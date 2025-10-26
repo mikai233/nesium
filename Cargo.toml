@@ -1,0 +1,6 @@
+[workspace]
+resolver = "3"
+members = ["crates/nesium-core"]
+
+[workspace.dependencies]
+phf = "0.13.1"
