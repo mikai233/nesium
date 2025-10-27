@@ -4,3 +4,4 @@ members = ["crates/nesium-core"]
 
 [workspace.dependencies]
 phf = "0.13.1"
+bitflags = "2.10.0"
