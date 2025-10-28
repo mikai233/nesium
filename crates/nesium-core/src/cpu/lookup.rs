@@ -1,5 +1,6 @@
-use phf::phf_map;
+use crate::cpu::addressing::Addressing as A;
+use crate::cpu::instruction::InstructionTemplate as I;
 
-use crate::cpu::instruction::InstructionTemplate;
+pub(crate) type Table = [I; 256];
 
-static LOOKUP: phf::Map<u8, InstructionTemplate> = phf_map! {};
+pub(crate) static LOOKUP_TABLE: [I; 2] = [I::ldx(A::Absolute), I::ldx(A::AbsoluteIndirect)];

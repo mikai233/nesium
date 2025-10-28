@@ -9,7 +9,7 @@ bitflags! {
     ///
     /// Each bit is a flag that reflects CPU state after arithmetic,
     /// logical, or control operations.
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub(crate) struct Status: u8 {
         /// Carry flag (C)
         /// Set when an addition produces a carry out of bit 7,

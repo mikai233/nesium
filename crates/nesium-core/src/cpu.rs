@@ -1,4 +1,5 @@
-use crate::cpu::{micro_op::MicroOp, status::Status};
+use crate::cpu::lookup::Table;
+use crate::cpu::status::Status;
 mod phase;
 mod status;
 
@@ -7,7 +8,14 @@ mod instruction;
 mod lookup;
 mod micro_op;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct AddrContext {
+    effective_addr: Option<u16>,
+    data: Option<u8>,
+    crossed_page: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct CPU {
     // Registers
     a: u8,     //Accumulator
@@ -17,14 +25,7 @@ struct CPU {
     p: Status, //Processor Status
     pc: u16,   //Program Counter
 
-    // Temp
-    addr_lo: u8,
-    addr_hi: u8,
-    eff_addr: u16,
-    fetched: u8,
-    rel_offset: i8,
-    rel_target: u16,
-
-    current_ops: Vec<MicroOp>,
+    lookup: &'static Table,
+    context: AddrContext,
     op_index: usize,
 }

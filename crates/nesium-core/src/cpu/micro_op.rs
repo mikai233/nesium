@@ -1,7 +1,7 @@
 /// A micro-operation represents the smallest atomic CPU action.
 /// Each 6502 instruction can be broken down into a sequence of MicroOps.
 /// This enum allows precise cycle-by-cycle emulation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MicroOp {
     // === Memory access ===
     /// Read a byte from the program counter (usually for opcode or immediate value),
