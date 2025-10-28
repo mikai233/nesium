@@ -91,6 +91,110 @@ pub(crate) enum Instruction {
     NOP,
 }
 
+macro_rules! status {
+    // Entry point — accepts multiple flag:value pairs
+    (
+        $status:expr, $result:expr, $carry:expr, $overflow:expr;
+        $flag:ident : $val:tt $(, $($rest:tt)*)?
+    ) => {{
+        __update_flag!($status, $result, $carry, $overflow, $flag, $val);
+        $(
+            status!($status, $result, $carry, $overflow; $($rest)*);
+        )?
+    }};
+
+    // Empty case — end recursion
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr;) => {};
+}
+
+// Internal helper macro (not exported)
+macro_rules! __update_flag {
+    // --- N: Negative ---
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, N, 0) => {
+        $status.remove(Status::NEGATIVE);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, N, 1) => {
+        $status.insert(Status::NEGATIVE);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, N, *) => {
+        $status.update_negative($result);
+    };
+
+    // --- Z: Zero ---
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, Z, 0) => {
+        $status.remove(Status::ZERO);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, Z, 1) => {
+        $status.insert(Status::ZERO);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, Z, *) => {
+        $status.update_zero($result);
+    };
+
+    // --- C: Carry ---
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, C, 0) => {
+        $status.remove(Status::CARRY);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, C, 1) => {
+        $status.insert(Status::CARRY);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, C, *) => {
+        if let Some(c) = $carry {
+            $status.set(Status::CARRY, c);
+        }
+    };
+
+    // --- V: Overflow ---
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, V, 0) => {
+        $status.remove(Status::OVERFLOW);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, V, 1) => {
+        $status.insert(Status::OVERFLOW);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, V, *) => {
+        if let Some(v) = $overflow {
+            $status.set(Status::OVERFLOW, v);
+        }
+    };
+
+    // --- Other simple flags (I, D, B, U) ---
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, I, 0) => {
+        $status.remove(Status::INTERRUPT);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, I, 1) => {
+        $status.insert(Status::INTERRUPT);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, D, 0) => {
+        $status.remove(Status::DECIMAL);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, D, 1) => {
+        $status.insert(Status::DECIMAL);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, B, 0) => {
+        $status.remove(Status::BREAK);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, B, 1) => {
+        $status.insert(Status::BREAK);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, U, 0) => {
+        $status.remove(Status::UNUSED);
+    };
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, U, 1) => {
+        $status.insert(Status::UNUSED);
+    };
+
+    // --- Fallback case: unknown flag or invalid value ---
+    ($status:expr, $result:expr, $carry:expr, $overflow:expr, $flag:ident, $val:tt) => {
+        compile_error!(concat!(
+            "Invalid flag or value in status!(): ",
+            stringify!($flag),
+            ":",
+            stringify!($val),
+            ". Allowed flags: N,Z,C,V,I,D,B,U; allowed values: 0,1,*"
+        ));
+    };
+}
+
 impl Instruction {
     /// Update the processor status flags according to the instruction semantics.
     /// `result` is the value that affects N/Z.
@@ -109,8 +213,7 @@ impl Instruction {
             | Instruction::LDA
             | Instruction::LDX
             | Instruction::LDY => {
-                status.update_negative(result);
-                status.update_zero(result);
+                status!(status, result, carry, overflow; N:*, Z:*);
             }
             Instruction::SAX
             | Instruction::SHA
@@ -122,19 +225,16 @@ impl Instruction {
             //
             Instruction::SHS => {}
             Instruction::TAX | Instruction::TAY | Instruction::TSX | Instruction::TXA => {
-                status.update_negative(result);
-                status.update_zero(result);
+                status!(status, result, carry, overflow; N:*, Z:*);
             }
             Instruction::TXS => {}
             Instruction::TYA => {
-                status.update_negative(result);
-                status.update_zero(result);
+                status!(status, result, carry, overflow; N:*, Z:*);
             }
             //
             Instruction::PHA | Instruction::PHP => {}
             Instruction::PLA => {
-                status.update_negative(result);
-                status.update_zero(result);
+                status!(status, result, carry, overflow; N:*, Z:*);
             }
             Instruction::PLP => {
                 // Restore all flags from stack value
@@ -142,43 +242,101 @@ impl Instruction {
             }
             //
             Instruction::ASL => {
-                status.update_negative(result);
-                status.update_zero(result);
-                if let Some(c) = carry {
-                    status.set(Status::CARRY, c);
-                }
+                status!(status, result, carry, overflow; N:*, Z:*, C:*);
             }
             Instruction::LSR => {
-                status.remove(Status::NEGATIVE);
-                status.update_zero(result);
-                if let Some(c) = carry {
-                    status.set(Status::CARRY, c);
-                }
+                status!(status, result, carry, overflow; N:0, Z:*, C:*);
             }
             Instruction::ROL | Self::ROR => {
-                status.update_negative(result);
-                status.update_zero(result);
-                if let Some(c) = carry {
-                    status.set(Status::CARRY, c);
-                }
+                status!(status, result, carry, overflow; N:*, Z:*, C:*);
             }
             Instruction::AND => {
-                status.update_negative(result);
-                status.update_zero(result);
+                status!(status, result, carry, overflow; N:*, Z:*);
             }
             Instruction::BIT => {
-                status.update_negative(result);
-                status.update_zero(result);
-                if let Some(o) = overflow {
-                    status.set(Status::OVERFLOW, o);
-                }
+                status!(status, result, carry, overflow; N:*, V:*, Z:*);
             }
             Instruction::EOR | Instruction::ORA => {
-                status.update_negative(result);
-                status.update_zero(result);
+                status!(status, result, carry, overflow; N:*, Z:*);
             }
             //
-            _ => {}
+            Instruction::ADC => {
+                status!(status, result, carry, overflow; N:*, V:*, Z:*, C:*);
+            }
+            Instruction::ANC => {
+                status!(status, result, carry, overflow; N:*, Z:*, C:*);
+            }
+            Instruction::ARR => {
+                status!(status, result, carry, overflow; N:*, V:*, Z:*, C:*);
+            }
+            Instruction::ASR => {
+                status!(status, result, carry, overflow; N:0, Z:*, C:*);
+            }
+            Instruction::CMP | Instruction::CPX | Instruction::CPY | Instruction::DCP => {
+                status!(status, result, carry, overflow; N:*, Z:*, C:*);
+            }
+            Instruction::ISC => {
+                status!(status, result, carry, overflow; N:*, V:*, Z:*, C:*);
+            }
+            Instruction::RLA => {
+                status!(status, result, carry, overflow; N:*, Z:*, C:*);
+            }
+            Instruction::RRA | Instruction::SBC => {
+                status!(status, result, carry, overflow; N:*, V:*, Z:*, C:*);
+            }
+            Instruction::SBX | Instruction::SLO | Instruction::SRE => {
+                status!(status, result, carry, overflow; N:*, Z:*, C:*);
+            }
+            Instruction::XAA
+            | Instruction::DEC
+            | Instruction::DEX
+            | Instruction::DEY
+            | Instruction::INC
+            | Instruction::INX
+            | Instruction::INY => {
+                status!(status, result, carry, overflow; N:*, Z:*);
+            }
+            //
+            Instruction::BRK => {
+                status!(status, result, carry, overflow; I:1);
+            }
+            Instruction::JMP | Instruction::JSR => {}
+            Instruction::RTI => {
+                //TODO
+                *status = Status::from_bits_truncate(result | Status::UNUSED.bits());
+            }
+            Instruction::RTS
+            | Instruction::BCC
+            | Instruction::BCS
+            | Instruction::BEQ
+            | Instruction::BMI
+            | Instruction::BNE
+            | Instruction::BPL
+            | Instruction::BVC
+            | Instruction::BVS => {}
+            //
+            Instruction::CLC => {
+                status!(status, result, carry, overflow; C:0);
+            }
+            Instruction::CLD => {
+                status!(status, result, carry, overflow; D:0);
+            }
+            Instruction::CLI => {
+                status!(status, result, carry, overflow; I:0);
+            }
+            Instruction::CLV => {
+                status!(status, result, carry, overflow; V:0);
+            }
+            Instruction::SEC => {
+                status!(status, result, carry, overflow; C:1);
+            }
+            Instruction::SED => {
+                status!(status, result, carry, overflow; D:1);
+            }
+            Instruction::SEI => {
+                status!(status, result, carry, overflow; I:1);
+            }
+            Instruction::JAM | Instruction::NOP => {}
         }
     }
 }
