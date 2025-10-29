@@ -1,1 +1,12 @@
 pub mod las;
+pub mod lax;
+pub mod lda;
+pub mod ldx;
+pub mod ldy;
+pub mod sax;
+pub mod sha;
+pub mod shx;
+pub mod shy;
+pub mod sta;
+pub mod stx;
+pub mod sty;

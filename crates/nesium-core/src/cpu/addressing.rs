@@ -8,7 +8,7 @@ use crate::{bus::Bus, cpu::micro_op::MicroOp};
 /// of an instruction to determine the effective memory address or
 /// immediate value for the operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AddressingMode {
+pub enum Addressing {
     /// No additional data required. The instruction operates implicitly.
     ///
     /// # Examples
@@ -116,112 +116,112 @@ pub enum AddressingMode {
     Relative,
 }
 
-impl AddressingMode {
-    /// Returns the sequence of micro operations for this addressing mode.
-    ///
-    /// The micro operations represent the cycle-by-cycle steps required to
-    /// resolve the effective address or operand for this addressing mode.
-    /// This sequence stops once the operand is available, excluding the
-    /// actual instruction execution.
-    pub const fn micro_ops(self) -> &'static [MicroOp] {
-        match self {
-            AddressingMode::Implied => &[MicroOp::ImpliedC1],
-            AddressingMode::Accumulator => &[MicroOp::AccumulatorC1],
+// impl Addressing {
+//     /// Returns the sequence of micro operations for this addressing mode.
+//     ///
+//     /// The micro operations represent the cycle-by-cycle steps required to
+//     /// resolve the effective address or operand for this addressing mode.
+//     /// This sequence stops once the operand is available, excluding the
+//     /// actual instruction execution.
+//     pub const fn micro_ops(self) -> &'static [MicroOp] {
+//         match self {
+//             Addressing::Implied => &[MicroOp::ImpliedC1],
+//             Addressing::Accumulator => &[MicroOp::AccumulatorC1],
 
-            AddressingMode::Immediate => &[MicroOp::ImmediateC1, MicroOp::ImmediateC2],
+//             Addressing::Immediate => &[MicroOp::ImmediateC1, MicroOp::ImmediateC2],
 
-            AddressingMode::Absolute => &[
-                MicroOp::AbsoluteC1,
-                MicroOp::AbsoluteC2,
-                MicroOp::AbsoluteC3,
-            ],
+//             Addressing::Absolute => &[
+//                 MicroOp::AbsoluteC1,
+//                 MicroOp::AbsoluteC2,
+//                 MicroOp::AbsoluteC3,
+//             ],
 
-            AddressingMode::AbsoluteX => &[
-                MicroOp::AbsoluteXC1,
-                MicroOp::AbsoluteXC2,
-                MicroOp::AbsoluteXC3,
-                MicroOp::AbsoluteXC4,
-            ],
+//             Addressing::AbsoluteX => &[
+//                 MicroOp::AbsoluteXC1,
+//                 MicroOp::AbsoluteXC2,
+//                 MicroOp::AbsoluteXC3,
+//                 MicroOp::AbsoluteXC4,
+//             ],
 
-            AddressingMode::AbsoluteY => &[
-                MicroOp::AbsoluteYC1,
-                MicroOp::AbsoluteYC2,
-                MicroOp::AbsoluteYC3,
-                MicroOp::AbsoluteYC4,
-                // Note: AbsoluteYC5 is used only when page boundary is crossed
-                // and is handled dynamically during execution
-            ],
+//             Addressing::AbsoluteY => &[
+//                 MicroOp::AbsoluteYC1,
+//                 MicroOp::AbsoluteYC2,
+//                 MicroOp::AbsoluteYC3,
+//                 MicroOp::AbsoluteYC4,
+//                 // Note: AbsoluteYC5 is used only when page boundary is crossed
+//                 // and is handled dynamically during execution
+//             ],
 
-            AddressingMode::Indirect => &[
-                MicroOp::IndirectC1,
-                MicroOp::IndirectC2,
-                MicroOp::IndirectC3,
-                MicroOp::IndirectC4,
-                MicroOp::IndirectC5,
-            ],
+//             Addressing::Indirect => &[
+//                 MicroOp::IndirectC1,
+//                 MicroOp::IndirectC2,
+//                 MicroOp::IndirectC3,
+//                 MicroOp::IndirectC4,
+//                 MicroOp::IndirectC5,
+//             ],
 
-            AddressingMode::ZeroPage => &[MicroOp::ZeroPageC1, MicroOp::ZeroPageC2],
+//             Addressing::ZeroPage => &[MicroOp::ZeroPageC1, MicroOp::ZeroPageC2],
 
-            AddressingMode::ZeroPageX => &[
-                MicroOp::ZeroPageXC1,
-                MicroOp::ZeroPageXC2,
-                MicroOp::ZeroPageXC3,
-                MicroOp::ZeroPageXC4,
-            ],
+//             Addressing::ZeroPageX => &[
+//                 MicroOp::ZeroPageXC1,
+//                 MicroOp::ZeroPageXC2,
+//                 MicroOp::ZeroPageXC3,
+//                 MicroOp::ZeroPageXC4,
+//             ],
 
-            AddressingMode::ZeroPageY => &[
-                MicroOp::ZeroPageYC1,
-                MicroOp::ZeroPageYC2,
-                MicroOp::ZeroPageYC3,
-                MicroOp::ZeroPageYC4,
-            ],
+//             Addressing::ZeroPageY => &[
+//                 MicroOp::ZeroPageYC1,
+//                 MicroOp::ZeroPageYC2,
+//                 MicroOp::ZeroPageYC3,
+//                 MicroOp::ZeroPageYC4,
+//             ],
 
-            AddressingMode::IndirectX => &[
-                MicroOp::IndirectXC1,
-                MicroOp::IndirectXC2,
-                MicroOp::IndirectXC3,
-                MicroOp::IndirectXC4,
-                MicroOp::IndirectXC5,
-                MicroOp::IndirectXC6,
-            ],
+//             Addressing::IndirectX => &[
+//                 MicroOp::IndirectXC1,
+//                 MicroOp::IndirectXC2,
+//                 MicroOp::IndirectXC3,
+//                 MicroOp::IndirectXC4,
+//                 MicroOp::IndirectXC5,
+//                 MicroOp::IndirectXC6,
+//             ],
 
-            AddressingMode::IndirectY => &[
-                MicroOp::IndirectYC1,
-                MicroOp::IndirectYC2,
-                MicroOp::IndirectYC3,
-                MicroOp::IndirectYC4,
-                MicroOp::IndirectYC5,
-                // Note: IndirectYC6 is used only when page boundary is crossed
-                // and is handled dynamically during execution
-            ],
+//             Addressing::IndirectY => &[
+//                 MicroOp::IndirectYC1,
+//                 MicroOp::IndirectYC2,
+//                 MicroOp::IndirectYC3,
+//                 MicroOp::IndirectYC4,
+//                 MicroOp::IndirectYC5,
+//                 // Note: IndirectYC6 is used only when page boundary is crossed
+//                 // and is handled dynamically during execution
+//             ],
 
-            AddressingMode::Relative => &[
-                MicroOp::RelativeC1,
-                MicroOp::RelativeC2,
-                MicroOp::RelativeC3,
-                // Note: RelativeC4 is used only when page boundary is crossed
-                // and branch is taken, handled dynamically during execution
-            ],
-        }
-    }
-}
+//             Addressing::Relative => &[
+//                 MicroOp::RelativeC1,
+//                 MicroOp::RelativeC2,
+//                 MicroOp::RelativeC3,
+//                 // Note: RelativeC4 is used only when page boundary is crossed
+//                 // and branch is taken, handled dynamically during execution
+//             ],
+//         }
+//     }
+// }
 
-impl Display for AddressingMode {
+impl Display for Addressing {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AddressingMode::Implied => "implied".fmt(f),
-            AddressingMode::Accumulator => "accumulator".fmt(f),
-            AddressingMode::Immediate => "immediate".fmt(f),
-            AddressingMode::Absolute => "absolute".fmt(f),
-            AddressingMode::AbsoluteX => "absolute_x".fmt(f),
-            AddressingMode::AbsoluteY => "absolute_y".fmt(f),
-            AddressingMode::Indirect => "indirect".fmt(f),
-            AddressingMode::ZeroPage => "zero_page".fmt(f),
-            AddressingMode::ZeroPageX => "zero_page_x".fmt(f),
-            AddressingMode::ZeroPageY => "zero_page_y".fmt(f),
-            AddressingMode::IndirectX => "indirect_x".fmt(f),
-            AddressingMode::IndirectY => "indirect_y".fmt(f),
-            AddressingMode::Relative => "relative".fmt(f),
+            Addressing::Implied => "implied".fmt(f),
+            Addressing::Accumulator => "accumulator".fmt(f),
+            Addressing::Immediate => "immediate".fmt(f),
+            Addressing::Absolute => "absolute".fmt(f),
+            Addressing::AbsoluteX => "absolute_x".fmt(f),
+            Addressing::AbsoluteY => "absolute_y".fmt(f),
+            Addressing::Indirect => "indirect".fmt(f),
+            Addressing::ZeroPage => "zero_page".fmt(f),
+            Addressing::ZeroPageX => "zero_page_x".fmt(f),
+            Addressing::ZeroPageY => "zero_page_y".fmt(f),
+            Addressing::IndirectX => "indirect_x".fmt(f),
+            Addressing::IndirectY => "indirect_y".fmt(f),
+            Addressing::Relative => "relative".fmt(f),
         }
     }
 }

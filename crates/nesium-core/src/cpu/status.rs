@@ -80,4 +80,9 @@ impl Status {
     pub fn from_byte(byte: u8) -> Self {
         Status::from_bits_truncate(byte)
     }
+
+    pub(crate) fn set_zn(&mut self, value: u8) {
+        self.update_zero(value);
+        self.update_negative(value);
+    }
 }

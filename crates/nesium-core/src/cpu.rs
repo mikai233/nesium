@@ -1,4 +1,4 @@
-use crate::bus::Bus;
+use crate::bus::{Bus, BusImpl};
 use crate::cpu;
 use crate::cpu::instruction::Instruction;
 use crate::cpu::lookup::LOOKUP_TABLE;
@@ -26,14 +26,12 @@ struct Cpu {
     tmp: u8,
     effective_addr: u16,
     data: u8,
+    check_cross_page: bool,
     crossed_page: bool,
 }
 
 impl Cpu {
-    pub fn clock<B>(&mut self, bus: &mut B)
-    where
-        B: Bus,
-    {
+    pub fn clock(&mut self, bus: &mut BusImpl) {
         let instruction = *self.instruction.get_or_insert_with(|| {
             let opcode = bus.read(self.pc);
             &LOOKUP_TABLE[opcode as usize]
@@ -41,7 +39,8 @@ impl Cpu {
         let micro_op = &instruction.micro_ops[self.index];
         micro_op.exec(self, bus);
         self.index += 1;
-        if micro_op.check_cross_page() && !self.crossed_page {
+        if self.check_cross_page && !self.crossed_page {
+            self.check_cross_page = false;
             self.index += 1; // Ignore next cross page op
         }
         if self.index > instruction.micro_ops.len() {
@@ -49,10 +48,7 @@ impl Cpu {
         }
     }
 
-    pub fn fetch<B>(&mut self, bus: &mut B) -> &'static Instruction
-    where
-        B: Bus,
-    {
+    pub fn fetch(&mut self, bus: &mut BusImpl) -> &'static Instruction {
         let opcode = bus.read(self.pc);
         self.pc = self.pc.wrapping_add(1);
         &LOOKUP_TABLE[opcode as usize]
