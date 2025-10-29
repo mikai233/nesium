@@ -1,513 +1,227 @@
 use std::fmt::Display;
 
-use crate::{
-    bus::Bus,
-    cpu::{
-        CPU,
-        micro_op::{MicroOp, MicroOp2},
-    },
-};
+use crate::{bus::Bus, cpu::micro_op::MicroOp};
 
+/// Represents the addressing modes supported by the 6502 CPU.
+///
+/// Addressing modes define how the CPU interprets the operand bytes
+/// of an instruction to determine the effective memory address or
+/// immediate value for the operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum Addressing {
+pub enum AddressingMode {
+    /// No additional data required. The instruction operates implicitly.
+    ///
+    /// # Examples
+    /// - `CLC` (Clear Carry Flag)
+    /// - `SEC` (Set Carry Flag)
+    /// - `NOP` (No Operation)
     Implied,
+
+    /// The operation is performed on the accumulator register.
+    ///
+    /// # Examples  
+    /// - `ASL A` (Arithmetic Shift Left Accumulator)
+    /// - `LSR A` (Logical Shift Right Accumulator)
     Accumulator,
+
+    /// The byte following the opcode is the operand value itself.
+    ///
+    /// # Examples
+    /// - `LDA #$42` (Load Accumulator with immediate value $42)
+    /// - `ORA #$FF` (OR Accumulator with immediate value $FF)
     Immediate,
+
+    /// Uses the full 16-bit address specified by the two bytes following the opcode.
+    ///
+    /// # Examples
+    /// - `LDA $1234` (Load Accumulator from address $1234)
+    /// - `STA $5678` (Store Accumulator to address $5678)
     Absolute,
-    XIndexedAbsolute,
-    YIndexedAbsolute,
-    AbsoluteIndirect,
+
+    /// Absolute address indexed by the X register.
+    ///
+    /// The effective address is calculated as `address + X`.
+    /// May require an extra cycle if a page boundary is crossed.
+    ///
+    /// # Examples
+    /// - `LDA $1234,X` (Load Accumulator from address $1234 + X)
+    AbsoluteX,
+
+    /// Absolute address indexed by the Y register.
+    ///
+    /// The effective address is calculated as `address + Y`.
+    /// May require an extra cycle if a page boundary is crossed.
+    ///
+    /// # Examples  
+    /// - `LDA $1234,Y` (Load Accumulator from address $1234 + Y)
+    AbsoluteY,
+
+    /// Indirect addressing used exclusively by the JMP instruction.
+    ///
+    /// The two bytes following the opcode point to a memory location
+    /// that contains the actual target address.
+    ///
+    /// # Examples
+    /// - `JMP ($1234)` (Jump to the address stored at $1234)
+    Indirect,
+
+    /// Uses a single byte address that refers to the zero page ($0000-$00FF).
+    ///
+    /// Zero page accesses are faster and use fewer bytes than absolute addressing.
+    ///
+    /// # Examples
+    /// - `LDA $42` (Load Accumulator from zero page address $42)
     ZeroPage,
-    XIndexedZeroPage,
-    YIndexedZeroPage,
-    XIndexedZeroPageIndirect,
-    ZeroPageIndirectYIndexed,
+
+    /// Zero page address indexed by the X register.
+    ///
+    /// The effective address wraps within the zero page: `(address + X) & 0xFF`.
+    ///
+    /// # Examples
+    /// - `LDA $42,X` (Load Accumulator from zero page address $42 + X)
+    ZeroPageX,
+
+    /// Zero page address indexed by the Y register.
+    ///
+    /// The effective address wraps within the zero page: `(address + Y) & 0xFF`.
+    ///
+    /// # Examples
+    /// - `LDX $42,Y` (Load X Register from zero page address $42 + Y)
+    ZeroPageY,
+
+    /// Pre-indexed indirect addressing (also known as "indexed indirect").
+    ///
+    /// The zero page address is first added to X, then used as a pointer
+    /// to the actual operand address. Notation: `(zp,X)`
+    ///
+    /// # Examples
+    /// - `LDA ($42,X)` (Load Accumulator using indirect addressing via $42 + X)
+    IndirectX,
+
+    /// Post-indexed indirect addressing (also known as "indirect indexed").
+    ///
+    /// The zero page address points to a pointer, which is then added to Y
+    /// to form the effective address. Notation: `(zp),Y`
+    ///
+    /// # Examples
+    /// - `LDA ($42),Y` (Load Accumulator using indirect addressing via $42 then + Y)
+    IndirectY,
+
+    /// Used for branch instructions. The operand is a signed 8-bit offset
+    /// relative to the address of the next instruction.
+    ///
+    /// # Examples
+    /// - `BNE $F0` (Branch if Not Equal to PC + $F0)
+    /// - `BCC $05` (Branch if Carry Clear to PC + $05)
     Relative,
 }
 
-impl Addressing {
-    pub(crate) const fn micro_ops2(&self) -> &'static [MicroOp2] {
+impl AddressingMode {
+    /// Returns the sequence of micro operations for this addressing mode.
+    ///
+    /// The micro operations represent the cycle-by-cycle steps required to
+    /// resolve the effective address or operand for this addressing mode.
+    /// This sequence stops once the operand is available, excluding the
+    /// actual instruction execution.
+    pub const fn micro_ops(self) -> &'static [MicroOp] {
         match self {
-            // ---------------------------------------------------------------------
-            // Implied
-            // ---------------------------------------------------------------------
-            Addressing::Implied => Self::implied(),
+            AddressingMode::Implied => &[MicroOp::ImpliedC1],
+            AddressingMode::Accumulator => &[MicroOp::AccumulatorC1],
 
-            // ---------------------------------------------------------------------
-            // Accumulator
-            // ---------------------------------------------------------------------
-            Addressing::Accumulator => Self::accumulator(),
+            AddressingMode::Immediate => &[MicroOp::ImmediateC1, MicroOp::ImmediateC2],
 
-            // ---------------------------------------------------------------------
-            // Immediate (#$xx)
-            // ---------------------------------------------------------------------
-            Addressing::Immediate => Self::immediate(),
-
-            // ---------------------------------------------------------------------
-            // Absolute ($HHLL)
-            // ---------------------------------------------------------------------
-            Addressing::Absolute => Self::absolute(),
-
-            // ---------------------------------------------------------------------
-            // Absolute,X ($HHLL,X)
-            // ---------------------------------------------------------------------
-            Addressing::XIndexedAbsolute => Self::absx(),
-
-            // ---------------------------------------------------------------------
-            // Absolute,Y ($HHLL,Y)
-            // ---------------------------------------------------------------------
-            Addressing::YIndexedAbsolute => Self::absy(),
-
-            // ---------------------------------------------------------------------
-            // Absolute Indirect ($HHLL)
-            // Used by JMP only.
-            // ---------------------------------------------------------------------
-            Addressing::AbsoluteIndirect => Self::absind(),
-
-            // ---------------------------------------------------------------------
-            // Zero Page ($LL)
-            // ---------------------------------------------------------------------
-            Addressing::ZeroPage => Self::zp(),
-
-            // ---------------------------------------------------------------------
-            // Zero Page,X
-            // ---------------------------------------------------------------------
-            Addressing::XIndexedZeroPage => Self::zpx(),
-
-            // ---------------------------------------------------------------------
-            // Zero Page,Y
-            // ---------------------------------------------------------------------
-            Addressing::YIndexedZeroPage => Self::zpy(),
-
-            // ---------------------------------------------------------------------
-            // (Indirect,X)
-            // ---------------------------------------------------------------------
-            Addressing::XIndexedZeroPageIndirect => Self::indx(),
-
-            // ---------------------------------------------------------------------
-            // (Indirect),Y
-            // ---------------------------------------------------------------------
-            Addressing::ZeroPageIndirectYIndexed => &[
-                MicroOp2 {
-                    name: "indy_cycle1",
-                    op: |cpu, _| cpu.incr_pc(),
-                },
-                MicroOp2 {
-                    name: "indy_cycle2",
-                    op: |cpu, bus| {
-                        let zp = bus.read(cpu.pc);
-                        cpu.incr_pc();
-                        let lo = bus.read(zp as u16);
-                        let hi = bus.read(zp.wrapping_add(1) as u16);
-                        let base = ((hi as u16) << 8) | (lo as u16);
-                        let eff = base.wrapping_add(cpu.y as u16);
-                        cpu.crossed_page = (base & 0xFF00) != (eff & 0xFF00);
-                        cpu.effective_addr = eff;
-                    },
-                },
-                MicroOp2 {
-                    name: "indy_cycle3",
-                    op: |cpu, bus| {
-                        if cpu.crossed_page {
-                            let _ = bus.read(
-                                (cpu.effective_addr & 0xFF00)
-                                    | ((cpu.effective_addr.wrapping_sub(0x100)) & 0x00FF),
-                            );
-                        }
-                    },
-                },
+            AddressingMode::Absolute => &[
+                MicroOp::AbsoluteC1,
+                MicroOp::AbsoluteC2,
+                MicroOp::AbsoluteC3,
             ],
 
-            // ---------------------------------------------------------------------
-            // Relative (for branches)
-            // ---------------------------------------------------------------------
-            Addressing::Relative => &[
-                MicroOp2 {
-                    name: "rel_cycle1",
-                    op: |cpu, _| cpu.incr_pc(),
-                },
-                MicroOp2 {
-                    name: "rel_cycle2",
-                    op: |cpu, bus| {
-                        let offset = bus.read(cpu.pc) as i8;
-                        cpu.incr_pc();
-                        let target = cpu.pc.wrapping_add(offset as u16);
-                        cpu.effective_addr = target;
-                    },
-                },
+            AddressingMode::AbsoluteX => &[
+                MicroOp::AbsoluteXC1,
+                MicroOp::AbsoluteXC2,
+                MicroOp::AbsoluteXC3,
+                MicroOp::AbsoluteXC4,
+            ],
+
+            AddressingMode::AbsoluteY => &[
+                MicroOp::AbsoluteYC1,
+                MicroOp::AbsoluteYC2,
+                MicroOp::AbsoluteYC3,
+                MicroOp::AbsoluteYC4,
+                // Note: AbsoluteYC5 is used only when page boundary is crossed
+                // and is handled dynamically during execution
+            ],
+
+            AddressingMode::Indirect => &[
+                MicroOp::IndirectC1,
+                MicroOp::IndirectC2,
+                MicroOp::IndirectC3,
+                MicroOp::IndirectC4,
+                MicroOp::IndirectC5,
+            ],
+
+            AddressingMode::ZeroPage => &[MicroOp::ZeroPageC1, MicroOp::ZeroPageC2],
+
+            AddressingMode::ZeroPageX => &[
+                MicroOp::ZeroPageXC1,
+                MicroOp::ZeroPageXC2,
+                MicroOp::ZeroPageXC3,
+                MicroOp::ZeroPageXC4,
+            ],
+
+            AddressingMode::ZeroPageY => &[
+                MicroOp::ZeroPageYC1,
+                MicroOp::ZeroPageYC2,
+                MicroOp::ZeroPageYC3,
+                MicroOp::ZeroPageYC4,
+            ],
+
+            AddressingMode::IndirectX => &[
+                MicroOp::IndirectXC1,
+                MicroOp::IndirectXC2,
+                MicroOp::IndirectXC3,
+                MicroOp::IndirectXC4,
+                MicroOp::IndirectXC5,
+                MicroOp::IndirectXC6,
+            ],
+
+            AddressingMode::IndirectY => &[
+                MicroOp::IndirectYC1,
+                MicroOp::IndirectYC2,
+                MicroOp::IndirectYC3,
+                MicroOp::IndirectYC4,
+                MicroOp::IndirectYC5,
+                // Note: IndirectYC6 is used only when page boundary is crossed
+                // and is handled dynamically during execution
+            ],
+
+            AddressingMode::Relative => &[
+                MicroOp::RelativeC1,
+                MicroOp::RelativeC2,
+                MicroOp::RelativeC3,
+                // Note: RelativeC4 is used only when page boundary is crossed
+                // and branch is taken, handled dynamically during execution
             ],
         }
     }
-
-    const fn implied() -> &'static [MicroOp2] {
-        &[MicroOp2 {
-            name: "implied_cycle1",
-            op: |cpu, _| {
-                cpu.incr_pc();
-            },
-        }]
-    }
-
-    const fn accumulator() -> &'static [MicroOp2] {
-        &[MicroOp2 {
-            name: "accumulator_cycle1",
-            op: |cpu, _| {
-                cpu.incr_pc();
-            },
-        }]
-    }
-
-    const fn immediate() -> &'static [MicroOp2] {
-        &[MicroOp2 {
-            name: "immediate_cycle1",
-            op: |cpu, _| {
-                cpu.incr_pc();
-            },
-        }]
-    }
-
-    const fn absolute() -> &'static [MicroOp2] {
-        &[
-            MicroOp2 {
-                name: "absolute_cycle1",
-                op: |cpu, _| {
-                    cpu.incr_pc();
-                },
-            },
-            MicroOp2 {
-                name: "absolute_cycle2",
-                op: |cpu, bus| {
-                    let lo = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    cpu.tmp = lo;
-                },
-            },
-            MicroOp2 {
-                name: "absolute_cycle3",
-                op: |cpu, bus| {
-                    let hi = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-                },
-            },
-        ]
-    }
-
-    const fn absx() -> &'static [MicroOp2] {
-        &[
-            MicroOp2 {
-                name: "absx_cycle1",
-                op: |cpu, _| cpu.incr_pc(),
-            },
-            MicroOp2 {
-                name: "absx_cycle2",
-                op: |cpu, bus| {
-                    let lo = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    cpu.tmp = lo;
-                },
-            },
-            MicroOp2 {
-                name: "absx_cycle3",
-                op: |cpu, bus| {
-                    let hi = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    let base = ((hi as u16) << 8) | (cpu.tmp as u16);
-                    let eff = base.wrapping_add(cpu.x as u16);
-                    cpu.crossed_page = (base & 0xFF00) != (eff & 0xFF00);
-                    cpu.effective_addr = eff;
-                },
-            },
-            MicroOp2 {
-                name: "absx_cycle4",
-                op: |cpu, bus| {
-                    if cpu.crossed_page {
-                        // Dummy read if crossed page
-                        let _ = bus.read(
-                            (cpu.effective_addr & 0xFF00)
-                                | ((cpu.effective_addr.wrapping_sub(0x100)) & 0x00FF),
-                        );
-                    }
-                },
-            },
-        ]
-    }
-
-    const fn absy() -> &'static [MicroOp2] {
-        &[
-            MicroOp2 {
-                name: "absy_cycle1",
-                op: |cpu, _| cpu.incr_pc(),
-            },
-            MicroOp2 {
-                name: "absy_cycle2",
-                op: |cpu, bus| {
-                    let lo = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    cpu.tmp = lo;
-                },
-            },
-            MicroOp2 {
-                name: "absy_cycle3",
-                op: |cpu, bus| {
-                    let hi = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    let base = ((hi as u16) << 8) | (cpu.tmp as u16);
-                    let eff = base.wrapping_add(cpu.y as u16);
-                    cpu.crossed_page = (base & 0xFF00) != (eff & 0xFF00);
-                    cpu.effective_addr = eff;
-                },
-            },
-            MicroOp2 {
-                name: "absy_cycle4",
-                op: |cpu, bus| {
-                    if cpu.crossed_page {
-                        let _ = bus.read(
-                            (cpu.effective_addr & 0xFF00)
-                                | ((cpu.effective_addr.wrapping_sub(0x100)) & 0x00FF),
-                        );
-                    }
-                },
-            },
-        ]
-    }
-
-    const fn absind() -> &'static [MicroOp2] {
-        &[
-            // --------------------------------------------------------------
-            // Cycle 1: Fetch opcode ($6C), PC++
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "absind_cycle1_fetch_opcode",
-                op: |cpu, _bus| {
-                    cpu.incr_pc(); // PC now points to first operand byte
-                },
-            },
-            // --------------------------------------------------------------
-            // Cycle 2: Fetch low byte of indirect address → store in tmp, PC++
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "absind_cycle2_fetch_ptr_lo",
-                op: |cpu, bus| {
-                    let lo = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    cpu.tmp = lo; // Save low byte of pointer address
-                },
-            },
-            // --------------------------------------------------------------
-            // Cycle 3: Fetch high byte of indirect address, form full ptr, PC++
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "absind_cycle3_fetch_ptr_hi",
-                op: |cpu, bus| {
-                    let hi = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    // Build full 16-bit indirect address: $xxFF
-                    cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-                },
-            },
-            // --------------------------------------------------------------
-            // Cycle 4: Read low byte of jump target from [ptr]
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "absind_cycle4_read_target_lo",
-                op: |cpu, bus| {
-                    let ptr = cpu.effective_addr;
-                    let lo = bus.read(ptr);
-                    cpu.tmp = lo; // Reuse tmp to hold target low byte
-                },
-            },
-            // --------------------------------------------------------------
-            // Cycle 5: Read high byte of jump target (with 6502 page-wrap bug!)
-            //         Then set PC to final jump address
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "absind_cycle5_read_target_hi_with_bug",
-                op: |cpu, bus| {
-                    let ptr = cpu.effective_addr;
-
-                    // 6502 bug: if low byte of ptr is $FF, high byte is read
-                    // from $xx00 instead of $xx+1 (no carry)
-                    let hi_addr = if (ptr & 0x00FF) == 0x00FF {
-                        ptr & 0xFF00 // Stay on same page (bug)
-                    } else {
-                        ptr.wrapping_add(1) // Normal increment
-                    };
-
-                    let hi = bus.read(hi_addr);
-                    cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-                },
-            },
-        ]
-    }
-
-    const fn zp() -> &'static [MicroOp2] {
-        &[
-            MicroOp2 {
-                name: "zp_cycle1",
-                op: |cpu, _| cpu.incr_pc(),
-            },
-            MicroOp2 {
-                name: "zp_cycle2",
-                op: |cpu, bus| {
-                    let addr = bus.read(cpu.pc) as u16;
-                    cpu.incr_pc();
-                    cpu.effective_addr = addr;
-                },
-            },
-        ]
-    }
-
-    const fn zpx() -> &'static [MicroOp2] {
-        &[
-            // --------------------------------------------------------------
-            // Cycle 1: Fetch opcode, PC++
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "zpx_cycle1_fetch_opcode",
-                op: |cpu, _| {
-                    cpu.incr_pc(); // PC now points to base address
-                },
-            },
-            // --------------------------------------------------------------
-            // Cycle 2: Fetch base zero-page address → store in tmp, PC++
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "zpx_cycle2_fetch_base",
-                op: |cpu, bus| {
-                    let base = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    cpu.tmp = base; // Save base address in tmp
-                },
-            },
-            // --------------------------------------------------------------
-            // Cycle 3: Compute effective address = (tmp + X) & 0xFF
-            //          No memory access - internal operation only!
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "zpx_cycle3_compute_address",
-                op: |cpu, bus| {
-                    let base = cpu.tmp as u16;
-                    // dummy read
-                    let _ = bus.read(base);
-                    let offset = cpu.x as u16;
-                    cpu.effective_addr = (base + offset) & 0xFF; // Wrap within zero page
-                },
-            },
-        ]
-    }
-
-    const fn zpy() -> &'static [MicroOp2] {
-        &[
-            // --------------------------------------------------------------
-            // Cycle 1: Fetch opcode, PC++
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "zpy_cycle1_fetch_opcode",
-                op: |cpu, _| {
-                    cpu.incr_pc(); // PC now points to base address
-                },
-            },
-            // --------------------------------------------------------------
-            // Cycle 2: Fetch base zero-page address → store in tmp, PC++
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "zpy_cycle2_fetch_base",
-                op: |cpu, bus| {
-                    let base = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    cpu.tmp = base; // Save base ZP address
-                },
-            },
-            // --------------------------------------------------------------
-            // Cycle 3: Compute effective address = (tmp + Y) & 0xFF
-            //          No memory access - internal only!
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "zpy_cycle3_compute_address",
-                op: |cpu, bus| {
-                    let base = cpu.tmp as u16;
-                    // dummy read
-                    let _ = bus.read(base);
-                    let offset = cpu.y as u16;
-                    cpu.effective_addr = (base + offset) & 0xFF; // Wrap within zero page
-                },
-            },
-        ]
-    }
-
-    const fn indx() -> &'static [MicroOp2] {
-        &[
-            // --------------------------------------------------------------
-            // C1: Fetch opcode, advance PC
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "c1_fetch_op",
-                op: |cpu, _| cpu.incr_pc(),
-            },
-            // --------------------------------------------------------------
-            // C2: Fetch zero-page base address → tmp
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "c2_fetch_zp_base",
-                op: |cpu, bus| {
-                    let base = bus.read(cpu.pc);
-                    cpu.incr_pc();
-                    cpu.tmp = base; // tmp = ZP base (e.g., $34)
-                },
-            },
-            // --------------------------------------------------------------
-            // C3: Compute ZP pointer = (base + X) & $FF + dummy read
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "c3_calc_zp_ptr_dummy",
-                op: |cpu, bus| {
-                    let _ = bus.read(cpu.tmp as u16); // Dummy read (critical!)
-                    let ptr = cpu.tmp.wrapping_add(cpu.x); // Wrap in ZP
-                    cpu.tmp = ptr; // tmp = final ZP pointer
-                },
-            },
-            // --------------------------------------------------------------
-            // C4: Read low byte of effective address from [ptr]
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "c4_read_addr_lo",
-                op: |cpu, bus| {
-                    let lo = bus.read(cpu.tmp as u16);
-                    cpu.effective_addr = lo as u16; // Store low byte
-                },
-            },
-            // --------------------------------------------------------------
-            // C5: Read high byte from [ptr+1], form full address
-            // --------------------------------------------------------------
-            MicroOp2 {
-                name: "c5_read_addr_hi_form",
-                op: |cpu, bus| {
-                    let ptr_hi = (cpu.tmp as u16).wrapping_add(1);
-                    let hi = bus.read(ptr_hi);
-                    cpu.effective_addr = ((hi as u16) << 8) | (cpu.effective_addr & 0xFF);
-                },
-            },
-        ]
-    }
 }
 
-impl Display for Addressing {
+impl Display for AddressingMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Addressing::Implied => "implied".fmt(f),
-            Addressing::Accumulator => "accumulator".fmt(f),
-            Addressing::Immediate => "immediate".fmt(f),
-            Addressing::Absolute => "absolute".fmt(f),
-            Addressing::XIndexedAbsolute => "x_indexed_absolute".fmt(f),
-            Addressing::YIndexedAbsolute => "y_indexed_absolute".fmt(f),
-            Addressing::AbsoluteIndirect => "absolute_indirect".fmt(f),
-            Addressing::ZeroPage => "zero_page".fmt(f),
-            Addressing::XIndexedZeroPage => "x_indexed_zero_page".fmt(f),
-            Addressing::YIndexedZeroPage => "y_indexed_zero_page".fmt(f),
-            Addressing::XIndexedZeroPageIndirect => "x_indexed_zero_page_indirect".fmt(f),
-            Addressing::ZeroPageIndirectYIndexed => "zero_page_indirect_y_indexed".fmt(f),
-            Addressing::Relative => "relative".fmt(f),
+            AddressingMode::Implied => "implied".fmt(f),
+            AddressingMode::Accumulator => "accumulator".fmt(f),
+            AddressingMode::Immediate => "immediate".fmt(f),
+            AddressingMode::Absolute => "absolute".fmt(f),
+            AddressingMode::AbsoluteX => "absolute_x".fmt(f),
+            AddressingMode::AbsoluteY => "absolute_y".fmt(f),
+            AddressingMode::Indirect => "indirect".fmt(f),
+            AddressingMode::ZeroPage => "zero_page".fmt(f),
+            AddressingMode::ZeroPageX => "zero_page_x".fmt(f),
+            AddressingMode::ZeroPageY => "zero_page_y".fmt(f),
+            AddressingMode::IndirectX => "indirect_x".fmt(f),
+            AddressingMode::IndirectY => "indirect_y".fmt(f),
+            AddressingMode::Relative => "relative".fmt(f),
         }
     }
 }

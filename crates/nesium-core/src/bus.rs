@@ -1,12 +1,7 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Bus {}
+pub mod real;
 
-impl Bus {
-    pub fn read(&mut self, addr: u16) -> u8 {
-        unimplemented!()
-    }
+pub trait Bus {
+    fn read(&mut self, addr: u16) -> u8;
 
-    pub fn write(&mut self, addr: u16, data: u8) {
-        unimplemented!()
-    }
+    fn write(&mut self, addr: u16, data: u8);
 }
