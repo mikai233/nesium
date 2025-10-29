@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::cpu::{addressing::Addressing, micro_op::MicroOp, status::Status};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum Instruction {
+pub(crate) enum Mnemonic {
     //Load/Store
     LAS,
     LAX,
@@ -197,7 +197,7 @@ macro_rules! __update_flag {
     };
 }
 
-impl Instruction {
+impl Mnemonic {
     /// Update the processor status flags according to the instruction semantics.
     /// `result` is the value that affects N/Z.
     /// `carry` and `overflow` are optional flags affected by ADC/SBC, shift/rotate, compare.
@@ -210,515 +210,587 @@ impl Instruction {
     ) {
         match self {
             //Load/Store
-            Instruction::LAS
-            | Instruction::LAX
-            | Instruction::LDA
-            | Instruction::LDX
-            | Instruction::LDY => {
+            Mnemonic::LAS | Mnemonic::LAX | Mnemonic::LDA | Mnemonic::LDX | Mnemonic::LDY => {
                 status!(status, result, carry, overflow; N:*, Z:*);
             }
-            Instruction::SAX
-            | Instruction::SHA
-            | Instruction::SHX
-            | Instruction::SHY
-            | Instruction::STA
-            | Instruction::STX
-            | Instruction::STY => {}
+            Mnemonic::SAX
+            | Mnemonic::SHA
+            | Mnemonic::SHX
+            | Mnemonic::SHY
+            | Mnemonic::STA
+            | Mnemonic::STX
+            | Mnemonic::STY => {}
             //Transfer
-            Instruction::SHS => {}
-            Instruction::TAX | Instruction::TAY | Instruction::TSX | Instruction::TXA => {
+            Mnemonic::SHS => {}
+            Mnemonic::TAX | Mnemonic::TAY | Mnemonic::TSX | Mnemonic::TXA => {
                 status!(status, result, carry, overflow; N:*, Z:*);
             }
-            Instruction::TXS => {}
-            Instruction::TYA => {
+            Mnemonic::TXS => {}
+            Mnemonic::TYA => {
                 status!(status, result, carry, overflow; N:*, Z:*);
             }
             //Stack
-            Instruction::PHA | Instruction::PHP => {}
-            Instruction::PLA => {
+            Mnemonic::PHA | Mnemonic::PHP => {}
+            Mnemonic::PLA => {
                 status!(status, result, carry, overflow; N:*, Z:*);
             }
-            Instruction::PLP => {
+            Mnemonic::PLP => {
                 // Restore all flags from stack value
                 *status = Status::from_bits_truncate(result | Status::UNUSED.bits());
             }
             //Shift
-            Instruction::ASL => {
+            Mnemonic::ASL => {
                 status!(status, result, carry, overflow; N:*, Z:*, C:*);
             }
-            Instruction::LSR => {
+            Mnemonic::LSR => {
                 status!(status, result, carry, overflow; N:0, Z:*, C:*);
             }
-            Instruction::ROL | Self::ROR => {
+            Mnemonic::ROL | Self::ROR => {
                 status!(status, result, carry, overflow; N:*, Z:*, C:*);
             }
-            Instruction::AND => {
+            Mnemonic::AND => {
                 status!(status, result, carry, overflow; N:*, Z:*);
             }
-            Instruction::BIT => {
+            Mnemonic::BIT => {
                 status!(status, result, carry, overflow; N:*, V:*, Z:*);
             }
-            Instruction::EOR | Instruction::ORA => {
+            Mnemonic::EOR | Mnemonic::ORA => {
                 status!(status, result, carry, overflow; N:*, Z:*);
             }
             //Arithmetic
-            Instruction::ADC => {
+            Mnemonic::ADC => {
                 status!(status, result, carry, overflow; N:*, V:*, Z:*, C:*);
             }
-            Instruction::ANC => {
+            Mnemonic::ANC => {
                 status!(status, result, carry, overflow; N:*, Z:*, C:*);
             }
-            Instruction::ARR => {
+            Mnemonic::ARR => {
                 status!(status, result, carry, overflow; N:*, V:*, Z:*, C:*);
             }
-            Instruction::ASR => {
+            Mnemonic::ASR => {
                 status!(status, result, carry, overflow; N:0, Z:*, C:*);
             }
-            Instruction::CMP | Instruction::CPX | Instruction::CPY | Instruction::DCP => {
+            Mnemonic::CMP | Mnemonic::CPX | Mnemonic::CPY | Mnemonic::DCP => {
                 status!(status, result, carry, overflow; N:*, Z:*, C:*);
             }
-            Instruction::ISC => {
+            Mnemonic::ISC => {
                 status!(status, result, carry, overflow; N:*, V:*, Z:*, C:*);
             }
-            Instruction::RLA => {
+            Mnemonic::RLA => {
                 status!(status, result, carry, overflow; N:*, Z:*, C:*);
             }
-            Instruction::RRA | Instruction::SBC => {
+            Mnemonic::RRA | Mnemonic::SBC => {
                 status!(status, result, carry, overflow; N:*, V:*, Z:*, C:*);
             }
-            Instruction::SBX | Instruction::SLO | Instruction::SRE => {
+            Mnemonic::SBX | Mnemonic::SLO | Mnemonic::SRE => {
                 status!(status, result, carry, overflow; N:*, Z:*, C:*);
             }
-            Instruction::XAA
-            | Instruction::DEC
-            | Instruction::DEX
-            | Instruction::DEY
-            | Instruction::INC
-            | Instruction::INX
-            | Instruction::INY => {
+            Mnemonic::XAA
+            | Mnemonic::DEC
+            | Mnemonic::DEX
+            | Mnemonic::DEY
+            | Mnemonic::INC
+            | Mnemonic::INX
+            | Mnemonic::INY => {
                 status!(status, result, carry, overflow; N:*, Z:*);
             }
             //Control Flow
-            Instruction::BRK => {
+            Mnemonic::BRK => {
                 status!(status, result, carry, overflow; I:1);
             }
-            Instruction::JMP | Instruction::JSR => {}
-            Instruction::RTI => {
+            Mnemonic::JMP | Mnemonic::JSR => {}
+            Mnemonic::RTI => {
                 //TODO
                 *status = Status::from_bits_truncate(result | Status::UNUSED.bits());
             }
-            Instruction::RTS
-            | Instruction::BCC
-            | Instruction::BCS
-            | Instruction::BEQ
-            | Instruction::BMI
-            | Instruction::BNE
-            | Instruction::BPL
-            | Instruction::BVC
-            | Instruction::BVS => {}
+            Mnemonic::RTS
+            | Mnemonic::BCC
+            | Mnemonic::BCS
+            | Mnemonic::BEQ
+            | Mnemonic::BMI
+            | Mnemonic::BNE
+            | Mnemonic::BPL
+            | Mnemonic::BVC
+            | Mnemonic::BVS => {}
             //Flags
-            Instruction::CLC => {
+            Mnemonic::CLC => {
                 status!(status, result, carry, overflow; C:0);
             }
-            Instruction::CLD => {
+            Mnemonic::CLD => {
                 status!(status, result, carry, overflow; D:0);
             }
-            Instruction::CLI => {
+            Mnemonic::CLI => {
                 status!(status, result, carry, overflow; I:0);
             }
-            Instruction::CLV => {
+            Mnemonic::CLV => {
                 status!(status, result, carry, overflow; V:0);
             }
-            Instruction::SEC => {
+            Mnemonic::SEC => {
                 status!(status, result, carry, overflow; C:1);
             }
-            Instruction::SED => {
+            Mnemonic::SED => {
                 status!(status, result, carry, overflow; D:1);
             }
-            Instruction::SEI => {
+            Mnemonic::SEI => {
                 status!(status, result, carry, overflow; I:1);
             }
-            Instruction::JAM | Instruction::NOP => {}
+            Mnemonic::JAM | Mnemonic::NOP => {}
         }
     }
 
     pub(crate) const fn micro_ops(&self) -> &'static [MicroOp] {
-        &[]
+        match self {
+            Mnemonic::LAS => todo!(),
+            Mnemonic::LAX => todo!(),
+            Mnemonic::LDA => todo!(),
+            Mnemonic::LDX => todo!(),
+            Mnemonic::LDY => todo!(),
+            Mnemonic::SAX => todo!(),
+            Mnemonic::SHA => todo!(),
+            Mnemonic::SHX => todo!(),
+            Mnemonic::SHY => todo!(),
+            Mnemonic::STA => todo!(),
+            Mnemonic::STX => todo!(),
+            Mnemonic::STY => todo!(),
+            Mnemonic::SHS => todo!(),
+            Mnemonic::TAX => todo!(),
+            Mnemonic::TAY => todo!(),
+            Mnemonic::TSX => todo!(),
+            Mnemonic::TXA => todo!(),
+            Mnemonic::TXS => todo!(),
+            Mnemonic::TYA => todo!(),
+            Mnemonic::PHA => todo!(),
+            Mnemonic::PHP => todo!(),
+            Mnemonic::PLA => todo!(),
+            Mnemonic::PLP => todo!(),
+            Mnemonic::ASL => todo!(),
+            Mnemonic::LSR => todo!(),
+            Mnemonic::ROL => todo!(),
+            Mnemonic::ROR => todo!(),
+            Mnemonic::AND => todo!(),
+            Mnemonic::BIT => todo!(),
+            Mnemonic::EOR => todo!(),
+            Mnemonic::ORA => todo!(),
+            Mnemonic::ADC => todo!(),
+            Mnemonic::ANC => todo!(),
+            Mnemonic::ARR => todo!(),
+            Mnemonic::ASR => todo!(),
+            Mnemonic::CMP => todo!(),
+            Mnemonic::CPX => todo!(),
+            Mnemonic::CPY => todo!(),
+            Mnemonic::DCP => todo!(),
+            Mnemonic::ISC => todo!(),
+            Mnemonic::RLA => todo!(),
+            Mnemonic::RRA => todo!(),
+            Mnemonic::SBC => todo!(),
+            Mnemonic::SBX => todo!(),
+            Mnemonic::SLO => todo!(),
+            Mnemonic::SRE => todo!(),
+            Mnemonic::XAA => todo!(),
+            Mnemonic::DEC => todo!(),
+            Mnemonic::DEX => todo!(),
+            Mnemonic::DEY => todo!(),
+            Mnemonic::INC => todo!(),
+            Mnemonic::INX => todo!(),
+            Mnemonic::INY => todo!(),
+            Mnemonic::BRK => todo!(),
+            Mnemonic::JMP => todo!(),
+            Mnemonic::JSR => todo!(),
+            Mnemonic::RTI => todo!(),
+            Mnemonic::RTS => todo!(),
+            Mnemonic::BCC => todo!(),
+            Mnemonic::BCS => todo!(),
+            Mnemonic::BEQ => todo!(),
+            Mnemonic::BMI => todo!(),
+            Mnemonic::BNE => todo!(),
+            Mnemonic::BPL => todo!(),
+            Mnemonic::BVC => todo!(),
+            Mnemonic::BVS => todo!(),
+            Mnemonic::CLC => todo!(),
+            Mnemonic::CLD => todo!(),
+            Mnemonic::CLI => todo!(),
+            Mnemonic::CLV => todo!(),
+            Mnemonic::SEC => todo!(),
+            Mnemonic::SED => todo!(),
+            Mnemonic::SEI => todo!(),
+            Mnemonic::JAM => todo!(),
+            Mnemonic::NOP => todo!(),
+        }
+    }
+
+    pub(crate) const fn table() -> &'static [(Mnemonic, Addressing); 256] {
+        &[
+            // 0x00-0x0F
+            (Mnemonic::BRK, Addressing::Implied),
+            (Mnemonic::ORA, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::SLO, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::NOP, Addressing::ZeroPage),
+            (Mnemonic::ORA, Addressing::ZeroPage),
+            (Mnemonic::ASL, Addressing::ZeroPage),
+            (Mnemonic::SLO, Addressing::ZeroPage),
+            (Mnemonic::PHP, Addressing::Implied),
+            (Mnemonic::ORA, Addressing::Immediate),
+            (Mnemonic::ASL, Addressing::Accumulator),
+            (Mnemonic::ANC, Addressing::Immediate),
+            (Mnemonic::NOP, Addressing::Absolute),
+            (Mnemonic::ORA, Addressing::Absolute),
+            (Mnemonic::ASL, Addressing::Absolute),
+            (Mnemonic::SLO, Addressing::Absolute),
+            // 0x10-0x1F
+            (Mnemonic::BPL, Addressing::Relative),
+            (Mnemonic::ORA, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::SLO, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::NOP, Addressing::XIndexedZeroPage),
+            (Mnemonic::ORA, Addressing::XIndexedZeroPage),
+            (Mnemonic::ASL, Addressing::XIndexedZeroPage),
+            (Mnemonic::SLO, Addressing::XIndexedZeroPage),
+            (Mnemonic::CLC, Addressing::Implied),
+            (Mnemonic::ORA, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::Implied),
+            (Mnemonic::SLO, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::XIndexedAbsolute),
+            (Mnemonic::ORA, Addressing::XIndexedAbsolute),
+            (Mnemonic::ASL, Addressing::XIndexedAbsolute),
+            (Mnemonic::SLO, Addressing::XIndexedAbsolute),
+            // 0x20-0x2F
+            (Mnemonic::JSR, Addressing::Absolute),
+            (Mnemonic::AND, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::RLA, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::BIT, Addressing::ZeroPage),
+            (Mnemonic::AND, Addressing::ZeroPage),
+            (Mnemonic::ROL, Addressing::ZeroPage),
+            (Mnemonic::RLA, Addressing::ZeroPage),
+            (Mnemonic::PLP, Addressing::Implied),
+            (Mnemonic::AND, Addressing::Immediate),
+            (Mnemonic::ROL, Addressing::Accumulator),
+            (Mnemonic::ANC, Addressing::Immediate),
+            (Mnemonic::BIT, Addressing::Absolute),
+            (Mnemonic::AND, Addressing::Absolute),
+            (Mnemonic::ROL, Addressing::Absolute),
+            (Mnemonic::RLA, Addressing::Absolute),
+            // 0x30-0x3F
+            (Mnemonic::BMI, Addressing::Relative),
+            (Mnemonic::AND, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::RLA, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::NOP, Addressing::XIndexedZeroPage),
+            (Mnemonic::AND, Addressing::XIndexedZeroPage),
+            (Mnemonic::ROL, Addressing::XIndexedZeroPage),
+            (Mnemonic::RLA, Addressing::XIndexedZeroPage),
+            (Mnemonic::SEC, Addressing::Implied),
+            (Mnemonic::AND, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::Implied),
+            (Mnemonic::RLA, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::XIndexedAbsolute),
+            (Mnemonic::AND, Addressing::XIndexedAbsolute),
+            (Mnemonic::ROL, Addressing::XIndexedAbsolute),
+            (Mnemonic::RLA, Addressing::XIndexedAbsolute),
+            // 0x40-0x4F
+            (Mnemonic::RTI, Addressing::Implied),
+            (Mnemonic::EOR, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::SRE, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::NOP, Addressing::ZeroPage),
+            (Mnemonic::EOR, Addressing::ZeroPage),
+            (Mnemonic::LSR, Addressing::ZeroPage),
+            (Mnemonic::SRE, Addressing::ZeroPage),
+            (Mnemonic::PHA, Addressing::Implied),
+            (Mnemonic::EOR, Addressing::Immediate),
+            (Mnemonic::LSR, Addressing::Accumulator),
+            (Mnemonic::ASR, Addressing::Immediate),
+            (Mnemonic::JMP, Addressing::Absolute),
+            (Mnemonic::EOR, Addressing::Absolute),
+            (Mnemonic::LSR, Addressing::Absolute),
+            (Mnemonic::SRE, Addressing::Absolute),
+            // 0x50-0x5F
+            (Mnemonic::BVC, Addressing::Relative),
+            (Mnemonic::EOR, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::SRE, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::NOP, Addressing::XIndexedZeroPage),
+            (Mnemonic::EOR, Addressing::XIndexedZeroPage),
+            (Mnemonic::LSR, Addressing::XIndexedZeroPage),
+            (Mnemonic::SRE, Addressing::XIndexedZeroPage),
+            (Mnemonic::CLI, Addressing::Implied),
+            (Mnemonic::EOR, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::Implied),
+            (Mnemonic::SRE, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::XIndexedAbsolute),
+            (Mnemonic::EOR, Addressing::XIndexedAbsolute),
+            (Mnemonic::LSR, Addressing::XIndexedAbsolute),
+            (Mnemonic::SRE, Addressing::XIndexedAbsolute),
+            // 0x60-0x6F
+            (Mnemonic::RTS, Addressing::Implied),
+            (Mnemonic::ADC, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::RRA, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::NOP, Addressing::ZeroPage),
+            (Mnemonic::ADC, Addressing::ZeroPage),
+            (Mnemonic::ROR, Addressing::ZeroPage),
+            (Mnemonic::RRA, Addressing::ZeroPage),
+            (Mnemonic::PLA, Addressing::Implied),
+            (Mnemonic::ADC, Addressing::Immediate),
+            (Mnemonic::ROR, Addressing::Accumulator),
+            (Mnemonic::ARR, Addressing::Immediate),
+            (Mnemonic::JMP, Addressing::AbsoluteIndirect),
+            (Mnemonic::ADC, Addressing::Absolute),
+            (Mnemonic::ROR, Addressing::Absolute),
+            (Mnemonic::RRA, Addressing::Absolute),
+            // 0x70-0x7F
+            (Mnemonic::BVS, Addressing::Relative),
+            (Mnemonic::ADC, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::RRA, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::NOP, Addressing::XIndexedZeroPage),
+            (Mnemonic::ADC, Addressing::XIndexedZeroPage),
+            (Mnemonic::ROR, Addressing::XIndexedZeroPage),
+            (Mnemonic::RRA, Addressing::XIndexedZeroPage),
+            (Mnemonic::SEI, Addressing::Implied),
+            (Mnemonic::ADC, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::Implied),
+            (Mnemonic::RRA, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::XIndexedAbsolute),
+            (Mnemonic::ADC, Addressing::XIndexedAbsolute),
+            (Mnemonic::ROR, Addressing::XIndexedAbsolute),
+            (Mnemonic::RRA, Addressing::XIndexedAbsolute),
+            // 0x80-0x8F
+            (Mnemonic::NOP, Addressing::Immediate),
+            (Mnemonic::STA, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::NOP, Addressing::Immediate),
+            (Mnemonic::SAX, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::STY, Addressing::ZeroPage),
+            (Mnemonic::STA, Addressing::ZeroPage),
+            (Mnemonic::STX, Addressing::ZeroPage),
+            (Mnemonic::SAX, Addressing::ZeroPage),
+            (Mnemonic::DEY, Addressing::Implied),
+            (Mnemonic::NOP, Addressing::Immediate),
+            (Mnemonic::TXA, Addressing::Implied),
+            (Mnemonic::XAA, Addressing::Immediate),
+            (Mnemonic::STY, Addressing::Absolute),
+            (Mnemonic::STA, Addressing::Absolute),
+            (Mnemonic::STX, Addressing::Absolute),
+            (Mnemonic::SAX, Addressing::Absolute),
+            // 0x90-0x9F
+            (Mnemonic::BCC, Addressing::Relative),
+            (Mnemonic::STA, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::SHA, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::STY, Addressing::XIndexedZeroPage),
+            (Mnemonic::STA, Addressing::XIndexedZeroPage),
+            (Mnemonic::STX, Addressing::YIndexedZeroPage),
+            (Mnemonic::SAX, Addressing::YIndexedZeroPage),
+            (Mnemonic::TYA, Addressing::Implied),
+            (Mnemonic::STA, Addressing::YIndexedAbsolute),
+            (Mnemonic::TXS, Addressing::Implied),
+            (Mnemonic::SHS, Addressing::YIndexedAbsolute),
+            (Mnemonic::SHY, Addressing::XIndexedAbsolute),
+            (Mnemonic::STA, Addressing::XIndexedAbsolute),
+            (Mnemonic::SHX, Addressing::YIndexedAbsolute),
+            (Mnemonic::SHA, Addressing::YIndexedAbsolute),
+            // 0xA0-0xAF
+            (Mnemonic::LDY, Addressing::Immediate),
+            (Mnemonic::LDA, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::LDX, Addressing::Immediate),
+            (Mnemonic::LAX, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::LDY, Addressing::ZeroPage),
+            (Mnemonic::LDA, Addressing::ZeroPage),
+            (Mnemonic::LDX, Addressing::ZeroPage),
+            (Mnemonic::LAX, Addressing::ZeroPage),
+            (Mnemonic::TAY, Addressing::Implied),
+            (Mnemonic::LDA, Addressing::Immediate),
+            (Mnemonic::TAX, Addressing::Implied),
+            (Mnemonic::LAX, Addressing::Immediate),
+            (Mnemonic::LDY, Addressing::Absolute),
+            (Mnemonic::LDA, Addressing::Absolute),
+            (Mnemonic::LDX, Addressing::Absolute),
+            (Mnemonic::LAX, Addressing::Absolute),
+            // 0xB0-0xBF
+            (Mnemonic::BCS, Addressing::Relative),
+            (Mnemonic::LDA, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::LAX, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::LDY, Addressing::XIndexedZeroPage),
+            (Mnemonic::LDA, Addressing::XIndexedZeroPage),
+            (Mnemonic::LDX, Addressing::YIndexedZeroPage),
+            (Mnemonic::LAX, Addressing::YIndexedZeroPage),
+            (Mnemonic::CLV, Addressing::Implied),
+            (Mnemonic::LDA, Addressing::YIndexedAbsolute),
+            (Mnemonic::TSX, Addressing::Implied),
+            (Mnemonic::LAS, Addressing::YIndexedAbsolute),
+            (Mnemonic::LDY, Addressing::XIndexedAbsolute),
+            (Mnemonic::LDA, Addressing::XIndexedAbsolute),
+            (Mnemonic::LDX, Addressing::YIndexedAbsolute),
+            (Mnemonic::LAX, Addressing::YIndexedAbsolute),
+            // 0xC0-0xCF
+            (Mnemonic::CPY, Addressing::Immediate),
+            (Mnemonic::CMP, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::NOP, Addressing::Immediate),
+            (Mnemonic::DCP, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::CPY, Addressing::ZeroPage),
+            (Mnemonic::CMP, Addressing::ZeroPage),
+            (Mnemonic::DEC, Addressing::ZeroPage),
+            (Mnemonic::DCP, Addressing::ZeroPage),
+            (Mnemonic::INY, Addressing::Implied),
+            (Mnemonic::CMP, Addressing::Immediate),
+            (Mnemonic::DEX, Addressing::Implied),
+            (Mnemonic::SBX, Addressing::Immediate),
+            (Mnemonic::CPY, Addressing::Absolute),
+            (Mnemonic::CMP, Addressing::Absolute),
+            (Mnemonic::DEC, Addressing::Absolute),
+            (Mnemonic::DCP, Addressing::Absolute),
+            // 0xD0-0xDF
+            (Mnemonic::BNE, Addressing::Relative),
+            (Mnemonic::CMP, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::DCP, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::NOP, Addressing::XIndexedZeroPage),
+            (Mnemonic::CMP, Addressing::XIndexedZeroPage),
+            (Mnemonic::DEC, Addressing::XIndexedZeroPage),
+            (Mnemonic::DCP, Addressing::XIndexedZeroPage),
+            (Mnemonic::CLD, Addressing::Implied),
+            (Mnemonic::CMP, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::Implied),
+            (Mnemonic::DCP, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::XIndexedAbsolute),
+            (Mnemonic::CMP, Addressing::XIndexedAbsolute),
+            (Mnemonic::DEC, Addressing::XIndexedAbsolute),
+            (Mnemonic::DCP, Addressing::XIndexedAbsolute),
+            // 0xE0-0xEF
+            (Mnemonic::CPX, Addressing::Immediate),
+            (Mnemonic::SBC, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::NOP, Addressing::Immediate),
+            (Mnemonic::ISC, Addressing::XIndexedZeroPageIndirect),
+            (Mnemonic::CPX, Addressing::ZeroPage),
+            (Mnemonic::SBC, Addressing::ZeroPage),
+            (Mnemonic::INC, Addressing::ZeroPage),
+            (Mnemonic::ISC, Addressing::ZeroPage),
+            (Mnemonic::INX, Addressing::Implied),
+            (Mnemonic::SBC, Addressing::Immediate),
+            (Mnemonic::NOP, Addressing::Implied),
+            (Mnemonic::SBC, Addressing::Immediate),
+            (Mnemonic::CPX, Addressing::Absolute),
+            (Mnemonic::SBC, Addressing::Absolute),
+            (Mnemonic::INC, Addressing::Absolute),
+            (Mnemonic::ISC, Addressing::Absolute),
+            // 0xF0-0xFF
+            (Mnemonic::BEQ, Addressing::Relative),
+            (Mnemonic::SBC, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::JAM, Addressing::Implied),
+            (Mnemonic::ISC, Addressing::ZeroPageIndirectYIndexed),
+            (Mnemonic::NOP, Addressing::XIndexedZeroPage),
+            (Mnemonic::SBC, Addressing::XIndexedZeroPage),
+            (Mnemonic::INC, Addressing::XIndexedZeroPage),
+            (Mnemonic::ISC, Addressing::XIndexedZeroPage),
+            (Mnemonic::SED, Addressing::Implied),
+            (Mnemonic::SBC, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::Implied),
+            (Mnemonic::ISC, Addressing::YIndexedAbsolute),
+            (Mnemonic::NOP, Addressing::XIndexedAbsolute),
+            (Mnemonic::SBC, Addressing::XIndexedAbsolute),
+            (Mnemonic::INC, Addressing::XIndexedAbsolute),
+            (Mnemonic::ISC, Addressing::XIndexedAbsolute),
+        ]
     }
 }
 
-impl Display for Instruction {
+impl Display for Mnemonic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::LAS => "las".fmt(f),
-            Instruction::LAX => "lax".fmt(f),
-            Instruction::LDA => "lda".fmt(f),
-            Instruction::LDX => "ldx".fmt(f),
-            Instruction::LDY => "ldy".fmt(f),
-            Instruction::SAX => "sax".fmt(f),
-            Instruction::SHA => "sha".fmt(f),
-            Instruction::SHX => "shx".fmt(f),
-            Instruction::SHY => "shy".fmt(f),
-            Instruction::STA => "sta".fmt(f),
-            Instruction::STX => "stx".fmt(f),
-            Instruction::STY => "sty".fmt(f),
-            Instruction::SHS => "shs".fmt(f),
-            Instruction::TAX => "tax".fmt(f),
-            Instruction::TAY => "tay".fmt(f),
-            Instruction::TSX => "tsx".fmt(f),
-            Instruction::TXA => "txa".fmt(f),
-            Instruction::TXS => "txs".fmt(f),
-            Instruction::TYA => "tya".fmt(f),
-            Instruction::PHA => "pha".fmt(f),
-            Instruction::PHP => "php".fmt(f),
-            Instruction::PLA => "pla".fmt(f),
-            Instruction::PLP => "plp".fmt(f),
-            Instruction::ASL => "asl".fmt(f),
-            Instruction::LSR => "lsr".fmt(f),
-            Instruction::ROL => "rol".fmt(f),
-            Instruction::ROR => "ror".fmt(f),
-            Instruction::AND => "and".fmt(f),
-            Instruction::BIT => "bit".fmt(f),
-            Instruction::EOR => "eor".fmt(f),
-            Instruction::ORA => "ora".fmt(f),
-            Instruction::ADC => "adc".fmt(f),
-            Instruction::ANC => "anc".fmt(f),
-            Instruction::ARR => "arr".fmt(f),
-            Instruction::ASR => "asr".fmt(f),
-            Instruction::CMP => "cmp".fmt(f),
-            Instruction::CPX => "cpx".fmt(f),
-            Instruction::CPY => "cpy".fmt(f),
-            Instruction::DCP => "dcp".fmt(f),
-            Instruction::ISC => "isc".fmt(f),
-            Instruction::RLA => "rla".fmt(f),
-            Instruction::RRA => "rra".fmt(f),
-            Instruction::SBC => "sbc".fmt(f),
-            Instruction::SBX => "sbx".fmt(f),
-            Instruction::SLO => "slo".fmt(f),
-            Instruction::SRE => "sre".fmt(f),
-            Instruction::XAA => "xaa".fmt(f),
-            Instruction::DEC => "dec".fmt(f),
-            Instruction::DEX => "dex".fmt(f),
-            Instruction::DEY => "dey".fmt(f),
-            Instruction::INC => "inc".fmt(f),
-            Instruction::INX => "inx".fmt(f),
-            Instruction::INY => "iny".fmt(f),
-            Instruction::BRK => "brk".fmt(f),
-            Instruction::JMP => "jmp".fmt(f),
-            Instruction::JSR => "jsr".fmt(f),
-            Instruction::RTI => "rti".fmt(f),
-            Instruction::RTS => "rts".fmt(f),
-            Instruction::BCC => "bcc".fmt(f),
-            Instruction::BCS => "bcs".fmt(f),
-            Instruction::BEQ => "beq".fmt(f),
-            Instruction::BMI => "bmi".fmt(f),
-            Instruction::BNE => "bne".fmt(f),
-            Instruction::BPL => "bpl".fmt(f),
-            Instruction::BVC => "bvc".fmt(f),
-            Instruction::BVS => "bvs".fmt(f),
-            Instruction::CLC => "clc".fmt(f),
-            Instruction::CLD => "cld".fmt(f),
-            Instruction::CLI => "cli".fmt(f),
-            Instruction::CLV => "clv".fmt(f),
-            Instruction::SEC => "sec".fmt(f),
-            Instruction::SED => "sed".fmt(f),
-            Instruction::SEI => "sei".fmt(f),
-            Instruction::JAM => "jam".fmt(f),
-            Instruction::NOP => "nop".fmt(f),
+            Mnemonic::LAS => "las".fmt(f),
+            Mnemonic::LAX => "lax".fmt(f),
+            Mnemonic::LDA => "lda".fmt(f),
+            Mnemonic::LDX => "ldx".fmt(f),
+            Mnemonic::LDY => "ldy".fmt(f),
+            Mnemonic::SAX => "sax".fmt(f),
+            Mnemonic::SHA => "sha".fmt(f),
+            Mnemonic::SHX => "shx".fmt(f),
+            Mnemonic::SHY => "shy".fmt(f),
+            Mnemonic::STA => "sta".fmt(f),
+            Mnemonic::STX => "stx".fmt(f),
+            Mnemonic::STY => "sty".fmt(f),
+            Mnemonic::SHS => "shs".fmt(f),
+            Mnemonic::TAX => "tax".fmt(f),
+            Mnemonic::TAY => "tay".fmt(f),
+            Mnemonic::TSX => "tsx".fmt(f),
+            Mnemonic::TXA => "txa".fmt(f),
+            Mnemonic::TXS => "txs".fmt(f),
+            Mnemonic::TYA => "tya".fmt(f),
+            Mnemonic::PHA => "pha".fmt(f),
+            Mnemonic::PHP => "php".fmt(f),
+            Mnemonic::PLA => "pla".fmt(f),
+            Mnemonic::PLP => "plp".fmt(f),
+            Mnemonic::ASL => "asl".fmt(f),
+            Mnemonic::LSR => "lsr".fmt(f),
+            Mnemonic::ROL => "rol".fmt(f),
+            Mnemonic::ROR => "ror".fmt(f),
+            Mnemonic::AND => "and".fmt(f),
+            Mnemonic::BIT => "bit".fmt(f),
+            Mnemonic::EOR => "eor".fmt(f),
+            Mnemonic::ORA => "ora".fmt(f),
+            Mnemonic::ADC => "adc".fmt(f),
+            Mnemonic::ANC => "anc".fmt(f),
+            Mnemonic::ARR => "arr".fmt(f),
+            Mnemonic::ASR => "asr".fmt(f),
+            Mnemonic::CMP => "cmp".fmt(f),
+            Mnemonic::CPX => "cpx".fmt(f),
+            Mnemonic::CPY => "cpy".fmt(f),
+            Mnemonic::DCP => "dcp".fmt(f),
+            Mnemonic::ISC => "isc".fmt(f),
+            Mnemonic::RLA => "rla".fmt(f),
+            Mnemonic::RRA => "rra".fmt(f),
+            Mnemonic::SBC => "sbc".fmt(f),
+            Mnemonic::SBX => "sbx".fmt(f),
+            Mnemonic::SLO => "slo".fmt(f),
+            Mnemonic::SRE => "sre".fmt(f),
+            Mnemonic::XAA => "xaa".fmt(f),
+            Mnemonic::DEC => "dec".fmt(f),
+            Mnemonic::DEX => "dex".fmt(f),
+            Mnemonic::DEY => "dey".fmt(f),
+            Mnemonic::INC => "inc".fmt(f),
+            Mnemonic::INX => "inx".fmt(f),
+            Mnemonic::INY => "iny".fmt(f),
+            Mnemonic::BRK => "brk".fmt(f),
+            Mnemonic::JMP => "jmp".fmt(f),
+            Mnemonic::JSR => "jsr".fmt(f),
+            Mnemonic::RTI => "rti".fmt(f),
+            Mnemonic::RTS => "rts".fmt(f),
+            Mnemonic::BCC => "bcc".fmt(f),
+            Mnemonic::BCS => "bcs".fmt(f),
+            Mnemonic::BEQ => "beq".fmt(f),
+            Mnemonic::BMI => "bmi".fmt(f),
+            Mnemonic::BNE => "bne".fmt(f),
+            Mnemonic::BPL => "bpl".fmt(f),
+            Mnemonic::BVC => "bvc".fmt(f),
+            Mnemonic::BVS => "bvs".fmt(f),
+            Mnemonic::CLC => "clc".fmt(f),
+            Mnemonic::CLD => "cld".fmt(f),
+            Mnemonic::CLI => "cli".fmt(f),
+            Mnemonic::CLV => "clv".fmt(f),
+            Mnemonic::SEC => "sec".fmt(f),
+            Mnemonic::SED => "sed".fmt(f),
+            Mnemonic::SEI => "sei".fmt(f),
+            Mnemonic::JAM => "jam".fmt(f),
+            Mnemonic::NOP => "nop".fmt(f),
         }
     }
 }
 
-pub(crate) const fn table() -> &'static [(Instruction, Addressing); 256] {
-    &[
-        // 0x00-0x0F
-        (Instruction::BRK, Addressing::Implied),
-        (Instruction::ORA, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::SLO, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::NOP, Addressing::ZeroPage),
-        (Instruction::ORA, Addressing::ZeroPage),
-        (Instruction::ASL, Addressing::ZeroPage),
-        (Instruction::SLO, Addressing::ZeroPage),
-        (Instruction::PHP, Addressing::Implied),
-        (Instruction::ORA, Addressing::Immediate),
-        (Instruction::ASL, Addressing::Accumulator),
-        (Instruction::ANC, Addressing::Immediate),
-        (Instruction::NOP, Addressing::Absolute),
-        (Instruction::ORA, Addressing::Absolute),
-        (Instruction::ASL, Addressing::Absolute),
-        (Instruction::SLO, Addressing::Absolute),
-        // 0x10-0x1F
-        (Instruction::BPL, Addressing::Relative),
-        (Instruction::ORA, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::SLO, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::NOP, Addressing::XIndexedZeroPage),
-        (Instruction::ORA, Addressing::XIndexedZeroPage),
-        (Instruction::ASL, Addressing::XIndexedZeroPage),
-        (Instruction::SLO, Addressing::XIndexedZeroPage),
-        (Instruction::CLC, Addressing::Implied),
-        (Instruction::ORA, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::Implied),
-        (Instruction::SLO, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::XIndexedAbsolute),
-        (Instruction::ORA, Addressing::XIndexedAbsolute),
-        (Instruction::ASL, Addressing::XIndexedAbsolute),
-        (Instruction::SLO, Addressing::XIndexedAbsolute),
-        // 0x20-0x2F
-        (Instruction::JSR, Addressing::Absolute),
-        (Instruction::AND, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::RLA, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::BIT, Addressing::ZeroPage),
-        (Instruction::AND, Addressing::ZeroPage),
-        (Instruction::ROL, Addressing::ZeroPage),
-        (Instruction::RLA, Addressing::ZeroPage),
-        (Instruction::PLP, Addressing::Implied),
-        (Instruction::AND, Addressing::Immediate),
-        (Instruction::ROL, Addressing::Accumulator),
-        (Instruction::ANC, Addressing::Immediate),
-        (Instruction::BIT, Addressing::Absolute),
-        (Instruction::AND, Addressing::Absolute),
-        (Instruction::ROL, Addressing::Absolute),
-        (Instruction::RLA, Addressing::Absolute),
-        // 0x30-0x3F
-        (Instruction::BMI, Addressing::Relative),
-        (Instruction::AND, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::RLA, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::NOP, Addressing::XIndexedZeroPage),
-        (Instruction::AND, Addressing::XIndexedZeroPage),
-        (Instruction::ROL, Addressing::XIndexedZeroPage),
-        (Instruction::RLA, Addressing::XIndexedZeroPage),
-        (Instruction::SEC, Addressing::Implied),
-        (Instruction::AND, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::Implied),
-        (Instruction::RLA, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::XIndexedAbsolute),
-        (Instruction::AND, Addressing::XIndexedAbsolute),
-        (Instruction::ROL, Addressing::XIndexedAbsolute),
-        (Instruction::RLA, Addressing::XIndexedAbsolute),
-        // 0x40-0x4F
-        (Instruction::RTI, Addressing::Implied),
-        (Instruction::EOR, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::SRE, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::NOP, Addressing::ZeroPage),
-        (Instruction::EOR, Addressing::ZeroPage),
-        (Instruction::LSR, Addressing::ZeroPage),
-        (Instruction::SRE, Addressing::ZeroPage),
-        (Instruction::PHA, Addressing::Implied),
-        (Instruction::EOR, Addressing::Immediate),
-        (Instruction::LSR, Addressing::Accumulator),
-        (Instruction::ASR, Addressing::Immediate),
-        (Instruction::JMP, Addressing::Absolute),
-        (Instruction::EOR, Addressing::Absolute),
-        (Instruction::LSR, Addressing::Absolute),
-        (Instruction::SRE, Addressing::Absolute),
-        // 0x50-0x5F
-        (Instruction::BVC, Addressing::Relative),
-        (Instruction::EOR, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::SRE, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::NOP, Addressing::XIndexedZeroPage),
-        (Instruction::EOR, Addressing::XIndexedZeroPage),
-        (Instruction::LSR, Addressing::XIndexedZeroPage),
-        (Instruction::SRE, Addressing::XIndexedZeroPage),
-        (Instruction::CLI, Addressing::Implied),
-        (Instruction::EOR, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::Implied),
-        (Instruction::SRE, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::XIndexedAbsolute),
-        (Instruction::EOR, Addressing::XIndexedAbsolute),
-        (Instruction::LSR, Addressing::XIndexedAbsolute),
-        (Instruction::SRE, Addressing::XIndexedAbsolute),
-        // 0x60-0x6F
-        (Instruction::RTS, Addressing::Implied),
-        (Instruction::ADC, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::RRA, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::NOP, Addressing::ZeroPage),
-        (Instruction::ADC, Addressing::ZeroPage),
-        (Instruction::ROR, Addressing::ZeroPage),
-        (Instruction::RRA, Addressing::ZeroPage),
-        (Instruction::PLA, Addressing::Implied),
-        (Instruction::ADC, Addressing::Immediate),
-        (Instruction::ROR, Addressing::Accumulator),
-        (Instruction::ARR, Addressing::Immediate),
-        (Instruction::JMP, Addressing::AbsoluteIndirect),
-        (Instruction::ADC, Addressing::Absolute),
-        (Instruction::ROR, Addressing::Absolute),
-        (Instruction::RRA, Addressing::Absolute),
-        // 0x70-0x7F
-        (Instruction::BVS, Addressing::Relative),
-        (Instruction::ADC, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::RRA, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::NOP, Addressing::XIndexedZeroPage),
-        (Instruction::ADC, Addressing::XIndexedZeroPage),
-        (Instruction::ROR, Addressing::XIndexedZeroPage),
-        (Instruction::RRA, Addressing::XIndexedZeroPage),
-        (Instruction::SEI, Addressing::Implied),
-        (Instruction::ADC, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::Implied),
-        (Instruction::RRA, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::XIndexedAbsolute),
-        (Instruction::ADC, Addressing::XIndexedAbsolute),
-        (Instruction::ROR, Addressing::XIndexedAbsolute),
-        (Instruction::RRA, Addressing::XIndexedAbsolute),
-        // 0x80-0x8F
-        (Instruction::NOP, Addressing::Immediate),
-        (Instruction::STA, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::NOP, Addressing::Immediate),
-        (Instruction::SAX, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::STY, Addressing::ZeroPage),
-        (Instruction::STA, Addressing::ZeroPage),
-        (Instruction::STX, Addressing::ZeroPage),
-        (Instruction::SAX, Addressing::ZeroPage),
-        (Instruction::DEY, Addressing::Implied),
-        (Instruction::NOP, Addressing::Immediate),
-        (Instruction::TXA, Addressing::Implied),
-        (Instruction::XAA, Addressing::Immediate),
-        (Instruction::STY, Addressing::Absolute),
-        (Instruction::STA, Addressing::Absolute),
-        (Instruction::STX, Addressing::Absolute),
-        (Instruction::SAX, Addressing::Absolute),
-        // 0x90-0x9F
-        (Instruction::BCC, Addressing::Relative),
-        (Instruction::STA, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::SHA, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::STY, Addressing::XIndexedZeroPage),
-        (Instruction::STA, Addressing::XIndexedZeroPage),
-        (Instruction::STX, Addressing::YIndexedZeroPage),
-        (Instruction::SAX, Addressing::YIndexedZeroPage),
-        (Instruction::TYA, Addressing::Implied),
-        (Instruction::STA, Addressing::YIndexedAbsolute),
-        (Instruction::TXS, Addressing::Implied),
-        (Instruction::SHS, Addressing::YIndexedAbsolute),
-        (Instruction::SHY, Addressing::XIndexedAbsolute),
-        (Instruction::STA, Addressing::XIndexedAbsolute),
-        (Instruction::SHX, Addressing::YIndexedAbsolute),
-        (Instruction::SHA, Addressing::YIndexedAbsolute),
-        // 0xA0-0xAF
-        (Instruction::LDY, Addressing::Immediate),
-        (Instruction::LDA, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::LDX, Addressing::Immediate),
-        (Instruction::LAX, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::LDY, Addressing::ZeroPage),
-        (Instruction::LDA, Addressing::ZeroPage),
-        (Instruction::LDX, Addressing::ZeroPage),
-        (Instruction::LAX, Addressing::ZeroPage),
-        (Instruction::TAY, Addressing::Implied),
-        (Instruction::LDA, Addressing::Immediate),
-        (Instruction::TAX, Addressing::Implied),
-        (Instruction::LAX, Addressing::Immediate),
-        (Instruction::LDY, Addressing::Absolute),
-        (Instruction::LDA, Addressing::Absolute),
-        (Instruction::LDX, Addressing::Absolute),
-        (Instruction::LAX, Addressing::Absolute),
-        // 0xB0-0xBF
-        (Instruction::BCS, Addressing::Relative),
-        (Instruction::LDA, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::LAX, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::LDY, Addressing::XIndexedZeroPage),
-        (Instruction::LDA, Addressing::XIndexedZeroPage),
-        (Instruction::LDX, Addressing::YIndexedZeroPage),
-        (Instruction::LAX, Addressing::YIndexedZeroPage),
-        (Instruction::CLV, Addressing::Implied),
-        (Instruction::LDA, Addressing::YIndexedAbsolute),
-        (Instruction::TSX, Addressing::Implied),
-        (Instruction::LAS, Addressing::YIndexedAbsolute),
-        (Instruction::LDY, Addressing::XIndexedAbsolute),
-        (Instruction::LDA, Addressing::XIndexedAbsolute),
-        (Instruction::LDX, Addressing::YIndexedAbsolute),
-        (Instruction::LAX, Addressing::YIndexedAbsolute),
-        // 0xC0-0xCF
-        (Instruction::CPY, Addressing::Immediate),
-        (Instruction::CMP, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::NOP, Addressing::Immediate),
-        (Instruction::DCP, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::CPY, Addressing::ZeroPage),
-        (Instruction::CMP, Addressing::ZeroPage),
-        (Instruction::DEC, Addressing::ZeroPage),
-        (Instruction::DCP, Addressing::ZeroPage),
-        (Instruction::INY, Addressing::Implied),
-        (Instruction::CMP, Addressing::Immediate),
-        (Instruction::DEX, Addressing::Implied),
-        (Instruction::SBX, Addressing::Immediate),
-        (Instruction::CPY, Addressing::Absolute),
-        (Instruction::CMP, Addressing::Absolute),
-        (Instruction::DEC, Addressing::Absolute),
-        (Instruction::DCP, Addressing::Absolute),
-        // 0xD0-0xDF
-        (Instruction::BNE, Addressing::Relative),
-        (Instruction::CMP, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::DCP, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::NOP, Addressing::XIndexedZeroPage),
-        (Instruction::CMP, Addressing::XIndexedZeroPage),
-        (Instruction::DEC, Addressing::XIndexedZeroPage),
-        (Instruction::DCP, Addressing::XIndexedZeroPage),
-        (Instruction::CLD, Addressing::Implied),
-        (Instruction::CMP, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::Implied),
-        (Instruction::DCP, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::XIndexedAbsolute),
-        (Instruction::CMP, Addressing::XIndexedAbsolute),
-        (Instruction::DEC, Addressing::XIndexedAbsolute),
-        (Instruction::DCP, Addressing::XIndexedAbsolute),
-        // 0xE0-0xEF
-        (Instruction::CPX, Addressing::Immediate),
-        (Instruction::SBC, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::NOP, Addressing::Immediate),
-        (Instruction::ISC, Addressing::XIndexedZeroPageIndirect),
-        (Instruction::CPX, Addressing::ZeroPage),
-        (Instruction::SBC, Addressing::ZeroPage),
-        (Instruction::INC, Addressing::ZeroPage),
-        (Instruction::ISC, Addressing::ZeroPage),
-        (Instruction::INX, Addressing::Implied),
-        (Instruction::SBC, Addressing::Immediate),
-        (Instruction::NOP, Addressing::Implied),
-        (Instruction::SBC, Addressing::Immediate),
-        (Instruction::CPX, Addressing::Absolute),
-        (Instruction::SBC, Addressing::Absolute),
-        (Instruction::INC, Addressing::Absolute),
-        (Instruction::ISC, Addressing::Absolute),
-        // 0xF0-0xFF
-        (Instruction::BEQ, Addressing::Relative),
-        (Instruction::SBC, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::JAM, Addressing::Implied),
-        (Instruction::ISC, Addressing::ZeroPageIndirectYIndexed),
-        (Instruction::NOP, Addressing::XIndexedZeroPage),
-        (Instruction::SBC, Addressing::XIndexedZeroPage),
-        (Instruction::INC, Addressing::XIndexedZeroPage),
-        (Instruction::ISC, Addressing::XIndexedZeroPage),
-        (Instruction::SED, Addressing::Implied),
-        (Instruction::SBC, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::Implied),
-        (Instruction::ISC, Addressing::YIndexedAbsolute),
-        (Instruction::NOP, Addressing::XIndexedAbsolute),
-        (Instruction::SBC, Addressing::XIndexedAbsolute),
-        (Instruction::INC, Addressing::XIndexedAbsolute),
-        (Instruction::ISC, Addressing::XIndexedAbsolute),
-    ]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct Instruction {
+    pub(crate) opcode: Mnemonic,
+    pub(crate) addressing: Addressing,
+    pub(crate) micro_ops: &'static [MicroOp],
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct InstructionTemplate {
-    name: Instruction,
-    addr: Addressing,
-    ops: &'static [MicroOp],
-}
-
-impl InstructionTemplate {
+impl Instruction {
     pub(crate) const fn ldx(addr: Addressing) -> Self {
         Self {
-            name: Instruction::LDX,
-            addr,
-            ops: &[],
+            opcode: Mnemonic::LDX,
+            addressing: addr,
+            micro_ops: &[],
         }
     }
 }

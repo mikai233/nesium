@@ -1,4 +1,6 @@
-use crate::cpu::lookup::Table;
+use crate::bus::Bus;
+use crate::cpu::instruction::Instruction;
+use crate::cpu::lookup::LOOKUP_TABLE;
 use crate::cpu::status::Status;
 mod phase;
 mod status;
@@ -7,13 +9,6 @@ mod addressing;
 mod instruction;
 mod lookup;
 mod micro_op;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct AddrContext {
-    effective_addr: Option<u16>,
-    data: Option<u8>,
-    crossed_page: bool,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct CPU {
@@ -25,7 +20,43 @@ struct CPU {
     p: Status, //Processor Status
     pc: u16,   //Program Counter
 
-    lookup: &'static Table,
-    context: AddrContext,
-    op_index: usize,
+    instruction: Option<&'static Instruction>,
+    index: usize,
+    tmp: u8,
+    effective_addr: u16,
+    data: u8,
+    crossed_page: bool,
+}
+
+impl CPU {
+    pub fn clock(&mut self, bus: &mut Bus) {
+        let instruction = *self.instruction.get_or_insert_with(|| {
+            let opcode = bus.read(self.pc);
+            &LOOKUP_TABLE[opcode as usize]
+        });
+        let micro_op = &instruction.micro_ops[self.index];
+        micro_op.exec(self, bus);
+        self.index += 1;
+        if self.index > instruction.micro_ops.len() {
+            self.clear();
+        }
+    }
+
+    pub fn fetch(&mut self, bus: &mut Bus) -> &'static Instruction {
+        let opcode = bus.read(self.pc);
+        self.pc = self.pc.wrapping_add(1);
+        &LOOKUP_TABLE[opcode as usize]
+    }
+
+    pub(crate) fn incr_pc(&mut self) {
+        self.pc = self.pc.wrapping_add(1);
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.index = 0;
+        self.instruction = None;
+        self.effective_addr = 0;
+        self.data = 0;
+        self.crossed_page = false;
+    }
 }

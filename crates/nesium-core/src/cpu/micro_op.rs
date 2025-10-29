@@ -1,173 +1,215 @@
-/// A micro-operation represents the smallest atomic CPU action.
-/// Each 6502 instruction can be broken down into a sequence of MicroOps.
-/// This enum allows precise cycle-by-cycle emulation.
+use crate::{bus::Bus, cpu::CPU};
+
+type OpFn = fn(&mut CPU, &mut Bus);
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MicroOp2 {
+    pub(crate) name: &'static str,
+    pub(crate) op: OpFn,
+}
+
+impl MicroOp2 {
+    pub(crate) fn new(name: &'static str, op: OpFn) -> Self {
+        Self { name, op }
+    }
+}
+
+impl MicroOp2 {
+    pub(crate) fn exec(&self, cpu: &mut CPU, bus: &mut Bus) {
+        (self.op)(cpu, bus);
+    }
+
+    pub(crate) fn fetch_opcode() -> Self {
+        Self {
+            name: "fetch_opcode",
+            op: |cpu, _| {
+                cpu.incr_pc();
+            },
+        }
+    }
+}
+
+/// Represents one cycle-level micro operation used during address resolution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MicroOp {
-    // === Memory access ===
-    /// Read a byte from the program counter (usually for opcode or immediate value),
-    /// then increment the program counter.
+pub(crate) enum MicroOp {
+    /// Fetch opcode byte.
     FetchOpcode,
 
-    /// Read the low byte of an address from memory at PC, increment PC.
+    /// Fetch low byte of address (operand low).
     FetchAddrLo,
 
-    /// Read the high byte of an address from memory at PC, increment PC.
+    /// Fetch high byte of address (operand high).
     FetchAddrHi,
 
-    /// Read from zero page address.
+    /// Fetch zero-page address byte (operand).
+    FetchZeroPageAddr,
+
+    /// Read from zero-page memory.
     ReadZeroPage,
 
-    /// Write to zero page address.
-    WriteZeroPage,
+    /// Read from zero-page + X.
+    ReadZeroPageXBase,
+    /// Read from zero-page + Y.
+    ReadZeroPageYBase,
 
-    /// Read from absolute address.
-    ReadAbs,
+    /// Fetch pointer low byte (for indirect addressing).
+    ReadIndirectLo,
+    /// Fetch pointer high byte.
+    ReadIndirectHi,
 
-    /// Write to absolute address.
-    WriteAbs,
+    /// Read from absolute + X base (may cross page).
+    ReadAbsXBase,
+    /// Read from absolute + Y base (may cross page).
+    ReadAbsYBase,
 
-    /// Perform a dummy read used in certain addressing modes (e.g., Absolute,X)
-    /// to simulate timing and page crossing behavior.
+    /// Dummy read if page boundary crossed (e.g. ABS,X or ABS,Y).
+    DummyReadIfCrossed,
+
+    /// Read the effective address (final operand fetch).
+    ReadEffective,
+
+    /// Read the immediate operand (fetch the next byte after the opcode).
+    ReadImmediate,
+
+    /// Read effective address for branch (PC-relative).
+    FetchRelativeOffset,
+
+    /// Dummy read (used for implied/accumulator instructions).
     DummyRead,
 
-    /// Read from memory using (ZeroPage,X) indirect addressing.
-    ReadIndirectXLo,
-    /// Read from memory using (ZeroPage,X) indirect addressing.
-    ReadIndirectXHi,
+    /// Internal no-op (used to pad cycle count for consistency).
+    Idle,
 
-    /// Read from memory using (ZeroPage),Y indirect addressing.
-    ReadIndirectYLo,
-    /// Read from memory using (ZeroPage),Y indirect addressing.
-    ReadIndirectYHi,
+    //
+    Instruction(fn(&mut CPU, &mut Bus)),
+}
 
-    /// Add index register (X or Y) to the base address (low byte only),
-    /// and check if a page boundary is crossed.
-    AddIndexToAddrLo,
+impl MicroOp {
+    pub(crate) fn exec(&self, cpu: &mut CPU, bus: &mut Bus) {
+        match self {
+            // -----------------------------------------------------------------
+            // Fetch instruction opcode
+            // -----------------------------------------------------------------
+            MicroOp::FetchOpcode => {
+                cpu.incr_pc();
+            }
 
-    /// Fix the high byte of the address if a page boundary was crossed.
-    CorrectAddrHiOnPageCross,
+            // -----------------------------------------------------------------
+            // Fetch address / operand bytes
+            // -----------------------------------------------------------------
+            MicroOp::FetchAddrLo => {
+                let lo = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.effective_addr = lo as u16;
+            }
 
-    // === Register operations ===
-    /// Load accumulator (A) with a value.
-    LoadA,
+            MicroOp::FetchAddrHi => {
+                let hi = bus.read(cpu.pc);
+                cpu.incr_pc();
+                let base = cpu.effective_addr | ((hi as u16) << 8);
+                cpu.effective_addr = base;
+            }
 
-    /// Load X register.
-    LoadX,
+            MicroOp::FetchZeroPageAddr => {
+                let addr = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.effective_addr = addr as u16;
+            }
 
-    /// Load Y register.
-    LoadY,
+            MicroOp::FetchRelativeOffset => {
+                let offset = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.data = offset;
+            }
 
-    /// Store accumulator (A) to memory.
-    StoreA,
+            // -----------------------------------------------------------------
+            // Zero Page / Indexed
+            // -----------------------------------------------------------------
+            MicroOp::ReadZeroPage => {
+                let addr = cpu.effective_addr & 0xFF;
+                cpu.data = bus.read(addr);
+            }
 
-    /// Store X register to memory.
-    StoreX,
+            MicroOp::ReadZeroPageXBase => {
+                let base = cpu.effective_addr & 0xFF;
+                let addr = base.wrapping_add(cpu.x as u16) & 0xFF;
+                cpu.effective_addr = addr;
+                let _ = bus.read(addr);
+            }
 
-    /// Store Y register to memory.
-    StoreY,
+            MicroOp::ReadZeroPageYBase => {
+                let base = cpu.effective_addr & 0xFF;
+                let addr = base.wrapping_add(cpu.y as u16) & 0xFF;
+                cpu.effective_addr = addr;
+                let _ = bus.read(addr);
+            }
 
-    /// Transfer A to X.
-    TransferAToX,
+            // -----------------------------------------------------------------
+            // Absolute + X / Y (check page cross)
+            // -----------------------------------------------------------------
+            MicroOp::ReadAbsXBase => {
+                let base = cpu.effective_addr;
+                let addr = base.wrapping_add(cpu.x as u16);
+                cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
+                cpu.effective_addr = addr;
+                cpu.data = bus.read(cpu.effective_addr);
+            }
 
-    /// Transfer A to Y.
-    TransferAToY,
+            MicroOp::ReadAbsYBase => {
+                let base = cpu.effective_addr;
+                let addr = base.wrapping_add(cpu.y as u16);
+                cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
+                cpu.effective_addr = addr;
+                cpu.data = bus.read(cpu.effective_addr);
+            }
 
-    /// Transfer X to A.
-    TransferXToA,
+            MicroOp::DummyReadIfCrossed => {
+                let _ = bus.read(cpu.effective_addr);
+            }
 
-    /// Transfer Y to A.
-    TransferYToA,
+            // -----------------------------------------------------------------
+            // Indirect addressing
+            // -----------------------------------------------------------------
+            MicroOp::ReadIndirectLo => {
+                let zp_addr = cpu.data as u16;
+                let lo = bus.read(zp_addr);
+                cpu.effective_addr = lo as u16;
+            }
 
-    /// Transfer stack pointer to X.
-    TransferSPToX,
+            MicroOp::ReadIndirectHi => {
+                let zp_addr = cpu.effective_addr & 0xFF;
+                let hi = bus.read(zp_addr.wrapping_add(1) & 0xFF);
+                let base = cpu.effective_addr | ((hi as u16) << 8);
+                cpu.effective_addr = base;
+            }
 
-    /// Transfer X to stack pointer.
-    TransferXToSP,
+            // -----------------------------------------------------------------
+            // Read final effective value
+            // -----------------------------------------------------------------
+            MicroOp::ReadEffective => {
+                let addr = cpu.effective_addr;
+                cpu.data = bus.read(addr);
+            }
 
-    // === ALU operations ===
-    /// Add memory and carry to A.
-    ADC,
+            MicroOp::ReadImmediate => {
+                let byte = bus.read(cpu.pc);
+                cpu.pc = cpu.pc.wrapping_add(1);
+                cpu.data = byte;
+            }
 
-    /// Subtract memory and borrow from A.
-    SBC,
+            // -----------------------------------------------------------------
+            // Dummy read / padding
+            // -----------------------------------------------------------------
+            MicroOp::DummyRead => {
+                let _ = bus.read(cpu.pc);
+            }
 
-    /// Logical AND with A.
-    AND,
-
-    /// Logical OR with A.
-    ORA,
-
-    /// Logical XOR with A.
-    EOR,
-
-    /// Compare memory with A.
-    CMP,
-
-    /// Compare memory with X.
-    CPX,
-
-    /// Compare memory with Y.
-    CPY,
-
-    /// Shift A or memory left.
-    ASL,
-
-    /// Shift A or memory right.
-    LSR,
-
-    /// Rotate A or memory left through carry.
-    ROL,
-
-    /// Rotate A or memory right through carry.
-    ROR,
-
-    /// Increment memory.
-    INC,
-
-    /// Decrement memory.
-    DEC,
-
-    // === Branching & control flow ===
-    /// Branch to a relative address (if condition met).
-    BranchIfCond,
-
-    /// Add branch offset to PC low byte.
-    AddBranchOffset,
-
-    /// Correct PC high byte if page boundary crossed during branch.
-    FixBranchCross,
-
-    /// Push PC high byte onto stack.
-    PushPCH,
-
-    /// Push PC low byte onto stack.
-    PushPCL,
-
-    /// Push processor status onto stack.
-    PushP,
-
-    /// Pull processor status from stack.
-    PullP,
-
-    /// Pull PC low byte from stack.
-    PullPCL,
-
-    /// Pull PC high byte from stack.
-    PullPCH,
-
-    // === Misc operations ===
-    /// Increment the program counter.
-    IncPC,
-
-    /// No operation (NOP) – consume one cycle without doing anything.
-    Nop,
-
-    /// Set a flag (N, V, D, I, Z, C, etc.).
-    SetFlag,
-
-    /// Clear a flag.
-    ClearFlag,
-
-    /// Wait one cycle (often used for page-cross penalties or internal operations).
-    StallCycle,
+            MicroOp::Idle => {
+                // no-op
+            }
+            MicroOp::Instruction(micro_op) => {
+                micro_op(cpu, bus);
+            }
+        }
+    }
 }
