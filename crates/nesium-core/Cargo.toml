@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 bitflags = { workspace = true }
-phf = { workspace = true, features = ["macros"] }
+
+[dev-dependencies]

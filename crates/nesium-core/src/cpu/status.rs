@@ -81,8 +81,48 @@ impl Status {
         Status::from_bits_truncate(byte)
     }
 
-    pub(crate) fn set_zn(&mut self, value: u8) {
+    #[inline]
+    pub fn set_zn(&mut self, value: u8) {
         self.update_zero(value);
         self.update_negative(value);
+    }
+
+    /// Update carry flag (C) using bitflags API
+    #[inline]
+    pub fn set_c(&mut self, value: bool) {
+        self.set(Status::CARRY, value);
+    }
+
+    /// Reset N flag (always for LSR)
+    #[inline]
+    pub fn reset_n(&mut self) {
+        self.remove(Status::NEGATIVE);
+    }
+
+    /// Set N flag to a specific bit (bit 7 of memory)
+    #[inline]
+    pub fn set_n(&mut self, value: bool) {
+        self.set(Status::NEGATIVE, value);
+    }
+
+    /// Set V flag to a specific bit (bit 6 of memory)
+    #[inline]
+    pub fn set_v(&mut self, value: bool) {
+        self.set(Status::OVERFLOW, value);
+    }
+
+    #[inline]
+    pub fn set_z(&mut self, value: bool) {
+        self.set(Status::ZERO, value);
+    }
+
+    /// Set N flag to match carry (input carry becomes N)
+    #[inline]
+    pub fn set_n_from_c(&mut self) {
+        if self.contains(Status::CARRY) {
+            self.insert(Status::NEGATIVE);
+        } else {
+            self.remove(Status::NEGATIVE);
+        };
     }
 }

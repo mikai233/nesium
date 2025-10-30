@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use crate::bus::nes::NesBus;
 
+pub mod mock;
 pub mod nes;
 
 pub trait Bus: Debug {
