@@ -8,28 +8,12 @@ use crate::{
 };
 
 // ================================================================
-//  1. Absolute: STA $nnnn     $8D    3 bytes, 4 cycles
+// 1. Absolute: STA $nnnn $8D 3 bytes, 4 cycles
 // ================================================================
 pub const fn sta_absolute() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi(); // Cycle 3
     const OP4: MicroOp = MicroOp {
         name: "write_a",
         micro_fn: |cpu, bus| {
@@ -44,37 +28,13 @@ pub const fn sta_absolute() -> Instruction {
 }
 
 // ================================================================
-//  2. Absolute,X: STA $nnnn,X $9D    3 bytes, 5 cycles
+// 2. Absolute,X: STA $nnnn,X $9D 3 bytes, 5 cycles
 // ================================================================
 pub const fn sta_absolute_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi_add_x",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            let base = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.effective_addr = base.wrapping_add(cpu.x as u16);
-            cpu.incr_pc();
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "dummy_read_base",
-        micro_fn: |cpu, bus| {
-            // Dummy read from base (without X) to consume the extra cycle
-            let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
-            let _ = bus.read(base);
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi_add_x(); // Cycle 3: add X, no page cross penalty
+    const OP4: MicroOp = MicroOp::dummy_read_cross_x(); // Cycle 4: dummy read from base
     const OP5: MicroOp = MicroOp {
         name: "write_a",
         micro_fn: |cpu, bus| {
@@ -89,36 +49,13 @@ pub const fn sta_absolute_x() -> Instruction {
 }
 
 // ================================================================
-//  3. Absolute,Y: STA $nnnn,Y $99    3 bytes, 5 cycles
+// 3. Absolute,Y: STA $nnnn,Y $99 3 bytes, 5 cycles
 // ================================================================
 pub const fn sta_absolute_y() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi_add_y",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            let base = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.effective_addr = base.wrapping_add(cpu.y as u16);
-            cpu.incr_pc();
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "dummy_read_base",
-        micro_fn: |cpu, bus| {
-            let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
-            let _ = bus.read(base);
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi_add_y(); // Cycle 3: add Y, no page cross penalty
+    const OP4: MicroOp = MicroOp::dummy_read_cross_y(); // Cycle 4: dummy read from base
     const OP5: MicroOp = MicroOp {
         name: "write_a",
         micro_fn: |cpu, bus| {
@@ -133,24 +70,15 @@ pub const fn sta_absolute_y() -> Instruction {
 }
 
 // ================================================================
-//  4. Zero Page: STA $nn      $85    2 bytes, 3 cycles
+// 4. Zero Page: STA $nn $85 2 bytes, 3 cycles
 // ================================================================
 pub const fn sta_zero_page() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_addr",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
     const OP3: MicroOp = MicroOp {
         name: "write_a",
         micro_fn: |cpu, bus| {
-            bus.write(cpu.tmp as u16, cpu.a);
+            bus.write(cpu.zp_addr as u16, cpu.a);
         },
     };
     Instruction {
@@ -161,26 +89,12 @@ pub const fn sta_zero_page() -> Instruction {
 }
 
 // ================================================================
-//  5. Zero Page,X: STA $nn,X  $95    2 bytes, 4 cycles
+// 5. Zero Page,X: STA $nn,X $95 2 bytes, 4 cycles
 // ================================================================
 pub const fn sta_zero_page_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_base",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "add_x",
-        micro_fn: |cpu, _| {
-            cpu.effective_addr = (cpu.tmp as u16).wrapping_add(cpu.x as u16);
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::read_zero_page_add_x_dummy(); // Cycle 3: wrap + dummy read
     const OP4: MicroOp = MicroOp {
         name: "write_a",
         micro_fn: |cpu, bus| {
@@ -195,41 +109,14 @@ pub const fn sta_zero_page_x() -> Instruction {
 }
 
 // ================================================================
-//  6. (Indirect,X): STA ($nn,X) $81   2 bytes, 6 cycles
+// 6. (Indirect,X): STA ($nn,X) $81 2 bytes, 6 cycles
 // ================================================================
 pub const fn sta_indirect_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "add_x_dummy",
-        micro_fn: |cpu, _| {
-            let _ = cpu.tmp.wrapping_add(cpu.x);
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "read_lo",
-        micro_fn: |cpu, bus| {
-            let ptr = (cpu.tmp as u16).wrapping_add(cpu.x as u16);
-            cpu.tmp = bus.read(ptr);
-        },
-    };
-    const OP5: MicroOp = MicroOp {
-        name: "read_hi",
-        micro_fn: |cpu, bus| {
-            let ptr = (cpu.tmp as u16).wrapping_add(cpu.x as u16).wrapping_add(1);
-            let hi = bus.read(ptr);
-            cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::read_indirect_x_dummy(); // Cycle 3: dummy read
+    const OP4: MicroOp = MicroOp::read_indirect_x_lo(); // Cycle 4: read low byte
+    const OP5: MicroOp = MicroOp::read_indirect_x_hi(); // Cycle 5: read high byte
     const OP6: MicroOp = MicroOp {
         name: "write_a",
         micro_fn: |cpu, bus| {
@@ -244,41 +131,14 @@ pub const fn sta_indirect_x() -> Instruction {
 }
 
 // ================================================================
-//  7. (Indirect),Y: STA ($nn),Y $91   2 bytes, 6 cycles
+// 7. (Indirect),Y: STA ($nn),Y $91 2 bytes, 6 cycles
 // ================================================================
 pub const fn sta_indirect_y() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "read_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.tmp as u16);
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "read_hi",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read((cpu.tmp as u16).wrapping_add(1));
-            let base = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.effective_addr = base.wrapping_add(cpu.y as u16);
-        },
-    };
-    const OP5: MicroOp = MicroOp {
-        name: "dummy_read_base",
-        micro_fn: |cpu, bus| {
-            let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
-            let _ = bus.read(base);
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::read_zero_page(); // Cycle 3: read low byte from zp
+    const OP4: MicroOp = MicroOp::read_indirect_y_hi(); // Cycle 4: read high, add Y, detect cross
+    const OP5: MicroOp = MicroOp::dummy_read_cross_y(); // Cycle 5: dummy read from base (no Y)
     const OP6: MicroOp = MicroOp {
         name: "write_a",
         micro_fn: |cpu, bus| {

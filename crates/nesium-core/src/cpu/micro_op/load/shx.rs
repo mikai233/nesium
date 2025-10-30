@@ -8,41 +8,30 @@ use crate::{
 };
 
 // ================================================================
-//  SHX $nnnn,Y   $9E    3 bytes, 5 cycles
-//  M = X & (high_byte_of_base + 1)
-//  (base = $nnnn, not including Y offset)
+// SHX $nnnn,Y $9E 3 bytes, 5 cycles
+// M = X & (high_byte_of_base + 1)
+// (base = $nnnn, not including Y offset)
 // ================================================================
 pub const fn shx_absolute_y() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // low byte of base address
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo(); // Cycle 2: fetch low byte of base
+
     const OP3: MicroOp = MicroOp {
         name: "fetch_hi_calc_v",
         micro_fn: |cpu, bus| {
             let hi = bus.read(cpu.pc); // high byte of base address
             let v = hi.wrapping_add(1); // V = H + 1
-            cpu.tmp = v; // reuse tmp to store V
-            let base = ((hi as u16) << 8) | (cpu.tmp as u16).wrapping_sub(1);
+            cpu.tmp = v; // store V for X & V
+            let base = ((hi as u16) << 8) | cpu.base_lo as u16;
             cpu.effective_addr = base.wrapping_add(cpu.y as u16);
             cpu.incr_pc();
+            // Note: SHX does NOT add +1 cycle on page cross, but we still need to
+            // consume the cycle for timing accuracy with a dummy read from base.
         },
     };
-    const OP4: MicroOp = MicroOp {
-        name: "dummy_read_base",
-        micro_fn: |cpu, bus| {
-            // Dummy read from base address (without Y) to consume cycle
-            let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
-            let _ = bus.read(base);
-        },
-    };
+
+    const OP4: MicroOp = MicroOp::dummy_read_cross_y(); // Cycle 4: dummy read from base (without Y)
+
     const OP5: MicroOp = MicroOp {
         name: "write_shx",
         micro_fn: |cpu, bus| {
@@ -50,6 +39,7 @@ pub const fn shx_absolute_y() -> Instruction {
             bus.write(cpu.effective_addr, result);
         },
     };
+
     Instruction {
         opcode: Mnemonic::SHX,
         addressing: Addressing::AbsoluteY,

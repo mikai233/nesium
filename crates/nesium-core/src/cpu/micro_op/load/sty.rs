@@ -8,28 +8,12 @@ use crate::{
 };
 
 // ================================================================
-//  1. Absolute: STY $nnnn     $8C    3 bytes, 4 cycles
+// 1. Absolute: STY $nnnn $8C 3 bytes, 4 cycles
 // ================================================================
 pub const fn sty_absolute() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi(); // Cycle 3
     const OP4: MicroOp = MicroOp {
         name: "write_y",
         micro_fn: |cpu, bus| {
@@ -44,24 +28,15 @@ pub const fn sty_absolute() -> Instruction {
 }
 
 // ================================================================
-//  2. Zero Page: STY $nn      $84    2 bytes, 3 cycles
+// 2. Zero Page: STY $nn $84 2 bytes, 3 cycles
 // ================================================================
 pub const fn sty_zero_page() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_addr",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
     const OP3: MicroOp = MicroOp {
         name: "write_y",
         micro_fn: |cpu, bus| {
-            bus.write(cpu.tmp as u16, cpu.y);
+            bus.write(cpu.zp_addr as u16, cpu.y);
         },
     };
     Instruction {
@@ -72,26 +47,12 @@ pub const fn sty_zero_page() -> Instruction {
 }
 
 // ================================================================
-//  3. Zero Page,X: STY $nn,X  $94    2 bytes, 4 cycles
+// 3. Zero Page,X: STY $nn,X $94 2 bytes, 4 cycles
 // ================================================================
 pub const fn sty_zero_page_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_base",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "add_x",
-        micro_fn: |cpu, _| {
-            cpu.effective_addr = (cpu.tmp as u16).wrapping_add(cpu.x as u16);
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::read_zero_page_add_x_dummy(); // Cycle 3: wrap + dummy read
     const OP4: MicroOp = MicroOp {
         name: "write_y",
         micro_fn: |cpu, bus| {

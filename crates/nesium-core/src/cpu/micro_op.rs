@@ -25,6 +25,7 @@ pub(crate) struct MicroOp {
 }
 
 impl MicroOp {
+    /// Execute this micro operation
     pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut BusImpl) {
         (self.micro_fn)(cpu, bus)
     }
@@ -33,8 +34,7 @@ impl MicroOp {
     //  Fetch & Program Counter Operations
     // ───────────────────────────────────────────────
 
-    /// Cycle 1: The opcode has already been fetched externally.
-    /// We simply advance the program counter to prepare for the next byte.
+    /// Cycle 1: Advance PC after fetching opcode.
     pub(crate) const fn advance_pc_after_opcode() -> Self {
         MicroOp {
             name: "advance_pc_after_opcode",
@@ -42,7 +42,7 @@ impl MicroOp {
         }
     }
 
-    /// Cycle 2: Read zero-page address from PC, then increment PC.
+    /// Cycle 2: Read zero-page address from PC, increment PC.
     pub(crate) const fn fetch_zp_addr_lo() -> Self {
         MicroOp {
             name: "fetch_zp_addr_lo",
@@ -64,7 +64,7 @@ impl MicroOp {
         }
     }
 
-    /// Cycle 3: Fetch high byte of absolute address from PC and form full address.
+    /// Cycle 3: Fetch high byte of absolute address and form full address.
     pub(crate) const fn fetch_abs_addr_hi() -> Self {
         MicroOp {
             name: "fetch_abs_addr_hi",
@@ -76,7 +76,7 @@ impl MicroOp {
         }
     }
 
-    /// Cycle 3: Fetch high byte of absolute address, add X index, check page crossing.
+    /// Cycle 3: Fetch high byte, add X index, detect page crossing.
     pub(crate) const fn fetch_abs_addr_hi_add_x() -> Self {
         MicroOp {
             name: "fetch_abs_addr_hi_add_x",
@@ -92,7 +92,7 @@ impl MicroOp {
         }
     }
 
-    /// Cycle 3: Fetch high byte of absolute address, add Y index, check page crossing.
+    /// Cycle 3: Fetch high byte, add Y index, detect page crossing.
     pub(crate) const fn fetch_abs_addr_hi_add_y() -> Self {
         MicroOp {
             name: "fetch_abs_addr_hi_add_y",
@@ -112,19 +112,18 @@ impl MicroOp {
     //  Zero Page & Indirect Operations
     // ───────────────────────────────────────────────
 
+    /// Cycle 3 (Indirect,X): Calculate ($nn + X) with zero-page wrap and dummy read.
     pub(crate) const fn read_indirect_x_dummy() -> Self {
         MicroOp {
             name: "read_indirect_x_dummy",
             micro_fn: |cpu, bus| {
-                // Cycle 3 of (Indirect,X):
-                // Calculate ($nn + X) with zero-page wrap, perform dummy read
                 let ptr = (cpu.zp_addr as u16 + cpu.x as u16) & 0x00FF;
-                let _ = bus.read(ptr); // Timing dummy read (no result used)
+                let _ = bus.read(ptr); // dummy read for timing
             },
         }
     }
 
-    /// Cycle 4: Read low byte of address from ($nn + X), with zero-page wrap-around.
+    /// Cycle 4 (Indirect,X): Read low byte from ($nn + X) zero-page wrap.
     pub(crate) const fn read_indirect_x_lo() -> Self {
         MicroOp {
             name: "read_indirect_x_lo",
@@ -135,7 +134,7 @@ impl MicroOp {
         }
     }
 
-    /// Cycle 5: Read high byte of address from ($nn + X + 1), with zero-page wrap.
+    /// Cycle 5 (Indirect,X): Read high byte from ($nn + X + 1) zero-page wrap.
     pub(crate) const fn read_indirect_x_hi() -> Self {
         MicroOp {
             name: "read_indirect_x_hi",
@@ -147,7 +146,7 @@ impl MicroOp {
         }
     }
 
-    /// Read a byte from zero-page address ($nn).
+    /// Read byte from zero-page address ($nn)
     pub(crate) const fn read_zero_page() -> Self {
         MicroOp {
             name: "read_zero_page",
@@ -157,8 +156,7 @@ impl MicroOp {
         }
     }
 
-    /// Indexed Indirect (Indirect),Y addressing:
-    /// Read high byte from ($nn + 1), add Y, detect page crossing.
+    /// Cycle 4 (Indirect),Y: Read high byte from ($nn + 1), add Y, detect page crossing.
     pub(crate) const fn read_indirect_y_hi() -> Self {
         MicroOp {
             name: "read_indirect_y_hi",
@@ -174,36 +172,50 @@ impl MicroOp {
         }
     }
 
-    /// Cycle 3: Zero Page,Y addressing - add Y index with zero-page wrap-around.
+    /// Cycle 3 (ZeroPage,Y): Add Y to zero-page address with wrap-around, dummy read.
     pub(crate) const fn read_zero_page_add_y_dummy() -> Self {
         MicroOp {
             name: "read_zero_page_add_y_dummy",
             micro_fn: |cpu, bus| {
                 let addr = (cpu.zp_addr as u16 + cpu.y as u16) & 0x00FF;
-                let _ = bus.read(addr); // dummy read (for timing)
+                let _ = bus.read(addr); // dummy read for timing
                 cpu.effective_addr = addr;
             },
         }
     }
 
+    /// Cycle 3 (ZeroPage,X): Add X to zero-page address with wrap-around, dummy read.
+    pub(crate) const fn read_zero_page_add_x_dummy() -> Self {
+        MicroOp {
+            name: "read_zero_page_add_x_dummy",
+            micro_fn: |cpu, bus| {
+                let addr = (cpu.zp_addr as u16 + cpu.x as u16) & 0x00FF;
+                let _ = bus.read(addr); // dummy read for timing
+                cpu.effective_addr = addr;
+            },
+        }
+    }
+
+    /// Cross-page dummy read for Absolute,X
     pub(crate) const fn dummy_read_cross_x() -> Self {
         MicroOp {
             name: "dummy_read_cross_x",
             micro_fn: |cpu, bus| {
                 let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
                 let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-                let _ = bus.read(dummy_addr);
+                let _ = bus.read(dummy_addr); // dummy read for cross-page
             },
         }
     }
 
+    /// Cross-page dummy read for Absolute,Y or (Indirect),Y
     pub(crate) const fn dummy_read_cross_y() -> Self {
         MicroOp {
             name: "dummy_read_cross_y",
             micro_fn: |cpu, bus| {
                 let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
                 let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-                let _ = bus.read(dummy_addr);
+                let _ = bus.read(dummy_addr); // dummy read for cross-page
             },
         }
     }

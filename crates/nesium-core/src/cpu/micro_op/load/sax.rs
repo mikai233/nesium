@@ -8,28 +8,12 @@ use crate::{
 };
 
 // ================================================================
-//  1. Absolute: SAX $nnnn     $8F    3 bytes, 4 cycles
+// 1. Absolute: SAX $nnnn $8F 3 bytes, 4 cycles
 // ================================================================
 pub const fn sax_absolute() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi(); // Cycle 3
     const OP4: MicroOp = MicroOp {
         name: "write_and",
         micro_fn: |cpu, bus| {
@@ -45,25 +29,16 @@ pub const fn sax_absolute() -> Instruction {
 }
 
 // ================================================================
-//  2. Zero Page: SAX $nn      $87    2 bytes, 3 cycles
+// 2. Zero Page: SAX $nn $87 2 bytes, 3 cycles
 // ================================================================
 pub const fn sax_zero_page() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_addr",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
     const OP3: MicroOp = MicroOp {
         name: "write_and",
         micro_fn: |cpu, bus| {
             let result = cpu.a & cpu.x;
-            bus.write(cpu.tmp as u16, result);
+            bus.write(cpu.zp_addr as u16, result);
         },
     };
     Instruction {
@@ -74,27 +49,12 @@ pub const fn sax_zero_page() -> Instruction {
 }
 
 // ================================================================
-//  3. Zero Page,Y: SAX $nn,Y  $97    2 bytes, 4 cycles
+// 3. Zero Page,Y: SAX $nn,Y $97 2 bytes, 4 cycles
 // ================================================================
 pub const fn sax_zero_page_y() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_base",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // Read ZP base ($nn)
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "add_y_zp_wrap",
-        micro_fn: |cpu, _| {
-            // Critical: Force address to stay within 0x00-0xFF (zero page)
-            cpu.effective_addr = (cpu.tmp as u16 + cpu.y as u16) & 0x00FF;
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::read_zero_page_add_y_dummy(); // Cycle 3 (dummy read + wrap)
     const OP4: MicroOp = MicroOp {
         name: "write_and",
         micro_fn: |cpu, bus| {
@@ -110,49 +70,14 @@ pub const fn sax_zero_page_y() -> Instruction {
 }
 
 // ================================================================
-//  4. (Indirect,X): SAX ($nn,X) $83   2 bytes, 6 cycles
+// 4. (Indirect,X): SAX ($nn,X) $83 2 bytes, 6 cycles
 // ================================================================
 pub const fn sax_indirect_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_base",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // 读取零页基地址 $nn
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "add_x_dummy_read",
-        micro_fn: |cpu, bus| {
-            // 计算指针（零页环绕）并执行虚读（模拟6502时序）
-            let ptr = (cpu.tmp as u16 + cpu.x as u16) & 0x00FF;
-            let _ = bus.read(ptr);
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "read_lo",
-        micro_fn: |cpu, bus| {
-            // 计算低字节指针（零页环绕）
-            let ptr = (cpu.tmp as u16 + cpu.x as u16) & 0x00FF;
-            // 读取低字节并存储（确保只占低8位）
-            let lo = bus.read(ptr);
-            cpu.effective_addr = lo as u16 & 0x00FF;
-        },
-    };
-    const OP5: MicroOp = MicroOp {
-        name: "read_hi",
-        micro_fn: |cpu, bus| {
-            // 计算高字节指针（ptr + 1，零页环绕）
-            let ptr = (cpu.tmp as u16 + cpu.x as u16 + 1) & 0x00FF;
-            // 读取高字节
-            let hi = bus.read(ptr);
-            // 组合高字节（高8位）和低字节（低8位）
-            cpu.effective_addr = ((hi as u16) << 8) | (cpu.effective_addr & 0x00FF);
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::read_indirect_x_dummy(); // Cycle 3 (dummy read)
+    const OP4: MicroOp = MicroOp::read_indirect_x_lo(); // Cycle 4
+    const OP5: MicroOp = MicroOp::read_indirect_x_hi(); // Cycle 5
     const OP6: MicroOp = MicroOp {
         name: "write_and",
         micro_fn: |cpu, bus| {

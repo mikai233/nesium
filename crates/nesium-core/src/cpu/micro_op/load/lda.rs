@@ -11,10 +11,7 @@ use crate::{
 //  1. Immediate: LDA #$nn     $A9    2 bytes, 2 cycles
 // ================================================================
 pub const fn lda_immediate() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
     const OP2: MicroOp = MicroOp {
         name: "fetch_and_lda",
         micro_fn: |cpu, bus| {
@@ -24,6 +21,7 @@ pub const fn lda_immediate() -> Instruction {
             cpu.incr_pc();
         },
     };
+
     Instruction {
         opcode: Mnemonic::LDA,
         addressing: Addressing::Immediate,
@@ -35,29 +33,21 @@ pub const fn lda_immediate() -> Instruction {
 //  2. Zero Page: LDA $nn      $A5    2 bytes, 3 cycles
 // ================================================================
 pub const fn lda_zero_page() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_addr",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
+    const OP3: MicroOp = MicroOp::read_zero_page();
+    const OP4: MicroOp = MicroOp {
+        name: "load_a_from_base",
+        micro_fn: |cpu, _| {
+            cpu.a = cpu.base_lo;
+            cpu.p.set_zn(cpu.a);
         },
     };
-    const OP3: MicroOp = MicroOp {
-        name: "read_and_lda",
-        micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.tmp as u16);
-            cpu.a = data;
-            cpu.p.set_zn(data);
-        },
-    };
+
     Instruction {
         opcode: Mnemonic::LDA,
         addressing: Addressing::ZeroPage,
-        micro_ops: &[OP1, OP2, OP3],
+        micro_ops: &[OP1, OP2, OP3, OP4],
     }
 }
 
@@ -65,33 +55,18 @@ pub const fn lda_zero_page() -> Instruction {
 //  3. Zero Page,X: LDA $nn,X  $B5    2 bytes, 4 cycles
 // ================================================================
 pub const fn lda_zero_page_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_base",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // Store zero-page base ($nn)
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "add_x_zp_wrap",
-        micro_fn: |cpu, _| {
-            // 8-bit addition auto-wraps within zero page (0x00-0xFF)
-            let addr = (cpu.tmp.wrapping_add(cpu.x)) as u16;
-            cpu.effective_addr = addr;
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
+    const OP3: MicroOp = MicroOp::read_zero_page_add_x_dummy();
     const OP4: MicroOp = MicroOp {
-        name: "read_and_lda",
+        name: "load_a_from_effective",
         micro_fn: |cpu, bus| {
             let data = bus.read(cpu.effective_addr);
             cpu.a = data;
             cpu.p.set_zn(data);
         },
     };
+
     Instruction {
         opcode: Mnemonic::LDA,
         addressing: Addressing::ZeroPageX,
@@ -103,25 +78,9 @@ pub const fn lda_zero_page_x() -> Instruction {
 //  4. Absolute: LDA $nnnn     $AD    3 bytes, 4 cycles
 // ================================================================
 pub const fn lda_absolute() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // Low byte of address
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc); // High byte of address
-            cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi();
     const OP4: MicroOp = MicroOp {
         name: "read_and_lda",
         micro_fn: |cpu, bus| {
@@ -130,6 +89,7 @@ pub const fn lda_absolute() -> Instruction {
             cpu.p.set_zn(data);
         },
     };
+
     Instruction {
         opcode: Mnemonic::LDA,
         addressing: Addressing::Absolute,
@@ -141,40 +101,10 @@ pub const fn lda_absolute() -> Instruction {
 //  5. Absolute,X: LDA $nnnn,X $BD    3 bytes, 4(+p) cycles
 // ================================================================
 pub const fn lda_absolute_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // Low byte of base address
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi_add_x",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc); // High byte of base address
-            let base = ((hi as u16) << 8) | (cpu.tmp as u16);
-            let addr = base.wrapping_add(cpu.x as u16);
-            cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-            cpu.effective_addr = addr;
-            cpu.incr_pc();
-            cpu.check_cross_page = true;
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "dummy_read_cross",
-        micro_fn: |cpu, bus| {
-            if cpu.crossed_page {
-                // Dummy read address: base high byte + target low byte
-                let wrong = (cpu.effective_addr & 0xFF)
-                    | ((cpu.effective_addr.wrapping_sub(cpu.x as u16)) & 0xFF00);
-                let _ = bus.read(wrong);
-            }
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi_add_x();
+    const OP4: MicroOp = MicroOp::dummy_read_cross_x();
     const OP5: MicroOp = MicroOp {
         name: "read_and_lda",
         micro_fn: |cpu, bus| {
@@ -183,6 +113,7 @@ pub const fn lda_absolute_x() -> Instruction {
             cpu.p.set_zn(data);
         },
     };
+
     Instruction {
         opcode: Mnemonic::LDA,
         addressing: Addressing::AbsoluteX,
@@ -194,40 +125,10 @@ pub const fn lda_absolute_x() -> Instruction {
 //  6. Absolute,Y: LDA $nnnn,Y $B9    3 bytes, 4(+p) cycles
 // ================================================================
 pub const fn lda_absolute_y() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // Low byte of base address
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi_add_y",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc); // High byte of base address
-            let base = ((hi as u16) << 8) | (cpu.tmp as u16);
-            let addr = base.wrapping_add(cpu.y as u16);
-            cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-            cpu.effective_addr = addr;
-            cpu.incr_pc();
-            cpu.check_cross_page = true;
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "dummy_read_cross",
-        micro_fn: |cpu, bus| {
-            if cpu.crossed_page {
-                // Dummy read address: base high byte + target low byte
-                let wrong = (cpu.effective_addr & 0xFF)
-                    | ((cpu.effective_addr.wrapping_sub(cpu.y as u16)) & 0xFF00);
-                let _ = bus.read(wrong);
-            }
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi_add_y();
+    const OP4: MicroOp = MicroOp::dummy_read_cross_y();
     const OP5: MicroOp = MicroOp {
         name: "read_and_lda",
         micro_fn: |cpu, bus| {
@@ -236,6 +137,7 @@ pub const fn lda_absolute_y() -> Instruction {
             cpu.p.set_zn(data);
         },
     };
+
     Instruction {
         opcode: Mnemonic::LDA,
         addressing: Addressing::AbsoluteY,
@@ -247,43 +149,11 @@ pub const fn lda_absolute_y() -> Instruction {
 //  7. (Indirect,X): LDA ($nn,X) $A1   2 bytes, 6 cycles
 // ================================================================
 pub const fn lda_indirect_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_base",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // Read ZP base ($nn)
-            cpu.effective_addr = cpu.tmp as u16; // Preserve $nn for later
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "calc_ptr_dummy_read",
-        micro_fn: |cpu, bus| {
-            // Dummy read: ($nn + X) with zero-page wrap
-            let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            let _ = bus.read(ptr);
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "read_ptr_lo",
-        micro_fn: |cpu, bus| {
-            // Read low byte of target address from ($nn + X)
-            let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            cpu.tmp = bus.read(ptr); // Overwrite tmp with low byte
-        },
-    };
-    const OP5: MicroOp = MicroOp {
-        name: "read_ptr_hi",
-        micro_fn: |cpu, bus| {
-            // Read high byte from ($nn + X + 1) (uses preserved $nn)
-            let ptr = (cpu.effective_addr + cpu.x as u16 + 1) & 0x00FF;
-            let hi = bus.read(ptr);
-            cpu.effective_addr = (hi as u16) << 8 | (cpu.tmp as u16); // Final address
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
+    const OP3: MicroOp = MicroOp::read_indirect_x_dummy();
+    const OP4: MicroOp = MicroOp::read_indirect_x_lo();
+    const OP5: MicroOp = MicroOp::read_indirect_x_hi();
     const OP6: MicroOp = MicroOp {
         name: "read_and_lda",
         micro_fn: |cpu, bus| {
@@ -292,6 +162,7 @@ pub const fn lda_indirect_x() -> Instruction {
             cpu.p.set_zn(data);
         },
     };
+
     Instruction {
         opcode: Mnemonic::LDA,
         addressing: Addressing::IndirectX,
@@ -303,50 +174,11 @@ pub const fn lda_indirect_x() -> Instruction {
 //  8. (Indirect),Y: LDA ($nn),Y $B1   2 bytes, 5(+p) cycles
 // ================================================================
 pub const fn lda_indirect_y() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_ptr",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // ZP pointer ($nn)
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "read_base_lo",
-        micro_fn: |cpu, bus| {
-            // Read low byte of base address from $nn
-            cpu.effective_addr = bus.read(cpu.tmp as u16) as u16;
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "read_base_hi_add_y",
-        micro_fn: |cpu, bus| {
-            // Read high byte from $nn + 1 (zero-page wrap via 8-bit add)
-            let hi_ptr = (cpu.tmp.wrapping_add(1)) as u16;
-            let hi = bus.read(hi_ptr);
-            let base = (hi as u16) << 8 | cpu.effective_addr;
-
-            // Add Y and check page cross
-            let addr = base.wrapping_add(cpu.y as u16);
-            cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-            cpu.effective_addr = addr;
-            cpu.check_cross_page = true;
-        },
-    };
-    const OP5: MicroOp = MicroOp {
-        name: "dummy_read_cross",
-        micro_fn: |cpu, bus| {
-            if cpu.crossed_page {
-                // Dummy read address: base high byte + target low byte
-                let wrong = (cpu.effective_addr & 0xFF)
-                    | ((cpu.effective_addr.wrapping_sub(cpu.y as u16)) & 0xFF00);
-                let _ = bus.read(wrong);
-            }
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
+    const OP3: MicroOp = MicroOp::read_zero_page();
+    const OP4: MicroOp = MicroOp::read_indirect_y_hi();
+    const OP5: MicroOp = MicroOp::dummy_read_cross_y();
     const OP6: MicroOp = MicroOp {
         name: "read_and_lda",
         micro_fn: |cpu, bus| {
@@ -355,6 +187,7 @@ pub const fn lda_indirect_y() -> Instruction {
             cpu.p.set_zn(data);
         },
     };
+
     Instruction {
         opcode: Mnemonic::LDA,
         addressing: Addressing::IndirectY,

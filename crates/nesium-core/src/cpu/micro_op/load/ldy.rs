@@ -8,13 +8,10 @@ use crate::{
 };
 
 // ================================================================
-//  1. Immediate: LDY #$nn     $A0    2 bytes, 2 cycles
+// 1. Immediate: LDY #$nn $A0 2 bytes, 2 cycles
 // ================================================================
 pub const fn ldy_immediate() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
     const OP2: MicroOp = MicroOp {
         name: "fetch_and_ldy",
         micro_fn: |cpu, bus| {
@@ -32,24 +29,15 @@ pub const fn ldy_immediate() -> Instruction {
 }
 
 // ================================================================
-//  2. Zero Page: LDY $nn      $A4    2 bytes, 3 cycles
+// 2. Zero Page: LDY $nn $A4 2 bytes, 3 cycles
 // ================================================================
 pub const fn ldy_zero_page() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_addr",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
     const OP3: MicroOp = MicroOp {
         name: "read_and_ldy",
         micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.tmp as u16);
+            let data = bus.read(cpu.zp_addr as u16);
             cpu.y = data;
             cpu.p.set_zn(data);
         },
@@ -62,26 +50,12 @@ pub const fn ldy_zero_page() -> Instruction {
 }
 
 // ================================================================
-//  3. Zero Page,X: LDY $nn,X  $B4    2 bytes, 4 cycles
+// 3. Zero Page,X: LDY $nn,X $B4 2 bytes, 4 cycles
 // ================================================================
 pub const fn ldy_zero_page_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_base",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "add_x_zp_wrap",
-        micro_fn: |cpu, _| {
-            cpu.effective_addr = (cpu.tmp as u16 + cpu.x as u16) & 0x00FF;
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::read_zero_page_add_x_dummy(); // Cycle 3 (wrap + dummy read)
     const OP4: MicroOp = MicroOp {
         name: "read_and_ldy",
         micro_fn: |cpu, bus| {
@@ -98,28 +72,12 @@ pub const fn ldy_zero_page_x() -> Instruction {
 }
 
 // ================================================================
-//  4. Absolute: LDY $nnnn     $AC    3 bytes, 4 cycles
+// 4. Absolute: LDY $nnnn $AC 3 bytes, 4 cycles
 // ================================================================
 pub const fn ldy_absolute() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi(); // Cycle 3
     const OP4: MicroOp = MicroOp {
         name: "read_and_ldy",
         micro_fn: |cpu, bus| {
@@ -136,42 +94,13 @@ pub const fn ldy_absolute() -> Instruction {
 }
 
 // ================================================================
-//  5. Absolute,X: LDY $nnnn,X $BC    3 bytes, 4(+p) cycles
+// 5. Absolute,X: LDY $nnnn,X $BC 3 bytes, 4(+p) cycles
 // ================================================================
 pub const fn ldy_absolute_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi_add_x",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            let base = ((hi as u16) << 8) | (cpu.tmp as u16);
-            let addr = base.wrapping_add(cpu.x as u16);
-            cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-            cpu.effective_addr = addr;
-            cpu.incr_pc();
-            cpu.check_cross_page = true;
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "dummy_read_cross",
-        micro_fn: |cpu, bus| {
-            if cpu.crossed_page {
-                let wrong = (cpu.effective_addr & 0xFF)
-                    | ((cpu.effective_addr.wrapping_sub(cpu.x as u16)) & 0xFF00);
-                let _ = bus.read(wrong);
-            }
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode(); // Cycle 1
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo(); // Cycle 2
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi_add_x(); // Cycle 3 (add X, detect page cross)
+    const OP4: MicroOp = MicroOp::dummy_read_cross_x(); // Cycle 4 (dummy read if crossed)
     const OP5: MicroOp = MicroOp {
         name: "read_and_ldy",
         micro_fn: |cpu, bus| {
