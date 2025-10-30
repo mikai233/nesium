@@ -1,10 +1,7 @@
-use crate::{
-    bus::Bus,
-    cpu::{
-        addressing::Addressing,
-        instruction::{Instruction, Mnemonic},
-        micro_op::MicroOp,
-    },
+use crate::cpu::{
+    addressing::Addressing,
+    instruction::{Instruction, Mnemonic},
+    micro_op::{MicroOp, ReadFrom},
 };
 
 // ================================================================
@@ -12,15 +9,7 @@ use crate::{
 // ================================================================
 pub const fn lda_immediate() -> Instruction {
     const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_and_lda",
-        micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.pc);
-            cpu.a = data;
-            cpu.p.set_zn(data);
-            cpu.incr_pc();
-        },
-    };
+    const OP2: MicroOp = MicroOp::lda(ReadFrom::Immediate);
 
     Instruction {
         opcode: Mnemonic::LDA,
@@ -35,19 +24,12 @@ pub const fn lda_immediate() -> Instruction {
 pub const fn lda_zero_page() -> Instruction {
     const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
     const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
-    const OP3: MicroOp = MicroOp::read_zero_page();
-    const OP4: MicroOp = MicroOp {
-        name: "load_a_from_base",
-        micro_fn: |cpu, _| {
-            cpu.a = cpu.base_lo;
-            cpu.p.set_zn(cpu.a);
-        },
-    };
+    const OP3: MicroOp = MicroOp::lda(ReadFrom::ZeroPage);
 
     Instruction {
         opcode: Mnemonic::LDA,
         addressing: Addressing::ZeroPage,
-        micro_ops: &[OP1, OP2, OP3, OP4],
+        micro_ops: &[OP1, OP2, OP3],
     }
 }
 
@@ -58,14 +40,7 @@ pub const fn lda_zero_page_x() -> Instruction {
     const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
     const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
     const OP3: MicroOp = MicroOp::read_zero_page_add_x_dummy();
-    const OP4: MicroOp = MicroOp {
-        name: "load_a_from_effective",
-        micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.effective_addr);
-            cpu.a = data;
-            cpu.p.set_zn(data);
-        },
-    };
+    const OP4: MicroOp = MicroOp::lda(ReadFrom::Effective);
 
     Instruction {
         opcode: Mnemonic::LDA,
@@ -81,14 +56,7 @@ pub const fn lda_absolute() -> Instruction {
     const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
     const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
     const OP3: MicroOp = MicroOp::fetch_abs_addr_hi();
-    const OP4: MicroOp = MicroOp {
-        name: "read_and_lda",
-        micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.effective_addr);
-            cpu.a = data;
-            cpu.p.set_zn(data);
-        },
-    };
+    const OP4: MicroOp = MicroOp::lda(ReadFrom::Effective);
 
     Instruction {
         opcode: Mnemonic::LDA,
@@ -105,14 +73,7 @@ pub const fn lda_absolute_x() -> Instruction {
     const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
     const OP3: MicroOp = MicroOp::fetch_abs_addr_hi_add_x();
     const OP4: MicroOp = MicroOp::dummy_read_cross_x();
-    const OP5: MicroOp = MicroOp {
-        name: "read_and_lda",
-        micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.effective_addr);
-            cpu.a = data;
-            cpu.p.set_zn(data);
-        },
-    };
+    const OP5: MicroOp = MicroOp::lda(ReadFrom::Effective);
 
     Instruction {
         opcode: Mnemonic::LDA,
@@ -129,14 +90,7 @@ pub const fn lda_absolute_y() -> Instruction {
     const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
     const OP3: MicroOp = MicroOp::fetch_abs_addr_hi_add_y();
     const OP4: MicroOp = MicroOp::dummy_read_cross_y();
-    const OP5: MicroOp = MicroOp {
-        name: "read_and_lda",
-        micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.effective_addr);
-            cpu.a = data;
-            cpu.p.set_zn(data);
-        },
-    };
+    const OP5: MicroOp = MicroOp::lda(ReadFrom::Effective);
 
     Instruction {
         opcode: Mnemonic::LDA,
@@ -154,14 +108,7 @@ pub const fn lda_indirect_x() -> Instruction {
     const OP3: MicroOp = MicroOp::read_indirect_x_dummy();
     const OP4: MicroOp = MicroOp::read_indirect_x_lo();
     const OP5: MicroOp = MicroOp::read_indirect_x_hi();
-    const OP6: MicroOp = MicroOp {
-        name: "read_and_lda",
-        micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.effective_addr);
-            cpu.a = data;
-            cpu.p.set_zn(data);
-        },
-    };
+    const OP6: MicroOp = MicroOp::lda(ReadFrom::Effective);
 
     Instruction {
         opcode: Mnemonic::LDA,
@@ -179,14 +126,7 @@ pub const fn lda_indirect_y() -> Instruction {
     const OP3: MicroOp = MicroOp::read_zero_page();
     const OP4: MicroOp = MicroOp::read_indirect_y_hi();
     const OP5: MicroOp = MicroOp::dummy_read_cross_y();
-    const OP6: MicroOp = MicroOp {
-        name: "read_and_lda",
-        micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.effective_addr);
-            cpu.a = data;
-            cpu.p.set_zn(data);
-        },
-    };
+    const OP6: MicroOp = MicroOp::lda(ReadFrom::Effective);
 
     Instruction {
         opcode: Mnemonic::LDA,

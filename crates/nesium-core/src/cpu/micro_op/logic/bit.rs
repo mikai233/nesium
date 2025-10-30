@@ -1,37 +1,17 @@
-use crate::{
-    bus::Bus,
-    cpu::{
-        addressing::Addressing,
-        instruction::{Instruction, Mnemonic},
-        micro_op::MicroOp,
-    },
+use crate::cpu::{
+    addressing::Addressing,
+    instruction::{Instruction, Mnemonic},
+    micro_op::{MicroOp, ReadFrom},
 };
 
 // ================================================================
 //  1. Zero Page: BIT $nn      $24    2 bytes, 3 cycles
 // ================================================================
 pub const fn bit_zero_page() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_addr",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // fetch ZP address
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "bit_test",
-        micro_fn: |cpu, bus| {
-            let mem = bus.read(cpu.tmp as u16); // read memory value
-            let result = cpu.a & mem; // A & M (result not stored)
-            cpu.p.set_n((mem & 0x80) != 0); // N = M bit 7
-            cpu.p.set_v((mem & 0x40) != 0); // V = M bit 6
-            cpu.p.update_zero(result); // Z = (A & M) == 0
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
+    const OP3: MicroOp = MicroOp::bit(ReadFrom::ZeroPage);
+
     Instruction {
         opcode: Mnemonic::BIT,
         addressing: Addressing::ZeroPage,
@@ -43,35 +23,11 @@ pub const fn bit_zero_page() -> Instruction {
 //  2. Absolute: BIT $nnnn     $2C    3 bytes, 4 cycles
 // ================================================================
 pub const fn bit_absolute() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.incr_pc();
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "bit_test",
-        micro_fn: |cpu, bus| {
-            let mem = bus.read(cpu.effective_addr);
-            let result = cpu.a & mem;
-            cpu.p.set_n((mem & 0x80) != 0); // N = M bit 7
-            cpu.p.set_v((mem & 0x40) != 0); // V = M bit 6
-            cpu.p.update_zero(result); // Z = (A & M) == 0
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi();
+    const OP4: MicroOp = MicroOp::bit(ReadFrom::Effective);
+
     Instruction {
         opcode: Mnemonic::BIT,
         addressing: Addressing::Absolute,

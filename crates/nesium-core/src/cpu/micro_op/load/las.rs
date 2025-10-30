@@ -18,16 +18,7 @@ pub const fn las_absolute_y() -> Instruction {
     const OP3: MicroOp = MicroOp::fetch_abs_addr_hi();
 
     // Cycle 4: dummy read (only if page boundary was crossed)
-    const OP4: MicroOp = MicroOp {
-        name: "dummy_read_cross",
-        micro_fn: |cpu, bus| {
-            // When the address crosses a page boundary, the 6502 performs
-            // a dummy read from the wrong page before correcting the high byte.
-            let addr = (cpu.effective_addr & 0xFF)
-                | ((cpu.effective_addr.wrapping_sub(cpu.y as u16)) & 0xFF00);
-            let _ = bus.read(addr); // dummy read, result discarded
-        },
-    };
+    const OP4: MicroOp = MicroOp::dummy_read_cross_y();
 
     // Cycle 5: read final byte from effective address and execute LAS operation
     const OP5: MicroOp = MicroOp {
