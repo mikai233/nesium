@@ -11,10 +11,7 @@ use crate::{
 //  1. Immediate: LAX #$nn     $AB    2 bytes, 2 cycles
 // ================================================================
 pub const fn lax_immediate() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
     const OP2: MicroOp = MicroOp {
         name: "fetch_and_lax",
         micro_fn: |cpu, bus| {
@@ -36,21 +33,12 @@ pub const fn lax_immediate() -> Instruction {
 //  2. Zero Page: LAX $nn      $A7    2 bytes, 3 cycles
 // ================================================================
 pub const fn lax_zero_page() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp_addr",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
     const OP3: MicroOp = MicroOp {
         name: "read_and_lax",
         micro_fn: |cpu, bus| {
-            let data = bus.read(cpu.tmp as u16);
+            let data = bus.read(cpu.zp_addr as u16);
             cpu.a = data;
             cpu.x = data;
             cpu.p.set_zn(data);
@@ -67,25 +55,9 @@ pub const fn lax_zero_page() -> Instruction {
 //  3. Zero Page,Y: LAX $nn,Y  $B7    2 bytes, 4 cycles
 // ================================================================
 pub const fn lax_zero_page_y() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_base",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // Read zero-page base address ($nn)
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "add_y_zp_wrap",
-        micro_fn: |cpu, _| {
-            // Calculate address with explicit zero-page wrapping (0x00-0xFF)
-            // Combine base + Y, then mask to 8 bits to enforce zero-page wrap
-            cpu.effective_addr = ((cpu.tmp as u16 + cpu.y as u16) & 0x00FF) as u16;
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
+    const OP3: MicroOp = MicroOp::read_zero_page_add_y_dummy();
     const OP4: MicroOp = MicroOp {
         name: "read_and_lax",
         micro_fn: |cpu, bus| {
@@ -106,25 +78,9 @@ pub const fn lax_zero_page_y() -> Instruction {
 //  4. Absolute: LAX $nnnn     $AF    3 bytes, 4 cycles
 // ================================================================
 pub const fn lax_absolute() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi();
     const OP4: MicroOp = MicroOp {
         name: "read_and_lax",
         micro_fn: |cpu, bus| {
@@ -145,39 +101,10 @@ pub const fn lax_absolute() -> Instruction {
 //  5. Absolute,Y: LAX $nnnn,Y $BF    3 bytes, 4(+p) cycles
 // ================================================================
 pub const fn lax_absolute_y() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc);
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi_add_y",
-        micro_fn: |cpu, bus| {
-            let hi = bus.read(cpu.pc);
-            let base = ((hi as u16) << 8) | (cpu.tmp as u16);
-            let addr = base.wrapping_add(cpu.y as u16);
-            cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-            cpu.effective_addr = addr;
-            cpu.incr_pc();
-            cpu.check_cross_page = true;
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "dummy_read_cross",
-        micro_fn: |cpu, bus| {
-            if cpu.crossed_page {
-                let wrong = (cpu.effective_addr & 0xFF)
-                    | ((cpu.effective_addr.wrapping_sub(cpu.y as u16)) & 0xFF00);
-                let _ = bus.read(wrong);
-            }
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi_add_y();
+    const OP4: MicroOp = MicroOp::dummy_read_cross_y();
     const OP5: MicroOp = MicroOp {
         name: "read_and_lax",
         micro_fn: |cpu, bus| {
@@ -198,42 +125,11 @@ pub const fn lax_absolute_y() -> Instruction {
 //  6. (Indirect,X): LAX ($nn,X) $A3   2 bytes, 6 cycles
 // ================================================================
 pub const fn lax_indirect_x() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(), // Cycle 1: Increment PC to point to $nn
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp",
-        micro_fn: |cpu, bus| {
-            cpu.tmp = bus.read(cpu.pc); // Cycle 2: Read $nn from PC
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "calc_ptr_with_x",
-        micro_fn: |cpu, bus| {
-            // Cycle 3: Calculate $nn + X (zero-page wrap) and dummy read
-            let ptr = (cpu.tmp as u16 + cpu.x as u16) & 0x00FF; // Explicit zero-page wrap
-            let _ = bus.read(ptr); // Actual bus read (matches hardware timing)
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "read_lo",
-        micro_fn: |cpu, bus| {
-            // Cycle 4: Read low byte of target address from ($nn + X)
-            let ptr = (cpu.tmp as u16 + cpu.x as u16) & 0x00FF;
-            cpu.effective_addr = bus.read(ptr) as u16;
-        },
-    };
-    const OP5: MicroOp = MicroOp {
-        name: "read_hi",
-        micro_fn: |cpu, bus| {
-            // Cycle 5: Read high byte from ($nn + X + 1) (zero-page wrap)
-            let ptr = (cpu.tmp as u16 + cpu.x as u16 + 1) & 0x00FF;
-            let hi = bus.read(ptr);
-            cpu.effective_addr |= (hi as u16) << 8;
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
+    const OP3: MicroOp = MicroOp::read_indirect_x_dummy();
+    const OP4: MicroOp = MicroOp::read_indirect_x_lo();
+    const OP5: MicroOp = MicroOp::read_indirect_x_hi();
     const OP6: MicroOp = MicroOp {
         name: "read_and_lax",
         micro_fn: |cpu, bus| {
@@ -255,58 +151,11 @@ pub const fn lax_indirect_x() -> Instruction {
 //  7. (Indirect),Y: LAX ($nn),Y $B3   2 bytes, 5(+p) cycles
 // ================================================================
 pub const fn lax_indirect_y() -> Instruction {
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| cpu.incr_pc(),
-    };
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_zp",
-        micro_fn: |cpu, bus| {
-            // Read the zero-page address ($nn) from current PC
-            cpu.tmp = bus.read(cpu.pc);
-            // Advance program counter to next byte
-            cpu.incr_pc();
-        },
-    };
-    const OP3: MicroOp = MicroOp {
-        name: "read_lo",
-        micro_fn: |cpu, bus| {
-            // Read low byte of base address from zero-page location $nn
-            cpu.effective_addr = bus.read(cpu.tmp as u16) as u16;
-        },
-    };
-    const OP4: MicroOp = MicroOp {
-        name: "read_hi_add_y",
-        micro_fn: |cpu, bus| {
-            // Calculate high byte address (wrap around within zero page if $nn is $FF)
-            let hi_addr = (cpu.tmp as u16 + 1) & 0x00FF;
-            // Read high byte of base address from $nn+1 (zero-page wrapped)
-            let hi = bus.read(hi_addr);
-            // Combine high/low bytes to form 16-bit base address
-            let base = ((hi as u16) << 8) | cpu.effective_addr;
-            // Add Y register to base address to get final effective address
-            let addr = base.wrapping_add(cpu.y as u16);
-            // Check if address crossed a page boundary
-            cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-            // Update effective address to final calculated value
-            cpu.effective_addr = addr;
-            // Flag to enable cross-page dummy read check
-            cpu.check_cross_page = true;
-        },
-    };
-    const OP5: MicroOp = MicroOp {
-        name: "dummy_read_cross",
-        micro_fn: |cpu, bus| {
-            // If page was crossed, perform dummy read of incorrect pre-cross address
-            if cpu.crossed_page {
-                // Calculate address that would have been read before page cross
-                let wrong = (cpu.effective_addr & 0xFF)
-                    | ((cpu.effective_addr.wrapping_sub(cpu.y as u16)) & 0xFF00);
-                // Execute dummy read (cycles counted even though result is unused)
-                let _ = bus.read(wrong);
-            }
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
+    const OP2: MicroOp = MicroOp::fetch_zp_addr_lo();
+    const OP3: MicroOp = MicroOp::read_zero_page();
+    const OP4: MicroOp = MicroOp::read_indirect_y_hi();
+    const OP5: MicroOp = MicroOp::dummy_read_cross_y();
     const OP6: MicroOp = MicroOp {
         name: "read_and_lax",
         micro_fn: |cpu, bus| {

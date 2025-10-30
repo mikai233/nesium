@@ -9,46 +9,13 @@ use crate::{
 
 pub const fn las_absolute_y() -> Instruction {
     // Cycle 1: opcode already fetched, increment PC to point to low byte
-    const OP1: MicroOp = MicroOp {
-        name: "inc_pc",
-        micro_fn: |cpu, _| {
-            // The opcode has already been fetched externally.
-            // We simply advance the program counter to fetch the low byte next.
-            cpu.incr_pc();
-        },
-    };
+    const OP1: MicroOp = MicroOp::advance_pc_after_opcode();
 
     // Cycle 2: fetch low byte of address, increment PC
-    const OP2: MicroOp = MicroOp {
-        name: "fetch_lo",
-        micro_fn: |cpu, bus| {
-            // Read the low byte of the address operand from memory
-            let lo = bus.read(cpu.pc);
-            cpu.tmp = lo; // temporarily store low byte
-            cpu.incr_pc(); // advance to high byte
-        },
-    };
+    const OP2: MicroOp = MicroOp::fetch_abs_addr_lo();
 
     // Cycle 3: fetch high byte of address, add Y, check for page cross
-    const OP3: MicroOp = MicroOp {
-        name: "fetch_hi_add_y",
-        micro_fn: |cpu, bus| {
-            // Read high byte of base address
-            let hi = bus.read(cpu.pc);
-            // Combine low and high to form the base address
-            let base = ((hi as u16) << 8) | cpu.tmp as u16;
-            // Add Y register to the address to form effective address
-            let addr = base.wrapping_add(cpu.y as u16);
-
-            // Determine if page boundary was crossed
-            cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-            cpu.effective_addr = addr;
-            cpu.incr_pc();
-
-            // Enable skip logic in case the next cycle (dummy read) is unnecessary
-            cpu.check_cross_page = true;
-        },
-    };
+    const OP3: MicroOp = MicroOp::fetch_abs_addr_hi();
 
     // Cycle 4: dummy read (only if page boundary was crossed)
     const OP4: MicroOp = MicroOp {
