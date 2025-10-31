@@ -18,6 +18,8 @@ impl Mnemonic {
             micro_fn: |cpu, _| {
                 if !cpu.p.contains(Status::CARRY) {
                     cpu.branch();
+                } else {
+                    cpu.index += 1;
                 }
             },
         };
@@ -41,6 +43,8 @@ impl Mnemonic {
             micro_fn: |cpu, _| {
                 if cpu.p.contains(Status::CARRY) {
                     cpu.branch();
+                } else {
+                    cpu.index += 1;
                 }
             },
         };
@@ -64,6 +68,8 @@ impl Mnemonic {
             micro_fn: |cpu, _| {
                 if cpu.p.contains(Status::ZERO) {
                     cpu.branch();
+                } else {
+                    cpu.index += 1;
                 }
             },
         };
@@ -87,6 +93,8 @@ impl Mnemonic {
             micro_fn: |cpu, _| {
                 if cpu.p.contains(Status::NEGATIVE) {
                     cpu.branch();
+                } else {
+                    cpu.index += 1;
                 }
             },
         };
@@ -104,12 +112,14 @@ impl Mnemonic {
     ///
     /// 🧩 Flags Affected:
     ///     None
-    pub(crate) const fn bne() -> &'static [MicroOp] {
+    pub(crate) const fn bne() -> &'static [MicroOp]{
         const OP1: MicroOp = MicroOp {
             name: "bne",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, _|{
                 if !cpu.p.contains(Status::ZERO) {
                     cpu.branch();
+                } else {
+                    cpu.index += 1;
                 }
             },
         };
@@ -133,6 +143,8 @@ impl Mnemonic {
             micro_fn: |cpu, _| {
                 if !cpu.p.contains(Status::NEGATIVE) {
                     cpu.branch();
+                } else {
+                    cpu.index += 1;
                 }
             },
         };
@@ -156,6 +168,8 @@ impl Mnemonic {
             micro_fn: |cpu, _| {
                 if !cpu.p.contains(Status::OVERFLOW) {
                     cpu.branch();
+                } else {
+                    cpu.index += 1;
                 }
             },
         };
@@ -179,6 +193,8 @@ impl Mnemonic {
             micro_fn: |cpu, _| {
                 if cpu.p.contains(Status::OVERFLOW) {
                     cpu.branch();
+                } else {
+                    cpu.index += 1;
                 }
             },
         };

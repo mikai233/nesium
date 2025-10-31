@@ -1,5 +1,4 @@
 use crate::bus::{Bus, BusImpl};
-use crate::cpu;
 use crate::cpu::addressing::Addressing;
 use crate::cpu::instruction::Instruction;
 use crate::cpu::lookup::LOOKUP_TABLE;
@@ -30,9 +29,6 @@ pub(crate) struct Cpu {
     base_lo: u8,
     rel_offset: u8,
     effective_addr: u16,
-    check_cross_page: bool,
-    crossed_page: bool,
-    branch_taken: bool,
 }
 
 impl Cpu {
@@ -52,10 +48,7 @@ impl Cpu {
             zp_addr: 0,
             base_lo: 0,
             effective_addr: 0,
-            check_cross_page: false,
-            crossed_page: false,
             rel_offset: 0,
-            branch_taken: false,
         }
     }
 
@@ -78,15 +71,9 @@ impl Cpu {
         self.index = 0;
         self.tmp = 0;
         self.effective_addr = 0;
-        self.check_cross_page = false;
-        self.crossed_page = false;
     }
 
     pub fn clock(&mut self, bus: &mut BusImpl) {
-        if self.branch_taken {
-            self.branch_taken = false;
-            return;
-        }
         let instruction = *self.instruction.get_or_insert_with(|| {
             let opcode = bus.read(self.pc);
             self.pc = self.pc.wrapping_add(1);
@@ -102,28 +89,19 @@ impl Cpu {
             }
             _ => {}
         }
-        let micro_op = &instruction.micro_ops[self.index];
+        let micro_op = &instruction[self.index];
         micro_op.exec(self, bus);
         self.index += 1;
-        if self.check_cross_page && !self.crossed_page {
-            self.check_cross_page = false;
-            self.index += 1; // skip next cross page op
-        }
-        if self.index > instruction.micro_ops.len() {
+        if self.index > instruction.len() {
             self.clear();
         }
     }
 
     #[cfg(test)]
     pub(crate) fn test_clock(&mut self, bus: &mut BusImpl, instruction: &Instruction) {
-        let micro_ops = instruction.micro_ops;
-        while self.index < micro_ops.len() {
-            micro_ops[self.index].exec(self, bus);
+        while self.index < instruction.len() {
+            instruction[self.index].exec(self, bus);
             self.index += 1;
-            if self.check_cross_page && !self.crossed_page {
-                self.check_cross_page = false;
-                self.index += 1; // skip next cross page op
-            }
         }
     }
 
@@ -141,19 +119,14 @@ impl Cpu {
         self.index = 0;
         self.instruction = None;
         self.effective_addr = 0;
-        self.check_cross_page = false;
-        self.crossed_page = false;
-        self.branch_taken = false;
     }
 
     pub(crate) fn branch(&mut self) {
         let old_pc = self.pc;
         let new_pc = old_pc.wrapping_add(self.rel_offset as u16);
-        if (old_pc & 0xFF00) != (new_pc & 0xFF00) {
-            self.check_cross_page = true;
-            self.crossed_page = true;
+        if (old_pc & 0xFF00) == (new_pc & 0xFF00) {
+            self.index += 1;
         }
         self.pc = new_pc;
-        self.branch_taken = true;
     }
 }

@@ -85,9 +85,11 @@ impl MicroOp {
                 let base = ((hi as u16) << 8) | (cpu.base_lo as u16);
                 let addr = base.wrapping_add(cpu.x as u16);
 
-                cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
+                let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
+                if !crossed_page {
+                    cpu.index += 1;
+                }
                 cpu.effective_addr = addr;
-                cpu.check_cross_page = true;
                 cpu.incr_pc();
             },
         }
@@ -102,9 +104,11 @@ impl MicroOp {
                 let base = ((hi as u16) << 8) | (cpu.base_lo as u16);
                 let addr = base.wrapping_add(cpu.y as u16);
 
-                cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
+                let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
+                if !crossed_page {
+                    cpu.index += 1;
+                }
                 cpu.effective_addr = addr;
-                cpu.check_cross_page = true;
                 cpu.incr_pc();
             },
         }
@@ -197,9 +201,11 @@ impl MicroOp {
                 let base = ((hi as u16) << 8) | (cpu.base_lo as u16);
                 let addr = base.wrapping_add(cpu.y as u16);
 
-                cpu.crossed_page = (base & 0xFF00) != (addr & 0xFF00);
+                let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
+                if !crossed_page {
+                    cpu.index += 1;
+                }
                 cpu.effective_addr = addr;
-                cpu.check_cross_page = true;
             },
         }
     }
