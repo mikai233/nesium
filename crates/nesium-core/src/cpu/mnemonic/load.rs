@@ -158,7 +158,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "sha",
             micro_fn: |cpu, bus| {
-                let hi = ((cpu.effective_addr >> 8) as u8).wrapping_add(1);
+                let hi = cpu.base;
                 let value = cpu.a & cpu.x & hi;
                 bus.write(cpu.effective_addr, value);
             },
@@ -181,7 +181,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "shx",
             micro_fn: |cpu, bus| {
-                let hi = ((cpu.effective_addr >> 8) as u8).wrapping_add(1);
+                let hi = cpu.base;
                 let value = cpu.x & hi;
                 bus.write(cpu.effective_addr, value);
             },
@@ -204,7 +204,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "shy",
             micro_fn: |cpu, bus| {
-                let hi = ((cpu.effective_addr >> 8) as u8).wrapping_add(1);
+                let hi = cpu.base;
                 let value = cpu.y & hi;
                 bus.write(cpu.effective_addr, value);
             },

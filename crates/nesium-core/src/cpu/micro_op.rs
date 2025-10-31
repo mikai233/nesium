@@ -58,7 +58,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_abs_addr_lo",
             micro_fn: |cpu, bus| {
-                cpu.base_lo = bus.read(cpu.pc);
+                cpu.base = bus.read(cpu.pc);
                 cpu.incr_pc();
             },
         }
@@ -70,7 +70,7 @@ impl MicroOp {
             name: "fetch_abs_addr_hi",
             micro_fn: |cpu, bus| {
                 let hi = bus.read(cpu.pc);
-                cpu.effective_addr = ((hi as u16) << 8) | (cpu.base_lo as u16);
+                cpu.effective_addr = ((hi as u16) << 8) | (cpu.base as u16);
                 cpu.incr_pc();
             },
         }
@@ -82,7 +82,8 @@ impl MicroOp {
             name: "fetch_abs_addr_hi_add_x",
             micro_fn: |cpu, bus| {
                 let hi = bus.read(cpu.pc);
-                let base = ((hi as u16) << 8) | (cpu.base_lo as u16);
+                let base = ((hi as u16) << 8) | (cpu.base as u16);
+                cpu.base = hi; // Store high byte for some unofficial instructions
                 let addr = base.wrapping_add(cpu.x as u16);
 
                 let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
@@ -101,7 +102,8 @@ impl MicroOp {
             name: "fetch_abs_addr_hi_add_y",
             micro_fn: |cpu, bus| {
                 let hi = bus.read(cpu.pc);
-                let base = ((hi as u16) << 8) | (cpu.base_lo as u16);
+                let base = ((hi as u16) << 8) | (cpu.base as u16);
+                cpu.base = hi; // Store high byte for some unofficial instructions
                 let addr = base.wrapping_add(cpu.y as u16);
 
                 let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
@@ -122,7 +124,7 @@ impl MicroOp {
         MicroOp {
             name: "read_zero_page",
             micro_fn: |cpu, bus| {
-                cpu.base_lo = bus.read(cpu.zp_addr as u16);
+                cpu.base = bus.read(cpu.zp_addr as u16);
             },
         }
     }
@@ -171,7 +173,7 @@ impl MicroOp {
             name: "read_indirect_x_lo",
             micro_fn: |cpu, bus| {
                 let ptr = (cpu.zp_addr as u16 + cpu.x as u16) & 0x00FF;
-                cpu.base_lo = bus.read(ptr);
+                cpu.base = bus.read(ptr);
             },
         }
     }
@@ -183,7 +185,7 @@ impl MicroOp {
             micro_fn: |cpu, bus| {
                 let ptr = (cpu.zp_addr as u16 + cpu.x as u16 + 1) & 0x00FF;
                 let hi = bus.read(ptr);
-                cpu.effective_addr = ((hi as u16) << 8) | (cpu.base_lo as u16);
+                cpu.effective_addr = ((hi as u16) << 8) | (cpu.base as u16);
             },
         }
     }
@@ -198,13 +200,13 @@ impl MicroOp {
             micro_fn: |cpu, bus| {
                 let hi_addr = (cpu.zp_addr as u16 + 1) & 0x00FF;
                 let hi = bus.read(hi_addr);
-                let base = ((hi as u16) << 8) | (cpu.base_lo as u16);
+                let base = ((hi as u16) << 8) | (cpu.base as u16);
+                // Store high byte for some unofficial instructions
+                cpu.base = hi;
                 let addr = base.wrapping_add(cpu.y as u16);
 
-                let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-                if !crossed_page {
-                    cpu.index += 1;
-                }
+                cpu.check_cross_page(base, addr);
+                
                 cpu.effective_addr = addr;
             },
         }

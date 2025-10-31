@@ -129,14 +129,7 @@ impl Addressing {
             // ─────────────────────────────────────────────────────────────────────
             //  Implied / Accumulator / Immediate
             // ─────────────────────────────────────────────────────────────────────
-            Addressing::Implied => &[],
-            Addressing::Accumulator => &[],
-
-            Addressing::Immediate => {
-                // Cycle 2: read immediate value into base_lo (or use directly in instruction)
-                const IMM: [MicroOp; 1] = [MicroOp::fetch_zp_addr_lo()];
-                &IMM
-            }
+            Addressing::Implied | Addressing::Accumulator | Addressing::Immediate => &[],
 
             // ─────────────────────────────────────────────────────────────────────
             //  Absolute
@@ -269,6 +262,16 @@ impl Addressing {
                 &REL
             }
         }
+    }
+
+    pub(crate) const fn maybe_cross_page(&self) -> bool {
+        matches!(
+            self,
+            Addressing::AbsoluteX
+                | Addressing::AbsoluteY
+                | Addressing::IndirectY
+                | Addressing::Relative
+        )
     }
 }
 

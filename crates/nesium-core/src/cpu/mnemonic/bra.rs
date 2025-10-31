@@ -16,11 +16,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "bcc",
             micro_fn: |cpu, _| {
-                if !cpu.p.contains(Status::CARRY) {
-                    cpu.branch();
-                } else {
-                    cpu.index += 1;
-                }
+                cpu.test_branch(!cpu.p.contains(Status::CARRY));
             },
         };
         &[OP1]
@@ -41,11 +37,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "bcs",
             micro_fn: |cpu, _| {
-                if cpu.p.contains(Status::CARRY) {
-                    cpu.branch();
-                } else {
-                    cpu.index += 1;
-                }
+                cpu.test_branch(cpu.p.contains(Status::CARRY));
             },
         };
         &[OP1]
@@ -66,11 +58,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "beq",
             micro_fn: |cpu, _| {
-                if cpu.p.contains(Status::ZERO) {
-                    cpu.branch();
-                } else {
-                    cpu.index += 1;
-                }
+                cpu.test_branch(cpu.p.contains(Status::ZERO));
             },
         };
         &[OP1]
@@ -91,11 +79,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "bmi",
             micro_fn: |cpu, _| {
-                if cpu.p.contains(Status::NEGATIVE) {
-                    cpu.branch();
-                } else {
-                    cpu.index += 1;
-                }
+                cpu.test_branch(cpu.p.contains(Status::NEGATIVE));
             },
         };
         &[OP1]
@@ -112,15 +96,11 @@ impl Mnemonic {
     ///
     /// 🧩 Flags Affected:
     ///     None
-    pub(crate) const fn bne() -> &'static [MicroOp]{
+    pub(crate) const fn bne() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "bne",
-            micro_fn: |cpu, _|{
-                if !cpu.p.contains(Status::ZERO) {
-                    cpu.branch();
-                } else {
-                    cpu.index += 1;
-                }
+            micro_fn: |cpu, _| {
+                cpu.test_branch(!cpu.p.contains(Status::ZERO));
             },
         };
         &[OP1]
@@ -141,11 +121,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "bpl",
             micro_fn: |cpu, _| {
-                if !cpu.p.contains(Status::NEGATIVE) {
-                    cpu.branch();
-                } else {
-                    cpu.index += 1;
-                }
+                cpu.test_branch(!cpu.p.contains(Status::NEGATIVE));
             },
         };
         &[OP1]
@@ -166,11 +142,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "bvc",
             micro_fn: |cpu, _| {
-                if !cpu.p.contains(Status::OVERFLOW) {
-                    cpu.branch();
-                } else {
-                    cpu.index += 1;
-                }
+                cpu.test_branch(!cpu.p.contains(Status::OVERFLOW));
             },
         };
         &[OP1]
@@ -191,11 +163,7 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "bvs",
             micro_fn: |cpu, _| {
-                if cpu.p.contains(Status::OVERFLOW) {
-                    cpu.branch();
-                } else {
-                    cpu.index += 1;
-                }
+                cpu.test_branch(cpu.p.contains(Status::OVERFLOW));
             },
         };
         &[OP1]

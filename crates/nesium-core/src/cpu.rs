@@ -1,5 +1,6 @@
 use crate::bus::{Bus, BusImpl};
 use crate::cpu::addressing::Addressing;
+use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
 use crate::cpu::lookup::LOOKUP_TABLE;
 use crate::cpu::status::Status;
@@ -7,6 +8,7 @@ mod phase;
 mod status;
 
 mod addressing;
+mod cycle;
 mod instruction;
 mod lookup;
 mod micro_op;
@@ -26,7 +28,7 @@ pub(crate) struct Cpu {
     index: u8,
     tmp: u8,
     zp_addr: u8,
-    base_lo: u8,
+    base: u8,
     rel_offset: u8,
     effective_addr: u16,
 }
@@ -46,7 +48,7 @@ impl Cpu {
             index: 0,
             tmp: 0,
             zp_addr: 0,
-            base_lo: 0,
+            base: 0,
             effective_addr: 0,
             rel_offset: 0,
         }
@@ -123,17 +125,37 @@ impl Cpu {
         self.effective_addr = 0;
     }
 
-    pub(crate) fn branch(&mut self) {
-        let old_pc = self.pc;
-        let new_pc = old_pc.wrapping_add(self.rel_offset as u16);
-        if (old_pc & 0xFF00) == (new_pc & 0xFF00) {
+    pub(crate) fn test_branch(&mut self, taken: bool) {
+        if taken {
+            let old_pc = self.pc;
+            let new_pc = old_pc.wrapping_add(self.rel_offset as u16);
+            self.check_cross_page(old_pc, new_pc);
+            self.pc = new_pc;
+        } else {
             self.index += 1;
         }
-        self.pc = new_pc;
     }
 
     #[inline]
     pub(crate) fn index(&self) -> usize {
         self.index as usize
+    }
+
+    pub(crate) const fn always_cross_page(opcode: u8, instr: &Instruction) -> bool {
+        let cycle = CYCLE_TABLE[opcode as usize];
+        instr.addressing.maybe_cross_page() && matches!(cycle, Cycle::Normal(_))
+    }
+
+    pub(crate) fn check_cross_page(&mut self, base: u16, addr: u16) {
+        if let Some(opcode) = self.opcode {
+            let instr = &LOOKUP_TABLE[opcode as usize];
+            if Self::always_cross_page(opcode, instr) {
+                return;
+            }
+        }
+        let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
+        if !crossed_page {
+            self.index += 1;
+        }
     }
 }

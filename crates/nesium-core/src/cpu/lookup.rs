@@ -1,9 +1,7 @@
 use crate::cpu::addressing::Addressing as A;
 use crate::cpu::instruction::Instruction as I;
 
-pub(crate) type Table = [I; 256];
-
-pub(crate) static LOOKUP_TABLE: Table = [
+pub(crate) static LOOKUP_TABLE: [I; 256] = [
     //  0x00          0x01          0x02          0x03          0x04          0x05          0x06          0x07
     I::brk(A::Implied),
     I::ora(A::IndirectX),
@@ -339,8 +337,6 @@ mod tests {
 
     #[test]
     fn test_cycle() {
-        for instr in &LOOKUP_TABLE {
-            
-        }
+        for instr in &LOOKUP_TABLE {}
     }
 }
