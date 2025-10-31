@@ -1,8 +1,12 @@
+use std::fmt::Display;
+
 use crate::bus::{Bus, BusImpl};
 use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
 use crate::cpu::lookup::LOOKUP_TABLE;
+#[cfg(test)]
+use crate::cpu::mnemonic::Mnemonic;
 use crate::cpu::status::Status;
 mod phase;
 mod status;
@@ -26,17 +30,15 @@ pub(crate) struct Cpu {
 
     opcode: Option<u8>,
     index: u8,
-    tmp: u8,
     zp_addr: u8,
     base: u8,
-    rel_offset: u8,
     effective_addr: u16,
 }
 
 impl Cpu {
     /// Create a new CPU instance with default values.
     /// Does not automatically fetch the reset vector — call `reset()` for that.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             a: 0x00,                             // Accumulator
             x: 0x00,                             // X register
@@ -46,11 +48,9 @@ impl Cpu {
             pc: 0x0000,                          // Will be set by reset vector
             opcode: None,
             index: 0,
-            tmp: 0,
             zp_addr: 0,
             base: 0,
             effective_addr: 0,
-            rel_offset: 0,
         }
     }
 
@@ -60,7 +60,7 @@ impl Cpu {
     /// to determine the starting program counter (reset vector).
     ///
     /// It also clears internal state used by instruction execution.
-    pub fn reset(&mut self, bus: &mut impl Bus) {
+    pub(crate) fn reset(&mut self, bus: &mut impl Bus) {
         // Read the reset vector from memory ($FFFC-$FFFD)
         let lo = bus.read(0xFFFC);
         let hi = bus.read(0xFFFD);
@@ -71,48 +71,59 @@ impl Cpu {
         self.p = Status::from_bits_truncate(0x34); // IRQ disabled
         self.opcode = None;
         self.index = 0;
-        self.tmp = 0;
         self.effective_addr = 0;
     }
 
-    pub fn clock(&mut self, bus: &mut BusImpl) {
-        let opcode = *self.opcode.get_or_insert_with(|| {
-            let opcode = bus.read(self.pc);
-            self.pc = self.pc.wrapping_add(1);
-            opcode
-        });
-        let instr = &LOOKUP_TABLE[opcode as usize];
-
-        match instr.addressing {
-            Addressing::Immediate => {
-                self.effective_addr = bus.read(self.pc) as u16;
-                self.incr_pc();
+    pub(crate) fn clock(&mut self, bus: &mut BusImpl) {
+        match self.opcode {
+            Some(opcode) => {
+                let instr = &LOOKUP_TABLE[opcode as usize];
+                self.prepare_imm_addr(bus, instr);
+                let micro_op = &instr[self.index()];
+                micro_op.exec(self, bus);
+                self.index += 1;
+                self.prepare_zp_addr(instr);
+                if self.index() > instr.len() {
+                    self.clear();
+                }
             }
-            Addressing::ZeroPage => {
-                self.effective_addr = self.zp_addr as u16;
+            None => {
+                self.opcode = Some(self.fetch_opcode(bus));
             }
-            _ => {}
-        }
-        let micro_op = &instr[self.index()];
-        micro_op.exec(self, bus);
-        self.index += 1;
-        if self.index() > instr.len() {
-            self.clear();
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn test_clock(&mut self, bus: &mut BusImpl, instr: &Instruction) {
-        while (self.index as usize) < instr.len() {
+    pub(crate) fn test_clock(&mut self, bus: &mut BusImpl, instr: &Instruction) -> usize {
+        self.incr_pc(); // Fetch opcode
+        let mut cycles = 1; // Fetch opcode has 1 cycle
+        self.prepare_imm_addr(bus, instr);
+        while self.index() < instr.len() {
             instr[self.index()].exec(self, bus);
             self.index += 1;
+            self.prepare_zp_addr(instr);
+            cycles += 1;
+        }
+        cycles
+    }
+
+    pub(crate) fn fetch_opcode(&mut self, bus: &mut BusImpl) -> u8 {
+        let opcode = bus.read(self.pc);
+        self.incr_pc();
+        opcode
+    }
+
+    pub(crate) fn prepare_imm_addr(&mut self, bus: &mut BusImpl, instr: &Instruction) {
+        if matches!(instr.addressing, Addressing::Immediate) {
+            self.effective_addr = self.pc as u16;
+            self.incr_pc();
         }
     }
 
-    pub fn fetch(&mut self, bus: &mut BusImpl) -> &'static Instruction {
-        let opcode = bus.read(self.pc);
-        self.pc = self.pc.wrapping_add(1);
-        &LOOKUP_TABLE[opcode as usize]
+    pub(crate) fn prepare_zp_addr(&mut self, instr: &Instruction) {
+        if self.index == 1 && matches!(instr.addressing, Addressing::ZeroPage) {
+            self.effective_addr = self.zp_addr as u16;
+        }
     }
 
     pub(crate) fn incr_pc(&mut self) {
@@ -122,13 +133,15 @@ impl Cpu {
     pub(crate) fn clear(&mut self) {
         self.index = 0;
         self.opcode = None;
+        self.base = 0;
+        self.zp_addr = 0;
         self.effective_addr = 0;
     }
 
     pub(crate) fn test_branch(&mut self, taken: bool) {
         if taken {
             let old_pc = self.pc;
-            let new_pc = old_pc.wrapping_add(self.rel_offset as u16);
+            let new_pc = old_pc.wrapping_add(self.base as u16);
             self.check_cross_page(old_pc, new_pc);
             self.pc = new_pc;
         } else {
@@ -157,5 +170,15 @@ impl Cpu {
         if !crossed_page {
             self.index += 1;
         }
+    }
+}
+
+impl Display for Cpu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[a:0x{:02x},x:0x{:02x},y:0x{:02x},s:0x{:02x},pc:0x{:04x}]",
+            self.a, self.x, self.y, self.s, self.pc
+        )
     }
 }

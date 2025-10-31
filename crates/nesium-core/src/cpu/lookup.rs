@@ -314,7 +314,7 @@ mod tests {
         }
 
         if matches!(
-            inst.opcode,
+            inst.mnemonic,
             Mnemonic::BCC
                 | Mnemonic::BCS
                 | Mnemonic::BNE

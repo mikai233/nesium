@@ -109,81 +109,124 @@ pub(crate) enum Mnemonic {
 impl Mnemonic {
     pub(crate) const fn micro_ops(&self) -> &'static [MicroOp] {
         match self {
-            Mnemonic::LAS => todo!(),
-            Mnemonic::LAX => todo!(),
+            // ===============================
+            // Load / Store Instructions
+            // ===============================
+            Mnemonic::LAS => Self::las(),
+            Mnemonic::LAX => Self::lax(),
             Mnemonic::LDA => Self::lda(),
-            Mnemonic::LDX => todo!(),
-            Mnemonic::LDY => todo!(),
-            Mnemonic::SAX => todo!(),
-            Mnemonic::SHA => todo!(),
-            Mnemonic::SHX => todo!(),
-            Mnemonic::SHY => todo!(),
-            Mnemonic::STA => todo!(),
-            Mnemonic::STX => todo!(),
-            Mnemonic::STY => todo!(),
-            Mnemonic::SHS => todo!(),
-            Mnemonic::TAX => todo!(),
-            Mnemonic::TAY => todo!(),
-            Mnemonic::TSX => todo!(),
-            Mnemonic::TXA => todo!(),
-            Mnemonic::TXS => todo!(),
-            Mnemonic::TYA => todo!(),
-            Mnemonic::PHA => todo!(),
-            Mnemonic::PHP => todo!(),
-            Mnemonic::PLA => todo!(),
-            Mnemonic::PLP => todo!(),
-            Mnemonic::ASL => todo!(),
-            Mnemonic::LSR => todo!(),
-            Mnemonic::ROL => todo!(),
-            Mnemonic::ROR => todo!(),
-            Mnemonic::AND => todo!(),
-            Mnemonic::BIT => todo!(),
-            Mnemonic::EOR => todo!(),
-            Mnemonic::ORA => todo!(),
-            Mnemonic::ADC => todo!(),
-            Mnemonic::ANC => todo!(),
-            Mnemonic::ARR => todo!(),
-            Mnemonic::ASR => todo!(),
-            Mnemonic::CMP => todo!(),
-            Mnemonic::CPX => todo!(),
-            Mnemonic::CPY => todo!(),
-            Mnemonic::DCP => todo!(),
-            Mnemonic::ISC => todo!(),
-            Mnemonic::RLA => todo!(),
-            Mnemonic::RRA => todo!(),
-            Mnemonic::SBC => todo!(),
-            Mnemonic::SBX => todo!(),
-            Mnemonic::SLO => todo!(),
-            Mnemonic::SRE => todo!(),
-            Mnemonic::XAA => todo!(),
-            Mnemonic::DEC => todo!(),
-            Mnemonic::DEX => todo!(),
-            Mnemonic::DEY => todo!(),
-            Mnemonic::INC => todo!(),
-            Mnemonic::INX => todo!(),
-            Mnemonic::INY => todo!(),
-            Mnemonic::BRK => todo!(),
-            Mnemonic::JMP => todo!(),
-            Mnemonic::JSR => todo!(),
-            Mnemonic::RTI => todo!(),
-            Mnemonic::RTS => todo!(),
-            Mnemonic::BCC => todo!(),
-            Mnemonic::BCS => todo!(),
-            Mnemonic::BEQ => todo!(),
-            Mnemonic::BMI => todo!(),
-            Mnemonic::BNE => todo!(),
-            Mnemonic::BPL => todo!(),
-            Mnemonic::BVC => todo!(),
-            Mnemonic::BVS => todo!(),
-            Mnemonic::CLC => todo!(),
-            Mnemonic::CLD => todo!(),
-            Mnemonic::CLI => todo!(),
-            Mnemonic::CLV => todo!(),
-            Mnemonic::SEC => todo!(),
-            Mnemonic::SED => todo!(),
-            Mnemonic::SEI => todo!(),
-            Mnemonic::JAM => todo!(),
-            Mnemonic::NOP => todo!(),
+            Mnemonic::LDX => Self::ldx(),
+            Mnemonic::LDY => Self::ldy(),
+            Mnemonic::SAX => Self::sax(),
+            Mnemonic::SHA => Self::sha(),
+            Mnemonic::SHX => Self::shx(),
+            Mnemonic::SHY => Self::shy(),
+            Mnemonic::STA => Self::sta(),
+            Mnemonic::STX => Self::stx(),
+            Mnemonic::STY => Self::sty(),
+            Mnemonic::SHS => Self::shs(),
+
+            // ===============================
+            // Transfer Instructions
+            // ===============================
+            Mnemonic::TAX => Self::tax(),
+            Mnemonic::TAY => Self::tay(),
+            Mnemonic::TSX => Self::tsx(),
+            Mnemonic::TXA => Self::txa(),
+            Mnemonic::TXS => Self::txs(),
+            Mnemonic::TYA => Self::tya(),
+
+            // ===============================
+            // Stack Instructions
+            // ===============================
+            Mnemonic::PHA => Self::pha(),
+            Mnemonic::PHP => Self::php(),
+            Mnemonic::PLA => Self::pla(),
+            Mnemonic::PLP => Self::plp(),
+
+            // ===============================
+            // Shift / Rotate
+            // ===============================
+            Mnemonic::ASL => Self::asl(),
+            Mnemonic::LSR => Self::lsr(),
+            Mnemonic::ROL => Self::rol(),
+            Mnemonic::ROR => Self::ror(),
+
+            // ===============================
+            // Logical
+            // ===============================
+            Mnemonic::AND => Self::and(),
+            Mnemonic::BIT => Self::bit(),
+            Mnemonic::EOR => Self::eor(),
+            Mnemonic::ORA => Self::ora(),
+
+            // ===============================
+            // Arithmetic
+            // ===============================
+            Mnemonic::ADC => Self::adc(),
+            Mnemonic::ANC => Self::anc(),
+            Mnemonic::ARR => Self::arr(),
+            Mnemonic::ASR => Self::asr(),
+            Mnemonic::CMP => Self::cmp(),
+            Mnemonic::CPX => Self::cpx(),
+            Mnemonic::CPY => Self::cpy(),
+            Mnemonic::DCP => Self::dcp(),
+            Mnemonic::ISC => Self::isc(),
+            Mnemonic::RLA => Self::rla(),
+            Mnemonic::RRA => Self::rra(),
+            Mnemonic::SBC => Self::sbc(),
+            Mnemonic::SBX => Self::sbx(),
+            Mnemonic::SLO => Self::slo(),
+            Mnemonic::SRE => Self::sre(),
+            Mnemonic::XAA => Self::xaa(),
+
+            // ===============================
+            // Increment / Decrement
+            // ===============================
+            Mnemonic::DEC => Self::dec(),
+            Mnemonic::DEX => Self::dex(),
+            Mnemonic::DEY => Self::dey(),
+            Mnemonic::INC => Self::inc(),
+            Mnemonic::INX => Self::inx(),
+            Mnemonic::INY => Self::iny(),
+
+            // ===============================
+            // Control Flow
+            // ===============================
+            Mnemonic::BRK => Self::brk(),
+            Mnemonic::JMP => Self::jmp(),
+            Mnemonic::JSR => Self::jsr(),
+            Mnemonic::RTI => Self::rti(),
+            Mnemonic::RTS => Self::rts(),
+
+            // ===============================
+            // Branches
+            // ===============================
+            Mnemonic::BCC => Self::bcc(),
+            Mnemonic::BCS => Self::bcs(),
+            Mnemonic::BEQ => Self::beq(),
+            Mnemonic::BMI => Self::bmi(),
+            Mnemonic::BNE => Self::bne(),
+            Mnemonic::BPL => Self::bpl(),
+            Mnemonic::BVC => Self::bvc(),
+            Mnemonic::BVS => Self::bvs(),
+
+            // ===============================
+            // Status Flag Operations
+            // ===============================
+            Mnemonic::CLC => Self::clc(),
+            Mnemonic::CLD => Self::cld(),
+            Mnemonic::CLI => Self::cli(),
+            Mnemonic::CLV => Self::clv(),
+            Mnemonic::SEC => Self::sec(),
+            Mnemonic::SED => Self::sed(),
+            Mnemonic::SEI => Self::sei(),
+
+            // ===============================
+            // Other
+            // ===============================
+            Mnemonic::JAM => Self::jam(),
+            Mnemonic::NOP => Self::nop(),
         }
     }
 }
@@ -191,5 +234,38 @@ impl Mnemonic {
 impl Display for Mnemonic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!("{:?}", self).to_lowercase())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        bus::{BusImpl, mock::MockBus},
+        cpu::Cpu,
+    };
+
+    // Helper: Initialize CPU + Bus with custom memory setup
+    pub(crate) fn setup(
+        pc: u16,
+        a: u8,
+        x: u8,
+        y: u8,
+        s: u8,
+        mem_setup: impl FnOnce(&mut MockBus),
+    ) -> (Cpu, BusImpl) {
+        use crate::{bus::BusImpl, cpu::status::Status};
+
+        let mut mock = MockBus::default();
+        mem_setup(&mut mock);
+
+        let mut cpu = Cpu::new();
+        cpu.pc = pc;
+        cpu.a = a;
+        cpu.x = x;
+        cpu.y = y;
+        cpu.s = s;
+        cpu.p = Status::empty();
+
+        (cpu, BusImpl::Dynamic(Box::new(mock)))
     }
 }

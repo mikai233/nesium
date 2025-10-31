@@ -17,7 +17,9 @@ impl MicroOp {
     // ─────────────────────────────────────────────────────────────────────────────
     /// Execute this micro operation.
     pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut BusImpl) {
-        (self.micro_fn)(cpu, bus)
+        println!("before exec {}: {}", self.name, cpu);
+        (self.micro_fn)(cpu, bus);
+        println!("after exec {}: {}", self.name, cpu);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -47,7 +49,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_rel_offset",
             micro_fn: |cpu, bus| {
-                cpu.rel_offset = bus.read(cpu.pc);
+                cpu.base = bus.read(cpu.pc);
                 cpu.incr_pc();
             },
         }
@@ -206,7 +208,7 @@ impl MicroOp {
                 let addr = base.wrapping_add(cpu.y as u16);
 
                 cpu.check_cross_page(base, addr);
-                
+
                 cpu.effective_addr = addr;
             },
         }
@@ -220,7 +222,7 @@ impl MicroOp {
         MicroOp {
             name: "read_indirect_lo",
             micro_fn: |cpu, bus| {
-                cpu.tmp = bus.read(cpu.effective_addr);
+                cpu.base = bus.read(cpu.effective_addr);
             },
         }
     }
@@ -237,7 +239,7 @@ impl MicroOp {
                     cpu.effective_addr + 1
                 };
                 let hi = bus.read(hi_addr);
-                cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
+                cpu.effective_addr = ((hi as u16) << 8) | (cpu.base as u16);
             },
         }
     }
@@ -269,3 +271,5 @@ impl MicroOp {
         }
     }
 }
+
+pub(crate) fn empty_micro_fn(_: &mut Cpu, _: &mut BusImpl) {}

@@ -21,7 +21,7 @@ impl Mnemonic {
     /// Cycle-by-cycle (2 cycles):
     /// 1. Dummy read from PC
     /// 2. Perform shift, update A and flags
-    pub(crate) const fn asl_a() -> &'static [MicroOp] {
+    pub(crate) const fn asl() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "asl_a_dummy_read",
             micro_fn: |cpu, bus| {
@@ -61,7 +61,7 @@ impl Mnemonic {
     /// Cycle-by-cycle (2 cycles):
     /// 1. Dummy read from PC
     /// 2. Perform shift, update A and flags
-    pub(crate) const fn lsr_a() -> &'static [MicroOp] {
+    pub(crate) const fn lsr() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "lsr_a_dummy_read",
             micro_fn: |cpu, bus| {
@@ -102,7 +102,7 @@ impl Mnemonic {
     /// Cycle-by-cycle (2 cycles):
     /// 1. Dummy read from PC
     /// 2. Perform rotate using current Carry
-    pub(crate) const fn rol_a() -> &'static [MicroOp] {
+    pub(crate) const fn rol() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "rol_a_dummy_read",
             micro_fn: |cpu, bus| {
@@ -143,7 +143,7 @@ impl Mnemonic {
     /// Cycle-by-cycle (2 cycles):
     /// 1. Dummy read from PC
     /// 2. Perform rotate using current Carry
-    pub(crate) const fn ror_a() -> &'static [MicroOp] {
+    pub(crate) const fn ror() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "ror_a_dummy_read",
             micro_fn: |cpu, bus| {
@@ -153,7 +153,7 @@ impl Mnemonic {
         };
         const OP2: MicroOp = MicroOp {
             name: "ror_a_rotate",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, _| {
                 // Cycle 2: Rotate right through Carry
                 let old_bit0 = cpu.a & 0x01;
                 let new_a = (cpu.a >> 1)
