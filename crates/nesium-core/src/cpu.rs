@@ -1,5 +1,6 @@
 use crate::bus::{Bus, BusImpl};
 use crate::cpu;
+use crate::cpu::addressing::Addressing;
 use crate::cpu::instruction::Instruction;
 use crate::cpu::lookup::LOOKUP_TABLE;
 use crate::cpu::status::Status;
@@ -10,9 +11,10 @@ mod addressing;
 mod instruction;
 mod lookup;
 mod micro_op;
+mod mnemonic;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct Cpu {
+pub(crate) struct Cpu {
     // Registers
     a: u8,     //Accumulator
     x: u8,     //X Index Register
@@ -26,9 +28,11 @@ struct Cpu {
     tmp: u8,
     zp_addr: u8,
     base_lo: u8,
+    rel_offset: u8,
     effective_addr: u16,
     check_cross_page: bool,
     crossed_page: bool,
+    branch_taken: bool,
 }
 
 impl Cpu {
@@ -50,6 +54,8 @@ impl Cpu {
             effective_addr: 0,
             check_cross_page: false,
             crossed_page: false,
+            rel_offset: 0,
+            branch_taken: false,
         }
     }
 
@@ -77,10 +83,25 @@ impl Cpu {
     }
 
     pub fn clock(&mut self, bus: &mut BusImpl) {
+        if self.branch_taken {
+            self.branch_taken = false;
+            return;
+        }
         let instruction = *self.instruction.get_or_insert_with(|| {
             let opcode = bus.read(self.pc);
+            self.pc = self.pc.wrapping_add(1);
             &LOOKUP_TABLE[opcode as usize]
         });
+        match instruction.addressing {
+            Addressing::Immediate => {
+                self.effective_addr = bus.read(self.pc) as u16;
+                self.incr_pc();
+            }
+            Addressing::ZeroPage => {
+                self.effective_addr = self.zp_addr as u16;
+            }
+            _ => {}
+        }
         let micro_op = &instruction.micro_ops[self.index];
         micro_op.exec(self, bus);
         self.index += 1;
@@ -120,6 +141,19 @@ impl Cpu {
         self.index = 0;
         self.instruction = None;
         self.effective_addr = 0;
+        self.check_cross_page = false;
         self.crossed_page = false;
+        self.branch_taken = false;
+    }
+
+    pub(crate) fn branch(&mut self) {
+        let old_pc = self.pc;
+        let new_pc = old_pc.wrapping_add(self.rel_offset as u16);
+        if (old_pc & 0xFF00) != (new_pc & 0xFF00) {
+            self.check_cross_page = true;
+            self.crossed_page = true;
+        }
+        self.pc = new_pc;
+        self.branch_taken = true;
     }
 }

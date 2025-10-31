@@ -19,7 +19,7 @@ pub enum Addressing {
 
     /// The operation is performed on the accumulator register.
     ///
-    /// # Examples  
+    /// # Examples
     /// - `ASL A` (Arithmetic Shift Left Accumulator)
     /// - `LSR A` (Logical Shift Right Accumulator)
     Accumulator,
@@ -52,7 +52,7 @@ pub enum Addressing {
     /// The effective address is calculated as `address + Y`.
     /// May require an extra cycle if a page boundary is crossed.
     ///
-    /// # Examples  
+    /// # Examples
     /// - `LDA $1234,Y` (Load Accumulator from address $1234 + Y)
     AbsoluteY,
 
@@ -116,95 +116,161 @@ pub enum Addressing {
     Relative,
 }
 
-// impl Addressing {
-//     /// Returns the sequence of micro operations for this addressing mode.
-//     ///
-//     /// The micro operations represent the cycle-by-cycle steps required to
-//     /// resolve the effective address or operand for this addressing mode.
-//     /// This sequence stops once the operand is available, excluding the
-//     /// actual instruction execution.
-//     pub const fn micro_ops(self) -> &'static [MicroOp] {
-//         match self {
-//             Addressing::Implied => &[MicroOp::ImpliedC1],
-//             Addressing::Accumulator => &[MicroOp::AccumulatorC1],
+impl Addressing {
+    /// Returns the sequence of micro-ops to execute **after the opcode has been fetched**.
+    ///
+    /// - All sequences **exclude** the opcode fetch cycle (handled during decode).
+    /// - Extra cycles due to page crossing are handled via `dummy_read_cross_*`
+    ///   (automatically based on `crossed_page`).
+    /// - At completion, `effective_addr`, `zp_addr`, `rel_offset`, etc. are ready
+    ///   for the instruction execution phase.
+    pub const fn micro_ops(&self) -> &'static [MicroOp] {
+        match self {
+            // ─────────────────────────────────────────────────────────────────────
+            //  Implied / Accumulator / Immediate
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::Implied => &[],
+            Addressing::Accumulator => &[],
 
-//             Addressing::Immediate => &[MicroOp::ImmediateC1, MicroOp::ImmediateC2],
+            Addressing::Immediate => {
+                // Cycle 2: read immediate value into base_lo (or use directly in instruction)
+                const IMM: [MicroOp; 1] = [MicroOp::fetch_zp_addr_lo()];
+                &IMM
+            }
 
-//             Addressing::Absolute => &[
-//                 MicroOp::AbsoluteC1,
-//                 MicroOp::AbsoluteC2,
-//                 MicroOp::AbsoluteC3,
-//             ],
+            // ─────────────────────────────────────────────────────────────────────
+            //  Absolute
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::Absolute => {
+                // Cycle 2: low  → base_lo, PC++
+                // Cycle 3: high → effective_addr, PC++
+                const ABS: [MicroOp; 2] =
+                    [MicroOp::fetch_abs_addr_lo(), MicroOp::fetch_abs_addr_hi()];
+                &ABS
+            }
 
-//             Addressing::AbsoluteX => &[
-//                 MicroOp::AbsoluteXC1,
-//                 MicroOp::AbsoluteXC2,
-//                 MicroOp::AbsoluteXC3,
-//                 MicroOp::AbsoluteXC4,
-//             ],
+            // ─────────────────────────────────────────────────────────────────────
+            //  Absolute,X
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::AbsoluteX => {
+                // Cycle 2: low  → base_lo, PC++
+                // Cycle 3: high + X → effective_addr, detect page cross, PC++
+                // Cycle 4 (if cross): dummy read
+                const ABSX: [MicroOp; 3] = [
+                    MicroOp::fetch_abs_addr_lo(),
+                    MicroOp::fetch_abs_addr_hi_add_x(),
+                    MicroOp::dummy_read_cross_x(),
+                ];
+                &ABSX
+            }
 
-//             Addressing::AbsoluteY => &[
-//                 MicroOp::AbsoluteYC1,
-//                 MicroOp::AbsoluteYC2,
-//                 MicroOp::AbsoluteYC3,
-//                 MicroOp::AbsoluteYC4,
-//                 // Note: AbsoluteYC5 is used only when page boundary is crossed
-//                 // and is handled dynamically during execution
-//             ],
+            // ─────────────────────────────────────────────────────────────────────
+            //  Absolute,Y
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::AbsoluteY => {
+                const ABSY: [MicroOp; 3] = [
+                    MicroOp::fetch_abs_addr_lo(),
+                    MicroOp::fetch_abs_addr_hi_add_y(),
+                    MicroOp::dummy_read_cross_y(),
+                ];
+                &ABSY
+            }
 
-//             Addressing::Indirect => &[
-//                 MicroOp::IndirectC1,
-//                 MicroOp::IndirectC2,
-//                 MicroOp::IndirectC3,
-//                 MicroOp::IndirectC4,
-//                 MicroOp::IndirectC5,
-//             ],
+            // ─────────────────────────────────────────────────────────────────────
+            //  Indirect (JMP only) – with 6502 page-boundary bug
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::Indirect => {
+                // Cycle 2: low  of pointer → base_lo, PC++
+                // Cycle 3: high of pointer → effective_addr = pointer, PC++
+                // Cycle 4: read low  byte of target → tmp
+                // Cycle 5: read high byte of target (buggy wrap if ptr & 0xFF == 0xFF)
+                const INDIRECT: [MicroOp; 4] = [
+                    MicroOp::fetch_abs_addr_lo(),
+                    MicroOp::fetch_abs_addr_hi(),
+                    MicroOp::read_indirect_lo(),       // target low → tmp
+                    MicroOp::read_indirect_hi_buggy(), // target high → effective_addr (final)
+                ];
+                &INDIRECT
+            }
 
-//             Addressing::ZeroPage => &[MicroOp::ZeroPageC1, MicroOp::ZeroPageC2],
+            // ─────────────────────────────────────────────────────────────────────
+            //  ZeroPage
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::ZeroPage => {
+                // Cycle 2: read zero-page address → zp_addr, PC++
+                const ZP: [MicroOp; 1] = [MicroOp::fetch_zp_addr_lo()];
+                &ZP
+            }
 
-//             Addressing::ZeroPageX => &[
-//                 MicroOp::ZeroPageXC1,
-//                 MicroOp::ZeroPageXC2,
-//                 MicroOp::ZeroPageXC3,
-//                 MicroOp::ZeroPageXC4,
-//             ],
+            // ─────────────────────────────────────────────────────────────────────
+            //  ZeroPage,X
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::ZeroPageX => {
+                // Cycle 2: read zp address → zp_addr, PC++
+                // Cycle 3: (zp + X) & 0xFF, dummy read → effective_addr
+                const ZPX: [MicroOp; 2] = [
+                    MicroOp::fetch_zp_addr_lo(),
+                    MicroOp::read_zero_page_add_x_dummy(),
+                ];
+                &ZPX
+            }
 
-//             Addressing::ZeroPageY => &[
-//                 MicroOp::ZeroPageYC1,
-//                 MicroOp::ZeroPageYC2,
-//                 MicroOp::ZeroPageYC3,
-//                 MicroOp::ZeroPageYC4,
-//             ],
+            // ─────────────────────────────────────────────────────────────────────
+            //  ZeroPage,Y (used by LDX, STX)
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::ZeroPageY => {
+                const ZPY: [MicroOp; 2] = [
+                    MicroOp::fetch_zp_addr_lo(),
+                    MicroOp::read_zero_page_add_y_dummy(),
+                ];
+                &ZPY
+            }
 
-//             Addressing::IndirectX => &[
-//                 MicroOp::IndirectXC1,
-//                 MicroOp::IndirectXC2,
-//                 MicroOp::IndirectXC3,
-//                 MicroOp::IndirectXC4,
-//                 MicroOp::IndirectXC5,
-//                 MicroOp::IndirectXC6,
-//             ],
+            // ─────────────────────────────────────────────────────────────────────
+            //  (Indirect,X) – Pre-indexed indirect
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::IndirectX => {
+                // Cycle 2: read zp pointer → zp_addr, PC++
+                // Cycle 3: dummy read (zp + X) & 0xFF
+                // Cycle 4: read low  from (zp + X)
+                // Cycle 5: read high from (zp + X + 1)
+                const INDX: [MicroOp; 4] = [
+                    MicroOp::fetch_zp_addr_lo(),
+                    MicroOp::read_indirect_x_dummy(),
+                    MicroOp::read_indirect_x_lo(),
+                    MicroOp::read_indirect_x_hi(),
+                ];
+                &INDX
+            }
 
-//             Addressing::IndirectY => &[
-//                 MicroOp::IndirectYC1,
-//                 MicroOp::IndirectYC2,
-//                 MicroOp::IndirectYC3,
-//                 MicroOp::IndirectYC4,
-//                 MicroOp::IndirectYC5,
-//                 // Note: IndirectYC6 is used only when page boundary is crossed
-//                 // and is handled dynamically during execution
-//             ],
+            // ─────────────────────────────────────────────────────────────────────
+            //  (Indirect),Y – Post-indexed indirect
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::IndirectY => {
+                // Cycle 2: read zp pointer → zp_addr, PC++
+                // Cycle 3: read low  from zp → base_lo
+                // Cycle 4: read high from (zp+1), add Y, detect cross → effective_addr
+                // Cycle 5 (if cross): dummy read
+                const INDY: [MicroOp; 4] = [
+                    MicroOp::fetch_zp_addr_lo(),
+                    MicroOp::read_zero_page(),     // low → base_lo
+                    MicroOp::read_indirect_y_hi(), // high + Y
+                    MicroOp::dummy_read_cross_y(),
+                ];
+                &INDY
+            }
 
-//             Addressing::Relative => &[
-//                 MicroOp::RelativeC1,
-//                 MicroOp::RelativeC2,
-//                 MicroOp::RelativeC3,
-//                 // Note: RelativeC4 is used only when page boundary is crossed
-//                 // and branch is taken, handled dynamically during execution
-//             ],
-//         }
-//     }
-// }
+            // ─────────────────────────────────────────────────────────────────────
+            //  Relative (branch instructions)
+            // ─────────────────────────────────────────────────────────────────────
+            Addressing::Relative => {
+                // Cycle 2: read signed offset → rel_offset, PC++
+                const REL: [MicroOp; 1] = [MicroOp::fetch_rel_offset()];
+                &REL
+            }
+        }
+    }
+}
 
 impl Display for Addressing {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
