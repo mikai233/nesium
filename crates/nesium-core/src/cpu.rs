@@ -22,8 +22,8 @@ pub(crate) struct Cpu {
     p: Status, //Processor Status
     pc: u16,   //Program Counter
 
-    instruction: Option<&'static Instruction>,
-    index: usize,
+    opcode: Option<u8>,
+    index: u8,
     tmp: u8,
     zp_addr: u8,
     base_lo: u8,
@@ -42,7 +42,7 @@ impl Cpu {
             s: 0xFD,                             // Stack pointer after reset
             p: Status::from_bits_truncate(0x34), // IRQ disabled, bit 5 always set
             pc: 0x0000,                          // Will be set by reset vector
-            instruction: None,
+            opcode: None,
             index: 0,
             tmp: 0,
             zp_addr: 0,
@@ -67,19 +67,21 @@ impl Cpu {
         // Reset other state
         self.s = 0xFD; // Stack pointer is initialized to $FD
         self.p = Status::from_bits_truncate(0x34); // IRQ disabled
-        self.instruction = None;
+        self.opcode = None;
         self.index = 0;
         self.tmp = 0;
         self.effective_addr = 0;
     }
 
     pub fn clock(&mut self, bus: &mut BusImpl) {
-        let instruction = *self.instruction.get_or_insert_with(|| {
+        let opcode = *self.opcode.get_or_insert_with(|| {
             let opcode = bus.read(self.pc);
             self.pc = self.pc.wrapping_add(1);
-            &LOOKUP_TABLE[opcode as usize]
+            opcode
         });
-        match instruction.addressing {
+        let instr = &LOOKUP_TABLE[opcode as usize];
+
+        match instr.addressing {
             Addressing::Immediate => {
                 self.effective_addr = bus.read(self.pc) as u16;
                 self.incr_pc();
@@ -89,18 +91,18 @@ impl Cpu {
             }
             _ => {}
         }
-        let micro_op = &instruction[self.index];
+        let micro_op = &instr[self.index()];
         micro_op.exec(self, bus);
         self.index += 1;
-        if self.index > instruction.len() {
+        if self.index() > instr.len() {
             self.clear();
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn test_clock(&mut self, bus: &mut BusImpl, instruction: &Instruction) {
-        while self.index < instruction.len() {
-            instruction[self.index].exec(self, bus);
+    pub(crate) fn test_clock(&mut self, bus: &mut BusImpl, instr: &Instruction) {
+        while (self.index as usize) < instr.len() {
+            instr[self.index()].exec(self, bus);
             self.index += 1;
         }
     }
@@ -117,7 +119,7 @@ impl Cpu {
 
     pub(crate) fn clear(&mut self) {
         self.index = 0;
-        self.instruction = None;
+        self.opcode = None;
         self.effective_addr = 0;
     }
 
@@ -128,5 +130,10 @@ impl Cpu {
             self.index += 1;
         }
         self.pc = new_pc;
+    }
+
+    #[inline]
+    pub(crate) fn index(&self) -> usize {
+        self.index as usize
     }
 }
