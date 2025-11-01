@@ -18,13 +18,6 @@ impl MicroOp {
     //  Execution
     // ─────────────────────────────────────────────────────────────────────────────
     /// Execute this micro operation.
-    #[cfg(not(test))]
-    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut BusImpl) {
-        (self.micro_fn)(cpu, bus);
-    }
-
-    #[cfg(test)]
-    #[tracing::instrument(skip(bus))]
     pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut BusImpl) {
         (self.micro_fn)(cpu, bus);
     }
@@ -46,8 +39,6 @@ impl MicroOp {
             name: "fetch_zp_addr_lo",
             micro_fn: |cpu, bus| {
                 cpu.zp_addr = bus.read(cpu.pc);
-                #[cfg(test)]
-                tracing::trace!("zp_addr: 0x{:02X}", cpu.zp_addr);
                 cpu.incr_pc();
             },
         }

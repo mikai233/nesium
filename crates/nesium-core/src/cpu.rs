@@ -98,7 +98,22 @@ impl Cpu {
         let mut cycles = 1; // Fetch opcode has 1 cycle
         self.prepare_imm_addr(instr);
         while self.index() < instr.len() {
-            instr[self.index()].exec(self, bus);
+            let op = &instr[self.index()];
+            let _span = tracing::span!(
+                tracing::Level::TRACE,
+                "instruction_exec",
+                op = ?op,
+                index = self.index()
+            );
+            let _enter = _span.enter();
+            let before = *self;
+            op.exec(self, bus);
+            tracing::event!(
+                tracing::Level::TRACE,
+                before_cpu = ?before,
+                after_cpu = ?self,
+                "Instruction executed"
+            );
             self.index += 1;
             self.prepare_zp_addr(instr);
             cycles += 1;
@@ -175,7 +190,7 @@ impl Debug for Cpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:[{:?}] PC:{:04X} O:{:02X?} I:{} Z:{:02X} B:{:02X} E:{:04X}",
+            "A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:{:?} PC:{:04X} O:{:02X?} I:{} Z:{:02X} B:{:02X} E:{:04X}",
             self.a,
             self.x,
             self.y,

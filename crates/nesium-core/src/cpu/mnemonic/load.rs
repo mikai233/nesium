@@ -69,7 +69,6 @@ impl Mnemonic {
         const OP1: MicroOp = MicroOp {
             name: "lda",
             micro_fn: |cpu, bus| {
-                tracing::debug!("load from: {:04X}", cpu.effective_addr);
                 let value = bus.read(cpu.effective_addr);
                 cpu.a = value;
                 cpu.p.set_zn(value);
@@ -282,16 +281,15 @@ impl Mnemonic {
 #[cfg(test)]
 mod load_tests {
 
-    use tracing::{debug, info};
+    use tracing::debug;
 
     use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
 
     #[test]
     fn test_lda() {
         let test = InstrTest::new(Mnemonic::LDA);
-        for _ in 0..1 {
-            // let seed = rand::random();
-            let seed = 8360970990284233340;
+        for _ in 0..10000 {
+            let seed = rand::random();
             debug!("using seed: {}", seed);
             test.run(seed, |instr, verify, cpu, bus| {
                 assert_eq!(cpu.a, verify.m);
