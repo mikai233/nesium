@@ -5,8 +5,6 @@ use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
 use crate::cpu::lookup::LOOKUP_TABLE;
-#[cfg(test)]
-use crate::cpu::mnemonic::Mnemonic;
 use crate::cpu::status::Status;
 mod phase;
 mod status;
@@ -78,7 +76,7 @@ impl Cpu {
         match self.opcode {
             Some(opcode) => {
                 let instr = &LOOKUP_TABLE[opcode as usize];
-                self.prepare_imm_addr(bus, instr);
+                self.prepare_imm_addr(instr);
                 let micro_op = &instr[self.index()];
                 micro_op.exec(self, bus);
                 self.index += 1;
@@ -97,7 +95,7 @@ impl Cpu {
     pub(crate) fn test_clock(&mut self, bus: &mut BusImpl, instr: &Instruction) -> usize {
         self.incr_pc(); // Fetch opcode
         let mut cycles = 1; // Fetch opcode has 1 cycle
-        self.prepare_imm_addr(bus, instr);
+        self.prepare_imm_addr(instr);
         while self.index() < instr.len() {
             instr[self.index()].exec(self, bus);
             self.index += 1;
@@ -113,7 +111,7 @@ impl Cpu {
         opcode
     }
 
-    pub(crate) fn prepare_imm_addr(&mut self, bus: &mut BusImpl, instr: &Instruction) {
+    pub(crate) fn prepare_imm_addr(&mut self, instr: &Instruction) {
         if matches!(instr.addressing, Addressing::Immediate) {
             self.effective_addr = self.pc as u16;
             self.incr_pc();
@@ -160,11 +158,10 @@ impl Cpu {
     }
 
     pub(crate) fn check_cross_page(&mut self, base: u16, addr: u16) {
-        if let Some(opcode) = self.opcode {
-            let instr = &LOOKUP_TABLE[opcode as usize];
-            if Self::always_cross_page(opcode, instr) {
-                return;
-            }
+        let opcode = self.opcode.expect("opcode not set");
+        let instr = &LOOKUP_TABLE[opcode as usize];
+        if Self::always_cross_page(opcode, instr) {
+            return;
         }
         let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
         if !crossed_page {

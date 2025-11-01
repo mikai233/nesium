@@ -88,10 +88,7 @@ impl MicroOp {
                 cpu.base = hi; // Store high byte for some unofficial instructions
                 let addr = base.wrapping_add(cpu.x as u16);
 
-                let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-                if !crossed_page {
-                    cpu.index += 1;
-                }
+                cpu.check_cross_page(base, addr);
                 cpu.effective_addr = addr;
                 cpu.incr_pc();
             },
@@ -108,10 +105,7 @@ impl MicroOp {
                 cpu.base = hi; // Store high byte for some unofficial instructions
                 let addr = base.wrapping_add(cpu.y as u16);
 
-                let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-                if !crossed_page {
-                    cpu.index += 1;
-                }
+                cpu.check_cross_page(base, addr);
                 cpu.effective_addr = addr;
                 cpu.incr_pc();
             },
@@ -208,7 +202,6 @@ impl MicroOp {
                 let addr = base.wrapping_add(cpu.y as u16);
 
                 cpu.check_cross_page(base, addr);
-
                 cpu.effective_addr = addr;
             },
         }
