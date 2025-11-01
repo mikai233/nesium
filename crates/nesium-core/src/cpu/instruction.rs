@@ -498,7 +498,10 @@ impl Instruction {
     }
 
     pub(crate) fn opcode(&self) -> u8 {
-        LOOKUP_TABLE.iter().position(|instr| instr == self).unwrap() as u8
+        LOOKUP_TABLE
+            .iter()
+            .position(|instr| instr == self)
+            .expect("instruction not found in LOOKUP_TABLE") as u8
     }
 
     pub(crate) fn cycle(&self) -> Cycle {

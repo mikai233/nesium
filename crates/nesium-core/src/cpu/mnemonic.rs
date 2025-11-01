@@ -239,10 +239,146 @@ impl Display for Mnemonic {
 
 #[cfg(test)]
 mod tests {
+    use rand::{Rng, SeedableRng};
+
     use crate::{
         bus::{BusImpl, mock::MockBus},
-        cpu::Cpu,
+        cpu::{
+            Cpu,
+            addressing::Addressing,
+            instruction::Instruction,
+            lookup::LOOKUP_TABLE,
+            mnemonic::{self, Mnemonic},
+            status::Status,
+        },
     };
+
+    #[derive(Debug)]
+    pub(crate) struct InstrTest {
+        mnemonic: Mnemonic,
+    }
+
+    impl InstrTest {
+        pub(crate) fn new(mnemonic: Mnemonic) -> Self {
+            Self { mnemonic }
+        }
+
+        pub(crate) fn run<F>(&self, seed: u64, f: F)
+        where
+            F: Fn(&Instruction, &Cpu, &Cpu, &mut BusImpl),
+        {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+            let mut cpu = Cpu::new();
+            cpu.a = rng.random();
+            cpu.x = rng.random();
+            cpu.y = rng.random();
+            cpu.s = rng.random();
+            cpu.p = Status::from_bits_truncate(rng.random());
+            cpu.pc = 0x8000;
+            let mut mock = MockBus::default();
+
+            for instr in LOOKUP_TABLE {
+                if instr.mnemonic == self.mnemonic {
+                    let mut crossed_page = false;
+                    mock.mem[cpu.pc as usize] = instr.opcode();
+                    match instr.addressing {
+                        Addressing::Implied | Addressing::Accumulator => {}
+
+                        Addressing::Immediate => {
+                            let value: u8 = rng.random();
+                            mock.mem[(cpu.pc + 1) as usize] = value;
+                        }
+
+                        Addressing::ZeroPage => {
+                            let addr: u8 = rng.random();
+                            mock.mem[(cpu.pc + 1) as usize] = addr;
+                            mock.mem[addr as usize] = rng.random();
+                        }
+
+                        Addressing::ZeroPageX => {
+                            let base: u8 = rng.random();
+                            let effective = base.wrapping_add(cpu.x);
+                            mock.mem[(cpu.pc + 1) as usize] = base;
+                            mock.mem[effective as usize] = rng.random();
+                        }
+
+                        Addressing::ZeroPageY => {
+                            let base: u8 = rng.random();
+                            let effective = base.wrapping_add(cpu.y);
+                            mock.mem[(cpu.pc + 1) as usize] = base;
+                            mock.mem[effective as usize] = rng.random();
+                        }
+
+                        Addressing::Absolute => {
+                            let addr: u16 = rng.random_range(0x0000..=0xFFFF);
+                            mock.mem[(cpu.pc + 1) as usize] = (addr & 0xFF) as u8;
+                            mock.mem[(cpu.pc + 2) as usize] = (addr >> 8) as u8;
+                            mock.mem[addr as usize] = rng.random();
+                        }
+
+                        Addressing::AbsoluteX => {
+                            let base: u16 = rng.random_range(0x0000..=0xFFFF);
+                            cpu.base = (base >> 8) as u8; // Store high byte useful for some unofficial instructions
+                            let effective = base.wrapping_add(cpu.x as u16);
+                            if (base & 0xFF00) != (effective & 0xFF00) {
+                                crossed_page = true;
+                            }
+                            mock.mem[(cpu.pc + 1) as usize] = (base & 0xFF) as u8;
+                            mock.mem[(cpu.pc + 2) as usize] = (base >> 8) as u8;
+                            mock.mem[effective as usize] = rng.random();
+                        }
+
+                        Addressing::AbsoluteY => {
+                            let base: u16 = rng.random_range(0x0000..=0xFFFF);
+                            cpu.base = (base >> 8) as u8; // Store high byte useful for some unofficial instructions
+                            let effective = base.wrapping_add(cpu.y as u16);
+                            if (base & 0xFF00) != (effective & 0xFF00) {
+                                crossed_page = true;
+                            }
+                            mock.mem[(cpu.pc + 1) as usize] = (base & 0xFF) as u8;
+                            mock.mem[(cpu.pc + 2) as usize] = (base >> 8) as u8;
+                            mock.mem[effective as usize] = rng.random();
+                        }
+
+                        Addressing::Indirect => {
+                            let ptr: u16 = rng.random_range(0x0000..=0xFFFF);
+                            let target: u16 = rng.random();
+                            mock.mem[(cpu.pc + 1) as usize] = (ptr & 0xFF) as u8;
+                            mock.mem[(cpu.pc + 2) as usize] = (ptr >> 8) as u8;
+                            mock.mem[ptr as usize] = (target & 0xFF) as u8;
+                            mock.mem[(ptr + 1) as usize] = (target >> 8) as u8;
+                        }
+
+                        Addressing::IndirectX => {
+                            let zp: u8 = rng.random();
+                            let ptr = zp.wrapping_add(cpu.x);
+                            let target: u16 = rng.random_range(0x0000..=0xFFFF);
+                            mock.mem[(cpu.pc + 1) as usize] = zp;
+                            mock.mem[ptr as usize] = (target & 0xFF) as u8;
+                            mock.mem[(ptr.wrapping_add(1)) as usize] = (target >> 8) as u8;
+                            mock.mem[target as usize] = rng.random();
+                        }
+
+                        Addressing::IndirectY => {
+                            let zp: u8 = rng.random();
+                            let base: u16 = rng.random_range(0x0000..=0xFFFF);
+                            cpu.base = (base >> 8) as u8; // Store high byte useful for some unofficial instructions
+                            let effective = base.wrapping_add(cpu.y as u16);
+                            mock.mem[(cpu.pc + 1) as usize] = zp;
+                            mock.mem[zp as usize] = (base & 0xFF) as u8;
+                            mock.mem[(zp.wrapping_add(1)) as usize] = (base >> 8) as u8;
+                            mock.mem[effective as usize] = rng.random();
+                        }
+
+                        Addressing::Relative => {
+                            let offset: i8 = rng.random_range(-128..=127);
+                            mock.mem[(cpu.pc + 1) as usize] = offset as u8;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Helper: Initialize CPU + Bus with custom memory setup
     pub(crate) fn setup(

@@ -125,4 +125,32 @@ impl Status {
             self.remove(Status::NEGATIVE);
         };
     }
+
+    pub fn n(&self) -> bool {
+        self.contains(Status::NEGATIVE)
+    }
+
+    pub fn z(&self) -> bool {
+        self.contains(Status::ZERO)
+    }
+
+    pub fn v(&self) -> bool {
+        self.contains(Status::OVERFLOW)
+    }
+
+    pub fn c(&self) -> bool {
+        self.contains(Status::CARRY)
+    }
+
+    pub fn i(&self) -> bool {
+        self.contains(Status::INTERRUPT)
+    }
+
+    pub fn b(&self) -> bool {
+        self.contains(Status::BREAK)
+    }
+
+    pub fn d(&self) -> bool {
+        self.contains(Status::DECIMAL)
+    }
 }

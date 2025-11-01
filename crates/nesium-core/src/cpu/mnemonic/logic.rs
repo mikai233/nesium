@@ -99,3 +99,10 @@ impl Mnemonic {
         &[OP1]
     }
 }
+
+#[cfg(test)]
+mod logic_tests {
+    mod test_and {
+        
+    }
+}

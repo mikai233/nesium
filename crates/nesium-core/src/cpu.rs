@@ -93,6 +93,7 @@ impl Cpu {
 
     #[cfg(test)]
     pub(crate) fn test_clock(&mut self, bus: &mut BusImpl, instr: &Instruction) -> usize {
+        self.opcode = Some(instr.opcode());
         self.incr_pc(); // Fetch opcode
         let mut cycles = 1; // Fetch opcode has 1 cycle
         self.prepare_imm_addr(instr);

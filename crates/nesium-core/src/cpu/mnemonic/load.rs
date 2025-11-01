@@ -1064,7 +1064,6 @@ mod load_tests {
                 mem.mem[0x8002] = 0x20; // base = $2000
                 // effective = $2000 + X = $2005 (no extra cycle for stores)
             });
-            cpu.opcode = Some(instr.opcode());
 
             // store addressing for absolute,X does not add page-cross cycles for STA
             let cross_page = false;
@@ -1084,7 +1083,6 @@ mod load_tests {
                 mem.mem[0x8002] = 0x30; // base = $3000
                 // effective = $3000 + Y = $3003
             });
-            cpu.opcode = Some(instr.opcode());
 
             let cross_page = false;
             let executed = cpu.test_clock(&mut bus, &instr);
@@ -1132,6 +1130,102 @@ mod load_tests {
 
             assert_eq!(bus.read(0x20FD), 0x22);
             assert_eq!(cpu.pc, 0x8002);
+        }
+    }
+
+    mod test_stx {
+        use crate::{
+            bus::Bus,
+            cpu::{addressing::Addressing, instruction::Instruction, mnemonic::tests::setup},
+        };
+
+        #[test]
+        fn test_stx_zero_page() {
+            let instr = Instruction::stx(Addressing::ZeroPage);
+            let (mut cpu, mut bus) = setup(0x8000, 0x00, 0x5A, 0x00, 0xFF, |mem| {
+                mem.mem[0x8001] = 0x80; // operand = $80
+            });
+            let executed = cpu.test_clock(&mut bus, &instr);
+            let expected = instr.cycle().total_cycle(false, false);
+            assert_eq!(executed, expected);
+            assert_eq!(bus.read(0x0080), 0x5A);
+            assert_eq!(cpu.pc, 0x8002);
+        }
+
+        #[test]
+        fn test_stx_zero_page_y() {
+            let instr = Instruction::stx(Addressing::ZeroPageY);
+            let (mut cpu, mut bus) = setup(0x8000, 0x00, 0x00, 0x03, 0xFF, |mem| {
+                mem.mem[0x8001] = 0x10; // base = $10
+                // effective = $10 + Y = $13
+            });
+            let executed = cpu.test_clock(&mut bus, &instr);
+            let expected = instr.cycle().total_cycle(false, false);
+            assert_eq!(executed, expected);
+            assert_eq!(bus.read(0x0013), 0x00); // X register is 0x00
+            assert_eq!(cpu.pc, 0x8002);
+        }
+
+        #[test]
+        fn test_stx_absolute() {
+            let instr = Instruction::stx(Addressing::Absolute);
+            let (mut cpu, mut bus) = setup(0x8000, 0x00, 0x99, 0x00, 0xFF, |mem| {
+                mem.mem[0x8001] = 0x00;
+                mem.mem[0x8002] = 0x40; // → $4000
+            });
+            let executed = cpu.test_clock(&mut bus, &instr);
+            let expected = instr.cycle().total_cycle(false, false);
+            assert_eq!(executed, expected);
+            assert_eq!(bus.read(0x4000), 0x99);
+            assert_eq!(cpu.pc, 0x8003);
+        }
+    }
+
+    mod test_sty {
+        use crate::{
+            bus::Bus,
+            cpu::{addressing::Addressing, instruction::Instruction, mnemonic::tests::setup},
+        };
+
+        #[test]
+        fn test_sty_zero_page() {
+            let instr = Instruction::sty(Addressing::ZeroPage);
+            let (mut cpu, mut bus) = setup(0x8000, 0x00, 0x00, 0x5A, 0xFF, |mem| {
+                mem.mem[0x8001] = 0x80; // operand = $80
+            });
+            let executed = cpu.test_clock(&mut bus, &instr);
+            let expected = instr.cycle().total_cycle(false, false);
+            assert_eq!(executed, expected);
+            assert_eq!(bus.read(0x0080), 0x5A);
+            assert_eq!(cpu.pc, 0x8002);
+        }
+
+        #[test]
+        fn test_sty_zero_page_x() {
+            let instr = Instruction::sty(Addressing::ZeroPageX);
+            let (mut cpu, mut bus) = setup(0x8000, 0x00, 0x03, 0x3C, 0xFF, |mem| {
+                mem.mem[0x8001] = 0x10; // base = $10
+                // effective = $10 + X = $13
+            });
+            let executed = cpu.test_clock(&mut bus, &instr);
+            let expected = instr.cycle().total_cycle(false, false);
+            assert_eq!(executed, expected);
+            assert_eq!(bus.read(0x0013), 0x3C);
+            assert_eq!(cpu.pc, 0x8002);
+        }
+
+        #[test]
+        fn test_sty_absolute() {
+            let instr = Instruction::sty(Addressing::Absolute);
+            let (mut cpu, mut bus) = setup(0x8000, 0x00, 0x00, 0x99, 0xFF, |mem| {
+                mem.mem[0x8001] = 0x00;
+                mem.mem[0x8002] = 0x40; // → $4000
+            });
+            let executed = cpu.test_clock(&mut bus, &instr);
+            let expected = instr.cycle().total_cycle(false, false);
+            assert_eq!(executed, expected);
+            assert_eq!(bus.read(0x4000), 0x99);
+            assert_eq!(cpu.pc, 0x8003);
         }
     }
 }
