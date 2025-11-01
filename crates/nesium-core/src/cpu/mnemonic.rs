@@ -239,19 +239,24 @@ impl Display for Mnemonic {
 
 #[cfg(test)]
 mod tests {
-    use rand::{Rng, SeedableRng};
+    use rand::SeedableRng;
+    use tracing::debug;
 
     use crate::{
-        bus::{BusImpl, mock::MockBus},
+        bus::{Bus, BusImpl, mock::MockBus},
         cpu::{
-            Cpu,
-            addressing::Addressing,
-            instruction::Instruction,
-            lookup::LOOKUP_TABLE,
-            mnemonic::{self, Mnemonic},
-            status::Status,
+            Cpu, addressing::Addressing, instruction::Instruction, lookup::LOOKUP_TABLE,
+            mnemonic::Mnemonic, status::Status,
         },
     };
+
+    #[derive(Debug)]
+    pub(crate) struct Verify {
+        pub(crate) cpu: Cpu,
+        pub(crate) addr_hi: u8,
+        pub(crate) addr: u16,
+        pub(crate) m: u8,
+    }
 
     #[derive(Debug)]
     pub(crate) struct InstrTest {
@@ -263,11 +268,10 @@ mod tests {
             Self { mnemonic }
         }
 
-        pub(crate) fn run<F>(&self, seed: u64, f: F)
+        pub(crate) fn rand_cpu<R>(rng: &mut R) -> Cpu
         where
-            F: Fn(&Instruction, &Cpu, &Cpu, &mut BusImpl),
+            R: rand::Rng,
         {
-            let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             let mut cpu = Cpu::new();
             cpu.a = rng.random();
             cpu.x = rng.random();
@@ -275,108 +279,250 @@ mod tests {
             cpu.s = rng.random();
             cpu.p = Status::from_bits_truncate(rng.random());
             cpu.pc = 0x8000;
-            let mut mock = MockBus::default();
+            cpu
+        }
 
+        pub(crate) fn run<F>(&self, seed: u64, verify_fn: F)
+        where
+            F: Fn(&Instruction, &Verify, &Cpu, &mut BusImpl),
+        {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             for instr in LOOKUP_TABLE {
                 if instr.mnemonic == self.mnemonic {
-                    let mut crossed_page = false;
-                    mock.mem[cpu.pc as usize] = instr.opcode();
-                    match instr.addressing {
-                        Addressing::Implied | Addressing::Accumulator => {}
-
-                        Addressing::Immediate => {
-                            let value: u8 = rng.random();
-                            mock.mem[(cpu.pc + 1) as usize] = value;
-                        }
-
-                        Addressing::ZeroPage => {
-                            let addr: u8 = rng.random();
-                            mock.mem[(cpu.pc + 1) as usize] = addr;
-                            mock.mem[addr as usize] = rng.random();
-                        }
-
-                        Addressing::ZeroPageX => {
-                            let base: u8 = rng.random();
-                            let effective = base.wrapping_add(cpu.x);
-                            mock.mem[(cpu.pc + 1) as usize] = base;
-                            mock.mem[effective as usize] = rng.random();
-                        }
-
-                        Addressing::ZeroPageY => {
-                            let base: u8 = rng.random();
-                            let effective = base.wrapping_add(cpu.y);
-                            mock.mem[(cpu.pc + 1) as usize] = base;
-                            mock.mem[effective as usize] = rng.random();
-                        }
-
-                        Addressing::Absolute => {
-                            let addr: u16 = rng.random_range(0x0000..=0xFFFF);
-                            mock.mem[(cpu.pc + 1) as usize] = (addr & 0xFF) as u8;
-                            mock.mem[(cpu.pc + 2) as usize] = (addr >> 8) as u8;
-                            mock.mem[addr as usize] = rng.random();
-                        }
-
-                        Addressing::AbsoluteX => {
-                            let base: u16 = rng.random_range(0x0000..=0xFFFF);
-                            cpu.base = (base >> 8) as u8; // Store high byte useful for some unofficial instructions
-                            let effective = base.wrapping_add(cpu.x as u16);
-                            if (base & 0xFF00) != (effective & 0xFF00) {
-                                crossed_page = true;
-                            }
-                            mock.mem[(cpu.pc + 1) as usize] = (base & 0xFF) as u8;
-                            mock.mem[(cpu.pc + 2) as usize] = (base >> 8) as u8;
-                            mock.mem[effective as usize] = rng.random();
-                        }
-
-                        Addressing::AbsoluteY => {
-                            let base: u16 = rng.random_range(0x0000..=0xFFFF);
-                            cpu.base = (base >> 8) as u8; // Store high byte useful for some unofficial instructions
-                            let effective = base.wrapping_add(cpu.y as u16);
-                            if (base & 0xFF00) != (effective & 0xFF00) {
-                                crossed_page = true;
-                            }
-                            mock.mem[(cpu.pc + 1) as usize] = (base & 0xFF) as u8;
-                            mock.mem[(cpu.pc + 2) as usize] = (base >> 8) as u8;
-                            mock.mem[effective as usize] = rng.random();
-                        }
-
-                        Addressing::Indirect => {
-                            let ptr: u16 = rng.random_range(0x0000..=0xFFFF);
-                            let target: u16 = rng.random();
-                            mock.mem[(cpu.pc + 1) as usize] = (ptr & 0xFF) as u8;
-                            mock.mem[(cpu.pc + 2) as usize] = (ptr >> 8) as u8;
-                            mock.mem[ptr as usize] = (target & 0xFF) as u8;
-                            mock.mem[(ptr + 1) as usize] = (target >> 8) as u8;
-                        }
-
-                        Addressing::IndirectX => {
-                            let zp: u8 = rng.random();
-                            let ptr = zp.wrapping_add(cpu.x);
-                            let target: u16 = rng.random_range(0x0000..=0xFFFF);
-                            mock.mem[(cpu.pc + 1) as usize] = zp;
-                            mock.mem[ptr as usize] = (target & 0xFF) as u8;
-                            mock.mem[(ptr.wrapping_add(1)) as usize] = (target >> 8) as u8;
-                            mock.mem[target as usize] = rng.random();
-                        }
-
-                        Addressing::IndirectY => {
-                            let zp: u8 = rng.random();
-                            let base: u16 = rng.random_range(0x0000..=0xFFFF);
-                            cpu.base = (base >> 8) as u8; // Store high byte useful for some unofficial instructions
-                            let effective = base.wrapping_add(cpu.y as u16);
-                            mock.mem[(cpu.pc + 1) as usize] = zp;
-                            mock.mem[zp as usize] = (base & 0xFF) as u8;
-                            mock.mem[(zp.wrapping_add(1)) as usize] = (base >> 8) as u8;
-                            mock.mem[effective as usize] = rng.random();
-                        }
-
-                        Addressing::Relative => {
-                            let offset: i8 = rng.random_range(-128..=127);
-                            mock.mem[(cpu.pc + 1) as usize] = offset as u8;
-                        }
-                    }
+                    debug!("test instruction: {}", instr);
+                    let mut cpu = Self::rand_cpu(&mut rng);
+                    let (verify, bus, crossed_page) = Self::build_mock(&instr, &mut cpu, &mut rng);
+                    let mut bus = BusImpl::Dynamic(Box::new(bus));
+                    let executed = cpu.test_clock(&mut bus, &instr);
+                    let expected = instr.cycle().total_cycle(crossed_page, false);
+                    assert_eq!(
+                        executed, expected,
+                        "instruction: {} cycle not match on {}",
+                        instr.mnemonic, instr.addressing
+                    );
+                    verify_fn(&instr, &verify, &cpu, &mut bus);
                 }
             }
+        }
+
+        pub(crate) fn run_branch<F>(&self, seed: u64, verify_fn: F)
+        where
+            F: Fn(&Instruction, &Verify, &Cpu, &mut BusImpl) -> bool,
+        {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+            for instr in LOOKUP_TABLE {
+                if instr.mnemonic == self.mnemonic {
+                    debug!("test instruction: {}", instr);
+                    let mut cpu = Self::rand_cpu(&mut rng);
+                    let (verify, bus, crossed_page) = Self::build_mock(&instr, &cpu, &mut rng);
+                    let mut bus = BusImpl::Dynamic(Box::new(bus));
+                    let executed = cpu.test_clock(&mut bus, &instr);
+                    let branch_taken = verify_fn(&instr, &verify, &cpu, &mut bus);
+                    let expected = instr.cycle().total_cycle(crossed_page, branch_taken);
+                    assert_eq!(executed, expected, "instruction cycle not match");
+                }
+            }
+        }
+
+        fn build_mock<R>(instr: &Instruction, cpu: &Cpu, rng: &mut R) -> (Verify, MockBus, bool)
+        where
+            R: rand::Rng,
+        {
+            let mut mock = MockBus::default();
+            let mut crossed_page = false;
+            let data = rng.random();
+            let mut addr_hi = 0;
+
+            // 写入 opcode 到 PC
+            mock.write(cpu.pc, instr.opcode());
+
+            let addr = match instr.addressing {
+                // ------------------------------------------------------------
+                // Implied / Accumulator
+                // ------------------------------------------------------------
+                Addressing::Implied | Addressing::Accumulator => {
+                    // 无操作数，指令仅使用寄存器或状态
+                    0
+                }
+
+                // ------------------------------------------------------------
+                // Immediate (#$nn)
+                // ------------------------------------------------------------
+                Addressing::Immediate => {
+                    mock.write(cpu.pc + 1, data);
+                    cpu.pc + 1
+                }
+
+                // ------------------------------------------------------------
+                // Zero Page ($nn)
+                // ------------------------------------------------------------
+                Addressing::ZeroPage => {
+                    let addr: u8 = rng.random();
+                    mock.write(cpu.pc + 1, addr);
+                    mock.write(addr as u16, data);
+                    addr as u16
+                }
+
+                // ------------------------------------------------------------
+                // Zero Page,X ($nn,X)
+                // ------------------------------------------------------------
+                Addressing::ZeroPageX => {
+                    let base: u8 = rng.random();
+                    let effective = base.wrapping_add(cpu.x);
+                    mock.write(cpu.pc + 1, base);
+                    mock.write(effective as u16, data);
+                    effective as u16
+                }
+
+                // ------------------------------------------------------------
+                // Zero Page,Y ($nn,Y)
+                // ------------------------------------------------------------
+                Addressing::ZeroPageY => {
+                    let base: u8 = rng.random();
+                    let effective = base.wrapping_add(cpu.y);
+                    mock.write(cpu.pc + 1, base);
+                    mock.write(effective as u16, data);
+                    effective as u16
+                }
+
+                // ------------------------------------------------------------
+                // Absolute ($nnnn)
+                // ------------------------------------------------------------
+                Addressing::Absolute => {
+                    let addr: u16 = rng.random_range(0x0000..=0xFFFF);
+                    mock.write(cpu.pc + 1, (addr & 0xFF) as u8);
+                    mock.write(cpu.pc + 2, (addr >> 8) as u8);
+                    mock.write(addr, data);
+                    addr
+                }
+
+                // ------------------------------------------------------------
+                // Absolute,X ($nnnn,X)
+                // ------------------------------------------------------------
+                Addressing::AbsoluteX => {
+                    let base: u16 = rng.random_range(0x0000..=0xFFFF);
+                    let effective = base.wrapping_add(cpu.x as u16);
+
+                    if (base & 0xFF00) != (effective & 0xFF00) {
+                        crossed_page = true;
+                    }
+
+                    // 仅非官方指令（如 SHS/SHY/SHX）使用 base 高字节
+                    if matches!(
+                        instr.mnemonic,
+                        Mnemonic::SHS | Mnemonic::SHY | Mnemonic::SHX
+                    ) {
+                        addr_hi = (base >> 8) as u8;
+                    }
+
+                    mock.write(cpu.pc + 1, (base & 0xFF) as u8);
+                    mock.write(cpu.pc + 2, (base >> 8) as u8);
+                    mock.write(effective, data);
+                    effective
+                }
+
+                // ------------------------------------------------------------
+                // Absolute,Y ($nnnn,Y)
+                // ------------------------------------------------------------
+                Addressing::AbsoluteY => {
+                    let base: u16 = rng.random_range(0x0000..=0xFFFF);
+                    let effective = base.wrapping_add(cpu.y as u16);
+
+                    if (base & 0xFF00) != (effective & 0xFF00) {
+                        crossed_page = true;
+                    }
+
+                    if matches!(
+                        instr.mnemonic,
+                        Mnemonic::SHS | Mnemonic::SHY | Mnemonic::SHX
+                    ) {
+                        addr_hi = (base >> 8) as u8;
+                    }
+
+                    mock.write(cpu.pc + 1, (base & 0xFF) as u8);
+                    mock.write(cpu.pc + 2, (base >> 8) as u8);
+                    mock.write(effective, data);
+                    effective
+                }
+
+                // ------------------------------------------------------------
+                // Indirect ($nnnn) — typically used only by JMP
+                // ------------------------------------------------------------
+                Addressing::Indirect => {
+                    let ptr: u16 = rng.random_range(0x0000..=0xFFFE); // 避免溢出
+                    let target: u16 = rng.random_range(0x0000..=0xFFFF);
+
+                    mock.write(cpu.pc + 1, (ptr & 0xFF) as u8);
+                    mock.write(cpu.pc + 2, (ptr >> 8) as u8);
+                    mock.write(ptr, (target & 0xFF) as u8);
+
+                    // 模拟 JMP ($xxFF) 硬件 bug：高字节 wrap-around
+                    let hi_addr = (ptr & 0xFF00) | ((ptr + 1) & 0x00FF);
+                    mock.write(hi_addr, (target >> 8) as u8);
+                    target
+                }
+
+                // ------------------------------------------------------------
+                // (Indirect,X) - ($nn,X)
+                // ------------------------------------------------------------
+                Addressing::IndirectX => {
+                    let zp: u8 = rng.random();
+                    let ptr = zp.wrapping_add(cpu.x) & 0xFF;
+                    let target: u16 = rng.random_range(0x0000..=0xFFFF);
+
+                    mock.write(cpu.pc + 1, zp);
+                    mock.write(ptr as u16, (target & 0xFF) as u8);
+                    mock.write(ptr.wrapping_add(1) as u16 & 0xFF, (target >> 8) as u8);
+                    mock.write(target, data);
+                    target
+                }
+
+                // ------------------------------------------------------------
+                // (Indirect),Y - ($nn),Y
+                // ------------------------------------------------------------
+                Addressing::IndirectY => {
+                    let zp: u8 = rng.random();
+                    let lo: u8 = rng.random();
+                    let hi: u8 = rng.random();
+                    let base = ((hi as u16) << 8) | lo as u16;
+                    let effective = base.wrapping_add(cpu.y as u16);
+
+                    if (base & 0xFF00) != (effective & 0xFF00) {
+                        crossed_page = true;
+                    }
+
+                    mock.write(cpu.pc + 1, zp);
+                    mock.write(zp as u16, lo);
+                    mock.write(zp.wrapping_add(1) as u16 & 0xFF, hi);
+                    mock.write(effective, data);
+                    debug!("indirect y addr: {:04x}",effective);
+                    effective
+                }
+
+                // ------------------------------------------------------------
+                // Relative (branch offset)
+                // ------------------------------------------------------------
+                Addressing::Relative => {
+                    let offset: i8 = rng.random_range(-128..=127);
+                    mock.write(cpu.pc + 1, offset as u8);
+                    let base = cpu.pc.wrapping_add(2);
+                    let target = base.wrapping_add(offset as i16 as u16);
+                    if (base & 0xFF00) != (target & 0xFF00) {
+                        crossed_page = true;
+                    }
+                    mock.write(target, data);
+                    target
+                }
+            };
+
+            let verify = Verify {
+                cpu: *cpu,
+                addr_hi,
+                addr,
+                m: data,
+            };
+
+            (verify, mock, crossed_page)
         }
     }
 

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::bus::{Bus, BusImpl};
 use crate::cpu::addressing::Addressing;
@@ -16,7 +16,7 @@ mod lookup;
 mod micro_op;
 mod mnemonic;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Cpu {
     // Registers
     a: u8,     //Accumulator
@@ -171,12 +171,67 @@ impl Cpu {
     }
 }
 
-impl Display for Cpu {
+impl Debug for Cpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "[a:0x{:02x},x:0x{:02x},y:0x{:02x},s:0x{:02x},pc:0x{:04x}]",
-            self.a, self.x, self.y, self.s, self.pc
+            "A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:[{:?}] PC:{:04X} O:{:02X?} I:{} Z:{:02X} B:{:02X} E:{:04X}",
+            self.a,
+            self.x,
+            self.y,
+            self.s,
+            self.p,
+            self.pc,
+            self.opcode,
+            self.index,
+            self.zp_addr,
+            self.base,
+            self.effective_addr
         )
+    }
+}
+
+impl Display for Cpu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f)?;
+        // 寄存器区
+        writeln!(f, "╔═════════════════════════════════════════╗")?;
+        writeln!(f, "║                 CPU State               ║")?;
+        writeln!(f, "╠══════╤══════╤══════╤══════╤══════╤══════╣")?;
+        writeln!(f, "║  A   │  X   │  Y   │  S   │  PC  │ OPC  ║")?;
+        writeln!(f, "╠══════╤══════╤══════╤══════╤══════╤══════╣")?;
+        let opcode = match self.opcode {
+            Some(opcode) => {
+                format!("{:02X}", opcode)
+            }
+            None => {
+                format!("  ")
+            }
+        };
+        writeln!(
+            f,
+            "║ {:02X}   │ {:02X}   │ {:02X}   │ {:02X}   │ {:04X} │ {}   ║",
+            self.a, self.x, self.y, self.s, self.pc, opcode
+        )?;
+
+        // 状态标志
+        writeln!(f, "╠══════╧══════╧══════╧══════╧══════╧══════╣")?;
+        writeln!(f, "║ Flags: {}  ║ ", self.p)?;
+
+        // 地址信息
+        writeln!(f, "╠═════════════════════════════════════════╣")?;
+        writeln!(
+            f,
+            "║     zp_addr: {:02X}      │    base: {:02X}      ║",
+            self.zp_addr, self.base
+        )?;
+        writeln!(
+            f,
+            "║ effective_addr: {:04X} │    index: {:02X}     ║",
+            self.effective_addr, self.index
+        )?;
+        writeln!(f, "╚═════════════════════════════════════════╝")?;
+
+        Ok(())
     }
 }

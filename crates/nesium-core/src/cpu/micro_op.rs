@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::{
     bus::{Bus, BusImpl},
     cpu::Cpu,
@@ -5,7 +7,7 @@ use crate::{
 
 type MicroFn = fn(&mut Cpu, bus: &mut BusImpl);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct MicroOp {
     pub(crate) name: &'static str,
     pub(crate) micro_fn: MicroFn,
@@ -16,10 +18,15 @@ impl MicroOp {
     //  Execution
     // ─────────────────────────────────────────────────────────────────────────────
     /// Execute this micro operation.
+    #[cfg(not(test))]
     pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut BusImpl) {
-        println!("before exec {}: {}", self.name, cpu);
         (self.micro_fn)(cpu, bus);
-        println!("after exec {}: {}", self.name, cpu);
+    }
+
+    #[cfg(test)]
+    #[tracing::instrument(skip(bus))]
+    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut BusImpl) {
+        (self.micro_fn)(cpu, bus);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -39,6 +46,8 @@ impl MicroOp {
             name: "fetch_zp_addr_lo",
             micro_fn: |cpu, bus| {
                 cpu.zp_addr = bus.read(cpu.pc);
+                #[cfg(test)]
+                tracing::trace!("zp_addr: 0x{:02X}", cpu.zp_addr);
                 cpu.incr_pc();
             },
         }
@@ -262,6 +271,12 @@ impl MicroOp {
                 let _ = bus.read(dummy_addr); // dummy read for timing
             },
         }
+    }
+}
+
+impl Debug for MicroOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#[{}.{:?}]", self.name, self.micro_fn)
     }
 }
 

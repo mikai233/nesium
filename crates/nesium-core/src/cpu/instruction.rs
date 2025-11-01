@@ -1,4 +1,4 @@
-use std::ops::Index;
+use std::{fmt::Display, ops::Index};
 
 use crate::cpu::{
     addressing::Addressing,
@@ -519,5 +519,11 @@ impl Index<usize> for Instruction {
         } else {
             &self.mnemonic.micro_ops()[index - len]
         }
+    }
+}
+
+impl Display for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{},{}", self.mnemonic, self.addressing)
     }
 }

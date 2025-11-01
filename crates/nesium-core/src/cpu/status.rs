@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Display};
+
 use bitflags::bitflags;
 
 bitflags! {
@@ -9,7 +11,7 @@ bitflags! {
     ///
     /// Each bit is a flag that reflects CPU state after arithmetic,
     /// logical, or control operations.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[derive(Clone, Copy, PartialEq, Eq, Hash)]
     pub(crate) struct Status: u8 {
         /// Carry flag (C)
         /// Set when an addition produces a carry out of bit 7,
@@ -134,6 +136,10 @@ impl Status {
         self.contains(Status::ZERO)
     }
 
+    pub(crate) fn u(&self) -> bool {
+        self.contains(Status::UNUSED)
+    }
+
     pub fn v(&self) -> bool {
         self.contains(Status::OVERFLOW)
     }
@@ -152,5 +158,48 @@ impl Status {
 
     pub fn d(&self) -> bool {
         self.contains(Status::DECIMAL)
+    }
+}
+
+impl Debug for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        let flags = [
+            (self.n(), "N"),
+            (self.v(), "V"),
+            (self.u(), "U"),
+            (self.b(), "B"),
+            (self.d(), "D"),
+            (self.i(), "I"),
+            (self.z(), "Z"),
+            (self.c(), "C"),
+        ];
+        let mut iter = flags
+            .into_iter()
+            .filter_map(|(t, n)| if t { Some(n) } else { None });
+        if let Some(n) = iter.next() {
+            write!(f, "{n}")?;
+            for n in iter {
+                write!(f, ".{}", n)?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn symbol(b: bool) -> &'static str {
+            if b { "✓" } else { "✗" }
+        }
+        let n = symbol(self.n());
+        let v = symbol(self.v());
+        let u = symbol(self.u());
+        let b = symbol(self.b());
+        let d = symbol(self.d());
+        let i = symbol(self.i());
+        let z = symbol(self.z());
+        let c = symbol(self.c());
+        write!(f, "N:{n}|V:{v}|U:{u}|B:{b}|D:{d}|I:{i}|Z:{z}|C:{c}")
     }
 }
