@@ -105,8 +105,9 @@ impl MicroOp {
             micro_fn: |cpu, bus| {
                 let hi = bus.read(cpu.pc);
                 let base = ((hi as u16) << 8) | (cpu.base as u16);
-                // SHA(0x9F) SHX(0x9E)
-                if cpu.opcode == Some(0x9F) || cpu.opcode == Some(0x9E) {
+                // SHA(0x9F) SHX(0x9E) SHS(0x9B)
+                if cpu.opcode == Some(0x9F) || cpu.opcode == Some(0x9E) || cpu.opcode == Some(0x9B)
+                {
                     cpu.base = hi;
                 }
                 let addr = base.wrapping_add(cpu.y as u16);

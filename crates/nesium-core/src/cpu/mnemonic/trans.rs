@@ -163,95 +163,74 @@ impl Mnemonic {
 
 #[cfg(test)]
 mod trans_tests {
-    mod test_shs {
-        use crate::{
-            bus::Bus,
-            cpu::{addressing::Addressing, instruction::Instruction, mnemonic::tests::setup},
-        };
+    use tracing::info;
 
-        #[test]
-        fn test_shs_absolute_y() {
-            // SHS $nnnn,Y  →  S = A & X, M = S & (H + 1)
-            let instr = Instruction::shs(Addressing::AbsoluteY);
-            let (mut cpu, mut bus) = setup(0x8000, 0xAB, 0xCD, 0x00, 0xFF, |mem| {
-                mem.mem[0x8001] = 0x00;
-                mem.mem[0x8002] = 0x30; // base = $3000, H = 0x30
-                // effective = $3000 + Y = $3000 (Y=0 initially)
-            });
-            let executed = cpu.test_clock(&mut bus, &instr);
-            let expected = instr.cycle().total_cycle(false, false);
-            assert_eq!(executed, expected);
+    use crate::{
+        bus::Bus,
+        cpu::mnemonic::{Mnemonic, tests::InstrTest},
+    };
 
-            let s = cpu.a & cpu.x; // 0xAB & 0xCD = 0x89
-            let h_plus_1 = 0x30 + 1; // 0x31
-            let value = s & h_plus_1; // 0x89 & 0x31 = 0x01
-
-            assert_eq!(cpu.s, s);
-            assert_eq!(bus.read(0x3000), value); // M = value
-
-            assert_eq!(cpu.pc, 0x8003);
-        }
+    #[test]
+    fn test_shs() {
+        InstrTest::new(Mnemonic::SHS).test(|_, verify, cpu, bus| {
+            let v = verify.cpu.a & verify.cpu.x;
+            assert_eq!(cpu.s, v);
+            let v = v & verify.addr_hi.wrapping_add(1);
+            let m = bus.read(verify.addr);
+            assert_eq!(v, m);
+        });
     }
 
-    mod test_tax {
-        use crate::cpu::{
-            addressing::Addressing, instruction::Instruction, mnemonic::tests::setup,
-            status::Status,
-        };
+    #[test]
+    fn test_tax() {
+        InstrTest::new(Mnemonic::TAX).test(|_, verify, cpu, bus| {
+            let v = verify.cpu.a;
+            assert_eq!(cpu.x, v);
+            verify.check_nz(cpu.p, v);
+        });
+    }
 
-        #[test]
-        fn test_tax_normal() {
-            // TAX - Transfer A → X
-            // Addressing mode: Implied
-            // Case: Normal value (A = 0xAB)
-            let instr = Instruction::tax(Addressing::Implied);
+    #[test]
+    fn test_tay() {
+        InstrTest::new(Mnemonic::TAY).test(|_, verify, cpu, bus| {
+            let v = verify.cpu.a;
+            assert_eq!(cpu.y, v);
+            verify.check_nz(cpu.p, v);
+        });
+    }
 
-            let (mut cpu, mut bus) = setup(0x8000, 0xAB, 0x00, 0x00, 0xFF, |mem| {
-                mem.mem[0x8000] = instr.opcode();
-            });
+    #[test]
+    fn test_tsx() {
+        InstrTest::new(Mnemonic::TSX).test(|_, verify, cpu, bus| {
+            let v = verify.cpu.s;
+            assert_eq!(cpu.x, v);
+            verify.check_nz(cpu.p, v);
+        });
+    }
 
-            let executed = cpu.test_clock(&mut bus, &instr);
-            assert_eq!(executed, instr.cycle().total_cycle(false, false));
-            assert_eq!(cpu.x, cpu.a);
-            assert_eq!(cpu.p.contains(Status::ZERO), false);
-            assert_eq!(cpu.p.contains(Status::NEGATIVE), true);
-            assert_eq!(cpu.pc, 0x8001);
-        }
+    #[test]
+    fn test_txa() {
+        InstrTest::new(Mnemonic::TXA).test(|_, verify, cpu, bus| {
+            let v = verify.cpu.x;
+            assert_eq!(cpu.a, v);
+            verify.check_nz(cpu.p, v);
+        });
+    }
 
-        #[test]
-        fn test_tax_zero() {
-            // TAX - Transfer A → X
-            // Addressing mode: Implied
-            // Case: Zero value (A = 0x00)
-            let instr = Instruction::tax(Addressing::Implied);
+    #[test]
+    fn test_txs() {
+        InstrTest::new(Mnemonic::TXS).test(|_, verify, cpu, bus| {
+            let v = verify.cpu.x;
+            assert_eq!(cpu.s, v);
+        });
+    }
 
-            let (mut cpu, mut bus) = setup(0x8000, 0x00, 0x00, 0x00, 0xFF, |mem| {
-                mem.mem[0x8000] = instr.opcode();
-            });
-
-            let executed = cpu.test_clock(&mut bus, &instr);
-            assert_eq!(cpu.x, 0x00);
-            assert_eq!(cpu.p.contains(Status::ZERO), true);
-            assert_eq!(cpu.p.contains(Status::NEGATIVE), false);
-            assert_eq!(cpu.pc, 0x8001);
-        }
-
-        #[test]
-        fn test_tax_negative() {
-            // TAX - Transfer A → X
-            // Addressing mode: Implied
-            // Case: Negative value (A = 0xFF)
-            let instr = Instruction::tax(Addressing::Implied);
-
-            let (mut cpu, mut bus) = setup(0x8000, 0xFF, 0x00, 0x00, 0xFF, |mem| {
-                mem.mem[0x8000] = instr.opcode();
-            });
-
-            let executed = cpu.test_clock(&mut bus, &instr);
-            assert_eq!(cpu.x, 0xFF);
-            assert_eq!(cpu.p.contains(Status::ZERO), false);
-            assert_eq!(cpu.p.contains(Status::NEGATIVE), true);
-            assert_eq!(cpu.pc, 0x8001);
-        }
+    #[test]
+    fn test_tya() {
+        InstrTest::new(Mnemonic::TYA).test(|_, verify, cpu, bus| {
+            let v = verify.cpu.y;
+            assert_eq!(cpu.a, v);
+            verify.check_nz(cpu.p, v);
+        });
     }
 }

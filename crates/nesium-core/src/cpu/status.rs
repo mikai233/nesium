@@ -2,6 +2,9 @@ use std::fmt::{Debug, Display};
 
 use bitflags::bitflags;
 
+pub(crate) const BIT_0: u8 = 0x01;
+pub(crate) const BIT_7: u8 = 0x80;
+
 bitflags! {
     /// Represents the 8-bit processor status register (P) of the NES CPU.
     ///

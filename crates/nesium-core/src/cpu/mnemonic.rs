@@ -239,10 +239,9 @@ impl Display for Mnemonic {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
 
     use rand::SeedableRng;
-    use tracing::{debug, info};
+    use tracing::debug;
 
     use crate::{
         bus::{Bus, BusImpl, mock::MockBus},
@@ -694,7 +693,7 @@ mod tests {
             let (zp, lo, hi) = loop {
                 let zp_candidate: u8 = rng.random();
                 let zp_lo = zp_candidate as u16;
-                let zp_hi = zp_candidate.wrapping_add(1) as u16 & 0xFF;
+                let zp_hi = zp_candidate.wrapping_add(1) as u16;
 
                 if protected_addrs.contains(&zp_lo) || protected_addrs.contains(&zp_hi) {
                     continue;

@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::bus::{Bus, BusImpl};
+use crate::bus::{Bus, BusImpl, STACK_ADDR};
 use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
@@ -76,7 +76,6 @@ impl Cpu {
         match self.opcode {
             Some(opcode) => {
                 let instr = &LOOKUP_TABLE[opcode as usize];
-                self.prepare_imm_addr(instr);
                 let micro_op = &instr[self.index()];
                 micro_op.exec(self, bus);
                 self.index += 1;
@@ -86,7 +85,11 @@ impl Cpu {
                 }
             }
             None => {
-                self.opcode = Some(self.fetch_opcode(bus));
+                let opcode = self.fetch_opcode(bus);
+                self.opcode = Some(opcode);
+                let instr = &LOOKUP_TABLE[opcode as usize];
+                self.prepare_imm_addr(instr);
+                self.prepare_accumulator(instr);
             }
         }
     }
@@ -97,6 +100,7 @@ impl Cpu {
         self.incr_pc(); // Fetch opcode
         let mut cycles = 1; // Fetch opcode has 1 cycle
         self.prepare_imm_addr(instr);
+        self.prepare_accumulator(instr);
         while self.index() < instr.len() {
             let op = &instr[self.index()];
             let _span = tracing::span!(
@@ -121,12 +125,21 @@ impl Cpu {
         cycles
     }
 
+    #[inline]
     pub(crate) fn fetch_opcode(&mut self, bus: &mut BusImpl) -> u8 {
         let opcode = bus.read(self.pc);
         self.incr_pc();
         opcode
     }
 
+    #[inline]
+    pub(crate) fn prepare_accumulator(&mut self, instr: &Instruction) {
+        if matches!(instr.addressing, Addressing::Accumulator) {
+            self.index = (instr.len() - 1) as u8;
+        }
+    }
+
+    #[inline]
     pub(crate) fn prepare_imm_addr(&mut self, instr: &Instruction) {
         if matches!(instr.addressing, Addressing::Immediate) {
             self.effective_addr = self.pc as u16;
@@ -134,16 +147,19 @@ impl Cpu {
         }
     }
 
+    #[inline]
     pub(crate) fn prepare_zp_addr(&mut self, instr: &Instruction) {
         if self.index == 1 && matches!(instr.addressing, Addressing::ZeroPage) {
             self.effective_addr = self.zp_addr as u16;
         }
     }
 
+    #[inline]
     pub(crate) fn incr_pc(&mut self) {
         self.pc = self.pc.wrapping_add(1);
     }
 
+    #[inline]
     pub(crate) fn clear(&mut self) {
         self.index = 0;
         self.opcode = None;
@@ -183,6 +199,16 @@ impl Cpu {
         if !crossed_page {
             self.index += 1;
         }
+    }
+
+    pub(crate) fn push(&mut self, bus: &mut BusImpl, data: u8) {
+        bus.write(STACK_ADDR | self.s as u16, data);
+        self.s = self.s.wrapping_sub(1);
+    }
+
+    pub(crate) fn pull(&mut self, bus: &mut BusImpl) -> u8 {
+        self.s = self.s.wrapping_add(1);
+        bus.read(STACK_ADDR | self.s as u16)
     }
 }
 

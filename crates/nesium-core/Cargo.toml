@@ -11,4 +11,3 @@ rand = { workspace = true }
 ctor = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-owo-colors = { workspace = true }

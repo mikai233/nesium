@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::{Bus, STACK_ADDR},
     cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status},
 };
 
@@ -32,8 +32,7 @@ impl Mnemonic {
             micro_fn: |cpu, bus| {
                 // Cycle 2: Write accumulator to stack, then decrement S
                 // Hardware writes to [0x0100 + S] using current S, then S--
-                bus.write(0x0100 | cpu.s as u16, cpu.a);
-                cpu.s = cpu.s.wrapping_sub(1);
+                cpu.push(bus, cpu.a);
             },
         };
         &[OP1, OP2]
@@ -71,9 +70,9 @@ impl Mnemonic {
             name: "php_write_stack",
             micro_fn: |cpu, bus| {
                 // Cycle 2: Hardware forces B flag (bit4) and unused bit5 when pushing
-                let p = cpu.p.to_byte() | 0x30;
-                bus.write(0x0100 | cpu.s as u16, p);
-                cpu.s = cpu.s.wrapping_sub(1);
+                let p = cpu.p | Status::BREAK | Status::UNUSED;
+                let p = p.bits();
+                cpu.push(bus, p);
             },
         };
         &[OP1, OP2]
@@ -108,15 +107,14 @@ impl Mnemonic {
             name: "pla_dummy_read2",
             micro_fn: |cpu, bus| {
                 // Cycle 2: Dummy read from current stack location (before increment)
-                let _ = bus.read(0x0100 | cpu.s as u16);
+                let _ = bus.read(STACK_ADDR | cpu.s as u16);
             },
         };
         const OP3: MicroOp = MicroOp {
             name: "pla_pull_value",
             micro_fn: |cpu, bus| {
                 // Cycle 3: Increment S first, then read from new stack pointer
-                cpu.s = cpu.s.wrapping_add(1);
-                let value = bus.read(0x0100 | cpu.s as u16);
+                let value = cpu.pull(bus);
                 cpu.a = value;
                 cpu.p.set_zn(value); // Update N and Z flags based on pulled value
             },
@@ -164,16 +162,72 @@ impl Mnemonic {
             name: "plp_pull_status",
             micro_fn: |cpu, bus| {
                 // Cycle 3: Increment S first
-                cpu.s = cpu.s.wrapping_add(1);
-                let value = bus.read(0x0100 | cpu.s as u16);
+                let value = cpu.pull(bus);
 
                 // Hardware behavior:
                 // - Clear B flag (bit 4): & 0xEF
                 // - Force unused bit 5 to 1: | 0x20
-                let masked = (value & 0xEF) | 0x20;
-                cpu.p = Status::from_byte(masked);
+                let mut p = Status::from_bits_truncate(value);
+                p.remove(Status::BREAK);
+                p.insert(Status::UNUSED);
+                cpu.p = p;
             },
         };
         &[OP1, OP2, OP3]
+    }
+}
+
+#[cfg(test)]
+mod test_stack {
+    use crate::{
+        bus::{Bus, STACK_ADDR},
+        cpu::{
+            mnemonic::{Mnemonic, tests::InstrTest},
+            status::Status,
+        },
+    };
+
+    #[test]
+    fn test_pha() {
+        InstrTest::new(Mnemonic::PHA).test(|_, verify, cpu, bus| {
+            let v = verify.cpu.a;
+            assert_eq!(verify.cpu.s.wrapping_sub(1), cpu.s);
+            let m = bus.read(STACK_ADDR | verify.cpu.s as u16);
+            assert_eq!(v, m);
+        });
+    }
+
+    #[test]
+    fn test_php() {
+        InstrTest::new(Mnemonic::PHP).test(|_, verify, cpu, bus| {
+            let v = verify.cpu.p | Status::BREAK | Status::UNUSED;
+            assert_eq!(verify.cpu.s.wrapping_sub(1), cpu.s);
+            let m = bus.read(STACK_ADDR | verify.cpu.s as u16);
+            assert_eq!(v.bits(), m);
+            assert_eq!(verify.cpu.p, cpu.p);
+        });
+    }
+
+    #[test]
+    fn test_pla() {
+        InstrTest::new(Mnemonic::PLA).test(|_, verify, cpu, bus| {
+            assert_eq!(verify.cpu.s.wrapping_add(1), cpu.s);
+            let m = bus.read(STACK_ADDR | verify.cpu.s as u16);
+            assert_eq!(cpu.a, m);
+            verify.check_nz(cpu.p, m);
+        });
+    }
+
+    #[test]
+    fn test_plp() {
+        InstrTest::new(Mnemonic::PLP).test(|_, verify, cpu, bus| {
+            assert_eq!(verify.cpu.s.wrapping_add(1), cpu.s);
+            let m = bus.read(STACK_ADDR | verify.cpu.s as u16);
+            let mut p = Status::from_bits_truncate(m);
+            //TODO
+            p.remove(Status::BREAK);
+            p.insert(Status::UNUSED);
+            assert_eq!(cpu.p, p);
+        });
     }
 }
