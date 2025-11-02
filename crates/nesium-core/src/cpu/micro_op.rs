@@ -7,7 +7,7 @@ use crate::{
 
 type MicroFn = fn(&mut Cpu, bus: &mut BusImpl);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Eq, Hash)]
 pub(crate) struct MicroOp {
     pub(crate) name: &'static str,
     pub(crate) micro_fn: MicroFn,
@@ -277,6 +277,12 @@ impl MicroOp {
 impl Debug for MicroOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "#[{}.{:?}]", self.name, self.micro_fn)
+    }
+}
+
+impl PartialEq for MicroOp {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && std::ptr::fn_addr_eq(self.micro_fn, other.micro_fn)
     }
 }
 
