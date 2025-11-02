@@ -253,7 +253,7 @@ mod tests {
     };
 
     #[derive(Debug)]
-    pub(crate) struct Verfication {
+    pub(crate) struct Verification {
         pub(crate) cpu: Cpu,
         pub(crate) addr_hi: u8,
         pub(crate) addr: u16,
@@ -286,7 +286,7 @@ mod tests {
 
         pub(crate) fn run<F>(&self, seed: u64, verify: F)
         where
-            F: Fn(&Instruction, &Verfication, &Cpu, &mut BusImpl),
+            F: Fn(&Instruction, &Verification, &Cpu, &mut BusImpl),
         {
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             for instr in LOOKUP_TABLE {
@@ -310,7 +310,7 @@ mod tests {
 
         pub(crate) fn run_branch<F>(&self, seed: u64, verify: F)
         where
-            F: Fn(&Instruction, &Verfication, &Cpu, &mut BusImpl) -> bool,
+            F: Fn(&Instruction, &Verification, &Cpu, &mut BusImpl) -> bool,
         {
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             for instr in LOOKUP_TABLE {
@@ -328,11 +328,13 @@ mod tests {
             }
         }
 
+        /// Build a mock bus for testing 6502 instructions.
+        /// Ensures addresses do not overwrite protected regions.
         fn build_mock<R>(
             instr: &Instruction,
             cpu: &Cpu,
             rng: &mut R,
-        ) -> (Verfication, MockBus, bool)
+        ) -> (Verification, MockBus, bool)
         where
             R: rand::Rng,
         {
@@ -341,446 +343,60 @@ mod tests {
             let data = rng.random();
             let mut addr_hi = 0;
 
-            // 写入 opcode 到 PC
+            // Write opcode at PC
             mock.write(cpu.pc, instr.opcode());
 
+            // Base protected addresses to avoid collisions
+            let protected_addrs = vec![cpu.pc, cpu.pc + 1, cpu.pc + 2, cpu.pc + 3];
+
+            // Dispatch to helper functions based on addressing mode
             let addr = match instr.addressing {
-                // ------------------------------------------------------------
-                // Implied / Accumulator
-                // ------------------------------------------------------------
-                Addressing::Implied | Addressing::Accumulator => {
-                    // 无操作数，指令仅使用寄存器或状态
-                    0
-                }
-
-                // ------------------------------------------------------------
-                // Immediate (#$nn)
-                // ------------------------------------------------------------
-                Addressing::Immediate => {
-                    mock.write(cpu.pc + 1, data);
-                    cpu.pc + 1
-                }
-
-                // ------------------------------------------------------------
-                // Zero Page ($nn)
-                // ------------------------------------------------------------
+                Addressing::Implied | Addressing::Accumulator => 0,
+                Addressing::Immediate => Self::immediate(&mut mock, cpu, data),
                 Addressing::ZeroPage => {
-                    let mut protected_addrs = Vec::with_capacity(4);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2); // 可能的下一指令
-
-                    let addr = loop {
-                        let addr_candidate: u8 = rng.random();
-                        let addr_u16 = addr_candidate as u16;
-
-                        // 检查零页地址是否与保护地址冲突
-                        if !protected_addrs.contains(&addr_u16) {
-                            break addr_candidate;
-                        }
-                    };
-
-                    mock.write(cpu.pc + 1, addr);
-                    mock.write(addr as u16, data);
-
-                    debug!("zero page addr: {:02x}", addr);
-                    addr as u16
+                    Self::zero_page(&mut mock, cpu, rng, data, &protected_addrs)
                 }
-
-                // ------------------------------------------------------------
-                // Zero Page,X ($nn,X)
-                // ------------------------------------------------------------
                 Addressing::ZeroPageX => {
-                    let mut protected_addrs = Vec::with_capacity(4);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2); // 可能的下一指令
-
-                    let (base, effective) = loop {
-                        let base_candidate: u8 = rng.random();
-                        let effective_candidate = base_candidate.wrapping_add(cpu.x);
-                        let effective_addr = effective_candidate as u16;
-
-                        // 检查有效地址是否与保护地址冲突
-                        if !protected_addrs.contains(&effective_addr) {
-                            break (base_candidate, effective_candidate);
-                        }
-                    };
-
-                    mock.write(cpu.pc + 1, base);
-                    mock.write(effective as u16, data);
-
-                    debug!(
-                        "zero page x addr: base={:02x}, x={:02x}, effective={:02x}",
-                        base, cpu.x, effective
-                    );
-                    effective as u16
+                    Self::zero_page_x(&mut mock, cpu, rng, data, &protected_addrs)
                 }
-
-                // ------------------------------------------------------------
-                // Zero Page,Y ($nn,Y)
-                // ------------------------------------------------------------
                 Addressing::ZeroPageY => {
-                    let mut protected_addrs = Vec::with_capacity(4);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2); // 可能的下一指令
-
-                    let (base, effective) = loop {
-                        let base_candidate: u8 = rng.random();
-                        let effective_candidate = base_candidate.wrapping_add(cpu.y);
-                        let effective_addr = effective_candidate as u16;
-
-                        // 检查有效地址是否与保护地址冲突
-                        if !protected_addrs.contains(&effective_addr) {
-                            break (base_candidate, effective_candidate);
-                        }
-                    };
-
-                    mock.write(cpu.pc + 1, base);
-                    mock.write(effective as u16, data);
-
-                    debug!(
-                        "zero page y addr: base={:02x}, y={:02x}, effective={:02x}",
-                        base, cpu.y, effective
-                    );
-                    effective as u16
+                    Self::zero_page_y(&mut mock, cpu, rng, data, &protected_addrs)
                 }
-
-                // ------------------------------------------------------------
-                // Absolute ($nnnn)
-                // ------------------------------------------------------------
-                Addressing::Absolute => {
-                    let mut protected_addrs = Vec::with_capacity(5);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2);
-                    protected_addrs.push(cpu.pc + 3); // 可能的下一指令
-
-                    let addr = loop {
-                        let addr_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
-
-                        // 检查地址是否与保护地址冲突
-                        if !protected_addrs.contains(&addr_candidate) {
-                            break addr_candidate;
-                        }
-                    };
-
-                    mock.write(cpu.pc + 1, (addr & 0xFF) as u8);
-                    mock.write(cpu.pc + 2, (addr >> 8) as u8);
-                    mock.write(addr, data);
-
-                    debug!("absolute addr: {:04x}", addr);
-                    addr
-                }
-
-                // ------------------------------------------------------------
-                // Absolute,X ($nnnn,X)
-                // ------------------------------------------------------------
+                Addressing::Absolute => Self::absolute(&mut mock, cpu, rng, data, &protected_addrs),
                 Addressing::AbsoluteX => {
-                    let mut protected_addrs = Vec::with_capacity(6);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2);
-                    protected_addrs.push(cpu.pc + 3); // 可能的下一指令
-
-                    let (base, effective) = loop {
-                        let base_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
-                        let effective_candidate = base_candidate.wrapping_add(cpu.x as u16);
-
-                        // 检查基地址和有效地址是否与保护地址冲突
-                        if protected_addrs.contains(&base_candidate)
-                            || protected_addrs.contains(&effective_candidate)
-                        {
-                            continue;
-                        }
-
-                        // 找到合适的地址组合
-                        break (base_candidate, effective_candidate);
-                    };
-
-                    if (base & 0xFF00) != (effective & 0xFF00) {
-                        crossed_page = true;
-                    }
-
-                    // 仅非官方指令（如 SHS/SHY/SHX）使用 base 高字节
-                    if matches!(
-                        instr.mnemonic,
-                        Mnemonic::SHS | Mnemonic::SHY | Mnemonic::SHX
-                    ) {
-                        addr_hi = (base >> 8) as u8;
-                    }
-
-                    mock.write(cpu.pc + 1, (base & 0xFF) as u8);
-                    mock.write(cpu.pc + 2, (base >> 8) as u8);
-                    mock.write(effective, data);
-
-                    debug!(
-                        "absolute x addr: base={:04x}, effective={:04x}, crossed_page={}",
-                        base, effective, crossed_page
-                    );
-                    effective
+                    let (hi, eff, crossed) =
+                        Self::absolute_x(&mut mock, cpu, rng, data, &protected_addrs);
+                    addr_hi = hi;
+                    crossed_page = crossed;
+                    eff
                 }
-
-                // ------------------------------------------------------------
-                // Absolute,Y ($nnnn,Y)
-                // ------------------------------------------------------------
                 Addressing::AbsoluteY => {
-                    let mut protected_addrs = Vec::with_capacity(6);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2);
-                    protected_addrs.push(cpu.pc + 3); // 可能的下一指令
-
-                    let (base, effective) = loop {
-                        let base_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
-                        let effective_candidate = base_candidate.wrapping_add(cpu.y as u16);
-
-                        // 检查基地址和有效地址是否与保护地址冲突
-                        if protected_addrs.contains(&base_candidate)
-                            || protected_addrs.contains(&effective_candidate)
-                        {
-                            continue;
-                        }
-
-                        // 找到合适的地址组合
-                        break (base_candidate, effective_candidate);
-                    };
-
-                    if (base & 0xFF00) != (effective & 0xFF00) {
-                        crossed_page = true;
-                    }
-
-                    // 仅非官方指令（如 SHS/SHY/SHX）使用 base 高字节
-                    if matches!(
-                        instr.mnemonic,
-                        Mnemonic::SHS | Mnemonic::SHY | Mnemonic::SHX
-                    ) {
-                        addr_hi = (base >> 8) as u8;
-                    }
-
-                    mock.write(cpu.pc + 1, (base & 0xFF) as u8);
-                    mock.write(cpu.pc + 2, (base >> 8) as u8);
-                    mock.write(effective, data);
-
-                    debug!(
-                        "absolute y addr: base={:04x}, effective={:04x}, crossed_page={}",
-                        base, effective, crossed_page
-                    );
-                    effective
+                    let (hi, eff, crossed) =
+                        Self::absolute_y(&mut mock, cpu, rng, data, &protected_addrs);
+                    addr_hi = hi;
+                    crossed_page = crossed;
+                    eff
                 }
-
-                // ------------------------------------------------------------
-                // Indirect ($nnnn) — typically used only by JMP
-                // ------------------------------------------------------------
-                Addressing::Indirect => {
-                    let mut protected_addrs = Vec::with_capacity(8);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2);
-                    protected_addrs.push(cpu.pc + 3); // 可能的下一指令
-
-                    let (ptr, target) = loop {
-                        let ptr_candidate: u16 = rng.random_range(0x0000..=0xFFFE); // 避免溢出
-                        let hi_addr_candidate =
-                            (ptr_candidate & 0xFF00) | ((ptr_candidate + 1) & 0x00FF); // 硬件bug地址
-
-                        let target_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
-
-                        // 检查所有相关地址是否与保护地址冲突
-                        let conflicts = [ptr_candidate, hi_addr_candidate, target_candidate];
-
-                        if conflicts
-                            .iter()
-                            .any(|&addr| protected_addrs.contains(&addr))
-                        {
-                            continue;
-                        }
-
-                        // 找到合适的地址组合
-                        break (ptr_candidate, target_candidate);
-                    };
-
-                    let hi_addr = (ptr & 0xFF00) | ((ptr + 1) & 0x00FF); // 硬件bug地址
-
-                    mock.write(cpu.pc + 1, (ptr & 0xFF) as u8);
-                    mock.write(cpu.pc + 2, (ptr >> 8) as u8);
-                    mock.write(ptr, (target & 0xFF) as u8);
-                    mock.write(hi_addr, (target >> 8) as u8);
-
-                    debug!(
-                        "indirect addr: ptr={:04x}, hi_addr={:04x}, target={:04x}",
-                        ptr, hi_addr, target
-                    );
-                    target
-                }
-
-                // ------------------------------------------------------------
-                // (Indirect,X) - ($nn,X)
-                // ------------------------------------------------------------
+                Addressing::Indirect => Self::indirect(&mut mock, cpu, rng, &protected_addrs),
                 Addressing::IndirectX => {
-                    let mut protected_addrs = Vec::with_capacity(6);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2);
-
-                    let (zp, target) = loop {
-                        let zp_candidate: u8 = rng.random();
-                        let ptr = zp_candidate.wrapping_add(cpu.x) & 0xFF;
-                        let ptr_lo_addr = ptr as u16;
-                        let ptr_hi_addr = ptr.wrapping_add(1) as u16 & 0xFF;
-
-                        // 检查零页指针地址是否与保护地址冲突
-                        if protected_addrs.contains(&ptr_lo_addr)
-                            || protected_addrs.contains(&ptr_hi_addr)
-                        {
-                            continue;
-                        }
-
-                        let target_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
-
-                        // 检查目标地址是否与保护地址或零页指针地址冲突
-                        if protected_addrs.contains(&target_candidate)
-                            || target_candidate == ptr_lo_addr
-                            || target_candidate == ptr_hi_addr
-                        {
-                            continue;
-                        }
-
-                        // 找到合适的地址组合
-                        break (zp_candidate, target_candidate);
-                    };
-
-                    let ptr = zp.wrapping_add(cpu.x) & 0xFF;
-
-                    // 写入所有数据
-                    mock.write(cpu.pc + 1, zp);
-                    mock.write(ptr as u16, (target & 0xFF) as u8);
-                    mock.write(ptr.wrapping_add(1) as u16 & 0xFF, (target >> 8) as u8);
-                    mock.write(target, data);
-
-                    debug!("indirect x addr: {:04x}", target);
-                    target
+                    Self::indirect_x(&mut mock, cpu, rng, data, &protected_addrs)
                 }
-
-                // ------------------------------------------------------------
-                // (Indirect),Y - ($nn),Y
-                // ------------------------------------------------------------
                 Addressing::IndirectY => {
-                    let mut protected_addrs = Vec::with_capacity(6);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2);
-
-                    let (zp, lo, hi) = loop {
-                        let zp_candidate: u8 = rng.random();
-                        let zp_lo_addr = zp_candidate as u16;
-                        let zp_hi_addr = zp_candidate.wrapping_add(1) as u16 & 0xFF;
-
-                        // 检查零页地址是否与保护地址冲突
-                        if protected_addrs.contains(&zp_lo_addr)
-                            || protected_addrs.contains(&zp_hi_addr)
-                        {
-                            continue;
-                        }
-
-                        let lo_candidate: u8 = rng.random();
-                        let hi_candidate: u8 = rng.random();
-                        let base = ((hi_candidate as u16) << 8) | lo_candidate as u16;
-                        let effective_candidate = base.wrapping_add(cpu.y as u16);
-
-                        // 检查最终地址是否与保护地址或零页地址冲突
-                        if protected_addrs.contains(&effective_candidate)
-                            || effective_candidate == zp_lo_addr
-                            || effective_candidate == zp_hi_addr
-                        {
-                            continue;
-                        }
-
-                        // 找到合适的地址组合
-                        break (zp_candidate, lo_candidate, hi_candidate);
-                    };
-
-                    let base = ((hi as u16) << 8) | lo as u16;
-                    let effective = base.wrapping_add(cpu.y as u16);
-
-                    if (base & 0xFF00) != (effective & 0xFF00) {
-                        crossed_page = true;
-                    }
-
-                    // 写入所有数据
-                    mock.write(cpu.pc + 1, zp);
-                    mock.write(zp as u16, lo);
-                    mock.write(zp.wrapping_add(1) as u16 & 0xFF, hi);
-                    mock.write(effective, data);
-
-                    debug!(
-                        "indirect y addr: {:04x}, crossed_page: {}",
-                        effective, crossed_page
-                    );
-                    effective
+                    let (hi, eff, crossed) =
+                        Self::indirect_y(&mut mock, cpu, rng, data, &protected_addrs);
+                    crossed_page = crossed;
+                    addr_hi = hi;
+                    eff
                 }
-
-                // ------------------------------------------------------------
-                // Relative (branch offset)
-                // ------------------------------------------------------------
                 Addressing::Relative => {
-                    let mut protected_addrs = Vec::with_capacity(5);
-
-                    // 添加PC相关地址到保护列表
-                    protected_addrs.push(cpu.pc);
-                    protected_addrs.push(cpu.pc + 1);
-                    protected_addrs.push(cpu.pc + 2);
-                    protected_addrs.push(cpu.pc + 3); // 可能的下一指令
-
-                    let (offset, target) = loop {
-                        let offset_candidate: i8 = rng.random_range(-128..=127);
-                        let base = cpu.pc.wrapping_add(2);
-                        let target_candidate = base.wrapping_add(offset_candidate as i16 as u16);
-
-                        // 检查目标地址是否与保护地址冲突
-                        if !protected_addrs.contains(&target_candidate) {
-                            break (offset_candidate, target_candidate);
-                        }
-                    };
-
-                    if (cpu.pc.wrapping_add(2) & 0xFF00) != (target & 0xFF00) {
-                        crossed_page = true;
-                    }
-
-                    mock.write(cpu.pc + 1, offset as u8);
-                    mock.write(target, data);
-
-                    debug!(
-                        "relative addr: offset={}, base={:04x}, target={:04x}, crossed_page={}",
-                        offset,
-                        cpu.pc.wrapping_add(2),
-                        target,
-                        crossed_page
-                    );
-                    target
+                    let (eff, crossed) =
+                        Self::relative(&mut mock, cpu, rng, data, &protected_addrs);
+                    crossed_page = crossed;
+                    eff
                 }
             };
 
-            let verify = Verfication {
+            let verify = Verification {
                 cpu: *cpu,
                 addr_hi,
                 addr,
@@ -788,6 +404,323 @@ mod tests {
             };
 
             (verify, mock, crossed_page)
+        }
+
+        ////////////////////////////////////////////////////////////////////////////////
+        // Helper functions for each addressing mode
+        ////////////////////////////////////////////////////////////////////////////////
+
+        fn immediate(mock: &mut MockBus, cpu: &Cpu, data: u8) -> u16 {
+            // Immediate mode: write operand at PC+1
+            mock.write(cpu.pc + 1, data);
+            cpu.pc + 1
+        }
+
+        fn zero_page<R>(
+            mock: &mut MockBus,
+            cpu: &Cpu,
+            rng: &mut R,
+            data: u8,
+            protected_addrs: &[u16],
+        ) -> u16
+        where
+            R: rand::Rng,
+        {
+            // Pick a zero-page address not overlapping protected addresses
+            let addr = loop {
+                let candidate: u8 = rng.random();
+                if !protected_addrs.contains(&(candidate as u16)) {
+                    break candidate;
+                }
+            };
+            mock.write(cpu.pc + 1, addr);
+            mock.write(addr as u16, data);
+            debug!("ZeroPage: addr={:02X}", addr);
+            addr as u16
+        }
+
+        fn zero_page_x<R>(
+            mock: &mut MockBus,
+            cpu: &Cpu,
+            rng: &mut R,
+            data: u8,
+            protected_addrs: &[u16],
+        ) -> u16
+        where
+            R: rand::Rng,
+        {
+            let (base, effective) = loop {
+                let base_candidate: u8 = rng.random();
+                let effective_candidate = base_candidate.wrapping_add(cpu.x);
+                if !protected_addrs.contains(&(effective_candidate as u16)) {
+                    break (base_candidate, effective_candidate);
+                }
+            };
+            mock.write(cpu.pc + 1, base);
+            mock.write(effective as u16, data);
+            debug!(
+                "ZeroPageX: base={:02X}, X={:02X}, effective={:02X}",
+                base, cpu.x, effective
+            );
+            effective as u16
+        }
+
+        fn zero_page_y<R>(
+            mock: &mut MockBus,
+            cpu: &Cpu,
+            rng: &mut R,
+            data: u8,
+            protected_addrs: &[u16],
+        ) -> u16
+        where
+            R: rand::Rng,
+        {
+            let (base, effective) = loop {
+                let base_candidate: u8 = rng.random();
+                let effective_candidate = base_candidate.wrapping_add(cpu.y);
+                if !protected_addrs.contains(&(effective_candidate as u16)) {
+                    break (base_candidate, effective_candidate);
+                }
+            };
+            mock.write(cpu.pc + 1, base);
+            mock.write(effective as u16, data);
+            debug!(
+                "ZeroPageY: base={:02X}, Y={:02X}, effective={:02X}",
+                base, cpu.y, effective
+            );
+            effective as u16
+        }
+
+        fn absolute<R>(
+            mock: &mut MockBus,
+            cpu: &Cpu,
+            rng: &mut R,
+            data: u8,
+            protected_addrs: &[u16],
+        ) -> u16
+        where
+            R: rand::Rng,
+        {
+            let addr = loop {
+                let candidate: u16 = rng.random_range(0x0000..=0xFFFF);
+                if !protected_addrs.contains(&candidate) {
+                    break candidate;
+                }
+            };
+            mock.write(cpu.pc + 1, (addr & 0xFF) as u8);
+            mock.write(cpu.pc + 2, (addr >> 8) as u8);
+            mock.write(addr, data);
+            debug!("Absolute: addr={:04X}", addr);
+            addr
+        }
+
+        fn absolute_x<R>(
+            mock: &mut MockBus,
+            cpu: &Cpu,
+            rng: &mut R,
+            data: u8,
+            protected_addrs: &[u16],
+        ) -> (u8, u16, bool)
+        where
+            R: rand::Rng,
+        {
+            let (base, effective) = loop {
+                let base_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
+                let effective_candidate = base_candidate.wrapping_add(cpu.x as u16);
+                if !protected_addrs.contains(&base_candidate)
+                    && !protected_addrs.contains(&effective_candidate)
+                {
+                    break (base_candidate, effective_candidate);
+                }
+            };
+            let crossed_page = (base & 0xFF00) != (effective & 0xFF00);
+            mock.write(cpu.pc + 1, (base & 0xFF) as u8);
+            mock.write(cpu.pc + 2, (base >> 8) as u8);
+            mock.write(effective, data);
+            debug!(
+                "AbsoluteX: base={:04X}, effective={:04X}, crossed={}",
+                base, effective, crossed_page
+            );
+            let hi = (base >> 8) as u8;
+            (hi, effective, crossed_page)
+        }
+
+        fn absolute_y<R>(
+            mock: &mut MockBus,
+            cpu: &Cpu,
+            rng: &mut R,
+            data: u8,
+            protected_addrs: &[u16],
+        ) -> (u8, u16, bool)
+        where
+            R: rand::Rng,
+        {
+            let (base, effective) = loop {
+                let base_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
+                let effective_candidate = base_candidate.wrapping_add(cpu.y as u16);
+                if !protected_addrs.contains(&base_candidate)
+                    && !protected_addrs.contains(&effective_candidate)
+                {
+                    break (base_candidate, effective_candidate);
+                }
+            };
+            let crossed_page = (base & 0xFF00) != (effective & 0xFF00);
+            mock.write(cpu.pc + 1, (base & 0xFF) as u8);
+            mock.write(cpu.pc + 2, (base >> 8) as u8);
+            mock.write(effective, data);
+            debug!(
+                "AbsoluteY: base={:04X}, effective={:04X}, crossed={}",
+                base, effective, crossed_page
+            );
+            let hi = (base >> 8) as u8;
+            (hi, effective, crossed_page)
+        }
+
+        fn indirect<R>(mock: &mut MockBus, cpu: &Cpu, rng: &mut R, protected_addrs: &[u16]) -> u16
+        where
+            R: rand::Rng,
+        {
+            let (ptr, target) = loop {
+                let ptr_candidate: u16 = rng.random_range(0x0000..=0xFFFE);
+                let hi_addr = (ptr_candidate & 0xFF00) | ((ptr_candidate + 1) & 0x00FF);
+                let target_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
+
+                if protected_addrs.contains(&ptr_candidate)
+                    || protected_addrs.contains(&hi_addr)
+                    || protected_addrs.contains(&target_candidate)
+                {
+                    continue;
+                }
+
+                break (ptr_candidate, target_candidate);
+            };
+            let hi_addr = (ptr & 0xFF00) | ((ptr + 1) & 0x00FF);
+            mock.write(cpu.pc + 1, (ptr & 0xFF) as u8);
+            mock.write(cpu.pc + 2, (ptr >> 8) as u8);
+            mock.write(ptr, (target & 0xFF) as u8);
+            mock.write(hi_addr, (target >> 8) as u8);
+            debug!(
+                "Indirect: ptr={:04X}, hi_addr={:04X}, target={:04X}",
+                ptr, hi_addr, target
+            );
+            target
+        }
+
+        fn indirect_x<R>(
+            mock: &mut MockBus,
+            cpu: &Cpu,
+            rng: &mut R,
+            data: u8,
+            protected_addrs: &[u16],
+        ) -> u16
+        where
+            R: rand::Rng,
+        {
+            let (zp, target) = loop {
+                let zp_candidate: u8 = rng.random();
+                let ptr = zp_candidate.wrapping_add(cpu.x) & 0xFF;
+                let ptr_lo = ptr as u16;
+                let ptr_hi = ptr.wrapping_add(1) as u16 & 0xFF;
+                let target_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
+
+                if protected_addrs.contains(&ptr_lo)
+                    || protected_addrs.contains(&ptr_hi)
+                    || protected_addrs.contains(&target_candidate)
+                    || target_candidate == ptr_lo
+                    || target_candidate == ptr_hi
+                {
+                    continue;
+                }
+
+                break (zp_candidate, target_candidate);
+            };
+            let ptr = zp.wrapping_add(cpu.x) & 0xFF;
+            mock.write(cpu.pc + 1, zp);
+            mock.write(ptr as u16, (target & 0xFF) as u8);
+            mock.write(ptr.wrapping_add(1) as u16 & 0xFF, (target >> 8) as u8);
+            mock.write(target, data);
+            debug!("IndirectX: target={:04X}", target);
+            target
+        }
+
+        fn indirect_y<R>(
+            mock: &mut MockBus,
+            cpu: &Cpu,
+            rng: &mut R,
+            data: u8,
+            protected_addrs: &[u16],
+        ) -> (u8, u16, bool)
+        where
+            R: rand::Rng,
+        {
+            let (zp, lo, hi) = loop {
+                let zp_candidate: u8 = rng.random();
+                let zp_lo = zp_candidate as u16;
+                let zp_hi = zp_candidate.wrapping_add(1) as u16 & 0xFF;
+
+                if protected_addrs.contains(&zp_lo) || protected_addrs.contains(&zp_hi) {
+                    continue;
+                }
+
+                let lo_candidate: u8 = rng.random();
+                let hi_candidate: u8 = rng.random();
+                let base = ((hi_candidate as u16) << 8) | lo_candidate as u16;
+                let effective = base.wrapping_add(cpu.y as u16);
+
+                if protected_addrs.contains(&effective) || effective == zp_lo || effective == zp_hi
+                {
+                    continue;
+                }
+
+                break (zp_candidate, lo_candidate, hi_candidate);
+            };
+            let base = ((hi as u16) << 8) | lo as u16;
+            let effective = base.wrapping_add(cpu.y as u16);
+            let crossed_page = (base & 0xFF00) != (effective & 0xFF00);
+
+            mock.write(cpu.pc + 1, zp);
+            mock.write(zp as u16, lo);
+            mock.write(zp.wrapping_add(1) as u16 & 0xFF, hi);
+            mock.write(effective, data);
+
+            debug!(
+                "IndirectY: effective={:04X}, crossed={}",
+                effective, crossed_page
+            );
+            (hi, effective, crossed_page)
+        }
+
+        fn relative<R>(
+            mock: &mut MockBus,
+            cpu: &Cpu,
+            rng: &mut R,
+            data: u8,
+            protected_addrs: &[u16],
+        ) -> (u16, bool)
+        where
+            R: rand::Rng,
+        {
+            let (offset, target) = loop {
+                let offset_candidate: i8 = rng.random_range(-128..=127);
+                let base = cpu.pc.wrapping_add(2);
+                let target_candidate = base.wrapping_add(offset_candidate as i16 as u16);
+                if !protected_addrs.contains(&target_candidate) {
+                    break (offset_candidate, target_candidate);
+                }
+            };
+            let crossed_page = (cpu.pc.wrapping_add(2) & 0xFF00) != (target & 0xFF00);
+            mock.write(cpu.pc + 1, offset as u8);
+            mock.write(target, data);
+
+            debug!(
+                "Relative: offset={}, base={:04X}, target={:04X}, crossed={}",
+                offset,
+                cpu.pc.wrapping_add(2),
+                target,
+                crossed_page
+            );
+
+            (target, crossed_page)
         }
     }
 
