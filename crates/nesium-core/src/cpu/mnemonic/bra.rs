@@ -1,17 +1,24 @@
 use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status};
 
 impl Mnemonic {
-    // ================================================================
-    //  BCC - Branch if Carry Clear
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Branches to a relative address if the Carry flag (C) is clear.
+    /// N V - B D I Z C
+    /// - - - - - - - -
     ///
-    /// ⚙️ Operation:
-    ///     If C == 0 → PC ← PC + offset
+    /// BCC - Branch on Carry Clear
+    /// Operation: Branch on C = 0
     ///
-    /// 🧩 Flags Affected:
-    ///     None
+    /// This instruction tests the state of the carry bit and takes a conditional
+    /// branch if the carry bit is reset.
+    ///
+    /// It affects no flags or registers other than the program counter and then
+    /// only if the C flag is not on.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ---------------------- | ------ | --------- | ----------
+    /// Relative        | BCC $nnnn              | $90    | 2         | 2+t+p
+    /// 
+    /// p: =1 if page is crossed.
+    /// t: =1 if branch is taken.
     pub(crate) const fn bcc() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "bcc",
@@ -22,17 +29,23 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  BCS - Branch if Carry Set
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Branches to a relative address if the Carry flag (C) is set.
+    /// N V - B D I Z C
+    /// - - - - - - - -
     ///
-    /// ⚙️ Operation:
-    ///     If C == 1 → PC ← PC + offset
+    /// BCS - Branch on Carry Set
+    /// Operation: Branch on C = 1
     ///
-    /// 🧩 Flags Affected:
-    ///     None
+    /// This instruction takes the conditional branch if the carry flag is on.
+    ///
+    /// BCS does not affect any of the flags or registers except for the program
+    /// counter and only then if the carry flag is on.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ---------------------- | ------ | --------- | ----------
+    /// Relative        | BCS $nnnn              | $B0    | 2         | 2+t+p
+    /// 
+    /// p: =1 if page is crossed.
+    /// t: =1 if branch is taken.
     pub(crate) const fn bcs() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "bcs",
@@ -43,17 +56,26 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  BEQ - Branch if Equal (Zero Set)
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Branches if the Zero flag (Z) is set.
+    /// N V - B D I Z C
+    /// - - - - - - - -
     ///
-    /// ⚙️ Operation:
-    ///     If Z == 1 → PC ← PC + offset
+    /// BEQ - Branch on Result Zero
+    /// Operation: Branch on Z = 1
     ///
-    /// 🧩 Flags Affected:
-    ///     None
+    /// This instruction could also be called "Branch on Equal."
+    ///
+    /// It takes a conditional branch whenever the Z flag is on or the previous
+    /// result is equal to 0.
+    ///
+    /// BEQ does not affect any of the flags or registers other than the program
+    /// counter and only then when the Z flag is set.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ---------------------- | ------ | --------- | ----------
+    /// Relative        | BEQ $nnnn              | $F0    | 2         | 2+t+p
+    /// 
+    /// p: =1 if page is crossed.
+    /// t: =1 if branch is taken.
     pub(crate) const fn beq() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "beq",
@@ -64,17 +86,23 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  BMI - Branch if Minus (Negative Set)
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Branches if the Negative flag (N) is set.
+    /// N V - B D I Z C
+    /// - - - - - - - -
     ///
-    /// ⚙️ Operation:
-    ///     If N == 1 → PC ← PC + offset
+    /// BMI - Branch on Result Minus
+    /// Operation: Branch on N = 1
     ///
-    /// 🧩 Flags Affected:
-    ///     None
+    /// This instruction takes the conditional branch if the N bit is set.
+    ///
+    /// BMI does not affect any of the flags or any other part of the machine
+    /// other than the program counter and then only if the N bit is on.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ---------------------- | ------ | --------- | ----------
+    /// Relative        | BMI $nnnn              | $30    | 2         | 2+t+p
+    /// 
+    /// p: =1 if page is crossed.
+    /// t: =1 if branch is taken.
     pub(crate) const fn bmi() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "bmi",
@@ -85,17 +113,25 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  BNE - Branch if Not Equal (Zero Clear)
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Branches if the Zero flag (Z) is clear.
+    /// N V - B D I Z C
+    /// - - - - - - - -
     ///
-    /// ⚙️ Operation:
-    ///     If Z == 0 → PC ← PC + offset
+    /// BNE - Branch on Result Not Zero
+    /// Operation: Branch on Z = 0
     ///
-    /// 🧩 Flags Affected:
-    ///     None
+    /// This instruction could also be called "Branch on Not Equal." It tests the
+    /// Z flag and takes the conditional branch if the Z flag is not on, indicating
+    /// that the previous result was not zero.
+    ///
+    /// BNE does not affect any of the flags or registers other than the program
+    /// counter and only then if the Z flag is reset.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ---------------------- | ------ | --------- | ----------
+    /// Relative        | BNE $nnnn              | $D0    | 2         | 2+t+p
+    /// 
+    /// p: =1 if page is crossed.
+    /// t: =1 if branch is taken.
     pub(crate) const fn bne() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "bne",
@@ -106,17 +142,27 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  BPL - Branch if Plus (Negative Clear)
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Branches if the Negative flag (N) is clear.
+    /// N V - B D I Z C
+    /// - - - - - - - -
     ///
-    /// ⚙️ Operation:
-    ///     If N == 0 → PC ← PC + offset
+    /// BPL - Branch on Result Plus
+    /// Operation: Branch on N = 0
     ///
-    /// 🧩 Flags Affected:
-    ///     None
+    /// This instruction is the complementary branch to branch on result minus. It
+    /// is a conditional branch which takes the branch when the N bit is reset (0).
+    /// BPL is used to test if the previous result bit 7 was off (0) and branch on
+    /// result minus is used to determine if the previous result was minus or bit 7
+    /// was on (1).
+    ///
+    /// The instruction affects no flags or other registers other than the P counter
+    /// and only affects the P counter when the N bit is reset.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ---------------------- | ------ | --------- | ----------
+    /// Relative        | BPL $nnnn              | $10    | 2         | 2+t+p
+    /// 
+    /// p: =1 if page is crossed.
+    /// t: =1 if branch is taken.
     pub(crate) const fn bpl() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "bpl",
@@ -127,17 +173,24 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  BVC - Branch if Overflow Clear
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Branches if the Overflow flag (V) is clear.
+    /// N V - B D I Z C
+    /// - - - - - - - -
     ///
-    /// ⚙️ Operation:
-    ///     If V == 0 → PC ← PC + offset
+    /// BVC - Branch on Overflow Clear
+    /// Operation: Branch on V = 0
     ///
-    /// 🧩 Flags Affected:
-    ///     None
+    /// This instruction tests the status of the V flag and takes the conditional
+    /// branch if the flag is not set.
+    ///
+    /// BVC does not affect any of the flags and registers other than the program
+    /// counter and only when the overflow flag is reset.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ---------------------- | ------ | --------- | ----------
+    /// Relative        | BVC $nnnn              | $50    | 2         | 2+t+p
+    /// 
+    /// p: =1 if page is crossed.
+    /// t: =1 if branch is taken.
     pub(crate) const fn bvc() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "bvc",
@@ -148,17 +201,23 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  BVS - Branch if Overflow Set
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Branches if the Overflow flag (V) is set.
+    /// N V - B D I Z C
+    /// - - - - - - - -
     ///
-    /// ⚙️ Operation:
-    ///     If V == 1 → PC ← PC + offset
+    /// BVS - Branch on Overflow Set
+    /// Operation: Branch on V = 1
     ///
-    /// 🧩 Flags Affected:
-    ///     None
+    /// This instruction tests the V flag and takes the conditional branch if V is on.
+    ///
+    /// BVS does not affect any flags or registers other than the program, counter
+    /// and only when the overflow flag is set.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ---------------------- | ------ | --------- | ----------
+    /// Relative        | BVS $nnnn              | $70    | 2         | 2+t+p
+    /// 
+    /// p: =1 if page is crossed.
+    /// t: =1 if branch is taken.
     pub(crate) const fn bvs() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "bvs",

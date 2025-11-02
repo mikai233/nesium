@@ -4,21 +4,22 @@ use crate::{
 };
 
 impl Mnemonic {
-    // ================================================================
-    // PHA - Push Accumulator
-    // ================================================================
-    /// Purpose:
-    /// Pushes the accumulator (A) onto the stack.
+    /// NV-BDIZC
+    /// --------
     ///
-    /// Operation:
-    /// M[0x0100 + S] ← A ; S ← S - 1
+    /// PHA - Push Accumulator On Stack
+    /// Operation: A↓
     ///
-    /// Flags Affected:
-    /// None
+    /// This instruction transfers the current value of the accumulator to the next
+    /// location on the stack, automatically decrementing the stack to point to the
+    /// next empty location.
     ///
-    /// Cycle-by-cycle (3 cycles):
-    /// 1. Dummy read from PC (opcode fetch already done)
-    /// 2. Write A to stack at current S, then decrement S
+    /// The Push A instruction only affects the stack pointer register which is
+    /// decremented by 1 as a result of the operation. It affects no flags.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | PHA                      | $48    | 1         | 3
     pub(crate) const fn pha() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "pha_dummy_read",
@@ -38,26 +39,20 @@ impl Mnemonic {
         &[OP1, OP2]
     }
 
-    // ================================================================
-    // PHP - Push Processor Status
-    // ================================================================
-    /// Purpose:
-    /// Pushes the processor status register (P) onto the stack.
+    /// NV-BDIZC
+    /// --------
     ///
-    /// Operation:
-    /// M[0x0100 + S] ← (P | 0x30) ; S ← S - 1
+    /// PHP - Push Processor Status On Stack
+    /// Operation: P↓
     ///
-    /// Flags Affected:
-    /// None (but B and bit5 are forced set in pushed value)
+    /// This instruction transfers the contents of the processor status register
+    /// unchanged to the stack, as governed by the stack pointer.
     ///
-    /// Hardware Notes:
-    /// - Bit 4 (B flag) is forced to 1 when pushing
-    /// - Bit 5 (unused) is forced to 1 when pushing
-    /// - This is hardwired in NMOS 6502
+    /// The PHP instruction affects no registers or flags in the microprocessor.
     ///
-    /// Cycle-by-cycle (3 cycles):
-    /// 1. Dummy read from PC
-    /// 2. Write (P | 0x30) to stack, then decrement S
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | PHP                      | $08    | 1         | 3
     pub(crate) const fn php() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "php_dummy_read",
@@ -78,23 +73,25 @@ impl Mnemonic {
         &[OP1, OP2]
     }
 
-    // ================================================================
-    // PLA - Pull Accumulator
-    // ================================================================
-    /// Purpose:
-    /// Pulls a byte from the stack into the accumulator (A).
+    /// NV-BDIZC
+    /// ✓-----✓-
     ///
-    /// Operation:
-    /// S ← S + 1 ; A ← M[0x0100 + S]
+    /// PLA - Pull Accumulator From Stack
+    /// Operation: A↑
     ///
-    /// Flags Affected:
-    /// N — Set if bit 7 of A is set
-    /// Z — Set if A == 0
+    /// This instruction adds 1 to the current value of the stack pointer and uses it
+    /// to address the stack and loads the contents of the stack into the A register.
     ///
-    /// Cycle-by-cycle (4 cycles):
-    /// 1. Dummy read from PC
-    /// 2. Dummy read from current stack pointer location [0x0100 + S]
-    /// 3. Increment S, then read from new stack location into A
+    /// The PLA instruction does not affect the carry or overflow flags. It sets N if
+    /// the bit 7 is on in accumulator A as a result of instructions, otherwise it is
+    /// reset. If accumulator A is zero as a result of the PLA, then the Z flag is
+    /// set, otherwise it is reset. The PLA instruction changes content of the
+    /// accumulator A to the contents of the memory location at stack register plus 1
+    /// and also increments the stack register.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | PLA                      | $68    | 1         | 4
     pub(crate) const fn pla() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "pla_dummy_read1",
@@ -122,27 +119,23 @@ impl Mnemonic {
         &[OP1, OP2, OP3]
     }
 
-    // ================================================================
-    // PLP - Pull Processor Status
-    // ================================================================
-    /// Purpose:
-    /// Pulls a byte from the stack into the processor status register (P).
+    /// NV-BDIZC
+    /// ✓✓--✓✓✓✓
     ///
-    /// Operation:
-    /// S ← S + 1 ; P ← (M[0x0100 + S] & 0xEF) | 0x20
+    /// PLP - Pull Processor Status From Stack
+    /// Operation: P↑
     ///
-    /// Flags Affected:
-    /// All flags are loaded from stack (with modifications)
+    /// This instruction transfers the next value on the stack to the Processor Status
+    /// register, thereby changing all of the flags and setting the mode switches to
+    /// the values from the stack.
     ///
-    /// Hardware Notes (NMOS 6502):
-    /// - Bit 4 (B flag) is ignored on pull — always cleared in P
-    /// - Bit 5 (unused) is always set to 1 after pull
-    /// - These are hardwired behaviors
+    /// The PLP instruction affects no registers in the processor other than the
+    /// status register. This instruction could affect all flags in the status
+    /// register.
     ///
-    /// Cycle-by-cycle (4 cycles):
-    /// 1. Dummy read from PC
-    /// 2. Dummy read from current stack [0x0100 + S]
-    /// 3. Increment S, read new location, apply bit fixes, load into P
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | PLP                      | $28    | 1         | 4
     pub(crate) const fn plp() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "plp_dummy_read1",

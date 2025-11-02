@@ -8,23 +8,29 @@ use crate::{
 };
 
 impl Mnemonic {
-    // ================================================================
-    // ASL A - Arithmetic Shift Left Accumulator
-    // ================================================================
-    /// Purpose:
-    /// Shifts the accumulator left by one bit. Bit 0 becomes 0, bit 7 goes to Carry.
+    /// NV-BDIZC
+    /// ✓-----✓✓
     ///
-    /// Operation:
-    /// C ← A7 ← A6 ← A5 ← A4 ← A3 ← A2 ← A1 ← A0 ← 0
+    /// ASL - Arithmetic Shift Left
+    /// Operation: C ← /M7...M0/ ← 0
     ///
-    /// Flags Affected:
-    /// N — Set if result bit 7 is set
-    /// Z — Set if result is zero
-    /// C — Receives old bit 7 of A
+    /// The shift left instruction shifts either the accumulator or the address
+    /// memory location 1 bit to the left, with the bit 0 always being set to 0 and
+    /// the input bit 7 being stored in the carry flag. ASL either shifts the
+    /// accumulator left 1 bit or is a read/modify/write instruction that affects
+    /// only memory.
     ///
-    /// Cycle-by-cycle (2 cycles):
-    /// 1. Dummy read from PC
-    /// 2. Perform shift, update A and flags
+    /// The instruction does not affect the overflow bit, sets N equal to the result
+    /// bit 7 (bit 6 in the input), sets Z flag if the result is equal to 0,
+    /// otherwise resets Z and stores the input bit 7 in the carry flag.
+    ///
+    /// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// ----------------------- | ------------------------ | ------ | --------- | ----------
+    /// Accumulator             | ASL A                    | $0A    | 1         | 2
+    /// Absolute                | ASL $nnnn                | $0E    | 3         | 6
+    /// X-Indexed Absolute      | ASL $nnnn,X              | $1E    | 3         | 7
+    /// Zero Page               | ASL $nn                  | $06    | 2         | 5
+    /// X-Indexed Zero Page     | ASL $nn,X                | $16    | 2         | 6
     pub(crate) const fn asl() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "asl_read_operand",
@@ -64,23 +70,31 @@ impl Mnemonic {
         &[OP1, OP2, OP3]
     }
 
-    // ================================================================
-    // LSR A - Logical Shift Right Accumulator
-    // ================================================================
-    /// Purpose:
-    /// Shifts the accumulator right by one bit. Bit 7 becomes 0, bit 0 goes to Carry.
+    /// NV-BDIZC
+    /// 0-----✓✓
     ///
-    /// Operation:
-    /// 0 → A7 → A6 → A5 → A4 → A3 → A2 → A1 → A0 → C
+    /// LSR - Logical Shift Right
+    /// Operation: 0 → /M7...M0/ → C
     ///
-    /// Flags Affected:
-    /// N — Always cleared (result bit 7 is always 0)
-    /// Z — Set if result is zero
-    /// C — Receives old bit 0 of A
+    /// This instruction shifts either the accumulator or a specified memory location
+    /// 1 bit to the right, with the higher bit of the result always being set to 0,
+    /// and the low bit which is shifted out of the field being stored in the carry
+    /// flag.
     ///
-    /// Cycle-by-cycle (2 cycles):
-    /// 1. Dummy read from PC
-    /// 2. Perform shift, update A and flags
+    /// The shift right instruction either affects the accumulator by shifting it
+    /// right 1 or is a read/modify/write instruction which changes a specified
+    /// memory location but does not affect any internal registers. The shift right
+    /// does not affect the overflow flag. The N flag is always reset. The Z flag is
+    /// set if the result of the shift is 0 and reset otherwise. The carry is set
+    /// equal to bit 0 of the input.
+    ///
+    /// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// ----------------------- | ------------------------ | ------ | --------- | ----------
+    /// Accumulator             | LSR A                    | $4A    | 1         | 2
+    /// Absolute                | LSR $nnnn                | $4E    | 3         | 6
+    /// X-Indexed Absolute      | LSR $nnnn,X              | $5E    | 3         | 7
+    /// Zero Page               | LSR $nn                  | $46    | 2         | 5
+    /// X-Indexed Zero Page     | LSR $nn,X                | $56    | 2         | 6
     pub(crate) const fn lsr() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "lsr_read_operand",
@@ -122,23 +136,29 @@ impl Mnemonic {
         &[OP1, OP2, OP3]
     }
 
-    // ================================================================
-    // ROL A - Rotate Left Accumulator
-    // ================================================================
-    /// Purpose:
-    /// Rotates the accumulator left. Old Carry goes to bit 0, bit 7 goes to Carry.
+    /// NV-BDIZC
+    /// ✓-----✓✓
     ///
-    /// Operation:
-    /// C ← A7 ← A6 ← A5 ← A4 ← A3 ← A2 ← A1 ← A0 ← C
+    /// ROL - Rotate Left
+    /// Operation: C ← /M7...M0/ ← C
     ///
-    /// Flags Affected:
-    /// N — Set if result bit 7 is set
-    /// Z — Set if result is zero
-    /// C — Receives old bit 7 of A
+    /// The rotate left instruction shifts either the accumulator or addressed memory
+    /// left 1 bit, with the input carry being stored in bit 0 and with the input bit
+    /// 7 being stored in the carry flags.
     ///
-    /// Cycle-by-cycle (2 cycles):
-    /// 1. Dummy read from PC
-    /// 2. Perform rotate using current Carry
+    /// The ROL instruction either shifts the accumulator left 1 bit and stores the
+    /// carry in accumulator bit 0 or does not affect the internal registers at all.
+    /// The ROL instruction sets carry equal to the input bit 7, sets N equal to the
+    /// input bit 6, sets the Z flag if the result of the rotate is 0, otherwise it
+    /// resets Z and does not affect the overflow flag at all.
+    ///
+    /// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// ----------------------- | ------------------------ | ------ | --------- | ----------
+    /// Accumulator             | ROL A                    | $2A    | 1         | 2
+    /// Absolute                | ROL $nnnn                | $2E    | 3         | 6
+    /// X-Indexed Absolute      | ROL $nnnn,X              | $3E    | 3         | 7
+    /// Zero Page               | ROL $nn                  | $26    | 2         | 5
+    /// X-Indexed Zero Page     | ROL $nn,X                | $36    | 2         | 6
     pub(crate) const fn rol() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "rol_read_operand",
@@ -181,23 +201,30 @@ impl Mnemonic {
         &[OP1, OP2, OP3]
     }
 
-    // ================================================================
-    // ROR A - Rotate Right Accumulator
-    // ================================================================
-    /// Purpose:
-    /// Rotates the accumulator right. Old Carry goes to bit 7, bit 0 goes to Carry.
+    /// NV-BDIZC
+    /// ✓-----✓✓
     ///
-    /// Operation:
-    /// C → A7 → A6 → A5 → A4 → A3 → A2 → A1 → A0 → C
+    /// ROR - Rotate Right
+    /// Operation: C → /M7...M0/ → C
     ///
-    /// Flags Affected:
-    /// N — Set if result bit 7 is set (from old Carry)
-    /// Z — Set if result is zero
-    /// C — Receives old bit 0 of A
+    /// The rotate right instruction shifts either the accumulator or addressed memory
+    /// right 1 bit with bit 0 shifted into the carry and carry shifted into bit 7.
     ///
-    /// Cycle-by-cycle (2 cycles):
-    /// 1. Dummy read from PC
-    /// 2. Perform rotate using current Carry
+    /// The ROR instruction either shifts the accumulator right 1 bit and stores the
+    /// carry in accumulator bit 7 or does not affect the internal registers at all.
+    /// The ROR instruction sets carry equal to input bit 0, sets N equal to the input
+    /// carry and sets the Z flag if the result of the rotate is 0; otherwise it
+    /// resets Z and does not affect the overflow flag at all.
+    ///
+    /// (Available on Microprocessors after June, 1976)
+    ///
+    /// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// ----------------------- | ------------------------ | ------ | --------- | ----------
+    /// Accumulator             | ROR A                    | $6A    | 1         | 2
+    /// Absolute                | ROR $nnnn                | $6E    | 3         | 6
+    /// X-Indexed Absolute      | ROR $nnnn,X              | $7E    | 3         | 7
+    /// Zero Page               | ROR $nn                  | $66    | 2         | 5
+    /// X-Indexed Zero Page     | ROR $nn,X                | $76    | 2         | 6
     pub(crate) const fn ror() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "ror_read_operand",

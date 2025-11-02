@@ -4,18 +4,27 @@ use crate::{
 };
 
 impl Mnemonic {
-    // ================================================================
-    // SHS - Store A AND X into Stack Pointer (illegal opcode)
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Stores (A AND X) into the stack pointer (S), and writes a modified value to memory.
+    /// NV-BDIZC
+    /// --------
     ///
-    /// ⚙️ Operation:
-    ///     S ← A & X
-    ///     M ← S & (high_byte_of_effective_address + 1)
+    /// SHS - Transfer Accumulator "AND" Index Register X to Stack Pointer then Store Stack Pointer "AND" Hi-Byte In Memory
+    /// Operation: A ∧ X → S, S ∧ (H + 1) → M
     ///
-    /// 🧩 Flags Affected:
-    ///     None (status flags are not affected)
+    /// The undocumented SHS instruction performs a bit-by-bit AND operation of the
+    /// value of the accumulator and the value of the index register X and stores
+    /// the result in the stack pointer. It then performs a bit-by-bit AND operation
+    /// of the resulting stack pointer and the upper 8 bits of the given address
+    /// (ignoring the addressing mode's Y offset), plus 1, and transfers the result
+    /// to the addressed memory location.
+    ///
+    /// No flags or registers in the microprocessor are affected by the store
+    /// operation.
+    ///
+    /// Addressing Mode     | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// ------------------- | ------------------------ | ------ | --------- | ----------
+    /// Y-Indexed Absolute  | SHS $nnnn,Y              | $9B*   | 3         | 5
+    ///
+    /// *Undocumented.
     pub(crate) const fn shs() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "shs",
@@ -29,17 +38,24 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  TAX - Transfer Accumulator to X
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Transfers the accumulator (A) into the X register.
+    /// NV-BDIZC
+    /// ✓-----✓-
     ///
-    /// ⚙️ Operation:
-    ///     X ← A
+    /// TAX - Transfer Accumulator To Index X
+    /// Operation: A → X
     ///
-    /// 🧩 Flags Affected:
-    ///     N, Z
+    /// This instruction takes the value from accumulator A and transfers or loads
+    /// it into the index register X without disturbing the content of the
+    /// accumulator A.
+    ///
+    /// TAX only affects the index register X, does not affect the carry or overflow
+    /// flags. The N flag is set if the resultant value in the index register X has
+    /// bit 7 on, otherwise N is reset. The Z bit is set if the content of the
+    /// register X is 0 as a result of the operation, otherwise it is reset.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | TAX                      | $AA    | 1         | 2
     pub(crate) const fn tax() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "tax",
@@ -51,17 +67,23 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  TAY - Transfer Accumulator to Y
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Transfers the accumulator (A) into the Y register.
+    /// NV-BDIZC
+    /// ✓-----✓-
     ///
-    /// ⚙️ Operation:
-    ///     Y ← A
+    /// TAY - Transfer Accumulator To Index Y
+    /// Operation: A → Y
     ///
-    /// 🧩 Flags Affected:
-    ///     N, Z
+    /// This instruction moves the value of the accumulator into index register Y
+    /// without affecting the accumulator.
+    ///
+    /// TAY instruction only affects the Y register and does not affect either the
+    /// carry or overflow flags. If the index register Y has bit 7 on, then N is set,
+    /// otherwise it is reset. If the content of the index register Y equals 0 as a
+    /// result of the operation, Z is set on, otherwise it is reset.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | TAY                      | $A8    | 1         | 2
     pub(crate) const fn tay() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "tay",
@@ -73,17 +95,24 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  TSX - Transfer Stack Pointer to X
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Transfers the stack pointer (S) into the X register.
+    /// NV-BDIZC
+    /// ✓-----✓-
     ///
-    /// ⚙️ Operation:
-    ///     X ← S
+    /// TSX - Transfer Stack Pointer To Index X
+    /// Operation: S → X
     ///
-    /// 🧩 Flags Affected:
-    ///     N, Z
+    /// This instruction transfers the value in the stack pointer to the index
+    /// register X.
+    ///
+    /// TSX does not affect the carry or overflow flags. It sets N if bit 7 is on in
+    /// index X as a result of the instruction, otherwise it is reset. If index X is
+    /// zero as a result of the TSX, the Z flag is set, otherwise it is reset. TSX
+    /// changes the value of index X, making it equal to the content of the stack
+    /// pointer.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | TSX                      | $BA    | 1         | 2
     pub(crate) const fn tsx() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "tsx",
@@ -95,17 +124,23 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  TXA - Transfer X to Accumulator
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Transfers the X register into the accumulator (A).
+    /// NV-BDIZC
+    /// ✓-----✓-
     ///
-    /// ⚙️ Operation:
-    ///     A ← X
+    /// TXA - Transfer Index X To Accumulator
+    /// Operation: X → A
     ///
-    /// 🧩 Flags Affected:
-    ///     N, Z
+    /// This instruction moves the value that is in the index register X to the
+    /// accumulator A without disturbing the content of the index register X.
+    ///
+    /// TXA does not affect any register other than the accumulator and does not
+    /// affect the carry or overflow flag. If the result in A has bit 7 on, then the
+    /// N flag is set, otherwise it is reset. If the resultant value in the
+    /// accumulator is 0, then the Z flag is set, otherwise it is reset.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | TXA                      | $8A    | 1         | 2
     pub(crate) const fn txa() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "txa",
@@ -117,17 +152,21 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  TXS - Transfer X to Stack Pointer
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Transfers the X register into the stack pointer (S).
+    /// NV-BDIZC
+    /// --------
     ///
-    /// ⚙️ Operation:
-    ///     S ← X
+    /// TXS - Transfer Index X To Stack Pointer
+    /// Operation: X → S
     ///
-    /// 🧩 Flags Affected:
-    ///     None
+    /// This instruction transfers the value in the index register X to the stack
+    /// pointer.
+    ///
+    /// TXS changes only the stack pointer, making it equal to the content of the
+    /// index register X. It does not affect any of the flags.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | TXS                      | $9A    | 1         | 2
     pub(crate) const fn txs() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "txs",
@@ -138,17 +177,23 @@ impl Mnemonic {
         &[OP1]
     }
 
-    // ================================================================
-    //  TYA - Transfer Y to Accumulator
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Transfers the Y register into the accumulator (A).
+    /// NV-BDIZC
+    /// ✓-----✓-
     ///
-    /// ⚙️ Operation:
-    ///     A ← Y
+    /// TYA - Transfer Index Y To Accumulator
+    /// Operation: Y → A
     ///
-    /// 🧩 Flags Affected:
-    ///     N, Z
+    /// This instruction moves the value that is in the index register Y to
+    /// accumulator A without disturbing the content of the register Y.
+    ///
+    /// TYA does not affect any other register other than the accumulator and does
+    /// not affect the carry or overflow flag. If the result in the accumulator A has
+    /// bit 7 on, the N flag is set, otherwise it is reset. If the resultant value
+    /// in the accumulator A is 0, then the Z flag is set, otherwise it is reset.
+    ///
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ------------------------ | ------ | --------- | ----------
+    /// Implied         | TYA                      | $98    | 1         | 2
     pub(crate) const fn tya() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "tya",

@@ -4,41 +4,31 @@ use crate::cpu::{
 };
 
 impl Mnemonic {
-    // ================================================================
-    //  NOP - No Operation
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Does nothing, consumes CPU cycles.
+    /// N V - B D I Z C
+    /// - - - - - - - -
     ///
-    /// ⚙️ Operation:
-    ///     None
+    /// JAM - Halt the CPU
+    /// Operation: Stop execution
     ///
-    /// 🧩 Flags Affected:
-    ///     None
-    pub(crate) const fn nop() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "nop",
-            micro_fn: empty_micro_fn,
-        };
-        &[OP1]
-    }
-
-    // ================================================================
-    //  JAM - CPU Lock / Halt
-    // ================================================================
-    /// 🕹️ Purpose:
-    ///     Represents execution of an illegal opcode that halts the CPU.
+    /// This undocumented instruction stops execution. The microprocessor will not
+    /// fetch further instructions, and will neither handle IRQs nor NMIs. It will
+    /// handle a RESET though.
     ///
-    /// ⚙️ Operation:
-    ///     Conceptually, the CPU would enter an infinite loop.
-    ///     In this implementation, the effect is handled outside the MicroOp.
-    ///
-    /// 🧩 Flags Affected:
-    ///     None
-    ///
-    /// 💡 Note:
-    ///     This instruction is handled externally because we avoid adding
-    ///     a dedicated halt flag in the `Cpu` structure.
+    /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+    /// --------------- | ---------------------- | ------ | --------- | ----------
+    /// Implied         | JAM                    | $02*   | 1         | X
+    /// Implied         | JAM                    | $12*   | 1         | X
+    /// Implied         | JAM                    | $22*   | 1         | X
+    /// Implied         | JAM                    | $32*   | 1         | X
+    /// Implied         | JAM                    | $42*   | 1         | X
+    /// Implied         | JAM                    | $52*   | 1         | X
+    /// Implied         | JAM                    | $62*   | 1         | X
+    /// Implied         | JAM                    | $72*   | 1         | X
+    /// Implied         | JAM                    | $92*   | 1         | X
+    /// Implied         | JAM                    | $B2*   | 1         | X
+    /// Implied         | JAM                    | $D2*   | 1         | X
+    /// Implied         | JAM                    | $F2*   | 1         | X
+    /// *Undocumented.
     pub(crate) const fn jam() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "jam",
