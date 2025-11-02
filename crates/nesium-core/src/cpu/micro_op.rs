@@ -85,7 +85,10 @@ impl MicroOp {
             micro_fn: |cpu, bus| {
                 let hi = bus.read(cpu.pc);
                 let base = ((hi as u16) << 8) | (cpu.base as u16);
-                cpu.base = hi; // Store high byte for some unofficial instructions
+                // SHX
+                if cpu.opcode == Some(0x9C) {
+                    cpu.base = hi;
+                }
                 let addr = base.wrapping_add(cpu.x as u16);
 
                 cpu.check_cross_page(base, addr);
@@ -102,7 +105,10 @@ impl MicroOp {
             micro_fn: |cpu, bus| {
                 let hi = bus.read(cpu.pc);
                 let base = ((hi as u16) << 8) | (cpu.base as u16);
-                cpu.base = hi; // Store high byte for some unofficial instructions
+                // SHA(0x9F) SHX(0x9E)
+                if cpu.opcode == Some(0x9F) || cpu.opcode == Some(0x9E) {
+                    cpu.base = hi;
+                }
                 let addr = base.wrapping_add(cpu.y as u16);
 
                 cpu.check_cross_page(base, addr);
@@ -197,8 +203,10 @@ impl MicroOp {
                 let hi_addr = (cpu.zp_addr as u16 + 1) & 0x00FF;
                 let hi = bus.read(hi_addr);
                 let base = ((hi as u16) << 8) | (cpu.base as u16);
-                // Store high byte for some unofficial instructions
-                cpu.base = hi;
+                // SHA
+                if cpu.opcode == Some(0x93) {
+                    cpu.base = hi;
+                }
                 let addr = base.wrapping_add(cpu.y as u16);
 
                 cpu.check_cross_page(base, addr);

@@ -250,6 +250,7 @@ mod tests {
             Cpu, addressing::Addressing, instruction::Instruction, lookup::LOOKUP_TABLE,
             mnemonic::Mnemonic, status::Status,
         },
+        tests::TEST_COUNT,
     };
 
     #[derive(Debug)]
@@ -258,6 +259,21 @@ mod tests {
         pub(crate) addr_hi: u8,
         pub(crate) addr: u16,
         pub(crate) m: u8,
+    }
+
+    impl Verification {
+        pub(crate) fn check_nz(&self, status: Status, val: u8) {
+            if val == 0 {
+                assert!(status.z());
+            } else {
+                assert!(!status.z());
+            }
+            if val & 0x80 != 0 {
+                assert!(status.n())
+            } else {
+                assert!(!status.n())
+            }
+        }
     }
 
     #[derive(Debug)]
@@ -284,7 +300,29 @@ mod tests {
             cpu
         }
 
-        pub(crate) fn run<F>(&self, seed: u64, verify: F)
+        pub(crate) fn test<F>(&self, verify: F)
+        where
+            F: Fn(&Instruction, &Verification, &Cpu, &mut BusImpl),
+        {
+            for _ in 0..TEST_COUNT {
+                let seed = rand::random();
+                debug!("using test seed: {}", seed);
+                self.run(seed, &verify);
+            }
+        }
+
+        pub(crate) fn test_branch<F>(&self, verify: F)
+        where
+            F: Fn(&Instruction, &Verification, &Cpu, &mut BusImpl) -> bool,
+        {
+            for _ in 0..TEST_COUNT {
+                let seed = rand::random();
+                debug!("using test seed: {}", seed);
+                self.run_branch(seed, &verify);
+            }
+        }
+
+        pub(crate) fn run<F>(&self, seed: u64, verify: &F)
         where
             F: Fn(&Instruction, &Verification, &Cpu, &mut BusImpl),
         {
