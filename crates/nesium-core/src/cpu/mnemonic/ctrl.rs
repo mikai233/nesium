@@ -1,4 +1,7 @@
-use crate::{bus::Bus, cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status}};
+use crate::{
+    bus::Bus,
+    cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status},
+};
 
 impl Mnemonic {
     // ================================================================

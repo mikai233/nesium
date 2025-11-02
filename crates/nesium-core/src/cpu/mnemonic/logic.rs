@@ -1,6 +1,10 @@
 use crate::{
     bus::Bus,
-    cpu::{micro_op::MicroOp, mnemonic::Mnemonic},
+    cpu::{
+        micro_op::MicroOp,
+        mnemonic::Mnemonic,
+        status::{BIT_6, BIT_7},
+    },
 };
 
 impl Mnemonic {
@@ -92,8 +96,8 @@ impl Mnemonic {
                 let m = bus.read(cpu.effective_addr);
                 let and = cpu.a & m;
                 cpu.p.set_z(and == 0);
-                cpu.p.set_n(m & 0x80 != 0);
-                cpu.p.set_v(m & 0x40 != 0);
+                cpu.p.set_n(m & BIT_7 != 0);
+                cpu.p.set_v(m & BIT_6 != 0);
             },
         };
         &[OP1]
@@ -102,7 +106,50 @@ impl Mnemonic {
 
 #[cfg(test)]
 mod logic_tests {
-    mod test_and {
-        
+    use crate::cpu::{
+        mnemonic::{Mnemonic, tests::InstrTest},
+        status::{BIT_6, BIT_7},
+    };
+
+    #[test]
+    fn test_and() {
+        InstrTest::new(Mnemonic::AND).test(|verify, cpu, _| {
+            let v = verify.cpu.a & verify.m;
+            assert_eq!(cpu.a, v);
+            verify.check_nz(cpu.p, v);
+        });
+    }
+
+    #[test]
+    fn test_eor() {
+        InstrTest::new(Mnemonic::EOR).test(|verify, cpu, _| {
+            let v = verify.cpu.a ^ verify.m;
+            assert_eq!(cpu.a, v);
+            verify.check_nz(cpu.p, v);
+        });
+    }
+
+    #[test]
+    fn test_ora() {
+        InstrTest::new(Mnemonic::ORA).test(|verify, cpu, _| {
+            let v = verify.cpu.a | verify.m;
+            assert_eq!(cpu.a, v);
+            verify.check_nz(cpu.p, v);
+        });
+    }
+
+    #[test]
+    fn test_bit() {
+        InstrTest::new(Mnemonic::BIT).test(|verify, cpu, _| {
+            // Z flag is set if (A & M) == 0
+            let z = (verify.cpu.a & verify.m) == 0;
+            assert_eq!(cpu.p.z(), z);
+
+            // N flag = bit 7 of memory operand
+            assert_eq!(cpu.p.n(), verify.m & BIT_7 != 0);
+
+            // V flag = bit 6 of memory operand
+            assert_eq!(cpu.p.v(), verify.m & BIT_6 != 0);
+        });
     }
 }

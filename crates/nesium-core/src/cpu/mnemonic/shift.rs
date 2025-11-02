@@ -252,7 +252,7 @@ mod shift_test {
 
     #[test]
     fn test_asl() {
-        InstrTest::new(Mnemonic::ASL).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::ASL).test(|verify, cpu, bus| {
             if cpu.opcode == Some(0x0A) {
                 let c = verify.cpu.a & BIT_7 != 0;
                 assert_eq!(cpu.p.c(), c);
@@ -271,7 +271,7 @@ mod shift_test {
 
     #[test]
     fn test_lsr() {
-        InstrTest::new(Mnemonic::LSR).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::LSR).test(|verify, cpu, bus| {
             if cpu.opcode == Some(0x4A) {
                 // Accumulator mode
                 let c = verify.cpu.a & BIT_0 != 0;
@@ -292,7 +292,7 @@ mod shift_test {
 
     #[test]
     fn test_rol() {
-        InstrTest::new(Mnemonic::ROL).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::ROL).test(|verify, cpu, bus| {
             if cpu.opcode == Some(0x2A) {
                 // Accumulator mode
                 let c_in = verify.cpu.p.c() as u8;
@@ -315,7 +315,7 @@ mod shift_test {
 
     #[test]
     fn test_ror() {
-        InstrTest::new(Mnemonic::ROR).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::ROR).test(|verify, cpu, bus| {
             if cpu.opcode == Some(0x6A) {
                 // Accumulator mode
                 let c_in = (verify.cpu.p.c() as u8) << 7;

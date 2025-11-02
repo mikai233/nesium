@@ -301,7 +301,7 @@ mod tests {
 
         pub(crate) fn test<F>(&self, verify: F)
         where
-            F: Fn(&Instruction, &Verification, &Cpu, &mut BusImpl),
+            F: Fn(&Verification, &Cpu, &mut BusImpl),
         {
             for _ in 0..TEST_COUNT {
                 let seed = rand::random();
@@ -312,7 +312,7 @@ mod tests {
 
         pub(crate) fn test_branch<F>(&self, verify: F)
         where
-            F: Fn(&Instruction, &Verification, &Cpu, &mut BusImpl) -> bool,
+            F: Fn(&Verification, &Cpu, &mut BusImpl) -> bool,
         {
             for _ in 0..TEST_COUNT {
                 let seed = rand::random();
@@ -323,7 +323,7 @@ mod tests {
 
         pub(crate) fn run<F>(&self, seed: u64, verify: &F)
         where
-            F: Fn(&Instruction, &Verification, &Cpu, &mut BusImpl),
+            F: Fn(&Verification, &Cpu, &mut BusImpl),
         {
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             for instr in LOOKUP_TABLE {
@@ -340,14 +340,14 @@ mod tests {
                         "instruction: {} cycle not match on {}",
                         instr.mnemonic, instr.addressing
                     );
-                    verify(&instr, &verification, &cpu, &mut bus);
+                    verify(&verification, &cpu, &mut bus);
                 }
             }
         }
 
         pub(crate) fn run_branch<F>(&self, seed: u64, verify: F)
         where
-            F: Fn(&Instruction, &Verification, &Cpu, &mut BusImpl) -> bool,
+            F: Fn(&Verification, &Cpu, &mut BusImpl) -> bool,
         {
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             for instr in LOOKUP_TABLE {
@@ -358,7 +358,7 @@ mod tests {
                         Self::build_mock(&instr, &cpu, &mut rng);
                     let mut bus = BusImpl::Dynamic(Box::new(bus));
                     let executed = cpu.test_clock(&mut bus, &instr);
-                    let branch_taken = verify(&instr, &verification, &cpu, &mut bus);
+                    let branch_taken = verify(&verification, &cpu, &mut bus);
                     let expected = instr.cycle().total_cycle(crossed_page, branch_taken);
                     assert_eq!(executed, expected, "instruction cycle not match");
                 }

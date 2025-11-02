@@ -189,7 +189,7 @@ mod test_stack {
 
     #[test]
     fn test_pha() {
-        InstrTest::new(Mnemonic::PHA).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::PHA).test(|verify, cpu, bus| {
             let v = verify.cpu.a;
             assert_eq!(verify.cpu.s.wrapping_sub(1), cpu.s);
             let m = bus.read(STACK_ADDR | verify.cpu.s as u16);
@@ -199,7 +199,7 @@ mod test_stack {
 
     #[test]
     fn test_php() {
-        InstrTest::new(Mnemonic::PHP).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::PHP).test(|verify, cpu, bus| {
             let v = verify.cpu.p | Status::BREAK | Status::UNUSED;
             assert_eq!(verify.cpu.s.wrapping_sub(1), cpu.s);
             let m = bus.read(STACK_ADDR | verify.cpu.s as u16);
@@ -210,7 +210,7 @@ mod test_stack {
 
     #[test]
     fn test_pla() {
-        InstrTest::new(Mnemonic::PLA).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::PLA).test(|verify, cpu, bus| {
             assert_eq!(verify.cpu.s.wrapping_add(1), cpu.s);
             let m = bus.read(STACK_ADDR | verify.cpu.s as u16);
             assert_eq!(cpu.a, m);
@@ -220,7 +220,7 @@ mod test_stack {
 
     #[test]
     fn test_plp() {
-        InstrTest::new(Mnemonic::PLP).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::PLP).test(|verify, cpu, bus| {
             assert_eq!(verify.cpu.s.wrapping_add(1), cpu.s);
             let m = bus.read(STACK_ADDR | verify.cpu.s as u16);
             let mut p = Status::from_bits_truncate(m);

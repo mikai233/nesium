@@ -163,8 +163,6 @@ impl Mnemonic {
 
 #[cfg(test)]
 mod trans_tests {
-    use tracing::info;
-
     use crate::{
         bus::Bus,
         cpu::mnemonic::{Mnemonic, tests::InstrTest},
@@ -172,7 +170,7 @@ mod trans_tests {
 
     #[test]
     fn test_shs() {
-        InstrTest::new(Mnemonic::SHS).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::SHS).test(|verify, cpu, bus| {
             let v = verify.cpu.a & verify.cpu.x;
             assert_eq!(cpu.s, v);
             let v = v & verify.addr_hi.wrapping_add(1);
@@ -183,7 +181,7 @@ mod trans_tests {
 
     #[test]
     fn test_tax() {
-        InstrTest::new(Mnemonic::TAX).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::TAX).test(|verify, cpu, bus| {
             let v = verify.cpu.a;
             assert_eq!(cpu.x, v);
             verify.check_nz(cpu.p, v);
@@ -192,7 +190,7 @@ mod trans_tests {
 
     #[test]
     fn test_tay() {
-        InstrTest::new(Mnemonic::TAY).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::TAY).test(|verify, cpu, bus| {
             let v = verify.cpu.a;
             assert_eq!(cpu.y, v);
             verify.check_nz(cpu.p, v);
@@ -201,7 +199,7 @@ mod trans_tests {
 
     #[test]
     fn test_tsx() {
-        InstrTest::new(Mnemonic::TSX).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::TSX).test(|verify, cpu, bus| {
             let v = verify.cpu.s;
             assert_eq!(cpu.x, v);
             verify.check_nz(cpu.p, v);
@@ -210,7 +208,7 @@ mod trans_tests {
 
     #[test]
     fn test_txa() {
-        InstrTest::new(Mnemonic::TXA).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::TXA).test(|verify, cpu, bus| {
             let v = verify.cpu.x;
             assert_eq!(cpu.a, v);
             verify.check_nz(cpu.p, v);
@@ -219,7 +217,7 @@ mod trans_tests {
 
     #[test]
     fn test_txs() {
-        InstrTest::new(Mnemonic::TXS).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::TXS).test(|verify, cpu, bus| {
             let v = verify.cpu.x;
             assert_eq!(cpu.s, v);
         });
@@ -227,7 +225,7 @@ mod trans_tests {
 
     #[test]
     fn test_tya() {
-        InstrTest::new(Mnemonic::TYA).test(|_, verify, cpu, bus| {
+        InstrTest::new(Mnemonic::TYA).test(|verify, cpu, bus| {
             let v = verify.cpu.y;
             assert_eq!(cpu.a, v);
             verify.check_nz(cpu.p, v);
