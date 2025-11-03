@@ -265,7 +265,7 @@ impl Mnemonic {
 }
 
 #[cfg(test)]
-mod shift_test {
+mod shift_tests {
     use crate::cpu::{
         mnemonic::{Mnemonic, tests::InstrTest},
         status::{BIT_0, BIT_7},

@@ -425,28 +425,40 @@ impl Mnemonic {
     /// *Undocumented.
     pub(crate) const fn isc() -> &'static [MicroOp] {
         &[
+            // T4: Read Old Value (R)
             MicroOp {
-                name: "isc_read",
+                name: "isc_read_old",
                 micro_fn: |cpu, bus| {
+                    // Read M_old into temporary storage (cpu.base)
                     cpu.base = bus.read(cpu.effective_addr);
                 },
             },
+            // T5: Dummy Write Old Value (W_dummy) & Internal Calculation
             MicroOp {
-                name: "isc_dummy_write",
+                name: "isc_dummy_write_inc",
                 micro_fn: |cpu, bus| {
+                    // 1. Bus: Dummy write of the old value (M_old) - Must be done for accurate timing
                     bus.write(cpu.effective_addr, cpu.base);
+
+                    // 2. Internal: Calculate the new value (M_new = M_old + 1)
+                    cpu.base = cpu.base.wrapping_add(1);
                 },
             },
+            // T6: Final Write New Value (W_final) & Internal SBC Operation
             MicroOp {
-                name: "isc_sbc",
+                name: "isc_final_write_sbc",
                 micro_fn: |cpu, bus| {
-                    let mut m = bus.read(cpu.effective_addr);
-                    m = m.wrapping_add(1);
-                    let m_inv = !m;
+                    // 1. Bus: Write the new, incremented value (M_new) to memory (Completes INC part)
+                    bus.write(cpu.effective_addr, cpu.base);
+
+                    // 2. Internal: Perform SBC (A - M_new - /C)
+                    let m_new = cpu.base;
+                    let m_inv = !m_new;
                     let carry = if cpu.p.c() { 1 } else { 0 };
                     let sum = cpu.a as u16 + m_inv as u16 + carry as u16;
                     let result = sum as u8;
 
+                    // 3. Update Status Flags and Accumulator
                     cpu.p.set_c(sum > 0xFF);
                     cpu.p
                         .set_v(((cpu.a ^ result) & (m_inv ^ result) & BIT_7) != 0);
@@ -487,26 +499,50 @@ impl Mnemonic {
     /// *Undocumented.
     pub(crate) const fn rla() -> &'static [MicroOp] {
         &[
+            // T4: Read Old Value (R)
             MicroOp {
-                name: "rla_read",
+                name: "rla_read_old",
                 micro_fn: |cpu, bus| {
+                    // Read M_old from memory into temporary storage (cpu.base)
                     cpu.base = bus.read(cpu.effective_addr);
                 },
             },
+            // T5: Dummy Write Old Value (W_dummy) & Internal Calculation (ROL)
             MicroOp {
-                name: "rla_dummy_write",
+                name: "rla_dummy_write_rol",
                 micro_fn: |cpu, bus| {
+                    // 1. Bus: Dummy write of the old value (M_old) - Accurate RMW timing
                     bus.write(cpu.effective_addr, cpu.base);
+
+                    // 2. Internal: Perform ROL calculation (Rotate Left) to get M_new
+                    let m_old = cpu.base;
+                    let carry_in = if cpu.p.c() { 1 } else { 0 };
+
+                    // Set the new Carry flag (C) based on the old bit 7
+                    cpu.p.set_c(m_old & 0x80 != 0);
+
+                    // Calculate the rotated new value (M_new)
+                    let m_new = (m_old << 1) | carry_in;
+
+                    // Store M_new back into cpu.base for final write and AND
+                    cpu.base = m_new;
                 },
             },
+            // T6: Final Write New Value (W_final) & Internal AND Operation
             MicroOp {
-                name: "rla_and",
+                name: "rla_final_write_and",
                 micro_fn: |cpu, bus| {
-                    let m = bus.read(cpu.effective_addr);
-                    let carry_in = if cpu.p.c() { 1 } else { 0 };
-                    cpu.p.set_c(m & BIT_7 != 0);
-                    let m = (m << 1) | carry_in;
-                    cpu.a &= m;
+                    // 1. Bus: Write the new, rotated value (M_new) to memory (Completes ROL part)
+                    bus.write(cpu.effective_addr, cpu.base);
+
+                    // 2. Internal: Perform AND operation (A = A & M_new)
+                    let m_new = cpu.base;
+
+                    // The ROL operation has already updated the Carry (C) flag in T5.
+                    // We only need to update A, N, and Z flags based on A & M_new.
+                    cpu.a &= m_new;
+
+                    // Update Negative (N) and Zero (Z) flags based on the new Accumulator value
                     cpu.p.set_zn(cpu.a);
                 },
             },
@@ -946,7 +982,30 @@ mod arith_tests {
 
     #[test]
     fn test_adc() {
-        unimplemented!()
+        InstrTest::new(Mnemonic::ADC).test(|verify, cpu, bus| {
+            let m = verify.m;
+            let a_in = verify.cpu.a;
+            let c_in = if verify.cpu.p.c() { 1 } else { 0 };
+
+            let sum_16 = a_in as u16 + m as u16 + c_in as u16;
+            let final_a = (sum_16 & 0xFF) as u8;
+
+            assert_eq!(cpu.a, final_a, "Accumulator mismatch after ADC");
+
+            let final_c = sum_16 > 0xFF;
+            assert_eq!(cpu.p.c(), final_c, "Carry flag mismatch");
+
+            let final_v = ((a_in ^ final_a) & (m ^ final_a) & BIT_7) != 0;
+            assert_eq!(cpu.p.v(), final_v, "Overflow flag mismatch");
+
+            let zero = final_a == 0;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            let negative = final_a & BIT_7 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            verify.check_nz(cpu.p, final_a);
+        });
     }
 
     #[test]
@@ -967,25 +1026,29 @@ mod arith_tests {
     #[test]
     fn test_arr() {
         InstrTest::new(Mnemonic::ARR).test(|verify, cpu, _| {
-            // Step 1: AND with operand
-            let mut v = verify.cpu.a & verify.m;
+            let old_carry = verify.cpu.p.c();
+            let old_a = verify.cpu.a;
+            let m = verify.m;
 
-            // Step 2: Logical shift right by 1
-            v >>= 1;
+            // Step 1: AND with operand
+            let and_result = old_a & m;
+
+            // Step 2: ROR operation with carry input
+            let shifted = (and_result >> 1) | (if old_carry { 0x80 } else { 0 });
 
             // Check accumulator result
-            assert_eq!(cpu.a, v);
+            assert_eq!(cpu.a, shifted, "Accumulator result mismatch");
 
             // Carry = bit 6 of result
-            let c = v & 0x40 != 0;
-            assert_eq!(cpu.p.c(), c);
+            let c = shifted & 0x40 != 0;
+            assert_eq!(cpu.p.c(), c, "Carry flag mismatch");
 
             // Overflow = bit6 XOR bit5
-            let v_flag = ((v >> 6) & 1) ^ ((v >> 5) & 1) != 0;
-            assert_eq!(cpu.p.v(), v_flag);
+            let v_flag = (shifted & 0x40 != 0) ^ (shifted & 0x20 != 0);
+            assert_eq!(cpu.p.v(), v_flag, "Overflow flag mismatch");
 
             // Negative / Zero flags
-            verify.check_nz(cpu.p, v);
+            verify.check_nz(cpu.p, shifted);
         });
     }
 
@@ -1122,32 +1185,32 @@ mod arith_tests {
             let new_m = verify.m.wrapping_add(1);
 
             // Step 2: Perform SBC A, new_m
-            // In 6502: SBC = A - M - (1 - C)
+            // SBC: A - M - (1 - C) 等价于 A + (!M) + C
             let carry_in = if verify.cpu.p.c() { 1 } else { 0 };
-            let sbc_result = verify.cpu.a.wrapping_sub(new_m).wrapping_sub(1 - carry_in);
+            let inverted_m = !new_m;
+            let sum = verify.cpu.a as u16 + inverted_m as u16 + carry_in as u16;
+            let sbc_result = sum as u8;
 
-            // Step 3: Update flags for SBC
-            // Carry = 1 if no borrow occurred (A >= new_m + (1 - C))
-            let carry = (verify.cpu.a as u16) >= (new_m as u16 + (1 - carry_in) as u16);
+            // Step 3: Verify memory has been incremented
+            assert_eq!(bus.read(verify.addr), new_m, "Memory was not incremented");
+
+            // Step 4: Accumulator updated correctly
+            assert_eq!(cpu.a, sbc_result, "Accumulator mismatch after SBC");
+
+            // Step 5: Update flags for SBC
+            // Carry = 1 if no borrow occurred (sum > 0xFF)
+            let carry = sum > 0xFF;
             assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
 
             // Zero = 1 if result == 0
-            let zero = sbc_result == 0;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+            assert_eq!(cpu.p.z(), sbc_result == 0, "Zero flag mismatch");
 
             // Negative = bit 7 of result
-            let negative = sbc_result & BIT_7 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+            assert_eq!(cpu.p.n(), sbc_result & BIT_7 != 0, "Negative flag mismatch");
 
             // Overflow = signed overflow detection
-            let overflow = ((verify.cpu.a ^ sbc_result) & (new_m ^ sbc_result) & BIT_7) != 0;
+            let overflow = ((verify.cpu.a ^ sbc_result) & (inverted_m ^ sbc_result) & BIT_7) != 0;
             assert_eq!(cpu.p.v(), overflow, "Overflow flag mismatch");
-
-            // Step 4: Verify memory has been incremented
-            assert_eq!(bus.read(verify.addr), new_m, "Memory was not incremented");
-
-            // Step 5: Accumulator updated correctly
-            assert_eq!(cpu.a, sbc_result, "Accumulator mismatch after SBC");
 
             // Step 6: Optional: cross-check N/Z flags
             verify.check_nz(cpu.p, sbc_result);
@@ -1196,48 +1259,60 @@ mod arith_tests {
     #[test]
     fn test_rra() {
         InstrTest::new(Mnemonic::RRA).test(|verify, cpu, bus| {
-            // Step 1: Rotate memory right through carry
-            let old_carry = if verify.cpu.p.c() { 1 } else { 0 };
-            let new_carry = (verify.m & BIT_0) != 0; // bit0 goes into carry
-            let rotated = (old_carry << 7) | (verify.m >> 1);
+            let old_carry = verify.cpu.p.c();
+            let m = verify.m;
 
-            // Step 2: Verify memory has been rotated
+            let ror_new_carry = (m & BIT_0) != 0;
+            let carry_in_for_ror = if old_carry { BIT_7 } else { 0 };
+            let rotated = (m >> 1) | carry_in_for_ror;
+
             assert_eq!(
                 bus.read(verify.addr),
                 rotated,
                 "Memory not rotated correctly"
             );
 
-            // Step 3: Perform SBC: A - rotated - (1 - C)
-            let carry_in = if verify.cpu.p.c() { 1 } else { 0 };
-            let sbc_result = verify
-                .cpu
-                .a
-                .wrapping_sub(rotated)
-                .wrapping_sub(1 - carry_in);
+            let carry_for_adc = if ror_new_carry { 1 } else { 0 };
 
-            // Step 4: Verify accumulator result
-            assert_eq!(cpu.a, sbc_result, "Accumulator mismatch after SBC");
+            let sum = verify.cpu.a as u16 + rotated as u16 + carry_for_adc as u16;
 
-            // Step 5: Verify flags
-            // Carry = 1 if no borrow occurred
-            let carry = (verify.cpu.a as u16) >= (rotated as u16 + (1 - carry_in) as u16);
+            let adc_result = sum as u8;
+
+            assert_eq!(cpu.a, adc_result, "Accumulator mismatch after ADC");
+
+            let carry = sum > 0xFF;
             assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
 
-            // Zero = 1 if result == 0
-            let zero = sbc_result == 0;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+            assert_eq!(cpu.p.z(), adc_result == 0, "Zero flag mismatch");
 
-            // Negative = bit7 of result
-            let negative = sbc_result & BIT_7 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+            assert_eq!(cpu.p.n(), adc_result & BIT_7 != 0, "Negative flag mismatch");
 
-            // Overflow = signed overflow detection
-            let overflow = ((verify.cpu.a ^ sbc_result) & (rotated ^ sbc_result) & BIT_7) != 0;
+            let overflow = ((verify.cpu.a ^ adc_result) & (rotated ^ adc_result) & BIT_7) != 0;
             assert_eq!(cpu.p.v(), overflow, "Overflow flag mismatch");
+        });
+    }
 
-            // Optional: cross-check N/Z flags using helper
-            verify.check_nz(cpu.p, sbc_result);
+    #[test]
+    fn test_sbc() {
+        InstrTest::new(Mnemonic::SBC).test(|verify, cpu, _| {
+            let m = verify.m;
+            let a_in = verify.cpu.a;
+            let c_in = if verify.cpu.p.c() { 1 } else { 0 };
+
+            let inverted_m = !m;
+            let sum_16 = a_in as u16 + inverted_m as u16 + c_in as u16;
+            let final_a = (sum_16 & 0xFF) as u8;
+
+            assert_eq!(cpu.a, final_a, "Accumulator mismatch after SBC");
+
+            let final_c = sum_16 > 0xFF;
+            assert_eq!(cpu.p.c(), final_c, "Carry flag mismatch");
+
+            let final_v = ((a_in ^ final_a) & (inverted_m ^ final_a) & BIT_7) != 0;
+            assert_eq!(cpu.p.v(), final_v, "Overflow flag mismatch");
+
+            assert_eq!(cpu.p.z(), final_a == 0, "Zero flag mismatch");
+            assert_eq!(cpu.p.n(), final_a & BIT_7 != 0, "Negative flag mismatch");
         });
     }
 

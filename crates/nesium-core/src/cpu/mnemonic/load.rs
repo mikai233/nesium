@@ -396,10 +396,7 @@ impl Mnemonic {
 #[cfg(test)]
 mod load_tests {
 
-    use crate::{
-        bus::Bus,
-        cpu::mnemonic::{Mnemonic, tests::InstrTest},
-    };
+    use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
 
     #[test]
     fn test_las() {

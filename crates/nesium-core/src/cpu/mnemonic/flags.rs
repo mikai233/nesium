@@ -1,4 +1,4 @@
-use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status};
+use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic};
 
 impl Mnemonic {
     /// N V - B D I Z C
@@ -20,7 +20,7 @@ impl Mnemonic {
     pub(crate) const fn clc() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "clc_clear_carry",
-            micro_fn: |cpu, _bus| {
+            micro_fn: |cpu, _| {
                 // Cycle 2: C = 0
                 cpu.p.set_c(false);
             },
@@ -50,7 +50,7 @@ impl Mnemonic {
     pub(crate) const fn cld() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "cld_clear_decimal",
-            micro_fn: |cpu, _bus| {
+            micro_fn: |cpu, _| {
                 // Cycle 2: D = 0
                 cpu.p.set_d(false);
             },
@@ -76,7 +76,7 @@ impl Mnemonic {
     pub(crate) const fn cli() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "cli_clear_interrupt",
-            micro_fn: |cpu, _bus| {
+            micro_fn: |cpu, _| {
                 // Cycle 2: I = 0
                 cpu.p.set_i(false);
             },
@@ -103,7 +103,7 @@ impl Mnemonic {
     pub(crate) const fn clv() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "clv_clear_overflow",
-            micro_fn: |cpu, _bus| {
+            micro_fn: |cpu, _| {
                 // Cycle 2: V = 0
                 cpu.p.set_v(false);
             },
@@ -130,7 +130,7 @@ impl Mnemonic {
     pub(crate) const fn sec() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "sec_set_carry",
-            micro_fn: |cpu, _bus| {
+            micro_fn: |cpu, _| {
                 // Cycle 2: C = 1
                 cpu.p.set_c(true);
             },
@@ -161,7 +161,7 @@ impl Mnemonic {
     pub(crate) const fn sed() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "sed_set_decimal",
-            micro_fn: |cpu, _bus| {
+            micro_fn: |cpu, _| {
                 // Cycle 2: D = 1
                 cpu.p.set_d(true);
             },
@@ -188,7 +188,7 @@ impl Mnemonic {
     pub(crate) const fn sei() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
             name: "sei_set_interrupt",
-            micro_fn: |cpu, _bus| {
+            micro_fn: |cpu, _| {
                 // Cycle 2: I = 1
                 cpu.p.set_i(true);
             },

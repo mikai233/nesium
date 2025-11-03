@@ -203,7 +203,7 @@ impl Mnemonic {
 }
 
 #[cfg(test)]
-mod test_stack {
+mod stack_tests {
     use crate::{
         bus::STACK_ADDR,
         cpu::{

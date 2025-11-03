@@ -35,7 +35,7 @@ impl Mnemonic {
                 // Internal: PC is incremented past the padding byte.
                 micro_fn: |cpu, bus| {
                     bus.read(cpu.pc); // Read the byte at PC (which is PC + 1 after T1 fetch)
-                    cpu.incr_pc();
+                    cpu.incr_pc();//TODO check pc
                 },
             },
             // T3: Push PC High Byte (W)
@@ -241,72 +241,67 @@ impl Mnemonic {
     /// Implied         | RTI                      | $40    | 1         | 6
     pub(crate) const fn rti() -> &'static [MicroOp] {
         &[
-            // T2: Dummy Read (Stack Address)
+            // T2: Dummy Read (PC + 1)
             MicroOp {
-                name: "rti_dummy_read",
-                // Bus: READ from the current stack address (0x0100 + S). Value is discarded.
-                // Internal: S remains unchanged.
+                name: "rti_dummy_read_pc",
+                // Bus: READ from the address AFTER the RTI opcode. Value is discarded.
+                // Internal: S remains unchanged. PC should have been auto-incremented to PC+1.
                 micro_fn: |cpu, bus| {
-                    // Read from the current stack pointer location. Value is always ignored.
+                    // NOTE: The address is typically PC+1, where PC is the address of the RTI instruction.
+                    // We read the effective address of the next instruction, which is often PC_Start + 1.
+                    // In a cycle-accurate model, this T2 read should be PC + 1.
+                    bus.read(cpu.pc.wrapping_add(1));
+                },
+            },
+            // T3: Dummy Read (Stack Pointer S)
+            MicroOp {
+                name: "rti_dummy_read_stack",
+                // Bus: READ from the current stack address (0x0100 + S). Value is discarded.
+                // Internal: S remains unchanged. This is the empty stack cycle.
+                micro_fn: |cpu, bus| {
+                    // Read from the current stack pointer location. Value is ignored.
                     bus.read(STACK_ADDR + cpu.s as u16);
                 },
             },
-            // T3: Pop Status Register P (R)
+            // T4: Pop Status Register P
             MicroOp {
                 name: "rti_pop_p",
                 // Bus: READ Status Register P from Stack (0x0100 + S + 1).
                 // Internal: Stack Pointer (S) is incremented. Status Register P is updated.
                 micro_fn: |cpu, bus| {
+                    // Stack Pop: S increments (Post-Increment), then read.
                     let p_bits = cpu.pull(bus);
 
-                    // Set the P register, ensuring the UNUSED flag (B) is respected in the read data
-                    // Note: The B flag (0x10) is ignored when pulling P off the stack.
-                    // UNUSED (0x20) flag is always set internally, but we set P to the exact popped value.
+                    // Set P register (0x20 UNUSED flag must be restored/set)
                     cpu.p = Status::from_bits_truncate(p_bits);
-
-                    // IMPORTANT: Ensure UNUSED flag (0x20) is ALWAYS set after a PLP/RTI
-                    cpu.p.set_u(true);
+                    cpu.p.set_u(true); // Always set UNUSED flag (B/0x10 is ignored/removed by from_bits_truncate)
+                    cpu.p.set_b(false);
                 },
             },
-            // T4: Pop PC Low Byte (R)
+            // T5: Pop PC Low Byte
             MicroOp {
                 name: "rti_pop_pc_lo",
                 // Bus: READ PC_L from Stack (0x0100 + S + 1).
                 // Internal: Stack Pointer (S) is incremented. PC_L stored in cpu.base.
                 micro_fn: |cpu, bus| {
                     // Read PC Low byte and store it temporarily in cpu.base
-                    cpu.base = cpu.pull(bus)
+                    cpu.base = cpu.pull(bus);
                 },
             },
-            // T5: Pop PC High Byte (R)
+            // T6: Pop PC High Byte (Final Jump)
             MicroOp {
-                name: "rti_pop_pc_hi",
+                name: "rti_pop_pc_hi_jump",
                 // Bus: READ PC_H from Stack (0x0100 + S + 1).
-                // Internal: Stack Pointer (S) is incremented. Full PC stored in cpu.effective_addr.
+                // Internal: Stack Pointer (S) is incremented. PC is updated to the restored address.
                 micro_fn: |cpu, bus| {
                     // Read PC High byte
                     let hi_byte = cpu.pull(bus) as u16;
 
-                    // Combine the popped HI and LO bytes to form the full PC address
+                    // Combine the popped HI and LO bytes to form the new PC address
                     let new_pc = (hi_byte << 8) | (cpu.base as u16);
 
-                    // Store the full address for the final T6 jump
-                    cpu.effective_addr = new_pc;
-                },
-            },
-            // T6: Final Jump (Dummy Read)
-            MicroOp {
-                name: "rti_jump",
-                // Bus: Dummy READ from the calculated new PC address. Value is discarded.
-                // Internal: Set PC to the restored address.
-                micro_fn: |cpu, bus| {
-                    // Dummy read from the new PC address. This cycle is just for bus activity/timing.
-                    bus.read(cpu.effective_addr);
-
-                    // Internal: Final PC update and instruction completion.
-                    cpu.pc = cpu.effective_addr;
-
-                    // Note: No PC increment here, as RTI jumps directly to the restored PC.
+                    // Final PC update
+                    cpu.pc = new_pc;
                 },
             },
         ]
@@ -397,7 +392,7 @@ impl Mnemonic {
 }
 
 #[cfg(test)]
-mod ctrl_test {
+mod ctrl_tests {
     use crate::{
         bus::STACK_ADDR,
         cpu::mnemonic::{Mnemonic, tests::InstrTest},
