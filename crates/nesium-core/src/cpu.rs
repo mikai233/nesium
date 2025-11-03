@@ -140,6 +140,14 @@ impl Cpu {
     }
 
     #[inline]
+    pub(crate) fn prepare_branch(&mut self, bus: &mut dyn Bus, instr: &Instruction) {
+        if matches!(instr.addressing, Addressing::Relative) {
+            self.base = bus.read(self.pc);
+            self.incr_pc();
+        }
+    }
+
+    #[inline]
     pub(crate) fn prepare_imm_addr(&mut self, instr: &Instruction) {
         if matches!(instr.addressing, Addressing::Immediate) {
             self.effective_addr = self.pc as u16;
@@ -169,13 +177,8 @@ impl Cpu {
     }
 
     pub(crate) fn test_branch(&mut self, taken: bool) {
-        if taken {
-            let old_pc = self.pc;
-            let new_pc = old_pc.wrapping_add(self.base as u16);
-            self.check_cross_page(old_pc, new_pc);
-            self.pc = new_pc;
-        } else {
-            self.index += 1;
+        if !taken {
+            self.index += 2; // Skip add branch offset and cross page
         }
     }
 
@@ -208,7 +211,8 @@ impl Cpu {
 
     pub(crate) fn pull(&mut self, bus: &mut dyn Bus) -> u8 {
         self.s = self.s.wrapping_add(1);
-        bus.read(STACK_ADDR | self.s as u16)
+        let data = bus.read(STACK_ADDR | self.s as u16);
+        data
     }
 }
 

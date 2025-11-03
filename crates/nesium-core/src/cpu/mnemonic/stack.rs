@@ -193,8 +193,8 @@ impl Mnemonic {
                 // - Clear B flag (bit 4): & 0xEF
                 // - Force unused bit 5 to 1: | 0x20
                 let mut p = Status::from_bits_truncate(value);
-                p.remove(Status::BREAK);
-                p.insert(Status::UNUSED);
+                p.set_b(false);
+                p.set_u(true);
                 cpu.p = p;
             },
         };

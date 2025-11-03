@@ -16,17 +16,34 @@ impl Mnemonic {
     /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Relative        | BCC $nnnn              | $90    | 2         | 2+t+p
-    /// 
+    ///
     /// p: =1 if page is crossed.
     /// t: =1 if branch is taken.
     pub(crate) const fn bcc() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "bcc",
-            micro_fn: |cpu, _| {
-                cpu.test_branch(!cpu.p.contains(Status::CARRY));
+            name: "bcc_fetch_branch_offset",
+            micro_fn: |cpu, bus| {
+                cpu.base = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.test_branch(!cpu.p.c());
             },
         };
-        &[OP1]
+        const OP2: MicroOp = MicroOp {
+            name: "bcc_add_branch_offset",
+            micro_fn: |cpu, _| {
+                let old_pc = cpu.pc;
+                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                cpu.pc = new_pc;
+                cpu.check_cross_page(old_pc, new_pc);
+            },
+        };
+        const OP3: MicroOp = MicroOp {
+            name: "bcc_add_dummy_read",
+            micro_fn: |cpu, bus| {
+                bus.read(cpu.pc);
+            },
+        };
+        &[OP1, OP2, OP3]
     }
 
     /// N V - B D I Z C
@@ -43,17 +60,34 @@ impl Mnemonic {
     /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Relative        | BCS $nnnn              | $B0    | 2         | 2+t+p
-    /// 
+    ///
     /// p: =1 if page is crossed.
     /// t: =1 if branch is taken.
     pub(crate) const fn bcs() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "bcs",
-            micro_fn: |cpu, _| {
-                cpu.test_branch(cpu.p.contains(Status::CARRY));
+            name: "bcs_fetch_branch_offset",
+            micro_fn: |cpu, bus| {
+                cpu.base = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.test_branch(cpu.p.c());
             },
         };
-        &[OP1]
+        const OP2: MicroOp = MicroOp {
+            name: "bcs_add_branch_offset",
+            micro_fn: |cpu, _| {
+                let old_pc = cpu.pc;
+                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                cpu.pc = new_pc;
+                cpu.check_cross_page(old_pc, new_pc);
+            },
+        };
+        const OP3: MicroOp = MicroOp {
+            name: "bcs_add_dummy_read",
+            micro_fn: |cpu, bus| {
+                bus.read(cpu.pc);
+            },
+        };
+        &[OP1, OP2, OP3]
     }
 
     /// N V - B D I Z C
@@ -73,17 +107,34 @@ impl Mnemonic {
     /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Relative        | BEQ $nnnn              | $F0    | 2         | 2+t+p
-    /// 
+    ///
     /// p: =1 if page is crossed.
     /// t: =1 if branch is taken.
     pub(crate) const fn beq() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "beq",
-            micro_fn: |cpu, _| {
-                cpu.test_branch(cpu.p.contains(Status::ZERO));
+            name: "beq_fetch_branch_offset",
+            micro_fn: |cpu, bus| {
+                cpu.base = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.test_branch(cpu.p.z());
             },
         };
-        &[OP1]
+        const OP2: MicroOp = MicroOp {
+            name: "beq_add_branch_offset",
+            micro_fn: |cpu, _| {
+                let old_pc = cpu.pc;
+                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                cpu.pc = new_pc;
+                cpu.check_cross_page(old_pc, new_pc);
+            },
+        };
+        const OP3: MicroOp = MicroOp {
+            name: "beq_add_dummy_read",
+            micro_fn: |cpu, bus| {
+                bus.read(cpu.pc);
+            },
+        };
+        &[OP1, OP2, OP3]
     }
 
     /// N V - B D I Z C
@@ -100,17 +151,34 @@ impl Mnemonic {
     /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Relative        | BMI $nnnn              | $30    | 2         | 2+t+p
-    /// 
+    ///
     /// p: =1 if page is crossed.
     /// t: =1 if branch is taken.
     pub(crate) const fn bmi() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "bmi",
-            micro_fn: |cpu, _| {
-                cpu.test_branch(cpu.p.contains(Status::NEGATIVE));
+            name: "bmi_fetch_branch_offset",
+            micro_fn: |cpu, bus| {
+                cpu.base = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.test_branch(cpu.p.n());
             },
         };
-        &[OP1]
+        const OP2: MicroOp = MicroOp {
+            name: "bmi_add_branch_offset",
+            micro_fn: |cpu, _| {
+                let old_pc = cpu.pc;
+                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                cpu.pc = new_pc;
+                cpu.check_cross_page(old_pc, new_pc);
+            },
+        };
+        const OP3: MicroOp = MicroOp {
+            name: "bmi_add_dummy_read",
+            micro_fn: |cpu, bus| {
+                bus.read(cpu.pc);
+            },
+        };
+        &[OP1, OP2, OP3]
     }
 
     /// N V - B D I Z C
@@ -129,17 +197,34 @@ impl Mnemonic {
     /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Relative        | BNE $nnnn              | $D0    | 2         | 2+t+p
-    /// 
+    ///
     /// p: =1 if page is crossed.
     /// t: =1 if branch is taken.
     pub(crate) const fn bne() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "bne",
-            micro_fn: |cpu, _| {
-                cpu.test_branch(!cpu.p.contains(Status::ZERO));
+            name: "bne_fetch_branch_offset",
+            micro_fn: |cpu, bus| {
+                cpu.base = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.test_branch(!cpu.p.z());
             },
         };
-        &[OP1]
+        const OP2: MicroOp = MicroOp {
+            name: "bne_add_branch_offset",
+            micro_fn: |cpu, _| {
+                let old_pc = cpu.pc;
+                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                cpu.pc = new_pc;
+                cpu.check_cross_page(old_pc, new_pc);
+            },
+        };
+        const OP3: MicroOp = MicroOp {
+            name: "bne_add_dummy_read",
+            micro_fn: |cpu, bus| {
+                bus.read(cpu.pc);
+            },
+        };
+        &[OP1, OP2, OP3]
     }
 
     /// N V - B D I Z C
@@ -160,17 +245,34 @@ impl Mnemonic {
     /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Relative        | BPL $nnnn              | $10    | 2         | 2+t+p
-    /// 
+    ///
     /// p: =1 if page is crossed.
     /// t: =1 if branch is taken.
     pub(crate) const fn bpl() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "bpl",
-            micro_fn: |cpu, _| {
-                cpu.test_branch(!cpu.p.contains(Status::NEGATIVE));
+            name: "bpl_fetch_branch_offset",
+            micro_fn: |cpu, bus| {
+                cpu.base = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.test_branch(!cpu.p.n());
             },
         };
-        &[OP1]
+        const OP2: MicroOp = MicroOp {
+            name: "bpl_add_branch_offset",
+            micro_fn: |cpu, _| {
+                let old_pc = cpu.pc;
+                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                cpu.pc = new_pc;
+                cpu.check_cross_page(old_pc, new_pc);
+            },
+        };
+        const OP3: MicroOp = MicroOp {
+            name: "bpl_add_dummy_read",
+            micro_fn: |cpu, bus| {
+                bus.read(cpu.pc);
+            },
+        };
+        &[OP1, OP2, OP3]
     }
 
     /// N V - B D I Z C
@@ -188,17 +290,34 @@ impl Mnemonic {
     /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Relative        | BVC $nnnn              | $50    | 2         | 2+t+p
-    /// 
+    ///
     /// p: =1 if page is crossed.
     /// t: =1 if branch is taken.
     pub(crate) const fn bvc() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "bvc",
-            micro_fn: |cpu, _| {
-                cpu.test_branch(!cpu.p.contains(Status::OVERFLOW));
+            name: "bvc_fetch_branch_offset",
+            micro_fn: |cpu, bus| {
+                cpu.base = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.test_branch(!cpu.p.v());
             },
         };
-        &[OP1]
+        const OP2: MicroOp = MicroOp {
+            name: "bvc_add_branch_offset",
+            micro_fn: |cpu, _| {
+                let old_pc = cpu.pc;
+                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                cpu.pc = new_pc;
+                cpu.check_cross_page(old_pc, new_pc);
+            },
+        };
+        const OP3: MicroOp = MicroOp {
+            name: "bvc_add_dummy_read",
+            micro_fn: |cpu, bus| {
+                bus.read(cpu.pc);
+            },
+        };
+        &[OP1, OP2, OP3]
     }
 
     /// N V - B D I Z C
@@ -215,16 +334,33 @@ impl Mnemonic {
     /// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Relative        | BVS $nnnn              | $70    | 2         | 2+t+p
-    /// 
+    ///
     /// p: =1 if page is crossed.
     /// t: =1 if branch is taken.
     pub(crate) const fn bvs() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "bvs",
-            micro_fn: |cpu, _| {
-                cpu.test_branch(cpu.p.contains(Status::OVERFLOW));
+            name: "bvs_fetch_branch_offset",
+            micro_fn: |cpu, bus| {
+                cpu.base = bus.read(cpu.pc);
+                cpu.incr_pc();
+                cpu.test_branch(cpu.p.v());
             },
         };
-        &[OP1]
+        const OP2: MicroOp = MicroOp {
+            name: "bvs_add_branch_offset",
+            micro_fn: |cpu, _| {
+                let old_pc = cpu.pc;
+                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                cpu.pc = new_pc;
+                cpu.check_cross_page(old_pc, new_pc);
+            },
+        };
+        const OP3: MicroOp = MicroOp {
+            name: "bvs_add_dummy_read",
+            micro_fn: |cpu, bus| {
+                bus.read(cpu.pc);
+            },
+        };
+        &[OP1, OP2, OP3]
     }
 }

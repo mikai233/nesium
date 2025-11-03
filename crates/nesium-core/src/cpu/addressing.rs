@@ -256,11 +256,7 @@ impl Addressing {
             // ─────────────────────────────────────────────────────────────────────
             //  Relative (branch instructions)
             // ─────────────────────────────────────────────────────────────────────
-            Addressing::Relative => {
-                // Cycle 2: read signed offset → rel_offset, PC++
-                const REL: [MicroOp; 1] = [MicroOp::fetch_rel_offset()];
-                &REL
-            }
+            Addressing::Relative => &[],
         }
     }
 

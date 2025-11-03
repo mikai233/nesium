@@ -1,7 +1,7 @@
 use crate::cpu::{
     micro_op::MicroOp,
     mnemonic::Mnemonic,
-    status::{BIT_0, BIT_5, BIT_6, BIT_7, Status},
+    status::{BIT_0, BIT_5, BIT_6, BIT_7},
 };
 
 impl Mnemonic {
@@ -41,35 +41,38 @@ impl Mnemonic {
     /// p: =1 if page is crossed.
     pub(crate) const fn adc() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "adc",
+            name: "adc_binary",
             micro_fn: |cpu, bus| {
+                // 1. Fetch Operand
                 let m = bus.read(cpu.effective_addr);
+
+                // 2. Calculate Sum
                 let carry_in = if cpu.p.c() { 1 } else { 0 };
                 let sum = cpu.a as u16 + m as u16 + carry_in as u16;
 
-                // Binary mode (default)
-                let mut result = sum as u8;
-                let mut carry_out = sum > 0xFF;
+                // --- Binary Mode (Standard 6502/2A03 Operation) ---
+                // NES's 2A03 CPU ignores the Decimal flag, so we always execute Binary addition.
 
-                // Decimal mode (BCD correction)
-                if cpu.p.d() {
-                    let mut lo = (cpu.a & 0x0F) + (m & 0x0F) + carry_in;
-                    let mut hi = (cpu.a >> 4) + (m >> 4);
-                    if lo > 9 {
-                        lo = lo + 6;
-                        hi += 1;
-                    }
-                    if hi > 9 {
-                        hi = hi + 6;
-                    }
-                    result = ((hi << 4) | (lo & 0x0F)) & 0xFF;
-                    carry_out = hi > 15;
-                }
+                let result = sum as u8;
+                let carry_out = sum > 0xFF;
 
-                // Set flags
+                // 3. Set Flags and Update Accumulator
+
+                // C: Carry Flag (Set if sum > 255)
                 cpu.p.set_c(carry_out);
+
+                // V: Overflow Flag (Set if signed addition crosses the +/- 127 boundary)
+                // (A^M) & 0x80: checks if operands have different signs (0: same sign)
+                // (A^Result) & 0x80: checks if A and result have different signs (1: signs crossed)
+                // Overflow occurs only if Operands have SAME sign AND the Result has a DIFFERENT sign.
+                // Simplified check for overflow: ((A^M) & 0x80) == 0 && ((A^R) & 0x80) != 0
+                // Your original calculation is a common alternative and should be fine:
                 cpu.p.set_v((!(cpu.a ^ m) & (cpu.a ^ result) & BIT_7) != 0);
+
+                // Update Accumulator
                 cpu.a = result;
+
+                // Z/N: Zero and Negative Flags
                 cpu.p.set_zn(result);
             },
         };
@@ -141,25 +144,29 @@ impl Mnemonic {
     /// *Undocumented.
     pub(crate) const fn arr() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "arr",
+            name: "arr_binary",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
+
+                // 1. A = A & M
                 cpu.a &= m;
+
+                // 2. ROR through Carry
                 let carry_in = if cpu.p.c() { BIT_7 } else { 0 };
-                let old = cpu.a;
                 cpu.a = (cpu.a >> 1) | carry_in;
+
+                // 3. Set Flags (Always Binary Mode for 2A03)
+
+                // N/Z: Standard setting based on final A
                 cpu.p.set_n(cpu.a & BIT_7 != 0);
                 cpu.p.set_z(cpu.a == 0);
-                if cpu.p.d() {
-                    // Decimal mode
-                    cpu.p.set_v((old & BIT_6) != (cpu.a & BIT_6));
-                    let c_calc = (m & 0xF0).wrapping_add(m & 0x10);
-                    cpu.p.set_c(c_calc > 0x50);
-                } else {
-                    // Binary mode
-                    cpu.p.set_v((cpu.a & BIT_6 != 0) ^ (cpu.a & BIT_5 != 0));
-                    cpu.p.set_c(cpu.a & BIT_6 != 0);
-                }
+
+                // V: V = (Result Bit 6) XOR (Result Bit 5)
+                // We use your original V flag logic, which is standard for ARR in binary mode.
+                cpu.p.set_v(((cpu.a & BIT_6) != 0) ^ ((cpu.a & BIT_5) != 0));
+
+                // C: C = Result Bit 6 (This is the specific, non-standard behavior for ARR's C flag)
+                cpu.p.set_c(cpu.a & BIT_6 != 0);
             },
         };
         &[OP1]
@@ -537,29 +544,71 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn rra() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "rra",
-            micro_fn: |cpu, bus| {
-                let mut m = bus.read(cpu.effective_addr);
-                let carry_in = if cpu.p.contains(Status::CARRY) {
-                    0x80
-                } else {
-                    0
-                };
-                cpu.p.set_c(m & 0x01 != 0);
-                m = (m >> 1) | carry_in;
-                bus.write(cpu.effective_addr, m);
-
-                let carry = if cpu.p.contains(Status::CARRY) { 1 } else { 0 };
-                let sum = cpu.a as u16 + m as u16 + carry as u16;
-                let result = sum as u8;
-                cpu.p.set_c(sum > 0xFF);
-                cpu.p.set_v(((cpu.a ^ result) & (m ^ result) & 0x80) != 0);
-                cpu.a = result;
-                cpu.p.set_zn(result);
+        &[
+            // T5: Read Old Value (R)
+            MicroOp {
+                name: "rra_read_old",
+                // Bus: READ V_old from M(effective_addr).
+                // Internal: Store V_old in cpu.base for modification.
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr); // V_old (M)
+                },
             },
-        };
-        &[OP1]
+            // T6: Dummy Write Old Value (W_dummy) & Internal ROR Calculation
+            MicroOp {
+                name: "rra_dummy_write_ror_calc",
+                // Bus: WRITE V_old back to M(effective_addr). (Cycle Burn/Dummy Write).
+                // Internal: Perform ROR calculation. cpu.base now holds M' (new value).
+                micro_fn: |cpu, bus| {
+                    let m_old = cpu.base;
+                    bus.write(cpu.effective_addr, m_old); // Dummy write of V_old
+
+                    // --- ROR Calculation ---
+                    let carry_in = if cpu.p.c() {
+                        BIT_7 // Old Carry bit rotates into Bit 7
+                    } else {
+                        0
+                    };
+
+                    // Old Bit 0 becomes the new Carry flag
+                    cpu.p.set_c(m_old & BIT_0 != 0);
+
+                    // Perform the Rotate Right
+                    let m_new = (m_old >> 1) | carry_in;
+
+                    cpu.base = m_new; // cpu.base now holds M'
+                },
+            },
+            // T7: Final Write New Value (W_new) & ADC Execution
+            MicroOp {
+                name: "rra_final_write_adc_exec",
+                // Bus: WRITE M' (V_new) to M(effective_addr).
+                // Internal: Perform ADC calculation (A = A + M' + C) and set all flags (Z/N/V/C).
+                micro_fn: |cpu, bus| {
+                    let m_prime = cpu.base; // M' (New ROR value)
+                    bus.write(cpu.effective_addr, m_prime); // Final write of M' (RRA's RMW part complete)
+
+                    // --- ADC Execution ---
+                    // ADC operates on M' (the value just written)
+                    let carry = if cpu.p.c() { 1 } else { 0 };
+                    let sum = cpu.a as u16 + m_prime as u16 + carry as u16;
+                    let result = sum as u8;
+
+                    // V Flag calculation (Standard ADC)
+                    // (A^R) & (M'^R) & 0x80 -> Check if signs crossed when adding same-sign numbers
+                    // Since M' is involved in the V calculation, this must occur after ROR.
+                    cpu.p
+                        .set_v(((cpu.a ^ result) & (m_prime ^ result) & BIT_7) != 0);
+
+                    // C Flag calculation (Standard ADC)
+                    cpu.p.set_c(sum > 0xFF);
+
+                    // Final A and Z/N update
+                    cpu.a = result;
+                    cpu.p.set_zn(result);
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -600,39 +649,43 @@ impl Mnemonic {
     /// p: =1 if page is crossed.
     pub(crate) const fn sbc() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "sbc",
+            name: "sbc_binary",
+            // Micro-Op for SBC (Subtract with Carry) - Single cycle for execution, assuming effective_addr is ready.
             micro_fn: |cpu, bus| {
+                // 1. Fetch Operand
                 let m = bus.read(cpu.effective_addr);
+
+                // 2. Calculate Sum (using 2's complement addition: A + ~M + C)
                 let carry_in = if cpu.p.c() { 1 } else { 0 };
 
-                // NOTE:
-                // SBC performs A = A - M - (1 - C)
-                // which is equivalent to: A + (~M) + C
+                // Invert M to get ~M (one's complement)
                 let value = (!m) as u16;
+
+                // Perform the addition: A + ~M + C
                 let sum = cpu.a as u16 + value + carry_in as u16;
 
-                let mut result = sum as u8;
-                let mut carry_out = sum > 0xFF;
+                // --- Binary Mode (Standard 6502/2A03 Operation) ---
+                let result = sum as u8;
 
-                // Decimal (BCD) correction
-                if cpu.p.d() {
-                    let mut lo = (cpu.a & 0x0F).wrapping_sub((m & 0x0F) + (1 - carry_in));
-                    let mut hi = (cpu.a >> 4).wrapping_sub((m >> 4) & 0x0F);
-                    if (lo as i8) < 0 {
-                        lo = lo.wrapping_sub(6);
-                        hi = hi.wrapping_sub(1);
-                    }
-                    if (hi as i8) < 0 {
-                        hi = hi.wrapping_sub(6);
-                    }
-                    result = ((hi << 4) | (lo & 0x0F)) & 0xFF;
-                    carry_out = hi < 0x10;
-                }
+                // C: Carry Flag (Set if sum > 255).
+                // In subtraction, Carry means NO borrow occurred, i.e., A >= M.
+                let carry_out = sum > 0xFF;
 
-                // Update flags
+                // 3. Set Flags and Update Accumulator
+
+                // V: Overflow Flag (Set if signed subtraction crosses the +/- 127 boundary)
+                // SBC V-flag: ((A^Result) & (~M ^ Result) & 0x80) != 0
+                // Note: We use ~M (value) in the calculation.
+                cpu.p
+                    .set_v(((cpu.a ^ result) & (value as u8 ^ result) & BIT_7) != 0);
+
+                // C: Carry Flag (Set if no borrow)
                 cpu.p.set_c(carry_out);
-                cpu.p.set_v(((cpu.a ^ result) & (!m ^ result) & BIT_7) != 0);
+
+                // Update Accumulator
                 cpu.a = result;
+
+                // Z/N: Zero and Negative Flags
                 cpu.p.set_zn(result);
             },
         };
@@ -705,26 +758,53 @@ impl Mnemonic {
     /// *Undocumented.
     pub(crate) const fn slo() -> &'static [MicroOp] {
         &[
+            // T5: Read Old Value (R)
             MicroOp {
-                name: "slo_read",
+                name: "slo_read_old",
+                // Bus: READ V_old from M(effective_addr).
+                // Internal: Store V_old in cpu.base for modification.
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.effective_addr);
+                    cpu.base = bus.read(cpu.effective_addr); // V_old (M)
                 },
             },
+            // T6: Dummy Write Old Value (W_dummy) & Internal ASL Calculation
             MicroOp {
-                name: "slo_dummy_write",
+                name: "slo_dummy_write_asl_calc",
+                // Bus: WRITE V_old back to M(effective_addr). (Cycle Burn/Dummy Write).
+                // Internal: Perform ASL (Shift Left) calculation. cpu.base now holds M' (new value).
                 micro_fn: |cpu, bus| {
-                    bus.write(cpu.effective_addr, cpu.base);
+                    let m_old = cpu.base;
+                    bus.write(cpu.effective_addr, m_old); // Dummy write of V_old
+
+                    // --- ASL Calculation (Shift Left) ---
+
+                    // Old Bit 7 becomes the new Carry flag
+                    cpu.p.set_c(m_old & BIT_7 != 0);
+
+                    // Perform the Arithmetic Shift Left (Bit 0 gets 0, Bit 7 goes to C)
+                    let m_new = m_old.wrapping_mul(2); // m_old << 1
+
+                    cpu.base = m_new; // cpu.base now holds M'
                 },
             },
+            // T7: Final Write New Value (W_new) & ORA Execution
             MicroOp {
-                name: "slo_ora",
+                name: "slo_final_write_ora_exec",
+                // Bus: WRITE M' (V_new) to M(effective_addr).
+                // Internal: Perform ORA operation (A = A | M') and set N/Z flags.
                 micro_fn: |cpu, bus| {
-                    let mut m = bus.read(cpu.effective_addr);
-                    cpu.p.set_c(m & BIT_7 != 0);
-                    m <<= 1;
-                    cpu.a |= m;
-                    cpu.p.set_zn(cpu.a);
+                    let m_prime = cpu.base; // M' (New ASL value)
+                    bus.write(cpu.effective_addr, m_prime); // Final write of M' (SLO's RMW part complete)
+
+                    // --- ORA Execution ---
+                    // ORA operates on A and M' (the value just written)
+
+                    // A = A | M'
+                    let result = cpu.a | m_prime;
+
+                    // Final A and Z/N update
+                    cpu.a = result;
+                    cpu.p.set_zn(result);
                 },
             },
         ]
@@ -760,26 +840,53 @@ impl Mnemonic {
     /// *Undocumented.
     pub(crate) const fn sre() -> &'static [MicroOp] {
         &[
+            // T5: Read Old Value (R)
             MicroOp {
-                name: "sre_read",
+                name: "sre_read_old",
+                // Bus: READ V_old from M(effective_addr).
+                // Internal: Store V_old in cpu.base for modification.
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.effective_addr);
+                    cpu.base = bus.read(cpu.effective_addr); // V_old (M)
                 },
             },
+            // T6: Dummy Write Old Value (W_dummy) & Internal LSR Calculation
             MicroOp {
-                name: "sre_dummy_write",
+                name: "sre_dummy_write_lsr_calc",
+                // Bus: WRITE V_old back to M(effective_addr). (Cycle Burn/Dummy Write).
+                // Internal: Perform LSR (Shift Right) calculation. cpu.base now holds M' (new value).
                 micro_fn: |cpu, bus| {
-                    bus.write(cpu.effective_addr, cpu.base);
+                    let m_old = cpu.base;
+                    bus.write(cpu.effective_addr, m_old); // Dummy write of V_old
+
+                    // --- LSR Calculation (Logical Shift Right) ---
+
+                    // Old Bit 0 becomes the new Carry flag
+                    cpu.p.set_c(m_old & BIT_0 != 0);
+
+                    // Perform the Logical Shift Right (Bit 7 gets 0, Bit 0 goes to C)
+                    let m_new = m_old >> 1;
+
+                    cpu.base = m_new; // cpu.base now holds M'
                 },
             },
+            // T7: Final Write New Value (W_new) & EOR Execution
             MicroOp {
-                name: "sre_eor",
+                name: "sre_final_write_eor_exec",
+                // Bus: WRITE M' (V_new) to M(effective_addr).
+                // Internal: Perform EOR operation (A = A ^ M') and set N/Z flags.
                 micro_fn: |cpu, bus| {
-                    let mut m = bus.read(cpu.effective_addr);
-                    cpu.p.set_c(m & BIT_0 != 0);
-                    m >>= 1;
-                    cpu.a ^= m;
-                    cpu.p.set_zn(cpu.a);
+                    let m_prime = cpu.base; // M' (New LSR value)
+                    bus.write(cpu.effective_addr, m_prime); // Final write of M' (SRE's RMW part complete)
+
+                    // --- EOR Execution ---
+                    // EOR operates on A and M' (the value just written)
+
+                    // A = A ^ M'
+                    let result = cpu.a ^ m_prime;
+
+                    // Final A and Z/N update
+                    cpu.a = result;
+                    cpu.p.set_zn(result);
                 },
             },
         ]
