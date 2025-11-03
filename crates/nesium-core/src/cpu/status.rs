@@ -104,6 +104,18 @@ impl Status {
         self.set(Status::CARRY, value);
     }
 
+    /// Update carry flag (D) using bitflags API
+    #[inline]
+    pub fn set_d(&mut self, value: bool) {
+        self.set(Status::DECIMAL, value);
+    }
+
+    /// Update carry flag (I) using bitflags API
+    #[inline]
+    pub fn set_i(&mut self, value: bool) {
+        self.set(Status::INTERRUPT, value);
+    }
+
     /// Reset N flag (always for LSR)
     #[inline]
     pub fn reset_n(&mut self) {

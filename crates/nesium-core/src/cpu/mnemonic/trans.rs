@@ -1,7 +1,4 @@
-use crate::{
-    bus::Bus,
-    cpu::{micro_op::MicroOp, mnemonic::Mnemonic},
-};
+use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic};
 
 impl Mnemonic {
     /// NV-BDIZC
@@ -208,10 +205,7 @@ impl Mnemonic {
 
 #[cfg(test)]
 mod trans_tests {
-    use crate::{
-        bus::Bus,
-        cpu::mnemonic::{Mnemonic, tests::InstrTest},
-    };
+    use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
 
     #[test]
     fn test_shs() {

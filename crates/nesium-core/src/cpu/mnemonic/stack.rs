@@ -1,5 +1,37 @@
+//! # NES/Ricoh 2A03 CPU Emulation: Cycle-Accurate Stack Operations
+//!
+//! This module implements the cycle-accurate behavior of stack PUSH (PHA, PHP)
+//! and PULL (PLA, PLP) instructions for the NMOS 6502 architecture (used in the NES/Famicom).
+//!
+//! Due to the 6502's design constraint—requiring a bus access on *every* clock cycle—
+//! internal operations (like register setup or pointer arithmetic) are often "filled"
+//! with dummy memory reads or writes. This leads to the non-obvious cycle counts.
+//!
+//! ## 1. PUSH Operations (PHA, PHP) - 3 Cycles Total
+//!
+//! PUSH operations (Write to Stack) require one extra cycle for internal setup, resulting in 3 total cycles:
+//!
+//! | Cycle | Bus Action | Address (A) | Data (D) | Purpose                                                      |
+//! |-------|------------|-------------|----------|--------------------------------------------------------------|
+//! | T1    | Read       | PC          | Opcode   | Fetch the opcode. PC increments.                             |
+//! | T2    | Read       | PC + 1      | Junk     | **Internal Setup:** CPU prepares data/address; performs a dummy read from the program counter's next byte (data is discarded). |
+//! | T3    | Write      | $01XX       | P/A      | **Execute:** Write data to the Stack; Stack Pointer (SP) decrements. |
+//!
+//! ## 2. PULL Operations (PLA, PLP) - 4 Cycles Total
+//!
+//! PULL operations (Read from Stack) require two extra cycles: one for setup and one for Stack Pointer increment, resulting in 4 total cycles:
+//!
+//! | Cycle | Bus Action | Address (A) | Data (D) | Purpose                                                      |
+//! |-------|------------|-------------|----------|--------------------------------------------------------------|
+//! | T1    | Read       | PC          | Opcode   | Fetch the opcode. PC increments.                             |
+//! | T2    | Read       | PC + 1      | Junk     | **Internal Setup:** CPU prepares to operate. Dummy read from PC+1 (data is discarded). |
+//! | T3    | Read       | $01XX       | Junk     | **SP Increment:** CPU increments SP; performs a dummy read from the *old* stack address (data is discarded). |
+//! | T4    | Read       | $01XX+1     | Data     | **Execute:** Pull data from the *new* stack address into the target register (A or P). |
+//!
+//! **Warning:** For cycle-accurate NES emulation, especially when handling Memory-Mapped I/O (MMIO) like the PPU/APU registers, these dummy memory accesses (T2, T3) must be simulated, as they consume crucial clock cycles.
+
 use crate::{
-    bus::{Bus, STACK_ADDR},
+    bus::STACK_ADDR,
     cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status},
 };
 
@@ -148,7 +180,7 @@ impl Mnemonic {
             name: "plp_dummy_read2",
             micro_fn: |cpu, bus| {
                 // Cycle 2: Dummy read from current stack location
-                let _ = bus.read(0x0100 | cpu.s as u16);
+                let _ = bus.read(STACK_ADDR | cpu.s as u16);
             },
         };
         const OP3: MicroOp = MicroOp {
@@ -173,7 +205,7 @@ impl Mnemonic {
 #[cfg(test)]
 mod test_stack {
     use crate::{
-        bus::{Bus, STACK_ADDR},
+        bus::STACK_ADDR,
         cpu::{
             mnemonic::{Mnemonic, tests::InstrTest},
             status::Status,

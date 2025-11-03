@@ -1,10 +1,7 @@
-use crate::{
-    bus::Bus,
-    cpu::{
-        micro_op::MicroOp,
-        mnemonic::Mnemonic,
-        status::{BIT_5, BIT_6, BIT_7, Status},
-    },
+use crate::cpu::{
+    micro_op::MicroOp,
+    mnemonic::Mnemonic,
+    status::{BIT_0, BIT_5, BIT_6, BIT_7, Status},
 };
 
 impl Mnemonic {
@@ -195,7 +192,7 @@ impl Mnemonic {
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
                 cpu.a &= m;
-                cpu.p.set_c(cpu.a & 0x01 != 0);
+                cpu.p.set_c(cpu.a & BIT_0 != 0);
                 cpu.a >>= 1;
                 cpu.p.set_zn(cpu.a);
             },
@@ -345,17 +342,49 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn dcp() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "dcp",
-            micro_fn: |cpu, bus| {
-                let mut m = bus.read(cpu.effective_addr);
-                m = m.wrapping_sub(1);
-                bus.write(cpu.effective_addr, m);
-                cpu.p.set_c(cpu.a >= m);
-                cpu.p.set_zn(cpu.a.wrapping_sub(m));
+        &[
+            // T4: Read Old Value (R)
+            MicroOp {
+                name: "dcp_read_old",
+                // Bus: READ V_old from M(effective_addr)
+                // Internal: Store V_old in a temporary register (here, cpu.base)
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        &[OP1]
+            // T5: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
+            MicroOp {
+                name: "dcp_dummy_write_dec",
+                // Bus: WRITE V_old back to M(effective_addr) (The "dummy" cycle to burn time)
+                // Internal: DEC calculation is performed. cpu.base now holds V_new.
+                micro_fn: |cpu, bus| {
+                    bus.write(cpu.effective_addr, cpu.base); // Dummy write of the old value
+
+                    // Internal operation: Calculate the new value (V_new = V_old - 1)
+                    cpu.base = cpu.base.wrapping_sub(1);
+                    // The DEC result (V_new) is temporarily held in cpu.base
+                },
+            },
+            // T6: Final Write New Value (W_new) & Internal CMP Operation
+            MicroOp {
+                name: "dcp_final_write_cmp",
+                // Bus: WRITE V_new to M(effective_addr). This completes the DEC part.
+                // Internal: Simultaneously perform CMP (A - V_new) and set flags.
+                micro_fn: |cpu, bus| {
+                    // Final Write: The correct, decremented value is written to memory.
+                    bus.write(cpu.effective_addr, cpu.base);
+
+                    // Internal Operation: Perform CMP (A - M) and update status flags (N, Z, C).
+                    let m = cpu.base; // m is the decremented value (V_new)
+
+                    // Carry flag (C): Set if A >= M (No Borrow)
+                    cpu.p.set_c(cpu.a >= m);
+
+                    // Negative (N) and Zero (Z) flags: Set based on the result of A - M
+                    cpu.p.set_zn(cpu.a.wrapping_sub(m));
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -388,24 +417,37 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn isc() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "isc",
-            micro_fn: |cpu, bus| {
-                let mut m = bus.read(cpu.effective_addr);
-                m = m.wrapping_add(1);
-                bus.write(cpu.effective_addr, m);
-
-                let m = m ^ 0xFF;
-                let carry = if cpu.p.contains(Status::CARRY) { 1 } else { 0 };
-                let sum = cpu.a as u16 + m as u16 + carry as u16;
-                let result = sum as u8;
-                cpu.p.set_c(sum > 0xFF);
-                cpu.p.set_v(((cpu.a ^ result) & (!m ^ result) & 0x80) != 0);
-                cpu.a = result;
-                cpu.p.set_zn(result);
+        &[
+            MicroOp {
+                name: "isc_read",
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        &[OP1]
+            MicroOp {
+                name: "isc_dummy_write",
+                micro_fn: |cpu, bus| {
+                    bus.write(cpu.effective_addr, cpu.base);
+                },
+            },
+            MicroOp {
+                name: "isc_sbc",
+                micro_fn: |cpu, bus| {
+                    let mut m = bus.read(cpu.effective_addr);
+                    m = m.wrapping_add(1);
+                    let m_inv = !m;
+                    let carry = if cpu.p.c() { 1 } else { 0 };
+                    let sum = cpu.a as u16 + m_inv as u16 + carry as u16;
+                    let result = sum as u8;
+
+                    cpu.p.set_c(sum > 0xFF);
+                    cpu.p
+                        .set_v(((cpu.a ^ result) & (m_inv ^ result) & BIT_7) != 0);
+                    cpu.a = result;
+                    cpu.p.set_zn(result);
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -437,19 +479,31 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn rla() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "rla",
-            micro_fn: |cpu, bus| {
-                let mut m = bus.read(cpu.effective_addr);
-                let carry_in = if cpu.p.contains(Status::CARRY) { 1 } else { 0 };
-                cpu.p.set_c(m & 0x80 != 0);
-                m = (m << 1) | carry_in;
-                bus.write(cpu.effective_addr, m);
-                cpu.a &= m;
-                cpu.p.set_zn(cpu.a);
+        &[
+            MicroOp {
+                name: "rla_read",
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        &[OP1]
+            MicroOp {
+                name: "rla_dummy_write",
+                micro_fn: |cpu, bus| {
+                    bus.write(cpu.effective_addr, cpu.base);
+                },
+            },
+            MicroOp {
+                name: "rla_and",
+                micro_fn: |cpu, bus| {
+                    let m = bus.read(cpu.effective_addr);
+                    let carry_in = if cpu.p.c() { 1 } else { 0 };
+                    cpu.p.set_c(m & BIT_7 != 0);
+                    let m = (m << 1) | carry_in;
+                    cpu.a &= m;
+                    cpu.p.set_zn(cpu.a);
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -650,18 +704,30 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn slo() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "slo",
-            micro_fn: |cpu, bus| {
-                let mut m = bus.read(cpu.effective_addr);
-                cpu.p.set_c(m & 0x80 != 0);
-                m <<= 1;
-                bus.write(cpu.effective_addr, m);
-                cpu.a |= m;
-                cpu.p.set_zn(cpu.a);
+        &[
+            MicroOp {
+                name: "slo_read",
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        &[OP1]
+            MicroOp {
+                name: "slo_dummy_write",
+                micro_fn: |cpu, bus| {
+                    bus.write(cpu.effective_addr, cpu.base);
+                },
+            },
+            MicroOp {
+                name: "slo_ora",
+                micro_fn: |cpu, bus| {
+                    let mut m = bus.read(cpu.effective_addr);
+                    cpu.p.set_c(m & BIT_7 != 0);
+                    m <<= 1;
+                    cpu.a |= m;
+                    cpu.p.set_zn(cpu.a);
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -693,18 +759,30 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn sre() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "sre",
-            micro_fn: |cpu, bus| {
-                let mut m = bus.read(cpu.effective_addr);
-                cpu.p.set_c(m & 0x01 != 0);
-                m >>= 1;
-                bus.write(cpu.effective_addr, m);
-                cpu.a ^= m;
-                cpu.p.set_zn(cpu.a);
+        &[
+            MicroOp {
+                name: "sre_read",
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        &[OP1]
+            MicroOp {
+                name: "sre_dummy_write",
+                micro_fn: |cpu, bus| {
+                    bus.write(cpu.effective_addr, cpu.base);
+                },
+            },
+            MicroOp {
+                name: "sre_eor",
+                micro_fn: |cpu, bus| {
+                    let mut m = bus.read(cpu.effective_addr);
+                    cpu.p.set_c(m & BIT_0 != 0);
+                    m >>= 1;
+                    cpu.a ^= m;
+                    cpu.p.set_zn(cpu.a);
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -756,7 +834,7 @@ impl Mnemonic {
 mod arith_tests {
     use crate::cpu::{
         mnemonic::{Mnemonic, tests::InstrTest},
-        status::BIT_7,
+        status::{BIT_0, BIT_7},
     };
 
     #[test]
@@ -801,6 +879,371 @@ mod arith_tests {
 
             // Negative / Zero flags
             verify.check_nz(cpu.p, v);
+        });
+    }
+
+    #[test]
+    fn test_asr() {
+        InstrTest::new(Mnemonic::ASR).test(|verify, cpu, _| {
+            let mut v = verify.cpu.a & verify.m;
+            v >>= 1;
+            assert_eq!(cpu.a, v);
+            let original_low_bit = (verify.cpu.a & verify.m) & 1;
+            assert_eq!(cpu.p.c(), original_low_bit != 0);
+            verify.check_nz(cpu.p, v);
+        });
+    }
+
+    #[test]
+    fn test_cmp() {
+        InstrTest::new(Mnemonic::CMP).test(|verify, cpu, _| {
+            // Step 1: Simulate (A - M) operation without storing the result
+            let result = verify.cpu.a.wrapping_sub(verify.m);
+
+            // Step 2: Verify processor flags
+            // Carry = 1 if A >= M
+            let carry = verify.cpu.a >= verify.m;
+            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
+
+            // Zero = 1 if A == M
+            let zero = verify.cpu.a == verify.m;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            // Negative = bit 7 of (A - M)
+            let negative = result & BIT_7 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            // Step 3: Ensure accumulator remains unchanged
+            assert_eq!(cpu.a, verify.cpu.a, "Accumulator should remain unchanged");
+
+            // Step 4: Cross-check N/Z flags with helper
+            verify.check_nz(cpu.p, result);
+        });
+    }
+
+    #[test]
+    fn test_cpx() {
+        InstrTest::new(Mnemonic::CPX).test(|verify, cpu, _| {
+            // Step 1: Simulate (X - M) operation
+            let (result, _borrow) = verify.cpu.x.overflowing_sub(verify.m);
+
+            // Step 2: Verify processor flags
+            // Carry = 1 if X >= M
+            let carry = verify.cpu.x >= verify.m;
+            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
+
+            // Zero = 1 if X == M
+            let zero = verify.cpu.x == verify.m;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            // Negative = bit 7 of (X - M)
+            let negative = result & BIT_7 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            // Step 3: Ensure register X remains unchanged
+            assert_eq!(cpu.x, verify.cpu.x, "Register X should remain unchanged");
+
+            // Step 4: Cross-check N/Z flags using helper
+            verify.check_nz(cpu.p, result);
+        });
+    }
+
+    #[test]
+    fn test_cpy() {
+        InstrTest::new(Mnemonic::CPY).test(|verify, cpu, _| {
+            // Step 1: Simulate (Y - M) operation
+            let (result, _borrow) = verify.cpu.y.overflowing_sub(verify.m);
+
+            // Step 2: Verify processor flags
+            // Carry = 1 if Y >= M
+            let carry = verify.cpu.y >= verify.m;
+            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
+
+            // Zero = 1 if Y == M
+            let zero = verify.cpu.y == verify.m;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            // Negative = bit 7 of (Y - M)
+            let negative = result & BIT_7 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            // Step 3: Ensure register Y remains unchanged
+            assert_eq!(cpu.y, verify.cpu.y, "Register Y should remain unchanged");
+
+            // Step 4: Cross-check N/Z flags using helper
+            verify.check_nz(cpu.p, result);
+        });
+    }
+
+    #[test]
+    fn test_dcp() {
+        InstrTest::new(Mnemonic::DCP).test(|verify, cpu, bus| {
+            // Step 1: Decrement memory value (simulate DEC M)
+            let new_m = verify.m.wrapping_sub(1);
+
+            // Step 2: Perform CMP A, new_m
+            let (result, _borrow) = verify.cpu.a.overflowing_sub(new_m);
+
+            // Step 3: Verify processor flags for CMP part
+            // Carry = 1 if A >= new_m
+            let carry = verify.cpu.a >= new_m;
+            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
+
+            // Zero = 1 if A == new_m
+            let zero = verify.cpu.a == new_m;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            // Negative = bit 7 of (A - new_m)
+            let negative = result & BIT_7 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            // Step 4: Verify memory has been decremented
+            assert_eq!(bus.read(verify.addr), new_m, "Memory was not decremented");
+
+            // Step 5: Accumulator remains unchanged
+            assert_eq!(cpu.a, verify.cpu.a, "Accumulator should remain unchanged");
+
+            // Step 6: Optional: cross-check N/Z flags
+            verify.check_nz(cpu.p, result);
+        });
+    }
+
+    #[test]
+    fn test_isc() {
+        InstrTest::new(Mnemonic::ISC).test(|verify, cpu, bus| {
+            // Step 1: Increment memory value (simulate INC M)
+            let new_m = verify.m.wrapping_add(1);
+
+            // Step 2: Perform SBC A, new_m
+            // In 6502: SBC = A - M - (1 - C)
+            let carry_in = if verify.cpu.p.c() { 1 } else { 0 };
+            let sbc_result = verify.cpu.a.wrapping_sub(new_m).wrapping_sub(1 - carry_in);
+
+            // Step 3: Update flags for SBC
+            // Carry = 1 if no borrow occurred (A >= new_m + (1 - C))
+            let carry = (verify.cpu.a as u16) >= (new_m as u16 + (1 - carry_in) as u16);
+            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
+
+            // Zero = 1 if result == 0
+            let zero = sbc_result == 0;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            // Negative = bit 7 of result
+            let negative = sbc_result & BIT_7 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            // Overflow = signed overflow detection
+            let overflow = ((verify.cpu.a ^ sbc_result) & (new_m ^ sbc_result) & BIT_7) != 0;
+            assert_eq!(cpu.p.v(), overflow, "Overflow flag mismatch");
+
+            // Step 4: Verify memory has been incremented
+            assert_eq!(bus.read(verify.addr), new_m, "Memory was not incremented");
+
+            // Step 5: Accumulator updated correctly
+            assert_eq!(cpu.a, sbc_result, "Accumulator mismatch after SBC");
+
+            // Step 6: Optional: cross-check N/Z flags
+            verify.check_nz(cpu.p, sbc_result);
+        });
+    }
+
+    #[test]
+    fn test_rla() {
+        InstrTest::new(Mnemonic::RLA).test(|verify, cpu, bus| {
+            // Step 1: Rotate memory left through carry
+            let old_carry = if verify.cpu.p.c() { 1 } else { 0 };
+            let mut rotated = (verify.m << 1) | old_carry;
+            rotated &= 0xFF; // ensure 8-bit
+            let new_carry = (verify.m & BIT_7) != 0;
+
+            // Step 2: Update memory with rotated value
+            assert_eq!(
+                bus.read(verify.addr),
+                rotated,
+                "Memory not rotated correctly"
+            );
+
+            // Step 3: AND accumulator with rotated memory
+            let result = verify.cpu.a & rotated;
+
+            // Step 4: Update accumulator
+            assert_eq!(cpu.a, result, "Accumulator not ANDed correctly");
+
+            // Step 5: Verify flags
+            // Carry = bit7 of original memory
+            assert_eq!(cpu.p.c(), new_carry, "Carry flag mismatch");
+
+            // Negative = bit7 of result
+            let negative = result & BIT_7 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            // Zero = 1 if result is zero
+            let zero = result == 0;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            // Optional: cross-check N/Z flags using helper
+            verify.check_nz(cpu.p, result);
+        });
+    }
+
+    #[test]
+    fn test_rra() {
+        InstrTest::new(Mnemonic::RRA).test(|verify, cpu, bus| {
+            // Step 1: Rotate memory right through carry
+            let old_carry = if verify.cpu.p.c() { 1 } else { 0 };
+            let new_carry = (verify.m & BIT_0) != 0; // bit0 goes into carry
+            let rotated = (old_carry << 7) | (verify.m >> 1);
+
+            // Step 2: Verify memory has been rotated
+            assert_eq!(
+                bus.read(verify.addr),
+                rotated,
+                "Memory not rotated correctly"
+            );
+
+            // Step 3: Perform SBC: A - rotated - (1 - C)
+            let carry_in = if verify.cpu.p.c() { 1 } else { 0 };
+            let sbc_result = verify
+                .cpu
+                .a
+                .wrapping_sub(rotated)
+                .wrapping_sub(1 - carry_in);
+
+            // Step 4: Verify accumulator result
+            assert_eq!(cpu.a, sbc_result, "Accumulator mismatch after SBC");
+
+            // Step 5: Verify flags
+            // Carry = 1 if no borrow occurred
+            let carry = (verify.cpu.a as u16) >= (rotated as u16 + (1 - carry_in) as u16);
+            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
+
+            // Zero = 1 if result == 0
+            let zero = sbc_result == 0;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            // Negative = bit7 of result
+            let negative = sbc_result & BIT_7 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            // Overflow = signed overflow detection
+            let overflow = ((verify.cpu.a ^ sbc_result) & (rotated ^ sbc_result) & BIT_7) != 0;
+            assert_eq!(cpu.p.v(), overflow, "Overflow flag mismatch");
+
+            // Optional: cross-check N/Z flags using helper
+            verify.check_nz(cpu.p, sbc_result);
+        });
+    }
+
+    #[test]
+    fn test_sbx() {
+        InstrTest::new(Mnemonic::SBX).test(|verify, cpu, _| {
+            // Step 1: Compute A & X
+            let ax = verify.cpu.a & verify.cpu.x;
+
+            // Step 2: Compute X = (A & X) - M
+            let result = ax.wrapping_sub(verify.m);
+
+            // Step 3: Update X register
+            assert_eq!(cpu.x, result, "X register mismatch after SBX");
+
+            // Step 4: Update flags
+            // Carry = 1 if (A & X) >= M
+            let carry = ax >= verify.m;
+            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
+
+            // Zero = 1 if result == 0
+            let zero = result == 0;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            // Negative = bit7 of result
+            let negative = result & 0x80 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            // Optional: cross-check N/Z flags using helper
+            verify.check_nz(cpu.p, result);
+        });
+    }
+
+    #[test]
+    fn test_slo() {
+        InstrTest::new(Mnemonic::SLO).test(|verify, cpu, bus| {
+            // Step 1: Perform ASL on memory
+            let asl_result = (verify.m << 1) & 0xFF;
+            let carry = (verify.m & BIT_7) != 0;
+
+            // Step 2: Update memory
+            assert_eq!(
+                bus.read(verify.addr),
+                asl_result,
+                "Memory not shifted correctly"
+            );
+
+            // Step 3: OR accumulator with rotated memory
+            let result = verify.cpu.a | asl_result;
+
+            // Step 4: Update accumulator
+            assert_eq!(cpu.a, result, "Accumulator not ORed correctly");
+
+            // Step 5: Verify flags
+            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
+            assert_eq!(cpu.p.n(), result & BIT_7 != 0, "Negative flag mismatch");
+            assert_eq!(cpu.p.z(), result == 0, "Zero flag mismatch");
+
+            // Optional: cross-check N/Z flags using helper
+            verify.check_nz(cpu.p, result);
+        });
+    }
+
+    #[test]
+    fn test_sre() {
+        InstrTest::new(Mnemonic::SRE).test(|verify, cpu, bus| {
+            // Step 1: Perform LSR on memory
+            let lsr_result = verify.m >> 1;
+            let carry = (verify.m & 0x01) != 0;
+
+            // Step 2: Update memory
+            assert_eq!(
+                bus.read(verify.addr),
+                lsr_result,
+                "Memory not shifted correctly"
+            );
+
+            // Step 3: EOR accumulator with shifted memory
+            let result = verify.cpu.a ^ lsr_result;
+
+            // Step 4: Update accumulator
+            assert_eq!(cpu.a, result, "Accumulator not XORed correctly");
+
+            // Step 5: Verify flags
+            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
+            assert_eq!(cpu.p.n(), result & 0x80 != 0, "Negative flag mismatch");
+            assert_eq!(cpu.p.z(), result == 0, "Zero flag mismatch");
+
+            // Optional: cross-check N/Z flags using helper
+            verify.check_nz(cpu.p, result);
+        });
+    }
+
+    #[test]
+    fn test_xaa() {
+        InstrTest::new(Mnemonic::XAA).test(|verify, cpu, _| {
+            // Step 1: Perform A & X & M
+            let result = verify.cpu.a & verify.cpu.x & verify.m;
+
+            // Step 2: Update accumulator
+            assert_eq!(cpu.a, result, "Accumulator mismatch after XAA");
+
+            // Step 3: Verify flags
+            // Negative = bit7 of result
+            let negative = result & 0x80 != 0;
+            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
+
+            // Zero = 1 if result == 0
+            let zero = result == 0;
+            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
+
+            // Optional: cross-check N/Z flags using helper
+            verify.check_nz(cpu.p, result);
         });
     }
 }

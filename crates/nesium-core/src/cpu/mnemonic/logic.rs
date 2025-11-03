@@ -1,10 +1,7 @@
-use crate::{
-    bus::Bus,
-    cpu::{
-        micro_op::MicroOp,
-        mnemonic::Mnemonic,
-        status::{BIT_6, BIT_7},
-    },
+use crate::cpu::{
+    micro_op::MicroOp,
+    mnemonic::Mnemonic,
+    status::{BIT_6, BIT_7},
 };
 
 impl Mnemonic {

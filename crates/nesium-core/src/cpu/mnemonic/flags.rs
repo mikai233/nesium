@@ -1,7 +1,4 @@
-use crate::{
-    bus::Bus,
-    cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status},
-};
+use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status};
 
 impl Mnemonic {
     /// N V - B D I Z C
@@ -22,20 +19,13 @@ impl Mnemonic {
     /// Implied         | CLC                    | $18    | 1         | 2
     pub(crate) const fn clc() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "clc_dummy_read",
-            micro_fn: |cpu, bus| {
-                // Cycle 1: Dummy read from PC
-                let _ = bus.read(cpu.pc);
-            },
-        };
-        const OP2: MicroOp = MicroOp {
             name: "clc_clear_carry",
             micro_fn: |cpu, _bus| {
                 // Cycle 2: C = 0
-                cpu.p.set(Status::CARRY, false);
+                cpu.p.set_c(false);
             },
         };
-        &[OP1, OP2]
+        &[OP1]
     }
 
     /// N V - B D I Z C
@@ -59,19 +49,13 @@ impl Mnemonic {
     /// Implied         | CLD                    | $D8    | 1         | 2
     pub(crate) const fn cld() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "cld_dummy_read",
-            micro_fn: |cpu, bus| {
-                let _ = bus.read(cpu.pc);
-            },
-        };
-        const OP2: MicroOp = MicroOp {
             name: "cld_clear_decimal",
             micro_fn: |cpu, _bus| {
                 // Cycle 2: D = 0
-                cpu.p.set(Status::DECIMAL, false);
+                cpu.p.set_d(false);
             },
         };
-        &[OP1, OP2]
+        &[OP1]
     }
 
     /// N V - B D I Z C
@@ -91,19 +75,13 @@ impl Mnemonic {
     /// Implied         | CLI                    | $58    | 1         | 2
     pub(crate) const fn cli() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "cli_dummy_read",
-            micro_fn: |cpu, bus| {
-                let _ = bus.read(cpu.pc);
-            },
-        };
-        const OP2: MicroOp = MicroOp {
             name: "cli_clear_interrupt",
             micro_fn: |cpu, _bus| {
                 // Cycle 2: I = 0
-                cpu.p.set(Status::INTERRUPT, false);
+                cpu.p.set_i(false);
             },
         };
-        &[OP1, OP2]
+        &[OP1]
     }
 
     /// N V - B D I Z C
@@ -124,19 +102,13 @@ impl Mnemonic {
     /// Implied         | CLV                    | $B8    | 1         | 2
     pub(crate) const fn clv() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "clv_dummy_read",
-            micro_fn: |cpu, bus| {
-                let _ = bus.read(cpu.pc);
-            },
-        };
-        const OP2: MicroOp = MicroOp {
             name: "clv_clear_overflow",
             micro_fn: |cpu, _bus| {
                 // Cycle 2: V = 0
-                cpu.p.set(Status::OVERFLOW, false);
+                cpu.p.set_v(false);
             },
         };
-        &[OP1, OP2]
+        &[OP1]
     }
 
     /// N V - B D I Z C
@@ -157,19 +129,13 @@ impl Mnemonic {
     /// Implied         | SEC                    | $38    | 1         | 2
     pub(crate) const fn sec() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "sec_dummy_read",
-            micro_fn: |cpu, bus| {
-                let _ = bus.read(cpu.pc);
-            },
-        };
-        const OP2: MicroOp = MicroOp {
             name: "sec_set_carry",
             micro_fn: |cpu, _bus| {
                 // Cycle 2: C = 1
-                cpu.p.set(Status::CARRY, true);
+                cpu.p.set_c(true);
             },
         };
-        &[OP1, OP2]
+        &[OP1]
     }
 
     /// N V - B D I Z C
@@ -194,19 +160,13 @@ impl Mnemonic {
     /// Implied         | SED                    | $F8    | 1         | 2
     pub(crate) const fn sed() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "sed_dummy_read",
-            micro_fn: |cpu, bus| {
-                let _ = bus.read(cpu.pc);
-            },
-        };
-        const OP2: MicroOp = MicroOp {
             name: "sed_set_decimal",
             micro_fn: |cpu, _bus| {
                 // Cycle 2: D = 1
-                cpu.p.set(Status::DECIMAL, true);
+                cpu.p.set_d(true);
             },
         };
-        &[OP1, OP2]
+        &[OP1]
     }
 
     /// N V - B D I Z C
@@ -227,18 +187,66 @@ impl Mnemonic {
     /// Implied         | SEI                    | $78    | 1         | 2
     pub(crate) const fn sei() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "sei_dummy_read",
-            micro_fn: |cpu, bus| {
-                let _ = bus.read(cpu.pc);
-            },
-        };
-        const OP2: MicroOp = MicroOp {
             name: "sei_set_interrupt",
             micro_fn: |cpu, _bus| {
                 // Cycle 2: I = 1
-                cpu.p.set(Status::INTERRUPT, true);
+                cpu.p.set_i(true);
             },
         };
-        &[OP1, OP2]
+        &[OP1]
+    }
+}
+
+#[cfg(test)]
+mod flags_test {
+    use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
+
+    #[test]
+    fn test_clc() {
+        InstrTest::new(Mnemonic::CLC).test(|_, cpu, _| {
+            assert_eq!(cpu.p.c(), false, "Carry flag should be cleared");
+        });
+    }
+
+    #[test]
+    fn test_cld() {
+        InstrTest::new(Mnemonic::CLD).test(|_, cpu, _| {
+            assert_eq!(cpu.p.d(), false, "Decimal Mode flag should be cleared");
+        });
+    }
+
+    #[test]
+    fn test_cli() {
+        InstrTest::new(Mnemonic::CLI).test(|_, cpu, _| {
+            assert_eq!(cpu.p.i(), false, "Interrupt Disable flag should be cleared");
+        });
+    }
+
+    #[test]
+    fn test_clv() {
+        InstrTest::new(Mnemonic::CLV).test(|_, cpu, _| {
+            assert_eq!(cpu.p.v(), false, "Overflow flag should be cleared");
+        });
+    }
+
+    #[test]
+    fn test_sec() {
+        InstrTest::new(Mnemonic::SEC).test(|_, cpu, _| {
+            assert_eq!(cpu.p.c(), true, "Carry flag should be set");
+        });
+    }
+
+    #[test]
+    fn test_sed() {
+        InstrTest::new(Mnemonic::SED).test(|_, cpu, _| {
+            assert_eq!(cpu.p.d(), true, "Decimal Mode flag should be set");
+        });
+    }
+
+    #[test]
+    fn test_sei() {
+        InstrTest::new(Mnemonic::SEI).test(|_, cpu, _| {
+            assert_eq!(cpu.p.i(), true, "Interrupt Disable flag should be set");
+        });
     }
 }

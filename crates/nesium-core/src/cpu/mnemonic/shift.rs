@@ -1,10 +1,7 @@
-use crate::{
-    bus::Bus,
-    cpu::{
-        micro_op::MicroOp,
-        mnemonic::Mnemonic,
-        status::{BIT_0, BIT_7, Status},
-    },
+use crate::cpu::{
+    micro_op::MicroOp,
+    mnemonic::Mnemonic,
+    status::{BIT_0, BIT_7, Status},
 };
 
 impl Mnemonic {
@@ -33,7 +30,7 @@ impl Mnemonic {
     /// X-Indexed Zero Page     | ASL $nn,X                | $16    | 2         | 6
     pub(crate) const fn asl() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "asl_read_operand",
+            name: "asl_read",
             micro_fn: |cpu, bus| {
                 cpu.base = bus.read(cpu.effective_addr);
             },
@@ -97,7 +94,7 @@ impl Mnemonic {
     /// X-Indexed Zero Page     | LSR $nn,X                | $56    | 2         | 6
     pub(crate) const fn lsr() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "lsr_read_operand",
+            name: "lsr_read",
             micro_fn: |cpu, bus| {
                 cpu.base = bus.read(cpu.effective_addr);
             },
@@ -161,7 +158,7 @@ impl Mnemonic {
     /// X-Indexed Zero Page     | ROL $nn,X                | $36    | 2         | 6
     pub(crate) const fn rol() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "rol_read_operand",
+            name: "rol_read",
             micro_fn: |cpu, bus| {
                 cpu.base = bus.read(cpu.effective_addr);
             },
@@ -227,7 +224,7 @@ impl Mnemonic {
     /// X-Indexed Zero Page     | ROR $nn,X                | $76    | 2         | 6
     pub(crate) const fn ror() -> &'static [MicroOp] {
         const OP1: MicroOp = MicroOp {
-            name: "ror_read_operand",
+            name: "ror_read",
             micro_fn: |cpu, bus| {
                 cpu.base = bus.read(cpu.effective_addr);
             },
@@ -269,12 +266,9 @@ impl Mnemonic {
 
 #[cfg(test)]
 mod shift_test {
-    use crate::{
-        bus::Bus,
-        cpu::{
-            mnemonic::{Mnemonic, tests::InstrTest},
-            status::{BIT_0, BIT_7},
-        },
+    use crate::cpu::{
+        mnemonic::{Mnemonic, tests::InstrTest},
+        status::{BIT_0, BIT_7},
     };
 
     #[test]

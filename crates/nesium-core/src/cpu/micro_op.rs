@@ -1,11 +1,8 @@
 use std::fmt::Debug;
 
-use crate::{
-    bus::{Bus, BusImpl},
-    cpu::Cpu,
-};
+use crate::{bus::Bus, cpu::Cpu};
 
-type MicroFn = fn(&mut Cpu, bus: &mut BusImpl);
+type MicroFn = fn(&mut Cpu, bus: &mut dyn Bus);
 
 #[derive(Clone, Copy, Eq, Hash)]
 pub(crate) struct MicroOp {
@@ -18,7 +15,7 @@ impl MicroOp {
     //  Execution
     // ─────────────────────────────────────────────────────────────────────────────
     /// Execute this micro operation.
-    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut BusImpl) {
+    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut dyn Bus) {
         (self.micro_fn)(cpu, bus);
     }
 
@@ -286,4 +283,4 @@ impl PartialEq for MicroOp {
     }
 }
 
-pub(crate) fn empty_micro_fn(_: &mut Cpu, _: &mut BusImpl) {}
+pub(crate) fn empty_micro_fn(_: &mut Cpu, _: &mut dyn Bus) {}

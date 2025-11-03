@@ -1,7 +1,4 @@
-use crate::{
-    bus::Bus,
-    cpu::{micro_op::MicroOp, mnemonic::Mnemonic},
-};
+use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic};
 
 impl Mnemonic {
     /// NV-BDIZC

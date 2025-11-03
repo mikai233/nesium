@@ -1,7 +1,4 @@
-use crate::{
-    bus::Bus,
-    cpu::{micro_op::MicroOp, mnemonic::Mnemonic},
-};
+use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic};
 
 impl Mnemonic {
     /// NV-BDIZC
@@ -26,15 +23,48 @@ impl Mnemonic {
     /// Zero Page               | DEC $nn                  | $C6    | 2         | 5
     /// X-Indexed Zero Page     | DEC $nn,X                | $D6    | 2         | 6
     pub(crate) const fn dec() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "dec",
-            micro_fn: |cpu, bus| {
-                let value = bus.read(cpu.effective_addr).wrapping_sub(1);
-                bus.write(cpu.effective_addr, value);
-                cpu.p.set_zn(value);
+        &[
+            // T5: Read Old Value (R)
+            MicroOp {
+                name: "dec_read_old",
+                // Bus: READ V_old from M(effective_addr). This is the value to be decremented.
+                // Internal: Store V_old in a temporary register (cpu.base).
+                micro_fn: |cpu, bus| {
+                    // Read the old value from memory
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        &[OP1]
+            // T6: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
+            MicroOp {
+                name: "dec_dummy_write_calc",
+                // Bus: WRITE V_old back to M(effective_addr). This burns a cycle (Dummy Write).
+                // Internal: DEC calculation is performed. cpu.base now holds V_new.
+                micro_fn: |cpu, bus| {
+                    // Dummy write of the old value (V_old)
+                    bus.write(cpu.effective_addr, cpu.base);
+
+                    // Internal operation: Calculate the new value (V_new = V_old - 1)
+                    cpu.base = cpu.base.wrapping_sub(1);
+                    // The DEC result (V_new) is temporarily held in cpu.base
+                },
+            },
+            // T7: Final Write New Value (W_new) & Internal Flag Update
+            MicroOp {
+                name: "dec_final_write_flags",
+                // Bus: WRITE V_new to M(effective_addr). This completes the RMW sequence.
+                // Internal: Update status flags (N, Z) based on V_new.
+                micro_fn: |cpu, bus| {
+                    // Final Write: The correct, decremented value is written to memory.
+                    let new_value = cpu.base;
+                    bus.write(cpu.effective_addr, new_value);
+
+                    // Internal Operation: Update Negative (N) and Zero (Z) flags.
+                    cpu.p.set_zn(new_value);
+
+                    // Note: DEC does not affect the Carry flag (C)
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -116,15 +146,48 @@ impl Mnemonic {
     /// Zero Page               | INC $nn                  | $E6    | 2         | 5
     /// X-Indexed Zero Page     | INC $nn,X                | $F6    | 2         | 6
     pub(crate) const fn inc() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "inc",
-            micro_fn: |cpu, bus| {
-                let value = bus.read(cpu.effective_addr).wrapping_add(1);
-                bus.write(cpu.effective_addr, value);
-                cpu.p.set_zn(value);
+        &[
+            // T5: Read Old Value (R)
+            MicroOp {
+                name: "inc_read_old",
+                // Bus: READ V_old from M(effective_addr). This is the value to be incremented.
+                // Internal: Store V_old in a temporary CPU register (cpu.base).
+                micro_fn: |cpu, bus| {
+                    // Read the old value from memory
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        &[OP1]
+            // T6: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
+            MicroOp {
+                name: "inc_dummy_write_calc",
+                // Bus: WRITE V_old back to M(effective_addr). This burns a cycle (Dummy Write).
+                // Internal: INC calculation is performed. cpu.base is updated to V_new.
+                micro_fn: |cpu, bus| {
+                    // Dummy write of the old value (V_old) - This is the "extra" RMW cycle.
+                    bus.write(cpu.effective_addr, cpu.base);
+
+                    // Internal operation: Calculate the new value (V_new = V_old + 1)
+                    cpu.base = cpu.base.wrapping_add(1);
+                    // The INC result (V_new) is temporarily held in cpu.base
+                },
+            },
+            // T7: Final Write New Value (W_new) & Internal Flag Update
+            MicroOp {
+                name: "inc_final_write_flags",
+                // Bus: WRITE V_new to M(effective_addr). This completes the RMW sequence.
+                // Internal: Update status flags (N, Z) based on V_new.
+                micro_fn: |cpu, bus| {
+                    // Final Write: The correct, incremented value is written to memory.
+                    let new_value = cpu.base;
+                    bus.write(cpu.effective_addr, new_value);
+
+                    // Internal Operation: Update Negative (N) and Zero (Z) flags.
+                    cpu.p.set_zn(new_value);
+
+                    // Note: INC does not affect the Carry flag (C)
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC

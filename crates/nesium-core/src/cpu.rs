@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::bus::{Bus, BusImpl, STACK_ADDR};
+use crate::bus::{Bus, STACK_ADDR};
 use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
@@ -72,7 +72,7 @@ impl Cpu {
         self.effective_addr = 0;
     }
 
-    pub(crate) fn clock(&mut self, bus: &mut BusImpl) {
+    pub(crate) fn clock(&mut self, bus: &mut dyn Bus) {
         match self.opcode {
             Some(opcode) => {
                 let instr = &LOOKUP_TABLE[opcode as usize];
@@ -95,7 +95,7 @@ impl Cpu {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_clock(&mut self, bus: &mut BusImpl, instr: &Instruction) -> usize {
+    pub(crate) fn test_clock(&mut self, bus: &mut dyn Bus, instr: &Instruction) -> usize {
         self.opcode = Some(instr.opcode());
         self.incr_pc(); // Fetch opcode
         let mut cycles = 1; // Fetch opcode has 1 cycle
@@ -126,7 +126,7 @@ impl Cpu {
     }
 
     #[inline]
-    pub(crate) fn fetch_opcode(&mut self, bus: &mut BusImpl) -> u8 {
+    pub(crate) fn fetch_opcode(&mut self, bus: &mut dyn Bus) -> u8 {
         let opcode = bus.read(self.pc);
         self.incr_pc();
         opcode
@@ -201,12 +201,12 @@ impl Cpu {
         }
     }
 
-    pub(crate) fn push(&mut self, bus: &mut BusImpl, data: u8) {
+    pub(crate) fn push(&mut self, bus: &mut dyn Bus, data: u8) {
         bus.write(STACK_ADDR | self.s as u16, data);
         self.s = self.s.wrapping_sub(1);
     }
 
-    pub(crate) fn pull(&mut self, bus: &mut BusImpl) -> u8 {
+    pub(crate) fn pull(&mut self, bus: &mut dyn Bus) -> u8 {
         self.s = self.s.wrapping_add(1);
         bus.read(STACK_ADDR | self.s as u16)
     }
