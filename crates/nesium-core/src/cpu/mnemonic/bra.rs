@@ -1,4 +1,4 @@
-use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status};
+use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic};
 
 impl Mnemonic {
     /// N V - B D I Z C
@@ -32,7 +32,8 @@ impl Mnemonic {
             name: "bcc_add_branch_offset",
             micro_fn: |cpu, _| {
                 let old_pc = cpu.pc;
-                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                let offset = cpu.base as i8;
+                let new_pc = old_pc.wrapping_add(offset as u16);
                 cpu.pc = new_pc;
                 cpu.check_cross_page(old_pc, new_pc);
             },
@@ -76,7 +77,8 @@ impl Mnemonic {
             name: "bcs_add_branch_offset",
             micro_fn: |cpu, _| {
                 let old_pc = cpu.pc;
-                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                let offset = cpu.base as i8;
+                let new_pc = old_pc.wrapping_add(offset as u16);
                 cpu.pc = new_pc;
                 cpu.check_cross_page(old_pc, new_pc);
             },
@@ -123,7 +125,8 @@ impl Mnemonic {
             name: "beq_add_branch_offset",
             micro_fn: |cpu, _| {
                 let old_pc = cpu.pc;
-                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                let offset = cpu.base as i8;
+                let new_pc = old_pc.wrapping_add(offset as u16);
                 cpu.pc = new_pc;
                 cpu.check_cross_page(old_pc, new_pc);
             },
@@ -167,7 +170,8 @@ impl Mnemonic {
             name: "bmi_add_branch_offset",
             micro_fn: |cpu, _| {
                 let old_pc = cpu.pc;
-                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                let offset = cpu.base as i8;
+                let new_pc = old_pc.wrapping_add(offset as u16);
                 cpu.pc = new_pc;
                 cpu.check_cross_page(old_pc, new_pc);
             },
@@ -213,7 +217,8 @@ impl Mnemonic {
             name: "bne_add_branch_offset",
             micro_fn: |cpu, _| {
                 let old_pc = cpu.pc;
-                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                let offset = cpu.base as i8;
+                let new_pc = old_pc.wrapping_add(offset as u16);
                 cpu.pc = new_pc;
                 cpu.check_cross_page(old_pc, new_pc);
             },
@@ -261,7 +266,8 @@ impl Mnemonic {
             name: "bpl_add_branch_offset",
             micro_fn: |cpu, _| {
                 let old_pc = cpu.pc;
-                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                let offset = cpu.base as i8;
+                let new_pc = old_pc.wrapping_add(offset as u16);
                 cpu.pc = new_pc;
                 cpu.check_cross_page(old_pc, new_pc);
             },
@@ -306,7 +312,8 @@ impl Mnemonic {
             name: "bvc_add_branch_offset",
             micro_fn: |cpu, _| {
                 let old_pc = cpu.pc;
-                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                let offset = cpu.base as i8;
+                let new_pc = old_pc.wrapping_add(offset as u16);
                 cpu.pc = new_pc;
                 cpu.check_cross_page(old_pc, new_pc);
             },
@@ -350,7 +357,8 @@ impl Mnemonic {
             name: "bvs_add_branch_offset",
             micro_fn: |cpu, _| {
                 let old_pc = cpu.pc;
-                let new_pc = old_pc.wrapping_add(cpu.base as u16);
+                let offset = cpu.base as i8;
+                let new_pc = old_pc.wrapping_add(offset as u16);
                 cpu.pc = new_pc;
                 cpu.check_cross_page(old_pc, new_pc);
             },
@@ -362,5 +370,185 @@ impl Mnemonic {
             },
         };
         &[OP1, OP2, OP3]
+    }
+}
+
+#[cfg(test)]
+mod bra_tests {
+    use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
+
+    #[test]
+    fn test_bcc() {
+        InstrTest::new(Mnemonic::BCC).test_branch(|verify, cpu, bus| {
+            let old_carry = verify.cpu.p.c();
+            let branch_taken = !old_carry;
+
+            if branch_taken {
+                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
+                assert_eq!(
+                    cpu.pc, expected_pc,
+                    "PC not updated correctly after branch taken"
+                );
+            } else {
+                let expected_pc = verify.cpu.pc.wrapping_add(2);
+                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
+            }
+            branch_taken
+        });
+    }
+
+    #[test]
+    fn test_bcs() {
+        InstrTest::new(Mnemonic::BCS).test_branch(|verify, cpu, bus| {
+            let old_carry = verify.cpu.p.c();
+            let branch_taken = old_carry;
+
+            if branch_taken {
+                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
+                assert_eq!(
+                    cpu.pc, expected_pc,
+                    "PC not updated correctly after branch taken"
+                );
+            } else {
+                let expected_pc = verify.cpu.pc.wrapping_add(2);
+                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
+            }
+
+            branch_taken
+        });
+    }
+
+    #[test]
+    fn test_beq() {
+        InstrTest::new(Mnemonic::BEQ).test_branch(|verify, cpu, bus| {
+            let old_zero = verify.cpu.p.z();
+            let branch_taken = old_zero;
+
+            if branch_taken {
+                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
+                assert_eq!(
+                    cpu.pc, expected_pc,
+                    "PC not updated correctly after branch taken"
+                );
+            } else {
+                let expected_pc = verify.cpu.pc.wrapping_add(2);
+                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
+            }
+
+            branch_taken
+        });
+    }
+
+    #[test]
+    fn test_bmi() {
+        InstrTest::new(Mnemonic::BMI).test_branch(|verify, cpu, bus| {
+            let old_negative = verify.cpu.p.n();
+            let branch_taken = old_negative;
+
+            if branch_taken {
+                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
+                assert_eq!(
+                    cpu.pc, expected_pc,
+                    "PC not updated correctly after branch taken"
+                );
+            } else {
+                let expected_pc = verify.cpu.pc.wrapping_add(2);
+                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
+            }
+
+            branch_taken
+        });
+    }
+
+    #[test]
+    fn test_bne() {
+        InstrTest::new(Mnemonic::BNE).test_branch(|verify, cpu, bus| {
+            let old_zero = verify.cpu.p.z();
+            let branch_taken = !old_zero;
+
+            if branch_taken {
+                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
+                assert_eq!(
+                    cpu.pc, expected_pc,
+                    "PC not updated correctly after branch taken"
+                );
+            } else {
+                let expected_pc = verify.cpu.pc.wrapping_add(2);
+                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
+            }
+
+            branch_taken
+        });
+    }
+
+    #[test]
+    fn test_bpl() {
+        InstrTest::new(Mnemonic::BPL).test_branch(|verify, cpu, bus| {
+            let old_negative = verify.cpu.p.n();
+            let branch_taken = !old_negative;
+
+            if branch_taken {
+                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
+                assert_eq!(
+                    cpu.pc, expected_pc,
+                    "PC not updated correctly after branch taken"
+                );
+            } else {
+                let expected_pc = verify.cpu.pc.wrapping_add(2);
+                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
+            }
+
+            branch_taken
+        });
+    }
+
+    #[test]
+    fn test_bvc() {
+        InstrTest::new(Mnemonic::BVC).test_branch(|verify, cpu, bus| {
+            let old_overflow = verify.cpu.p.v();
+            let branch_taken = !old_overflow;
+
+            if branch_taken {
+                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
+                assert_eq!(
+                    cpu.pc, expected_pc,
+                    "PC not updated correctly after branch taken"
+                );
+            } else {
+                let expected_pc = verify.cpu.pc.wrapping_add(2);
+                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
+            }
+
+            branch_taken
+        });
+    }
+
+    #[test]
+    fn test_bvs() {
+        InstrTest::new(Mnemonic::BVS).test_branch(|verify, cpu, bus| {
+            let old_overflow = verify.cpu.p.v();
+            let branch_taken = old_overflow;
+
+            if branch_taken {
+                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
+                assert_eq!(
+                    cpu.pc, expected_pc,
+                    "PC not updated correctly after branch taken"
+                );
+            } else {
+                let expected_pc = verify.cpu.pc.wrapping_add(2);
+                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
+            }
+
+            branch_taken
+        });
     }
 }

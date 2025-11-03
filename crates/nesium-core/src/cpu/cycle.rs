@@ -26,12 +26,15 @@ impl Cycle {
 
     pub(crate) const fn total_cycle(&self, cross_page: bool, branch_taken: bool) -> usize {
         let mut total_cycle = self.basic_cycle();
-        if cross_page && !matches!(self, Cycle::Normal(_)) {
+        if cross_page && matches!(self, Cycle::Cross(_)) {
             total_cycle += 1;
         }
 
         if branch_taken && matches!(self, Cycle::Branch(_)) {
             total_cycle += 1;
+            if cross_page {
+                total_cycle += 1;
+            }
         }
         total_cycle
     }

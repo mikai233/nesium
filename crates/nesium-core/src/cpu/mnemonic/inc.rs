@@ -248,3 +248,123 @@ impl Mnemonic {
         &[OP1]
     }
 }
+
+#[cfg(test)]
+mod inc_tests {
+    use crate::cpu::{
+        mnemonic::{Mnemonic, tests::InstrTest},
+        status::BIT_7,
+    };
+
+    #[test]
+    fn test_dec() {
+        InstrTest::new(Mnemonic::DEC).test(|verify, cpu, bus| {
+            let expected_value = verify.m.wrapping_sub(1);
+
+            assert_eq!(
+                bus.read(verify.addr),
+                expected_value,
+                "Memory was not decremented correctly"
+            );
+
+            assert_eq!(cpu.p.z(), expected_value == 0, "Zero flag mismatch");
+            assert_eq!(
+                cpu.p.n(),
+                expected_value & BIT_7 != 0,
+                "Negative flag mismatch"
+            );
+
+            verify.check_nz(cpu.p, expected_value);
+        });
+    }
+
+    #[test]
+    fn test_dex() {
+        InstrTest::new(Mnemonic::DEX).test(|verify, cpu, _| {
+            let expected_x = verify.cpu.x.wrapping_sub(1);
+
+            assert_eq!(
+                cpu.x, expected_x,
+                "X register was not decremented correctly"
+            );
+
+            assert_eq!(cpu.p.z(), expected_x == 0, "Zero flag mismatch");
+            assert_eq!(cpu.p.n(), expected_x & BIT_7 != 0, "Negative flag mismatch");
+
+            verify.check_nz(cpu.p, expected_x);
+        });
+    }
+
+    #[test]
+    fn test_dey() {
+        InstrTest::new(Mnemonic::DEY).test(|verify, cpu, _| {
+            let expected_y = verify.cpu.y.wrapping_sub(1);
+
+            assert_eq!(
+                cpu.y, expected_y,
+                "Y register was not decremented correctly"
+            );
+
+            assert_eq!(cpu.p.z(), expected_y == 0, "Zero flag mismatch");
+            assert_eq!(cpu.p.n(), expected_y & BIT_7 != 0, "Negative flag mismatch");
+
+            verify.check_nz(cpu.p, expected_y);
+        });
+    }
+
+    #[test]
+    fn test_inc() {
+        InstrTest::new(Mnemonic::INC).test(|verify, cpu, bus| {
+            let expected_value = verify.m.wrapping_add(1);
+
+            assert_eq!(
+                bus.read(verify.addr),
+                expected_value,
+                "Memory was not incremented correctly"
+            );
+
+            assert_eq!(cpu.p.z(), expected_value == 0, "Zero flag mismatch");
+            assert_eq!(
+                cpu.p.n(),
+                expected_value & BIT_7 != 0,
+                "Negative flag mismatch"
+            );
+
+            verify.check_nz(cpu.p, expected_value);
+        });
+    }
+
+    #[test]
+    fn test_inx() {
+        InstrTest::new(Mnemonic::INX).test(|verify, cpu, _| {
+            let expected_x = verify.cpu.x.wrapping_add(1);
+
+            assert_eq!(
+                cpu.x, expected_x,
+                "X register was not incremented correctly"
+            );
+
+            assert_eq!(cpu.p.z(), expected_x == 0, "Zero flag mismatch");
+            assert_eq!(cpu.p.n(), expected_x & BIT_7 != 0, "Negative flag mismatch");
+
+            verify.check_nz(cpu.p, expected_x);
+        });
+    }
+
+    #[test]
+    fn test_iny() {
+        InstrTest::new(Mnemonic::INY).test(|verify, cpu, _| {
+            let expected_y = verify.cpu.y.wrapping_add(1);
+
+            assert_eq!(
+                cpu.y, expected_y,
+                "Y register was not incremented correctly"
+            );
+
+            assert_eq!(cpu.p.z(), expected_y == 0, "Zero flag mismatch");
+            assert_eq!(cpu.p.n(), expected_y & BIT_7 != 0, "Negative flag mismatch");
+
+            verify.check_nz(cpu.p, expected_y);
+        });
+    }
+}
