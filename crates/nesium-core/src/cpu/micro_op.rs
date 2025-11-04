@@ -41,17 +41,6 @@ impl MicroOp {
         }
     }
 
-    /// Cycle 2: Read relative branch offset (signed 8-bit) from PC and increment PC.
-    pub(crate) const fn fetch_rel_offset() -> Self {
-        MicroOp {
-            name: "fetch_rel_offset",
-            micro_fn: |cpu, bus| {
-                cpu.base = bus.read(cpu.pc);
-                cpu.incr_pc();
-            },
-        }
-    }
-
     /// Cycle 2: Fetch low byte of absolute address from PC and increment PC.
     pub(crate) const fn fetch_abs_addr_lo() -> Self {
         MicroOp {
