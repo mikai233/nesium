@@ -5,6 +5,8 @@ use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
 use crate::cpu::lookup::LOOKUP_TABLE;
+use crate::cpu::micro_op::MicroOp;
+use crate::cpu::mnemonic::Mnemonic;
 use crate::cpu::status::Status;
 mod phase;
 mod status;
@@ -77,9 +79,8 @@ impl Cpu {
             Some(opcode) => {
                 let instr = &LOOKUP_TABLE[opcode as usize];
                 let micro_op = &instr[self.index()];
-                micro_op.exec(self, bus);
-                self.index += 1;
-                self.prepare_zp_addr(instr);
+                self.exec(bus, instr, micro_op);
+                self.post_exec(instr);
                 if self.index() > instr.len() {
                     self.clear();
                 }
@@ -88,8 +89,7 @@ impl Cpu {
                 let opcode = self.fetch_opcode(bus);
                 self.opcode = Some(opcode);
                 let instr = &LOOKUP_TABLE[opcode as usize];
-                self.prepare_imm_addr(instr);
-                self.prepare_accumulator(instr);
+                self.pre_exec(instr);
             }
         }
     }
@@ -99,8 +99,7 @@ impl Cpu {
         self.opcode = Some(instr.opcode());
         self.incr_pc(); // Fetch opcode
         let mut cycles = 1; // Fetch opcode has 1 cycle
-        self.prepare_imm_addr(instr);
-        self.prepare_accumulator(instr);
+        self.pre_exec(instr);
         while self.index() < instr.len() {
             let op = &instr[self.index()];
             let _span = tracing::span!(
@@ -111,15 +110,14 @@ impl Cpu {
             );
             let _enter = _span.enter();
             let before = *self;
-            op.exec(self, bus);
+            self.exec(bus, instr, op);
             tracing::event!(
                 tracing::Level::TRACE,
                 before_cpu = ?before,
                 after_cpu = ?self,
                 "Instruction executed"
             );
-            self.index += 1;
-            self.prepare_zp_addr(instr);
+            self.post_exec(instr);
             cycles += 1;
         }
         cycles
@@ -133,32 +131,55 @@ impl Cpu {
     }
 
     #[inline]
-    pub(crate) fn prepare_accumulator(&mut self, instr: &Instruction) {
-        if matches!(instr.addressing, Addressing::Accumulator) {
-            self.index = (instr.len() - 1) as u8;
+    pub(crate) fn pre_exec(&mut self, instr: &Instruction) {
+        match instr.addressing {
+            Addressing::Immediate => {
+                self.effective_addr = self.pc as u16;
+                self.incr_pc();
+            }
+            Addressing::Accumulator => {
+                self.index = (instr.len() - 1) as u8;
+            }
+            _ => {}
         }
     }
 
     #[inline]
-    pub(crate) fn prepare_branch(&mut self, bus: &mut dyn Bus, instr: &Instruction) {
-        if matches!(instr.addressing, Addressing::Relative) {
-            self.base = bus.read(self.pc);
-            self.incr_pc();
+    pub(crate) fn exec(&mut self, bus: &mut dyn Bus, instr: &Instruction, micro_op: &MicroOp) {
+        match instr.mnemonic {
+            Mnemonic::JSR | Mnemonic::RTI | Mnemonic::RTS => {
+                if self.index == 0 {
+                    // Skip addressing micro ops, because them has its own special micro ops
+                    self.index += instr.addr_len() as u8;
+                }
+            }
+            _ => {}
         }
+        micro_op.exec(self, bus);
+        self.index += 1;
     }
 
     #[inline]
-    pub(crate) fn prepare_imm_addr(&mut self, instr: &Instruction) {
-        if matches!(instr.addressing, Addressing::Immediate) {
-            self.effective_addr = self.pc as u16;
-            self.incr_pc();
-        }
-    }
-
-    #[inline]
-    pub(crate) fn prepare_zp_addr(&mut self, instr: &Instruction) {
-        if self.index == 1 && matches!(instr.addressing, Addressing::ZeroPage) {
-            self.effective_addr = self.zp_addr as u16;
+    pub(crate) fn post_exec(&mut self, instr: &Instruction) {
+        match instr.addressing {
+            Addressing::ZeroPage => {
+                if self.index == 1 {
+                    self.effective_addr = self.zp_addr as u16;
+                }
+            }
+            Addressing::Absolute => {
+                if matches!(instr.mnemonic, Mnemonic::JMP) && self.index() == instr.addr_len() {
+                    // Absolute JMP has only 3 cycles
+                    self.pc = self.effective_addr;
+                }
+            }
+            Addressing::Indirect => {
+                if matches!(instr.mnemonic, Mnemonic::JMP) && self.index() == instr.addr_len() {
+                    // Indirect JMP has only 5 cycles
+                    self.pc = self.effective_addr;
+                }
+            }
+            _ => {}
         }
     }
 

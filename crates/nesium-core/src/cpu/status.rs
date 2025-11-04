@@ -59,11 +59,6 @@ bitflags! {
 }
 
 impl Status {
-    /// Create a new Status with default power-up state (usually 0x34 or 0x24 depending on emulator).
-    pub fn new() -> Self {
-        Status::from_bits_truncate(0x24)
-    }
-
     /// Set or clear the Zero flag based on a value.
     pub fn update_zero(&mut self, value: u8) {
         if value == 0 {
@@ -80,16 +75,6 @@ impl Status {
         } else {
             self.remove(Status::NEGATIVE);
         }
-    }
-
-    /// Convert the flags to a byte.
-    pub fn to_byte(&self) -> u8 {
-        self.bits()
-    }
-
-    /// Load flags from a byte value.
-    pub fn from_byte(byte: u8) -> Self {
-        Status::from_bits_truncate(byte)
     }
 
     #[inline]
@@ -128,12 +113,6 @@ impl Status {
         self.set(Status::BREAK, value);
     }
 
-    /// Reset N flag (always for LSR)
-    #[inline]
-    pub fn reset_n(&mut self) {
-        self.remove(Status::NEGATIVE);
-    }
-
     /// Set N flag to a specific bit (bit 7 of memory)
     #[inline]
     pub fn set_n(&mut self, value: bool) {
@@ -149,16 +128,6 @@ impl Status {
     #[inline]
     pub fn set_z(&mut self, value: bool) {
         self.set(Status::ZERO, value);
-    }
-
-    /// Set N flag to match carry (input carry becomes N)
-    #[inline]
-    pub fn set_n_from_c(&mut self) {
-        if self.contains(Status::CARRY) {
-            self.insert(Status::NEGATIVE);
-        } else {
-            self.remove(Status::NEGATIVE);
-        };
     }
 
     pub fn n(&self) -> bool {

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{bus::Bus, cpu::micro_op::MicroOp};
+use crate::cpu::micro_op::MicroOp;
 
 /// Represents the addressing modes supported by the 6502 CPU.
 ///
