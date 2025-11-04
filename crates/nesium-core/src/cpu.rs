@@ -30,7 +30,6 @@ pub(crate) struct Cpu {
 
     opcode: Option<u8>,
     index: u8,
-    zp_addr: u8,
     base: u8,
     effective_addr: u16,
 }
@@ -48,7 +47,6 @@ impl Cpu {
             pc: 0x0000,                          // Will be set by reset vector
             opcode: None,
             index: 0,
-            zp_addr: 0,
             base: 0,
             effective_addr: 0,
         }
@@ -133,13 +131,28 @@ impl Cpu {
     #[inline]
     pub(crate) fn pre_exec(&mut self, instr: &Instruction) {
         match instr.addressing {
+            // Immediate Addressing:
+            // This mode only has one execution cycle after the opcode fetch.
+            // Set 'effective_addr' now to the current PC (which points to the data byte)
+            // so the main execution logic can fetch the data from a unified source,
+            // regardless of the addressing mode. Then, advance the PC past the data byte.
             Addressing::Immediate => {
                 self.effective_addr = self.pc as u16;
                 self.incr_pc();
             }
+
+            // Accumulator Addressing:
+            // This mode operates directly on the Accumulator (A) register, not memory.
+            // It bypasses all memory read/write micro-ops that other modes might use
+            // (often involving 'dummy reads').
+            // To unify the core 'exec' logic, jump the cycle index directly to the final
+            // instruction execution phase (usually the last cycle).
             Addressing::Accumulator => {
                 self.index = (instr.len() - 1) as u8;
             }
+
+            // For all other addressing modes (Absolute, Zero Page, etc.),
+            // the effective_addr is calculated during the subsequent micro-ops.
             _ => {}
         }
     }
@@ -147,38 +160,62 @@ impl Cpu {
     #[inline]
     pub(crate) fn exec(&mut self, bus: &mut dyn Bus, instr: &Instruction, micro_op: &MicroOp) {
         match instr.mnemonic {
-            Mnemonic::JSR | Mnemonic::RTI | Mnemonic::RTS => {
-                if self.index == 0 {
-                    // Skip addressing micro ops, because them has its own special micro ops
-                    self.index += instr.addr_len() as u8;
-                }
+            // JSR, RTI, and RTS have complex, non-standard instruction cycles (micro-ops),
+            // especially during stack manipulation. Their addressing phase cycles are often
+            // dedicated to setup and are distinct from standard addressing modes.
+            Mnemonic::JSR | Mnemonic::RTI | Mnemonic::RTS if self.index == 0 => {
+                // Skip the cycles normally reserved for general addressing mode processing.
+                // These instructions have their own custom micro-ops defined immediately
+                // following the opcode fetch cycle (index 0).
+                self.index += instr.addr_len() as u8;
+
+                // Execute the *first* of the custom, non-addressing micro-ops.
+                instr[self.index()].exec(self, bus);
             }
-            _ => {}
+            _ => {
+                // For all other instructions, or for the remaining cycles of JSR/RTI/RTS,
+                // execute the micro-op corresponding to the current cycle index.
+                micro_op.exec(self, bus);
+            }
         }
-        micro_op.exec(self, bus);
+
+        // Move to the next cycle index for the next execution phase.
         self.index += 1;
     }
 
     #[inline]
     pub(crate) fn post_exec(&mut self, instr: &Instruction) {
+        // Context: This function runs *after* a micro-op is executed, and self.index has
+        // *already been incremented* by the previous function call's logic.
+        // Therefore, index() here represents the total number of cycles executed so far
+        // (excluding the Opcode Fetch cycle).
+
         match instr.addressing {
-            Addressing::ZeroPage => {
-                if self.index == 1 {
-                    self.effective_addr = self.zp_addr as u16;
-                }
-            }
             Addressing::Absolute => {
+                // JMP Absolute (3 total cycles, 2 addressing cycles after fetch):
+                // The jump must occur immediately upon fetching the final address byte.
+                // If addr_len() is 2, the addressing micro-ops are at index 0 and 1.
+                // When index() == 2, the addressing is complete, and the next cycle is skipped.
                 if matches!(instr.mnemonic, Mnemonic::JMP) && self.index() == instr.addr_len() {
-                    // Absolute JMP has only 3 cycles
+                    // JMP is special: it updates the PC right after address calculation,
+                    // skipping the final execution phase cycle used by most other instructions.
                     self.pc = self.effective_addr;
                 }
             }
+
             Addressing::Indirect => {
+                // JMP Indirect (5 total cycles, 4 addressing cycles after fetch):
+                // Addressing micro-ops run at index 0, 1, 2, 3.
+                // When index() == 4 (addr_len), the address calculation is finished.
                 if matches!(instr.mnemonic, Mnemonic::JMP) && self.index() == instr.addr_len() {
-                    // Indirect JMP has only 5 cycles
+                    // Similarly, JMP Indirect updates PC immediately after the 4th addressing cycle
+                    // (the final address byte read, including the $XXFF bug handling).
                     self.pc = self.effective_addr;
                 }
             }
+
+            // For all other instructions, the PC is either updated later by a dedicated
+            // execution micro-op, or the flow continues normally.
             _ => {}
         }
     }
@@ -193,7 +230,6 @@ impl Cpu {
         self.index = 0;
         self.opcode = None;
         self.base = 0;
-        self.zp_addr = 0;
         self.effective_addr = 0;
     }
 
@@ -241,7 +277,7 @@ impl Debug for Cpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:{:?} PC:{:04X} O:{:02X?} I:{} Z:{:02X} B:{:02X} E:{:04X}",
+            "A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:{:?} PC:{:04X} O:{:02X?} I:{} B:{:02X} E:{:04X}",
             self.a,
             self.x,
             self.y,
@@ -250,7 +286,6 @@ impl Debug for Cpu {
             self.pc,
             self.opcode,
             self.index,
-            self.zp_addr,
             self.base,
             self.effective_addr
         )
@@ -288,13 +323,8 @@ impl Display for Cpu {
         writeln!(f, "╠═════════════════════════════════════════╣")?;
         writeln!(
             f,
-            "║     zp_addr: {:02X}      │    base: {:02X}      ║",
-            self.zp_addr, self.base
-        )?;
-        writeln!(
-            f,
-            "║ effective_addr: {:04X} │    index: {:02X}     ║",
-            self.effective_addr, self.index
+            "║ base: {:02X}|effective_addr: {:04X}│index: {:02X} ║",
+            self.base, self.effective_addr, self.index
         )?;
         writeln!(f, "╚═════════════════════════════════════════╝")?;
 
