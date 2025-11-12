@@ -1,0 +1,87 @@
+name: Security and Dependency Audit
+
+# Trigger conditions
+on:
+  pull_request:
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+  push:
+    branches:
+      - "**"
+
+# Global environment variables
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+  CLICOLOR: 1
+
+# Concurrency control to avoid duplicate workflow runs
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------
+  # 1️⃣ Security vulnerability audit
+  # -------------------------------
+  security_audit:
+    name: Audit Security Vulnerabilities
+    runs-on: ubuntu-latest
+    # Do not fail the workflow on PR to avoid blocking
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      issues: write   # required to create issues if vulnerabilities are found
+      checks: write   # required to create check runs
+    steps:
+      # Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Run security audit using actions-rs/audit-check
+      - name: Run actions-rs/audit-check
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  # -------------------------------
+  # 2️⃣ Dependency license / source / ban checks
+  # -------------------------------
+  cargo_deny:
+    name: Cargo Deny Checks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        checks:
+          - bans
+          - licenses
+          - sources
+    permissions:
+      issues: write   # required to create issues if violations are found
+      checks: write   # required to create check runs
+    steps:
+      # Checkout repository
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Cache Cargo registry and git repositories to speed up dependency resolution
+      - name: Cache cargo registry/git
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # Install cargo-deny
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      # Run cargo-deny checks (license, source, and bans)
+      - name: Run cargo-deny check
+        run: cargo deny check ${{ matrix.checks }} --all-features --json > target/cargo-deny-${{ matrix.checks }}.json || true
