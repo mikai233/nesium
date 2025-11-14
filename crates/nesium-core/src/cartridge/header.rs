@@ -15,7 +15,6 @@
 //! Unsupported or damaged headers turn into a descriptive [`HeaderParseError`].
 
 use bitflags::bitflags;
-use std::fmt;
 
 use crate::error::Error;
 
