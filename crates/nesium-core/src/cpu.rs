@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use crate::bus::{Bus, STACK_ADDR};
+use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
 use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
@@ -60,8 +61,8 @@ impl Cpu {
     /// It also clears internal state used by instruction execution.
     pub(crate) fn reset(&mut self, bus: &mut impl Bus) {
         // Read the reset vector from memory ($FFFC-$FFFD)
-        let lo = bus.read(0xFFFC);
-        let hi = bus.read(0xFFFD);
+        let lo = bus.read(RESET_VECTOR_LO);
+        let hi = bus.read(RESET_VECTOR_HI);
         self.pc = ((hi as u16) << 8) | (lo as u16);
 
         // Reset other state
