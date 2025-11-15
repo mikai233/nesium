@@ -1,9 +1,12 @@
 use std::fmt::Debug;
 
+use crate::memory;
+
 pub mod mock;
 pub mod nes;
 
-pub(crate) const STACK_ADDR: u16 = 0x0100;
+/// Expose the CPU stack page start address for stack helpers.
+pub(crate) const STACK_ADDR: u16 = memory::cpu::STACK_PAGE_START;
 
 pub trait Bus: Debug {
     fn read(&mut self, addr: u16) -> u8;
