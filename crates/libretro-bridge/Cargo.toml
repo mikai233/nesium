@@ -1,0 +1,15 @@
+[package]
+name = "libretro-bridge"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+description = "Safe Rust bindings and runtime helpers for implementing libretro cores."
+readme = "README.md"
+build = "build.rs"
+
+[dependencies]
+once_cell.workspace = true
+
+[build-dependencies]
+bindgen.workspace = true
+ureq = { workspace = true, features = ["tls"] }
