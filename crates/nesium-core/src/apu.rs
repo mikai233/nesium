@@ -76,7 +76,7 @@ impl StatusRegister {
 }
 
 /// Lightweight NES APU representation.
-#[derive(Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Apu {
     registers: [u8; REGISTER_SPACE],
     frame_counter: FrameCounter,
