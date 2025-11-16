@@ -1,0 +1,13 @@
+[package]
+name = "nesium-libretro"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[lib]
+name = "nesium_libretro"
+crate-type = ["cdylib"]
+
+[dependencies]
+libretro-bridge = { path = "../libretro-bridge" }
+once_cell.workspace = true

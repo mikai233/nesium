@@ -15,3 +15,6 @@ A cycle-accurate NES emulator written in Rust, designed to faithfully replicate 
 
 ## Contributions:
 Feel free to fork the project, open issues, and submit pull requests. Contributions are welcome as we work to improve accuracy and expand the feature set.
+
+## Libretro bindings
+The workspace includes the `libretro-bridge` crate, which automatically generates Rust bindings for the upstream `libretro.h` header via `bindgen`. The build script fetches the most recent header at compile time (with a vendored fallback for offline builds) so Nesium—and any other Rust project—can integrate with the libretro ecosystem as soon as API changes land upstream.
