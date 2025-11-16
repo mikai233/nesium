@@ -17,6 +17,8 @@ pub enum Error {
         expected: usize,
         actual: usize,
     },
+    /// Palette files must contain either 192 or 256 bytes.
+    InvalidPaletteSize { actual: usize },
     /// Wrapper for I/O errors raised while reading ROMs from disk.
     Io(std::io::Error),
 }
@@ -39,7 +41,10 @@ impl fmt::Display for Error {
                 f,
                 "{section} section expected {expected} bytes, got {actual}"
             ),
-            Self::Io(err) => write!(f, "i/o error while reading cartridge: {err}"),
+            Self::InvalidPaletteSize { actual } => {
+                write!(f, "palette blobs must be 192 or 256 bytes (got {actual})")
+            }
+            Self::Io(err) => write!(f, "i/o error: {err}"),
         }
     }
 }

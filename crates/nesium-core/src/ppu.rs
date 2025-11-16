@@ -13,13 +13,13 @@ mod registers;
 
 use core::fmt;
 
-use crate::memory::ppu::{self as ppu_mem, Register as PpuRegister, PALETTE_RAM_SIZE, VRAM_SIZE};
+use crate::memory::ppu::{self as ppu_mem, PALETTE_RAM_SIZE, Register as PpuRegister, VRAM_SIZE};
 use registers::{Control, Mask, Registers, Status};
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + vblank lines
 
 /// Entry points for the CPU PPU register mirror.
-#[derive(Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Ppu {
     /// Collection of CPU visible registers and their helper latches.
     registers: Registers,
@@ -77,9 +77,7 @@ impl Ppu {
     /// Handles CPU writes to the mirrored PPU register space (`$2000-$3FFF`).
     pub fn cpu_write(&mut self, addr: u16, value: u8) {
         match PpuRegister::from_cpu_addr(addr) {
-            PpuRegister::Control => {
-                self.registers.control = Control::from_bits_retain(value)
-            }
+            PpuRegister::Control => self.registers.control = Control::from_bits_retain(value),
             PpuRegister::Mask => self.registers.mask = Mask::from_bits_retain(value),
             PpuRegister::Status => {} // read-only
             PpuRegister::OamAddr => self.registers.oam_addr = value,

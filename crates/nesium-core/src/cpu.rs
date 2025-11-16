@@ -1,7 +1,6 @@
 use std::fmt::{Debug, Display};
 
 use crate::bus::{Bus, STACK_ADDR};
-use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
 use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
@@ -9,6 +8,7 @@ use crate::cpu::lookup::LOOKUP_TABLE;
 use crate::cpu::micro_op::MicroOp;
 use crate::cpu::mnemonic::Mnemonic;
 use crate::cpu::status::Status;
+use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
 mod phase;
 mod status;
 

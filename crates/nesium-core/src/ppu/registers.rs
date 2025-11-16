@@ -173,7 +173,7 @@ impl Default for Status {
 }
 
 /// Internal latch that mirrors writes to `$2005` (scroll register).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ScrollRegister {
     /// Raw horizontal scroll value written by the CPU.
     horizontal: u8,
@@ -221,7 +221,7 @@ impl ScrollRegister {
 }
 
 /// Internal latch for the VRAM address register (`$2006`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct VramAddressRegister {
     /// Current 15-bit VRAM address.
     addr: u16,
@@ -231,7 +231,10 @@ pub(crate) struct VramAddressRegister {
 
 impl Default for VramAddressRegister {
     fn default() -> Self {
-        Self { addr: 0, latch: false }
+        Self {
+            addr: 0,
+            latch: false,
+        }
     }
 }
 
@@ -264,7 +267,7 @@ impl VramAddressRegister {
 }
 
 /// Aggregates the state of all CPU visible PPU registers.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Registers {
     /// Mirror of the control register (`$2000`).
     pub(crate) control: Control,
