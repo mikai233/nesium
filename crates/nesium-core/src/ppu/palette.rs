@@ -122,9 +122,10 @@ impl Palette {
 }
 
 /// Collection of built-in palettes that can be selected without loading a file.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum PaletteKind {
     /// Canonical Nesdev/Ntsc palette. Matches the default data defined below.
+    #[default]
     NesdevNtsc,
     /// FirebrandX's "Composite Direct" capture (CRT composite signal).
     FbxCompositeDirect,
@@ -134,12 +135,6 @@ pub enum PaletteKind {
     Pal2c07,
     /// Straight YIQ-to-RGB conversion without decoder tweaks. Useful for theory/debugging.
     RawLinear,
-}
-
-impl Default for PaletteKind {
-    fn default() -> Self {
-        PaletteKind::NesdevNtsc
-    }
 }
 
 impl PaletteKind {

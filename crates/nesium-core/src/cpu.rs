@@ -138,7 +138,7 @@ impl Cpu {
             // so the main execution logic can fetch the data from a unified source,
             // regardless of the addressing mode. Then, advance the PC past the data byte.
             Addressing::Immediate => {
-                self.effective_addr = self.pc as u16;
+                self.effective_addr = self.pc;
                 self.incr_pc();
             }
 
@@ -269,8 +269,7 @@ impl Cpu {
 
     pub(crate) fn pull(&mut self, bus: &mut dyn Bus) -> u8 {
         self.s = self.s.wrapping_add(1);
-        let data = bus.read(STACK_ADDR | self.s as u16);
-        data
+        bus.read(STACK_ADDR | self.s as u16)
     }
 }
 
@@ -306,9 +305,7 @@ impl Display for Cpu {
             Some(opcode) => {
                 format!("{:02X}", opcode)
             }
-            None => {
-                format!("  ")
-            }
+            None => "  ".to_string(),
         };
         writeln!(
             f,

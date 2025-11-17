@@ -58,7 +58,7 @@ impl MicroOp {
             name: "fetch_abs_addr_hi",
             micro_fn: |cpu, bus| {
                 let hi = bus.read(cpu.pc);
-                cpu.effective_addr = ((hi as u16) << 8) | cpu.effective_addr;
+                cpu.effective_addr |= (hi as u16) << 8;
                 cpu.incr_pc();
             },
         }
