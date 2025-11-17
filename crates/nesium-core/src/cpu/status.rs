@@ -3,10 +3,10 @@ use std::fmt::{Debug, Display};
 use bitflags::bitflags;
 
 pub(crate) const BIT_0: u8 = 1 << 0;
-pub(crate) const BIT_1: u8 = 1 << 1;
-pub(crate) const BIT_2: u8 = 1 << 2;
-pub(crate) const BIT_3: u8 = 1 << 3;
-pub(crate) const BIT_4: u8 = 1 << 4;
+// pub(crate) const BIT_1: u8 = 1 << 1;
+// pub(crate) const BIT_2: u8 = 1 << 2;
+// pub(crate) const BIT_3: u8 = 1 << 3;
+// pub(crate) const BIT_4: u8 = 1 << 4;
 pub(crate) const BIT_5: u8 = 1 << 5;
 pub(crate) const BIT_6: u8 = 1 << 6;
 pub(crate) const BIT_7: u8 = 1 << 7;

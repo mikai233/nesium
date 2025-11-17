@@ -100,7 +100,7 @@ impl LibretroCore for DemoCore {
     fn run(&mut self, runtime: &mut RuntimeHandles) {
         self.render_pattern();
         if let Some(video) = runtime.video() {
-            let pitch = (WIDTH as usize * std::mem::size_of::<u16>()) as usize;
+            let pitch = WIDTH as usize * std::mem::size_of::<u16>();
             video.submit(Frame::from_pixels(self.pixel_bytes(), WIDTH, HEIGHT, pitch));
         }
 

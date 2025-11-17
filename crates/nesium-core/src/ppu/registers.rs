@@ -173,7 +173,7 @@ impl Default for Status {
 }
 
 /// Internal latch that mirrors writes to `$2005` (scroll register).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(crate) struct ScrollRegister {
     /// Raw horizontal scroll value written by the CPU.
     horizontal: u8,
@@ -181,16 +181,6 @@ pub(crate) struct ScrollRegister {
     vertical: u8,
     /// Tracks whether the next write targets the vertical component.
     latch: bool,
-}
-
-impl Default for ScrollRegister {
-    fn default() -> Self {
-        Self {
-            horizontal: 0,
-            vertical: 0,
-            latch: false,
-        }
-    }
 }
 
 impl ScrollRegister {
@@ -221,21 +211,12 @@ impl ScrollRegister {
 }
 
 /// Internal latch for the VRAM address register (`$2006`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(crate) struct VramAddressRegister {
     /// Current 15-bit VRAM address.
     addr: u16,
     /// Indicates whether the high byte or low byte is expected on the next write.
     latch: bool,
-}
-
-impl Default for VramAddressRegister {
-    fn default() -> Self {
-        Self {
-            addr: 0,
-            latch: false,
-        }
-    }
 }
 
 impl VramAddressRegister {

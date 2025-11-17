@@ -2,8 +2,9 @@ use std::fmt::Debug;
 
 use crate::memory;
 
+pub mod cpu;
+#[cfg(test)]
 pub mod mock;
-pub mod nes;
 
 /// Expose the CPU stack page start address for stack helpers.
 pub(crate) const STACK_ADDR: u16 = memory::cpu::STACK_PAGE_START;

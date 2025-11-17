@@ -15,6 +15,7 @@ pub mod shift;
 pub mod stack;
 pub mod trans;
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Mnemonic {
     //Load/Store
