@@ -13,20 +13,23 @@ mod registers;
 
 use core::fmt;
 
-use crate::memory::ppu::{self as ppu_mem, PALETTE_RAM_SIZE, Register as PpuRegister, VRAM_SIZE};
+use crate::{
+    memory::ppu::{self as ppu_mem, Register as PpuRegister},
+    ram::ppu::{PaletteRam, Vram},
+};
 use registers::{Control, Mask, Registers, Status};
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + vblank lines
 
 /// Entry points for the CPU PPU register mirror.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Ppu {
     /// Collection of CPU visible registers and their helper latches.
     registers: Registers,
     /// Internal VRAM backing store for nametables and pattern tables.
-    vram: [u8; VRAM_SIZE],
+    vram: Vram,
     /// Dedicated palette RAM. Addresses between `$3F00` and `$3FFF` map here.
-    palette_ram: [u8; PALETTE_RAM_SIZE],
+    palette_ram: PaletteRam,
     /// Current dot (0..=340) within the active scanline.
     cycle: u16,
     /// Current scanline. `-1` is the prerender line, `0..239` are visible.
@@ -49,13 +52,19 @@ impl fmt::Debug for Ppu {
     }
 }
 
+impl Default for Ppu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ppu {
     /// Creates a new PPU instance with cleared VRAM and default register values.
     pub fn new() -> Self {
         Self {
             registers: Registers::new(),
-            vram: [0; VRAM_SIZE],
-            palette_ram: [0; PALETTE_RAM_SIZE],
+            vram: Vram::new(),
+            palette_ram: PaletteRam::new(),
             cycle: 0,
             scanline: -1,
             frame: 0,
@@ -66,8 +75,8 @@ impl Ppu {
     /// Restores the device to its power-on state.
     pub fn reset(&mut self) {
         self.registers.reset();
-        self.vram = [0; VRAM_SIZE];
-        self.palette_ram = [0; PALETTE_RAM_SIZE];
+        self.vram.fill(0);
+        self.palette_ram.fill(0);
         self.cycle = 0;
         self.scanline = -1;
         self.frame = 0;
@@ -196,7 +205,7 @@ fn palette_index(addr: u16) -> usize {
     if index >= 16 && index % 4 == 0 {
         index -= 16;
     }
-    index % PALETTE_RAM_SIZE
+    index % ppu_mem::PALETTE_RAM_SIZE
 }
 
 #[cfg(test)]

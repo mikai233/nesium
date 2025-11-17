@@ -1,3 +1,5 @@
+use crate::cpu::Cpu;
+
 pub mod apu;
 pub mod bus;
 pub mod cartridge;
@@ -5,6 +7,18 @@ pub mod cpu;
 pub mod error;
 pub mod memory;
 pub mod ppu;
+pub mod ram;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NES {
+    cpu: Cpu,
+}
+
+impl NES {
+    pub fn clock(&mut self) {
+        self.cpu.clock(todo!());
+    }
+}
 
 #[cfg(test)]
 mod tests {

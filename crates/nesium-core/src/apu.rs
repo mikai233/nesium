@@ -9,19 +9,17 @@
 
 use core::fmt;
 
-use crate::memory::apu::{self as apu_mem, REGISTER_SPACE};
+use crate::{
+    memory::apu::{self as apu_mem},
+    ram::apu::RegisterRam,
+};
 
 /// Frame sequencer timing mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum FrameCounterMode {
+    #[default]
     FourStep,
     FiveStep,
-}
-
-impl Default for FrameCounterMode {
-    fn default() -> Self {
-        Self::FourStep
-    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
@@ -78,7 +76,7 @@ impl StatusRegister {
 /// Lightweight NES APU representation.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Apu {
-    registers: [u8; REGISTER_SPACE],
+    registers: RegisterRam,
     frame_counter: FrameCounter,
     status: StatusRegister,
     cycles: u64,
@@ -97,7 +95,7 @@ impl fmt::Debug for Apu {
 impl Apu {
     pub fn new() -> Self {
         Self {
-            registers: [0; REGISTER_SPACE],
+            registers: RegisterRam::new(),
             frame_counter: FrameCounter::default(),
             status: StatusRegister::default(),
             cycles: 0,
@@ -105,7 +103,7 @@ impl Apu {
     }
 
     pub fn reset(&mut self) {
-        self.registers = [0; REGISTER_SPACE];
+        self.registers.fill(0);
         self.frame_counter = FrameCounter::default();
         self.status = StatusRegister::default();
         self.cycles = 0;
