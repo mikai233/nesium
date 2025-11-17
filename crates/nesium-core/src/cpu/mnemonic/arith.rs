@@ -40,7 +40,7 @@ impl Mnemonic {
     ///
     /// p: =1 if page is crossed.
     pub(crate) const fn adc() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "adc_binary",
             micro_fn: |cpu, bus| {
                 // 1. Fetch Operand
@@ -75,8 +75,7 @@ impl Mnemonic {
                 // Z/N: Zero and Negative Flags
                 cpu.p.set_zn(result);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -100,7 +99,7 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn anc() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "anc",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
@@ -108,8 +107,7 @@ impl Mnemonic {
                 cpu.p.set_zn(cpu.a);
                 cpu.p.set_c(cpu.a & BIT_7 != 0);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -143,7 +141,7 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn arr() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "arr_binary",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
@@ -168,8 +166,7 @@ impl Mnemonic {
                 // C: C = Result Bit 6 (This is the specific, non-standard behavior for ARR's C flag)
                 cpu.p.set_c(cpu.a & BIT_6 != 0);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -194,7 +191,7 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn asr() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "asr",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
@@ -203,8 +200,7 @@ impl Mnemonic {
                 cpu.a >>= 1;
                 cpu.p.set_zn(cpu.a);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -235,7 +231,7 @@ impl Mnemonic {
     ///
     /// p: =1 if page is crossed.
     pub(crate) const fn cmp() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "cmp",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
@@ -243,8 +239,7 @@ impl Mnemonic {
                 cpu.p.set_c(cpu.a >= m);
                 cpu.p.set_zn(result);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -273,7 +268,7 @@ impl Mnemonic {
     /// Absolute        | CPX $nnnn                | $EC    | 3         | 4
     /// Zero Page       | CPX $nn                  | $E4    | 2         | 3
     pub(crate) const fn cpx() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "cpx",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
@@ -281,8 +276,7 @@ impl Mnemonic {
                 cpu.p.set_c(cpu.x >= m);
                 cpu.p.set_zn(result);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -309,7 +303,7 @@ impl Mnemonic {
     /// Absolute        | CPY $nnnn                | $CC    | 3         | 4
     /// Zero Page       | CPY $nn                  | $C4    | 2         | 3
     pub(crate) const fn cpy() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "cpy",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
@@ -317,8 +311,7 @@ impl Mnemonic {
                 cpu.p.set_c(cpu.y >= m);
                 cpu.p.set_zn(result);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -684,7 +677,7 @@ impl Mnemonic {
     /// *Undocumented.
     /// p: =1 if page is crossed.
     pub(crate) const fn sbc() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "sbc_binary",
             // Micro-Op for SBC (Subtract with Carry) - Single cycle for execution, assuming effective_addr is ready.
             micro_fn: |cpu, bus| {
@@ -724,8 +717,7 @@ impl Mnemonic {
                 // Z/N: Zero and Negative Flags
                 cpu.p.set_zn(result);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -752,7 +744,7 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn sbx() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "sbx",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
@@ -761,8 +753,7 @@ impl Mnemonic {
                 cpu.x = value;
                 cpu.p.set_zn(cpu.x);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -961,15 +952,14 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn xaa() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "xaa",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
                 cpu.a = (cpu.a & cpu.x) & m;
                 cpu.p.set_zn(cpu.a);
             },
-        };
-        &[OP1]
+        }]
     }
 }
 

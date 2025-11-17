@@ -23,7 +23,7 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn shs() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "shs",
             micro_fn: |cpu, bus| {
                 let s = cpu.a & cpu.x;
@@ -31,8 +31,7 @@ impl Mnemonic {
                 let m = s & cpu.base.wrapping_add(1);
                 bus.write(cpu.effective_addr, m);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -54,14 +53,13 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | TAX                      | $AA    | 1         | 2
     pub(crate) const fn tax() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "tax",
             micro_fn: |cpu, _| {
                 cpu.x = cpu.a;
                 cpu.p.set_zn(cpu.x);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -82,14 +80,13 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | TAY                      | $A8    | 1         | 2
     pub(crate) const fn tay() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "tay",
             micro_fn: |cpu, _| {
                 cpu.y = cpu.a;
                 cpu.p.set_zn(cpu.y);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -111,14 +108,13 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | TSX                      | $BA    | 1         | 2
     pub(crate) const fn tsx() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "tsx",
             micro_fn: |cpu, _| {
                 cpu.x = cpu.s;
                 cpu.p.set_zn(cpu.x);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -139,14 +135,13 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | TXA                      | $8A    | 1         | 2
     pub(crate) const fn txa() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "txa",
             micro_fn: |cpu, _| {
                 cpu.a = cpu.x;
                 cpu.p.set_zn(cpu.a);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -165,13 +160,12 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | TXS                      | $9A    | 1         | 2
     pub(crate) const fn txs() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "txs",
             micro_fn: |cpu, _| {
                 cpu.s = cpu.x;
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -192,14 +186,13 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | TYA                      | $98    | 1         | 2
     pub(crate) const fn tya() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "tya",
             micro_fn: |cpu, _| {
                 cpu.a = cpu.y;
                 cpu.p.set_zn(cpu.a);
             },
-        };
-        &[OP1]
+        }]
     }
 }
 

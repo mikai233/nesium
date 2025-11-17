@@ -18,14 +18,13 @@ impl Mnemonic {
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Implied         | CLC                    | $18    | 1         | 2
     pub(crate) const fn clc() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "clc_clear_carry",
             micro_fn: |cpu, _| {
                 // Cycle 2: C = 0
                 cpu.p.set_c(false);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// N V - B D I Z C
@@ -48,14 +47,13 @@ impl Mnemonic {
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Implied         | CLD                    | $D8    | 1         | 2
     pub(crate) const fn cld() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "cld_clear_decimal",
             micro_fn: |cpu, _| {
                 // Cycle 2: D = 0
                 cpu.p.set_d(false);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// N V - B D I Z C
@@ -74,14 +72,13 @@ impl Mnemonic {
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Implied         | CLI                    | $58    | 1         | 2
     pub(crate) const fn cli() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "cli_clear_interrupt",
             micro_fn: |cpu, _| {
                 // Cycle 2: I = 0
                 cpu.p.set_i(false);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// N V - B D I Z C
@@ -101,14 +98,13 @@ impl Mnemonic {
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Implied         | CLV                    | $B8    | 1         | 2
     pub(crate) const fn clv() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "clv_clear_overflow",
             micro_fn: |cpu, _| {
                 // Cycle 2: V = 0
                 cpu.p.set_v(false);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// N V - B D I Z C
@@ -128,14 +124,13 @@ impl Mnemonic {
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Implied         | SEC                    | $38    | 1         | 2
     pub(crate) const fn sec() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "sec_set_carry",
             micro_fn: |cpu, _| {
                 // Cycle 2: C = 1
                 cpu.p.set_c(true);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// N V - B D I Z C
@@ -159,14 +154,13 @@ impl Mnemonic {
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Implied         | SED                    | $F8    | 1         | 2
     pub(crate) const fn sed() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "sed_set_decimal",
             micro_fn: |cpu, _| {
                 // Cycle 2: D = 1
                 cpu.p.set_d(true);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// N V - B D I Z C
@@ -186,14 +180,13 @@ impl Mnemonic {
     /// --------------- | ---------------------- | ------ | --------- | ----------
     /// Implied         | SEI                    | $78    | 1         | 2
     pub(crate) const fn sei() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "sei_set_interrupt",
             micro_fn: |cpu, _| {
                 // Cycle 2: I = 1
                 cpu.p.set_i(true);
             },
-        };
-        &[OP1]
+        }]
     }
 }
 

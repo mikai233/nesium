@@ -37,8 +37,8 @@ fn ensure_header(download_path: &Path, vendor_header: &Path) {
         None => env::var_os("LIBRETRO_BRIDGE_FETCH").is_none(),
     };
     let offline_forced = matches!(offline_env.as_deref(), Some(value) if value != "0");
-    let header_url = env::var("LIBRETRO_BRIDGE_HEADER_URL")
-        .unwrap_or_else(|_| DEFAULT_HEADER_URL.to_string());
+    let header_url =
+        env::var("LIBRETRO_BRIDGE_HEADER_URL").unwrap_or_else(|_| DEFAULT_HEADER_URL.to_string());
 
     if !offline {
         match fetch_remote_header(&header_url, download_path) {

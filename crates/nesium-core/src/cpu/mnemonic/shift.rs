@@ -29,42 +29,43 @@ impl Mnemonic {
     /// Zero Page               | ASL $nn                  | $06    | 2         | 5
     /// X-Indexed Zero Page     | ASL $nn,X                | $16    | 2         | 6
     pub(crate) const fn asl() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "asl_read",
-            micro_fn: |cpu, bus| {
-                cpu.base = bus.read(cpu.effective_addr);
+        &[
+            MicroOp {
+                name: "asl_read",
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        const OP2: MicroOp = MicroOp {
-            name: "asl_dummy_write",
-            micro_fn: |cpu, bus| {
-                bus.write(cpu.effective_addr, cpu.base);
-            },
-        };
-        const OP3: MicroOp = MicroOp {
-            name: "asl_shift",
-            micro_fn: |cpu, bus| {
-                if cpu.opcode == Some(0x0A) {
-                    // Accumulator
-                    // Dummy read
-                    let _ = bus.read(cpu.pc);
-                    // C = bit 7 of A
-                    cpu.p.set_c(cpu.a & BIT_7 != 0);
-                    // A = A << 1, bit 0 = 0
-                    cpu.a <<= 1;
-                    // Update N and Z
-                    cpu.p.set_zn(cpu.a);
-                } else {
-                    // Other
-                    cpu.p.set_c(cpu.base & BIT_7 != 0);
-                    cpu.base <<= 1;
+            MicroOp {
+                name: "asl_dummy_write",
+                micro_fn: |cpu, bus| {
                     bus.write(cpu.effective_addr, cpu.base);
-                    // Update N and Z
-                    cpu.p.set_zn(cpu.base);
-                }
+                },
             },
-        };
-        &[OP1, OP2, OP3]
+            MicroOp {
+                name: "asl_shift",
+                micro_fn: |cpu, bus| {
+                    if cpu.opcode == Some(0x0A) {
+                        // Accumulator
+                        // Dummy read
+                        let _ = bus.read(cpu.pc);
+                        // C = bit 7 of A
+                        cpu.p.set_c(cpu.a & BIT_7 != 0);
+                        // A = A << 1, bit 0 = 0
+                        cpu.a <<= 1;
+                        // Update N and Z
+                        cpu.p.set_zn(cpu.a);
+                    } else {
+                        // Other
+                        cpu.p.set_c(cpu.base & BIT_7 != 0);
+                        cpu.base <<= 1;
+                        bus.write(cpu.effective_addr, cpu.base);
+                        // Update N and Z
+                        cpu.p.set_zn(cpu.base);
+                    }
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -93,44 +94,45 @@ impl Mnemonic {
     /// Zero Page               | LSR $nn                  | $46    | 2         | 5
     /// X-Indexed Zero Page     | LSR $nn,X                | $56    | 2         | 6
     pub(crate) const fn lsr() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "lsr_read",
-            micro_fn: |cpu, bus| {
-                cpu.base = bus.read(cpu.effective_addr);
+        &[
+            MicroOp {
+                name: "lsr_read",
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        const OP2: MicroOp = MicroOp {
-            name: "lsr_dummy_write",
-            micro_fn: |cpu, bus| {
-                bus.write(cpu.effective_addr, cpu.base);
-            },
-        };
-        const OP3: MicroOp = MicroOp {
-            name: "lsr_shift",
-            micro_fn: |cpu, bus| {
-                if cpu.opcode == Some(0x4A) {
-                    // Accumulator
-                    // Dummy read
-                    let _ = bus.read(cpu.pc);
-                    // C = bit 7 of A
-                    cpu.p.set_c(cpu.a & BIT_0 != 0);
-                    // A = A << 1, bit 7 = 0
-                    cpu.a >>= 1;
-                    // Update N and Z
-                    cpu.p.remove(Status::NEGATIVE);
-                    cpu.p.set_z(cpu.a == 0);
-                } else {
-                    // Other
-                    cpu.p.set_c(cpu.base & BIT_0 != 0);
-                    cpu.base >>= 1;
+            MicroOp {
+                name: "lsr_dummy_write",
+                micro_fn: |cpu, bus| {
                     bus.write(cpu.effective_addr, cpu.base);
-                    // Update N and Z
-                    cpu.p.remove(Status::NEGATIVE);
-                    cpu.p.set_z(cpu.base == 0);
-                }
+                },
             },
-        };
-        &[OP1, OP2, OP3]
+            MicroOp {
+                name: "lsr_shift",
+                micro_fn: |cpu, bus| {
+                    if cpu.opcode == Some(0x4A) {
+                        // Accumulator
+                        // Dummy read
+                        let _ = bus.read(cpu.pc);
+                        // C = bit 7 of A
+                        cpu.p.set_c(cpu.a & BIT_0 != 0);
+                        // A = A << 1, bit 7 = 0
+                        cpu.a >>= 1;
+                        // Update N and Z
+                        cpu.p.remove(Status::NEGATIVE);
+                        cpu.p.set_z(cpu.a == 0);
+                    } else {
+                        // Other
+                        cpu.p.set_c(cpu.base & BIT_0 != 0);
+                        cpu.base >>= 1;
+                        bus.write(cpu.effective_addr, cpu.base);
+                        // Update N and Z
+                        cpu.p.remove(Status::NEGATIVE);
+                        cpu.p.set_z(cpu.base == 0);
+                    }
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -157,45 +159,46 @@ impl Mnemonic {
     /// Zero Page               | ROL $nn                  | $26    | 2         | 5
     /// X-Indexed Zero Page     | ROL $nn,X                | $36    | 2         | 6
     pub(crate) const fn rol() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "rol_read",
-            micro_fn: |cpu, bus| {
-                cpu.base = bus.read(cpu.effective_addr);
+        &[
+            MicroOp {
+                name: "rol_read",
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        const OP2: MicroOp = MicroOp {
-            name: "rol_dummy_write",
-            micro_fn: |cpu, bus| {
-                bus.write(cpu.effective_addr, cpu.base);
-            },
-        };
-        const OP3: MicroOp = MicroOp {
-            name: "rol_rotate",
-            micro_fn: |cpu, bus| {
-                // Cycle 2: Rotate left through Carry
-                if cpu.opcode == Some(0x2A) {
-                    // Dummy read
-                    let _ = bus.read(cpu.pc);
-                    let old_bit7 = cpu.a & BIT_7;
-                    let new_a = (cpu.a << 1) | if cpu.p.c() { 1 } else { 0 };
-                    cpu.a = new_a;
-                    // C = old bit 7
-                    cpu.p.set_c(old_bit7 != 0);
-                    // Update N and Z
-                    cpu.p.set_zn(cpu.a);
-                } else {
-                    let old_bit7 = cpu.base & BIT_7;
-                    let new_a = (cpu.base << 1) | if cpu.p.c() { 1 } else { 0 };
-                    cpu.base = new_a;
+            MicroOp {
+                name: "rol_dummy_write",
+                micro_fn: |cpu, bus| {
                     bus.write(cpu.effective_addr, cpu.base);
-                    // C = old bit 7
-                    cpu.p.set_c(old_bit7 != 0);
-                    // Update N and Z
-                    cpu.p.set_zn(cpu.base);
-                }
+                },
             },
-        };
-        &[OP1, OP2, OP3]
+            MicroOp {
+                name: "rol_rotate",
+                micro_fn: |cpu, bus| {
+                    // Cycle 2: Rotate left through Carry
+                    if cpu.opcode == Some(0x2A) {
+                        // Dummy read
+                        let _ = bus.read(cpu.pc);
+                        let old_bit7 = cpu.a & BIT_7;
+                        let new_a = (cpu.a << 1) | if cpu.p.c() { 1 } else { 0 };
+                        cpu.a = new_a;
+                        // C = old bit 7
+                        cpu.p.set_c(old_bit7 != 0);
+                        // Update N and Z
+                        cpu.p.set_zn(cpu.a);
+                    } else {
+                        let old_bit7 = cpu.base & BIT_7;
+                        let new_a = (cpu.base << 1) | if cpu.p.c() { 1 } else { 0 };
+                        cpu.base = new_a;
+                        bus.write(cpu.effective_addr, cpu.base);
+                        // C = old bit 7
+                        cpu.p.set_c(old_bit7 != 0);
+                        // Update N and Z
+                        cpu.p.set_zn(cpu.base);
+                    }
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC
@@ -223,44 +226,45 @@ impl Mnemonic {
     /// Zero Page               | ROR $nn                  | $66    | 2         | 5
     /// X-Indexed Zero Page     | ROR $nn,X                | $76    | 2         | 6
     pub(crate) const fn ror() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "ror_read",
-            micro_fn: |cpu, bus| {
-                cpu.base = bus.read(cpu.effective_addr);
+        &[
+            MicroOp {
+                name: "ror_read",
+                micro_fn: |cpu, bus| {
+                    cpu.base = bus.read(cpu.effective_addr);
+                },
             },
-        };
-        const OP2: MicroOp = MicroOp {
-            name: "ror_dummy_write",
-            micro_fn: |cpu, bus| {
-                bus.write(cpu.effective_addr, cpu.base);
-            },
-        };
-        const OP3: MicroOp = MicroOp {
-            name: "ror_rotate",
-            micro_fn: |cpu, bus| {
-                if cpu.opcode == Some(0x6A) {
-                    // Dummy read
-                    let _ = bus.read(cpu.pc);
-                    let old_bit0 = cpu.a & BIT_0;
-                    let new_a = (cpu.a >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
-                    cpu.a = new_a;
-                    // C = old bit 0
-                    cpu.p.set_c(old_bit0 != 0);
-                    // Update N and Z (N = bit7 = old C)
-                    cpu.p.set_zn(cpu.a);
-                } else {
-                    let old_bit0 = cpu.base & BIT_0;
-                    let new_a = (cpu.base >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
-                    cpu.base = new_a;
+            MicroOp {
+                name: "ror_dummy_write",
+                micro_fn: |cpu, bus| {
                     bus.write(cpu.effective_addr, cpu.base);
-                    // C = old bit 0
-                    cpu.p.set_c(old_bit0 != 0);
-                    // Update N and Z (N = bit7 = old C)
-                    cpu.p.set_zn(cpu.base);
-                }
+                },
             },
-        };
-        &[OP1, OP2, OP3]
+            MicroOp {
+                name: "ror_rotate",
+                micro_fn: |cpu, bus| {
+                    if cpu.opcode == Some(0x6A) {
+                        // Dummy read
+                        let _ = bus.read(cpu.pc);
+                        let old_bit0 = cpu.a & BIT_0;
+                        let new_a = (cpu.a >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
+                        cpu.a = new_a;
+                        // C = old bit 0
+                        cpu.p.set_c(old_bit0 != 0);
+                        // Update N and Z (N = bit7 = old C)
+                        cpu.p.set_zn(cpu.a);
+                    } else {
+                        let old_bit0 = cpu.base & BIT_0;
+                        let new_a = (cpu.base >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
+                        cpu.base = new_a;
+                        bus.write(cpu.effective_addr, cpu.base);
+                        // C = old bit 0
+                        cpu.p.set_c(old_bit0 != 0);
+                        // Update N and Z (N = bit7 = old C)
+                        cpu.p.set_zn(cpu.base);
+                    }
+                },
+            },
+        ]
     }
 }
 

@@ -85,14 +85,13 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | DEX                      | $CA    | 1         | 2
     pub(crate) const fn dex() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "dex",
             micro_fn: |cpu, _| {
                 cpu.x = cpu.x.wrapping_sub(1);
                 cpu.p.set_zn(cpu.x);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -116,14 +115,13 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | DEY                      | $88    | 1         | 2
     pub(crate) const fn dey() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "dey",
             micro_fn: |cpu, _| {
                 cpu.y = cpu.y.wrapping_sub(1);
                 cpu.p.set_zn(cpu.y);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -210,14 +208,13 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | INX                      | $E8    | 1         | 2
     pub(crate) const fn inx() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "inx",
             micro_fn: |cpu, _| {
                 cpu.x = cpu.x.wrapping_add(1);
                 cpu.p.set_zn(cpu.x);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -238,14 +235,13 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | INY                      | $C8    | 1         | 2
     pub(crate) const fn iny() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "iny",
             micro_fn: |cpu, _| {
                 cpu.y = cpu.y.wrapping_add(1);
                 cpu.p.set_zn(cpu.y);
             },
-        };
-        &[OP1]
+        }]
     }
 }
 

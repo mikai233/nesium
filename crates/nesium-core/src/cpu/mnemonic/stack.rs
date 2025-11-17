@@ -53,22 +53,23 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | PHA                      | $48    | 1         | 3
     pub(crate) const fn pha() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "pha_dummy_read",
-            micro_fn: |cpu, bus| {
-                // Cycle 1: Dummy read from current PC (internal operation)
-                let _ = bus.read(cpu.pc);
+        &[
+            MicroOp {
+                name: "pha_dummy_read",
+                micro_fn: |cpu, bus| {
+                    // Cycle 1: Dummy read from current PC (internal operation)
+                    let _ = bus.read(cpu.pc);
+                },
             },
-        };
-        const OP2: MicroOp = MicroOp {
-            name: "pha_write_stack",
-            micro_fn: |cpu, bus| {
-                // Cycle 2: Write accumulator to stack, then decrement S
-                // Hardware writes to [0x0100 + S] using current S, then S--
-                cpu.push(bus, cpu.a);
+            MicroOp {
+                name: "pha_write_stack",
+                micro_fn: |cpu, bus| {
+                    // Cycle 2: Write accumulator to stack, then decrement S
+                    // Hardware writes to [0x0100 + S] using current S, then S--
+                    cpu.push(bus, cpu.a);
+                },
             },
-        };
-        &[OP1, OP2]
+        ]
     }
 
     /// NV-BDIZC
@@ -86,23 +87,24 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | PHP                      | $08    | 1         | 3
     pub(crate) const fn php() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "php_dummy_read",
-            micro_fn: |cpu, bus| {
-                // Cycle 1: Dummy read from current PC
-                let _ = bus.read(cpu.pc);
+        &[
+            MicroOp {
+                name: "php_dummy_read",
+                micro_fn: |cpu, bus| {
+                    // Cycle 1: Dummy read from current PC
+                    let _ = bus.read(cpu.pc);
+                },
             },
-        };
-        const OP2: MicroOp = MicroOp {
-            name: "php_write_stack",
-            micro_fn: |cpu, bus| {
-                // Cycle 2: Hardware forces B flag (bit4) and unused bit5 when pushing
-                let p = cpu.p | Status::BREAK | Status::UNUSED;
-                let p = p.bits();
-                cpu.push(bus, p);
+            MicroOp {
+                name: "php_write_stack",
+                micro_fn: |cpu, bus| {
+                    // Cycle 2: Hardware forces B flag (bit4) and unused bit5 when pushing
+                    let p = cpu.p | Status::BREAK | Status::UNUSED;
+                    let p = p.bits();
+                    cpu.push(bus, p);
+                },
             },
-        };
-        &[OP1, OP2]
+        ]
     }
 
     /// NV-BDIZC
@@ -125,30 +127,31 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | PLA                      | $68    | 1         | 4
     pub(crate) const fn pla() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "pla_dummy_read1",
-            micro_fn: |cpu, bus| {
-                // Cycle 1: Dummy read from PC
-                let _ = bus.read(cpu.pc);
+        &[
+            MicroOp {
+                name: "pla_dummy_read1",
+                micro_fn: |cpu, bus| {
+                    // Cycle 1: Dummy read from PC
+                    let _ = bus.read(cpu.pc);
+                },
             },
-        };
-        const OP2: MicroOp = MicroOp {
-            name: "pla_dummy_read2",
-            micro_fn: |cpu, bus| {
-                // Cycle 2: Dummy read from current stack location (before increment)
-                let _ = bus.read(STACK_ADDR | cpu.s as u16);
+            MicroOp {
+                name: "pla_dummy_read2",
+                micro_fn: |cpu, bus| {
+                    // Cycle 2: Dummy read from current stack location (before increment)
+                    let _ = bus.read(STACK_ADDR | cpu.s as u16);
+                },
             },
-        };
-        const OP3: MicroOp = MicroOp {
-            name: "pla_pull_value",
-            micro_fn: |cpu, bus| {
-                // Cycle 3: Increment S first, then read from new stack pointer
-                let value = cpu.pull(bus);
-                cpu.a = value;
-                cpu.p.set_zn(value); // Update N and Z flags based on pulled value
+            MicroOp {
+                name: "pla_pull_value",
+                micro_fn: |cpu, bus| {
+                    // Cycle 3: Increment S first, then read from new stack pointer
+                    let value = cpu.pull(bus);
+                    cpu.a = value;
+                    cpu.p.set_zn(value); // Update N and Z flags based on pulled value
+                },
             },
-        };
-        &[OP1, OP2, OP3]
+        ]
     }
 
     /// NV-BDIZC
@@ -169,36 +172,37 @@ impl Mnemonic {
     /// --------------- | ------------------------ | ------ | --------- | ----------
     /// Implied         | PLP                      | $28    | 1         | 4
     pub(crate) const fn plp() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
-            name: "plp_dummy_read1",
-            micro_fn: |cpu, bus| {
-                // Cycle 1: Dummy read from PC
-                let _ = bus.read(cpu.pc);
+        &[
+            MicroOp {
+                name: "plp_dummy_read1",
+                micro_fn: |cpu, bus| {
+                    // Cycle 1: Dummy read from PC
+                    let _ = bus.read(cpu.pc);
+                },
             },
-        };
-        const OP2: MicroOp = MicroOp {
-            name: "plp_dummy_read2",
-            micro_fn: |cpu, bus| {
-                // Cycle 2: Dummy read from current stack location
-                let _ = bus.read(STACK_ADDR | cpu.s as u16);
+            MicroOp {
+                name: "plp_dummy_read2",
+                micro_fn: |cpu, bus| {
+                    // Cycle 2: Dummy read from current stack location
+                    let _ = bus.read(STACK_ADDR | cpu.s as u16);
+                },
             },
-        };
-        const OP3: MicroOp = MicroOp {
-            name: "plp_pull_status",
-            micro_fn: |cpu, bus| {
-                // Cycle 3: Increment S first
-                let value = cpu.pull(bus);
+            MicroOp {
+                name: "plp_pull_status",
+                micro_fn: |cpu, bus| {
+                    // Cycle 3: Increment S first
+                    let value = cpu.pull(bus);
 
-                // Hardware behavior:
-                // - Clear B flag (bit 4): & 0xEF
-                // - Force unused bit 5 to 1: | 0x20
-                let mut p = Status::from_bits_truncate(value);
-                p.set_b(false);
-                p.set_u(true);
-                cpu.p = p;
+                    // Hardware behavior:
+                    // - Clear B flag (bit 4): & 0xEF
+                    // - Force unused bit 5 to 1: | 0x20
+                    let mut p = Status::from_bits_truncate(value);
+                    p.set_b(false);
+                    p.set_u(true);
+                    cpu.p = p;
+                },
             },
-        };
-        &[OP1, OP2, OP3]
+        ]
     }
 }
 
