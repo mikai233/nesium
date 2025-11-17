@@ -1,13 +1,12 @@
 use super::*;
 use once_cell::sync::Lazy;
 use std::{
-    ffi::{c_void, CStr, CString},
+    ffi::{CStr, CString, c_void},
     mem::MaybeUninit,
-    ptr,
-    slice,
+    ptr, slice,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Mutex,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -146,12 +145,7 @@ impl LibretroCore for DummyCore {
 
 crate::export_libretro_core!(DummyCore);
 
-unsafe extern "C" fn video_cb(
-    data: *const c_void,
-    width: u32,
-    height: u32,
-    pitch: usize,
-) {
+unsafe extern "C" fn video_cb(data: *const c_void, width: u32, height: u32, pitch: usize) {
     VIDEO_FRAMES
         .lock()
         .unwrap()
@@ -176,13 +170,11 @@ unsafe extern "C" fn input_poll_cb() {
     INPUT_POLLS.fetch_add(1, Ordering::SeqCst);
 }
 
-unsafe extern "C" fn input_state_cb(
-    port: u32,
-    device: u32,
-    index: u32,
-    id: u32,
-) -> i16 {
-    INPUT_REQUESTS.lock().unwrap().push((port, device, index, id));
+unsafe extern "C" fn input_state_cb(port: u32, device: u32, index: u32, id: u32) -> i16 {
+    INPUT_REQUESTS
+        .lock()
+        .unwrap()
+        .push((port, device, index, id));
     1
 }
 

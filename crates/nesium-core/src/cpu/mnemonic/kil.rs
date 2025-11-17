@@ -30,10 +30,9 @@ impl Mnemonic {
     /// Implied         | JAM                    | $F2*   | 1         | X
     /// *Undocumented.
     pub(crate) const fn jam() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "jam",
             micro_fn: empty_micro_fn,
-        };
-        &[OP1]
+        }]
     }
 }

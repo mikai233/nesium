@@ -43,10 +43,9 @@ impl Mnemonic {
     /// *Undocumented.
     /// p: =1 if page is crossed.
     pub(crate) const fn nop() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "nop",
             micro_fn: empty_micro_fn,
-        };
-        &[OP1]
+        }]
     }
 }

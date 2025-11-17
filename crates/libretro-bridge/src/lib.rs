@@ -54,14 +54,14 @@ macro_rules! export_libretro_core {
         const _: () = {
             fn __libretro_bridge_state() -> &'static $crate::__private::CoreInstance<$core> {
                 static STATE: ::once_cell::sync::Lazy<$crate::__private::CoreInstance<$core>> =
-                    ::once_cell::sync::Lazy::new(|| $crate::__private::CoreInstance::<$core>::new());
+                    ::once_cell::sync::Lazy::new(|| {
+                        $crate::__private::CoreInstance::<$core>::new()
+                    });
                 &STATE
             }
 
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn retro_set_environment(
-                cb: $crate::raw::retro_environment_t,
-            ) {
+            pub unsafe extern "C" fn retro_set_environment(cb: $crate::raw::retro_environment_t) {
                 __libretro_bridge_state().set_environment(cb);
             }
 
@@ -73,9 +73,7 @@ macro_rules! export_libretro_core {
             }
 
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn retro_set_audio_sample(
-                cb: $crate::raw::retro_audio_sample_t,
-            ) {
+            pub unsafe extern "C" fn retro_set_audio_sample(cb: $crate::raw::retro_audio_sample_t) {
                 __libretro_bridge_state().set_audio_sample(cb);
             }
 
@@ -87,16 +85,12 @@ macro_rules! export_libretro_core {
             }
 
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn retro_set_input_poll(
-                cb: $crate::raw::retro_input_poll_t,
-            ) {
+            pub unsafe extern "C" fn retro_set_input_poll(cb: $crate::raw::retro_input_poll_t) {
                 __libretro_bridge_state().set_input_poll(cb);
             }
 
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn retro_set_input_state(
-                cb: $crate::raw::retro_input_state_t,
-            ) {
+            pub unsafe extern "C" fn retro_set_input_state(cb: $crate::raw::retro_input_state_t) {
                 __libretro_bridge_state().set_input_state(cb);
             }
 
@@ -130,10 +124,7 @@ macro_rules! export_libretro_core {
             }
 
             #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn retro_set_controller_port_device(
-                port: u32,
-                device: u32,
-            ) {
+            pub unsafe extern "C" fn retro_set_controller_port_device(port: u32, device: u32) {
                 __libretro_bridge_state().set_controller_port_device(port, device);
             }
 

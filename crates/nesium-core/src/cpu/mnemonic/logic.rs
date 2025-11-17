@@ -33,15 +33,14 @@ impl Mnemonic {
     ///
     /// p: =1 if page is crossed.
     pub(crate) const fn and() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "and",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
                 cpu.a &= m;
                 cpu.p.set_zn(cpu.a);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -64,7 +63,7 @@ impl Mnemonic {
     /// Absolute        | BIT $nnnn                | $2C    | 3         | 4
     /// Zero Page       | BIT $nn                  | $24    | 2         | 3
     pub(crate) const fn bit() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "bit",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
@@ -73,8 +72,7 @@ impl Mnemonic {
                 cpu.p.set_n(m & BIT_7 != 0);
                 cpu.p.set_v(m & BIT_6 != 0);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -105,15 +103,14 @@ impl Mnemonic {
     ///
     /// p: =1 if page is crossed.
     pub(crate) const fn eor() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "eor",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
                 cpu.a ^= m;
                 cpu.p.set_zn(cpu.a);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -144,15 +141,14 @@ impl Mnemonic {
     ///
     /// p: =1 if page is crossed.
     pub(crate) const fn ora() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "ora",
             micro_fn: |cpu, bus| {
                 let m = bus.read(cpu.effective_addr);
                 cpu.a |= m;
                 cpu.p.set_zn(cpu.a);
             },
-        };
-        &[OP1]
+        }]
     }
 }
 

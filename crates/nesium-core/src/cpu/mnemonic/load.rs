@@ -22,7 +22,7 @@ impl Mnemonic {
     /// *Undocumented.
     /// p: =1 if page is crossed.
     pub(crate) const fn las() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "las",
             micro_fn: |cpu, bus| {
                 let value = bus.read(cpu.effective_addr) & cpu.s;
@@ -31,8 +31,7 @@ impl Mnemonic {
                 cpu.s = value;
                 cpu.p.set_zn(value);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -61,7 +60,7 @@ impl Mnemonic {
     /// *Undocumented.
     /// p: =1 if page is crossed.
     pub(crate) const fn lax() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "lax",
             micro_fn: |cpu, bus| {
                 let value = bus.read(cpu.effective_addr);
@@ -69,8 +68,7 @@ impl Mnemonic {
                 cpu.x = value;
                 cpu.p.set_zn(value);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -100,15 +98,14 @@ impl Mnemonic {
     ///
     /// p: =1 if page is crossed.
     pub(crate) const fn lda() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "lda",
             micro_fn: |cpu, bus| {
                 let value = bus.read(cpu.effective_addr);
                 cpu.a = value;
                 cpu.p.set_zn(value);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -133,15 +130,14 @@ impl Mnemonic {
     ///
     /// p: =1 if page is crossed.
     pub(crate) const fn ldx() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "ldx",
             micro_fn: |cpu, bus| {
                 let value = bus.read(cpu.effective_addr);
                 cpu.x = value;
                 cpu.p.set_zn(value);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -166,15 +162,14 @@ impl Mnemonic {
     ///
     /// p: =1 if page is crossed.
     pub(crate) const fn ldy() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "ldy",
             micro_fn: |cpu, bus| {
                 let value = bus.read(cpu.effective_addr);
                 cpu.y = value;
                 cpu.p.set_zn(value);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -199,14 +194,13 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn sax() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "sax",
             micro_fn: |cpu, bus| {
                 let value = cpu.a & cpu.x;
                 bus.write(cpu.effective_addr, value);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -238,15 +232,14 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn sha() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "sha",
             micro_fn: |cpu, bus| {
                 let hi = cpu.base;
                 let value = cpu.a & cpu.x & hi.wrapping_add(1);
                 bus.write(cpu.effective_addr, value);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -269,15 +262,14 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn shx() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "shx",
             micro_fn: |cpu, bus| {
                 let hi = cpu.base;
                 let value = cpu.x & hi.wrapping_add(1);
                 bus.write(cpu.effective_addr, value);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -300,15 +292,14 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn shy() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "shy",
             micro_fn: |cpu, bus| {
                 let hi = cpu.base;
                 let value = cpu.y & hi.wrapping_add(1);
                 bus.write(cpu.effective_addr, value);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -332,13 +323,12 @@ impl Mnemonic {
     /// X-Indexed Zero Page Indirect        | STA ($nn,X)              | $81    | 2         | 6
     /// Zero Page Indirect Y-Indexed        | STA ($nn),Y              | $91    | 2         | 6
     pub(crate) const fn sta() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "sta",
             micro_fn: |cpu, bus| {
                 bus.write(cpu.effective_addr, cpu.a);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -358,13 +348,12 @@ impl Mnemonic {
     /// Zero Page           | STX $nn                  | $86    | 2         | 3
     /// Y-Indexed Zero Page | STX $nn,Y                | $96    | 2         | 4
     pub(crate) const fn stx() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "stx",
             micro_fn: |cpu, bus| {
                 bus.write(cpu.effective_addr, cpu.x);
             },
-        };
-        &[OP1]
+        }]
     }
 
     /// NV-BDIZC
@@ -383,13 +372,12 @@ impl Mnemonic {
     /// Zero Page           | STY $nn                  | $84    | 2         | 3
     /// X-Indexed Zero Page | STY $nn,X                | $94    | 2         | 4
     pub(crate) const fn sty() -> &'static [MicroOp] {
-        const OP1: MicroOp = MicroOp {
+        &[MicroOp {
             name: "sty",
             micro_fn: |cpu, bus| {
                 bus.write(cpu.effective_addr, cpu.y);
             },
-        };
-        &[OP1]
+        }]
     }
 }
 

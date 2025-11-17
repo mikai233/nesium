@@ -6,9 +6,8 @@ use crate::{
     runtime::{CallbackSet, RuntimeHandles},
 };
 use std::{
-    ffi::{c_char, c_void, CStr, CString},
-    ptr,
-    slice,
+    ffi::{CStr, CString, c_char, c_void},
+    ptr, slice,
     sync::Mutex,
 };
 
@@ -235,7 +234,9 @@ impl<T: LibretroCore> CoreInstance<T> {
 
     fn with_core<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         let guard = self.core.lock().unwrap();
-        let core = guard.as_ref().expect("libretro core has not been initialized");
+        let core = guard
+            .as_ref()
+            .expect("libretro core has not been initialized");
         f(core)
     }
 
@@ -294,5 +295,8 @@ fn c_string(ptr: *const c_char) -> Option<String> {
         return None;
     }
 
-    unsafe { CStr::from_ptr(ptr) }.to_str().ok().map(|s| s.to_owned())
+    unsafe { CStr::from_ptr(ptr) }
+        .to_str()
+        .ok()
+        .map(|s| s.to_owned())
 }
