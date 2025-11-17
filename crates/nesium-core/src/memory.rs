@@ -16,6 +16,47 @@ pub mod cpu {
     pub const RESET_VECTOR_LO: u16 = 0xFFFC;
     /// Reset vector high byte address (`$FFFD`).
     pub const RESET_VECTOR_HI: u16 = 0xFFFD;
+
+    /// First byte of CPU internal RAM.
+    pub const INTERNAL_RAM_START: u16 = 0x0000;
+    /// Last mirrored internal RAM address visible to the CPU (`$1FFF`).
+    pub const INTERNAL_RAM_MIRROR_END: u16 = 0x1FFF;
+    /// Size of the CPU internal RAM block (2 KiB mirrored through `$1FFF`).
+    pub const INTERNAL_RAM_SIZE: usize = 0x0800;
+    /// Mask applied to mirror CPU RAM accesses within `$0000-$1FFF`.
+    pub const INTERNAL_RAM_MASK: u16 = (INTERNAL_RAM_SIZE as u16) - 1;
+
+    /// First CPU address mapped to the PPU register mirror.
+    pub const PPU_REGISTER_BASE: u16 = 0x2000;
+    /// Last CPU address mirrored to the PPU register set.
+    pub const PPU_REGISTER_END: u16 = 0x3FFF;
+
+    /// First CPU-visible APU register.
+    pub const APU_REGISTER_BASE: u16 = 0x4000;
+    /// Final APU register before the status / frame counter region.
+    pub const APU_REGISTER_END: u16 = 0x4013;
+    /// APU status register (`$4015`).
+    pub const APU_STATUS: u16 = 0x4015;
+    /// Controller port 1 strobe/read address (`$4016`).
+    pub const CONTROLLER_PORT_1: u16 = 0x4016;
+    /// Controller port 2 strobe/read address (`$4017`).
+    pub const CONTROLLER_PORT_2: u16 = 0x4017;
+
+    /// Experimental I/O range reserved by Nintendo's diagnostics hardware.
+    pub const TEST_MODE_BASE: u16 = 0x4018;
+    /// End of the test mode I/O window.
+    pub const TEST_MODE_END: u16 = 0x401F;
+
+    /// First address handled by the cartridge expansion / PRG window.
+    pub const CARTRIDGE_SPACE_BASE: u16 = 0x4020;
+    /// PRG RAM window start address (`$6000`).
+    pub const PRG_RAM_START: u16 = 0x6000;
+    /// PRG RAM window end address (inclusive).
+    pub const PRG_RAM_END: u16 = 0x7FFF;
+    /// PRG ROM window start address (`$8000`).
+    pub const PRG_ROM_START: u16 = 0x8000;
+    /// Final CPU-visible address (`$FFFF`).
+    pub const CPU_ADDR_END: u16 = 0xFFFF;
 }
 
 /// PPU register layout and VRAM mirror rules.

@@ -1,13 +1,15 @@
-use crate::bus::Bus;
+use crate::{bus::Bus, ram::cpu::AddressSpace};
 
 #[derive(Debug)]
 pub(crate) struct MockBus {
-    pub(crate) mem: [u8; 0x10000], // 65536 bytes (0x0000 to 0xFFFF)
+    pub(crate) mem: AddressSpace, // 65536 bytes (0x0000 to 0xFFFF)
 }
 
 impl Default for MockBus {
     fn default() -> Self {
-        Self { mem: [0; 0x10000] } // Initialize all 65536 bytes to 0
+        Self {
+            mem: AddressSpace::new(),
+        } // Initialize all 65536 bytes to 0
     }
 }
 
