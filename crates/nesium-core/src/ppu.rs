@@ -15,7 +15,8 @@ use core::fmt;
 
 use crate::{
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
-    ram::ppu::{PaletteRam, Vram},
+    ppu::palette::PaletteRam,
+    ram::ppu::Vram,
 };
 use registers::{Control, Mask, Registers, Status};
 const CYCLES_PER_SCANLINE: u16 = 341;
@@ -182,8 +183,7 @@ impl Ppu {
     fn write_vram(&mut self, addr: u16, value: u8) {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
         if addr >= ppu_mem::PALETTE_BASE {
-            let index = palette_index(addr);
-            self.palette_ram[index] = value;
+            self.palette_ram.write(addr, value);
         } else {
             self.vram[addr as usize] = value;
         }
@@ -192,20 +192,11 @@ impl Ppu {
     fn read_vram(&self, addr: u16) -> u8 {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
         if addr >= ppu_mem::PALETTE_BASE {
-            let index = palette_index(addr);
-            self.palette_ram[index]
+            self.palette_ram.read(addr)
         } else {
             self.vram[addr as usize]
         }
     }
-}
-
-fn palette_index(addr: u16) -> usize {
-    let mut index = ((addr - ppu_mem::PALETTE_BASE) % ppu_mem::PALETTE_STRIDE) as usize;
-    if index >= 16 && index % 4 == 0 {
-        index -= 16;
-    }
-    index % ppu_mem::PALETTE_RAM_SIZE
 }
 
 #[cfg(test)]

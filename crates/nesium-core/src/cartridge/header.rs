@@ -8,7 +8,8 @@
 //!
 //! # Quick overview
 //! - Read the first 16 bytes and pass them to [`Header::parse`].
-//! - Inspect `header.mapper` to pick or construct a concrete [`mapper::Mapper`].
+//! - Inspect `header.mapper` to pick or construct a concrete [`crate::cartridge::Cartridge`]
+//!   implementation.
 //! - Use `header.prg_rom_size` / `header.chr_rom_size` to slice the raw PRG/CHR
 //!   sections out of the file.
 //!

@@ -41,7 +41,72 @@
 
 use std::{fs, path::Path};
 
-use crate::error::Error;
+use crate::{error::Error, memory::ppu as ppu_mem, ram::ppu::PaletteRam as PaletteStorage};
+
+/// 32-byte palette RAM covering the `$3F00-$3FFF` color window.
+///
+/// Each address written through `$2007` lands here once VRAM mirroring resolves
+/// into the palette range. The hardware repeats the 32-byte block every `$20`
+/// bytes and mirrors the background color entries (`$3F10/$3F14/$3F18/$3F1C`)
+/// back onto `$3F00/$3F04/$3F08/$3F0C`. The helper below keeps that behavior in
+/// one place so the rest of the PPU can treat palette reads and writes as plain
+/// VRAM accesses.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PaletteRam(PaletteStorage);
+
+impl PaletteRam {
+    /// Creates a cleared palette RAM instance backed by the shared [`crate::ram::Ram`] helper.
+    pub fn new() -> Self {
+        Self(PaletteStorage::new())
+    }
+
+    /// Returns the palette byte for a VRAM address in `$3F00-$3FFF`.
+    pub fn read(&self, addr: u16) -> u8 {
+        let index = Self::decode_index(addr);
+        self.0.read(index)
+    }
+
+    /// Writes a palette byte applying the NES mirroring rules.
+    pub fn write(&mut self, addr: u16, value: u8) {
+        let index = Self::decode_index(addr);
+        self.0.write(index, value);
+    }
+
+    /// Fills the entire palette RAM with the provided byte.
+    pub fn fill(&mut self, value: u8) {
+        self.0.as_mut_slice().fill(value);
+    }
+
+    /// Immutable view into the raw palette bytes.
+    pub fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+
+    /// Mutable view into the raw palette bytes.
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.0.as_mut_slice()
+    }
+
+    /// Resolves a VRAM address (or palette offset) to the backing byte index.
+    fn decode_index(addr: u16) -> usize {
+        let relative = if addr >= ppu_mem::PALETTE_BASE {
+            addr - ppu_mem::PALETTE_BASE
+        } else {
+            addr
+        };
+        let mut index = (relative % ppu_mem::PALETTE_STRIDE) as usize;
+        if index >= 16 && index % 4 == 0 {
+            index -= 16;
+        }
+        index % ppu_mem::PALETTE_RAM_SIZE
+    }
+}
+
+impl Default for PaletteRam {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Simple RGB triplet described with 8-bit channels.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -306,6 +371,7 @@ const RAW_LINEAR_DATA: [Color; 64] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory::ppu as ppu_mem;
 
     fn digest(colors: &[Color; 64]) -> u128 {
         colors.iter().fold(0u128, |acc, color| {
@@ -350,6 +416,33 @@ mod tests {
     fn clamp_to_byte(value: f64) -> u8 {
         let scaled = (value * 255.0).round();
         scaled.clamp(0.0, 255.0) as u8
+    }
+
+    #[test]
+    fn palette_ram_background_entries_mirror_properly() {
+        let mut ram = PaletteRam::new();
+        let base = ppu_mem::PALETTE_BASE;
+        ram.write(base, 0x12);
+        ram.write(base + 0x10, 0x34);
+        assert_eq!(ram.read(base), 0x34);
+        assert_eq!(ram.read(base + 0x10), 0x34);
+    }
+
+    #[test]
+    fn palette_ram_wraps_every_32_bytes() {
+        let mut ram = PaletteRam::new();
+        let base = ppu_mem::PALETTE_BASE;
+        let mirror = base + ppu_mem::PALETTE_STRIDE;
+        ram.write(base + 0x1F, 0x77);
+        assert_eq!(ram.read(mirror + 0x1F), 0x77);
+    }
+
+    #[test]
+    fn palette_ram_accepts_palette_offsets() {
+        let mut ram = PaletteRam::new();
+        // Provide an offset instead of a full VRAM address.
+        ram.write(0x0004, 0xAB);
+        assert_eq!(ram.read(ppu_mem::PALETTE_BASE + 0x04), 0xAB);
     }
 
     #[test]
