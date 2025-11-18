@@ -22,7 +22,7 @@ const DMA_TRANSFER_BYTES: usize = 256;
 pub struct Context {
     ppu: Ppu,
     apu: Apu,
-    cartridge: Option<CartridgeSlot>,
+    cartridge: Option<Box<dyn Cartridge>>,
 }
 
 impl Context {
@@ -43,8 +43,8 @@ impl Context {
     }
 
     /// Inserts a cartridge into the context, replacing any previous one.
-    pub fn insert_cartridge(&mut self, cartridge: Cartridge) {
-        self.cartridge = Some(CartridgeSlot::new(cartridge));
+    pub fn insert_cartridge(&mut self, cartridge: Box<dyn Cartridge>) {
+        self.cartridge = Some(cartridge);
     }
 
     /// Returns `true` when a cartridge is loaded.
@@ -53,8 +53,8 @@ impl Context {
     }
 
     /// Provides read-only access to the currently inserted cartridge, if any.
-    pub fn cartridge(&self) -> Option<&Cartridge> {
-        self.cartridge.as_ref().map(|slot| slot.cartridge())
+    pub fn cartridge(&self) -> Option<&dyn Cartridge> {
+        self.cartridge.as_deref()
     }
 }
 
@@ -88,7 +88,7 @@ impl<'a> CpuBus<'a> {
     }
 
     /// Convenience helper that forwards cartridge insertion to the context.
-    pub fn insert_cartridge(&mut self, cartridge: Cartridge) {
+    pub fn insert_cartridge(&mut self, cartridge: Box<dyn Cartridge>) {
         self.context.insert_cartridge(cartridge);
     }
 
@@ -98,7 +98,7 @@ impl<'a> CpuBus<'a> {
     }
 
     /// Returns the cartridge currently inserted in the context, when present.
-    pub fn cartridge(&self) -> Option<&Cartridge> {
+    pub fn cartridge(&self) -> Option<&dyn Cartridge> {
         self.context.cartridge()
     }
 
@@ -146,13 +146,13 @@ impl<'a> CpuBus<'a> {
         self.context
             .cartridge
             .as_ref()
-            .map(|slot| slot.read(addr))
+            .map(|cart| cart.cpu_read(addr))
             .unwrap_or(0)
     }
 
     fn write_cartridge(&mut self, addr: u16, value: u8) {
-        if let Some(slot) = self.context.cartridge.as_mut() {
-            slot.write(addr, value);
+        if let Some(cart) = self.context.cartridge.as_mut() {
+            cart.cpu_write(addr, value);
         }
     }
 
@@ -164,6 +164,22 @@ impl<'a> CpuBus<'a> {
             self.context
                 .ppu
                 .cpu_write(PpuRegister::OamData.addr(), value);
+        }
+    }
+
+    /// Returns `true` when the inserted cartridge asserts IRQ.
+    fn cartridge_irq_pending(&self) -> bool {
+        self.context
+            .cartridge
+            .as_ref()
+            .map(|cart| cart.irq_pending())
+            .unwrap_or(false)
+    }
+
+    /// Clears any mapper IRQ sources.
+    fn clear_cartridge_irq(&mut self) {
+        if let Some(cart) = self.context.cartridge.as_mut() {
+            cart.clear_irq();
         }
     }
 }
@@ -208,79 +224,26 @@ impl<'a> Bus for CpuBus<'a> {
             }
         }
     }
-}
 
-/// Wrapper around the inserted cartridge that also tracks CPU-visible PRG RAM.
-#[derive(Debug, Clone)]
-struct CartridgeSlot {
-    cartridge: Cartridge,
-    prg_ram: Vec<u8>,
-}
-
-impl CartridgeSlot {
-    fn new(cartridge: Cartridge) -> Self {
-        let prg_ram = if cartridge.header.prg_ram_size > 0 {
-            vec![0; cartridge.header.prg_ram_size]
-        } else {
-            Vec::new()
-        };
-
-        Self { cartridge, prg_ram }
+    fn irq_pending(&mut self) -> bool {
+        let apu_irq = self.context.apu.irq_pending();
+        let cartridge_irq = self.cartridge_irq_pending();
+        apu_irq || cartridge_irq
     }
 
-    fn cartridge(&self) -> &Cartridge {
-        &self.cartridge
-    }
-
-    fn read(&self, addr: u16) -> u8 {
-        match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
-            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
-            _ => 0,
-        }
-    }
-
-    fn write(&mut self, addr: u16, value: u8) {
-        match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, value),
-            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.handle_mapper_write(addr, value),
-            _ => {}
-        }
-    }
-
-    fn read_prg_ram(&self, addr: u16) -> u8 {
-        if self.prg_ram.is_empty() {
-            return 0;
-        }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        self.prg_ram[idx]
-    }
-
-    fn write_prg_ram(&mut self, addr: u16, value: u8) {
-        if self.prg_ram.is_empty() {
-            return;
-        }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        self.prg_ram[idx] = value;
-    }
-
-    fn read_prg_rom(&self, addr: u16) -> u8 {
-        if self.cartridge.prg_rom.is_empty() {
-            return 0;
-        }
-        let idx = (addr - cpu_mem::PRG_ROM_START) as usize % self.cartridge.prg_rom.len();
-        self.cartridge.prg_rom[idx]
-    }
-
-    fn handle_mapper_write(&mut self, _addr: u16, _value: u8) {
-        // Placeholder until concrete mappers are wired up.
+    fn clear_irq(&mut self) {
+        self.context.apu.clear_irq();
+        self.clear_cartridge_irq();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cartridge::header::{Header, Mirroring, RomFormat, TvSystem};
+    use crate::cartridge::{
+        header::{Header, Mirroring, RomFormat, TvSystem},
+        nrom::Nrom,
+    };
 
     fn test_header(prg_rom_size: usize, prg_ram_size: usize) -> Header {
         Header {
@@ -302,17 +265,14 @@ mod tests {
         }
     }
 
-    fn cartridge_with_pattern(prg_rom_size: usize, prg_ram_size: usize) -> Cartridge {
+    fn cartridge_with_pattern(prg_rom_size: usize, prg_ram_size: usize) -> Box<dyn Cartridge> {
         let header = test_header(prg_rom_size, prg_ram_size);
         let prg_rom = (0..prg_rom_size)
             .map(|value| (value & 0xFF) as u8)
-            .collect();
-        Cartridge {
-            header,
-            trainer: None,
-            prg_rom,
-            chr_rom: vec![0; header.chr_rom_size],
-        }
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let chr_rom = vec![0; header.chr_rom_size].into_boxed_slice();
+        Box::new(Nrom::new(header, prg_rom, chr_rom))
     }
 
     #[test]

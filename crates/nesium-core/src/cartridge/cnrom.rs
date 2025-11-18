@@ -1,0 +1,225 @@
+use crate::{
+    cartridge::{
+        Cartridge, TRAINER_SIZE,
+        header::Header,
+        nrom::{allocate_prg_ram, trainer_destination},
+    },
+    memory::cpu as cpu_mem,
+};
+
+const CHR_BANK_SIZE: usize = 8 * 1024;
+
+#[derive(Debug, Clone)]
+pub struct Cnrom {
+    header: Header,
+    prg_rom: Box<[u8]>,
+    prg_ram: Box<[u8]>,
+    chr_rom: Box<[u8]>,
+    chr_ram: Box<[u8]>,
+    chr_bank: usize,
+    chr_bank_count: usize,
+}
+
+impl Cnrom {
+    pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
+        Self::with_trainer(header, prg_rom, chr_rom, None)
+    }
+
+    pub(crate) fn with_trainer(
+        header: Header,
+        prg_rom: Box<[u8]>,
+        chr_rom: Box<[u8]>,
+        trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+    ) -> Self {
+        let mut prg_ram = allocate_prg_ram(&header);
+        if let (Some(trainer), Some(dst)) = (trainer.as_ref(), trainer_destination(&mut prg_ram)) {
+            dst.copy_from_slice(trainer.as_ref());
+        }
+
+        let chr_bank_count = if chr_rom.is_empty() {
+            0
+        } else {
+            (chr_rom.len() / CHR_BANK_SIZE).max(1)
+        };
+
+        Self {
+            header,
+            prg_rom,
+            prg_ram,
+            chr_rom,
+            chr_ram: allocate_chr_ram(&header),
+            chr_bank: 0,
+            chr_bank_count,
+        }
+    }
+
+    fn read_prg_rom(&self, addr: u16) -> u8 {
+        if self.prg_rom.is_empty() {
+            return 0;
+        }
+        let idx = (addr - cpu_mem::PRG_ROM_START) as usize % self.prg_rom.len();
+        self.prg_rom[idx]
+    }
+
+    fn read_prg_ram(&self, addr: u16) -> u8 {
+        if self.prg_ram.is_empty() {
+            return 0;
+        }
+        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
+        self.prg_ram[idx]
+    }
+
+    fn write_prg_ram(&mut self, addr: u16, data: u8) {
+        if self.prg_ram.is_empty() {
+            return;
+        }
+        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
+        self.prg_ram[idx] = data;
+    }
+
+    fn read_chr(&self, addr: u16) -> u8 {
+        let offset = (addr as usize) & 0x1FFF;
+        if !self.chr_rom.is_empty() && self.chr_bank_count > 0 {
+            let bank = self.chr_bank % self.chr_bank_count;
+            let start = bank * CHR_BANK_SIZE;
+            let idx = start + (offset % CHR_BANK_SIZE);
+            return self.chr_rom.get(idx).copied().unwrap_or(0);
+        }
+
+        if self.chr_ram.is_empty() {
+            return 0;
+        }
+        self.chr_ram[offset % self.chr_ram.len()]
+    }
+
+    fn write_chr(&mut self, addr: u16, data: u8) {
+        if !self.chr_rom.is_empty() {
+            return;
+        }
+        if self.chr_ram.is_empty() {
+            return;
+        }
+        let offset = (addr as usize) & 0x1FFF;
+        let idx = offset % self.chr_ram.len();
+        self.chr_ram[idx] = data;
+    }
+
+    fn write_chr_bank(&mut self, data: u8) {
+        if self.chr_bank_count == 0 {
+            return;
+        }
+        self.chr_bank = (data as usize) % self.chr_bank_count;
+    }
+}
+
+impl Cartridge for Cnrom {
+    fn header(&self) -> &Header {
+        &self.header
+    }
+
+    fn cpu_read(&self, addr: u16) -> u8 {
+        match addr {
+            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
+            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
+            _ => 0,
+        }
+    }
+
+    fn cpu_write(&mut self, addr: u16, data: u8) {
+        match addr {
+            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
+            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.write_chr_bank(data),
+            _ => {}
+        }
+    }
+
+    fn ppu_read(&self, addr: u16) -> u8 {
+        self.read_chr(addr)
+    }
+
+    fn ppu_write(&mut self, addr: u16, data: u8) {
+        self.write_chr(addr, data);
+    }
+}
+
+fn allocate_chr_ram(header: &Header) -> Box<[u8]> {
+    let size = header.chr_ram_size.max(header.chr_nvram_size);
+    if size == 0 {
+        Vec::new().into_boxed_slice()
+    } else {
+        vec![0; size].into_boxed_slice()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cartridge::header::{Header, Mirroring, RomFormat, TvSystem};
+
+    fn header(prg_rom_size: usize, chr_rom_size: usize, chr_ram_size: usize) -> Header {
+        Header {
+            format: RomFormat::INes,
+            mapper: 3,
+            submapper: 0,
+            mirroring: Mirroring::Horizontal,
+            battery_backed_ram: false,
+            trainer_present: false,
+            prg_rom_size,
+            chr_rom_size,
+            prg_ram_size: 8 * 1024,
+            prg_nvram_size: 0,
+            chr_ram_size,
+            chr_nvram_size: 0,
+            vs_unisystem: false,
+            playchoice_10: false,
+            tv_system: TvSystem::Ntsc,
+        }
+    }
+
+    fn rom_cart(prg_banks: usize, chr_banks: usize) -> Cnrom {
+        let mut prg = vec![0u8; prg_banks * 16 * 1024];
+        for (i, byte) in prg.iter_mut().enumerate() {
+            *byte = (i & 0xFF) as u8;
+        }
+        let mut chr = vec![0u8; chr_banks * CHR_BANK_SIZE];
+        for bank in 0..chr_banks {
+            let start = bank * CHR_BANK_SIZE;
+            let end = start + CHR_BANK_SIZE;
+            chr[start..end].fill(bank as u8);
+        }
+
+        Cnrom::new(
+            header(prg.len(), chr.len(), 0),
+            prg.into_boxed_slice(),
+            chr.into_boxed_slice(),
+        )
+    }
+
+    #[test]
+    fn switches_chr_banks() {
+        let mut cart = rom_cart(2, 4);
+        assert_eq!(cart.ppu_read(0x0000), 0);
+
+        cart.cpu_write(cpu_mem::PRG_ROM_START, 0x02);
+        assert_eq!(cart.ppu_read(0x0000), 0x02);
+    }
+
+    #[test]
+    fn prg_rom_mirrors() {
+        let cart = rom_cart(1, 2);
+        let a = cart.cpu_read(cpu_mem::PRG_ROM_START);
+        let b = cart.cpu_read(cpu_mem::PRG_ROM_START + 0x4000);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn falls_back_to_chr_ram() {
+        let header = header(0x8000, 0, 8 * 1024);
+        let prg = vec![0; 0x8000].into_boxed_slice();
+        let chr = Vec::new().into_boxed_slice();
+        let mut cart = Cnrom::new(header, prg, chr);
+
+        cart.ppu_write(0x0010, 0x77);
+        assert_eq!(cart.ppu_read(0x0010), 0x77);
+    }
+}

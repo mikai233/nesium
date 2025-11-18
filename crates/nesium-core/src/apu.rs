@@ -128,6 +128,18 @@ impl Apu {
         }
     }
 
+    /// Returns `true` when either the frame sequencer or DMC have latched an IRQ.
+    pub fn irq_pending(&self) -> bool {
+        (self.status.frame_interrupt && !self.frame_counter.irq_inhibit)
+            || self.status.dmc_interrupt
+    }
+
+    /// Clears any pending IRQ sources to mimic the CPU ack cycle.
+    pub fn clear_irq(&mut self) {
+        self.status.frame_interrupt = false;
+        self.status.dmc_interrupt = false;
+    }
+
     pub fn clock(&mut self) {
         self.cycles = self.cycles.wrapping_add(1);
     }

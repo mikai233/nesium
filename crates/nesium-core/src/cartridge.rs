@@ -1,59 +1,97 @@
-use std::{fs, path::Path};
+use std::{fmt::Debug, fs, path::Path};
+
+use dyn_clone::DynClone;
 
 use crate::{
     cartridge::header::{Header, NES_HEADER_LEN},
     error::Error,
 };
 
-pub mod header;
-pub mod mapper;
+use self::{axrom::Axrom, cnrom::Cnrom, nrom::Nrom, uxrom::Uxrom};
 
-/// Parsed NES cartridge, including header metadata and raw ROM sections.
-#[derive(Debug, Clone)]
-pub struct Cartridge {
-    pub header: Header,
-    pub trainer: Option<[u8; 512]>,
-    pub prg_rom: Vec<u8>,
-    pub chr_rom: Vec<u8>,
+pub const TRAINER_SIZE: usize = 512;
+
+pub mod axrom;
+pub mod cnrom;
+pub mod header;
+pub mod nrom;
+pub mod uxrom;
+
+pub trait Cartridge: Debug + DynClone {
+    fn header(&self) -> &Header;
+
+    fn cpu_read(&self, addr: u16) -> u8;
+
+    fn cpu_write(&mut self, addr: u16, data: u8);
+
+    fn ppu_read(&self, addr: u16) -> u8;
+
+    fn ppu_write(&mut self, addr: u16, data: u8);
+
+    /// Returns `true` when the mapper asserts the CPU IRQ line.
+    fn irq_pending(&self) -> bool {
+        false
+    }
+
+    /// Clears any IRQ sources latched by the mapper.
+    fn clear_irq(&mut self) {}
 }
 
-impl Cartridge {
-    /// Parse a cartridge from an in-memory byte slice.
-    pub fn new(bytes: &[u8]) -> Result<Self, Error> {
-        let header_bytes = bytes.get(..NES_HEADER_LEN).ok_or(Error::TooShort {
-            actual: bytes.len(),
-        })?;
-        let header = Header::parse(header_bytes)?;
+dyn_clone::clone_trait_object!(Cartridge);
 
-        let mut cursor = NES_HEADER_LEN;
-        let trainer = if header.trainer_present {
-            let trainer_slice = section(bytes, &mut cursor, 512, "trainer")?;
-            let mut trainer = [0u8; 512];
-            trainer.copy_from_slice(&trainer_slice);
-            Some(trainer)
-        } else {
-            None
-        };
+/// Load a cartridge from an in-memory byte slice.
+pub fn load_cartridge(bytes: &[u8]) -> Result<Box<dyn Cartridge>, Error> {
+    let header_bytes = bytes.get(..NES_HEADER_LEN).ok_or(Error::TooShort {
+        actual: bytes.len(),
+    })?;
+    let header = Header::parse(header_bytes)?;
+    let (trainer, prg_rom, chr_rom) = slice_sections(bytes, &header)?;
 
-        let prg_rom = section(bytes, &mut cursor, header.prg_rom_size, "PRG ROM")?;
-        let chr_rom = section(bytes, &mut cursor, header.chr_rom_size, "CHR ROM")?;
+    let cartridge: Box<dyn Cartridge> = match header.mapper {
+        0 => Box::new(Nrom::with_trainer(header, prg_rom, chr_rom, trainer)),
+        2 => Box::new(Uxrom::with_trainer(header, prg_rom, chr_rom, trainer)),
+        3 => Box::new(Cnrom::with_trainer(header, prg_rom, chr_rom, trainer)),
+        7 => Box::new(Axrom::with_trainer(header, prg_rom, chr_rom, trainer)),
+        _ => unimplemented!("Mapper {} not implemented", header.mapper),
+    };
 
-        Ok(Self {
-            header,
-            trainer,
-            prg_rom,
-            chr_rom,
-        })
-    }
+    Ok(cartridge)
+}
 
-    /// Load and parse a cartridge directly from disk.
-    pub fn from_file<P>(path: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
-        let bytes = fs::read(path)?;
-        Self::new(&bytes)
-    }
+/// Load a cartridge directly from disk.
+pub fn load_cartridge_from_file<P>(path: P) -> Result<Box<dyn Cartridge>, Error>
+where
+    P: AsRef<Path>,
+{
+    let bytes = fs::read(path)?;
+    load_cartridge(&bytes)
+}
+
+fn slice_sections(
+    bytes: &[u8],
+    header: &Header,
+) -> Result<(Option<Box<[u8; TRAINER_SIZE]>>, Box<[u8]>, Box<[u8]>), Error> {
+    let mut cursor = NES_HEADER_LEN;
+    let trainer = if header.trainer_present {
+        let trainer_slice = section(bytes, &mut cursor, TRAINER_SIZE, "trainer")?;
+        Some(
+            trainer_slice
+                .into_boxed_slice()
+                .try_into()
+                .expect("trainer length mismatch"),
+        )
+    } else {
+        None
+    };
+
+    let prg_rom = section(bytes, &mut cursor, header.prg_rom_size, "PRG ROM")?;
+    let chr_rom = section(bytes, &mut cursor, header.chr_rom_size, "CHR ROM")?;
+
+    Ok((
+        trainer,
+        prg_rom.into_boxed_slice(),
+        chr_rom.into_boxed_slice(),
+    ))
 }
 
 fn section(
@@ -85,6 +123,7 @@ fn section(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory::cpu as cpu_mem;
 
     fn base_header(prg_banks: u8, chr_banks: u8, flags6: u8) -> [u8; NES_HEADER_LEN] {
         [
@@ -93,30 +132,30 @@ mod tests {
     }
 
     #[test]
-    fn parses_basic_cartridge() {
+    fn loads_basic_nrom_cartridge() {
         let mut rom = base_header(1, 1, 0).to_vec();
         rom.extend(vec![0xAA; 16 * 1024]);
         rom.extend(vec![0x55; 8 * 1024]);
 
-        let cartridge = Cartridge::new(&rom).expect("parse cartridge");
+        let cartridge = load_cartridge(&rom).expect("parse cartridge");
 
-        assert_eq!(cartridge.prg_rom.len(), 16 * 1024);
-        assert_eq!(cartridge.chr_rom.len(), 8 * 1024);
-        assert!(cartridge.trainer.is_none());
+        assert_eq!(cartridge.header().prg_rom_size, 16 * 1024);
+        assert_eq!(cartridge.header().chr_rom_size, 8 * 1024);
+        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), 0xAA);
+        assert_eq!(cartridge.ppu_read(0x0000), 0x55);
     }
 
     #[test]
-    fn parses_trainer_when_present() {
+    fn loads_cartridge_with_trainer() {
         let mut rom = base_header(1, 0, 0b0000_0100).to_vec();
-        rom.extend(vec![0xFE; 512]);
+        rom.extend(vec![0xFE; TRAINER_SIZE]);
         rom.extend(vec![0xAA; 16 * 1024]);
 
-        let cartridge = Cartridge::new(&rom).expect("parse cartridge");
+        let cartridge = load_cartridge(&rom).expect("parse cartridge");
 
-        let trainer = cartridge.trainer.expect("trainer present");
-        assert!(trainer.iter().all(|&byte| byte == 0xFE));
-        assert_eq!(cartridge.prg_rom.len(), 16 * 1024);
-        assert!(cartridge.chr_rom.is_empty());
+        assert!(cartridge.header().trainer_present);
+        assert_eq!(cartridge.header().prg_rom_size, 16 * 1024);
+        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), 0xAA);
     }
 
     #[test]
@@ -124,7 +163,7 @@ mod tests {
         let mut rom = base_header(1, 0, 0).to_vec();
         rom.extend(vec![0xAA; 1024]); // insufficient PRG data
 
-        let err = Cartridge::new(&rom).expect_err("should fail");
+        let err = load_cartridge(&rom).expect_err("should fail");
         assert!(matches!(
             err,
             Error::SectionTooShort {
