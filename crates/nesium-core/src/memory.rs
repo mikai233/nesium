@@ -90,6 +90,11 @@ pub mod ppu {
     /// Pattern table base address for table 1.
     pub const PATTERN_TABLE_1: u16 = 0x1000;
 
+    /// Primary Object Attribute Memory (OAM) byte count.
+    pub const OAM_RAM_SIZE: usize = 0x100;
+    /// Secondary OAM byte count used during sprite evaluation.
+    pub const SECONDARY_OAM_RAM_SIZE: usize = 0x20;
+
     /// DMA register used for transferring OAM data (`$4014`).
     pub const OAM_DMA: u16 = 0x4014;
 
