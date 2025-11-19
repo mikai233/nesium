@@ -22,7 +22,7 @@ const DMA_TRANSFER_BYTES: usize = 256;
 pub struct Context {
     ppu: Ppu,
     apu: Apu,
-    cartridge: Option<Box<dyn Cartridge>>,
+    cartridge: Option<Cartridge>,
 }
 
 impl Context {
@@ -43,7 +43,7 @@ impl Context {
     }
 
     /// Inserts a cartridge into the context, replacing any previous one.
-    pub fn insert_cartridge(&mut self, cartridge: Box<dyn Cartridge>) {
+    pub fn insert_cartridge(&mut self, cartridge: Cartridge) {
         self.cartridge = Some(cartridge);
     }
 
@@ -53,8 +53,8 @@ impl Context {
     }
 
     /// Provides read-only access to the currently inserted cartridge, if any.
-    pub fn cartridge(&self) -> Option<&dyn Cartridge> {
-        self.cartridge.as_deref()
+    pub fn cartridge(&self) -> Option<&Cartridge> {
+        self.cartridge.as_ref()
     }
 }
 
@@ -88,7 +88,7 @@ impl<'a> CpuBus<'a> {
     }
 
     /// Convenience helper that forwards cartridge insertion to the context.
-    pub fn insert_cartridge(&mut self, cartridge: Box<dyn Cartridge>) {
+    pub fn insert_cartridge(&mut self, cartridge: Cartridge) {
         self.context.insert_cartridge(cartridge);
     }
 
@@ -98,7 +98,7 @@ impl<'a> CpuBus<'a> {
     }
 
     /// Returns the cartridge currently inserted in the context, when present.
-    pub fn cartridge(&self) -> Option<&dyn Cartridge> {
+    pub fn cartridge(&self) -> Option<&Cartridge> {
         self.context.cartridge()
     }
 
@@ -242,7 +242,7 @@ mod tests {
     use super::*;
     use crate::cartridge::{
         header::{Header, Mirroring, RomFormat, TvSystem},
-        nrom::Nrom,
+        mapper::mapper0::Mapper0,
     };
 
     fn test_header(prg_rom_size: usize, prg_ram_size: usize) -> Header {
@@ -265,14 +265,15 @@ mod tests {
         }
     }
 
-    fn cartridge_with_pattern(prg_rom_size: usize, prg_ram_size: usize) -> Box<dyn Cartridge> {
+    fn cartridge_with_pattern(prg_rom_size: usize, prg_ram_size: usize) -> Cartridge {
         let header = test_header(prg_rom_size, prg_ram_size);
         let prg_rom = (0..prg_rom_size)
             .map(|value| (value & 0xFF) as u8)
             .collect::<Vec<_>>()
             .into_boxed_slice();
         let chr_rom = vec![0; header.chr_rom_size].into_boxed_slice();
-        Box::new(Nrom::new(header, prg_rom, chr_rom))
+        let mapper = Mapper0::new(header, prg_rom, chr_rom);
+        Cartridge::new(header, Box::new(mapper))
     }
 
     #[test]

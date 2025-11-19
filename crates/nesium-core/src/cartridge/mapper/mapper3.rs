@@ -1,8 +1,10 @@
+use std::borrow::Cow;
+
 use crate::{
     cartridge::{
-        Cartridge, TRAINER_SIZE,
+        Mapper, TRAINER_SIZE,
         header::Header,
-        nrom::{allocate_prg_ram, trainer_destination},
+        mapper::{allocate_prg_ram, trainer_destination},
     },
     memory::cpu as cpu_mem,
 };
@@ -10,8 +12,7 @@ use crate::{
 const CHR_BANK_SIZE: usize = 8 * 1024;
 
 #[derive(Debug, Clone)]
-pub struct Cnrom {
-    header: Header,
+pub struct Mapper3 {
     prg_rom: Box<[u8]>,
     prg_ram: Box<[u8]>,
     chr_rom: Box<[u8]>,
@@ -20,7 +21,7 @@ pub struct Cnrom {
     chr_bank_count: usize,
 }
 
-impl Cnrom {
+impl Mapper3 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
         Self::with_trainer(header, prg_rom, chr_rom, None)
     }
@@ -43,7 +44,6 @@ impl Cnrom {
         };
 
         Self {
-            header,
             prg_rom,
             prg_ram,
             chr_rom,
@@ -112,11 +112,7 @@ impl Cnrom {
     }
 }
 
-impl Cartridge for Cnrom {
-    fn header(&self) -> &Header {
-        &self.header
-    }
-
+impl Mapper for Mapper3 {
     fn cpu_read(&self, addr: u16) -> u8 {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
@@ -139,6 +135,58 @@ impl Cartridge for Cnrom {
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
         self.write_chr(addr, data);
+    }
+
+    fn prg_rom(&self) -> Option<&[u8]> {
+        Some(self.prg_rom.as_ref())
+    }
+
+    fn prg_ram(&self) -> Option<&[u8]> {
+        if self.prg_ram.is_empty() {
+            None
+        } else {
+            Some(self.prg_ram.as_ref())
+        }
+    }
+
+    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
+        if self.prg_ram.is_empty() {
+            None
+        } else {
+            Some(self.prg_ram.as_mut())
+        }
+    }
+
+    fn chr_rom(&self) -> Option<&[u8]> {
+        if self.chr_rom.is_empty() {
+            None
+        } else {
+            Some(self.chr_rom.as_ref())
+        }
+    }
+
+    fn chr_ram(&self) -> Option<&[u8]> {
+        if self.chr_ram.is_empty() {
+            None
+        } else {
+            Some(self.chr_ram.as_ref())
+        }
+    }
+
+    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
+        if self.chr_ram.is_empty() {
+            None
+        } else {
+            Some(self.chr_ram.as_mut())
+        }
+    }
+
+    fn mapper_id(&self) -> u16 {
+        3
+    }
+
+    fn name(&self) -> Cow<'static, str> {
+        Cow::Borrowed("CnROM")
     }
 }
 
@@ -176,7 +224,7 @@ mod tests {
         }
     }
 
-    fn rom_cart(prg_banks: usize, chr_banks: usize) -> Cnrom {
+    fn rom_cart(prg_banks: usize, chr_banks: usize) -> Mapper3 {
         let mut prg = vec![0u8; prg_banks * 16 * 1024];
         for (i, byte) in prg.iter_mut().enumerate() {
             *byte = (i & 0xFF) as u8;
@@ -188,7 +236,7 @@ mod tests {
             chr[start..end].fill(bank as u8);
         }
 
-        Cnrom::new(
+        Mapper3::new(
             header(prg.len(), chr.len(), 0),
             prg.into_boxed_slice(),
             chr.into_boxed_slice(),
@@ -217,7 +265,7 @@ mod tests {
         let header = header(0x8000, 0, 8 * 1024);
         let prg = vec![0; 0x8000].into_boxed_slice();
         let chr = Vec::new().into_boxed_slice();
-        let mut cart = Cnrom::new(header, prg, chr);
+        let mut cart = Mapper3::new(header, prg, chr);
 
         cart.ppu_write(0x0010, 0x77);
         assert_eq!(cart.ppu_read(0x0010), 0x77);
