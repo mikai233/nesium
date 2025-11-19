@@ -1,5 +1,4 @@
 use bitflags::bitflags;
-use core::slice::GetDisjointMutError;
 
 bitflags! {
     /// Attribute bits stored in sprite byte 2.
@@ -108,22 +107,22 @@ impl<'a> SpriteView<'a> {
         self.bytes[3] = x;
     }
 
-    /// Builds a fixed-size list of sprite views for the given sprite indices.
-    ///
-    /// The `sprite_indices` are sprite slots (0-based); each slot occupies four
-    /// bytes inside `oam`. This helper uses `get_disjoint_mut` to safely create
-    /// multiple mutable views at once.
-    pub(crate) fn views_for_indices<const N: usize>(
-        oam: &'a mut [u8],
-        sprite_indices: [usize; N],
-    ) -> Result<[SpriteView<'a>; N], GetDisjointMutError> {
-        let ranges = sprite_indices.map(|i| {
-            let start = i * Self::BYTES_PER_SPRITE;
-            let end = start + Self::BYTES_PER_SPRITE;
-            start..end
-        });
+    /// Returns a view for the sprite at `sprite_index`, if it is in range.
+    pub(crate) fn at_index(oam: &'a mut [u8], sprite_index: usize) -> Option<SpriteView<'a>> {
+        let start = sprite_index.checked_mul(Self::BYTES_PER_SPRITE)?;
+        let end = start + Self::BYTES_PER_SPRITE;
+        if end <= oam.len() {
+            Some(SpriteView::new(&mut oam[start..end]))
+        } else {
+            None
+        }
+    }
 
-        let slices = oam.get_disjoint_mut(ranges)?;
-        Ok(slices.map(SpriteView::new))
+    /// Iterates over all sprites in the given OAM slice.
+    ///
+    /// The slice length must be a multiple of 4; any remainder bytes are ignored.
+    pub(crate) fn iter(oam: &'a mut [u8]) -> impl Iterator<Item = SpriteView<'a>> {
+        oam.chunks_exact_mut(Self::BYTES_PER_SPRITE)
+            .map(SpriteView::new)
     }
 }
