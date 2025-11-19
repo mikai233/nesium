@@ -1,8 +1,10 @@
+use std::borrow::Cow;
+
 use crate::{
     cartridge::{
-        Cartridge, TRAINER_SIZE,
+        Mapper, TRAINER_SIZE,
         header::Header,
-        nrom::{ChrStorage, allocate_prg_ram, select_chr_storage, trainer_destination},
+        mapper::{ChrStorage, allocate_prg_ram, select_chr_storage, trainer_destination},
     },
     memory::cpu as cpu_mem,
 };
@@ -10,8 +12,7 @@ use crate::{
 const PRG_BANK_SIZE: usize = 16 * 1024;
 
 #[derive(Debug, Clone)]
-pub struct Uxrom {
-    header: Header,
+pub struct Mapper2 {
     prg_rom: Box<[u8]>,
     prg_ram: Box<[u8]>,
     chr: ChrStorage,
@@ -19,7 +20,7 @@ pub struct Uxrom {
     bank_count: usize,
 }
 
-impl Uxrom {
+impl Mapper2 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
         Self::with_trainer(header, prg_rom, chr_rom, None)
     }
@@ -38,7 +39,6 @@ impl Uxrom {
         let bank_count = (prg_rom.len() / PRG_BANK_SIZE).max(1);
 
         Self {
-            header,
             prg_rom,
             prg_ram,
             chr: select_chr_storage(&header, chr_rom),
@@ -92,11 +92,7 @@ impl Uxrom {
     }
 }
 
-impl Cartridge for Uxrom {
-    fn header(&self) -> &Header {
-        &self.header
-    }
-
+impl Mapper for Mapper2 {
     fn cpu_read(&self, addr: u16) -> u8 {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
@@ -119,6 +115,46 @@ impl Cartridge for Uxrom {
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
         self.chr.write(addr, data);
+    }
+
+    fn prg_rom(&self) -> Option<&[u8]> {
+        Some(self.prg_rom.as_ref())
+    }
+
+    fn prg_ram(&self) -> Option<&[u8]> {
+        if self.prg_ram.is_empty() {
+            None
+        } else {
+            Some(self.prg_ram.as_ref())
+        }
+    }
+
+    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
+        if self.prg_ram.is_empty() {
+            None
+        } else {
+            Some(self.prg_ram.as_mut())
+        }
+    }
+
+    fn chr_rom(&self) -> Option<&[u8]> {
+        self.chr.as_rom()
+    }
+
+    fn chr_ram(&self) -> Option<&[u8]> {
+        self.chr.as_ram()
+    }
+
+    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
+        self.chr.as_ram_mut()
+    }
+
+    fn mapper_id(&self) -> u16 {
+        2
+    }
+
+    fn name(&self) -> Cow<'static, str> {
+        Cow::Borrowed("UxROM")
     }
 }
 
@@ -147,7 +183,7 @@ mod tests {
         }
     }
 
-    fn cart_with_banks(bank_count: usize) -> Uxrom {
+    fn cart_with_banks(bank_count: usize) -> Mapper2 {
         let mut prg_rom = vec![0u8; bank_count * PRG_BANK_SIZE];
         for bank in 0..bank_count {
             let start = bank * PRG_BANK_SIZE;
@@ -155,7 +191,7 @@ mod tests {
             prg_rom[start..end].fill(bank as u8);
         }
         let chr = Vec::new().into_boxed_slice();
-        Uxrom::new(
+        Mapper2::new(
             header(bank_count * PRG_BANK_SIZE, 8 * 1024),
             prg_rom.into_boxed_slice(),
             chr,

@@ -1,65 +1,96 @@
-use std::{fmt::Debug, fs, path::Path};
-
-use dyn_clone::DynClone;
+use std::{fs, path::Path};
 
 use crate::{
     cartridge::header::{Header, NES_HEADER_LEN},
     error::Error,
 };
 
-use self::{axrom::Axrom, cnrom::Cnrom, nrom::Nrom, uxrom::Uxrom};
+use self::mapper::{Mapper0, Mapper2, Mapper3, Mapper7};
 
 pub const TRAINER_SIZE: usize = 512;
 
-pub mod axrom;
-pub mod cnrom;
 pub mod header;
-pub mod nrom;
-pub mod uxrom;
+pub mod mapper;
+pub use mapper::{Mapper, mapper_downcast_mut, mapper_downcast_ref};
 
-pub trait Cartridge: Debug + DynClone {
-    fn header(&self) -> &Header;
-
-    fn cpu_read(&self, addr: u16) -> u8;
-
-    fn cpu_write(&mut self, addr: u16, data: u8);
-
-    fn ppu_read(&self, addr: u16) -> u8;
-
-    fn ppu_write(&mut self, addr: u16, data: u8);
-
-    /// Returns `true` when the mapper asserts the CPU IRQ line.
-    fn irq_pending(&self) -> bool {
-        false
-    }
-
-    /// Clears any IRQ sources latched by the mapper.
-    fn clear_irq(&mut self) {}
+#[derive(Debug)]
+pub struct Cartridge {
+    header: Header,
+    mapper: Box<dyn Mapper>,
 }
 
-dyn_clone::clone_trait_object!(Cartridge);
+impl Cartridge {
+    pub fn new(header: Header, mapper: Box<dyn Mapper>) -> Self {
+        Self { header, mapper }
+    }
+
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+
+    pub fn mapper(&self) -> &dyn Mapper {
+        self.mapper.as_ref()
+    }
+
+    pub fn mapper_mut(&mut self) -> &mut dyn Mapper {
+        self.mapper.as_mut()
+    }
+
+    pub fn cpu_read(&self, addr: u16) -> u8 {
+        self.mapper.cpu_read(addr)
+    }
+
+    pub fn cpu_write(&mut self, addr: u16, data: u8) {
+        self.mapper.cpu_write(addr, data);
+    }
+
+    pub fn ppu_read(&self, addr: u16) -> u8 {
+        self.mapper.ppu_read(addr)
+    }
+
+    pub fn ppu_write(&mut self, addr: u16, data: u8) {
+        self.mapper.ppu_write(addr, data);
+    }
+
+    pub fn irq_pending(&self) -> bool {
+        self.mapper.irq_pending()
+    }
+
+    pub fn clear_irq(&mut self) {
+        self.mapper.clear_irq();
+    }
+}
+
+impl Clone for Cartridge {
+    fn clone(&self) -> Self {
+        Self {
+            header: self.header,
+            mapper: dyn_clone::clone_box(self.mapper()),
+        }
+    }
+}
 
 /// Load a cartridge from an in-memory byte slice.
-pub fn load_cartridge(bytes: &[u8]) -> Result<Box<dyn Cartridge>, Error> {
+pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
     let header_bytes = bytes.get(..NES_HEADER_LEN).ok_or(Error::TooShort {
         actual: bytes.len(),
     })?;
     let header = Header::parse(header_bytes)?;
     let (trainer, prg_rom, chr_rom) = slice_sections(bytes, &header)?;
 
-    let cartridge: Box<dyn Cartridge> = match header.mapper {
-        0 => Box::new(Nrom::with_trainer(header, prg_rom, chr_rom, trainer)),
-        2 => Box::new(Uxrom::with_trainer(header, prg_rom, chr_rom, trainer)),
-        3 => Box::new(Cnrom::with_trainer(header, prg_rom, chr_rom, trainer)),
-        7 => Box::new(Axrom::with_trainer(header, prg_rom, chr_rom, trainer)),
+    let mapper: Box<dyn Mapper> = match header.mapper {
+        0 => Box::new(Mapper0::with_trainer(header, prg_rom, chr_rom, trainer)),
+        2 => Box::new(Mapper2::with_trainer(header, prg_rom, chr_rom, trainer)),
+        3 => Box::new(Mapper3::with_trainer(header, prg_rom, chr_rom, trainer)),
+        7 => Box::new(Mapper7::with_trainer(header, prg_rom, chr_rom, trainer)),
         _ => unimplemented!("Mapper {} not implemented", header.mapper),
     };
 
-    Ok(cartridge)
+    Ok(Cartridge::new(header, mapper))
 }
 
 /// Load a cartridge directly from disk.
-pub fn load_cartridge_from_file<P>(path: P) -> Result<Box<dyn Cartridge>, Error>
+pub fn load_cartridge_from_file<P>(path: P) -> Result<Cartridge, Error>
 where
     P: AsRef<Path>,
 {

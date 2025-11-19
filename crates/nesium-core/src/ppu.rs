@@ -147,27 +147,59 @@ impl Ppu {
 
     /// Advances the PPU by a single dot, keeping cycle and frame counters up to date.
     pub fn clock(&mut self) {
-        if self.scanline == 241 && self.cycle == 1 {
-            self.registers.status.insert(Status::VERTICAL_BLANK);
-        }
-        if self.scanline == -1 && self.cycle == 1 {
-            self.registers.status.remove(Status::VERTICAL_BLANK);
-            self.registers
-                .status
-                .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
-        }
-
-        // Visible scanlines 0..239 and visible dots 1..256 produce pixels.
-        if self.scanline >= 0 && self.scanline < 240 {
-            if self.cycle >= 1 && self.cycle <= 256 {
-                self.render_pixel();
+        match self.scanline {
+            // Prerender scanline (-1).
+            -1 => {
+                // At dot 1 of the prerender line, clear VBlank and sprite flags.
+                if self.cycle == 1 {
+                    self.registers.status.remove(Status::VERTICAL_BLANK);
+                    self.registers
+                        .status
+                        .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+                }
+                // TODO: implement prerender background/sprite pipeline setup.
             }
-            // Background/sprite fetch and evaluation stubs;
-            // these will be filled in with proper NES timing later.
-            self.fetch_background_data();
-            self.evaluate_sprites_for_scanline();
+            // Visible scanlines 0..239.
+            0..=239 => {
+                match self.cycle {
+                    // Visible dots 1..256 produce pixels.
+                    1..=256 => {
+                        self.render_pixel();
+                        // TODO: implement precise background/sprite fetch timing for visible dots.
+                    }
+                    // Dots 257..320: sprite evaluation and fetches for the next scanline.
+                    257..=320 => {
+                        // TODO: implement sprite evaluation and pattern fetches for the next scanline.
+                    }
+                    // Dots 321..340: background fetches for the next scanline.
+                    321..=340 => {
+                        // TODO: implement background fetches for the next scanline.
+                    }
+                    _ => {}
+                }
+
+                // Background/sprite fetch and evaluation stubs;
+                // these will be filled in with proper NES timing later.
+                self.fetch_background_data();
+                self.evaluate_sprites_for_scanline();
+            }
+            // Post-render scanline (240).
+            240 => {
+                // TODO: implement post-render idle line behavior if needed.
+            }
+            // VBlank scanlines 241..261.
+            241..=261 => {
+                // Enter VBlank at scanline 241, dot 1.
+                if self.scanline == 241 && self.cycle == 1 {
+                    self.registers.status.insert(Status::VERTICAL_BLANK);
+                }
+                // TODO: additional VBlank period behavior (e.g., NMI handling integration).
+            }
+            // Any other scanline value indicates a bug in the timing logic.
+            _ => unreachable!("PPU scanline {} out of range", self.scanline),
         }
 
+        // Advance to the next dot / scanline / frame.
         self.cycle += 1;
         if self.cycle >= CYCLES_PER_SCANLINE {
             self.cycle = 0;
