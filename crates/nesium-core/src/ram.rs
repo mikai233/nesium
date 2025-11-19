@@ -22,6 +22,8 @@ pub mod ppu {
 
     pub type Vram = super::Ram<{ ppu_mem::VRAM_SIZE }>;
     pub type PaletteRam = super::Ram<{ ppu_mem::PALETTE_RAM_SIZE }>;
+    pub type OamRam = super::Ram<{ ppu_mem::OAM_RAM_SIZE }>;
+    pub type SecondaryOamRam = super::Ram<{ ppu_mem::SECONDARY_OAM_RAM_SIZE }>;
 }
 
 pub mod apu {

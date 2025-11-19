@@ -9,16 +9,24 @@
 
 pub mod palette;
 
+mod background_pipeline;
 mod registers;
+mod sprite;
+
+use self::background_pipeline::BgPipeline;
 
 use core::fmt;
 
 use crate::{
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
-    ppu::palette::PaletteRam,
-    ram::ppu::Vram,
+    ppu::{
+        palette::PaletteRam,
+        registers::{Control, Mask, Registers, Status},
+    },
+    ram::ppu::{SecondaryOamRam, Vram},
 };
-use registers::{Control, Mask, Registers, Status};
+pub const SCREEN_WIDTH: usize = 256;
+pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + vblank lines
 
@@ -39,6 +47,14 @@ pub struct Ppu {
     frame: u64,
     /// Tracks whether the current frame is odd. Required for the skipped tick logic.
     odd_frame: bool,
+    /// Background pixel pipeline (pattern and attribute shifters).
+    bg_pipeline: BgPipeline,
+    /// Fine X scroll (0..=7) used when sampling from the background pipeline.
+    fine_x: u8,
+    /// Secondary OAM used during sprite evaluation for the current scanline.
+    secondary_oam: SecondaryOamRam,
+    /// Background + sprite rendering target for the current frame.
+    framebuffer: Box<[u8; SCREEN_WIDTH * SCREEN_HEIGHT]>,
 }
 
 impl fmt::Debug for Ppu {
@@ -70,6 +86,10 @@ impl Ppu {
             scanline: -1,
             frame: 0,
             odd_frame: false,
+            bg_pipeline: BgPipeline::new(),
+            fine_x: 0,
+            secondary_oam: SecondaryOamRam::new(),
+            framebuffer: Box::new([0; SCREEN_WIDTH * SCREEN_HEIGHT]),
         }
     }
 
@@ -82,6 +102,23 @@ impl Ppu {
         self.scanline = -1;
         self.frame = 0;
         self.odd_frame = false;
+        self.bg_pipeline.clear();
+        self.fine_x = 0;
+        self.secondary_oam.fill(0);
+        self.clear_framebuffer();
+    }
+
+    /// Returns an immutable view of the current framebuffer.
+    ///
+    /// Each entry is a palette index (0..=63) which can be resolved using
+    /// the palette RAM and a host-side color palette.
+    pub fn framebuffer(&self) -> &[u8] {
+        &*self.framebuffer
+    }
+
+    /// Clears the framebuffer to palette index 0.
+    fn clear_framebuffer(&mut self) {
+        self.framebuffer.fill(0);
     }
 
     /// Handles CPU writes to the mirrored PPU register space (`$2000-$3FFF`).
@@ -120,6 +157,17 @@ impl Ppu {
                 .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
         }
 
+        // Visible scanlines 0..239 and visible dots 1..256 produce pixels.
+        if self.scanline >= 0 && self.scanline < 240 {
+            if self.cycle >= 1 && self.cycle <= 256 {
+                self.render_pixel();
+            }
+            // Background/sprite fetch and evaluation stubs;
+            // these will be filled in with proper NES timing later.
+            self.fetch_background_data();
+            self.evaluate_sprites_for_scanline();
+        }
+
         self.cycle += 1;
         if self.cycle >= CYCLES_PER_SCANLINE {
             self.cycle = 0;
@@ -133,6 +181,52 @@ impl Ppu {
         }
     }
 
+    /// Renders a single pixel into the framebuffer based on the current
+    /// background pipeline state (and, in the future, sprite state).
+    fn render_pixel(&mut self) {
+        let x = (self.cycle - 1) as usize;
+        let y = self.scanline as usize;
+        if x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT {
+            return;
+        }
+        let idx = y * SCREEN_WIDTH + x;
+
+        // Sample background pixel from the background pipeline.
+        // In the current scaffolding, this assumes the pipeline has already
+        // been fed with nametable/pattern/attribute data for this dot.
+        let (bg_palette, bg_color) = self.bg_pipeline.sample_and_shift();
+
+        // TODO: integrate sprite pipeline once implemented and perform
+        // proper priority/transparent handling.
+
+        if bg_color != 0 {
+            // Non-transparent background pixel: resolve palette+color into
+            // a final palette RAM entry.
+            let palette_addr = ppu_mem::PALETTE_BASE + (bg_palette as u16) * 4 + (bg_color as u16);
+            let color_index = self.palette_ram.read(palette_addr);
+            self.framebuffer[idx] = color_index;
+        }
+    }
+
+    /// Performs background tile/attribute fetches and reloads the background
+    /// pipeline at tile boundaries.
+    ///
+    /// This is currently a stub; the detailed NES timing will be implemented
+    /// once the PPU rendering pipeline is fleshed out.
+    fn fetch_background_data(&mut self) {
+        // TODO: implement nametable/pattern/attribute fetch based on the
+        // internal VRAM address and scroll registers.
+    }
+
+    /// Performs sprite evaluation for the current scanline, filling
+    /// `secondary_oam` and preparing sprite shifters.
+    ///
+    /// This is currently a stub and only establishes the structure for the
+    /// eventual sprite pipeline.
+    fn evaluate_sprites_for_scanline(&mut self) {
+        // TODO: implement sprite evaluation and sprite pipeline.
+    }
+
     fn read_status(&mut self) -> u8 {
         let status = self.registers.status.bits();
         self.registers.status.remove(Status::VERTICAL_BLANK);
@@ -143,7 +237,7 @@ impl Ppu {
 
     fn write_oam_data(&mut self, value: u8) {
         let idx = self.registers.oam_addr as usize;
-        if idx < registers::OAM_SIZE {
+        if idx < ppu_mem::OAM_RAM_SIZE {
             self.registers.oam[idx] = value;
             self.registers.oam_addr = self.registers.oam_addr.wrapping_add(1);
         }
@@ -151,7 +245,7 @@ impl Ppu {
 
     fn read_oam_data(&self) -> u8 {
         let idx = self.registers.oam_addr as usize;
-        if idx < registers::OAM_SIZE {
+        if idx < ppu_mem::OAM_RAM_SIZE {
             self.registers.oam[idx]
         } else {
             0

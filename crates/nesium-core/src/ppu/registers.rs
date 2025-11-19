@@ -1,9 +1,6 @@
 use bitflags::bitflags;
 
-use crate::memory::ppu as ppu_mem;
-
-/// Number of bytes stored inside the primary Object Attribute Memory (OAM).
-pub(crate) const OAM_SIZE: usize = 256;
+use crate::{memory::ppu as ppu_mem, ram::ppu::OamRam};
 
 bitflags! {
     /// PPU control register (`$2000`).
@@ -248,7 +245,7 @@ impl VramAddressRegister {
 }
 
 /// Aggregates the state of all CPU visible PPU registers.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Registers {
     /// Mirror of the control register (`$2000`).
     pub(crate) control: Control,
@@ -259,7 +256,7 @@ pub(crate) struct Registers {
     /// Current OAM pointer driven by `$2003`/`$2004`.
     pub(crate) oam_addr: u8,
     /// Primary sprite memory accessible through `$2004`.
-    pub(crate) oam: [u8; OAM_SIZE],
+    pub(crate) oam: OamRam,
     /// Scroll register latch associated with `$2005`.
     pub(crate) scroll: ScrollRegister,
     /// VRAM address latch associated with `$2006`/`$2007`.
@@ -282,7 +279,7 @@ impl Registers {
             mask: Mask::default(),
             status: Status::default(),
             oam_addr: 0,
-            oam: [0; OAM_SIZE],
+            oam: OamRam::new(),
             scroll: ScrollRegister::default(),
             addr: VramAddressRegister::default(),
             vram_buffer: 0,
