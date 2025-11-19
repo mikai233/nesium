@@ -241,8 +241,10 @@ impl Display for Mnemonic {
 #[cfg(test)]
 mod tests {
 
+    use std::panic::{self, AssertUnwindSafe};
+
     use rand::SeedableRng;
-    use tracing::debug;
+    use tracing::{error, trace};
 
     use crate::{
         bus::{Bus, mock::MockBus},
@@ -306,8 +308,17 @@ mod tests {
         {
             for _ in 0..TEST_COUNT {
                 let seed = rand::random();
-                debug!("using test seed: {}", seed);
-                self.run(seed, &verify);
+                let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                    self.run(seed, &verify);
+                }));
+
+                if let Err(err) = result {
+                    error!(
+                        "InstrTest for {:?} failed with seed {}",
+                        self.mnemonic, seed
+                    );
+                    panic::resume_unwind(err);
+                }
             }
         }
 
@@ -317,8 +328,17 @@ mod tests {
         {
             for _ in 0..TEST_COUNT {
                 let seed = rand::random();
-                debug!("using test seed: {}", seed);
-                self.run_branch(seed, &verify);
+                let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                    self.run_branch(seed, &verify);
+                }));
+
+                if let Err(err) = result {
+                    error!(
+                        "Branch InstrTest for {:?} failed with seed {}",
+                        self.mnemonic, seed
+                    );
+                    panic::resume_unwind(err);
+                }
             }
         }
 
@@ -329,7 +349,7 @@ mod tests {
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             for instr in LOOKUP_TABLE {
                 if instr.mnemonic == self.mnemonic {
-                    debug!("test instruction: {}", instr);
+                    trace!("test instruction: {}", instr);
                     let mut cpu = Self::rand_cpu(&mut rng);
                     let (verification, mut bus, crossed_page) =
                         Self::build_mock(&instr, &mut cpu, &mut rng);
@@ -352,7 +372,7 @@ mod tests {
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             for instr in LOOKUP_TABLE {
                 if instr.mnemonic == self.mnemonic {
-                    debug!("test instruction: {}", instr);
+                    trace!("test instruction: {}", instr);
                     let mut cpu = Self::rand_cpu(&mut rng);
                     let (verification, mut bus, crossed_page) =
                         Self::build_mock(&instr, &cpu, &mut rng);
@@ -471,7 +491,7 @@ mod tests {
             };
             mock.write(cpu.pc + 1, addr);
             mock.write(addr as u16, data);
-            debug!("ZeroPage: addr={:02X}", addr);
+            trace!("ZeroPage: addr={:02X}", addr);
             addr as u16
         }
 
@@ -494,7 +514,7 @@ mod tests {
             };
             mock.write(cpu.pc + 1, base);
             mock.write(effective as u16, data);
-            debug!(
+            trace!(
                 "ZeroPageX: base={:02X}, X={:02X}, effective={:02X}",
                 base, cpu.x, effective
             );
@@ -520,7 +540,7 @@ mod tests {
             };
             mock.write(cpu.pc + 1, base);
             mock.write(effective as u16, data);
-            debug!(
+            trace!(
                 "ZeroPageY: base={:02X}, Y={:02X}, effective={:02X}",
                 base, cpu.y, effective
             );
@@ -546,7 +566,7 @@ mod tests {
             mock.write(cpu.pc + 1, (addr & 0xFF) as u8);
             mock.write(cpu.pc + 2, (addr >> 8) as u8);
             mock.write(addr, data);
-            debug!("Absolute: addr={:04X}", addr);
+            trace!("Absolute: addr={:04X}", addr);
             addr
         }
 
@@ -573,7 +593,7 @@ mod tests {
             mock.write(cpu.pc + 1, (base & 0xFF) as u8);
             mock.write(cpu.pc + 2, (base >> 8) as u8);
             mock.write(effective, data);
-            debug!(
+            trace!(
                 "AbsoluteX: base={:04X}, effective={:04X}, crossed={}",
                 base, effective, crossed_page
             );
@@ -604,7 +624,7 @@ mod tests {
             mock.write(cpu.pc + 1, (base & 0xFF) as u8);
             mock.write(cpu.pc + 2, (base >> 8) as u8);
             mock.write(effective, data);
-            debug!(
+            trace!(
                 "AbsoluteY: base={:04X}, effective={:04X}, crossed={}",
                 base, effective, crossed_page
             );
@@ -635,7 +655,7 @@ mod tests {
             mock.write(cpu.pc + 2, (ptr >> 8) as u8);
             mock.write(ptr, (target & 0xFF) as u8);
             mock.write(hi_addr, (target >> 8) as u8);
-            debug!(
+            trace!(
                 "Indirect: ptr={:04X}, hi_addr={:04X}, target={:04X}",
                 ptr, hi_addr, target
             );
@@ -675,7 +695,7 @@ mod tests {
             mock.write(ptr as u16, (target & 0xFF) as u8);
             mock.write(ptr.wrapping_add(1) as u16 & 0xFF, (target >> 8) as u8);
             mock.write(target, data);
-            debug!("IndirectX: target={:04X}", target);
+            trace!("IndirectX: target={:04X}", target);
             target
         }
 
@@ -719,7 +739,7 @@ mod tests {
             mock.write(zp.wrapping_add(1) as u16 & 0xFF, hi);
             mock.write(effective, data);
 
-            debug!(
+            trace!(
                 "IndirectY: effective={:04X}, crossed={}",
                 effective, crossed_page
             );
@@ -748,7 +768,7 @@ mod tests {
             mock.write(cpu.pc + 1, offset as u8);
             mock.write(target, data);
 
-            debug!(
+            trace!(
                 "Relative: offset={}, base={:04X}, target={:04X}, crossed={}",
                 offset,
                 cpu.pc.wrapping_add(2),
