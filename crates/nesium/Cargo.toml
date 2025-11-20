@@ -5,5 +5,5 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-nesium-core = { path = "../nesium-core" }
-egui = { workspace = true }
+nesium-core.path = "../nesium-core"
+egui.workspace = true
