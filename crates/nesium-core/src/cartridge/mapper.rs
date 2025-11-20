@@ -21,7 +21,7 @@ pub use mapper3::Mapper3;
 pub use mapper7::Mapper7;
 
 use crate::{
-    cartridge::{header::Header, TRAINER_SIZE},
+    cartridge::{TRAINER_SIZE, header::Header},
     memory::cpu as cpu_mem,
 };
 
