@@ -9,7 +9,6 @@ use crate::cpu::micro_op::MicroOp;
 use crate::cpu::mnemonic::Mnemonic;
 use crate::cpu::status::Status;
 use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
-mod phase;
 mod status;
 
 mod addressing;
