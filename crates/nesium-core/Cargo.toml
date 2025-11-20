@@ -9,11 +9,12 @@ default = []
 boxed-ram = []
 
 [dependencies]
-bitflags = { workspace = true }
-dyn-clone = { workspace = true }
+bitflags.workspace = true
+dyn-clone.workspace = true
+bincode.workspace = true
 
 [dev-dependencies]
-rand = { workspace = true }
-ctor = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+rand.workspace = true
+ctor.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
