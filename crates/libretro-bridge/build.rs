@@ -103,10 +103,6 @@ fn generate_bindings(header: &Path, output: &Path) {
         .generate()
         .expect("bindgen failed to produce libretro bindings");
 
-    let patched = bindings
-        .to_string()
-        .replace("extern \"C\" {", "unsafe extern \"C\" {");
-
-    fs::write(output, patched)
+    fs::write(output, bindings.to_string())
         .unwrap_or_else(|err| panic!("failed to write bindings to {}: {err}", output.display()));
 }
