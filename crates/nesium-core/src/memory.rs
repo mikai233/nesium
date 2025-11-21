@@ -16,6 +16,14 @@ pub mod cpu {
     pub const RESET_VECTOR_LO: u16 = 0xFFFC;
     /// Reset vector high byte address (`$FFFD`).
     pub const RESET_VECTOR_HI: u16 = 0xFFFD;
+    /// NMI vector low byte address (`$FFFA`).
+    pub const NMI_VECTOR_LO: u16 = 0xFFFA;
+    /// NMI vector high byte address (`$FFFB`).
+    pub const NMI_VECTOR_HI: u16 = 0xFFFB;
+    /// IRQ/BRK vector low byte address (`$FFFE`).
+    pub const IRQ_VECTOR_LO: u16 = 0xFFFE;
+    /// IRQ/BRK vector high byte address (`$FFFF`).
+    pub const IRQ_VECTOR_HI: u16 = 0xFFFF;
 
     /// First byte of CPU internal RAM.
     pub const INTERNAL_RAM_START: u16 = 0x0000;

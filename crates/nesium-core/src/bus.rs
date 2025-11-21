@@ -14,6 +14,22 @@ pub trait Bus: Debug {
 
     fn write(&mut self, addr: u16, data: u8);
 
+    /// PPU-side read for pattern table accesses (`$0000-$1FFF`).
+    fn ppu_read(&mut self, addr: u16) -> u8 {
+        let _ = addr;
+        0
+    }
+
+    /// PPU-side write for pattern table accesses (`$0000-$1FFF`).
+    fn ppu_write(&mut self, addr: u16, value: u8) {
+        let _ = (addr, value);
+    }
+
+    /// Returns `true` when the PPU has requested an NMI.
+    fn poll_nmi(&mut self) -> bool {
+        false
+    }
+
     /// Returns `true` when any peripheral (cartridge/APU/...) asserts the IRQ line.
     fn irq_pending(&mut self) -> bool {
         false

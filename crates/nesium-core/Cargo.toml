@@ -12,6 +12,7 @@ boxed-ram = []
 bitflags.workspace = true
 dyn-clone.workspace = true
 bincode.workspace = true
+once_cell.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

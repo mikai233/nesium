@@ -8,6 +8,7 @@ use crate::cpu::lookup::LOOKUP_TABLE;
 use crate::cpu::micro_op::MicroOp;
 use crate::cpu::mnemonic::Mnemonic;
 use crate::cpu::status::Status;
+use crate::memory::cpu as cpu_mem;
 use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
 mod status;
 
@@ -17,6 +18,17 @@ mod instruction;
 mod lookup;
 mod micro_op;
 mod mnemonic;
+
+/// Lightweight CPU register snapshot used for tracing/debugging.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CpuSnapshot {
+    pub pc: u16,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub s: u8,
+    pub p: u8,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Cpu {
@@ -73,13 +85,22 @@ impl Cpu {
     }
 
     pub(crate) fn clock(&mut self, bus: &mut dyn Bus) {
+        if self.opcode.is_none() {
+            if self.service_nmi(bus) {
+                return;
+            }
+            if self.service_irq(bus) {
+                return;
+            }
+        }
+
         match self.opcode {
             Some(opcode) => {
                 let instr = &LOOKUP_TABLE[opcode as usize];
                 let micro_op = &instr[self.index()];
                 self.exec(bus, instr, micro_op);
                 self.post_exec(instr);
-                if self.index() > instr.len() {
+                if self.index() >= instr.len() {
                     self.clear();
                 }
             }
@@ -233,6 +254,54 @@ impl Cpu {
         self.effective_addr = 0;
     }
 
+    fn push_status(&mut self, bus: &mut dyn Bus, set_break: bool) {
+        let mut status = self.p;
+        status.set(Status::UNUSED, true);
+        status.set(Status::BREAK, set_break);
+        self.push(bus, status.bits());
+    }
+
+    fn service_irq(&mut self, bus: &mut dyn Bus) -> bool {
+        if self.p.i() || !bus.irq_pending() {
+            return false;
+        }
+        self.perform_interrupt(bus, cpu_mem::IRQ_VECTOR_LO, cpu_mem::IRQ_VECTOR_HI, false);
+        bus.clear_irq();
+        true
+    }
+
+    fn service_nmi(&mut self, bus: &mut dyn Bus) -> bool {
+        if !bus.poll_nmi() {
+            return false;
+        }
+        self.perform_interrupt(bus, cpu_mem::NMI_VECTOR_LO, cpu_mem::NMI_VECTOR_HI, false);
+        true
+    }
+
+    fn perform_interrupt(
+        &mut self,
+        bus: &mut dyn Bus,
+        vector_lo: u16,
+        vector_hi: u16,
+        set_break: bool,
+    ) {
+        let pc_hi = (self.pc >> 8) as u8;
+        let pc_lo = self.pc as u8;
+
+        self.push(bus, pc_hi);
+        self.push(bus, pc_lo);
+        self.push_status(bus, set_break);
+
+        self.p.set_i(true);
+
+        let lo = bus.read(vector_lo);
+        let hi = bus.read(vector_hi);
+        self.pc = ((hi as u16) << 8) | (lo as u16);
+
+        self.opcode = None;
+        self.index = 0;
+    }
+
     pub(crate) fn test_branch(&mut self, taken: bool) {
         if !taken {
             self.index += 2; // Skip add branch offset and cross page
@@ -269,6 +338,37 @@ impl Cpu {
     pub(crate) fn pull(&mut self, bus: &mut dyn Bus) -> u8 {
         self.s = self.s.wrapping_add(1);
         bus.read(STACK_ADDR | self.s as u16)
+    }
+
+    /// Captures the current CPU registers for tracing/debugging.
+    pub(crate) fn snapshot(&self) -> CpuSnapshot {
+        CpuSnapshot {
+            pc: self.pc,
+            a: self.a,
+            x: self.x,
+            y: self.y,
+            s: self.s,
+            p: self.p.bits(),
+        }
+    }
+
+    /// Overwrites CPU registers from a snapshot (resets in-flight instruction).
+    pub(crate) fn load_snapshot(&mut self, snapshot: CpuSnapshot) {
+        self.pc = snapshot.pc;
+        self.a = snapshot.a;
+        self.x = snapshot.x;
+        self.y = snapshot.y;
+        self.s = snapshot.s;
+        self.p = Status::from_bits_truncate(snapshot.p);
+        self.index = 0;
+        self.opcode = None;
+        self.base = 0;
+        self.effective_addr = 0;
+    }
+
+    /// Returns `true` when an instruction is currently in flight.
+    pub(crate) fn opcode_active(&self) -> bool {
+        self.opcode.is_some()
     }
 }
 
