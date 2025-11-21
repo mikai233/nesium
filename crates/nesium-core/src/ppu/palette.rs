@@ -43,6 +43,122 @@ use std::{fs, path::Path};
 
 use crate::{error::Error, memory::ppu as ppu_mem, ram::ppu::PaletteRam as PaletteStorage};
 
+/// Encodes a palette selection and color index as used by the NES PPU.
+///
+/// Layout (5 bits):
+/// - bit 4: sprite flag (0 = background, 1 = sprite)
+/// - bits 2-3: palette number (0..3)
+/// - bits 0-1: color index within the palette (0..3)
+///
+/// This maps directly to the address inside palette RAM:
+/// - Background colors live at `$3F00 + palette*4 + color`.
+/// - Sprite colors live at `$3F10 + palette*4 + color` (bit 4 set).
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default)]
+pub struct PaletteIndex(u8);
+
+impl PaletteIndex {
+    const COLOR_MASK: u8 = 0b11;
+    const PALETTE_MASK: u8 = 0b11 << 2;
+    const SPRITE_BIT: u8 = 1 << 4;
+    const ALL_MASK: u8 = 0b1_1111;
+
+    /// Builds a background palette entry from palette (0..3) and color (0..3).
+    #[inline]
+    pub fn from_bg(palette: u8, color: u8) -> Self {
+        Self(((palette & 0b11) << 2) | (color & Self::COLOR_MASK))
+    }
+
+    /// Builds a sprite palette entry from palette (0..3) and color (0..3).
+    #[inline]
+    pub fn from_sprite(palette: u8, color: u8) -> Self {
+        Self(Self::SPRITE_BIT | ((palette & 0b11) << 2) | (color & Self::COLOR_MASK))
+    }
+
+    /// Returns the palette number (0..3).
+    #[inline]
+    pub fn palette(self) -> u8 {
+        (self.0 & Self::PALETTE_MASK) >> 2
+    }
+
+    /// Returns the color index within the palette (0..3).
+    #[inline]
+    pub fn color(self) -> u8 {
+        self.0 & Self::COLOR_MASK
+    }
+
+    /// Returns `true` if this refers to a sprite palette entry.
+    #[inline]
+    pub fn is_sprite(self) -> bool {
+        (self.0 & Self::SPRITE_BIT) != 0
+    }
+
+    /// Background/sprite transparency: NES treats color index 0 as transparent.
+    #[inline]
+    pub fn is_transparent(self) -> bool {
+        (self.0 & Self::COLOR_MASK) == 0
+    }
+
+    /// Raw 5-bit value used to index palette RAM.
+    #[inline]
+    pub fn raw(self) -> u8 {
+        self.0 & Self::ALL_MASK
+    }
+
+    /// Creates an index from a raw byte, masking to the valid 5-bit range.
+    #[inline]
+    pub fn from_raw(raw: u8) -> Self {
+        Self(raw & Self::ALL_MASK)
+    }
+
+    /// Resolves to the mirrored VRAM address used by the PPU palette.
+    ///
+    /// The PPU repeats the 32-entry palette window every `$20` bytes and mirrors
+    /// sprite background colors (`$3F10/$14/$18/$1C`) back onto the equivalent
+    /// background slots (`$3F00/$04/$08/$0C`). This helper applies those rules
+    /// and returns the canonical palette address (`$3F00-$3F1F`) for the index.
+    #[inline]
+    pub fn mirrored_addr(self) -> u16 {
+        let mut idx = self.0 & 0x1F;
+        if idx == 0x10 {
+            idx = 0x00;
+        }
+        if idx == 0x14 {
+            idx = 0x04;
+        }
+        if idx == 0x18 {
+            idx = 0x08;
+        }
+        if idx == 0x1C {
+            idx = 0x0C;
+        }
+        0x3F00 | idx as u16
+    }
+}
+
+impl core::fmt::Debug for PaletteIndex {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PaletteIndex")
+            .field("raw", &format_args!("{:#04X}", self.raw()))
+            .field("sprite", &self.is_sprite())
+            .field("palette", &self.palette())
+            .field("color", &self.color())
+            .finish()
+    }
+}
+
+impl core::fmt::Display for PaletteIndex {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "raw={:#04X} sprite={} palette={} color={}",
+            self.raw(),
+            self.is_sprite(),
+            self.palette(),
+            self.color()
+        )
+    }
+}
+
 /// 32-byte palette RAM covering the `$3F00-$3FFF` color window.
 ///
 /// Each address written through `$2007` lands here once VRAM mirroring resolves
