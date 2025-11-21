@@ -10,12 +10,14 @@ use dyn_clone::DynClone;
 
 pub mod chr_storage;
 pub mod mapper0;
+pub mod mapper1;
 pub mod mapper2;
 pub mod mapper3;
 pub mod mapper7;
 
 pub(crate) use chr_storage::{ChrStorage, select_chr_storage};
 pub use mapper0::Mapper0;
+pub use mapper1::Mapper1;
 pub use mapper2::Mapper2;
 pub use mapper3::Mapper3;
 pub use mapper7::Mapper7;
