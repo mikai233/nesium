@@ -46,6 +46,7 @@ use self::{
 use core::fmt;
 
 use crate::{
+    cartridge::Cartridge,
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
         palette::PaletteRam,
@@ -95,6 +96,45 @@ pub struct Ppu {
     framebuffer: Box<[u8; SCREEN_WIDTH * SCREEN_HEIGHT]>,
 }
 
+/// Temporary view that lets the PPU reach the cartridge CHR space without storing a raw pointer.
+///
+/// The bus creates one of these per PPU call, so lifetimes remain explicit and borrow-checked.
+#[derive(Default)]
+pub struct PatternBus<'a> {
+    cartridge: Option<&'a mut Cartridge>,
+}
+
+impl<'a> PatternBus<'a> {
+    pub fn new(cartridge: Option<&'a mut Cartridge>) -> Self {
+        Self { cartridge }
+    }
+
+    pub fn none() -> Self {
+        Self { cartridge: None }
+    }
+
+    pub fn from_cartridge(cartridge: &'a mut Cartridge) -> Self {
+        Self {
+            cartridge: Some(cartridge),
+        }
+    }
+
+    fn read(&mut self, addr: u16) -> Option<u8> {
+        self.cartridge
+            .as_deref_mut()
+            .map(|cart| cart.ppu_read(addr))
+    }
+
+    fn write(&mut self, addr: u16, value: u8) -> bool {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.ppu_write(addr, value);
+            true
+        } else {
+            false
+        }
+    }
+}
+
 impl fmt::Debug for Ppu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Ppu")
@@ -133,6 +173,16 @@ impl Ppu {
             sprite_fetch: SpriteFetchState::default(),
             sprite_line_next: SpriteLineBuffers::new(),
             framebuffer: Box::new([0; SCREEN_WIDTH * SCREEN_HEIGHT]),
+        }
+    }
+
+    /// Preloads CHR ROM/RAM into VRAM when a cartridge is inserted.
+    ///
+    /// Pattern table accesses still flow through the mapper via [`PatternBus`];
+    /// this helper just seeds VRAM for setups that poke pattern RAM directly.
+    pub(crate) fn attach_cartridge(&mut self, cartridge: &Cartridge) {
+        if let Some(chr) = cartridge.mapper().chr_rom() {
+            self.load_chr(chr);
         }
     }
 
@@ -178,16 +228,29 @@ impl Ppu {
         &*self.framebuffer
     }
 
+    /// Current frame counter (increments when scanline wraps from 260 to -1).
+    pub fn frame_count(&self) -> u64 {
+        self.frame
+    }
+
     /// Clears the framebuffer to palette index 0.
     fn clear_framebuffer(&mut self) {
         self.framebuffer.fill(0);
+    }
+
+    /// Copies CHR ROM/RAM contents into the pattern table window (`$0000-$1FFF`).
+    ///
+    /// This is a temporary bridge until full PPU<->mapper wiring is in place.
+    pub fn load_chr(&mut self, chr: &[u8]) {
+        let len = chr.len().min(0x2000);
+        self.vram[..len].copy_from_slice(&chr[..len]);
     }
 
     /// Handles CPU writes to the mirrored PPU register space (`$2000-$3FFF`).
     ///
     /// Mirrors open-bus semantics by latching the last value written; the
     /// hardware leaves that value on the data bus.
-    pub fn cpu_write(&mut self, addr: u16, value: u8) {
+    pub fn cpu_write(&mut self, addr: u16, value: u8, pattern: &mut PatternBus<'_>) {
         self.bus_latch = value;
         match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Control => self.registers.write_control(value),
@@ -197,7 +260,7 @@ impl Ppu {
             PpuRegister::OamData => self.write_oam_data(value),
             PpuRegister::Scroll => self.registers.vram.write_scroll(value),
             PpuRegister::Addr => self.registers.vram.write_addr(value),
-            PpuRegister::Data => self.write_vram_data(value),
+            PpuRegister::Data => self.write_vram_data(value, pattern),
         }
     }
 
@@ -205,11 +268,11 @@ impl Ppu {
     ///
     /// Unhandled reads return the last bus value to approximate open-bus
     /// behavior.
-    pub fn cpu_read(&mut self, addr: u16) -> u8 {
+    pub fn cpu_read(&mut self, addr: u16, pattern: &mut PatternBus<'_>) -> u8 {
         let value = match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Status => self.read_status(),
             PpuRegister::OamData => self.read_oam_data(),
-            PpuRegister::Data => self.read_vram_data(),
+            PpuRegister::Data => self.read_vram_data(pattern),
             _ => self.bus_latch,
         };
         self.bus_latch = value;
@@ -221,10 +284,8 @@ impl Ppu {
     /// This is the main timing entry: it performs background/sprite pipeline
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
-    pub fn clock(&mut self) {
+    pub fn clock(&mut self, pattern: &mut PatternBus<'_>) {
         let rendering_enabled = self.registers.mask.rendering_enabled();
-        let visible_scanline = (0..=239).contains(&self.scanline);
-        let prerender_scanline = self.scanline == -1;
 
         // Odd-frame cycle skip: on prerender line, when rendering is enabled,
         // the PPU omits cycle 0 on odd frames.
@@ -283,7 +344,7 @@ impl Ppu {
                     // Shift background shifters each dot.
                     let _ = self.bg_pipeline.sample_and_shift(self.registers.vram.x);
                     // Fetch/reload background data at tile boundaries.
-                    self.fetch_background_data();
+                    self.fetch_background_data(pattern);
                     // Sprite evaluation for scanline 0 happens on prerender as well.
                     self.sprite_pipeline_eval_tick();
 
@@ -307,7 +368,7 @@ impl Ppu {
                     if (280..=304).contains(&self.cycle) {
                         self.copy_vertical_scroll();
                     }
-                    self.sprite_pipeline_fetch_tick();
+                    self.sprite_pipeline_fetch_tick(pattern);
                 }
             }
 
@@ -315,7 +376,7 @@ impl Ppu {
             (-1, 321..=336) => {
                 if rendering_enabled {
                     let _ = self.bg_pipeline.sample_and_shift(self.registers.vram.x);
-                    self.fetch_background_data();
+                    self.fetch_background_data(pattern);
                 }
             }
 
@@ -331,7 +392,7 @@ impl Ppu {
 
                 if rendering_enabled {
                     // Fetch background data for this dot.
-                    self.fetch_background_data();
+                    self.fetch_background_data(pattern);
                     // Sprite evaluation for the *next* scanline runs during dots 1..=256.
                     self.sprite_pipeline_eval_tick();
 
@@ -351,7 +412,7 @@ impl Ppu {
             // Dots 258..=320: sprite pattern fetches for the next scanline.
             (0..=239, 258..=320) => {
                 if rendering_enabled {
-                    self.sprite_pipeline_fetch_tick();
+                    self.sprite_pipeline_fetch_tick(pattern);
                 }
             }
 
@@ -359,7 +420,7 @@ impl Ppu {
             (0..=239, 321..=336) => {
                 if rendering_enabled {
                     let _ = self.bg_pipeline.sample_and_shift(self.registers.vram.x);
-                    self.fetch_background_data();
+                    self.fetch_background_data(pattern);
                 }
             }
 
@@ -495,7 +556,7 @@ impl Ppu {
     ///
     /// Mirrors the PPU’s interleaved nametable/attribute/pattern fetch pattern
     /// on prerender and visible scanlines.
-    fn fetch_background_data(&mut self) {
+    fn fetch_background_data(&mut self, pattern: &mut PatternBus<'_>) {
         // Only run while background rendering is enabled.
         if !self.registers.mask.contains(Mask::SHOW_BACKGROUND) {
             return;
@@ -508,7 +569,7 @@ impl Ppu {
         // Fetch and reload shifters every 8 dots (tile boundary) during fetch windows.
         let in_fetch_window = (1..=256).contains(&self.cycle) || (321..=336).contains(&self.cycle);
         if in_fetch_window && (self.cycle - 1) % 8 == 0 {
-            self.load_background_tile();
+            self.load_background_tile(pattern);
             self.increment_scroll_x();
         }
     }
@@ -546,13 +607,13 @@ impl Ppu {
     ///
     /// Fetches sprite metadata/pattern bytes for the next scanline. Each sprite
     /// gets an 8-dot slot.
-    fn sprite_pipeline_fetch_tick(&mut self) {
+    fn sprite_pipeline_fetch_tick(&mut self, pattern: &mut PatternBus<'_>) {
         if !self.registers.mask.contains(Mask::SHOW_SPRITES) {
             return;
         }
 
         if (257..=320).contains(&self.cycle) {
-            self.fetch_sprites_for_dot();
+            self.fetch_sprites_for_dot(pattern);
         }
     }
 
@@ -672,7 +733,7 @@ impl Ppu {
     }
 
     /// Per-dot sprite fetch step (257..=320).
-    fn fetch_sprites_for_dot(&mut self) {
+    fn fetch_sprites_for_dot(&mut self, pattern: &mut PatternBus<'_>) {
         // First fetch dot for the window is cycle 258 (clock arm starts at 258).
         if self.cycle == 258 {
             self.sprite_fetch = SpriteFetchState::default();
@@ -753,12 +814,12 @@ impl Ppu {
 
         // sub 4/6 are the low/high plane fetches in a classic 8-dot slot.
         if sub == 4 {
-            self.sprite_line_next
-                .set_pattern_low(i, self.read_vram(addr));
+            let pattern_low = self.read_vram(pattern, addr);
+            self.sprite_line_next.set_pattern_low(i, pattern_low);
         }
         if sub == 6 {
-            self.sprite_line_next
-                .set_pattern_high(i, self.read_vram(addr + 8));
+            let pattern_high = self.read_vram(pattern, addr + 8);
+            self.sprite_line_next.set_pattern_high(i, pattern_high);
         }
 
         // Advance within the 8-dot sprite slot.
@@ -803,16 +864,16 @@ impl Ppu {
         }
     }
 
-    fn write_vram_data(&mut self, value: u8) {
+    fn write_vram_data(&mut self, value: u8, pattern: &mut PatternBus<'_>) {
         let addr = self.registers.vram.v.raw() & ppu_mem::VRAM_MIRROR_MASK;
-        self.write_vram(addr, value);
+        self.write_vram(pattern, addr, value);
         let increment = self.registers.control.vram_increment();
         self.registers.vram.v.increment(increment);
     }
 
-    fn read_vram_data(&mut self) -> u8 {
+    fn read_vram_data(&mut self, pattern: &mut PatternBus<'_>) -> u8 {
         let addr = self.registers.vram.v.raw() & ppu_mem::VRAM_MIRROR_MASK;
-        let data = self.read_vram(addr);
+        let data = self.read_vram(pattern, addr);
         let buffered = self.registers.vram_buffer;
         self.registers.vram_buffer = data;
         let increment = self.registers.control.vram_increment();
@@ -825,30 +886,38 @@ impl Ppu {
         }
     }
 
-    fn write_vram(&mut self, addr: u16, value: u8) {
+    fn write_vram(&mut self, pattern: &mut PatternBus<'_>, addr: u16, value: u8) {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
         if addr >= ppu_mem::PALETTE_BASE {
             self.palette_ram.write(addr, value);
+        } else if addr < 0x2000 {
+            if !pattern.write(addr, value) {
+                self.vram[addr as usize] = value;
+            }
         } else {
             self.vram[addr as usize] = value;
         }
     }
 
-    fn read_vram(&self, addr: u16) -> u8 {
+    fn read_vram(&mut self, pattern: &mut PatternBus<'_>, addr: u16) -> u8 {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
         if addr >= ppu_mem::PALETTE_BASE {
             self.palette_ram.read(addr)
+        } else if addr < 0x2000 {
+            pattern
+                .read(addr)
+                .unwrap_or_else(|| self.vram[addr as usize])
         } else {
             self.vram[addr as usize]
         }
     }
 
     /// Loads the current tile/attribute data into the background shifters.
-    fn load_background_tile(&mut self) {
+    fn load_background_tile(&mut self, pattern: &mut PatternBus<'_>) {
         let v = self.registers.vram.v;
         let base_nt = ppu_mem::NAMETABLE_BASE + (v.nametable() as u16 * ppu_mem::NAMETABLE_SIZE);
         let tile_index_addr = base_nt + (v.coarse_y() as u16 * 32) + (v.coarse_x() as u16);
-        let tile_index = self.read_vram(tile_index_addr);
+        let tile_index = self.read_vram(pattern, tile_index_addr);
 
         let fine_y = v.fine_y() as u16;
         let pattern_base = if self.registers.control.contains(Control::BACKGROUND_TABLE) {
@@ -857,18 +926,18 @@ impl Ppu {
             ppu_mem::PATTERN_TABLE_0
         };
         let pattern_addr = pattern_base + (tile_index as u16 * 16) + fine_y;
-        let pattern = [
-            self.read_vram(pattern_addr),
-            self.read_vram(pattern_addr + 8),
+        let tile_pattern = [
+            self.read_vram(pattern, pattern_addr),
+            self.read_vram(pattern, pattern_addr + 8),
         ];
 
         let attr_addr =
             base_nt + 0x03C0 + (v.coarse_y() as u16 / 4) * 8 + (v.coarse_x() as u16 / 4);
-        let attr_byte = self.read_vram(attr_addr);
+        let attr_byte = self.read_vram(pattern, attr_addr);
         let quadrant_shift = ((v.coarse_y() & 0b10) << 1) | (v.coarse_x() & 0b10);
         let palette_index = (attr_byte >> quadrant_shift) & 0b11;
 
-        self.bg_pipeline.reload(pattern, palette_index);
+        self.bg_pipeline.reload(tile_pattern, palette_index);
     }
 
     /// Increments the coarse X scroll component in `v`, wrapping nametable horizontally.
@@ -938,7 +1007,8 @@ mod tests {
     #[test]
     fn control_register_helpers() {
         let mut ppu = Ppu::new();
-        ppu.cpu_write(PpuRegister::Control.addr(), 0b1000_0100);
+        let mut pattern = PatternBus::default();
+        ppu.cpu_write(PpuRegister::Control.addr(), 0b1000_0100, &mut pattern);
         assert!(ppu.registers.control.nmi_enabled());
         assert_eq!(ppu.registers.control.vram_increment(), 32);
         assert_eq!(
@@ -950,17 +1020,18 @@ mod tests {
     #[test]
     fn buffered_ppu_data_read() {
         let mut ppu = Ppu::new();
+        let mut pattern = PatternBus::default();
         // Point to $2000 and write a value.
-        ppu.cpu_write(PpuRegister::Addr.addr(), 0x20);
-        ppu.cpu_write(PpuRegister::Addr.addr(), 0x00);
-        ppu.cpu_write(PpuRegister::Data.addr(), 0x12);
+        ppu.cpu_write(PpuRegister::Addr.addr(), 0x20, &mut pattern);
+        ppu.cpu_write(PpuRegister::Addr.addr(), 0x00, &mut pattern);
+        ppu.cpu_write(PpuRegister::Data.addr(), 0x12, &mut pattern);
 
         // Reset VRAM address to read back.
-        ppu.cpu_write(PpuRegister::Addr.addr(), 0x20);
-        ppu.cpu_write(PpuRegister::Addr.addr(), 0x00);
+        ppu.cpu_write(PpuRegister::Addr.addr(), 0x20, &mut pattern);
+        ppu.cpu_write(PpuRegister::Addr.addr(), 0x00, &mut pattern);
 
-        let first = ppu.cpu_read(PpuRegister::Data.addr());
-        let second = ppu.cpu_read(PpuRegister::Data.addr());
+        let first = ppu.cpu_read(PpuRegister::Data.addr(), &mut pattern);
+        let second = ppu.cpu_read(PpuRegister::Data.addr(), &mut pattern);
         assert_eq!(first, 0x00, "First read should return buffered value");
         assert_eq!(second, 0x12, "Second read should contain VRAM data");
     }
@@ -968,30 +1039,32 @@ mod tests {
     #[test]
     fn palette_reads_bypass_buffer() {
         let mut ppu = Ppu::new();
-        ppu.cpu_write(PpuRegister::Addr.addr(), 0x3F);
-        ppu.cpu_write(PpuRegister::Addr.addr(), 0x00);
-        ppu.cpu_write(PpuRegister::Data.addr(), 0x99);
+        let mut pattern = PatternBus::default();
+        ppu.cpu_write(PpuRegister::Addr.addr(), 0x3F, &mut pattern);
+        ppu.cpu_write(PpuRegister::Addr.addr(), 0x00, &mut pattern);
+        ppu.cpu_write(PpuRegister::Data.addr(), 0x99, &mut pattern);
 
-        ppu.cpu_write(PpuRegister::Addr.addr(), 0x3F);
-        ppu.cpu_write(PpuRegister::Addr.addr(), 0x00);
+        ppu.cpu_write(PpuRegister::Addr.addr(), 0x3F, &mut pattern);
+        ppu.cpu_write(PpuRegister::Addr.addr(), 0x00, &mut pattern);
 
-        let value = ppu.cpu_read(PpuRegister::Data.addr());
+        let value = ppu.cpu_read(PpuRegister::Data.addr(), &mut pattern);
         assert_eq!(value, 0x99);
     }
 
     #[test]
     fn status_read_resets_scroll_latch() {
         let mut ppu = Ppu::new();
-        ppu.cpu_write(PpuRegister::Scroll.addr(), 0x12); // horizontal
-        ppu.cpu_write(PpuRegister::Scroll.addr(), 0x34); // vertical
+        let mut pattern = PatternBus::default();
+        ppu.cpu_write(PpuRegister::Scroll.addr(), 0x12, &mut pattern); // horizontal
+        ppu.cpu_write(PpuRegister::Scroll.addr(), 0x34, &mut pattern); // vertical
         assert_eq!(ppu.registers.vram.t.coarse_x(), 0x12 >> 3);
         assert_eq!(ppu.registers.vram.x, 0x12 & 0x07);
         assert_eq!(ppu.registers.vram.t.coarse_y(), 0x34 >> 3);
         assert_eq!(ppu.registers.vram.t.fine_y(), 0x34 & 0x07);
 
         // Reading status should clear the write toggle so the next write targets horizontal.
-        let _ = ppu.cpu_read(PpuRegister::Status.addr());
-        ppu.cpu_write(PpuRegister::Scroll.addr(), 0x56);
+        let _ = ppu.cpu_read(PpuRegister::Status.addr(), &mut pattern);
+        ppu.cpu_write(PpuRegister::Scroll.addr(), 0x56, &mut pattern);
         assert_eq!(ppu.registers.vram.t.coarse_x(), 0x56 >> 3);
         assert_eq!(ppu.registers.vram.t.coarse_y(), 0x34 >> 3);
     }
@@ -999,9 +1072,10 @@ mod tests {
     #[test]
     fn oam_data_auto_increments() {
         let mut ppu = Ppu::new();
-        ppu.cpu_write(PpuRegister::OamAddr.addr(), 0x02);
-        ppu.cpu_write(PpuRegister::OamData.addr(), 0xAA);
-        ppu.cpu_write(PpuRegister::OamData.addr(), 0xBB);
+        let mut pattern = PatternBus::default();
+        ppu.cpu_write(PpuRegister::OamAddr.addr(), 0x02, &mut pattern);
+        ppu.cpu_write(PpuRegister::OamData.addr(), 0xAA, &mut pattern);
+        ppu.cpu_write(PpuRegister::OamData.addr(), 0xBB, &mut pattern);
         assert_eq!(ppu.registers.oam[2], 0xAA);
         assert_eq!(ppu.registers.oam[3], 0xBB);
     }
@@ -1009,16 +1083,17 @@ mod tests {
     #[test]
     fn vblank_flag_is_managed_by_clock() {
         let mut ppu = Ppu::new();
+        let mut pattern = PatternBus::default();
         // Run until scanline 241, cycle 1 (accounting for prerender line).
         let target_cycles = (242i32 * CYCLES_PER_SCANLINE as i32 + 2) as usize;
         for _ in 0..target_cycles {
-            ppu.clock();
+            ppu.clock(&mut pattern);
         }
         assert!(ppu.registers.status.contains(Status::VERTICAL_BLANK));
 
         // Continue until prerender line clears the flag.
         while ppu.scanline != -1 || ppu.cycle != 1 {
-            ppu.clock();
+            ppu.clock(&mut pattern);
         }
         assert!(!ppu.registers.status.contains(Status::VERTICAL_BLANK));
     }
