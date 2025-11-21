@@ -5,7 +5,7 @@ use crate::{
     error::Error,
 };
 
-use self::mapper::{Mapper0, Mapper2, Mapper3, Mapper7};
+use self::mapper::{Mapper0, Mapper1, Mapper2, Mapper3, Mapper7};
 
 pub const TRAINER_SIZE: usize = 512;
 
@@ -80,6 +80,7 @@ pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
 
     let mapper: Box<dyn Mapper> = match header.mapper {
         0 => Box::new(Mapper0::with_trainer(header, prg_rom, chr_rom, trainer)),
+        1 => Box::new(Mapper1::with_trainer(header, prg_rom, chr_rom, trainer)),
         2 => Box::new(Mapper2::with_trainer(header, prg_rom, chr_rom, trainer)),
         3 => Box::new(Mapper3::with_trainer(header, prg_rom, chr_rom, trainer)),
         7 => Box::new(Mapper7::with_trainer(header, prg_rom, chr_rom, trainer)),
