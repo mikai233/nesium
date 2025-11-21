@@ -196,10 +196,29 @@ impl Mnemonic {
                     // Hardware behavior:
                     // - Clear B flag (bit 4): & 0xEF
                     // - Force unused bit 5 to 1: | 0x20
+                    let was_disabled = cpu.p.i();
+                    let was_enabled = !cpu.p.i();
                     let mut p = Status::from_bits_truncate(value);
                     p.set_b(false);
                     p.set_u(true);
                     cpu.p = p;
+
+                    // Like SEI, PLP updates the I flag with a one-instruction
+                    // latency for interrupt gating. When PLP changes I from
+                    // enabled (0) to disabled (1) while an IRQ is pending, the
+                    // 6502 still allows one IRQ "just after" PLP. Approximate
+                    // this by permitting a single IRQ even though I is now set.
+                    if was_enabled && cpu.p.i() {
+                        cpu.force_irq_once = true;
+                    }
+
+                    // When PLP changes I from disabled (1) to enabled (0), the
+                    // first potential IRQ after PLP should be delayed by one
+                    // instruction, just like CLI. Model this by suppressing IRQ
+                    // service for the next instruction boundary.
+                    if was_disabled && !cpu.p.i() {
+                        cpu.irq_suppressed = true;
+                    }
                 },
             },
         ]

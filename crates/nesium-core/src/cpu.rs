@@ -41,6 +41,14 @@ pub(crate) struct Cpu {
     pc: u16,   //Program Counter
 
     opcode: Option<u8>,
+    /// Suppress servicing maskable IRQs for the next instruction boundary.
+    /// Used to model the 6502 behaviour where a pending IRQ is not taken
+    /// until one instruction after CLI clears the I flag.
+    irq_suppressed: bool,
+    /// Allow a single IRQ even though the I flag is set.
+    /// This is used to approximate the behaviour of CLI/SEI and related
+    /// sequences where a pending IRQ is taken "just after" SEI/PLP.
+    force_irq_once: bool,
     index: u8,
     base: u8,
     effective_addr: u16,
@@ -58,6 +66,8 @@ impl Cpu {
             p: Status::from_bits_truncate(0x34), // IRQ disabled, bit 5 always set
             pc: 0x0000,                          // Will be set by reset vector
             opcode: None,
+            irq_suppressed: false,
+            force_irq_once: false,
             index: 0,
             base: 0,
             effective_addr: 0,
@@ -80,6 +90,8 @@ impl Cpu {
         self.s = 0xFD; // Stack pointer is initialized to $FD
         self.p = Status::from_bits_truncate(0x34); // IRQ disabled
         self.opcode = None;
+        self.irq_suppressed = false;
+        self.force_irq_once = false;
         self.index = 0;
         self.effective_addr = 0;
     }
@@ -146,6 +158,8 @@ impl Cpu {
     pub(crate) fn fetch_opcode(&mut self, bus: &mut dyn Bus) -> u8 {
         let opcode = bus.read(self.pc);
         self.incr_pc();
+        // Starting a new instruction boundary clears any one-instruction IRQ suppression.
+        self.irq_suppressed = false;
         opcode
     }
 
@@ -262,11 +276,12 @@ impl Cpu {
     }
 
     fn service_irq(&mut self, bus: &mut dyn Bus) -> bool {
-        if self.p.i() || !bus.irq_pending() {
+        if (self.p.i() && !self.force_irq_once) || self.irq_suppressed || !bus.irq_pending() {
             return false;
         }
         self.perform_interrupt(bus, cpu_mem::IRQ_VECTOR_LO, cpu_mem::IRQ_VECTOR_HI, false);
         bus.clear_irq();
+        self.force_irq_once = false;
         true
     }
 
@@ -362,6 +377,8 @@ impl Cpu {
         self.p = Status::from_bits_truncate(snapshot.p);
         self.index = 0;
         self.opcode = None;
+        self.irq_suppressed = false;
+        self.force_irq_once = false;
         self.base = 0;
         self.effective_addr = 0;
     }
