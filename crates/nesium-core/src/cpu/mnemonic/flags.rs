@@ -76,7 +76,15 @@ impl Mnemonic {
             name: "cli_clear_interrupt",
             micro_fn: |cpu, _| {
                 // Cycle 2: I = 0
+                let was_disabled = cpu.p.i();
                 cpu.p.set_i(false);
+                // If interrupts were previously disabled while an IRQ was pending,
+                // the 6502 delays servicing that IRQ until *after* the next
+                // instruction completes. We approximate this by suppressing IRQ
+                // service for one instruction boundary after CLI.
+                if was_disabled {
+                    cpu.irq_suppressed = true;
+                }
             },
         }]
     }
@@ -184,7 +192,14 @@ impl Mnemonic {
             name: "sei_set_interrupt",
             micro_fn: |cpu, _| {
                 // Cycle 2: I = 1
+                let was_enabled = !cpu.p.i();
                 cpu.p.set_i(true);
+                // If interrupts were previously enabled when SEI executes,
+                // a pending IRQ is still allowed to fire "just after" SEI.
+                // Model this by permitting a single IRQ even though I is set.
+                if was_enabled {
+                    cpu.force_irq_once = true;
+                }
             },
         }]
     }

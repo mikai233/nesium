@@ -14,6 +14,17 @@ use crate::{
     ram::apu::RegisterRam,
 };
 
+/// Approximate CPU cycle interval between frame IRQs in 4-step mode (NTSC).
+///
+/// On real hardware the frame sequencer asserts an IRQ near 29830 CPU cycles
+/// after being (re)configured in 4-step mode. Several blargg/APU test ROMs
+/// (e.g. `cpu_interrupts_v2`, `instr_misc/04-dummy_reads_apu`) rely on this
+/// behaviour to detect dummy reads of `$4015` by sampling the frame IRQ flag
+/// after a fixed delay. We keep the model deliberately simple and only care
+/// about the approximate IRQ cadence, not the intermediate envelope/timer
+/// steps.
+const FRAME_IRQ_PERIOD_CYCLES: u64 = 29_830;
+
 /// Frame sequencer timing mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum FrameCounterMode {
@@ -116,7 +127,12 @@ impl Apu {
                 self.registers[idx] = value;
             }
             apu_mem::STATUS => self.status.write(value),
-            apu_mem::FRAME_COUNTER => self.frame_counter.configure(value),
+            apu_mem::FRAME_COUNTER => {
+                // Writing to $4017 reconfigures and resets the frame sequencer.
+                self.frame_counter.configure(value);
+                self.status.frame_interrupt = false;
+                self.cycles = 0;
+            }
             _ => {}
         }
     }
@@ -136,12 +152,26 @@ impl Apu {
 
     /// Clears any pending IRQ sources to mimic the CPU ack cycle.
     pub fn clear_irq(&mut self) {
-        self.status.frame_interrupt = false;
+        // On real hardware, the frame IRQ is acknowledged by reading $4015.
+        // Here we only clear the DMC IRQ source; frame IRQ remains latched
+        // until STATUS is read via `cpu_read`.
         self.status.dmc_interrupt = false;
     }
 
     pub fn clock(&mut self) {
         self.cycles = self.cycles.wrapping_add(1);
+
+        // Extremely simplified frame sequencer: we only model the periodic
+        // frame IRQ used by test ROMs. In four-step mode, when IRQs are not
+        // inhibited, assert the frame interrupt roughly once per sequence.
+        if self.frame_counter.mode == FrameCounterMode::FourStep && !self.frame_counter.irq_inhibit
+        {
+            if self.cycles >= FRAME_IRQ_PERIOD_CYCLES {
+                self.status.frame_interrupt = true;
+                // Restart the cycle counter so multi-frame tests continue to see IRQs.
+                self.cycles = 0;
+            }
+        }
     }
 
     pub fn sample(&self) -> f32 {

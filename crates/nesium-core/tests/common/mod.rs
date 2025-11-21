@@ -23,10 +23,7 @@ const RESET_DELAY_FRAMES: usize = 6;
 
 #[derive(Debug)]
 pub enum Progress {
-    Running {
-        message: String,
-        needs_reset: bool,
-    },
+    Running { message: String, needs_reset: bool },
     Passed(String),
     Failed(u8, String),
 }
@@ -80,7 +77,10 @@ where
                     format_status(msg)
                 )
             }
-            Progress::Running { message, needs_reset } => {
+            Progress::Running {
+                message,
+                needs_reset,
+            } => {
                 if !message.is_empty() {
                     last_status = message;
                 }
@@ -101,10 +101,10 @@ where
         Progress::Failed(code, msg) => {
             bail!(
                 "failed with status byte {:#04X}{}",
-                    code,
-                    format_status(msg)
-                )
-            }
+                code,
+                format_status(msg)
+            )
+        }
         Progress::Running { message, .. } => {
             if !message.is_empty() {
                 last_status = message;
@@ -149,7 +149,11 @@ pub fn require_color_diversity(nes: &NES, min_unique: usize) -> Result<()> {
     }
     let unique = seen.iter().filter(|b| **b).count();
     if unique < min_unique {
-        bail!("framebuffer has only {} unique color indices (expected at least {})", unique, min_unique);
+        bail!(
+            "framebuffer has only {} unique color indices (expected at least {})",
+            unique,
+            min_unique
+        );
     }
     Ok(())
 }

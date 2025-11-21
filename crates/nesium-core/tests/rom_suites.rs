@@ -1,9 +1,7 @@
 mod common;
 
 use anyhow::Result;
-use common::{
-    require_color_diversity, run_rom_frames, run_rom_status,
-};
+use common::{require_color_diversity, run_rom_frames, run_rom_status};
 
 const DEFAULT_FRAMES: usize = 1800;
 
@@ -17,7 +15,9 @@ fn _240pee_suite() -> Result<()> {
 
 #[test]
 fn mmc1_a12_suite() -> Result<()> {
-    run_rom_frames("MMC1_A12/mmc1_a12.nes", 600, |nes| require_color_diversity(nes, 4))
+    run_rom_frames("MMC1_A12/mmc1_a12.nes", 600, |nes| {
+        require_color_diversity(nes, 4)
+    })
 }
 
 /// Interactive paddle controller test ROM.
@@ -366,7 +366,9 @@ fn instr_timing_suite() -> Result<()> {
 
 #[test]
 fn m22chrbankingtest_suite() -> Result<()> {
-    run_rom_frames("m22chrbankingtest/0-127.nes", 600, |nes| require_color_diversity(nes, 4))
+    run_rom_frames("m22chrbankingtest/0-127.nes", 600, |nes| {
+        require_color_diversity(nes, 4)
+    })
 }
 
 #[test]
@@ -484,7 +486,9 @@ fn nrom368_suite() -> Result<()> {
 
 #[test]
 fn ny2011_suite() -> Result<()> {
-    run_rom_frames("ny2011/ny2011.nes", 600, |nes| require_color_diversity(nes, 4))
+    run_rom_frames("ny2011/ny2011.nes", 600, |nes| {
+        require_color_diversity(nes, 4)
+    })
 }
 
 #[test]
@@ -703,17 +707,23 @@ fn sprite_overflow_tests_suite() -> Result<()> {
 
 #[test]
 fn spritecans_2011_suite() -> Result<()> {
-    run_rom_frames("spritecans-2011/spritecans.nes", 240, |nes| require_color_diversity(nes, 4))
+    run_rom_frames("spritecans-2011/spritecans.nes", 240, |nes| {
+        require_color_diversity(nes, 4)
+    })
 }
 
 #[test]
 fn stomper_suite() -> Result<()> {
-    run_rom_frames("stomper/smwstomp.nes", 300, |nes| require_color_diversity(nes, 4))
+    run_rom_frames("stomper/smwstomp.nes", 300, |nes| {
+        require_color_diversity(nes, 4)
+    })
 }
 
 #[test]
 fn tutor_suite() -> Result<()> {
-    run_rom_frames("tutor/tutor.nes", 300, |nes| require_color_diversity(nes, 4))
+    run_rom_frames("tutor/tutor.nes", 300, |nes| {
+        require_color_diversity(nes, 4)
+    })
 }
 
 /// TV characteristics test ROM (NTSC chroma/luma crosstalk, pixel aspect ratio).
