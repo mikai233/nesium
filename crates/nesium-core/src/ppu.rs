@@ -21,7 +21,7 @@ use crate::{
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
         palette::PaletteRam,
-        registers::{Control, Mask, Registers, Status},
+        registers::{Mask, Registers, Status},
     },
     ram::ppu::{SecondaryOamRam, Vram},
 };
@@ -49,8 +49,6 @@ pub struct Ppu {
     odd_frame: bool,
     /// Background pixel pipeline (pattern and attribute shifters).
     bg_pipeline: BgPipeline,
-    /// Fine X scroll (0..=7) used when sampling from the background pipeline.
-    fine_x: u8,
     /// Secondary OAM used during sprite evaluation for the current scanline.
     secondary_oam: SecondaryOamRam,
     /// Background + sprite rendering target for the current frame.
@@ -87,7 +85,6 @@ impl Ppu {
             frame: 0,
             odd_frame: false,
             bg_pipeline: BgPipeline::new(),
-            fine_x: 0,
             secondary_oam: SecondaryOamRam::new(),
             framebuffer: Box::new([0; SCREEN_WIDTH * SCREEN_HEIGHT]),
         }
@@ -103,7 +100,6 @@ impl Ppu {
         self.frame = 0;
         self.odd_frame = false;
         self.bg_pipeline.clear();
-        self.fine_x = 0;
         self.secondary_oam.fill(0);
         self.clear_framebuffer();
     }
@@ -124,13 +120,13 @@ impl Ppu {
     /// Handles CPU writes to the mirrored PPU register space (`$2000-$3FFF`).
     pub fn cpu_write(&mut self, addr: u16, value: u8) {
         match PpuRegister::from_cpu_addr(addr) {
-            PpuRegister::Control => self.registers.control = Control::from_bits_retain(value),
+            PpuRegister::Control => self.registers.write_control(value),
             PpuRegister::Mask => self.registers.mask = Mask::from_bits_retain(value),
             PpuRegister::Status => {} // read-only
             PpuRegister::OamAddr => self.registers.oam_addr = value,
             PpuRegister::OamData => self.write_oam_data(value),
-            PpuRegister::Scroll => self.registers.scroll.write(value),
-            PpuRegister::Addr => self.registers.addr.write(value),
+            PpuRegister::Scroll => self.registers.vram.write_scroll(value),
+            PpuRegister::Addr => self.registers.vram.write_addr(value),
             PpuRegister::Data => self.write_vram_data(value),
         }
     }
@@ -247,7 +243,7 @@ impl Ppu {
     /// once the PPU rendering pipeline is fleshed out.
     fn fetch_background_data(&mut self) {
         // TODO: implement nametable/pattern/attribute fetch based on the
-        // internal VRAM address and scroll registers.
+        // internal `v`/`t`/`x`/`w` VRAM registers.
     }
 
     /// Performs sprite evaluation for the current scanline, filling
@@ -262,8 +258,7 @@ impl Ppu {
     fn read_status(&mut self) -> u8 {
         let status = self.registers.status.bits();
         self.registers.status.remove(Status::VERTICAL_BLANK);
-        self.registers.scroll.reset_latch();
-        self.registers.addr.reset_latch();
+        self.registers.vram.reset_latch();
         status
     }
 
@@ -285,19 +280,19 @@ impl Ppu {
     }
 
     fn write_vram_data(&mut self, value: u8) {
-        let addr = self.registers.addr.addr();
+        let addr = self.registers.vram.v.raw() & ppu_mem::VRAM_MIRROR_MASK;
         self.write_vram(addr, value);
         let increment = self.registers.control.vram_increment();
-        self.registers.addr.increment(increment);
+        self.registers.vram.v.increment(increment);
     }
 
     fn read_vram_data(&mut self) -> u8 {
-        let addr = self.registers.addr.addr();
+        let addr = self.registers.vram.v.raw() & ppu_mem::VRAM_MIRROR_MASK;
         let data = self.read_vram(addr);
         let buffered = self.registers.vram_buffer;
         self.registers.vram_buffer = data;
         let increment = self.registers.control.vram_increment();
-        self.registers.addr.increment(increment);
+        self.registers.vram.v.increment(increment);
 
         if addr >= ppu_mem::PALETTE_BASE {
             data
@@ -378,13 +373,16 @@ mod tests {
         let mut ppu = Ppu::new();
         ppu.cpu_write(PpuRegister::Scroll.addr(), 0x12); // horizontal
         ppu.cpu_write(PpuRegister::Scroll.addr(), 0x34); // vertical
-        assert_eq!(ppu.registers.scroll.horizontal(), 0x12);
-        assert_eq!(ppu.registers.scroll.vertical(), 0x34);
+        assert_eq!(ppu.registers.vram.t.coarse_x(), 0x12 >> 3);
+        assert_eq!(ppu.registers.vram.x, 0x12 & 0x07);
+        assert_eq!(ppu.registers.vram.t.coarse_y(), 0x34 >> 3);
+        assert_eq!(ppu.registers.vram.t.fine_y(), 0x34 & 0x07);
 
         // Reading status should clear the write toggle so the next write targets horizontal.
         let _ = ppu.cpu_read(PpuRegister::Status.addr());
         ppu.cpu_write(PpuRegister::Scroll.addr(), 0x56);
-        assert_eq!(ppu.registers.scroll.horizontal(), 0x56);
+        assert_eq!(ppu.registers.vram.t.coarse_x(), 0x56 >> 3);
+        assert_eq!(ppu.registers.vram.t.coarse_y(), 0x34 >> 3);
     }
 
     #[test]
