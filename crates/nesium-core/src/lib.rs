@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::{
     apu::Apu,
-    bus::cpu::CpuBus,
+    bus::{Bus, cpu::CpuBus},
     cartridge::Cartridge,
     controller::{Button, Controller},
     cpu::Cpu,
@@ -174,6 +174,32 @@ impl NES {
     /// Forces the CPU registers to the provided snapshot (clears in-flight opcode).
     pub fn set_cpu_snapshot(&mut self, snapshot: CpuSnapshot) {
         self.cpu.load_snapshot(snapshot);
+    }
+
+    /// Reads a byte from the CPU address space without mutating CPU state.
+    pub fn peek_cpu_byte(&mut self, addr: u16) -> u8 {
+        let mut bus = CpuBus::new(
+            &mut self.ram,
+            &mut self.ppu,
+            &mut self.apu,
+            self.cartridge.as_mut(),
+            &mut self.controllers,
+        );
+        bus.read(addr)
+    }
+
+    /// Reads a contiguous range of CPU-visible bytes into `buffer`, starting at `base`.
+    pub fn peek_cpu_slice(&mut self, base: u16, buffer: &mut [u8]) {
+        let mut bus = CpuBus::new(
+            &mut self.ram,
+            &mut self.ppu,
+            &mut self.apu,
+            self.cartridge.as_mut(),
+            &mut self.controllers,
+        );
+        for (offset, byte) in buffer.iter_mut().enumerate() {
+            *byte = bus.read(base.wrapping_add(offset as u16));
+        }
     }
 }
 
