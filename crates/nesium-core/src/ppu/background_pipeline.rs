@@ -37,6 +37,17 @@ impl Shift16 {
         ((self.0 >> 15) & 1) as u8
     }
 
+    /// Returns the bit at position `15 - fine_x`.
+    ///
+    /// The PPU samples shifters using the fine X scroll as an offset rather
+    /// than delaying shifts. This helper keeps the physical shift timing the
+    /// same while exposing the scrolled bit.
+    #[inline]
+    fn bit_with_fine_x(&self, fine_x: u8) -> u8 {
+        let shift = 15 - (fine_x & 0b111);
+        ((self.0 >> shift) & 1) as u8
+    }
+
     /// Shifts the register one bit to the left.
     ///
     /// This models the per-pixel shift that happens once for each PPU dot.
@@ -117,7 +128,8 @@ impl BgPipeline {
         }
     }
 
-    /// Samples the current background pixel and advances the pipeline.
+    /// Samples the current background pixel (respecting fine X scroll) and
+    /// advances the pipeline.
     ///
     /// Returns `(palette_bits, pattern_bits)`:
     /// - `palette_bits` (`0..=3`): 2-bit palette index from attribute data,
@@ -128,12 +140,13 @@ impl BgPipeline {
     ///
     /// This method also shifts all four shifters by one bit to prepare for
     /// the next pixel.
-    pub fn sample_and_shift(&mut self) -> (u8, u8) {
-        // Sample the MSB of each shifter for the current pixel.
-        let pattern_bit0 = self.pattern[0].msb();
-        let pattern_bit1 = self.pattern[1].msb();
-        let palette_bit0 = self.palette[0].msb();
-        let palette_bit1 = self.palette[1].msb();
+    pub fn sample_and_shift(&mut self, fine_x: u8) -> (u8, u8) {
+        // Sample the relevant bit of each shifter; fine X offsets which bit is
+        // visible without altering the shift cadence.
+        let pattern_bit0 = self.pattern[0].bit_with_fine_x(fine_x);
+        let pattern_bit1 = self.pattern[1].bit_with_fine_x(fine_x);
+        let palette_bit0 = self.palette[0].bit_with_fine_x(fine_x);
+        let palette_bit1 = self.palette[1].bit_with_fine_x(fine_x);
 
         let pattern_bits = (pattern_bit1 << 1) | pattern_bit0;
         let palette_bits = (palette_bit1 << 1) | palette_bit0;

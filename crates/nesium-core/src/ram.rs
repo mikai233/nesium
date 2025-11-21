@@ -24,6 +24,8 @@ pub mod ppu {
     pub type PaletteRam = super::Ram<{ ppu_mem::PALETTE_RAM_SIZE }>;
     pub type OamRam = super::Ram<{ ppu_mem::OAM_RAM_SIZE }>;
     pub type SecondaryOamRam = super::Ram<{ ppu_mem::SECONDARY_OAM_RAM_SIZE }>;
+    /// Generic 8-byte sprite line buffer (boxed on xtensa/wasm/with `boxed-ram`).
+    pub type SpriteLineRam = super::Ram<8>;
 }
 
 pub mod apu {
