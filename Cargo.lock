@@ -516,6 +516,7 @@ dependencies = [
 name = "nesium-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bincode",
  "bitflags 2.10.0",
  "ctor",

@@ -2,12 +2,12 @@ use crate::{
     apu::Apu,
     bus::Bus,
     cartridge::Cartridge,
+    controller::Controller,
     memory::{
         cpu as cpu_mem,
         ppu::{self as ppu_mem, Register as PpuRegister},
     },
     ppu::{PatternBus, Ppu},
-    controller::Controller,
     ram::cpu as cpu_ram,
 };
 
@@ -283,8 +283,13 @@ mod tests {
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
         let mut controllers = [Controller::new(), Controller::new()];
-        let mut bus =
-            CpuBus::new(&mut ram, &mut ppu, &mut apu, Some(&mut cartridge), &mut controllers);
+        let mut bus = CpuBus::new(
+            &mut ram,
+            &mut ppu,
+            &mut apu,
+            Some(&mut cartridge),
+            &mut controllers,
+        );
 
         let first_bank = bus.read(cpu_mem::PRG_ROM_START);
         let mirrored_bank = bus.read(cpu_mem::PRG_ROM_START + 0x4000);
@@ -298,8 +303,13 @@ mod tests {
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
         let mut controllers = [Controller::new(), Controller::new()];
-        let mut bus =
-            CpuBus::new(&mut ram, &mut ppu, &mut apu, Some(&mut cartridge), &mut controllers);
+        let mut bus = CpuBus::new(
+            &mut ram,
+            &mut ppu,
+            &mut apu,
+            Some(&mut cartridge),
+            &mut controllers,
+        );
 
         bus.write(cpu_mem::PRG_RAM_START, 0x42);
         assert_eq!(bus.read(cpu_mem::PRG_RAM_START), 0x42);
