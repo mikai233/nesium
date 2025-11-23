@@ -13,6 +13,9 @@ A cycle-accurate NES emulator written in Rust, designed to faithfully replicate 
 - Active development with ongoing improvements to accuracy, performance, and compatibility.
 - Still in the early stages, but several key components are already functional.
 
+## Accuracy notes
+- **Open bus (Mesen2-style)**: CPU bus keeps a decaying latch (~1s of CPU cycles) and feeds it back for write-only/unmapped reads ($4000-$4013, $4014 read, $4018-$401F, or no cartridge PRG space). PPU register traffic refreshes the latch so Blargg/Mesen2 open-bus expectations hold.
+
 ## Contributions:
 Feel free to fork the project, open issues, and submit pull requests. Contributions are welcome as we work to improve accuracy and expand the feature set.
 

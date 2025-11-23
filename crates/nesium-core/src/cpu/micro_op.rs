@@ -92,7 +92,9 @@ impl MicroOp {
                 let hi = bus.read(cpu.pc);
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHA(0x9F) SHX(0x9E) SHS(0x9B)
-                if cpu.opcode_in_flight == Some(0x9F) || cpu.opcode_in_flight == Some(0x9E) || cpu.opcode_in_flight == Some(0x9B)
+                if cpu.opcode_in_flight == Some(0x9F)
+                    || cpu.opcode_in_flight == Some(0x9E)
+                    || cpu.opcode_in_flight == Some(0x9B)
                 {
                     cpu.base = hi;
                 }

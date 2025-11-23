@@ -2,8 +2,8 @@ mod common;
 
 use anyhow::Result;
 use common::{
-    require_color_diversity, run_rom_frames, run_rom_status, run_rom_zeropage_result,
-    RESULT_ZP_ADDR,
+    RESULT_ZP_ADDR, require_color_diversity, run_rom_frames, run_rom_status,
+    run_rom_zeropage_result,
 };
 use ctor::ctor;
 use tracing::Level;

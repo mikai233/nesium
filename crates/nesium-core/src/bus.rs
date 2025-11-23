@@ -5,10 +5,18 @@ use crate::memory;
 pub mod cpu;
 #[cfg(test)]
 pub mod mock;
+pub(crate) mod open_bus;
+
+pub(crate) use open_bus::OpenBus;
 
 /// Expose the CPU stack page start address for stack helpers.
 pub(crate) const STACK_ADDR: u16 = memory::cpu::STACK_PAGE_START;
 
+/// Core CPU/PPU bus abstraction.
+///
+/// Implementations are expected to honour open-bus behaviour (see
+/// [`open_bus::OpenBus`]), returning the last driven value for write-only or
+/// unmapped addresses when no device actively drives the data lines.
 pub trait Bus: Debug {
     fn read(&mut self, addr: u16) -> u8;
 

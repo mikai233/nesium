@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::{
     apu::Apu,
-    bus::{Bus, cpu::CpuBus},
+    bus::{Bus, OpenBus, cpu::CpuBus},
     cartridge::Cartridge,
     controller::{Button, Controller},
     cpu::Cpu,
@@ -41,6 +41,8 @@ pub struct NES {
     serial_log: controller::SerialLogger,
     /// Pending OAM DMA page written via `$4014` (latched until CPU picks it up).
     oam_dma_request: Option<u8>,
+    /// CPU data-bus open-bus latch (mirrors Mesen2's decay model).
+    open_bus: OpenBus,
 }
 
 impl NES {
@@ -58,6 +60,7 @@ impl NES {
             dot_counter: 0,
             serial_log: controller::SerialLogger::default(),
             oam_dma_request: None,
+            open_bus: OpenBus::new(),
         };
         nes.reset();
         nes
@@ -83,6 +86,7 @@ impl NES {
         self.ppu.reset();
         self.apu.reset();
         self.serial_log.drain();
+        self.open_bus.reset();
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
@@ -91,6 +95,7 @@ impl NES {
             &mut self.controllers,
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
+            &mut self.open_bus,
         );
         self.cpu.reset(&mut bus);
         self.last_frame = bus.ppu().frame_count();
@@ -110,6 +115,7 @@ impl NES {
             &mut self.controllers,
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
+            &mut self.open_bus,
         );
 
         // Always run one PPU dot first so NMI/VBlank events become visible
@@ -230,6 +236,7 @@ impl NES {
             &mut self.controllers,
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
+            &mut self.open_bus,
         );
         bus.read(addr)
     }
@@ -244,6 +251,7 @@ impl NES {
             &mut self.controllers,
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
+            &mut self.open_bus,
         );
         for (offset, byte) in buffer.iter_mut().enumerate() {
             *byte = bus.read(base.wrapping_add(offset as u16));
