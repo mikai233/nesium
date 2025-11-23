@@ -32,6 +32,19 @@ pub struct Mapper1 {
 }
 
 impl Mapper1 {
+    fn power_on_init(&mut self) {
+        // Power-on defaults per MMC1 documentation:
+        // - Control = 0b11xx (16 KiB banking, fixed high bank)
+        // - PRG/CHR banks = 0
+        // - Shift register cleared with bit4 set so the next 5 writes latch cleanly.
+        self.control = 0x0C;
+        self.chr_bank0 = 0;
+        self.chr_bank1 = 0;
+        self.prg_bank = 0;
+        self.shift_reg = 0x10;
+        self.shift_count = 0;
+    }
+
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
         Self::with_trainer(header, prg_rom, chr_rom, None)
     }
@@ -68,21 +81,23 @@ impl Mapper1 {
 
         let prg_bank_count = (prg_rom.len() / PRG_BANK_SIZE_16K).max(1);
 
-        Self {
+        let mut mapper = Self {
             prg_rom,
             prg_ram,
             chr_rom,
             chr_ram,
             prg_bank_count,
             chr_bank_count,
-            // Power-on default: 16 KiB PRG banking, last bank fixed at $C000.
-            control: 0x0C,
+            control: 0,
             chr_bank0: 0,
             chr_bank1: 0,
             prg_bank: 0,
             shift_reg: 0,
             shift_count: 0,
-        }
+        };
+
+        mapper.power_on_init();
+        mapper
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
@@ -239,7 +254,8 @@ impl Mapper1 {
     fn write_register(&mut self, addr: u16, data: u8) {
         if data & 0x80 != 0 {
             // Reset shift register and force 16 KiB PRG banking with fixed high bank.
-            self.shift_reg = 0;
+            // PRG/CHR bank registers keep their current values.
+            self.shift_reg = 0x10;
             self.shift_count = 0;
             self.control |= 0x0C;
             return;

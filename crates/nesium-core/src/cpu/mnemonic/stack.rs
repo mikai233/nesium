@@ -202,14 +202,13 @@ impl Mnemonic {
                     p.set_b(false);
                     p.set_u(true);
                     cpu.p = p;
-
-                    // Like SEI, PLP updates the I flag with a one-instruction
+                    // Like SEI/CLI, PLP updates the I flag with a one-instruction
                     // latency for interrupt gating. When PLP changes I from
                     // enabled (0) to disabled (1) while an IRQ is pending, the
                     // 6502 still allows one IRQ "just after" PLP. Approximate
                     // this by permitting a single IRQ even though I is now set.
                     if was_enabled && cpu.p.i() {
-                        cpu.force_irq_once = true;
+                        cpu.allow_irq_once = true;
                     }
 
                     // When PLP changes I from disabled (1) to enabled (0), the
@@ -217,8 +216,11 @@ impl Mnemonic {
                     // instruction, just like CLI. Model this by suppressing IRQ
                     // service for the next instruction boundary.
                     if was_disabled && !cpu.p.i() {
-                        cpu.irq_suppressed = true;
+                        cpu.irq_inhibit_next = true;
                     }
+
+                    // Finally, queue the new I value into the IRQ gating pipeline.
+                    cpu.queue_i_update(cpu.p.i());
                 },
             },
         ]

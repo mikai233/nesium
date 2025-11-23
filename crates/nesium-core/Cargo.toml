@@ -8,15 +8,19 @@ license = "MIT"
 default = []
 boxed-ram = []
 
+[profile.test]
+opt-level = 2
+debug = true
+
 [dependencies]
 bitflags.workspace = true
 dyn-clone.workspace = true
 bincode.workspace = true
-once_cell.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 rand.workspace = true
 ctor.workspace = true
-tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
+once_cell.workspace = true

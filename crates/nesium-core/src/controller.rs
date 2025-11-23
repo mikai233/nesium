@@ -16,7 +16,7 @@ pub enum Button {
 }
 
 /// Serially-readable controller state with latch/strobe behavior.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Controller {
     strobe: bool,
     latched: u8,
@@ -70,5 +70,64 @@ impl Controller {
 impl Default for Controller {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Captures the serial stream some blargg test ROMs emit via `$4016` writes.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct SerialLogger {
+    state: SerialState,
+    buffer: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SerialState {
+    Idle,
+    Data { byte: u8, bit: u8 },
+    Stop { byte: u8 },
+}
+
+impl Default for SerialState {
+    fn default() -> Self {
+        SerialState::Idle
+    }
+}
+
+impl SerialLogger {
+    pub(crate) fn push_bit(&mut self, bit: bool) {
+        use SerialState::*;
+        self.state = match (self.state, bit) {
+            // Waiting for start bit (0).
+            (Idle, false) => Data { byte: 0, bit: 0 },
+            (Idle, true) => Idle,
+
+            // Collect 8 data bits, LSB first.
+            (Data { mut byte, mut bit }, b) => {
+                if b {
+                    byte |= 1 << bit;
+                }
+                bit += 1;
+                if bit >= 8 {
+                    Stop { byte }
+                } else {
+                    Data { byte, bit }
+                }
+            }
+
+            // Consume stop bit of value 1.
+            (Stop { byte }, true) => {
+                self.buffer.push(byte);
+                Idle
+            }
+
+            // Framing error: reset state machine.
+            (Stop { .. }, false) => Idle,
+        };
+    }
+
+    pub(crate) fn drain(&mut self) -> Vec<u8> {
+        let mut out = Vec::new();
+        std::mem::swap(&mut self.buffer, &mut out);
+        out
     }
 }

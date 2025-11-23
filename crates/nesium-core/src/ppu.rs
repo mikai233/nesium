@@ -54,6 +54,16 @@ use crate::{
     },
     ram::ppu::{SecondaryOamRam, Vram},
 };
+
+/// Minimal PPU timing/debug snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NmiDebugState {
+    pub nmi_output: bool,
+    pub nmi_pending: bool,
+    pub scanline: i16,
+    pub cycle: u16,
+    pub frame: u64,
+}
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
@@ -80,8 +90,10 @@ pub struct Ppu {
     bg_pipeline: BgPipeline,
     /// Sprite pixel pipeline for the current scanline.
     sprite_pipeline: SpritePipeline,
-    /// Latched NMI request (true when PPU wants to fire NMI).
+    /// Latched NMI request (true when the PPU wants to fire NMI).
     nmi_pending: bool,
+    /// Current level of the NMI output line (true = asserted).
+    nmi_output: bool,
     /// Last value on the (simulated) PPU data bus for open-bus behavior.
     bus_latch: u8,
     /// Secondary OAM used during sprite evaluation for the current scanline.
@@ -167,6 +179,7 @@ impl Ppu {
             bg_pipeline: BgPipeline::new(),
             sprite_pipeline: SpritePipeline::new(),
             nmi_pending: false,
+            nmi_output: false,
             bus_latch: 0,
             secondary_oam: SecondaryOamRam::new(),
             sprite_eval: SpriteEvalState::default(),
@@ -202,6 +215,10 @@ impl Ppu {
         self.bg_pipeline.clear();
         self.sprite_pipeline.clear();
         self.nmi_pending = false;
+        self.nmi_output = false;
+        // PPU power-on: clear VBlank flag so the first BIT $2002 loop waits
+        // for the true VBlank edge instead of seeing a stale high.
+        self.registers.status.remove(registers::Status::VERTICAL_BLANK);
         self.bus_latch = 0;
         self.secondary_oam.fill(0);
         self.sprite_eval = SpriteEvalState::default();
@@ -210,14 +227,9 @@ impl Ppu {
         self.clear_framebuffer();
     }
 
-    /// Returns whether an NMI is pending and clears the latch.
-    ///
-    /// Call this from the CPU/interrupt glue once per CPU tick to emulate the
-    /// PPU’s vblank NMI line.
-    pub fn poll_nmi(&mut self) -> bool {
-        let pending = self.nmi_pending;
-        self.nmi_pending = false;
-        pending
+    /// Current NMI output level: true when VBLANK is set and NMI is enabled.
+    pub fn nmi_output(&self) -> bool {
+        self.nmi_output
     }
 
     /// Returns an immutable view of the current framebuffer.
@@ -231,6 +243,17 @@ impl Ppu {
     /// Current frame counter (increments when scanline wraps from 260 to -1).
     pub fn frame_count(&self) -> u64 {
         self.frame
+    }
+
+    /// Debug info about NMI output/pending and position.
+    pub(crate) fn debug_nmi_state(&self) -> NmiDebugState {
+        NmiDebugState {
+            nmi_output: self.nmi_output,
+            nmi_pending: self.nmi_pending,
+            scanline: self.scanline,
+            cycle: self.cycle,
+            frame: self.frame,
+        }
     }
 
     /// Clears the framebuffer to palette index 0.
@@ -253,7 +276,34 @@ impl Ppu {
     pub fn cpu_write(&mut self, addr: u16, value: u8, pattern: &mut PatternBus<'_>) {
         self.bus_latch = value;
         match PpuRegister::from_cpu_addr(addr) {
-            PpuRegister::Control => self.registers.write_control(value),
+            PpuRegister::Control => {
+                let prev_output = self.nmi_output;
+                let old_ctrl = self.registers.control.bits();
+                let old_nmi_en = self.registers.control.nmi_enabled();
+
+                self.registers.write_control(value);
+
+                let new_ctrl = self.registers.control.bits();
+                let new_nmi_en = self.registers.control.nmi_enabled();
+
+                #[cfg(debug_assertions)]
+                {
+                    if old_ctrl != new_ctrl {
+                        eprintln!(
+                            "[PPU] PPUCTRL write {:02X}->{:02X} (NMI_EN {}->{}) at frame {}, scanline {}, cycle {}",
+                            old_ctrl,
+                            new_ctrl,
+                            old_nmi_en,
+                            new_nmi_en,
+                            self.frame,
+                            self.scanline,
+                            self.cycle,
+                        );
+                    }
+                }
+
+                self.update_nmi_output(prev_output);
+            }
             PpuRegister::Mask => self.registers.mask = Mask::from_bits_retain(value),
             PpuRegister::Status => {} // read-only
             PpuRegister::OamAddr => self.registers.oam_addr = value,
@@ -286,12 +336,26 @@ impl Ppu {
     /// three times per CPU tick for NTSC timing.
     pub fn clock(&mut self, pattern: &mut PatternBus<'_>) {
         let rendering_enabled = self.registers.mask.rendering_enabled();
+        let prev_nmi_output = self.nmi_output;
+
+        // NOTE: We clear VBlank and drop NMI output at dot 1 of prerender.
+        // Dot 0 should NOT clear VBlank on normal frames (avoids early NMI fall).
+        // For odd-frame skip, we clear explicitly in the skip path below.
 
         // Odd-frame cycle skip: on prerender line, when rendering is enabled,
         // the PPU omits cycle 0 on odd frames.
         if self.scanline == -1 && self.cycle == 0 && self.odd_frame && rendering_enabled {
+            // Odd-frame prerender skip: hardware still clears VBlank/flags at dot 1.
+            // Since we skip dot 1 processing, clear here.
+            self.registers.status.remove(Status::VERTICAL_BLANK);
+            self.registers
+                .status
+                .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+            self.nmi_output = false;
+            self.nmi_pending = false;
             self.cycle = 1;
             // Skip the rest of match processing for this dot.
+            self.update_nmi_output(prev_nmi_output);
             self.advance_cycle();
             return;
         }
@@ -319,16 +383,8 @@ impl Ppu {
             // ----------------------
             // Pre-render scanline (-1)
             // ----------------------
-            (_, 0) => {
-                if self.scanline == -1 {
-                    // The cycle preceding dot 1 of prerender clears flags.
-                    self.registers.status.remove(Status::VERTICAL_BLANK);
-                    self.registers
-                        .status
-                        .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
-                    self.nmi_pending = false;
-                }
-            }
+            // Dot 0 has no special side effects (prerender clears happen at dot 1).
+            (_, 0) => {}
 
             (-1, 1) => {
                 // Clear vblank/sprite flags at dot 1 of prerender.
@@ -336,6 +392,8 @@ impl Ppu {
                 self.registers
                     .status
                     .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+                // Debug latch is per-VBlank; drop it when VBlank ends.
+                self.nmi_pending = false;
             }
 
             // Background pipeline ticks during prerender dots 1..=256 when rendering is enabled.
@@ -437,10 +495,9 @@ impl Ppu {
             // ----------------------
             (241, 1) => {
                 // Enter vblank at scanline 241, dot 1.
+                // NMI is edge-triggered from the NMI line (VBLANK && NMI_ENABLE)
+                // in `update_nmi_output`; no separate latch here.
                 self.registers.status.insert(Status::VERTICAL_BLANK);
-                if self.registers.control.nmi_enabled() {
-                    self.nmi_pending = true;
-                }
             }
             (241..=260, _) => {}
 
@@ -448,6 +505,7 @@ impl Ppu {
             _ => unreachable!("PPU scanline {} out of range", self.scanline),
         }
 
+        self.update_nmi_output(prev_nmi_output);
         self.advance_cycle();
     }
 
@@ -463,6 +521,18 @@ impl Ppu {
                 self.frame = self.frame.wrapping_add(1);
                 self.odd_frame = !self.odd_frame;
             }
+        }
+    }
+
+    /// Recomputes the NMI output line based on VBlank and control register,
+    /// latching a pending NMI on rising edges.
+    fn update_nmi_output(&mut self, prev_output: bool) {
+        let new_output = self.registers.status.contains(Status::VERTICAL_BLANK)
+            && self.registers.control.nmi_enabled();
+        self.nmi_output = new_output;
+
+        if self.nmi_output && !prev_output {
+            self.nmi_pending = true;
         }
     }
 
@@ -831,9 +901,11 @@ impl Ppu {
     }
 
     fn read_status(&mut self) -> u8 {
+        let prev_output = self.nmi_output;
         let status = self.registers.status.bits();
         self.registers.status.remove(Status::VERTICAL_BLANK);
         self.registers.vram.reset_latch();
+        self.update_nmi_output(prev_output);
         status
     }
 
@@ -1091,10 +1163,12 @@ mod tests {
         }
         assert!(ppu.registers.status.contains(Status::VERTICAL_BLANK));
 
-        // Continue until prerender line clears the flag.
-        while ppu.scanline != -1 || ppu.cycle != 1 {
+        // Continue to the prerender line, then run dot 1 where VBL is cleared.
+        while !(ppu.scanline == -1 && ppu.cycle == 1) {
             ppu.clock(&mut pattern);
         }
+        // Dot 1 of prerender clears VBL/sprite flags (mirrors hardware timing).
+        ppu.clock(&mut pattern);
         assert!(!ppu.registers.status.contains(Status::VERTICAL_BLANK));
     }
 }

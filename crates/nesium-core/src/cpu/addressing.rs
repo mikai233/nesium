@@ -117,6 +117,24 @@ pub enum Addressing {
 }
 
 impl Addressing {
+    /// Number of operand bytes following the opcode.
+    pub const fn operand_len(&self) -> usize {
+        match self {
+            Addressing::Implied | Addressing::Accumulator => 0,
+            Addressing::Immediate
+            | Addressing::ZeroPage
+            | Addressing::ZeroPageX
+            | Addressing::ZeroPageY
+            | Addressing::IndirectX
+            | Addressing::IndirectY
+            | Addressing::Relative => 1,
+            Addressing::Absolute
+            | Addressing::AbsoluteX
+            | Addressing::AbsoluteY
+            | Addressing::Indirect => 2,
+        }
+    }
+
     /// Returns the sequence of micro-ops to execute **after the opcode has been fetched**.
     ///
     /// - All sequences **exclude** the opcode fetch cycle (handled during decode).

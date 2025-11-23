@@ -265,9 +265,20 @@ impl Mnemonic {
         &[MicroOp {
             name: "shx",
             micro_fn: |cpu, bus| {
-                let hi = cpu.base;
+                // Reconstruct base operand address before applying Y index.
+                let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
+                let lo = base as u8;
+                let hi = (base >> 8) as u8;
+
+                // Undocumented behaviour: the high byte of the store address is
+                // masked by X+1, producing the "SXA" addressing quirk.
+                let addr_hi = hi & cpu.x.wrapping_add(1);
+                let addr_lo = lo.wrapping_add(cpu.y);
+                let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
+
+                // Stored value: X & (H+1), where H is the original operand high byte.
                 let value = cpu.x & hi.wrapping_add(1);
-                bus.write(cpu.effective_addr, value);
+                bus.write(addr, value);
             },
         }]
     }
@@ -295,9 +306,20 @@ impl Mnemonic {
         &[MicroOp {
             name: "shy",
             micro_fn: |cpu, bus| {
-                let hi = cpu.base;
+                // Reconstruct base operand address before applying X index.
+                let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
+                let lo = base as u8;
+                let hi = (base >> 8) as u8;
+
+                // Undocumented behaviour: the high byte of the store address is
+                // masked by Y+1, producing the "SYA" addressing quirk.
+                let addr_hi = hi & cpu.y.wrapping_add(1);
+                let addr_lo = lo.wrapping_add(cpu.x);
+                let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
+
+                // Stored value: Y & (H+1), where H is the original operand high byte.
                 let value = cpu.y & hi.wrapping_add(1);
-                bus.write(cpu.effective_addr, value);
+                bus.write(addr, value);
             },
         }]
     }
@@ -455,8 +477,17 @@ mod load_tests {
     #[test]
     fn test_shx() {
         InstrTest::new(Mnemonic::SHX).test(|verify, _, bus| {
-            let v = verify.cpu.x & verify.addr_hi.wrapping_add(1);
-            let m = bus.read(verify.addr);
+            // Reconstruct base operand address before applying Y index.
+            let base = verify.addr.wrapping_sub(verify.cpu.y as u16);
+            let lo = base as u8;
+            let hi = (base >> 8) as u8;
+
+            let addr_hi = hi & verify.cpu.x.wrapping_add(1);
+            let addr_lo = lo.wrapping_add(verify.cpu.y);
+            let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
+
+            let v = verify.cpu.x & hi.wrapping_add(1);
+            let m = bus.read(addr);
             assert_eq!(v, m);
         });
     }
@@ -464,8 +495,17 @@ mod load_tests {
     #[test]
     fn test_shy() {
         InstrTest::new(Mnemonic::SHY).test(|verify, _, bus| {
-            let v = verify.cpu.y & verify.addr_hi.wrapping_add(1);
-            let m = bus.read(verify.addr);
+            // Reconstruct base operand address before applying X index.
+            let base = verify.addr.wrapping_sub(verify.cpu.x as u16);
+            let lo = base as u8;
+            let hi = (base >> 8) as u8;
+
+            let addr_hi = hi & verify.cpu.y.wrapping_add(1);
+            let addr_lo = lo.wrapping_add(verify.cpu.x);
+            let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
+
+            let v = verify.cpu.y & hi.wrapping_add(1);
+            let m = bus.read(addr);
             assert_eq!(v, m);
         });
     }

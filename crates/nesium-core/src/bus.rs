@@ -14,6 +14,12 @@ pub trait Bus: Debug {
 
     fn write(&mut self, addr: u16, data: u8);
 
+    /// Returns a pending OAM DMA page value (written via `$4014`), if any.
+    /// Default implementations have no DMA bridge, so they always return `None`.
+    fn take_oam_dma_request(&mut self) -> Option<u8> {
+        None
+    }
+
     /// PPU-side read for pattern table accesses (`$0000-$1FFF`).
     fn ppu_read(&mut self, addr: u16) -> u8 {
         let _ = addr;
@@ -25,8 +31,9 @@ pub trait Bus: Debug {
         let _ = (addr, value);
     }
 
-    /// Returns `true` when the PPU has requested an NMI.
-    fn poll_nmi(&mut self) -> bool {
+    /// Returns current NMI line level (PPU NMI output). Non-destructive.
+    /// CPU is responsible for edge-detecting and latching.
+    fn nmi_line(&mut self) -> bool {
         false
     }
 

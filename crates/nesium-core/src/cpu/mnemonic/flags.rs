@@ -75,15 +75,14 @@ impl Mnemonic {
         &[MicroOp {
             name: "cli_clear_interrupt",
             micro_fn: |cpu, _| {
-                // Cycle 2: I = 0
+                // Cycle 2: I = 0. When interrupts were previously disabled,
+                // the 6502 delays servicing a pending IRQ until *after* the
+                // next instruction completes. Model this with a one-boundary
+                // suppression flag plus an I-flag pipeline update.
                 let was_disabled = cpu.p.i();
-                cpu.p.set_i(false);
-                // If interrupts were previously disabled while an IRQ was pending,
-                // the 6502 delays servicing that IRQ until *after* the next
-                // instruction completes. We approximate this by suppressing IRQ
-                // service for one instruction boundary after CLI.
+                cpu.queue_i_update(false);
                 if was_disabled {
-                    cpu.irq_suppressed = true;
+                    cpu.irq_inhibit_next = true;
                 }
             },
         }]
@@ -191,14 +190,14 @@ impl Mnemonic {
         &[MicroOp {
             name: "sei_set_interrupt",
             micro_fn: |cpu, _| {
-                // Cycle 2: I = 1
+                // Cycle 2: I = 1. If interrupts were previously enabled when
+                // SEI executes, a pending IRQ is still allowed to fire "just
+                // after" SEI. Approximate this with a one-shot override that
+                // permits a single IRQ even though I is now set.
                 let was_enabled = !cpu.p.i();
-                cpu.p.set_i(true);
-                // If interrupts were previously enabled when SEI executes,
-                // a pending IRQ is still allowed to fire "just after" SEI.
-                // Model this by permitting a single IRQ even though I is set.
+                cpu.queue_i_update(true);
                 if was_enabled {
-                    cpu.force_irq_once = true;
+                    cpu.allow_irq_once = true;
                 }
             },
         }]
