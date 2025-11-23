@@ -23,7 +23,10 @@ pub use mapper3::Mapper3;
 pub use mapper7::Mapper7;
 
 use crate::{
-    cartridge::{TRAINER_SIZE, header::Header},
+    cartridge::{
+        TRAINER_SIZE,
+        header::{Header, Mirroring},
+    },
     memory::cpu as cpu_mem,
 };
 
@@ -79,6 +82,9 @@ pub trait Mapper: Debug + DynClone + Any + 'static {
     fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
         None
     }
+
+    /// Current nametable mirroring mode exposed by the mapper.
+    fn mirroring(&self) -> Mirroring;
 
     /// Mapper identifier as used in the iNES header.
     fn mapper_id(&self) -> u16;

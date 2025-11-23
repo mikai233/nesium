@@ -14,12 +14,6 @@ pub trait Bus: Debug {
 
     fn write(&mut self, addr: u16, data: u8);
 
-    /// Returns a pending OAM DMA page value (written via `$4014`), if any.
-    /// Default implementations have no DMA bridge, so they always return `None`.
-    fn take_oam_dma_request(&mut self) -> Option<u8> {
-        None
-    }
-
     /// PPU-side read for pattern table accesses (`$0000-$1FFF`).
     fn ppu_read(&mut self, addr: u16) -> u8 {
         let _ = addr;

@@ -6,11 +6,13 @@ use crate::{
     memory::{
         apu as apu_mem,
         cpu as cpu_mem,
-        ppu::{self as ppu_mem},
+        ppu::{self as ppu_mem, Register as PpuRegister},
     },
-        ppu::{PatternBus, Ppu},
-        ram::cpu as cpu_ram,
-    };
+    ppu::{PatternBus, Ppu},
+    ram::cpu as cpu_ram,
+};
+
+const DMA_TRANSFER_BYTES: usize = 256;
 
 /// CPU-visible bus that bridges the core to RAM, the PPU, the APU, and the
 /// cartridge mapper space. It borrows the hardware from the owning NES.
@@ -21,7 +23,6 @@ pub struct CpuBus<'a> {
     apu: &'a mut Apu,
     cartridge: Option<&'a mut Cartridge>,
     controllers: &'a mut [Controller; 2],
-    oam_dma_page: Option<u8>,
     serial_log: Option<&'a mut SerialLogger>,
 }
 
@@ -41,7 +42,6 @@ impl<'a> CpuBus<'a> {
             apu,
             cartridge,
             controllers,
-            oam_dma_page: None,
             serial_log,
         }
     }
@@ -150,6 +150,17 @@ impl<'a> CpuBus<'a> {
             log.push_bit((data & 0x01) != 0);
         }
     }
+
+    fn write_oam_dma(&mut self, page: u8) {
+        let base = (page as u16) << 8;
+        for offset in 0..DMA_TRANSFER_BYTES {
+            let addr = base.wrapping_add(offset as u16);
+            let value = self.read(addr);
+            let mut pattern = PatternBus::new(self.cartridge.as_deref_mut());
+            self.ppu
+                .cpu_write(PpuRegister::OamData.addr(), value, &mut pattern);
+        }
+    }
 }
 
 impl Bus for CpuBus<'_> {
@@ -197,7 +208,7 @@ impl Bus for CpuBus<'_> {
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
                 self.apu.cpu_write(addr, data)
             }
-            ppu_mem::OAM_DMA => self.oam_dma_page = Some(data),
+            ppu_mem::OAM_DMA => self.write_oam_dma(data),
             cpu_mem::APU_STATUS => self.apu.cpu_write(addr, data),
             apu_mem::FRAME_COUNTER => {
                 // $4017 doubles as both controller port 2 and the APU frame counter.
@@ -224,10 +235,6 @@ impl Bus for CpuBus<'_> {
         let apu_irq = self.apu.irq_pending();
         let cartridge_irq = self.cartridge_irq_pending();
         apu_irq || cartridge_irq
-    }
-
-    fn take_oam_dma_request(&mut self) -> Option<u8> {
-        self.oam_dma_page.take()
     }
 
     fn clear_irq(&mut self) {

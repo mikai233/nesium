@@ -80,10 +80,12 @@ impl Mapper7 {
 
     fn write_bank_select(&mut self, data: u8) {
         self.selected_bank = (data & 0b0001_1111) as usize;
-        self.mirroring = if data & 0b0010_0000 == 0 {
-            Mirroring::Vertical
+        // AxROM uses single-screen mirroring, selecting either the lower
+        // (`$2000`) or upper (`$2400`) nametable. Bit 4 chooses the target.
+        self.mirroring = if data & 0b0001_0000 == 0 {
+            Mirroring::SingleScreenLower
         } else {
-            Mirroring::Horizontal
+            Mirroring::SingleScreenUpper
         };
     }
 }
@@ -143,6 +145,10 @@ impl Mapper for Mapper7 {
 
     fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
         self.chr.as_ram_mut()
+    }
+
+    fn mirroring(&self) -> Mirroring {
+        self.mirroring
     }
 
     fn mapper_id(&self) -> u16 {
@@ -213,10 +219,10 @@ mod tests {
     #[test]
     fn updates_mirroring_flag() {
         let mut cart = cart(2);
-        cart.cpu_write(cpu_mem::PRG_ROM_START, 0b0010_0000);
-        assert_eq!(cart.mirroring, Mirroring::Horizontal);
+        cart.cpu_write(cpu_mem::PRG_ROM_START, 0b0001_0000);
+        assert_eq!(cart.mirroring, Mirroring::SingleScreenUpper);
 
         cart.cpu_write(cpu_mem::PRG_ROM_START, 0);
-        assert_eq!(cart.mirroring, Mirroring::Vertical);
+        assert_eq!(cart.mirroring, Mirroring::SingleScreenLower);
     }
 }
