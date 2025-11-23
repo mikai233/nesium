@@ -81,7 +81,7 @@ impl Mapper for Mapper0 {
         Some(value)
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {
+    fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
             self.write_prg_ram(addr, data);
         }
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn reads_and_writes_prg_ram() {
         let mut cart = new_mapper0(0x4000, 0x2000, 0);
-        cart.cpu_write(cpu_mem::PRG_RAM_START, 0x42);
+        cart.cpu_write(cpu_mem::PRG_RAM_START, 0x42, 0);
         assert_eq!(cart.cpu_read(cpu_mem::PRG_RAM_START), Some(0x42));
     }
 

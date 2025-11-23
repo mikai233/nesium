@@ -43,6 +43,8 @@ pub struct NES {
     oam_dma_request: Option<u8>,
     /// CPU data-bus open-bus latch (mirrors Mesen2's decay model).
     open_bus: OpenBus,
+    /// CPU bus access counter (fed into timing-sensitive mappers).
+    cpu_bus_cycle: u64,
 }
 
 impl NES {
@@ -61,6 +63,7 @@ impl NES {
             serial_log: controller::SerialLogger::default(),
             oam_dma_request: None,
             open_bus: OpenBus::new(),
+            cpu_bus_cycle: 0,
         };
         nes.reset();
         nes
@@ -87,6 +90,7 @@ impl NES {
         self.apu.reset();
         self.serial_log.drain();
         self.open_bus.reset();
+        self.cpu_bus_cycle = 0;
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
@@ -96,6 +100,7 @@ impl NES {
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
             &mut self.open_bus,
+            &mut self.cpu_bus_cycle,
         );
         self.cpu.reset(&mut bus);
         self.last_frame = bus.ppu().frame_count();
@@ -116,6 +121,7 @@ impl NES {
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
             &mut self.open_bus,
+            &mut self.cpu_bus_cycle,
         );
 
         // Always run one PPU dot first so NMI/VBlank events become visible
@@ -237,6 +243,7 @@ impl NES {
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
             &mut self.open_bus,
+            &mut self.cpu_bus_cycle,
         );
         bus.read(addr)
     }
@@ -252,6 +259,7 @@ impl NES {
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
             &mut self.open_bus,
+            &mut self.cpu_bus_cycle,
         );
         for (offset, byte) in buffer.iter_mut().enumerate() {
             *byte = bus.read(base.wrapping_add(offset as u16));

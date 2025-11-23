@@ -44,8 +44,8 @@ impl Cartridge {
         self.mapper.cpu_read(addr)
     }
 
-    pub fn cpu_write(&mut self, addr: u16, data: u8) {
-        self.mapper.cpu_write(addr, data);
+    pub fn cpu_write(&mut self, addr: u16, data: u8, cpu_cycle: u64) {
+        self.mapper.cpu_write(addr, data, cpu_cycle);
     }
 
     pub fn ppu_read(&self, addr: u16) -> u8 {

@@ -129,7 +129,7 @@ impl Mapper for Mapper3 {
         Some(value)
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {
+    fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.write_chr_bank(data),
@@ -260,7 +260,7 @@ mod tests {
         let mut cart = rom_cart(2, 4);
         assert_eq!(cart.ppu_read(0x0000), 0);
 
-        cart.cpu_write(cpu_mem::PRG_ROM_START, 0x02);
+        cart.cpu_write(cpu_mem::PRG_ROM_START, 0x02, 0);
         assert_eq!(cart.ppu_read(0x0000), 0x02);
     }
 

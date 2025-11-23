@@ -42,7 +42,8 @@ pub trait Mapper: Debug + DynClone + Any + 'static {
     /// absent.
     fn cpu_read(&self, addr: u16) -> Option<u8>;
 
-    fn cpu_write(&mut self, addr: u16, data: u8);
+    /// CPU write with cycle count for timing-sensitive mappers.
+    fn cpu_write(&mut self, addr: u16, data: u8, cpu_cycle: u64);
 
     fn ppu_read(&self, addr: u16) -> u8;
 
