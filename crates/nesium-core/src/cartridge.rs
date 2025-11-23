@@ -40,7 +40,7 @@ impl Cartridge {
         self.mapper.mirroring()
     }
 
-    pub fn cpu_read(&self, addr: u16) -> u8 {
+    pub fn cpu_read(&self, addr: u16) -> Option<u8> {
         self.mapper.cpu_read(addr)
     }
 
@@ -177,7 +177,7 @@ mod tests {
 
         assert_eq!(cartridge.header().prg_rom_size, 16 * 1024);
         assert_eq!(cartridge.header().chr_rom_size, 8 * 1024);
-        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), 0xAA);
+        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), Some(0xAA));
         assert_eq!(cartridge.ppu_read(0x0000), 0x55);
     }
 
@@ -191,7 +191,7 @@ mod tests {
 
         assert!(cartridge.header().trainer_present);
         assert_eq!(cartridge.header().prg_rom_size, 16 * 1024);
-        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), 0xAA);
+        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), Some(0xAA));
     }
 
     #[test]

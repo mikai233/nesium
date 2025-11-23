@@ -67,12 +67,18 @@ impl Mapper0 {
 }
 
 impl Mapper for Mapper0 {
-    fn cpu_read(&self, addr: u16) -> u8 {
-        match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
+    fn cpu_read(&self, addr: u16) -> Option<u8> {
+        let value = match addr {
+            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => {
+                if self.prg_ram.is_empty() {
+                    return None;
+                }
+                self.read_prg_ram(addr)
+            }
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
-            _ => 0,
-        }
+            _ => return None,
+        };
+        Some(value)
     }
 
     fn cpu_write(&mut self, addr: u16, data: u8) {
@@ -172,8 +178,8 @@ mod tests {
     #[test]
     fn mirrors_prg_rom_when_16k() {
         let cart = new_mapper0(0x4000, 0x2000, 0);
-        let a = cart.cpu_read(cpu_mem::PRG_ROM_START);
-        let b = cart.cpu_read(cpu_mem::PRG_ROM_START + 0x4000);
+        let a = cart.cpu_read(cpu_mem::PRG_ROM_START).unwrap();
+        let b = cart.cpu_read(cpu_mem::PRG_ROM_START + 0x4000).unwrap();
         assert_eq!(a, b);
     }
 
@@ -181,7 +187,7 @@ mod tests {
     fn reads_and_writes_prg_ram() {
         let mut cart = new_mapper0(0x4000, 0x2000, 0);
         cart.cpu_write(cpu_mem::PRG_RAM_START, 0x42);
-        assert_eq!(cart.cpu_read(cpu_mem::PRG_RAM_START), 0x42);
+        assert_eq!(cart.cpu_read(cpu_mem::PRG_RAM_START), Some(0x42));
     }
 
     #[test]

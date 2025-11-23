@@ -118,7 +118,7 @@ impl<'a> CpuBus<'a> {
     }
 
     fn read_cartridge(&self, addr: u16) -> Option<u8> {
-        self.cartridge.as_ref().map(|cart| cart.cpu_read(addr))
+        self.cartridge.as_ref().and_then(|cart| cart.cpu_read(addr))
     }
 
     fn write_cartridge(&mut self, addr: u16, value: u8) {

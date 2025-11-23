@@ -95,12 +95,18 @@ impl Mapper2 {
 }
 
 impl Mapper for Mapper2 {
-    fn cpu_read(&self, addr: u16) -> u8 {
-        match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
+    fn cpu_read(&self, addr: u16) -> Option<u8> {
+        let value = match addr {
+            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => {
+                if self.prg_ram.is_empty() {
+                    return None;
+                }
+                self.read_prg_ram(addr)
+            }
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
-            _ => 0,
-        }
+            _ => return None,
+        };
+        Some(value)
     }
 
     fn cpu_write(&mut self, addr: u16, data: u8) {
@@ -207,11 +213,11 @@ mod tests {
     #[test]
     fn switches_upper_bank() {
         let mut cart = cart_with_banks(4);
-        let first = cart.cpu_read(cpu_mem::PRG_ROM_START);
+        let first = cart.cpu_read(cpu_mem::PRG_ROM_START).unwrap();
         assert_eq!(first, 0);
 
         cart.cpu_write(cpu_mem::PRG_ROM_START, 0x02);
-        let switched = cart.cpu_read(cpu_mem::PRG_ROM_START);
+        let switched = cart.cpu_read(cpu_mem::PRG_ROM_START).unwrap();
         assert_eq!(switched, 0x02);
     }
 
@@ -219,7 +225,7 @@ mod tests {
     fn fixes_high_bank_to_last() {
         let mut cart = cart_with_banks(4);
         cart.cpu_write(cpu_mem::PRG_ROM_START, 0x00);
-        let high = cart.cpu_read(0xC000);
+        let high = cart.cpu_read(0xC000).unwrap();
         assert_eq!(high, 0x03);
     }
 
@@ -227,6 +233,6 @@ mod tests {
     fn reads_and_writes_prg_ram() {
         let mut cart = cart_with_banks(4);
         cart.cpu_write(cpu_mem::PRG_RAM_START, 0x99);
-        assert_eq!(cart.cpu_read(cpu_mem::PRG_RAM_START), 0x99);
+        assert_eq!(cart.cpu_read(cpu_mem::PRG_RAM_START), Some(0x99));
     }
 }
