@@ -116,7 +116,7 @@ impl NES {
         // before the corresponding CPU sample on the same 3-dot window.
         bus.clock_ppu();
 
-        // Run CPU/APU on every 3rd dot after the PPU step.
+        // Run CPU/APU on every 3rd dot after the PPU step (phase 2 of 3).
         if self.dot_counter % 3 == 2 {
             self.cpu.clock(&mut bus);
             bus.apu_mut().clock();
@@ -177,14 +177,29 @@ impl NES {
         self.cpu.snapshot()
     }
 
+    /// Returns `true` when the CPU is mid-instruction (opcode + micro-ops still in flight).
+    pub fn cpu_opcode_active(&self) -> bool {
+        self.cpu.opcode_active()
+    }
+
     /// Internal timing counter (PPU dots since power-on). Exposed for tests/debug.
     pub fn dot_counter(&self) -> u64 {
         self.dot_counter
     }
 
+    /// Peek first sprite-0 hit position for the current frame (debug).
+    pub fn sprite0_hit_pos(&self) -> Option<crate::ppu::Sprite0HitDebug> {
+        self.ppu.sprite0_hit_pos()
+    }
+
     /// Peek PPU NMI flags and position (tests/debug).
     pub fn ppu_nmi_debug(&self) -> crate::ppu::NmiDebugState {
         self.ppu.debug_nmi_state()
+    }
+
+    /// Debug-only: override PPU counters for trace alignment.
+    pub fn debug_set_ppu_position(&mut self, scanline: i16, cycle: u16, frame: u64) {
+        self.ppu.debug_set_position(scanline, cycle, frame);
     }
 
     /// Executes the next instruction (advancing CPU/PPU/APU as needed).

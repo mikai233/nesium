@@ -69,6 +69,20 @@ pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + post + vblank (241..260)
 
+/// Captures the position of the first sprite-0 hit in the current frame (debug).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Sprite0HitPos {
+    pub scanline: i16,
+    pub cycle: u16,
+}
+
+/// Debug info captured on the first sprite-0 hit of a frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Sprite0HitDebug {
+    pub pos: Sprite0HitPos,
+    pub oam: [u8; 4],
+}
+
 /// Entry points for the CPU PPU register mirror.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Ppu {
@@ -94,6 +108,8 @@ pub struct Ppu {
     nmi_pending: bool,
     /// Current level of the NMI output line (true = asserted).
     nmi_output: bool,
+    /// First sprite-0 hit debug info in the current frame (debug).
+    sprite0_hit_pos: Option<Sprite0HitDebug>,
     /// Last value on the (simulated) PPU data bus for open-bus behavior.
     bus_latch: u8,
     /// Secondary OAM used during sprite evaluation for the current scanline.
@@ -187,6 +203,7 @@ impl Ppu {
             sprite_pipeline: SpritePipeline::new(),
             nmi_pending: false,
             nmi_output: false,
+            sprite0_hit_pos: None,
             bus_latch: 0,
             secondary_oam: SecondaryOamRam::new(),
             sprite_eval: SpriteEvalState::default(),
@@ -223,6 +240,7 @@ impl Ppu {
         self.sprite_pipeline.clear();
         self.nmi_pending = false;
         self.nmi_output = false;
+        self.sprite0_hit_pos = None;
         // PPU power-on: clear VBlank flag so the first BIT $2002 loop waits
         // for the true VBlank edge instead of seeing a stale high.
         self.registers.status.remove(registers::Status::VERTICAL_BLANK);
@@ -261,6 +279,11 @@ impl Ppu {
             cycle: self.cycle,
             frame: self.frame,
         }
+    }
+
+    /// First sprite-0 hit position for the current frame (if any).
+    pub(crate) fn sprite0_hit_pos(&self) -> Option<Sprite0HitDebug> {
+        self.sprite0_hit_pos
     }
 
     /// Clears the framebuffer to palette index 0.
@@ -358,6 +381,7 @@ impl Ppu {
             self.registers
                 .status
                 .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+            self.sprite0_hit_pos = None;
             self.nmi_output = false;
             self.nmi_pending = false;
             self.cycle = 1;
@@ -399,6 +423,8 @@ impl Ppu {
                 self.registers
                     .status
                     .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+                // Drop per-frame sprite0 debug info when vblank ends.
+                self.sprite0_hit_pos = None;
                 // Debug latch is per-VBlank; drop it when VBlank ends.
                 self.nmi_pending = false;
             }
@@ -516,6 +542,15 @@ impl Ppu {
         self.advance_cycle();
     }
 
+    /// Debug helper: overrides PPU position counters (scanline/cycle/frame).
+    /// Intended for trace alignment only.
+    pub(crate) fn debug_set_position(&mut self, scanline: i16, cycle: u16, frame: u64) {
+        self.scanline = scanline;
+        self.cycle = cycle;
+        self.frame = frame;
+        self.odd_frame = frame % 2 == 1;
+    }
+
     /// Advances to the next dot / scanline / frame.
     fn advance_cycle(&mut self) {
         self.cycle += 1;
@@ -615,6 +650,26 @@ impl Ppu {
             && self.cycle != 256
         {
             self.registers.status.insert(Status::SPRITE_ZERO_HIT);
+            if self.sprite0_hit_pos.is_none() {
+                let oam0 = [
+                    self.registers.oam[0],
+                    self.registers.oam[1],
+                    self.registers.oam[2],
+                    self.registers.oam[3],
+                ];
+                self.sprite0_hit_pos = Some(Sprite0HitDebug {
+                    pos: Sprite0HitPos {
+                        scanline: self.scanline,
+                        cycle: self.cycle,
+                    },
+                    oam: oam0,
+                });
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[PPU][sprite0] hit at s={}, c={} oam0=[y:{:02X} tile:{:02X} attr:{:02X} x:{:02X}]",
+                    self.scanline, self.cycle, oam0[0], oam0[1], oam0[2], oam0[3]
+                );
+            }
         }
 
         // Resolve palette RAM address (color 0 always uses universal background).
