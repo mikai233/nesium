@@ -18,9 +18,8 @@
 //! - The odd-frame skip on prerender: real hardware drops cycle 0 on odd
 //!   frames when rendering is enabled. We model that by jumping `cycle` from 0
 //!   to 1 and bailing early.
-//! - The `bus_latch`: untouched register reads return the last value that was
-//!   on the data bus (open-bus behavior). We store that in `bus_latch` and feed
-//!   it back for "unknown" reads.
+//! - The PPU data bus floats when undriven; we mirror that with an open-bus
+//!   latch (with decay) so untouched register reads see the last driven value.
 //! - OAM reads during rendering: hardware doesn’t expose live primary OAM then;
 //!   we return a constant `0xFF` to approximate the internal bus noise.
 //! - Sprite overflow is still an approximation; the hardware bug relies on
@@ -46,6 +45,7 @@ use self::{
 use core::fmt;
 
 use crate::{
+    bus::OpenBus,
     cartridge::{Cartridge, header::Mirroring},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
@@ -110,8 +110,8 @@ pub struct Ppu {
     nmi_output: bool,
     /// First sprite-0 hit debug info in the current frame (debug).
     sprite0_hit_pos: Option<Sprite0HitDebug>,
-    /// Last value on the (simulated) PPU data bus for open-bus behavior.
-    bus_latch: u8,
+    /// PPU-side open-bus latch (with decay).
+    open_bus: OpenBus,
     /// Secondary OAM used during sprite evaluation for the current scanline.
     secondary_oam: SecondaryOamRam,
     /// Sprite evaluation state (cycle-accurate structure).
@@ -204,7 +204,7 @@ impl Ppu {
             nmi_pending: false,
             nmi_output: false,
             sprite0_hit_pos: None,
-            bus_latch: 0,
+            open_bus: OpenBus::new(),
             secondary_oam: SecondaryOamRam::new(),
             sprite_eval: SpriteEvalState::default(),
             sprite_fetch: SpriteFetchState::default(),
@@ -246,7 +246,7 @@ impl Ppu {
         self.registers
             .status
             .remove(registers::Status::VERTICAL_BLANK);
-        self.bus_latch = 0;
+        self.open_bus.reset();
         self.secondary_oam.fill(0);
         self.sprite_eval = SpriteEvalState::default();
         self.sprite_fetch = SpriteFetchState::default();
@@ -306,7 +306,8 @@ impl Ppu {
     /// Mirrors open-bus semantics by latching the last value written; the
     /// hardware leaves that value on the data bus.
     pub fn cpu_write(&mut self, addr: u16, value: u8, pattern: &mut PatternBus<'_>) {
-        self.bus_latch = value;
+        self.open_bus.step();
+        self.open_bus.latch(value);
         match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Control => {
                 let prev_output = self.nmi_output;
@@ -351,13 +352,14 @@ impl Ppu {
     /// Unhandled reads return the last bus value to approximate open-bus
     /// behavior.
     pub fn cpu_read(&mut self, addr: u16, pattern: &mut PatternBus<'_>) -> u8 {
+        self.open_bus.step();
         let value = match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Status => self.read_status(),
             PpuRegister::OamData => self.read_oam_data(),
             PpuRegister::Data => self.read_vram_data(pattern),
-            _ => self.bus_latch,
+            _ => self.open_bus.sample(),
         };
-        self.bus_latch = value;
+        self.open_bus.latch(value);
         value
     }
 
