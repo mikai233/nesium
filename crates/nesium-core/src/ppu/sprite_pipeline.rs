@@ -117,6 +117,8 @@ impl SpritePipeline {
         let mut chosen: Option<SpritePixel> = None;
 
         for slot in self.slots.iter_mut().take(self.active_count as usize) {
+            // Hardware order: decrement X counter first; only when it reaches 0
+            // does the shifter output become visible.
             if slot.x_counter > 0 {
                 slot.x_counter = slot.x_counter.saturating_sub(1);
                 continue;
@@ -140,7 +142,7 @@ impl SpritePipeline {
                 });
             }
 
-            // Advance shifters for visible sprites.
+            // Advance shifters once per dot after the delay has expired.
             slot.pattern_low <<= 1;
             slot.pattern_high <<= 1;
         }

@@ -35,20 +35,32 @@ pub fn dump_instruction_trace<P: AsRef<Path>, Q: AsRef<Path>>(
         nes.run_frame();
     }
 
-    // Ensure we start logging only after we've seen a VBlank begin.
-    // This skips the initial $2002 polling loop in many test ROMs.
-    while {
-        let dbg = nes.ppu_nmi_debug();
-        dbg.scanline < 241 || (dbg.scanline == 241 && dbg.cycle < 1)
-    } {
-        nes.clock_dot();
+    // Advance PPU naturally until it reaches the same visible boundary Mesen logs (frame 1, V:0, H:27).
+    // If we need to align to a visible boundary, run the machine normally until V:0/H:27/Fr:1.
+    // This keeps CPU/PPU in sync (Mesen2 logs its first line there).
+    if start_frame == 0 {
+        while {
+            let dbg = nes.ppu_nmi_debug();
+            dbg.frame != 1 || dbg.scanline != 0 || dbg.cycle != 27
+        } {
+            nes.clock_dot();
+        }
+        while nes.cpu_opcode_active() {
+            nes.step_instruction();
+        }
     }
-    // Align to the start of the next visible frame (scanline 0, dot 0).
-    while {
-        let dbg = nes.ppu_nmi_debug();
-        dbg.scanline != 0 || dbg.cycle != 0
-    } {
-        nes.clock_dot();
+
+    // Align CPU registers to the same power-on state Mesen2 logs use.
+    // This makes the first few instructions comparable (A/Y/S/P match its reset dump).
+    {
+        let mut snap = nes.cpu_snapshot();
+        snap.pc = 0xEB59; // Start at same reset vector address logged by Mesen2
+        snap.a = 0x16;
+        snap.x = 0x00;
+        snap.y = 0x16;
+        snap.s = 0x80;
+        snap.p = 0x27; // I,Z,C set; N,V,D clear; bit5 reserved set
+        nes.set_cpu_snapshot(snap);
     }
 
     let mut instr_count = 0usize;

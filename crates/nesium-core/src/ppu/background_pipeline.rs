@@ -151,7 +151,8 @@ impl BgPipeline {
         let pattern_bits = (pattern_bit1 << 1) | pattern_bit0;
         let palette_bits = (palette_bit1 << 1) | palette_bit0;
 
-        // Advance all shifters by one bit (one PPU dot).
+        // Advance all shifters by one bit (one PPU dot) *after* sampling.
+        // This keeps the visible pixel aligned with the current MSB.
         for i in 0..=1 {
             self.pattern[i].shift();
             self.palette[i].shift();

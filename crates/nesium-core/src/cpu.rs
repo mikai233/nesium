@@ -127,6 +127,8 @@ pub(crate) struct Cpu {
     prev_nmi_line: bool,
     /// Latched NMI event set on rising edge, cleared only when NMI is taken.
     nmi_latch: bool,
+    /// CPU reset sequence consumes 7 cycles before the first opcode fetch.
+    reset_delay: u8,
     index: u8,
     base: u8,
     effective_addr: u16,
@@ -153,6 +155,7 @@ impl Cpu {
             branch_taken_defer_irq: false,
             prev_nmi_line: false,
             nmi_latch: false,
+            reset_delay: 0,
             index: 0,
             base: 0,
             effective_addr: 0,
@@ -184,6 +187,7 @@ impl Cpu {
         self.branch_taken_defer_irq = false;
         self.prev_nmi_line = false;
         self.nmi_latch = false;
+        self.reset_delay = 7; // 7 CPU cycles elapse during reset sequence
         self.index = 0;
         self.effective_addr = 0;
         self.cycles = 0;
@@ -191,6 +195,12 @@ impl Cpu {
     }
 
     pub(crate) fn clock(&mut self, bus: &mut dyn Bus) {
+        if self.reset_delay > 0 {
+            self.reset_delay -= 1;
+            self.cycles = self.cycles.wrapping_add(1);
+            return;
+        }
+
         // Sample the NMI line every CPU cycle and latch on rising edge.
         let nmi_line = bus.nmi_line();
         if nmi_line && !self.prev_nmi_line {
@@ -588,6 +598,7 @@ impl Cpu {
         self.effective_addr = 0;
         self.cycles = 0;
         self.oam_dma = None;
+        self.reset_delay = 0;
     }
 
     /// Returns `true` when an instruction is currently in flight.
