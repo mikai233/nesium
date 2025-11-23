@@ -54,6 +54,10 @@ pub enum Mirroring {
     Vertical,
     /// Cartridge supplies its own four nametables.
     FourScreen,
+    /// Single-screen mirroring using the first nametable (`$2000` region).
+    SingleScreenLower,
+    /// Single-screen mirroring using the second nametable (`$2400` region).
+    SingleScreenUpper,
 }
 
 /// Identifies the header flavour encountered.

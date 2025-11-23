@@ -1,7 +1,7 @@
 use std::{fs, path::Path};
 
 use crate::{
-    cartridge::header::{Header, NES_HEADER_LEN},
+    cartridge::header::{Header, Mirroring, NES_HEADER_LEN},
     error::Error,
 };
 
@@ -34,6 +34,10 @@ impl Cartridge {
 
     pub fn mapper_mut(&mut self) -> &mut dyn Mapper {
         self.mapper.as_mut()
+    }
+
+    pub fn mirroring(&self) -> Mirroring {
+        self.mapper.mirroring()
     }
 
     pub fn cpu_read(&self, addr: u16) -> u8 {

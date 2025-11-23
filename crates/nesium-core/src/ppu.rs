@@ -46,7 +46,7 @@ use self::{
 use core::fmt;
 
 use crate::{
-    cartridge::Cartridge,
+    cartridge::{Cartridge, header::Mirroring},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
         palette::PaletteRam,
@@ -144,6 +144,13 @@ impl<'a> PatternBus<'a> {
         } else {
             false
         }
+    }
+
+    fn mirroring(&self) -> Mirroring {
+        self.cartridge
+            .as_deref()
+            .map(|cart| cart.mirroring())
+            .unwrap_or(Mirroring::Horizontal)
     }
 }
 
@@ -960,6 +967,7 @@ impl Ppu {
 
     fn write_vram(&mut self, pattern: &mut PatternBus<'_>, addr: u16, value: u8) {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
+        let addr = self.mirror_vram_addr(addr, pattern);
         if addr >= ppu_mem::PALETTE_BASE {
             self.palette_ram.write(addr, value);
         } else if addr < 0x2000 {
@@ -973,6 +981,7 @@ impl Ppu {
 
     fn read_vram(&mut self, pattern: &mut PatternBus<'_>, addr: u16) -> u8 {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
+        let addr = self.mirror_vram_addr(addr, pattern);
         if addr >= ppu_mem::PALETTE_BASE {
             self.palette_ram.read(addr)
         } else if addr < 0x2000 {
@@ -982,6 +991,31 @@ impl Ppu {
         } else {
             self.vram[addr as usize]
         }
+    }
+
+    /// Applies nametable mirroring rules for addresses in `$2000-$3EFF`.
+    fn mirror_vram_addr(&self, addr: u16, pattern: &PatternBus<'_>) -> u16 {
+        if addr < ppu_mem::NAMETABLE_BASE || addr >= ppu_mem::PALETTE_BASE {
+            return addr;
+        }
+
+        // $3000-$3EFF mirrors $2000-$2EFF.
+        let mirrored = if addr >= 0x3000 { addr - 0x1000 } else { addr };
+        let relative = mirrored - ppu_mem::NAMETABLE_BASE;
+        let table = ((relative / ppu_mem::NAMETABLE_SIZE) & 0b11) as u8;
+        let offset = relative % ppu_mem::NAMETABLE_SIZE;
+
+        let target_table = match pattern.mirroring() {
+            // Vertical mirroring: $2000/$2800 share, $2400/$2C00 share (table & 1).
+            Mirroring::Vertical => table & 0b01,
+            // Horizontal mirroring: $2000/$2400 share, $2800/$2C00 share (table >> 1).
+            Mirroring::Horizontal => (table >> 1) & 0b01,
+            Mirroring::FourScreen => table,
+            Mirroring::SingleScreenLower => 0,
+            Mirroring::SingleScreenUpper => 1,
+        };
+
+        ppu_mem::NAMETABLE_BASE + (target_table as u16 * ppu_mem::NAMETABLE_SIZE) + offset
     }
 
     /// Loads the current tile/attribute data into the background shifters.

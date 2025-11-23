@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use crate::{
     cartridge::{
         Mapper, TRAINER_SIZE,
-        header::Header,
+        header::{Header, Mirroring},
         mapper::{allocate_prg_ram, trainer_destination},
     },
     memory::cpu as cpu_mem,
@@ -362,6 +362,15 @@ impl Mapper for Mapper1 {
             None
         } else {
             Some(self.chr_ram.as_mut())
+        }
+    }
+
+    fn mirroring(&self) -> Mirroring {
+        match self.control & 0b11 {
+            0 => Mirroring::SingleScreenLower,
+            1 => Mirroring::SingleScreenUpper,
+            2 => Mirroring::Vertical,
+            _ => Mirroring::Horizontal,
         }
     }
 

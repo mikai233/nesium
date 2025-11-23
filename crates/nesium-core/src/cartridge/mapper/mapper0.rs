@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use crate::{
     cartridge::{
         Mapper, TRAINER_SIZE,
-        header::Header,
+        header::{Header, Mirroring},
         mapper::{ChrStorage, allocate_prg_ram, select_chr_storage, trainer_destination},
     },
     memory::cpu as cpu_mem,
@@ -14,6 +14,7 @@ pub struct Mapper0 {
     prg_rom: Box<[u8]>,
     prg_ram: Box<[u8]>,
     chr: ChrStorage,
+    mirroring: Mirroring,
 }
 
 impl Mapper0 {
@@ -36,6 +37,7 @@ impl Mapper0 {
             prg_rom,
             prg_ram,
             chr: select_chr_storage(&header, chr_rom),
+            mirroring: header.mirroring,
         }
     }
 
@@ -117,6 +119,10 @@ impl Mapper for Mapper0 {
 
     fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
         self.chr.as_ram_mut()
+    }
+
+    fn mirroring(&self) -> Mirroring {
+        self.mirroring
     }
 
     fn mapper_id(&self) -> u16 {
