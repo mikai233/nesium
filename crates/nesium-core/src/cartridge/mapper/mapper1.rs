@@ -72,10 +72,10 @@ impl Mapper1 {
         // TODO(accuracy): consider board/submapper-specific or undefined/randomized
         // power-on state if strict hardware fidelity is desired.
         //
-        // - Control = 0b01000 (16 KiB banking, fixed FIRST bank)
+        // - Control = 0b01100 (16 KiB banking, fixed LAST bank)
         // - PRG/CHR banks = 0
         // - Shift register = 0x10 (bit4 set so the next 5 writes latch cleanly)
-        self.control = 0x08;
+        self.control = 0x0C;
         self.chr_bank0 = 0;
         self.chr_bank1 = 0;
         self.prg_bank = 0;
@@ -160,13 +160,13 @@ impl Mapper1 {
         self.prg_rom.get(idx).copied().unwrap_or(0)
     }
 
-    fn read_prg_ram(&self, addr: u16) -> u8 {
-        // If PRG-RAM is absent or disabled, behave like open-bus (we return 0 for now).
+    fn read_prg_ram(&self, addr: u16) -> Option<u8> {
+        // If PRG-RAM is absent or disabled, behave like open-bus.
         if self.prg_ram.is_empty() || !self.prg_ram_enabled() {
-            return 0;
+            return None;
         }
         let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        self.prg_ram[idx]
+        Some(self.prg_ram[idx])
     }
 
     fn write_prg_ram(&mut self, addr: u16, data: u8) {
@@ -363,12 +363,13 @@ impl Mapper1 {
 }
 
 impl Mapper for Mapper1 {
-    fn cpu_read(&self, addr: u16) -> u8 {
-        match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
+    fn cpu_read(&self, addr: u16) -> Option<u8> {
+        let value = match addr {
+            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => return self.read_prg_ram(addr),
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
-            _ => 0,
-        }
+            _ => return None,
+        };
+        Some(value)
     }
 
     fn cpu_write(&mut self, addr: u16, data: u8) {
@@ -511,8 +512,8 @@ mod tests {
     fn default_prg_banking_mode_is_fixed_last_bank() {
         let cart = cart_with_prg_banks(4);
         // Control defaults to 0x0C: 16 KiB banking with fixed last bank at $C000.
-        assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START), 0);
-        assert_eq!(cart.cpu_read(0xC000), 3);
+        assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START), Some(0));
+        assert_eq!(cart.cpu_read(0xC000), Some(3));
     }
 
     #[test]
@@ -520,8 +521,8 @@ mod tests {
         let mut cart = cart_with_prg_banks(4);
         // Select bank 2 at $8000 in mode 3 (control already 0x0C).
         write_serial_reg(&mut cart, 0xE000, 0x02);
-        assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START), 2);
+        assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START), Some(2));
         // High bank should remain fixed to last bank.
-        assert_eq!(cart.cpu_read(0xC000), 3);
+        assert_eq!(cart.cpu_read(0xC000), Some(3));
     }
 }
