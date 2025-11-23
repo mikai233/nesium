@@ -39,6 +39,8 @@ pub struct NES {
     /// Master PPU dot counter used to drive CPU/PPU/APU in lockstep (3 dots per CPU cycle).
     dot_counter: u64,
     serial_log: controller::SerialLogger,
+    /// Pending OAM DMA page written via `$4014` (latched until CPU picks it up).
+    oam_dma_request: Option<u8>,
 }
 
 impl NES {
@@ -55,6 +57,7 @@ impl NES {
             last_frame: 0,
             dot_counter: 0,
             serial_log: controller::SerialLogger::default(),
+            oam_dma_request: None,
         };
         nes.reset();
         nes
@@ -87,6 +90,7 @@ impl NES {
             self.cartridge.as_mut(),
             &mut self.controllers,
             Some(&mut self.serial_log),
+            &mut self.oam_dma_request,
         );
         self.cpu.reset(&mut bus);
         self.last_frame = bus.ppu().frame_count();
@@ -105,6 +109,7 @@ impl NES {
             self.cartridge.as_mut(),
             &mut self.controllers,
             Some(&mut self.serial_log),
+            &mut self.oam_dma_request,
         );
 
         // Always run one PPU dot first so NMI/VBlank events become visible
@@ -209,6 +214,7 @@ impl NES {
             self.cartridge.as_mut(),
             &mut self.controllers,
             Some(&mut self.serial_log),
+            &mut self.oam_dma_request,
         );
         bus.read(addr)
     }
@@ -222,6 +228,7 @@ impl NES {
             self.cartridge.as_mut(),
             &mut self.controllers,
             Some(&mut self.serial_log),
+            &mut self.oam_dma_request,
         );
         for (offset, byte) in buffer.iter_mut().enumerate() {
             *byte = bus.read(base.wrapping_add(offset as u16));

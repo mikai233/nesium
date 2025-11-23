@@ -3,16 +3,10 @@ use crate::{
     bus::Bus,
     cartridge::Cartridge,
     controller::{Controller, SerialLogger},
-    memory::{
-        apu as apu_mem,
-        cpu as cpu_mem,
-        ppu::{self as ppu_mem, Register as PpuRegister},
-    },
+    memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem},
     ppu::{PatternBus, Ppu},
     ram::cpu as cpu_ram,
 };
-
-const DMA_TRANSFER_BYTES: usize = 256;
 
 /// CPU-visible bus that bridges the core to RAM, the PPU, the APU, and the
 /// cartridge mapper space. It borrows the hardware from the owning NES.
@@ -24,6 +18,7 @@ pub struct CpuBus<'a> {
     cartridge: Option<&'a mut Cartridge>,
     controllers: &'a mut [Controller; 2],
     serial_log: Option<&'a mut SerialLogger>,
+    oam_dma_request: &'a mut Option<u8>,
 }
 
 impl<'a> CpuBus<'a> {
@@ -35,6 +30,7 @@ impl<'a> CpuBus<'a> {
         cartridge: Option<&'a mut Cartridge>,
         controllers: &'a mut [Controller; 2],
         serial_log: Option<&'a mut SerialLogger>,
+        oam_dma_request: &'a mut Option<u8>,
     ) -> Self {
         Self {
             ram,
@@ -43,6 +39,7 @@ impl<'a> CpuBus<'a> {
             cartridge,
             controllers,
             serial_log,
+            oam_dma_request,
         }
     }
 
@@ -152,14 +149,7 @@ impl<'a> CpuBus<'a> {
     }
 
     fn write_oam_dma(&mut self, page: u8) {
-        let base = (page as u16) << 8;
-        for offset in 0..DMA_TRANSFER_BYTES {
-            let addr = base.wrapping_add(offset as u16);
-            let value = self.read(addr);
-            let mut pattern = PatternBus::new(self.cartridge.as_deref_mut());
-            self.ppu
-                .cpu_write(PpuRegister::OamData.addr(), value, &mut pattern);
-        }
+        *self.oam_dma_request = Some(page);
     }
 }
 
@@ -237,6 +227,10 @@ impl Bus for CpuBus<'_> {
         apu_irq || cartridge_irq
     }
 
+    fn take_oam_dma_request(&mut self) -> Option<u8> {
+        self.oam_dma_request.take()
+    }
+
     fn clear_irq(&mut self) {
         self.apu.clear_irq();
         self.clear_cartridge_irq();
@@ -288,8 +282,16 @@ mod tests {
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
         let mut controllers = [Controller::new(), Controller::new()];
-        let mut bus =
-            CpuBus::new(&mut ram, &mut ppu, &mut apu, None, &mut controllers, None);
+        let mut oam_dma_request = None;
+        let mut bus = CpuBus::new(
+            &mut ram,
+            &mut ppu,
+            &mut apu,
+            None,
+            &mut controllers,
+            None,
+            &mut oam_dma_request,
+        );
         bus.write(cpu_mem::INTERNAL_RAM_START + 0x0002, 0xDE);
         assert_eq!(bus.read(cpu_mem::INTERNAL_RAM_START + 0x0002), 0xDE);
         assert_eq!(bus.read(0x0802), 0xDE);
@@ -304,6 +306,7 @@ mod tests {
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
         let mut controllers = [Controller::new(), Controller::new()];
+        let mut oam_dma_request = None;
         let mut bus = CpuBus::new(
             &mut ram,
             &mut ppu,
@@ -311,6 +314,7 @@ mod tests {
             Some(&mut cartridge),
             &mut controllers,
             None,
+            &mut oam_dma_request,
         );
 
         let first_bank = bus.read(cpu_mem::PRG_ROM_START);
@@ -325,6 +329,7 @@ mod tests {
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
         let mut controllers = [Controller::new(), Controller::new()];
+        let mut oam_dma_request = None;
         let mut bus = CpuBus::new(
             &mut ram,
             &mut ppu,
@@ -332,6 +337,7 @@ mod tests {
             Some(&mut cartridge),
             &mut controllers,
             None,
+            &mut oam_dma_request,
         );
 
         bus.write(cpu_mem::PRG_RAM_START, 0x42);
