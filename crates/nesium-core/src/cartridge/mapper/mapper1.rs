@@ -59,9 +59,8 @@ pub struct Mapper1 {
     /// Number of bits currently shifted into `shift_reg`.
     shift_count: u8,
     /// Approximation of NESdev consecutive-cycle write ignore.
-    /// Without CPU cycle info we ignore one immediately consecutive serial write.
-    /// TODO: Replace with precise cycle-based logic once CPU cycles are plumbed.
-    last_serial_write: bool,
+    /// Stores the CPU cycle of the last serial write so we can ignore back-to-back writes.
+    last_serial_cycle: Option<u64>,
 }
 
 impl Mapper1 {
@@ -81,7 +80,7 @@ impl Mapper1 {
         self.prg_bank = 0;
         self.shift_reg = 0x10;
         self.shift_count = 0;
-        self.last_serial_write = false;
+        self.last_serial_cycle = None;
     }
 
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -133,7 +132,7 @@ impl Mapper1 {
             prg_bank: 0,
             shift_reg: 0,
             shift_count: 0,
-            last_serial_write: false,
+            last_serial_cycle: None,
         };
 
         mapper.power_on_init();
@@ -303,24 +302,28 @@ impl Mapper1 {
         }
     }
 
-    fn write_register(&mut self, addr: u16, data: u8) {
+    fn write_register(&mut self, addr: u16, data: u8, cpu_cycle: u64) {
         if data & 0x80 != 0 {
             // Reset shift register and force 16 KiB PRG banking with fixed high bank.
             // PRG/CHR bank registers keep their current values.
             self.shift_reg = 0x10;
             self.shift_count = 0;
             self.control |= 0x0C;
-            self.last_serial_write = false;
+            self.last_serial_cycle = None;
             return;
         }
 
         // NESdev/Mesen2: if two serial (D0) writes occur on consecutive CPU cycles,
         // only the first is honored (commonly triggered by RMW instructions).
-        // Without cycle info here, we approximate by ignoring one immediately
-        // consecutive mapper write.
-        // TODO(accuracy): make this exact using CPU cycle timestamps.
-        if self.last_serial_write {
-            self.last_serial_write = false;
+        if let Some(last) = self.last_serial_cycle {
+            if cpu_cycle == last.wrapping_add(1) {
+                self.last_serial_cycle = None;
+                return;
+            }
+        }
+
+        if self.last_serial_cycle == Some(cpu_cycle) {
+            // Defensive: avoid double-counting within the same cycle.
             return;
         }
 
@@ -328,7 +331,7 @@ impl Mapper1 {
         self.shift_reg >>= 1;
         self.shift_reg |= bit << 4;
         self.shift_count = self.shift_count.saturating_add(1);
-        self.last_serial_write = true;
+        self.last_serial_cycle = Some(cpu_cycle);
 
         if self.shift_count == 5 {
             let value = self.shift_reg & 0x1F;
@@ -357,7 +360,7 @@ impl Mapper1 {
 
             self.shift_reg = 0x10;
             self.shift_count = 0;
-            self.last_serial_write = false;
+            self.last_serial_cycle = None;
         }
     }
 }
@@ -372,10 +375,12 @@ impl Mapper for Mapper1 {
         Some(value)
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {
+    fn cpu_write(&mut self, addr: u16, data: u8, cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.write_register(addr, data),
+            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => {
+                self.write_register(addr, data, cpu_cycle)
+            }
             _ => {}
         }
     }
@@ -502,9 +507,11 @@ mod tests {
     }
 
     fn write_serial_reg(mapper: &mut Mapper1, addr: u16, value: u8) {
+        let mut cycle = 0;
         for i in 0..5 {
             let bit = (value >> i) & 1;
-            mapper.cpu_write(addr, bit);
+            mapper.cpu_write(addr, bit, cycle);
+            cycle += 2; // Space writes so they are not consecutive CPU cycles.
         }
     }
 

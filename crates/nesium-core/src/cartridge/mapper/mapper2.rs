@@ -109,7 +109,7 @@ impl Mapper for Mapper2 {
         Some(value)
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {
+    fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.write_bank_select(data),
@@ -216,7 +216,7 @@ mod tests {
         let first = cart.cpu_read(cpu_mem::PRG_ROM_START).unwrap();
         assert_eq!(first, 0);
 
-        cart.cpu_write(cpu_mem::PRG_ROM_START, 0x02);
+        cart.cpu_write(cpu_mem::PRG_ROM_START, 0x02, 0);
         let switched = cart.cpu_read(cpu_mem::PRG_ROM_START).unwrap();
         assert_eq!(switched, 0x02);
     }
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     fn fixes_high_bank_to_last() {
         let mut cart = cart_with_banks(4);
-        cart.cpu_write(cpu_mem::PRG_ROM_START, 0x00);
+        cart.cpu_write(cpu_mem::PRG_ROM_START, 0x00, 0);
         let high = cart.cpu_read(0xC000).unwrap();
         assert_eq!(high, 0x03);
     }
@@ -232,7 +232,7 @@ mod tests {
     #[test]
     fn reads_and_writes_prg_ram() {
         let mut cart = cart_with_banks(4);
-        cart.cpu_write(cpu_mem::PRG_RAM_START, 0x99);
+        cart.cpu_write(cpu_mem::PRG_RAM_START, 0x99, 0);
         assert_eq!(cart.cpu_read(cpu_mem::PRG_RAM_START), Some(0x99));
     }
 }

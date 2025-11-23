@@ -20,6 +20,8 @@ pub struct CpuBus<'a> {
     serial_log: Option<&'a mut SerialLogger>,
     oam_dma_request: &'a mut Option<u8>,
     open_bus: &'a mut OpenBus,
+    /// Approximate CPU bus cycle counter (increments per bus access).
+    cpu_cycle_counter: &'a mut u64,
 }
 
 impl<'a> CpuBus<'a> {
@@ -33,6 +35,7 @@ impl<'a> CpuBus<'a> {
         serial_log: Option<&'a mut SerialLogger>,
         oam_dma_request: &'a mut Option<u8>,
         open_bus: &'a mut OpenBus,
+        cpu_cycle_counter: &'a mut u64,
     ) -> Self {
         Self {
             ram,
@@ -43,6 +46,7 @@ impl<'a> CpuBus<'a> {
             serial_log,
             oam_dma_request,
             open_bus,
+            cpu_cycle_counter,
         }
     }
 
@@ -123,7 +127,7 @@ impl<'a> CpuBus<'a> {
 
     fn write_cartridge(&mut self, addr: u16, value: u8) {
         if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.cpu_write(addr, value);
+            cart.cpu_write(addr, value, *self.cpu_cycle_counter);
         }
     }
 
@@ -168,6 +172,7 @@ impl Bus for CpuBus<'_> {
     }
 
     fn read(&mut self, addr: u16) -> u8 {
+        *self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
         self.open_bus.step();
 
         let mut driven = true;
@@ -213,6 +218,7 @@ impl Bus for CpuBus<'_> {
     }
 
     fn write(&mut self, addr: u16, data: u8) {
+        *self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
         self.open_bus.step();
         self.open_bus.latch(data);
 
@@ -313,6 +319,7 @@ mod tests {
         let mut controllers = [Controller::new(), Controller::new()];
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
+        let mut cpu_bus_cycle = 0;
         let mut bus = CpuBus::new(
             &mut ram,
             &mut ppu,
@@ -322,6 +329,7 @@ mod tests {
             None,
             &mut oam_dma_request,
             &mut open_bus,
+            &mut cpu_bus_cycle,
         );
         bus.write(cpu_mem::INTERNAL_RAM_START + 0x0002, 0xDE);
         assert_eq!(bus.read(cpu_mem::INTERNAL_RAM_START + 0x0002), 0xDE);
@@ -339,6 +347,7 @@ mod tests {
         let mut controllers = [Controller::new(), Controller::new()];
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
+        let mut cpu_bus_cycle = 0;
         let mut bus = CpuBus::new(
             &mut ram,
             &mut ppu,
@@ -348,6 +357,7 @@ mod tests {
             None,
             &mut oam_dma_request,
             &mut open_bus,
+            &mut cpu_bus_cycle,
         );
 
         let first_bank = bus.read(cpu_mem::PRG_ROM_START);
@@ -364,6 +374,7 @@ mod tests {
         let mut controllers = [Controller::new(), Controller::new()];
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
+        let mut cpu_bus_cycle = 0;
         let mut bus = CpuBus::new(
             &mut ram,
             &mut ppu,
@@ -373,6 +384,7 @@ mod tests {
             None,
             &mut oam_dma_request,
             &mut open_bus,
+            &mut cpu_bus_cycle,
         );
 
         bus.write(cpu_mem::PRG_RAM_START, 0x42);

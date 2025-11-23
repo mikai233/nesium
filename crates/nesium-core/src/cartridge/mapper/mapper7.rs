@@ -105,7 +105,7 @@ impl Mapper for Mapper7 {
         Some(value)
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {
+    fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.write_bank_select(data),
@@ -211,24 +211,24 @@ mod tests {
         let mut cart = cart(4);
         assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START), Some(0));
 
-        cart.cpu_write(cpu_mem::PRG_ROM_START, 0x02);
+        cart.cpu_write(cpu_mem::PRG_ROM_START, 0x02, 0);
         assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START), Some(0x02));
     }
 
     #[test]
     fn writes_prg_ram() {
         let mut cart = cart(2);
-        cart.cpu_write(cpu_mem::PRG_RAM_START, 0x55);
+        cart.cpu_write(cpu_mem::PRG_RAM_START, 0x55, 0);
         assert_eq!(cart.cpu_read(cpu_mem::PRG_RAM_START), Some(0x55));
     }
 
     #[test]
     fn updates_mirroring_flag() {
         let mut cart = cart(2);
-        cart.cpu_write(cpu_mem::PRG_ROM_START, 0b0001_0000);
+        cart.cpu_write(cpu_mem::PRG_ROM_START, 0b0001_0000, 0);
         assert_eq!(cart.mirroring, Mirroring::SingleScreenUpper);
 
-        cart.cpu_write(cpu_mem::PRG_ROM_START, 0);
+        cart.cpu_write(cpu_mem::PRG_ROM_START, 0, 1);
         assert_eq!(cart.mirroring, Mirroring::SingleScreenLower);
     }
 }
