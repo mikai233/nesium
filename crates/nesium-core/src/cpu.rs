@@ -406,6 +406,16 @@ impl Cpu {
             return true;
         }
 
+        if self.opcode_in_flight.is_none() {
+            if let Some(page) = bus.take_oam_dma_request() {
+                let start_on_odd_cycle = (self.cycles & 1) == 1;
+                let mut dma = OamDma::new(page, start_on_odd_cycle);
+                let done = dma.step(bus);
+                self.oam_dma = if done { None } else { Some(dma) };
+                return true;
+            }
+        }
+
         false
     }
 
