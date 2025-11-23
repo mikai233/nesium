@@ -4,11 +4,14 @@ use std::{path::Path, time::Instant};
 
 use anyhow::{Context, Result, bail};
 use nesium_core::NES;
+use nesium_core::memory::cpu as cpu_mem;
 
 pub const ROM_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/vendor/nes-test-roms");
 pub const STATUS_ADDR: u16 = 0x6000;
 pub const STATUS_MESSAGE_ADDR: u16 = 0x6004;
 pub const STATUS_MAX_BYTES: usize = 256;
+/// Many test ROMs that don't use the Blargg $6000 protocol store their result in ZP.
+pub const RESULT_ZP_ADDR: u16 = 0x00F8;
 
 /// Status byte protocol used by blargg-style test ROMs (see individual READMEs):
 /// - $80: test is running
@@ -53,8 +56,11 @@ where
     let start = Instant::now();
 
     let mut reset_delay_frames: Option<usize> = None;
+    let mut serial_log = String::new();
 
     for _ in 0..frames {
+        serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
+
         // Apply any pending reset once the requested delay has elapsed.
         if let Some(counter) = reset_delay_frames.as_mut() {
             if *counter == 0 {
@@ -90,33 +96,88 @@ where
             }
         }
 
+        if let Some(progress) = parse_serial_progress(&serial_log) {
+            match progress {
+                Progress::Passed(msg) => {
+                    verify(&mut nes)?;
+                    return Ok(message_or_none(msg));
+                }
+                Progress::Failed(code, msg) => {
+                    bail!("failed with status byte {:#04X}{}", code, format_status(msg))
+                }
+                Progress::Running { .. } => {}
+            }
+        }
+
+        if let Some(progress) = parse_ram_progress(&mut nes) {
+            match progress {
+                Progress::Passed(msg) => {
+                    verify(&mut nes)?;
+                    return Ok(message_or_none(msg));
+                }
+                Progress::Failed(code, msg) => {
+                    bail!("failed with status byte {:#04X}{}", code, format_status(msg))
+                }
+                Progress::Running { .. } => {}
+            }
+        }
+
         nes.run_frame();
     }
 
-    match poll_status(&mut nes) {
+    serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
+
+    return match poll_status(&mut nes) {
         Progress::Passed(msg) => {
             verify(&mut nes)?;
             Ok(message_or_none(msg))
         }
-        Progress::Failed(code, msg) => {
-            bail!(
-                "failed with status byte {:#04X}{}",
-                code,
-                format_status(msg)
-            )
-        }
+        Progress::Failed(code, msg) => bail!(
+            "failed with status byte {:#04X}{}",
+            code,
+            format_status(msg)
+        ),
         Progress::Running { message, .. } => {
             if !message.is_empty() {
                 last_status = message;
             }
+            if let Some(progress) = parse_serial_progress(&serial_log) {
+                match progress {
+                    Progress::Passed(msg) => {
+                        verify(&mut nes)?;
+                        return Ok(message_or_none(msg));
+                    }
+                    Progress::Failed(code, msg) => {
+                        bail!("failed with status byte {:#04X}{}", code, format_status(msg))
+                    }
+                    Progress::Running { .. } => {}
+                }
+            }
+            if let Some(progress) = parse_ram_progress(&mut nes) {
+                match progress {
+                    Progress::Passed(msg) => {
+                        verify(&mut nes)?;
+                        return Ok(message_or_none(msg));
+                    }
+                    Progress::Failed(code, msg) => {
+                        bail!("failed with status byte {:#04X}{}", code, format_status(msg))
+                    }
+                    Progress::Running { .. } => {}
+                }
+            }
+            let serial_hint = latest_serial_line(&serial_log)
+                .map(|l| format!(" and serial output \"{}\"", l))
+                .unwrap_or_default();
+            eprintln!("serial log raw: {:?}", serial_log);
             bail!(
-                "timed out after {} frames{} (elapsed {:.2?})",
+                "timed out after {} frames{}{} (elapsed {:.2?})",
                 frames,
                 format_status(last_status),
+                serial_hint,
                 start.elapsed()
             )
         }
-    }
+    };
 }
 
 /// Runs a ROM for `frames` without depending on $6000 status handshakes, then calls `verify`.
@@ -138,6 +199,79 @@ where
     }
 
     verify(&mut nes)
+}
+
+/// Runs a ROM until a zero-page result byte becomes non-zero or times out.
+/// Returns the final result byte. `pass_value` marks success; any other non-zero
+/// value is treated as failure.
+pub fn run_rom_zeropage_result(
+    rom_rel_path: &str,
+    frames: usize,
+    result_addr: u16,
+    pass_value: u8,
+) -> Result<u8> {
+    const SETTLE_FRAMES: usize = 4;
+
+    let path = Path::new(ROM_ROOT).join(rom_rel_path);
+    if !path.exists() {
+        bail!("ROM not found: {}", path.display());
+    }
+
+    let mut nes = NES::new();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+
+    let mut last_result = 0u8;
+    let mut stable_count = 0usize;
+    let start = Instant::now();
+    for _ in 0..frames {
+        let result = nes.peek_cpu_byte(result_addr);
+        if result == last_result {
+            stable_count += 1;
+        } else {
+            last_result = result;
+            stable_count = 1;
+        }
+
+        if result != 0 && stable_count >= SETTLE_FRAMES {
+            if result == pass_value {
+                return Ok(result);
+            }
+            let nmi_count = nes.peek_cpu_byte(0x000A);
+            let snap = nes.cpu_snapshot();
+            bail!(
+                "failed with result code {:#04X} (nmi_count {}, PC {:04X}, S {:02X})",
+                result,
+                nmi_count,
+                snap.pc,
+                snap.s
+            );
+        }
+        nes.run_frame();
+    }
+
+    let result = nes.peek_cpu_byte(result_addr);
+    if result != 0 {
+        if result == pass_value {
+            return Ok(result);
+        }
+        let nmi_count = nes.peek_cpu_byte(0x000A);
+        let snap = nes.cpu_snapshot();
+        bail!(
+            "failed with result code {:#04X} (nmi_count {}, PC {:04X}, S {:02X})",
+            result,
+            nmi_count,
+            snap.pc,
+            snap.s
+        );
+    }
+
+    bail!(
+        "timed out after {} frames with result still {:#04X} (elapsed {:.2?})",
+        frames,
+        last_result,
+        start.elapsed()
+    )
 }
 
 /// Simple heuristic to ensure the framebuffer isn't blank: require at least `min_unique` distinct color indices.
@@ -222,4 +356,70 @@ fn format_status(msg: String) -> String {
     } else {
         format!(" with status \"{}\"", msg)
     }
+}
+
+fn serial_bytes_to_string(bytes: &[u8]) -> String {
+    let mut out = String::new();
+    for b in bytes {
+        match b {
+            b'\n' | b'\r' => out.push('\n'),
+            0x20..=0x7E => out.push(*b as char),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn parse_serial_progress(log: &str) -> Option<Progress> {
+    let latest_line = log.lines().rev().find(|l| !l.trim().is_empty())?;
+    let line = latest_line.trim();
+    if line.contains("Passed") {
+        return Some(Progress::Passed(line.to_string()));
+    }
+    if let Some(idx) = line.find("Error") {
+        let code_str = line[idx + "Error".len()..].trim();
+        let code = code_str
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse::<u8>().ok())
+            .unwrap_or(1);
+        return Some(Progress::Failed(code, line.to_string()));
+    }
+    if line.contains("Failed") {
+        return Some(Progress::Failed(1, line.to_string()));
+    }
+    None
+}
+
+fn latest_serial_line(log: &str) -> Option<String> {
+    log.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.trim().to_string())
+}
+
+fn parse_ram_progress(nes: &mut NES) -> Option<Progress> {
+    let mut ram = vec![0u8; cpu_mem::INTERNAL_RAM_SIZE];
+    nes.peek_cpu_slice(0, &mut ram);
+
+    if ram.windows(6).any(|w| w == b"Passed") {
+        return Some(Progress::Passed("Passed".into()));
+    }
+    if ram.windows(6).any(|w| w == b"Failed") {
+        return Some(Progress::Failed(1, "Failed".into()));
+    }
+    if let Some(pos) = find_window(&ram, b"Error ") {
+        let mut code: u8 = 1;
+        let mut idx = pos + 6;
+        while idx < ram.len() && ram[idx].is_ascii_digit() {
+            let digit = ram[idx] - b'0';
+            code = code.saturating_mul(10).saturating_add(digit);
+            idx += 1;
+        }
+        return Some(Progress::Failed(code, "Error".into()));
+    }
+    None
+}
+
+fn find_window(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|w| w == needle)
 }

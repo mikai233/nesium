@@ -36,6 +36,9 @@ pub struct NES {
     controllers: [Controller; 2],
     palette: Palette,
     last_frame: u64,
+    /// Master PPU dot counter used to drive CPU/PPU/APU in lockstep (3 dots per CPU cycle).
+    dot_counter: u64,
+    serial_log: controller::SerialLogger,
 }
 
 impl NES {
@@ -50,6 +53,8 @@ impl NES {
             controllers: [Controller::new(), Controller::new()],
             palette: Palette::default(),
             last_frame: 0,
+            dot_counter: 0,
+            serial_log: controller::SerialLogger::default(),
         };
         nes.reset();
         nes
@@ -74,41 +79,47 @@ impl NES {
         self.ram.fill(0);
         self.ppu.reset();
         self.apu.reset();
+        self.serial_log.drain();
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
             &mut self.apu,
             self.cartridge.as_mut(),
             &mut self.controllers,
+            Some(&mut self.serial_log),
         );
         self.cpu.reset(&mut bus);
         self.last_frame = bus.ppu().frame_count();
+        self.dot_counter = 0;
     }
 
-    /// Advances the system by a single CPU tick (three PPU ticks).
+    /// Advances the system by a single PPU dot (master tick).
     ///
+    /// Runs PPU every call; runs CPU/APU every 3 dots (NTSC ratio).
     /// Returns `true` when a new frame has just been produced.
-    pub fn clock(&mut self) -> bool {
+    pub fn clock_dot(&mut self) -> bool {
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
             &mut self.apu,
             self.cartridge.as_mut(),
             &mut self.controllers,
+            Some(&mut self.serial_log),
         );
 
-        self.cpu.clock(&mut bus);
-
-        // NTSC timing: 3 PPU cycles per CPU cycle.
-        bus.clock_ppu();
-        bus.clock_ppu();
+        // Always run one PPU dot first so NMI/VBlank events become visible
+        // before the corresponding CPU sample on the same 3-dot window.
         bus.clock_ppu();
 
-        // Keep APU counters moving so audio timing stays roughly correct.
-        bus.apu_mut().clock();
+        // Run CPU/APU on every 3rd dot after the PPU step.
+        if self.dot_counter % 3 == 2 {
+            self.cpu.clock(&mut bus);
+            bus.apu_mut().clock();
+        }
+
+        self.dot_counter = self.dot_counter.wrapping_add(1);
 
         let frame_count = bus.ppu().frame_count();
-
         let new_frame = frame_count != self.last_frame;
         if new_frame {
             self.last_frame = frame_count;
@@ -120,7 +131,7 @@ impl NES {
     pub fn run_frame(&mut self) {
         let target_frame = self.last_frame.wrapping_add(1);
         while self.ppu.frame_count() < target_frame {
-            self.clock();
+            self.clock_dot();
         }
     }
 
@@ -161,11 +172,24 @@ impl NES {
         self.cpu.snapshot()
     }
 
+    /// Internal timing counter (PPU dots since power-on). Exposed for tests/debug.
+    pub fn dot_counter(&self) -> u64 {
+        self.dot_counter
+    }
+
+    /// Peek PPU NMI flags and position (tests/debug).
+    pub fn ppu_nmi_debug(&self) -> crate::ppu::NmiDebugState {
+        self.ppu.debug_nmi_state()
+    }
+
     /// Executes the next instruction (advancing CPU/PPU/APU as needed).
     pub fn step_instruction(&mut self) {
+        let mut seen_active = false;
         loop {
-            self.clock();
-            if !self.cpu.opcode_active() {
+            self.clock_dot();
+            if self.cpu.opcode_active() {
+                seen_active = true;
+            } else if seen_active {
                 break;
             }
         }
@@ -184,6 +208,7 @@ impl NES {
             &mut self.apu,
             self.cartridge.as_mut(),
             &mut self.controllers,
+            Some(&mut self.serial_log),
         );
         bus.read(addr)
     }
@@ -196,10 +221,16 @@ impl NES {
             &mut self.apu,
             self.cartridge.as_mut(),
             &mut self.controllers,
+            Some(&mut self.serial_log),
         );
         for (offset, byte) in buffer.iter_mut().enumerate() {
             *byte = bus.read(base.wrapping_add(offset as u16));
         }
+    }
+
+    /// Drains any bytes emitted on controller port 1 via the blargg serial protocol.
+    pub fn take_serial_output(&mut self) -> Vec<u8> {
+        self.serial_log.drain()
     }
 }
 

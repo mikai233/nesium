@@ -45,7 +45,7 @@ impl Mnemonic {
             MicroOp {
                 name: "asl_shift",
                 micro_fn: |cpu, bus| {
-                    if cpu.opcode == Some(0x0A) {
+                    if cpu.opcode_in_flight == Some(0x0A) {
                         // Accumulator
                         // Dummy read
                         let _ = bus.read(cpu.pc);
@@ -110,7 +110,7 @@ impl Mnemonic {
             MicroOp {
                 name: "lsr_shift",
                 micro_fn: |cpu, bus| {
-                    if cpu.opcode == Some(0x4A) {
+                    if cpu.opcode_in_flight == Some(0x4A) {
                         // Accumulator
                         // Dummy read
                         let _ = bus.read(cpu.pc);
@@ -176,7 +176,7 @@ impl Mnemonic {
                 name: "rol_rotate",
                 micro_fn: |cpu, bus| {
                     // Cycle 2: Rotate left through Carry
-                    if cpu.opcode == Some(0x2A) {
+                    if cpu.opcode_in_flight == Some(0x2A) {
                         // Dummy read
                         let _ = bus.read(cpu.pc);
                         let old_bit7 = cpu.a & BIT_7;
@@ -242,7 +242,7 @@ impl Mnemonic {
             MicroOp {
                 name: "ror_rotate",
                 micro_fn: |cpu, bus| {
-                    if cpu.opcode == Some(0x6A) {
+                    if cpu.opcode_in_flight == Some(0x6A) {
                         // Dummy read
                         let _ = bus.read(cpu.pc);
                         let old_bit0 = cpu.a & BIT_0;
@@ -278,7 +278,7 @@ mod shift_tests {
     #[test]
     fn test_asl() {
         InstrTest::new(Mnemonic::ASL).test(|verify, cpu, bus| {
-            if cpu.opcode == Some(0x0A) {
+            if cpu.opcode_in_flight == Some(0x0A) {
                 let c = verify.cpu.a & BIT_7 != 0;
                 assert_eq!(cpu.p.c(), c);
                 let v = verify.cpu.a << 1;
@@ -297,7 +297,7 @@ mod shift_tests {
     #[test]
     fn test_lsr() {
         InstrTest::new(Mnemonic::LSR).test(|verify, cpu, bus| {
-            if cpu.opcode == Some(0x4A) {
+            if cpu.opcode_in_flight == Some(0x4A) {
                 // Accumulator mode
                 let c = verify.cpu.a & BIT_0 != 0;
                 assert_eq!(cpu.p.c(), c);
@@ -318,7 +318,7 @@ mod shift_tests {
     #[test]
     fn test_rol() {
         InstrTest::new(Mnemonic::ROL).test(|verify, cpu, bus| {
-            if cpu.opcode == Some(0x2A) {
+            if cpu.opcode_in_flight == Some(0x2A) {
                 // Accumulator mode
                 let c_in = verify.cpu.p.c() as u8;
                 let c_out = verify.cpu.a & BIT_7 != 0;
@@ -341,7 +341,7 @@ mod shift_tests {
     #[test]
     fn test_ror() {
         InstrTest::new(Mnemonic::ROR).test(|verify, cpu, bus| {
-            if cpu.opcode == Some(0x6A) {
+            if cpu.opcode_in_flight == Some(0x6A) {
                 // Accumulator mode
                 let c_in = (verify.cpu.p.c() as u8) << 7;
                 let c_out = verify.cpu.a & BIT_0 != 0;

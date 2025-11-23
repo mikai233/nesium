@@ -72,7 +72,7 @@ impl MicroOp {
                 let hi = bus.read(cpu.pc);
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHX
-                if cpu.opcode == Some(0x9C) {
+                if cpu.opcode_in_flight == Some(0x9C) {
                     cpu.base = hi;
                 }
                 let addr = base.wrapping_add(cpu.x as u16);
@@ -92,7 +92,7 @@ impl MicroOp {
                 let hi = bus.read(cpu.pc);
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHA(0x9F) SHX(0x9E) SHS(0x9B)
-                if cpu.opcode == Some(0x9F) || cpu.opcode == Some(0x9E) || cpu.opcode == Some(0x9B)
+                if cpu.opcode_in_flight == Some(0x9F) || cpu.opcode_in_flight == Some(0x9E) || cpu.opcode_in_flight == Some(0x9B)
                 {
                     cpu.base = hi;
                 }
@@ -191,7 +191,7 @@ impl MicroOp {
                 let hi = bus.read(hi_addr);
                 let base = ((hi as u16) << 8) | (cpu.base as u16);
                 // SHA
-                if cpu.opcode == Some(0x93) {
+                if cpu.opcode_in_flight == Some(0x93) {
                     cpu.base = hi;
                 }
                 let addr = base.wrapping_add(cpu.y as u16);
