@@ -1,3 +1,23 @@
+//! Mapper1 (MMC1) implementation.
+//!
+//! This mapper follows the NESdev MMC1 serial programming protocol and banking
+//! modes, with a few Mesen2-aligned behaviors for real-world compatibility.
+//! Reference: https://www.nesdev.org/wiki/MMC1
+//!
+//! Key behaviors:
+//! - Serial 5-bit shift register programmed via CPU writes to $8000-$FFFF.
+//! - Bit7 writes reset the shift register and force PRG mode = 3 (fixed high bank).
+//! - PRG banking supports 32KiB and 16KiB (fixed-first / fixed-last) modes.
+//! - CHR banking supports 8KiB and 4KiB modes.
+//! - Mirroring controlled by Control bits 0-1.
+//! - MMC1B-style PRG-RAM disable via PRG bank bit4.
+//!
+//! TODOs (accuracy improvements):
+//! - Use CPU cycle information to implement precise consecutive-write ignore.
+//! - Return open-bus value when PRG-RAM is disabled (requires bus support).
+//! - Support SxROM outer banking variants (SUROM/SXROM/SOROM/SZROM/SNROM).
+//! - Distinguish MMC1A/MMC1B revisions when submapper/board info is available.
+
 use std::borrow::Cow;
 
 use crate::{
@@ -22,27 +42,46 @@ pub struct Mapper1 {
     prg_bank_count: usize, // number of 16 KiB PRG banks
     chr_bank_count: usize, // number of 4 KiB CHR banks
 
+    /// Control register ($8000-$9FFF), 5 bits latched.
+    /// Bits 0-1: mirroring, bits 2-3: PRG mode, bit4: CHR mode.
     control: u8,
+    /// CHR bank 0 register ($A000-$BFFF), 5 bits latched.
     chr_bank0: u8,
+    /// CHR bank 1 register ($C000-$DFFF), 5 bits latched.
     chr_bank1: u8,
+    /// PRG bank register ($E000-$FFFF), 5 bits latched.
+    /// On MMC1B, bit4 disables PRG-RAM when set.
     prg_bank: u8,
 
+    /// Serial shift register. Initialized to 0x10 (bit4 set), then shifted right
+    /// with each D0 write. After 5 writes, value is latched and this resets.
     shift_reg: u8,
+    /// Number of bits currently shifted into `shift_reg`.
     shift_count: u8,
+    /// Approximation of NESdev consecutive-cycle write ignore.
+    /// Without CPU cycle info we ignore one immediately consecutive serial write.
+    /// TODO: Replace with precise cycle-based logic once CPU cycles are plumbed.
+    last_serial_write: bool,
 }
 
 impl Mapper1 {
     fn power_on_init(&mut self) {
-        // Power-on defaults per MMC1 documentation:
-        // - Control = 0b11xx (16 KiB banking, fixed high bank)
+        // Power-on defaults observed in Mesen2 for iNES mapper 1.
+        // NOTE: Real hardware power-on state is not strictly defined across MMC1
+        // revisions/boards; most games reinitialize MMC1 on reset.
+        // TODO(accuracy): consider board/submapper-specific or undefined/randomized
+        // power-on state if strict hardware fidelity is desired.
+        //
+        // - Control = 0b01000 (16 KiB banking, fixed FIRST bank)
         // - PRG/CHR banks = 0
-        // - Shift register cleared with bit4 set so the next 5 writes latch cleanly.
-        self.control = 0x0C;
+        // - Shift register = 0x10 (bit4 set so the next 5 writes latch cleanly)
+        self.control = 0x08;
         self.chr_bank0 = 0;
         self.chr_bank1 = 0;
         self.prg_bank = 0;
         self.shift_reg = 0x10;
         self.shift_count = 0;
+        self.last_serial_write = false;
     }
 
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -94,10 +133,19 @@ impl Mapper1 {
             prg_bank: 0,
             shift_reg: 0,
             shift_count: 0,
+            last_serial_write: false,
         };
 
         mapper.power_on_init();
         mapper
+    }
+
+    #[inline]
+    fn prg_ram_enabled(&self) -> bool {
+        // MMC1B uses PRG bank register bit4 to disable PRG RAM when set.
+        // TODO(accuracy): MMC1A boards may not honor this disable bit.
+        // TODO(accuracy): When disabled, reads should return open-bus, not 0.
+        (self.prg_bank & 0x10) == 0
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
@@ -113,7 +161,8 @@ impl Mapper1 {
     }
 
     fn read_prg_ram(&self, addr: u16) -> u8 {
-        if self.prg_ram.is_empty() {
+        // If PRG-RAM is absent or disabled, behave like open-bus (we return 0 for now).
+        if self.prg_ram.is_empty() || !self.prg_ram_enabled() {
             return 0;
         }
         let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
@@ -121,7 +170,8 @@ impl Mapper1 {
     }
 
     fn write_prg_ram(&mut self, addr: u16, data: u8) {
-        if self.prg_ram.is_empty() {
+        // If PRG-RAM is absent or disabled, ignore writes.
+        if self.prg_ram.is_empty() || !self.prg_ram_enabled() {
             return;
         }
         let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
@@ -184,6 +234,7 @@ impl Mapper1 {
         let offset_in_bank = (addr as usize) & 0x0FFF;
         let chr_mode_4k = (self.control >> 4) & 0b1 == 1;
 
+        // TODO(accuracy): SxROM variants use CHR bank high bits for outer PRG/PRG-RAM banking.
         let bank_index = if !chr_mode_4k {
             // 8 KiB CHR mode: ignore low bit of bank 0.
             let base_bank = (self.chr_bank0 & !1) as usize;
@@ -223,6 +274,7 @@ impl Mapper1 {
         let offset_in_bank = (addr as usize) & 0x0FFF;
         let chr_mode_4k = (self.control >> 4) & 0b1 == 1;
 
+        // TODO(accuracy): SxROM variants use CHR bank high bits for outer PRG/PRG-RAM banking.
         let bank_index = if !chr_mode_4k {
             let base_bank = (self.chr_bank0 & !1) as usize;
             if addr < 0x1000 {
@@ -258,6 +310,17 @@ impl Mapper1 {
             self.shift_reg = 0x10;
             self.shift_count = 0;
             self.control |= 0x0C;
+            self.last_serial_write = false;
+            return;
+        }
+
+        // NESdev/Mesen2: if two serial (D0) writes occur on consecutive CPU cycles,
+        // only the first is honored (commonly triggered by RMW instructions).
+        // Without cycle info here, we approximate by ignoring one immediately
+        // consecutive mapper write.
+        // TODO(accuracy): make this exact using CPU cycle timestamps.
+        if self.last_serial_write {
+            self.last_serial_write = false;
             return;
         }
 
@@ -265,10 +328,12 @@ impl Mapper1 {
         self.shift_reg >>= 1;
         self.shift_reg |= bit << 4;
         self.shift_count = self.shift_count.saturating_add(1);
+        self.last_serial_write = true;
 
         if self.shift_count == 5 {
             let value = self.shift_reg & 0x1F;
             let target = (addr >> 13) & 0b11;
+            // Target selection uses A14-A13 on the 5th write only.
 
             match target {
                 0 => {
@@ -290,8 +355,9 @@ impl Mapper1 {
                 _ => {}
             }
 
-            self.shift_reg = 0;
+            self.shift_reg = 0x10;
             self.shift_count = 0;
+            self.last_serial_write = false;
         }
     }
 }
