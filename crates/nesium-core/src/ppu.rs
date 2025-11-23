@@ -243,7 +243,9 @@ impl Ppu {
         self.sprite0_hit_pos = None;
         // PPU power-on: clear VBlank flag so the first BIT $2002 loop waits
         // for the true VBlank edge instead of seeing a stale high.
-        self.registers.status.remove(registers::Status::VERTICAL_BLANK);
+        self.registers
+            .status
+            .remove(registers::Status::VERTICAL_BLANK);
         self.bus_latch = 0;
         self.secondary_oam.fill(0);
         self.sprite_eval = SpriteEvalState::default();

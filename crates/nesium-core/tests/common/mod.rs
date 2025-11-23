@@ -103,7 +103,11 @@ where
                     return Ok(message_or_none(msg));
                 }
                 Progress::Failed(code, msg) => {
-                    bail!("failed with status byte {:#04X}{}", code, format_status(msg))
+                    bail!(
+                        "failed with status byte {:#04X}{}",
+                        code,
+                        format_status(msg)
+                    )
                 }
                 Progress::Running { .. } => {}
             }
@@ -116,7 +120,11 @@ where
                     return Ok(message_or_none(msg));
                 }
                 Progress::Failed(code, msg) => {
-                    bail!("failed with status byte {:#04X}{}", code, format_status(msg))
+                    bail!(
+                        "failed with status byte {:#04X}{}",
+                        code,
+                        format_status(msg)
+                    )
                 }
                 Progress::Running { .. } => {}
             }
@@ -148,7 +156,11 @@ where
                         return Ok(message_or_none(msg));
                     }
                     Progress::Failed(code, msg) => {
-                        bail!("failed with status byte {:#04X}{}", code, format_status(msg))
+                        bail!(
+                            "failed with status byte {:#04X}{}",
+                            code,
+                            format_status(msg)
+                        )
                     }
                     Progress::Running { .. } => {}
                 }
@@ -160,7 +172,11 @@ where
                         return Ok(message_or_none(msg));
                     }
                     Progress::Failed(code, msg) => {
-                        bail!("failed with status byte {:#04X}{}", code, format_status(msg))
+                        bail!(
+                            "failed with status byte {:#04X}{}",
+                            code,
+                            format_status(msg)
+                        )
                     }
                     Progress::Running { .. } => {}
                 }
@@ -392,7 +408,10 @@ fn parse_serial_progress(log: &str) -> Option<Progress> {
 }
 
 fn latest_serial_line(log: &str) -> Option<String> {
-    log.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.trim().to_string())
+    log.lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
 }
 
 fn parse_ram_progress(nes: &mut NES) -> Option<Progress> {
@@ -419,7 +438,5 @@ fn parse_ram_progress(nes: &mut NES) -> Option<Progress> {
 }
 
 fn find_window(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack
-        .windows(needle.len())
-        .position(|w| w == needle)
+    haystack.windows(needle.len()).position(|w| w == needle)
 }

@@ -45,14 +45,24 @@ fn log_nmi_edges() -> Result<()> {
         if state.scanline == 241 && state.cycle == 1 && now_dot != last_vblank_set_dot {
             println!(
                 "VBlank set at dot {}, frame {}, scanline {}, cycle {}, nmi_output {}, pending {}",
-                now_dot, state.frame, state.scanline, state.cycle, state.nmi_output, state.nmi_pending
+                now_dot,
+                state.frame,
+                state.scanline,
+                state.cycle,
+                state.nmi_output,
+                state.nmi_pending
             );
             last_vblank_set_dot = now_dot;
         }
         if state.scanline == -1 && state.cycle == 1 && now_dot != last_vblank_clear_dot {
             println!(
                 "VBlank clear at dot {}, frame {}, scanline {}, cycle {}, nmi_output {}, pending {}",
-                now_dot, state.frame, state.scanline, state.cycle, state.nmi_output, state.nmi_pending
+                now_dot,
+                state.frame,
+                state.scanline,
+                state.cycle,
+                state.nmi_output,
+                state.nmi_pending
             );
             last_vblank_clear_dot = now_dot;
         }
