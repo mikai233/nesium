@@ -43,8 +43,8 @@ High-level behaviour differences between `nesium-core`'s NES PPU and Mesen2's `N
 
 2. **PPUSCROLL/PPUADDR scroll glitches ($2000/$2005/$2006)**
    - Mesen2 implements the well-known scroll glitches when writing to `$2000/$2005/$2006` on specific cycles (e.g. 257 and at 8-dot boundaries) via `ProcessTmpAddrScrollGlitch` and the `EnablePpu2006ScrollGlitch` setting, corrupting `v`/`t` in the same way as hardware.
-   - ~~Nesium currently performs clean copies between `t` and `v` (`copy_horizontal_scroll`/`copy_vertical_scroll`) with no glitch emulation; TODO comments in `ppu.rs` acknowledge this.~~ (nesium now emulates the basic scroll glitch when `$2000/$2005/$2006` writes land on dot 257 of a visible scanline while rendering is enabled.)
-   - TODO: If we aim for full Mesen2 parity, extend the current dot-257 glitch to also cover the more subtle `$2006` AND-style corruption and any additional 8-dot-boundary effects described in `ProcessTmpAddrScrollGlitch`.
+   - ~~Nesium currently performs clean copies between `t` and `v` (`copy_horizontal_scroll`/`copy_vertical_scroll`) with no glitch emulation; TODO comments in `ppu.rs` acknowledge this.~~ (nesium now emulates the basic dot-257 glitch for `$2000/$2005/$2006` and the `$2006` AND-style corruption when the delayed update lands on Y/X increments, matching Mesen2’s `UpdateState` logic.)
+   - TODO: Keep an eye on region-specific behaviour (PAL/Dendy) and any remaining 8-dot-boundary edge cases that may show up in test ROMs (e.g. VisualNES-based scroll glitch tests) and refine the implementation if discrepancies are observed.
 
 3. **OAMDATA ($2004) read/write behaviour**
    - ~~Writes: Mesen2 ignores writes to `$2004` during rendering and instead performs the “high 6 bits only” increment (`_spriteRamAddr = (_spriteRamAddr + 4) & 0xFF`), which models the hardware OAMADDR glitch.~~
