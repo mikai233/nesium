@@ -50,7 +50,7 @@ use crate::{
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
         palette::PaletteRam,
-        registers::{Control, Mask, Registers, Status},
+        registers::{Control, Mask, Registers, Status, VramAddr},
     },
     ram::ppu::{SecondaryOamRam, Vram},
 };
@@ -88,6 +88,10 @@ pub struct Sprite0HitDebug {
 pub struct Ppu {
     /// Collection of CPU visible registers and their helper latches.
     registers: Registers,
+    /// Deferred $2006 VRAM address to apply after the hardware latency window.
+    pending_vram_addr: VramAddr,
+    /// Remaining dots before the pending VRAM address commit (0 = no pending write).
+    pending_vram_delay: u8,
     /// Internal VRAM backing store for nametables and pattern tables.
     vram: Vram,
     /// Dedicated palette RAM. Addresses between `$3F00` and `$3FFF` map here.
@@ -196,6 +200,8 @@ impl Ppu {
     pub fn new() -> Self {
         Self {
             registers: Registers::new(),
+            pending_vram_addr: VramAddr::default(),
+            pending_vram_delay: 0,
             vram: Vram::new(),
             palette_ram: PaletteRam::new(),
             cycle: 0,
@@ -240,6 +246,8 @@ impl Ppu {
         self.scanline = -1;
         self.frame = 0;
         self.odd_frame = false;
+        self.pending_vram_delay = 0;
+        self.pending_vram_addr = VramAddr::default();
         self.bg_pipeline.clear();
         self.sprite_pipeline.clear();
         self.nmi_pending = false;
@@ -352,9 +360,10 @@ impl Ppu {
             PpuRegister::OamData => self.write_oam_data(value),
             PpuRegister::Scroll => self.registers.vram.write_scroll(value),
             PpuRegister::Addr => {
-                // TODO: Mesen2 delays applying the final VRAM address by ~3 PPU cycles after $2006 writes.
-                // This matters for razor-thin mid-scanline scroll tricks; current implementation applies immediately.
-                self.registers.vram.write_addr(value)
+                if let Some(new_v) = self.registers.vram.write_addr(value) {
+                    self.pending_vram_addr = new_v;
+                    self.pending_vram_delay = 3;
+                }
             }
             PpuRegister::Data => self.write_vram_data(value, pattern),
         }
@@ -384,6 +393,7 @@ impl Ppu {
     pub fn clock(&mut self, pattern: &mut PatternBus<'_>) {
         let rendering_enabled = self.registers.mask.rendering_enabled();
         let prev_nmi_output = self.nmi_output;
+        self.step_pending_vram_addr();
 
         // NOTE: We clear VBlank and drop NMI output at dot 1 of prerender.
         // Dot 0 should NOT clear VBlank on normal frames (avoids early NMI fall).
@@ -562,6 +572,17 @@ impl Ppu {
 
         self.update_nmi_output(prev_nmi_output);
         self.advance_cycle();
+    }
+
+    #[inline]
+    fn step_pending_vram_addr(&mut self) {
+        if self.pending_vram_delay == 0 {
+            return;
+        }
+        self.pending_vram_delay -= 1;
+        if self.pending_vram_delay == 0 {
+            self.registers.vram.v = self.pending_vram_addr;
+        }
     }
 
     /// Debug helper: overrides PPU position counters (scanline/cycle/frame).

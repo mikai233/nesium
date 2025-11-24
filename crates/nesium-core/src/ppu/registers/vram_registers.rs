@@ -26,19 +26,21 @@ impl VramRegisters {
         self.w = !self.w;
     }
 
-    /// Writes to `$2006` (PPUADDR), updating `t` and copying into `v`
-    /// on the second write.
-    pub(crate) fn write_addr(&mut self, value: u8) {
-        if !self.w {
+    /// Writes to `$2006` (PPUADDR), updating `t`. On the second write,
+    /// returns the completed address so the caller can commit `v` after
+    /// emulating hardware delay.
+    pub(crate) fn write_addr(&mut self, value: u8) -> Option<VramAddr> {
+        let second_write = self.w;
+        if !second_write {
             let hi = u16::from(value & 0b0011_1111) << 8;
             let lo = self.t.raw() & 0x00FF;
             self.t.set_raw(hi | lo);
         } else {
             let hi = self.t.raw() & 0x7F00;
             self.t.set_raw(hi | u16::from(value));
-            self.v = self.t;
         }
         self.w = !self.w;
+        second_write.then_some(self.t)
     }
 
     /// Resets the write toggle so the next `$2005/$2006` write is treated
