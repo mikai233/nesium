@@ -138,6 +138,14 @@ pub struct Ppu {
     framebuffer: Box<[u8; SCREEN_WIDTH * SCREEN_HEIGHT]>,
 }
 
+/// Source register for scroll-glitch emulation.
+#[derive(Copy, Clone)]
+enum ScrollGlitchSource {
+    Control2000,
+    Scroll2005,
+    Addr2006,
+}
+
 /// Temporary view that lets the PPU reach the cartridge CHR space without storing a raw pointer.
 ///
 /// The bus creates one of these per PPU call, so lifetimes remain explicit and borrow-checked.
@@ -341,6 +349,7 @@ impl Ppu {
                 let old_nmi_en = self.registers.control.nmi_enabled();
 
                 self.registers.write_control(value);
+                self.maybe_apply_scroll_glitch(ScrollGlitchSource::Control2000);
 
                 let new_ctrl = self.registers.control.bits();
                 let new_nmi_en = self.registers.control.nmi_enabled();
@@ -371,11 +380,25 @@ impl Ppu {
             PpuRegister::Status => {} // read-only
             PpuRegister::OamAddr => self.registers.oam_addr = value,
             PpuRegister::OamData => self.write_oam_data(value),
-            PpuRegister::Scroll => self.registers.vram.write_scroll(value),
+            PpuRegister::Scroll => {
+                let w_before = self.registers.vram.w;
+                self.registers.vram.write_scroll(value);
+                // Glitch on first $2005 write (horizontal scroll) when it lands
+                // exactly on dot 257 of a visible scanline while rendering.
+                if !w_before {
+                    self.maybe_apply_scroll_glitch(ScrollGlitchSource::Scroll2005);
+                }
+            }
             PpuRegister::Addr => {
+                let w_before = self.registers.vram.w;
                 if let Some(new_v) = self.registers.vram.write_addr(value) {
                     self.pending_vram_addr = new_v;
                     self.pending_vram_delay = 3;
+                }
+                // Glitch on first $2006 write (high byte) under the same timing
+                // conditions as Mesen2's ProcessTmpAddrScrollGlitch.
+                if !w_before {
+                    self.maybe_apply_scroll_glitch(ScrollGlitchSource::Addr2006);
                 }
             }
             PpuRegister::Data => self.write_vram_data(value, pattern),
@@ -761,6 +784,41 @@ impl Ppu {
         };
         let color_index = self.palette_ram.read(palette_addr);
         self.framebuffer[idx] = color_index;
+    }
+
+    /// Emulates the $2000/$2005/$2006 scroll glitch when writes land on
+    /// dot 257 of a visible scanline while rendering is enabled (Mesen2-style).
+    fn maybe_apply_scroll_glitch(&mut self, source: ScrollGlitchSource) {
+        // Only visible scanlines, when rendering is enabled, at dot 257.
+        if !(0..=239).contains(&self.scanline) {
+            return;
+        }
+        if !self.registers.mask.rendering_enabled() {
+            return;
+        }
+        if self.cycle != 257 {
+            return;
+        }
+
+        let bus = self.open_bus.sample();
+        let (mask, value): (u16, u16) = match source {
+            ScrollGlitchSource::Control2000 => {
+                // Use bus bits to perturb nametable X (bit 10).
+                (0x0400, (bus as u16) << 10)
+            }
+            ScrollGlitchSource::Scroll2005 => {
+                // Use bus bits to perturb coarse X (bits 0-4).
+                (0x001F, (bus as u16) >> 3)
+            }
+            ScrollGlitchSource::Addr2006 => {
+                // Use bus bits to perturb nametable (bits 10-11).
+                (0x0C00, (bus as u16) << 8)
+            }
+        };
+
+        let raw = self.registers.vram.v.raw();
+        let new_raw = (raw & !mask) | (value & mask);
+        self.registers.vram.v.set_raw(new_raw);
     }
 
     /// Performs background tile/attribute fetches and reloads shifters every 8 dots.
