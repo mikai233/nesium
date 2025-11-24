@@ -119,6 +119,10 @@ pub struct Ppu {
     sprite0_hit_pos: Option<Sprite0HitDebug>,
     /// PPU-side open-bus latch (with decay).
     open_bus: OpenBus,
+    /// Countdown (in PPU dots) during which a second `$2007` read is ignored.
+    /// Mirrors Mesen2's `_ignoreVramRead` behaviour (two consecutive CPU
+    /// cycles -> second read returns open bus and does not increment VRAM).
+    ignore_vram_read: u8,
     /// Secondary OAM used during sprite evaluation for the current scanline.
     secondary_oam: SecondaryOamRam,
     /// Sprite evaluation state (cycle-accurate structure).
@@ -215,6 +219,7 @@ impl Ppu {
             prevent_vblank_flag: false,
             sprite0_hit_pos: None,
             open_bus: OpenBus::new(),
+            ignore_vram_read: 0,
             secondary_oam: SecondaryOamRam::new(),
             sprite_eval: SpriteEvalState::default(),
             sprite_fetch: SpriteFetchState::default(),
@@ -259,6 +264,7 @@ impl Ppu {
             .status
             .remove(registers::Status::VERTICAL_BLANK);
         self.open_bus.reset();
+        self.ignore_vram_read = 0;
         self.secondary_oam.fill(0);
         self.sprite_eval = SpriteEvalState::default();
         self.sprite_fetch = SpriteFetchState::default();
@@ -378,7 +384,18 @@ impl Ppu {
         let value = match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Status => self.read_status(),
             PpuRegister::OamData => self.read_oam_data(),
-            PpuRegister::Data => self.read_vram_data(pattern),
+            PpuRegister::Data => {
+                if self.ignore_vram_read != 0 {
+                    // Consecutive $2007 read within the ignore window: return open bus
+                    // and do not touch VRAM buffer or increment the VRAM address.
+                    self.open_bus.sample()
+                } else {
+                    let value = self.read_vram_data(pattern);
+                    // Roughly match Mesen2's window of ~6 PPU cycles (~2 CPU cycles).
+                    self.ignore_vram_read = 6;
+                    value
+                }
+            }
             _ => self.open_bus.sample(),
         };
         self.open_bus.latch(value);
@@ -394,6 +411,10 @@ impl Ppu {
         let rendering_enabled = self.registers.mask.rendering_enabled();
         let prev_nmi_output = self.nmi_output;
         self.step_pending_vram_addr();
+
+        if self.ignore_vram_read > 0 {
+            self.ignore_vram_read -= 1;
+        }
 
         // NOTE: We clear VBlank and drop NMI output at dot 1 of prerender.
         // Dot 0 should NOT clear VBlank on normal frames (avoids early NMI fall).
@@ -1083,10 +1104,26 @@ impl Ppu {
     }
 
     fn write_oam_data(&mut self, value: u8) {
-        let idx = self.registers.oam_addr as usize;
-        if idx < ppu_mem::OAM_RAM_SIZE {
-            self.registers.oam[idx] = value;
-            self.registers.oam_addr = self.registers.oam_addr.wrapping_add(1);
+        let rendering = self.registers.mask.rendering_enabled();
+        let during_render =
+            rendering && ((0..=239).contains(&self.scanline) || self.scanline == -1);
+
+        if during_render {
+            // Mesen2 / hardware: writes to $2004 during rendering do not modify primary OAM.
+            // Instead, OAMADDR is incremented in a "glitchy" way: only the high 6 bits bump.
+            self.registers.oam_addr = self.registers.oam_addr.wrapping_add(4);
+        } else {
+            let idx = self.registers.oam_addr as usize;
+            if idx < ppu_mem::OAM_RAM_SIZE {
+                // Mask off the 3 unimplemented bits of sprite byte 2 so they always read back as 0.
+                let mut v = value;
+                if (self.registers.oam_addr & 0x03) == 0x02 {
+                    v &= 0xE3;
+                }
+
+                self.registers.oam[idx] = v;
+                self.registers.oam_addr = self.registers.oam_addr.wrapping_add(1);
+            }
         }
     }
 
