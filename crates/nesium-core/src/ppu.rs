@@ -645,7 +645,32 @@ impl Ppu {
         }
         self.pending_vram_delay -= 1;
         if self.pending_vram_delay == 0 {
-            self.registers.vram.v = self.pending_vram_addr;
+            let new_v = self.pending_vram_addr;
+            // Mesen2 / hardware: when the delayed $2006 update lands exactly
+            // on the Y or X increment, the written value is ANDed with the
+            // incremented value instead of simply replacing it.
+            if self.registers.mask.rendering_enabled() && (0..=239).contains(&self.scanline) {
+                let cur_raw = self.registers.vram.v.raw();
+                let new_raw = new_v.raw();
+                let merged = if self.cycle == 257 {
+                    // Landing on the Y increment (scanline increment): AND the
+                    // entire V with the written value.
+                    cur_raw & new_raw
+                } else if self.cycle > 0
+                    && (self.cycle & 0x07) == 0
+                    && (self.cycle <= 256 || self.cycle > 320)
+                {
+                    // Landing on an X increment (every 8 dots while rendering):
+                    // only the coarse X and horizontal nametable bits (mask 0x041F)
+                    // are corrupted by ANDing with the written value.
+                    (new_raw & !0x041F) | (cur_raw & new_raw & 0x041F)
+                } else {
+                    new_raw
+                };
+                self.registers.vram.v.set_raw(merged);
+            } else {
+                self.registers.vram.v = new_v;
+            }
         }
     }
 
