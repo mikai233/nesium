@@ -32,6 +32,9 @@ pub(crate) struct SpriteEvalState {
     pub(crate) overflow_in_range: bool,
     /// Countdown used to emulate the overflow address realignment glitch.
     pub(crate) overflow_bug_counter: u8,
+    /// Latched: sprite evaluation has wrapped / realigned and further
+    /// writes to secondary OAM are effectively disabled (Mesen2 `_oamCopyDone`).
+    pub(crate) oam_copy_done: bool,
     /// Latched: sprite 0 will be in range on the *next* scanline.
     pub(crate) sprite0_in_range_next: bool,
     /// Latched: sprite overflow has been observed for the next scanline.

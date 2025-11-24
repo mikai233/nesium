@@ -53,8 +53,8 @@ High-level behaviour differences between `nesium-core`'s NES PPU and Mesen2's `N
 
 4. **Sprite evaluation and overflow bug**
    - Mesen2 has a very detailed implementation of the sprite overflow bug during the overflow scan phase, including the exact `n`/`m` increment pattern and the “realign” behaviour after overflow (`_overflowBugCounter`, `_oamCopyDone`, etc.).
-   - Nesium has a simplified `SpriteEvalPhase::OverflowScan` that captures the general effect (overflow flag set when more than 8 in-range sprites) but not all the edge-case patterns (marked with `TODO(sprite-overflow)` in `sprite_state.rs`/`ppu.rs`).
-   - TODO: Tighten the overflow scan logic to match Mesen2’s n/m stepping and `overflow_bug_counter` semantics so tests like `oam_stress` and sprite overflow edge cases behave identically.
+   - ~~Nesium implements a simplified `SpriteEvalPhase::OverflowScan` that captures the general effect (overflow flag set when more than 8 in-range sprites) and uses an `overflow_bug_counter` but does not yet model all of Mesen2’s address realignment and `_oamCopyDone`/secondary-OAM interaction edge cases.~~ (nesium now mirrors Mesen2’s overflow scan `n`/`m` pattern, wrap-to-start behaviour, and realign via `overflow_bug_counter`/`oam_copy_done`, and derives per-scanline sprite count from the number of bytes copied into secondary OAM, like Mesen2’s `(_secondaryOamAddr + 3) >> 2`.)
+   - TODO: If tests start depending on OAMADDR-based misalignment and the 2C02B X=255 phantom-sprite quirk, extend the sprite eval state to model the full `_spriteRamAddr`/`_spriteAddrL` interaction and add an optional 2C02B mode flag to match Mesen2’s `EnablePpuSpriteEvalBug`.
 
 5. **PPUMASK grayscale and color emphasis bits**
    - In Mesen2, `$2001` grayscale and R/G/B emphasis bits are applied when reading palette RAM and when writing the final framebuffer (`UpdateGrayscaleAndIntensifyBits`, `_paletteRamMask`, `_intensifyColorBits`).
