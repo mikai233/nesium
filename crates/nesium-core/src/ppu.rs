@@ -413,7 +413,11 @@ impl Ppu {
         self.open_bus.step();
         let value = match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Status => self.read_status(),
-            PpuRegister::OamData => self.read_oam_data(),
+            PpuRegister::OamData => {
+                let v = self.read_oam_data();
+                // OAMDATA drives the full bus when read.
+                self.open_bus.apply_masked(0x00, v)
+            }
             PpuRegister::Data => {
                 if self.ignore_vram_read != 0 {
                     // Consecutive $2007 read within the ignore window: return open bus
@@ -428,7 +432,6 @@ impl Ppu {
             }
             _ => self.open_bus.sample(),
         };
-        self.open_bus.latch(value);
         value
     }
 
@@ -1158,8 +1161,9 @@ impl Ppu {
         let prev_output = self.nmi_output;
         let status = self.registers.status.bits();
         // Mesen2 / hardware: low 5 bits of $2002 come from open bus.
-        let open_low = self.open_bus.sample() & 0x1F;
-        let ret = (status & 0xE0) | open_low;
+        // Use OpenBus::apply_masked with a mask covering the low 5 bits so only
+        // the status flags (high 3 bits) refresh the decay stamps.
+        let ret = self.open_bus.apply_masked(0x1F, status);
 
         // Reading $2002 clears VBlank and the VRAM write latch.
         self.registers.status.remove(Status::VERTICAL_BLANK);
@@ -1239,9 +1243,12 @@ impl Ppu {
         self.pending_vram_increment = true;
 
         if addr >= ppu_mem::PALETTE_BASE {
-            data
+            // Palette reads bypass the buffer but mix with open bus: low 6 bits
+            // come from palette RAM, high 2 bits are preserved from the bus.
+            self.open_bus.apply_masked(0xC0, data)
         } else {
-            buffered
+            // Nametable/CHR reads return the buffered value and fully drive the bus.
+            self.open_bus.apply_masked(0x00, buffered)
         }
     }
 
