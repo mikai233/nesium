@@ -757,7 +757,10 @@ impl Ppu {
     /// Dots 1..=64 clear secondary OAM; dots 65..=256 scan primary OAM to
     /// select up to 8 sprites for the *next* scanline.
     fn sprite_pipeline_eval_tick(&mut self) {
-        if !self.registers.mask.contains(Mask::SHOW_SPRITES) {
+        // Mesen2 / hardware: sprite evaluation runs whenever rendering is enabled
+        // (background OR sprites). This preserves correct overflow timing even if
+        // sprites are masked off mid-frame.
+        if !self.registers.mask.rendering_enabled() {
             return;
         }
 
@@ -853,6 +856,9 @@ impl Ppu {
                         // Enter overflow scan phase after 8 sprites.
                         self.sprite_eval.phase = SpriteEvalPhase::OverflowScan;
                         self.sprite_eval.m = 0;
+                        self.sprite_eval.copying = false;
+                        self.sprite_eval.overflow_in_range = false;
+                        self.sprite_eval.overflow_bug_counter = 0;
                         // In real HW, overflow is set only if another in-range sprite is found later.
                     }
                 } else {
@@ -890,20 +896,35 @@ impl Ppu {
             }
 
             SpriteEvalPhase::OverflowScan => {
-                // TODO: HW overflow bug is approximated; emulate secondary OAM write suppression pattern for full accuracy.
-                // Buggy overflow scan approximation:
-                // Hardware increments m every dot, and only checks Y when m==0.
-                if self.sprite_eval.m == 0 {
-                    let in_range = next_scanline >= y && next_scanline < y + sprite_height;
+                let oam_byte = self.registers.oam[base + self.sprite_eval.m as usize] as i16;
+
+                if !self.sprite_eval.overflow_in_range {
+                    let in_range =
+                        next_scanline >= oam_byte && next_scanline < oam_byte + sprite_height;
                     if in_range {
-                        self.sprite_eval.overflow_next = true;
-                        self.registers.status.insert(Status::SPRITE_OVERFLOW);
+                        self.sprite_eval.overflow_in_range = true;
                     }
                 }
 
-                // Advance m with the hardware's buggy pattern.
-                self.sprite_eval.m = (self.sprite_eval.m + 1) & 0b11;
-                if self.sprite_eval.m == 0 {
+                if self.sprite_eval.overflow_in_range {
+                    self.sprite_eval.overflow_next = true;
+                    self.registers.status.insert(Status::SPRITE_OVERFLOW);
+
+                    self.sprite_eval.m = (self.sprite_eval.m + 1) & 0b11;
+                    if self.sprite_eval.m == 0 {
+                        self.sprite_eval.n = self.sprite_eval.n.wrapping_add(1);
+                    }
+
+                    if self.sprite_eval.overflow_bug_counter == 0 {
+                        self.sprite_eval.overflow_bug_counter = 3;
+                    } else {
+                        self.sprite_eval.overflow_bug_counter -= 1;
+                        if self.sprite_eval.overflow_bug_counter == 0 {
+                            self.sprite_eval.m = 0;
+                        }
+                    }
+                } else {
+                    self.sprite_eval.m = (self.sprite_eval.m + 1) & 0b11;
                     self.sprite_eval.n = self.sprite_eval.n.wrapping_add(1);
                 }
             }

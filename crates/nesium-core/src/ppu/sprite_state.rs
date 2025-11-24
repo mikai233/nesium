@@ -28,6 +28,10 @@ pub(crate) struct SpriteEvalState {
     pub(crate) count: u8,
     /// Whether we are currently copying this sprite into secondary OAM.
     pub(crate) copying: bool,
+    /// Latched during overflow scan: a byte has matched the scanline range.
+    pub(crate) overflow_in_range: bool,
+    /// Countdown used to emulate the overflow address realignment glitch.
+    pub(crate) overflow_bug_counter: u8,
     /// Latched: sprite 0 will be in range on the *next* scanline.
     pub(crate) sprite0_in_range_next: bool,
     /// Latched: sprite overflow has been observed for the next scanline.
