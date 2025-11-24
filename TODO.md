@@ -8,13 +8,13 @@ Follow-up tasks to finish parity with Mesen2's open-bus behaviour on the PPU sid
    - ~~Provide `step()`, `sample()`, and `latch()` entry points so reads from floating sources get decayed values and writes refresh decay deadlines.~~
 
 2. **Clock the PPU open bus on every relevant access**
-   - ~~CPU-visible register mirror (`cpu_read`/`cpu_write`): step before accesses; latch on writes; latch returned values for reads.~~
-   - Internal VRAM/palette/OAM accesses that leave data on the PPU data bus (e.g., `read_vram_data`, palette reads, OAM reads outside rendering) should latch their results.
-   - For reads that are “open” on hardware (e.g., OAMDATA during rendering, write-only registers), return the decayed sample instead of a fixed constant (unless hardware dictates a specific value).
+   - ~~CPU-visible register mirror (`cpu_read`/`cpu_write`): step before accesses; latch on writes; latch returned values for reads.~~ (nesium now latches on writes and on the registers that actively drive the bus: `$2002`, `$2004`, `$2007`.)
+   - ~~Internal VRAM/palette/OAM accesses that leave data on the PPU data bus (e.g., `read_vram_data`, palette reads, OAM reads outside rendering) should latch their results.~~ (internal VRAM/OAM fetches update the internal OAM bus and palette reads go through `apply_masked`, matching Mesen2’s CPU-visible behaviour.)
+   - ~~For reads that are “open” on hardware (e.g., OAMDATA during rendering, write-only registers), return the decayed sample instead of a fixed constant (unless hardware dictates a specific value).~~ (default cases use the decayed PPU open bus; `$2004` during rendering now exposes the internal OAM bus instead of a fixed constant.)
 
 3. **Hook decay tick into PPU timing**
-   - Increment the PPU bus tick once per CPU-visible PPU access and for internal PPU fetches that would keep the data bus charged.
-   - Keep tick units aligned with CPU bus timing expectations (Mesen2 uses CPU-cycle granularity for the decay window; match that to stay compatible with test ROMs).
+   - ~~Increment the PPU bus tick once per CPU-visible PPU access and for internal PPU fetches that would keep the data bus charged.~~ (nesium now advances the PPU open-bus tick once per completed frame, with decay after ~3 frames, matching Mesen2’s frame-based decay model.)
+   - ~~Keep tick units aligned with CPU bus timing expectations (Mesen2 uses CPU-cycle granularity for the decay window; match that to stay compatible with test ROMs).~~
 
 4. **Reset/initialisation**
    - ~~Clear/latch to 0 on `Ppu::new()`/`reset()`.~~

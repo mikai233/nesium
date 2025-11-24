@@ -9,10 +9,10 @@
 
 /// Number of bus `step()` calls before a driven `1` bit decays to `0`.
 ///
-/// For NTSC, a frame is ~29_780 CPU cycles. Using ~90k steps gives decay on
-/// the order of ~3 frames (Mesen2 uses "3 frames" as a conservative upper
-/// bound for individual bit decay).
-const DECAY_TICKS: u64 = 90_000;
+/// For the PPU, `step()` is called once per frame, so a value of 3 matches
+/// Mesen2's "decay after ~3 frames" behaviour. On the CPU side, decay is
+/// disabled entirely (`decay_enabled = false`).
+const DECAY_TICKS: u64 = 3;
 
 /// Tracks the last value driven on the data bus and per-bit decay.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
