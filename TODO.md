@@ -34,8 +34,8 @@ High-level behaviour differences between `nesium-core`'s NES PPU and Mesen2's `N
 
 1. **$2007 read/write timing and VRAM increment**
    - Mesen2 delays the VRAM address increment by 1 PPU cycle after `$2007` reads/writes (`_needVideoRamIncrement` + `UpdateVideoRamAddr()`), and ignores a second `$2007` read when it happens on consecutive CPU cycles (`_ignoreVramRead`).
-   - Nesium currently increments `v` immediately in `write_vram_data`/`read_vram_data` ~~and has no special handling for back-to-back `$2007` reads~~ (now uses a small ignore window, but still has no 1-dot increment delay).
-   - TODO: Consider adding a small pending increment latch (similar to `_needVideoRamIncrement`) to better match Mesen2 / hardware tests (e.g. `full_palette`).
+   - ~~Nesium currently increments `v` immediately in `write_vram_data`/`read_vram_data` and has no special handling for back-to-back `$2007` reads.~~ (nesium now uses an ignore window for the second `$2007` read and delays VRAM increment by one PPU dot.)
+   - ~~TODO: Consider adding a small pending increment latch (similar to `_needVideoRamIncrement`) to better match Mesen2 / hardware tests (e.g. `full_palette`).~~
 
 2. **PPUSCROLL/PPUADDR scroll glitches ($2000/$2005/$2006)**
    - Mesen2 implements the well-known scroll glitches when writing to `$2000/$2005/$2006` on specific cycles (e.g. 257 and at 8-dot boundaries) via `ProcessTmpAddrScrollGlitch` and the `EnablePpu2006ScrollGlitch` setting, corrupting `v`/`t` in the same way as hardware.
