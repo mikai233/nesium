@@ -229,7 +229,7 @@ impl Ppu {
             nmi_output: false,
             prevent_vblank_flag: false,
             sprite0_hit_pos: None,
-            open_bus: OpenBus::new(),
+            open_bus: OpenBus::new_with_decay(),
             ignore_vram_read: 0,
             pending_vram_increment: false,
             pending_vram_increment_step: 0,

@@ -34,13 +34,13 @@ High-level behaviour differences between `nesium-core`'s NES PPU and Mesen2's `N
 
 1. **$2007 read/write timing and VRAM increment**
    - Mesen2 delays the VRAM address increment by 1 PPU cycle after `$2007` reads/writes (`_needVideoRamIncrement` + `UpdateVideoRamAddr()`), and ignores a second `$2007` read when it happens on consecutive CPU cycles (`_ignoreVramRead`).
-   - Nesium currently increments `v` immediately in `write_vram_data`/`read_vram_data` ~~and has no special handling for back-to-back `$2007` reads~~ (now uses a small ignore window, but still has no 1-dot increment delay).
-   - TODO: Consider adding a small pending increment latch (similar to `_needVideoRamIncrement`) to better match Mesen2 / hardware tests (e.g. `full_palette`).
+   - ~~Nesium currently increments `v` immediately in `write_vram_data`/`read_vram_data` and has no special handling for back-to-back `$2007` reads.~~ (nesium now uses a small ignore window for consecutive `$2007` reads and delays the VRAM increment by one PPU dot after each read/write.)
+   - ~~TODO: Consider adding a small pending increment latch (similar to `_needVideoRamIncrement`) to better match Mesen2 / hardware tests (e.g. `full_palette`).~~
 
 2. **PPUSCROLL/PPUADDR scroll glitches ($2000/$2005/$2006)**
    - Mesen2 implements the well-known scroll glitches when writing to `$2000/$2005/$2006` on specific cycles (e.g. 257 and at 8-dot boundaries) via `ProcessTmpAddrScrollGlitch` and the `EnablePpu2006ScrollGlitch` setting, corrupting `v`/`t` in the same way as hardware.
-   - Nesium currently performs clean copies between `t` and `v` (`copy_horizontal_scroll`/`copy_vertical_scroll`) with no glitch emulation; TODO comments in `ppu.rs` acknowledge this.
-   - TODO: If we aim for full Mesen2 parity, port the scroll glitch behaviour in a minimal form (gated behind a config flag) so `$2000/$2005/$2006` writes during rendering can perturb `VramAddr` like on 2C02.
+   - ~~Nesium currently performs clean copies between `t` and `v` (`copy_horizontal_scroll`/`copy_vertical_scroll`) with no glitch emulation; TODO comments in `ppu.rs` acknowledge this.~~ (nesium now emulates the basic scroll glitch when `$2000/$2005/$2006` writes land on dot 257 of a visible scanline while rendering is enabled.)
+   - TODO: If we aim for full Mesen2 parity, extend the current dot-257 glitch to also cover the more subtle `$2006` AND-style corruption and any additional 8-dot-boundary effects described in `ProcessTmpAddrScrollGlitch`.
 
 3. **OAMDATA ($2004) read/write behaviour**
    - ~~Writes: Mesen2 ignores writes to `$2004` during rendering and instead performs the “high 6 bits only” increment (`_spriteRamAddr = (_spriteRamAddr + 4) & 0xFF`), which models the hardware OAMADDR glitch.~~
@@ -62,5 +62,28 @@ High-level behaviour differences between `nesium-core`'s NES PPU and Mesen2's `N
    - TODO: If multi-region support is desired, introduce a small region enum + timing table for scanline counts, NMI/vblank start/end, and PAL-specific sprite eval behaviour, guided by Mesen2’s `UpdateTimings`.
 
 7. **$2007 palette reads / open bus interaction**
-   - Mesen2 merges palette RAM reads with open-bus high bits and applies grayscale masking; nesium’s `read_vram_data` currently reads directly from `PaletteRam` without mixing in bus bits or mask.
-   - TODO: Consider merging palette reads with the PPU-side open-bus latch (once implemented) and optionally applying a grayscale mask like Mesen2’s `_paletteRamMask`, to better match test ROM expectations.
+   - Mesen2 merges palette RAM reads with open-bus high bits and applies grayscale masking; ~~nesium’s `read_vram_data` currently reads directly from `PaletteRam` without mixing in bus bits or mask.~~ (nesium now merges palette reads with the PPU-side open-bus latch, preserving high bits.)
+   - TODO: Add an optional grayscale mask (like Mesen2’s `_paletteRamMask`) on palette reads when `$2001` grayscale is enabled so that palette open-bus behaviour also matches test ROM expectations.
+
+# TODO: CPU Open Bus (Mesen2-aligned)
+
+Follow-up tasks to finish parity with Mesen2's CPU-side open-bus behaviour.
+
+1. ~~Share a single CPU open-bus latch across all CPU memory reads/writes~~
+   - ~~Use `OpenBus::new()` (no decay) for the CPU data bus and step it once per bus access in `CpuBus::read`/`write`.~~
+
+2. ~~Special-case APU status reads at `$4015`~~
+   - ~~Reading `$4015` should not update the external open-bus latch (only the internal CPU data bus).~~
+   - ~~Mix bit 5 from the current open bus into the value returned by `$4015` to approximate Mesen2's `GetInternalOpenBus() & 0x20` behaviour.~~
+
+3. **Expose CPU open bus to mappers/controllers (future)**
+   - Add a small helper on `NES` to return the current CPU open-bus value with an optional mask (equivalent to Mesen2's `GetOpenBus(mask)`).
+   - Once available, audit mapper/controller code paths that currently assume constant defaults and replace them with masked CPU open-bus reads where appropriate.
+
+4. **Model internal vs external CPU data bus (future refinement)**
+   - Mesen2 keeps separate internal/external latches in `OpenBusHandler`; nesium currently approximates `GetInternalOpenBus()` by reusing the external latch.
+   - If tests start depending on the distinction, add a secondary “internal bus” byte and `set_internal_only()`/`internal_sample()` helpers, then use those in the APU/CPU where Mesen2 does.
+
+5. **Per-register CPU open-bus masks (future refinement)**
+   - Some CPU-visible registers only drive a subset of bits and leave the remaining bits floating on the bus (handled via `ApplyOpenBus(mask, value)` in Mesen2).
+   - TODO: Audit CPU register reads that should partially drive the bus and switch them from raw `latch()`/`sample()` usage to `apply_masked(mask, value)` once concrete cases are identified.

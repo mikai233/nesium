@@ -192,7 +192,18 @@ impl Bus for CpuBus<'_> {
                 driven = false;
                 self.open_bus.sample()
             }
-            cpu_mem::APU_STATUS => self.apu.cpu_read(addr),
+            // $4015 (APU status) updates only the CPU's *internal* data bus on
+            // Mesen2; the external bus latch is left unchanged. We mirror that
+            // by reading the current internal bus bit-5, mixing it into the
+            // returned status, and then updating only the internal latch.
+            cpu_mem::APU_STATUS => {
+                driven = false;
+                let internal = self.open_bus.internal_sample();
+                let status = self.apu.cpu_read(addr);
+                let value = status | (internal & 0x20);
+                self.open_bus.set_internal_only(value);
+                value
+            }
             cpu_mem::CONTROLLER_PORT_1 => self.controllers[0].read(),
             cpu_mem::CONTROLLER_PORT_2 => self.controllers[1].read(),
             cpu_mem::TEST_MODE_BASE..=cpu_mem::TEST_MODE_END => {

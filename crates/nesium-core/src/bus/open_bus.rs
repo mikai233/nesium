@@ -17,23 +17,42 @@ const DECAY_TICKS: u64 = 90_000;
 /// Tracks the last value driven on the data bus and per-bit decay.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct OpenBus {
+    /// External CPU/PPU data bus latch (what floating reads see).
     value: u8,
+    /// Internal CPU data bus latch (used for APU/$4015 quirks, etc.).
+    internal_value: u8,
     decay_deadline: [u64; 8],
     tick: u64,
+    /// When false, `step`/decay are effectively disabled (CPU-side open bus).
+    decay_enabled: bool,
 }
 
 impl OpenBus {
     pub(crate) fn new() -> Self {
         Self {
             value: 0,
+            internal_value: 0,
             decay_deadline: [0; 8],
             tick: 0,
+            decay_enabled: false,
+        }
+    }
+
+    /// Creates an open-bus latch with per-bit decay enabled (PPU-style).
+    pub(crate) fn new_with_decay() -> Self {
+        Self {
+            value: 0,
+            internal_value: 0,
+            decay_deadline: [0; 8],
+            tick: 0,
+            decay_enabled: true,
         }
     }
 
     /// Resets the open-bus state to its power-on value.
     pub(crate) fn reset(&mut self) {
         self.value = 0;
+        self.internal_value = 0;
         self.decay_deadline = [0; 8];
         self.tick = 0;
     }
@@ -42,8 +61,10 @@ impl OpenBus {
     /// bit decays. Call this once per CPU memory access to approximate real
     /// elapsed time on the bus.
     pub(crate) fn step(&mut self) {
-        self.tick = self.tick.wrapping_add(1);
-        self.apply_decay();
+        if self.decay_enabled {
+            self.tick = self.tick.wrapping_add(1);
+            self.apply_decay();
+        }
     }
 
     /// Returns the current bus value after applying decay without refreshing
@@ -57,6 +78,8 @@ impl OpenBus {
     /// timers (equivalent to Mesen2's `SetOpenBus(0xFF, value)`).
     pub(crate) fn latch(&mut self, value: u8) {
         self.set_masked(0xFF, value);
+        // Normal bus events update both external and internal latches.
+        self.internal_value = value;
     }
 
     /// Mesen2-style `SetOpenBus(mask, value)`:
@@ -66,9 +89,11 @@ impl OpenBus {
     pub(crate) fn set_masked(&mut self, mut mask: u8, mut value: u8) {
         if mask == 0xFF {
             self.value = value;
-            let decay_at = self.tick.wrapping_add(DECAY_TICKS);
-            for deadline in &mut self.decay_deadline {
-                *deadline = decay_at;
+            if self.decay_enabled {
+                let decay_at = self.tick.wrapping_add(DECAY_TICKS);
+                for deadline in &mut self.decay_deadline {
+                    *deadline = decay_at;
+                }
             }
             return;
         }
@@ -82,8 +107,13 @@ impl OpenBus {
                 } else {
                     open_bus &= 0xFF7F;
                 }
-                *deadline = self.tick.wrapping_add(DECAY_TICKS);
-            } else if *deadline != 0 && self.tick.wrapping_sub(*deadline) > DECAY_TICKS {
+                if self.decay_enabled {
+                    *deadline = self.tick.wrapping_add(DECAY_TICKS);
+                }
+            } else if self.decay_enabled
+                && *deadline != 0
+                && self.tick.wrapping_sub(*deadline) > DECAY_TICKS
+            {
                 // When this bit hasn't been refreshed in a while, decay it to 0.
                 open_bus &= 0xFF7F;
             }
@@ -102,7 +132,20 @@ impl OpenBus {
         value | (self.value & mask)
     }
 
+    /// Updates only the internal CPU data-bus latch (used for `$4015` reads).
+    pub(crate) fn set_internal_only(&mut self, value: u8) {
+        self.internal_value = value;
+    }
+
+    /// Returns the current internal CPU data-bus value.
+    pub(crate) fn internal_sample(&self) -> u8 {
+        self.internal_value
+    }
+
     fn apply_decay(&mut self) {
+        if !self.decay_enabled {
+            return;
+        }
         for (bit, deadline) in self.decay_deadline.iter_mut().enumerate() {
             if *deadline != 0 && self.tick >= *deadline {
                 self.value &= !(1 << bit);
