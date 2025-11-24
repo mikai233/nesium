@@ -789,7 +789,10 @@ impl Ppu {
     /// Fetches sprite metadata/pattern bytes for the next scanline. Each sprite
     /// gets an 8-dot slot.
     fn sprite_pipeline_fetch_tick(&mut self, pattern: &mut PatternBus<'_>) {
-        if !self.registers.mask.contains(Mask::SHOW_SPRITES) {
+        // Mesen2 / hardware: sprite fetches run whenever rendering is enabled
+        // (background OR sprites). Pixel visibility is still controlled later
+        // by SHOW_SPRITES in `render_pixel`.
+        if !self.registers.mask.rendering_enabled() {
             return;
         }
 
@@ -896,6 +899,10 @@ impl Ppu {
             }
 
             SpriteEvalPhase::OverflowScan => {
+                // TODO(sprite-overflow): This overflow scan is still an approximation.
+                // Mesen2/2C02 bug compares Y only on specific sub-cycles and relies on
+                // suppressed secondary-OAM writes plus a glitchy m/n increment pattern.
+                // Our current logic can mis-trigger/miss-trigger overflow in edge cases.
                 let oam_byte = self.registers.oam[base + self.sprite_eval.m as usize] as i16;
 
                 if !self.sprite_eval.overflow_in_range {
