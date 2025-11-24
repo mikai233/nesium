@@ -123,6 +123,8 @@ pub struct Ppu {
     /// Mirrors Mesen2's `_ignoreVramRead` behaviour (two consecutive CPU
     /// cycles -> second read returns open bus and does not increment VRAM).
     ignore_vram_read: u8,
+    /// Internal OAM data bus copy buffer used during rendering for `$2004` reads.
+    oam_copybuffer: u8,
     /// Pending VRAM increment step after a `$2007` read/write (applied one dot later).
     pending_vram_increment: bool,
     pending_vram_increment_step: u16,
@@ -231,6 +233,7 @@ impl Ppu {
             sprite0_hit_pos: None,
             open_bus: OpenBus::new_with_decay(),
             ignore_vram_read: 0,
+            oam_copybuffer: 0,
             pending_vram_increment: false,
             pending_vram_increment_step: 0,
             secondary_oam: SecondaryOamRam::new(),
@@ -278,6 +281,7 @@ impl Ppu {
             .remove(registers::Status::VERTICAL_BLANK);
         self.open_bus.reset();
         self.ignore_vram_read = 0;
+        self.oam_copybuffer = 0;
         self.pending_vram_increment = false;
         self.pending_vram_increment_step = 0;
         self.secondary_oam.fill(0);
@@ -340,7 +344,6 @@ impl Ppu {
     /// Mirrors open-bus semantics by latching the last value written; the
     /// hardware leaves that value on the data bus.
     pub fn cpu_write(&mut self, addr: u16, value: u8, pattern: &mut PatternBus<'_>) {
-        self.open_bus.step();
         self.open_bus.latch(value);
         match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Control => {
@@ -410,7 +413,6 @@ impl Ppu {
     /// Unhandled reads return the last bus value to approximate open-bus
     /// behavior.
     pub fn cpu_read(&mut self, addr: u16, pattern: &mut PatternBus<'_>) -> u8 {
-        self.open_bus.step();
         let value = match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Status => self.read_status(),
             PpuRegister::OamData => {
@@ -666,6 +668,11 @@ impl Ppu {
             if self.scanline > 260 {
                 self.scanline = -1;
                 self.frame = self.frame.wrapping_add(1);
+                // PPU open-bus decay is modelled in frame units (Mesen2
+                // decays bits after ~3 frames). Advance the PPU-side open-bus
+                // tick once per completed frame so decay deadlines are
+                // evaluated against frame count.
+                self.open_bus.step();
                 self.odd_frame = !self.odd_frame;
             }
         }
@@ -868,6 +875,9 @@ impl Ppu {
                     let byte_index = ((self.cycle - 1) / 2) as usize;
                     if byte_index < 32 {
                         self.secondary_oam[byte_index] = 0xFF;
+                        // When clearing secondary OAM, the bus effectively
+                        // sees $FF writes.
+                        self.oam_copybuffer = 0xFF;
                     }
                 }
             }
@@ -927,7 +937,10 @@ impl Ppu {
         };
 
         let base = (self.sprite_eval.n as usize) * 4;
-        let y = self.registers.oam[base] as i16;
+        let y_byte = self.registers.oam[base];
+        let y = y_byte as i16;
+        // Internal OAM bus sees the last byte read from primary OAM.
+        self.oam_copybuffer = y_byte;
 
         match self.sprite_eval.phase {
             SpriteEvalPhase::ScanY => {
@@ -975,6 +988,8 @@ impl Ppu {
                         let byte = self.registers.oam[base + self.sprite_eval.m as usize];
                         self.secondary_oam[self.sprite_eval.sec_idx as usize] = byte;
                         self.sprite_eval.sec_idx += 1;
+                        // Keep internal OAM bus in sync with the last byte read.
+                        self.oam_copybuffer = byte;
                     }
 
                     self.sprite_eval.m += 1;
@@ -1000,7 +1015,9 @@ impl Ppu {
                 // Mesen2/2C02 bug compares Y only on specific sub-cycles and relies on
                 // suppressed secondary-OAM writes plus a glitchy m/n increment pattern.
                 // Our current logic can mis-trigger/miss-trigger overflow in edge cases.
-                let oam_byte = self.registers.oam[base + self.sprite_eval.m as usize] as i16;
+                let oam_raw = self.registers.oam[base + self.sprite_eval.m as usize];
+                let oam_byte = oam_raw as i16;
+                self.oam_copybuffer = oam_raw;
 
                 if !self.sprite_eval.overflow_in_range {
                     let in_range =
@@ -1071,6 +1088,9 @@ impl Ppu {
         let tile = self.secondary_oam[base + 1];
         let attr = self.secondary_oam[base + 2];
         let x = self.secondary_oam[base + 3];
+        // Sprite fetches also drive the internal OAM data bus; approximate by
+        // latching the last metadata byte.
+        self.oam_copybuffer = x;
 
         // Latch raw sprite bytes early in the slot.
         if sub == 0 {
@@ -1204,19 +1224,34 @@ impl Ppu {
         }
     }
 
-    fn read_oam_data(&self) -> u8 {
+    fn read_oam_data(&mut self) -> u8 {
         let rendering = self.registers.mask.rendering_enabled();
-        let during_render =
-            rendering && ((0..=239).contains(&self.scanline) || self.scanline == -1);
+        let during_render = rendering && (0..=239).contains(&self.scanline);
 
         if during_render {
-            // During rendering, reads return the contents of the internal (stale) OAM bus.
-            // Approximated here as 0xFF to avoid exposing primary OAM.
-            0xFF
+            // While the screen is being drawn, $2004 exposes the internal OAM
+            // evaluation/rendering bus:
+            // - During sprite fetches (scanline 0..=239, cycles 257..=320),
+            //   the value on the bus comes from secondary OAM.
+            // - Outside that window, reads return the last OAM bus value.
+            if (257..=320).contains(&self.cycle) {
+                let rel = self.cycle - 257;
+                let step = (rel % 8).min(3);
+                let addr = ((rel / 8) * 4 + step) as usize;
+                if addr < ppu_mem::SECONDARY_OAM_RAM_SIZE {
+                    let v = self.secondary_oam[addr];
+                    self.oam_copybuffer = v;
+                }
+            }
+            self.oam_copybuffer
         } else {
             let idx = self.registers.oam_addr as usize;
             if idx < ppu_mem::OAM_RAM_SIZE {
-                self.registers.oam[idx]
+                let v = self.registers.oam[idx];
+                // Outside rendering, $2004 reads primary OAM and also update
+                // the internal OAM bus copybuffer.
+                self.oam_copybuffer = v;
+                v
             } else {
                 0
             }
