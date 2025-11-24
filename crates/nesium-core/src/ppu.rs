@@ -108,6 +108,9 @@ pub struct Ppu {
     nmi_pending: bool,
     /// Current level of the NMI output line (true = asserted).
     nmi_output: bool,
+    /// When true, suppresses the upcoming VBlank flag/NMI edge for this frame.
+    /// Models the $2002 read-vs-VBlank set race described on NESdev (and used by Mesen2).
+    prevent_vblank_flag: bool,
     /// First sprite-0 hit debug info in the current frame (debug).
     sprite0_hit_pos: Option<Sprite0HitDebug>,
     /// PPU-side open-bus latch (with decay).
@@ -203,6 +206,7 @@ impl Ppu {
             sprite_pipeline: SpritePipeline::new(),
             nmi_pending: false,
             nmi_output: false,
+            prevent_vblank_flag: false,
             sprite0_hit_pos: None,
             open_bus: OpenBus::new(),
             secondary_oam: SecondaryOamRam::new(),
@@ -252,6 +256,7 @@ impl Ppu {
         self.sprite_fetch = SpriteFetchState::default();
         self.sprite_line_next.clear();
         self.clear_framebuffer();
+        self.prevent_vblank_flag = false;
     }
 
     /// Current NMI output level: true when VBLANK is set and NMI is enabled.
@@ -337,12 +342,20 @@ impl Ppu {
 
                 self.update_nmi_output(prev_output);
             }
-            PpuRegister::Mask => self.registers.mask = Mask::from_bits_retain(value),
+            PpuRegister::Mask => {
+                // TODO: Hardware/Mesen2 model subtle mid-frame rendering enable/disable glitches (bus address reset, OAM corruption).
+                // We currently just update the mask bitfield.
+                self.registers.mask = Mask::from_bits_retain(value)
+            }
             PpuRegister::Status => {} // read-only
             PpuRegister::OamAddr => self.registers.oam_addr = value,
             PpuRegister::OamData => self.write_oam_data(value),
             PpuRegister::Scroll => self.registers.vram.write_scroll(value),
-            PpuRegister::Addr => self.registers.vram.write_addr(value),
+            PpuRegister::Addr => {
+                // TODO: Mesen2 delays applying the final VRAM address by ~3 PPU cycles after $2006 writes.
+                // This matters for razor-thin mid-scanline scroll tricks; current implementation applies immediately.
+                self.registers.vram.write_addr(value)
+            }
             PpuRegister::Data => self.write_vram_data(value, pattern),
         }
     }
@@ -388,6 +401,7 @@ impl Ppu {
             self.sprite0_hit_pos = None;
             self.nmi_output = false;
             self.nmi_pending = false;
+            self.prevent_vblank_flag = false;
             self.cycle = 1;
             // Skip the rest of match processing for this dot.
             self.update_nmi_output(prev_nmi_output);
@@ -532,9 +546,13 @@ impl Ppu {
             // ----------------------
             (241, 1) => {
                 // Enter vblank at scanline 241, dot 1.
-                // NMI is edge-triggered from the NMI line (VBLANK && NMI_ENABLE)
-                // in `update_nmi_output`; no separate latch here.
-                self.registers.status.insert(Status::VERTICAL_BLANK);
+                // NESdev/2C02 race: if $2002 was read at scanline 241, dot 0,
+                // the VBlank flag never sets and no NMI edge is generated for this frame.
+                if !self.prevent_vblank_flag {
+                    self.registers.status.insert(Status::VERTICAL_BLANK);
+                }
+                // Consume the race latch each frame.
+                self.prevent_vblank_flag = false;
             }
             (241..=260, _) => {}
 
@@ -693,8 +711,11 @@ impl Ppu {
     /// Mirrors the PPU’s interleaved nametable/attribute/pattern fetch pattern
     /// on prerender and visible scanlines.
     fn fetch_background_data(&mut self, pattern: &mut PatternBus<'_>) {
-        // Only run while background rendering is enabled.
-        if !self.registers.mask.contains(Mask::SHOW_BACKGROUND) {
+        // Mesen2 / hardware: background fetches and scroll increments continue
+        // as long as *either* background or sprites are enabled.
+        // This keeps A12/IRQ timing correct even when BG is masked off.
+        let rendering_enabled = self.registers.mask.rendering_enabled();
+        if !rendering_enabled {
             return;
         }
         // Run during visible scanlines and prerender, when the background fetch pipeline is active.
@@ -888,6 +909,16 @@ impl Ppu {
         // sub = 0..7 within a sprite slot.
         let sub = self.sprite_fetch.sub;
 
+        // Mesen2 / hardware: during sprite fetch window, the PPU performs
+        // "garbage" nametable and attribute reads on sub-cycles 0 and 2.
+        // These reads don't affect pixels but do affect mapper IRQ timing (A12 toggles).
+        if sub == 0 {
+            let _ = self.read_vram(pattern, self.nametable_addr());
+        }
+        if sub == 2 {
+            let _ = self.read_vram(pattern, self.attribute_addr());
+        }
+
         // Read sprite bytes from secondary OAM.
         let base = i * 4;
         let y = self.secondary_oam[base];
@@ -966,13 +997,40 @@ impl Ppu {
         }
     }
 
+    /// Current nametable fetch address derived from `v` (used for normal and garbage fetches).
+    fn nametable_addr(&self) -> u16 {
+        let v = self.registers.vram.v;
+        let base_nt = ppu_mem::NAMETABLE_BASE + (v.nametable() as u16 * ppu_mem::NAMETABLE_SIZE);
+        base_nt + (v.coarse_y() as u16 * 32) + (v.coarse_x() as u16)
+    }
+
+    /// Current attribute fetch address derived from `v` (used for normal and garbage fetches).
+    fn attribute_addr(&self) -> u16 {
+        let v = self.registers.vram.v;
+        let base_nt = ppu_mem::NAMETABLE_BASE + (v.nametable() as u16 * ppu_mem::NAMETABLE_SIZE);
+        base_nt + 0x03C0 + (v.coarse_y() as u16 / 4) * 8 + (v.coarse_x() as u16 / 4)
+    }
+
     fn read_status(&mut self) -> u8 {
         let prev_output = self.nmi_output;
         let status = self.registers.status.bits();
+        // Mesen2 / hardware: low 5 bits of $2002 come from open bus.
+        let open_low = self.open_bus.sample() & 0x1F;
+        let ret = (status & 0xE0) | open_low;
+
+        // Reading $2002 clears VBlank and the VRAM write latch.
         self.registers.status.remove(Status::VERTICAL_BLANK);
         self.registers.vram.reset_latch();
+
+        // NESdev race approximation (matches Mesen2):
+        // If $2002 is read one dot before VBlank would set (241:0),
+        // suppress VBlank/NMI for that frame.
+        if self.scanline == 241 && self.cycle == 0 {
+            self.prevent_vblank_flag = true;
+        }
+
         self.update_nmi_output(prev_output);
-        status
+        ret
     }
 
     fn write_oam_data(&mut self, value: u8) {

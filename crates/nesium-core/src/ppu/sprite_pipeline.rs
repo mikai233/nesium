@@ -117,11 +117,13 @@ impl SpritePipeline {
         let mut chosen: Option<SpritePixel> = None;
 
         for slot in self.slots.iter_mut().take(self.active_count as usize) {
-            // Hardware order: decrement X counter first; only when it reaches 0
-            // does the shifter output become visible.
+            // Hardware order: decrement X counter first; when it transitions to
+            // zero, the shifter starts outputting on the *same* dot.
             if slot.x_counter > 0 {
                 slot.x_counter = slot.x_counter.saturating_sub(1);
-                continue;
+                if slot.x_counter > 0 {
+                    continue;
+                }
             }
 
             // Extract the current pixel from the MSB of each bitplane.
