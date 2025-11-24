@@ -124,12 +124,13 @@ impl NES {
             &mut self.cpu_bus_cycle,
         );
 
-        // Always run one PPU dot first so NMI/VBlank events become visible
-        // before the corresponding CPU sample on the same 3-dot window.
+        // NTSC timing: 1 CPU tick per 3 PPU dots. Run one PPU dot every call,
+        // and run CPU/APU after the third dot in each 3-dot group so timing
+        // matches the common PPU-first, CPU-later cadence.
         bus.clock_ppu();
-
-        // Run CPU/APU on every 3rd dot after the PPU step (phase 2 of 3).
-        if self.dot_counter % 3 == 2 {
+        // Run CPU/APU once every 3 PPU dots with a phase that aligns CPU work
+        // just after the second PPU dot in each trio, matching common PPU-first cadence.
+        if (self.dot_counter + 2) % 3 == 0 {
             self.cpu.clock(&mut bus);
             bus.apu_mut().clock();
         }
