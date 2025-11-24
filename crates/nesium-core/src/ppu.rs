@@ -792,7 +792,12 @@ impl Ppu {
         } else {
             ppu_mem::PALETTE_BASE + (final_palette as u16) * 4 + (final_color as u16)
         };
-        let color_index = self.palette_ram.read(palette_addr);
+        let mut color_index = self.palette_ram.read(palette_addr);
+        // Apply grayscale mask when $2001 bit 0 is set: only keep the grey
+        // column ($00, $10, $20, $30) as in Mesen2 / hardware.
+        if self.registers.mask.contains(Mask::GRAYSCALE) {
+            color_index &= 0x30;
+        }
         self.framebuffer[idx] = color_index;
     }
 
@@ -1280,7 +1285,12 @@ impl Ppu {
         if addr >= ppu_mem::PALETTE_BASE {
             // Palette reads bypass the buffer but mix with open bus: low 6 bits
             // come from palette RAM, high 2 bits are preserved from the bus.
-            self.open_bus.apply_masked(0xC0, data)
+            let mut value = data;
+            if self.registers.mask.contains(Mask::GRAYSCALE) {
+                // Grayscale: keep only the grey column ($00, $10, $20, $30).
+                value &= 0x30;
+            }
+            self.open_bus.apply_masked(0xC0, value)
         } else {
             // Nametable/CHR reads return the buffered value and fully drive the bus.
             self.open_bus.apply_masked(0x00, buffered)

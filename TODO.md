@@ -28,6 +28,10 @@ Follow-up tasks to finish parity with Mesen2's open-bus behaviour on the PPU sid
    - Update `README.md` accuracy notes to mention PPU-side open bus and decay once implemented.
    - Brief code comment near the new latch describing the Mesen2 alignment and decay window choice.
 
+7. **PPU model-specific status open-bus patterns**
+   - Mesen2 adjusts the low bits of `$2002` depending on the PPU model (2C05A-E) via `ProcessStatusRegOpenBus`; nesium currently always assumes the standard 2C02 mask/behaviour.
+   - TODO: If Vs. System / 2C05 support is added, introduce a PPU model enum and feed it into `read_status` so `$2002` open-bus patterns can match the specific chip variant.
+
 # TODO: PPU vs Mesen2 parity
 
 High-level behaviour differences between `nesium-core`'s NES PPU and Mesen2's `NesPpu` to revisit.
@@ -44,8 +48,8 @@ High-level behaviour differences between `nesium-core`'s NES PPU and Mesen2's `N
 
 3. **OAMDATA ($2004) read/write behaviour**
    - ~~Writes: Mesen2 ignores writes to `$2004` during rendering and instead performs the “high 6 bits only” increment (`_spriteRamAddr = (_spriteRamAddr + 4) & 0xFF`), which models the hardware OAMADDR glitch.~~
-   - Reads: During rendering, Mesen2 returns the value currently on the internal OAM bus (`_oamCopybuffer` or secondary OAM contents) rather than primary OAM; nesium approximates this as a fixed `0xFF` placeholder.
-   - TODO: ~~Align `$2004` writes with Mesen2 (no OAM modification + glitchy increment during rendering) and,~~ if needed, refine `$2004` reads to expose the internal OAM bus state instead of `0xFF`.
+   - ~~Reads: During rendering, Mesen2 returns the value currently on the internal OAM bus (`_oamCopybuffer` or secondary OAM contents) rather than primary OAM; nesium approximates this as a fixed `0xFF` placeholder.~~ (nesium now tracks an internal OAM bus copybuffer and maps `$2004` reads in the 257..=320 sprite-fetch window to the corresponding secondary OAM address.)
+   - TODO: Keep iterating on corner cases (sprite overflow / PAL refresh behaviour) if specific test ROMs demonstrate remaining differences in `$2004` bus contents.
 
 4. **Sprite evaluation and overflow bug**
    - Mesen2 has a very detailed implementation of the sprite overflow bug during the overflow scan phase, including the exact `n`/`m` increment pattern and the “realign” behaviour after overflow (`_overflowBugCounter`, `_oamCopyDone`, etc.).
@@ -54,8 +58,8 @@ High-level behaviour differences between `nesium-core`'s NES PPU and Mesen2's `N
 
 5. **PPUMASK grayscale and color emphasis bits**
    - In Mesen2, `$2001` grayscale and R/G/B emphasis bits are applied when reading palette RAM and when writing the final framebuffer (`UpdateGrayscaleAndIntensifyBits`, `_paletteRamMask`, `_intensifyColorBits`).
-   - Nesium defines the corresponding `Mask` bits but does not yet apply them to palette reads or to the framebuffer; ~~palette writes also don’t clamp values to 0x3F like Mesen2.~~ (palette writes are now clamped to 0x3F).
-   - TODO: Decide whether to apply grayscale/ emphasis in the core PPU (palette path) or in the front-end video pipeline, and add masking to bring behaviour in line with Mesen2 where it matters for test ROMs.
+   - ~~Nesium defines the corresponding `Mask` bits but does not yet apply them to palette reads or to the framebuffer;~~ ~~palette writes also don’t clamp values to 0x3F like Mesen2.~~ (nesium now clamps palette writes to 0x3F and applies a grayscale mask to palette reads and framebuffer writes when `$2001` bit 0 is set.)
+   - TODO: Decide whether to apply color emphasis bits (R/G/B) in the core PPU (palette path) or in the front-end video pipeline, and add masking/intensify logic to bring behaviour in line with Mesen2 where it matters for test ROMs.
 
 6. **Region-specific timing (NTSC vs PAL/Dendy)**
    - Mesen2 supports NTSC/PAL/Dendy via `UpdateTimings` and changes `_nmiScanline`, `_vblankEnd`, master clock divider and PAL-specific OAM refresh behaviour; nesium currently targets NTSC only (`SCANLINES_PER_FRAME = 262`, fixed odd-frame skip logic).
