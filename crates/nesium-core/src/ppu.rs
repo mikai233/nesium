@@ -548,6 +548,10 @@ impl Ppu {
             (-1, 257) => {
                 if rendering_enabled {
                     self.copy_horizontal_scroll();
+                    // NESdev/Mesen2: during sprite tile loading (257..=320) the PPU
+                    // forces OAMADDR to 0. This also means OAMADDR is 0 after a
+                    // normal rendered frame.
+                    self.registers.oam_addr = 0;
                 }
             }
 
@@ -596,6 +600,8 @@ impl Ppu {
             (0..=239, 257) => {
                 if rendering_enabled {
                     self.copy_horizontal_scroll();
+                    // NESdev/Mesen2: force OAMADDR to 0 for the sprite fetch window.
+                    self.registers.oam_addr = 0;
                 }
             }
 
@@ -941,6 +947,9 @@ impl Ppu {
         }
 
         if (257..=320).contains(&self.cycle) {
+            // Keep OAMADDR pinned to 0 throughout the fetch window (defensive;
+            // dot 257 already sets it in `clock`).
+            self.registers.oam_addr = 0;
             self.fetch_sprites_for_dot(pattern);
         }
     }
@@ -1353,6 +1362,7 @@ impl Ppu {
         if addr >= ppu_mem::PALETTE_BASE {
             // Palette reads bypass the buffer but mix with open bus: low 6 bits
             // come from palette RAM, high 2 bits are preserved from the bus.
+            // TODO read palette ram
             let mut value = data;
             if self.registers.mask.contains(Mask::GRAYSCALE) {
                 // Grayscale: keep only the grey column ($00, $10, $20, $30).
