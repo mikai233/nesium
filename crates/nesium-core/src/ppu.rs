@@ -1350,27 +1350,44 @@ impl Ppu {
     }
 
     fn read_vram_data(&mut self, pattern: &mut PatternBus<'_>) -> u8 {
-        let addr = self.registers.vram.v.raw() & ppu_mem::VRAM_MIRROR_MASK;
-        let data = self.read_vram(pattern, addr);
-        let buffered = self.registers.vram_buffer;
-        self.registers.vram_buffer = data;
+        let vaddr = self.registers.vram.v.raw();
+        let addr = vaddr & ppu_mem::VRAM_MIRROR_MASK;
+
         // Delay VRAM increment by one PPU dot to match Mesen2 / hardware
         // behaviour (used by some test ROMs to observe transient colours).
         self.pending_vram_increment_step = self.registers.control.vram_increment();
         self.pending_vram_increment = true;
 
         if addr >= ppu_mem::PALETTE_BASE {
-            // Palette reads bypass the buffer but mix with open bus: low 6 bits
-            // come from palette RAM, high 2 bits are preserved from the bus.
-            // TODO read palette ram
-            let mut value = data;
+            // Palette reads bypass the VRAM read buffer, but the buffer is still
+            // updated with the underlying VRAM value at (addr & 0x2FFF).
+            // This mirrors the 2C02 / Mesen2 behaviour where palette RAM is on a
+            // separate bus but $2007 still primes the internal buffer from the
+            // corresponding nametable/pattern address.
+            let palette_value = self.palette_ram.read(addr);
+
+            // Compute the "under" VRAM address (3Fxx -> 2Fxx) and use the normal
+            // VRAM path to refill the internal buffer.
+            let vram_addr_for_buffer = addr & 0x2FFF;
+            let vram_data = self.read_vram(pattern, vram_addr_for_buffer);
+            self.registers.vram_buffer = vram_data;
+
+            // Palette reads drive the low 6 bits of the bus; high 2 bits stay from
+            // open bus. Apply grayscale mask when requested.
+            let mut value = palette_value;
             if self.registers.mask.contains(Mask::GRAYSCALE) {
                 // Grayscale: keep only the grey column ($00, $10, $20, $30).
                 value &= 0x30;
             }
             self.open_bus.apply_masked(0xC0, value)
         } else {
-            // Nametable/CHR reads return the buffered value and fully drive the bus.
+            // Nametable/CHR reads go through the buffered path: $2007 returns the
+            // previous buffered value, and then refills the buffer from VRAM.
+            let data = self.read_vram(pattern, addr);
+            let buffered = self.registers.vram_buffer;
+            self.registers.vram_buffer = data;
+
+            // Nametable/CHR reads fully drive the bus.
             self.open_bus.apply_masked(0x00, buffered)
         }
     }
@@ -1392,9 +1409,16 @@ impl Ppu {
     fn read_vram(&mut self, pattern: &mut PatternBus<'_>, addr: u16) -> u8 {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
         let addr = self.mirror_vram_addr(addr, pattern);
-        if addr >= ppu_mem::PALETTE_BASE {
-            self.palette_ram.read(addr)
-        } else if addr < 0x2000 {
+
+        // read_vram is intended for nametable/pattern table accesses only; palette
+        // RAM is handled separately in read_vram_data / write_vram_data.
+        debug_assert!(
+            addr < ppu_mem::PALETTE_BASE,
+            "read_vram should not be used for palette addresses (got {:04X})",
+            addr
+        );
+
+        if addr < 0x2000 {
             pattern
                 .read(addr)
                 .unwrap_or_else(|| self.vram[addr as usize])
