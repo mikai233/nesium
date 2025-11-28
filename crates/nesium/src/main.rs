@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use nesium_core::{
-    CpuSnapshot, NES,
+    CpuSnapshot, Nes,
     controller::Button,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat, palette::PaletteKind},
 };
@@ -62,7 +62,7 @@ fn main() -> Result<()> {
     }
 
     let format = ColorFormat::Argb8888;
-    let mut nes = NES::new(format);
+    let mut nes = Nes::new(format);
     nes.ppu
         .framebuffer
         .set_palette(PaletteKind::RawLinear.palette());
@@ -273,7 +273,7 @@ fn parse_trace_line(line: &str) -> Option<TraceRow> {
 }
 
 fn run_trace(rom_path: &str, log_path: &str) -> Result<()> {
-    let mut nes = NES::default();
+    let mut nes = Nes::default();
     nes.load_cartridge_from_file(rom_path)?;
 
     let log = fs::read_to_string(log_path)?;
@@ -318,7 +318,7 @@ fn run_trace(rom_path: &str, log_path: &str) -> Result<()> {
     Ok(())
 }
 
-fn run_frame_report(mut nes: NES, frames: usize) -> Result<()> {
+fn run_frame_report(mut nes: Nes, frames: usize) -> Result<()> {
     for _ in 0..frames {
         nes.run_frame();
     }

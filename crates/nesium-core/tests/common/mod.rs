@@ -3,7 +3,7 @@
 use std::{path::Path, time::Instant};
 
 use anyhow::{Context, Result, bail};
-use nesium_core::NES;
+use nesium_core::Nes;
 use nesium_core::memory::cpu as cpu_mem;
 
 pub const ROM_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/vendor/nes-test-roms");
@@ -41,14 +41,14 @@ pub fn run_rom_status(rom_rel_path: &str, frames: usize) -> Result<Option<String
 /// to allow extra per-ROM assertions once the ROM reports success.
 pub fn run_rom_custom<F>(rom_rel_path: &str, frames: usize, mut verify: F) -> Result<Option<String>>
 where
-    F: FnMut(&mut NES) -> Result<()>,
+    F: FnMut(&mut Nes) -> Result<()>,
 {
     let path = Path::new(ROM_ROOT).join(rom_rel_path);
     if !path.exists() {
         bail!("ROM not found: {}", path.display());
     }
 
-    let mut nes = NES::default();
+    let mut nes = Nes::default();
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
@@ -199,14 +199,14 @@ where
 /// Runs a ROM for `frames` without depending on $6000 status handshakes, then calls `verify`.
 pub fn run_rom_frames<F>(rom_rel_path: &str, frames: usize, mut verify: F) -> Result<()>
 where
-    F: FnMut(&mut NES) -> Result<()>,
+    F: FnMut(&mut Nes) -> Result<()>,
 {
     let path = Path::new(ROM_ROOT).join(rom_rel_path);
     if !path.exists() {
         bail!("ROM not found: {}", path.display());
     }
 
-    let mut nes = NES::default();
+    let mut nes = Nes::default();
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
@@ -233,7 +233,7 @@ pub fn run_rom_zeropage_result(
         bail!("ROM not found: {}", path.display());
     }
 
-    let mut nes = NES::default();
+    let mut nes = Nes::default();
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
@@ -291,7 +291,7 @@ pub fn run_rom_zeropage_result(
 }
 
 /// Simple heuristic to ensure the framebuffer isn't blank: require at least `min_unique` distinct color indices.
-pub fn require_color_diversity(nes: &NES, min_unique: usize) -> Result<()> {
+pub fn require_color_diversity(nes: &Nes, min_unique: usize) -> Result<()> {
     let mut seen = [false; 256];
     let fb = nes.render_buffer();
     for &b in fb {
@@ -308,7 +308,7 @@ pub fn require_color_diversity(nes: &NES, min_unique: usize) -> Result<()> {
     Ok(())
 }
 
-fn poll_status(nes: &mut NES) -> Progress {
+fn poll_status(nes: &mut Nes) -> Progress {
     let status = nes.peek_cpu_byte(STATUS_ADDR);
     let message = read_status_message(nes);
     let has_magic = has_status_magic(nes);
@@ -338,13 +338,13 @@ fn poll_status(nes: &mut NES) -> Progress {
     }
 }
 
-fn has_status_magic(nes: &mut NES) -> bool {
+fn has_status_magic(nes: &mut Nes) -> bool {
     let mut buf = [0u8; 3];
     nes.peek_cpu_slice(STATUS_ADDR + 1, &mut buf);
     buf == STATUS_MAGIC
 }
 
-fn read_status_message(nes: &mut NES) -> String {
+fn read_status_message(nes: &mut Nes) -> String {
     let mut raw = [0u8; STATUS_MAX_BYTES];
     nes.peek_cpu_slice(STATUS_MESSAGE_ADDR, &mut raw);
     let end = raw.iter().position(|b| *b == 0).unwrap_or(raw.len());
@@ -414,7 +414,7 @@ fn latest_serial_line(log: &str) -> Option<String> {
         .map(|l| l.trim().to_string())
 }
 
-fn parse_ram_progress(nes: &mut NES) -> Option<Progress> {
+fn parse_ram_progress(nes: &mut Nes) -> Option<Progress> {
     let mut ram = vec![0u8; cpu_mem::INTERNAL_RAM_SIZE];
     nes.peek_cpu_slice(0, &mut ram);
 

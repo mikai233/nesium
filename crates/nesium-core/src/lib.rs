@@ -28,7 +28,7 @@ pub mod ram;
 pub use cpu::CpuSnapshot;
 
 #[derive(Debug)]
-pub struct NES {
+pub struct Nes {
     pub cpu: Cpu,
     pub ppu: Ppu,
     apu: Apu,
@@ -47,7 +47,7 @@ pub struct NES {
     cpu_bus_cycle: u64,
 }
 
-impl NES {
+impl Nes {
     /// Constructs a powered-on NES instance with cleared RAM and default palette.
     pub fn new(format: ColorFormat) -> Self {
         let buffer = FrameBuffer::new_color(PaletteKind::NesdevNtsc.palette(), format);
@@ -80,6 +80,12 @@ impl NES {
     pub fn insert_cartridge(&mut self, cartridge: Cartridge) {
         self.ppu.attach_cartridge(&cartridge);
         self.cartridge = Some(cartridge);
+        self.reset();
+    }
+
+    /// Ejects the currently inserted cartridge and resets the system.
+    pub fn eject_cartridge(&mut self) {
+        self.cartridge = None;
         self.reset();
     }
 
@@ -263,7 +269,7 @@ impl NES {
     }
 }
 
-impl Default for NES {
+impl Default for Nes {
     fn default() -> Self {
         Self::new(ColorFormat::Rgb555)
     }

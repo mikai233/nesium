@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use anyhow::Result;
-use nesium_core::NES;
+use nesium_core::Nes;
 
 const ROM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -12,7 +12,7 @@ const ROM: &str = concat!(
 #[test]
 #[ignore = "debug helper"]
 fn log_nmi_edges() -> Result<()> {
-    let mut nes = NES::default();
+    let mut nes = Nes::default();
     nes.load_cartridge_from_file(ROM)?;
 
     let mut last_output = nes.ppu_nmi_debug().nmi_output;
