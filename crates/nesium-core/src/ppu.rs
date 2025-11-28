@@ -31,6 +31,7 @@
 pub mod palette;
 
 mod background_pipeline;
+pub mod buffer;
 mod registers;
 mod sprite;
 mod sprite_pipeline;
@@ -49,6 +50,7 @@ use crate::{
     cartridge::{Cartridge, header::Mirroring},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
+        buffer::FrameBuffer,
         palette::PaletteRam,
         registers::{Control, Mask, Registers, Status, VramAddr},
         sprite::SpriteView,
@@ -138,7 +140,7 @@ pub struct Ppu {
     /// Buffered secondary-OAM sprite bytes/patterns for the next scanline.
     sprite_line_next: SpriteLineBuffers,
     /// Background + sprite rendering target for the current frame.
-    framebuffer: Box<[u8; SCREEN_WIDTH * SCREEN_HEIGHT]>,
+    pub framebuffer: FrameBuffer,
 }
 
 /// Source register for scroll-glitch emulation.
@@ -209,13 +211,13 @@ impl fmt::Debug for Ppu {
 
 impl Default for Ppu {
     fn default() -> Self {
-        Self::new()
+        Self::new(FrameBuffer::default())
     }
 }
 
 impl Ppu {
     /// Creates a new PPU instance with cleared VRAM and default register values.
-    pub fn new() -> Self {
+    pub fn new(framebuffer: FrameBuffer) -> Self {
         Self {
             registers: Registers::new(),
             pending_vram_addr: VramAddr::default(),
@@ -241,7 +243,7 @@ impl Ppu {
             sprite_eval: SpriteEvalState::default(),
             sprite_fetch: SpriteFetchState::default(),
             sprite_line_next: SpriteLineBuffers::new(),
-            framebuffer: Box::new([0; SCREEN_WIDTH * SCREEN_HEIGHT]),
+            framebuffer,
         }
     }
 
@@ -302,8 +304,8 @@ impl Ppu {
     ///
     /// Each entry is a palette index (0..=63) which can be resolved using
     /// the palette RAM and a host-side color palette.
-    pub fn framebuffer(&self) -> &[u8] {
-        &*self.framebuffer
+    pub fn render_buffer(&self) -> &[u8] {
+        self.framebuffer.render()
     }
 
     /// Current frame counter (increments when scanline wraps from 260 to -1).
@@ -329,7 +331,7 @@ impl Ppu {
 
     /// Clears the framebuffer to palette index 0.
     fn clear_framebuffer(&mut self) {
-        self.framebuffer.fill(0);
+        self.framebuffer.clear();
     }
 
     /// Copies CHR ROM/RAM contents into the pattern table window (`$0000-$1FFF`).
@@ -725,7 +727,6 @@ impl Ppu {
         if x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT {
             return;
         }
-        let idx = y * SCREEN_WIDTH + x;
 
         let mask = self.registers.mask;
         let fine_x = self.registers.vram.x;
@@ -817,7 +818,10 @@ impl Ppu {
         if self.registers.mask.contains(Mask::GRAYSCALE) {
             color_index &= 0x30;
         }
-        self.framebuffer[idx] = color_index;
+        self.framebuffer.write_pixel(x, y, color_index);
+        if x * y >= SCREEN_WIDTH * SCREEN_HEIGHT {
+            self.framebuffer.swap();
+        }
     }
 
     /// Emulates the $2000/$2005/$2006 scroll glitch when writes land on
@@ -1537,7 +1541,7 @@ mod tests {
 
     #[test]
     fn control_register_helpers() {
-        let mut ppu = Ppu::new();
+        let mut ppu = Ppu::default();
         let mut pattern = PatternBus::default();
         ppu.cpu_write(PpuRegister::Control.addr(), 0b1000_0100, &mut pattern);
         assert!(ppu.registers.control.nmi_enabled());
@@ -1550,7 +1554,7 @@ mod tests {
 
     #[test]
     fn buffered_ppu_data_read() {
-        let mut ppu = Ppu::new();
+        let mut ppu = Ppu::default();
         let mut pattern = PatternBus::default();
         // Point to $2000 and write a value.
         ppu.cpu_write(PpuRegister::Addr.addr(), 0x20, &mut pattern);
@@ -1569,7 +1573,7 @@ mod tests {
 
     #[test]
     fn palette_reads_bypass_buffer() {
-        let mut ppu = Ppu::new();
+        let mut ppu = Ppu::default();
         let mut pattern = PatternBus::default();
         ppu.cpu_write(PpuRegister::Addr.addr(), 0x3F, &mut pattern);
         ppu.cpu_write(PpuRegister::Addr.addr(), 0x00, &mut pattern);
@@ -1584,7 +1588,7 @@ mod tests {
 
     #[test]
     fn status_read_resets_scroll_latch() {
-        let mut ppu = Ppu::new();
+        let mut ppu = Ppu::default();
         let mut pattern = PatternBus::default();
         ppu.cpu_write(PpuRegister::Scroll.addr(), 0x12, &mut pattern); // horizontal
         ppu.cpu_write(PpuRegister::Scroll.addr(), 0x34, &mut pattern); // vertical
@@ -1602,7 +1606,7 @@ mod tests {
 
     #[test]
     fn oam_data_auto_increments() {
-        let mut ppu = Ppu::new();
+        let mut ppu = Ppu::default();
         let mut pattern = PatternBus::default();
         ppu.cpu_write(PpuRegister::OamAddr.addr(), 0x02, &mut pattern);
         ppu.cpu_write(PpuRegister::OamData.addr(), 0xAA, &mut pattern);
@@ -1613,7 +1617,7 @@ mod tests {
 
     #[test]
     fn vblank_flag_is_managed_by_clock() {
-        let mut ppu = Ppu::new();
+        let mut ppu = Ppu::default();
         let mut pattern = PatternBus::default();
         // Run until scanline 241, cycle 1 (accounting for prerender line).
         let target_cycles = (242i32 * CYCLES_PER_SCANLINE as i32 + 2) as usize;

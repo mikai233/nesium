@@ -226,7 +226,7 @@ impl Default for PaletteRam {
 }
 
 /// Simple RGB triplet described with 8-bit channels.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -248,10 +248,10 @@ macro_rules! rgb {
     };
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Palette {
     Static(&'static [Color; 64]),
-    Dynamic([Color; 64]),
+    Dynamic(Box<[Color; 64]>),
 }
 
 impl Default for Palette {
@@ -286,7 +286,7 @@ impl Palette {
             256 => 4,
             actual => return Err(Error::InvalidPaletteSize { actual }),
         };
-        let mut colors = [Color::BLACK; 64];
+        let mut colors = Box::new([Color::BLACK; 64]);
         let mut idx = 0;
         while idx < 64 {
             let base = idx * stride;

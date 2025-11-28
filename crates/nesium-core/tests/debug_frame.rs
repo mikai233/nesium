@@ -24,7 +24,7 @@ pub fn dump_instruction_trace<P: AsRef<Path>, Q: AsRef<Path>>(
     end_frame: u64,
     max_instructions: usize,
 ) {
-    let mut nes = NES::new();
+    let mut nes = NES::default();
     nes.load_cartridge_from_file(&rom_path).expect("load rom");
 
     let file = File::create(out_path).expect("create trace file");

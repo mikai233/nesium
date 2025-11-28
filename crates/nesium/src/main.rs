@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 use nesium_core::{
     CpuSnapshot, NES,
     controller::Button,
-    ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, palette::PaletteKind},
+    ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat, palette::PaletteKind},
 };
 use sdl2::{event::Event, keyboard::Keycode, pixels::PixelFormatEnum};
 
@@ -61,8 +61,11 @@ fn main() -> Result<()> {
         return run_trace(&rom_path, &log_path);
     }
 
-    let mut nes = NES::new();
-    nes.set_palette_kind(PaletteKind::NesdevNtsc);
+    let format = ColorFormat::Argb8888;
+    let mut nes = NES::new(format);
+    nes.ppu
+        .framebuffer
+        .set_palette(PaletteKind::RawLinear.palette());
     nes.load_cartridge_from_file(&rom_path)?;
     if let Some(pc) = start_pc {
         let snapshot = CpuSnapshot {
@@ -103,8 +106,12 @@ fn main() -> Result<()> {
     let texture_creator = canvas.texture_creator();
     let mut texture = texture_creator
         .create_texture_streaming(
-            // ABGR8888 stores bytes in RGBA order on little-endian hosts, matching our writes below.
-            PixelFormatEnum::ABGR8888,
+            // NOTE: SDL2 pixel formats are defined in terms of a 32-bit ARGB value,
+            // but on little-endian machines the in-memory byte order is reversed.
+            // Using `PixelFormatEnum::BGRA8888` here ensures the raw bytes in the
+            // framebuffer match the expected [B, G, R, A] layout and avoids
+            // ARGB/endianness confusion.
+            PixelFormatEnum::BGRA8888,
             SCREEN_WIDTH as u32,
             SCREEN_HEIGHT as u32,
         )
@@ -150,24 +157,9 @@ fn main() -> Result<()> {
         }
 
         nes.run_frame();
-
-        let palette = *nes.palette();
-        let frame = nes.framebuffer();
         texture
-            .with_lock(None, |buffer, pitch| {
-                let pitch = pitch as usize;
-                for y in 0..SCREEN_HEIGHT {
-                    let src_row = &frame[y * SCREEN_WIDTH..(y + 1) * SCREEN_WIDTH];
-                    let dst_row = &mut buffer[y * pitch..y * pitch + SCREEN_WIDTH * 4];
-                    for (x, &index) in src_row.iter().enumerate() {
-                        let color = palette.color(index);
-                        let base = x * 4;
-                        dst_row[base] = color.r;
-                        dst_row[base + 1] = color.g;
-                        dst_row[base + 2] = color.b;
-                        dst_row[base + 3] = 0xFF;
-                    }
-                }
+            .with_lock(None, |buffer, _| {
+                buffer.copy_from_slice(nes.render_buffer());
             })
             .map_err(|e| anyhow!("uploading frame to texture: {e}"))?;
 
@@ -281,8 +273,7 @@ fn parse_trace_line(line: &str) -> Option<TraceRow> {
 }
 
 fn run_trace(rom_path: &str, log_path: &str) -> Result<()> {
-    let mut nes = NES::new();
-    nes.set_palette_kind(PaletteKind::NesdevNtsc);
+    let mut nes = NES::default();
     nes.load_cartridge_from_file(rom_path)?;
 
     let log = fs::read_to_string(log_path)?;
@@ -332,7 +323,7 @@ fn run_frame_report(mut nes: NES, frames: usize) -> Result<()> {
         nes.run_frame();
     }
 
-    let fb = nes.framebuffer();
+    let fb = nes.render_buffer();
     let mut counts = [0usize; 64];
     for &idx in fb {
         counts[idx as usize] += 1;

@@ -8,7 +8,8 @@ use crate::{
     cpu::Cpu,
     error::Error,
     ppu::{
-        self as ppu_mod, Ppu,
+        Ppu,
+        buffer::{ColorFormat, FrameBuffer},
         palette::{Palette, PaletteKind},
     },
     ram::cpu as cpu_ram,
@@ -28,13 +29,12 @@ pub use cpu::CpuSnapshot;
 
 #[derive(Debug)]
 pub struct NES {
-    cpu: Cpu,
-    ppu: Ppu,
+    pub cpu: Cpu,
+    pub ppu: Ppu,
     apu: Apu,
     ram: cpu_ram::Ram,
     cartridge: Option<Cartridge>,
     controllers: [Controller; 2],
-    palette: Palette,
     last_frame: u64,
     /// Master PPU dot counter used to drive CPU/PPU/APU in lockstep (3 dots per CPU cycle).
     dot_counter: u64,
@@ -49,15 +49,15 @@ pub struct NES {
 
 impl NES {
     /// Constructs a powered-on NES instance with cleared RAM and default palette.
-    pub fn new() -> Self {
+    pub fn new(format: ColorFormat) -> Self {
+        let buffer = FrameBuffer::new_color(PaletteKind::NesdevNtsc.palette(), format);
         let mut nes = Self {
             cpu: Cpu::new(),
-            ppu: Ppu::new(),
+            ppu: Ppu::new(buffer),
             apu: Apu::new(),
             ram: cpu_ram::Ram::new(),
             cartridge: None,
             controllers: [Controller::new(), Controller::new()],
-            palette: Palette::default(),
             last_frame: 0,
             dot_counter: 0,
             serial_log: controller::SerialLogger::default(),
@@ -154,28 +154,18 @@ impl NES {
     }
 
     /// Palette indices for the latest frame (PPU native format).
-    pub fn framebuffer(&self) -> &[u8] {
-        self.ppu.framebuffer()
-    }
-
-    /// Converts the current framebuffer into RGBA8 pixels using the active palette.
-    pub fn frame_rgba(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(ppu_mod::SCREEN_WIDTH * ppu_mod::SCREEN_HEIGHT * 4);
-        for index in self.ppu.framebuffer() {
-            let color = self.palette.color(*index);
-            out.extend_from_slice(&[color.r, color.g, color.b, 0xFF]);
-        }
-        out
+    pub fn render_buffer(&self) -> &[u8] {
+        self.ppu.render_buffer()
     }
 
     /// Selects one of the built-in palettes.
-    pub fn set_palette_kind(&mut self, kind: PaletteKind) {
-        self.palette = kind.palette();
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.ppu.framebuffer.set_palette(palette);
     }
 
     /// Active palette reference.
     pub fn palette(&self) -> &Palette {
-        &self.palette
+        self.ppu.framebuffer.get_palette()
     }
 
     /// Updates the pressed state of a controller button (0 = port 1).
@@ -270,6 +260,12 @@ impl NES {
     /// Drains any bytes emitted on controller port 1 via the blargg serial protocol.
     pub fn take_serial_output(&mut self) -> Vec<u8> {
         self.serial_log.drain()
+    }
+}
+
+impl Default for NES {
+    fn default() -> Self {
+        Self::new(ColorFormat::Rgb555)
     }
 }
 

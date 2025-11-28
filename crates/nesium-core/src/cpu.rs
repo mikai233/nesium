@@ -98,7 +98,7 @@ impl OamDma {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Cpu {
+pub struct Cpu {
     // Registers
     a: u8,     //Accumulator
     x: u8,     //X Index Register

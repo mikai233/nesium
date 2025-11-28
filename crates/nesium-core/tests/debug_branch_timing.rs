@@ -12,7 +12,7 @@ const ROM: &str = concat!(
 #[test]
 #[ignore = "debug helper"]
 fn log_nmi_edges() -> Result<()> {
-    let mut nes = NES::new();
+    let mut nes = NES::default();
     nes.load_cartridge_from_file(ROM)?;
 
     let mut last_output = nes.ppu_nmi_debug().nmi_output;

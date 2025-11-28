@@ -324,7 +324,7 @@ mod tests {
 
     #[test]
     fn mirrors_internal_ram() {
-        let mut ppu = Ppu::new();
+        let mut ppu = Ppu::default();
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
         let mut controllers = [Controller::new(), Controller::new()];
@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn reads_from_prg_rom_with_mirroring() {
-        let mut ppu = Ppu::new();
+        let mut ppu = Ppu::default();
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn reads_and_writes_prg_ram() {
-        let mut ppu = Ppu::new();
+        let mut ppu = Ppu::default();
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
