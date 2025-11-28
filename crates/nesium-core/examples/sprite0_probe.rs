@@ -1,4 +1,4 @@
-use nesium_core::{NES, ppu::Sprite0HitPos};
+use nesium_core::NES;
 use std::{env, path::Path};
 
 fn main() -> anyhow::Result<()> {
@@ -10,7 +10,7 @@ fn main() -> anyhow::Result<()> {
         .map(|s| s.parse().unwrap_or(120))
         .unwrap_or(120);
 
-    let mut nes = NES::new();
+    let mut nes = NES::default();
     nes.load_cartridge_from_file(Path::new(&rom))?;
 
     let mut last_hit: Option<nesium_core::ppu::Sprite0HitDebug> = None;

@@ -48,7 +48,7 @@ where
         bail!("ROM not found: {}", path.display());
     }
 
-    let mut nes = NES::new();
+    let mut nes = NES::default();
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
@@ -206,7 +206,7 @@ where
         bail!("ROM not found: {}", path.display());
     }
 
-    let mut nes = NES::new();
+    let mut nes = NES::default();
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
@@ -233,7 +233,7 @@ pub fn run_rom_zeropage_result(
         bail!("ROM not found: {}", path.display());
     }
 
-    let mut nes = NES::new();
+    let mut nes = NES::default();
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
@@ -293,7 +293,7 @@ pub fn run_rom_zeropage_result(
 /// Simple heuristic to ensure the framebuffer isn't blank: require at least `min_unique` distinct color indices.
 pub fn require_color_diversity(nes: &NES, min_unique: usize) -> Result<()> {
     let mut seen = [false; 256];
-    let fb = nes.framebuffer();
+    let fb = nes.render_buffer();
     for &b in fb {
         seen[b as usize] = true;
     }
