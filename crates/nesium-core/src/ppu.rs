@@ -51,6 +51,7 @@ use crate::{
     ppu::{
         palette::PaletteRam,
         registers::{Control, Mask, Registers, Status, VramAddr},
+        sprite::SpriteView,
     },
     ram::ppu::{SecondaryOamRam, Vram},
 };
@@ -348,31 +349,8 @@ impl Ppu {
         match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Control => {
                 let prev_output = self.nmi_output;
-                let old_ctrl = self.registers.control.bits();
-                let old_nmi_en = self.registers.control.nmi_enabled();
-
                 self.registers.write_control(value);
                 self.maybe_apply_scroll_glitch(ScrollGlitchSource::Control2000);
-
-                let new_ctrl = self.registers.control.bits();
-                let new_nmi_en = self.registers.control.nmi_enabled();
-
-                #[cfg(debug_assertions)]
-                {
-                    if old_ctrl != new_ctrl {
-                        eprintln!(
-                            "[PPU] PPUCTRL write {:02X}->{:02X} (NMI_EN {}->{}) at frame {}, scanline {}, cycle {}",
-                            old_ctrl,
-                            new_ctrl,
-                            old_nmi_en,
-                            new_nmi_en,
-                            self.frame,
-                            self.scanline,
-                            self.cycle,
-                        );
-                    }
-                }
-
                 self.update_nmi_output(prev_output);
             }
             PpuRegister::Mask => {
@@ -492,13 +470,19 @@ impl Ppu {
             let bytes_copied = self.sprite_eval.sec_idx;
             let sprite_count = (bytes_copied.saturating_add(3) >> 2).min(8);
 
+            // Take slices once so we can both log and pass them to the pipeline.
+            let attrs = self.sprite_line_next.attr_slice();
+            let xs = self.sprite_line_next.x_slice();
+            let pats_lo = self.sprite_line_next.pattern_low_slice();
+            let pats_hi = self.sprite_line_next.pattern_high_slice();
+
             self.sprite_pipeline.load_scanline(
                 sprite_count,
                 self.sprite_eval.sprite0_in_range_next,
-                self.sprite_line_next.attr_slice(),
-                self.sprite_line_next.x_slice(),
-                self.sprite_line_next.pattern_low_slice(),
-                self.sprite_line_next.pattern_high_slice(),
+                attrs,
+                xs,
+                pats_lo,
+                pats_hi,
             );
         }
 
@@ -516,20 +500,19 @@ impl Ppu {
             // Dot 0 has no special side effects (prerender clears happen at dot 1).
             (_, 0) => {}
 
-            (-1, 1) => {
-                // Clear vblank/sprite flags at dot 1 of prerender.
-                self.registers.status.remove(Status::VERTICAL_BLANK);
-                self.registers
-                    .status
-                    .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
-                // Drop per-frame sprite0 debug info when vblank ends.
-                self.sprite0_hit_pos = None;
-                // Debug latch is per-VBlank; drop it when VBlank ends.
-                self.nmi_pending = false;
-            }
-
             // Background pipeline ticks during prerender dots 1..=256 when rendering is enabled.
             (-1, 1..=256) => {
+                if self.cycle == 1 {
+                    // Clear vblank/sprite flags at dot 1 of prerender.
+                    self.registers.status.remove(Status::VERTICAL_BLANK);
+                    self.registers
+                        .status
+                        .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+                    // Drop per-frame sprite0 debug info when vblank ends.
+                    self.sprite0_hit_pos = None;
+                    // Debug latch is per-VBlank; drop it when VBlank ends.
+                    self.nmi_pending = false;
+                }
                 if rendering_enabled {
                     // Shift background shifters each dot.
                     let _ = self.bg_pipeline.sample_and_shift(self.registers.vram.x);
@@ -615,6 +598,9 @@ impl Ppu {
             // Dots 321..=336: prefetch first two background tiles for next scanline.
             (0..=239, 321..=336) => {
                 if rendering_enabled {
+                    // Visible scanline prefetch window: keep BG shifters advancing
+                    // here as well so that the prefetched tiles for the *next*
+                    // scanline are aligned with dots 0 and 8 when rendering resumes.
                     let _ = self.bg_pipeline.sample_and_shift(self.registers.vram.x);
                     self.fetch_background_data(pattern);
                 }
@@ -814,11 +800,6 @@ impl Ppu {
                     },
                     oam: oam0,
                 });
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[PPU][sprite0] hit at s={}, c={} oam0=[y:{:02X} tile:{:02X} attr:{:02X} x:{:02X}]",
-                    self.scanline, self.cycle, oam0[0], oam0[1], oam0[2], oam0[3]
-                );
             }
         }
 
@@ -876,24 +857,21 @@ impl Ppu {
 
     /// Performs background tile/attribute fetches and reloads shifters every 8 dots.
     ///
-    /// Mirrors the PPU’s interleaved nametable/attribute/pattern fetch pattern
-    /// on prerender and visible scanlines.
+    /// This helper assumes it is only called:
+    /// - on the prerender scanline (-1) or visible scanlines (0..=239)
+    /// - during the background fetch windows (dots 1..=256 or 321..=336)
+    /// Callers are responsible for enforcing those timing constraints.
     fn fetch_background_data(&mut self, pattern: &mut PatternBus<'_>) {
-        // Mesen2 / hardware: background fetches and scroll increments continue
-        // as long as *either* background or sprites are enabled.
-        // This keeps A12/IRQ timing correct even when BG is masked off.
-        let rendering_enabled = self.registers.mask.rendering_enabled();
-        if !rendering_enabled {
-            return;
-        }
-        // Run during visible scanlines and prerender, when the background fetch pipeline is active.
-        if !((0..=239).contains(&self.scanline) || self.scanline == -1) {
-            return;
-        }
+        debug_assert!(
+            ((0..=239).contains(&self.scanline) || self.scanline == -1)
+                && ((1..=256).contains(&self.cycle) || (321..=336).contains(&self.cycle)),
+            "fetch_background_data should only be called during bg fetch window (scanline={}, cycle={})",
+            self.scanline,
+            self.cycle,
+        );
 
         // Fetch and reload shifters every 8 dots (tile boundary) during fetch windows.
-        let in_fetch_window = (1..=256).contains(&self.cycle) || (321..=336).contains(&self.cycle);
-        if in_fetch_window && (self.cycle - 1) % 8 == 0 {
+        if self.cycle % 8 == 0 {
             self.load_background_tile(pattern);
             self.increment_scroll_x();
         }
@@ -977,7 +955,7 @@ impl Ppu {
             return;
         }
 
-        let next_scanline = self.scanline.wrapping_add(1) as i16;
+        let next_scanline = self.scanline.wrapping_add(1);
         let sprite_height: i16 = if self.registers.control.contains(Control::SPRITE_SIZE_16) {
             16
         } else {
@@ -997,7 +975,7 @@ impl Ppu {
         match self.sprite_eval.phase {
             SpriteEvalPhase::ScanY => {
                 // Read byte 0 (Y) and test range.
-                let in_range = next_scanline >= y && next_scanline < y + sprite_height;
+                let in_range = next_scanline > y && next_scanline <= y + sprite_height;
 
                 if in_range {
                     if self.sprite_eval.count < 8 {
@@ -1079,7 +1057,7 @@ impl Ppu {
 
                 if !self.sprite_eval.overflow_in_range && !self.sprite_eval.oam_copy_done {
                     let in_range =
-                        next_scanline >= oam_byte && next_scanline < oam_byte + sprite_height;
+                        next_scanline > oam_byte && next_scanline <= oam_byte + sprite_height;
                     if in_range {
                         self.sprite_eval.overflow_in_range = true;
                     }
@@ -1165,11 +1143,11 @@ impl Ppu {
         }
 
         // Read sprite bytes from secondary OAM.
-        let base = i * 4;
-        let y = self.secondary_oam[base];
-        let tile = self.secondary_oam[base + 1];
-        let attr = self.secondary_oam[base + 2];
-        let x = self.secondary_oam[base + 3];
+        let view = SpriteView::at_index(&mut self.secondary_oam, i).expect("invalid sprite index");
+        let y = view.y();
+        let tile = view.tile();
+        let attr = view.attributes().bits();
+        let x = view.x();
         // Sprite fetches also drive the internal OAM data bus; approximate by
         // latching the last metadata byte.
         self.oam_copybuffer = x;
@@ -1186,9 +1164,21 @@ impl Ppu {
         } else {
             8
         }; // PPUCTRL bit 5
-        let mut row = next_scanline - (y as i16);
-        if row < 0 {
-            row = 0;
+        // On hardware, the sprite Y coordinate is one less than the topmost
+        // visible scanline (Y+1). Keep fetch logic consistent with the
+        // evaluation range check by subtracting 1 here as well.
+        let mut row = next_scanline - 1 - (y as i16);
+        let active_sprites = self.sprite_eval.count.min(8);
+        if (i as u8) < active_sprites {
+            debug_assert!(
+                row >= 0 && row < sprite_height,
+                "PPU sprite row out of range: scanline={} next_scanline={} sprite_y={} sprite_height={} row={}",
+                self.scanline,
+                next_scanline,
+                y,
+                sprite_height,
+                row,
+            );
         }
 
         // Vertical flip affects row selection.
@@ -1502,17 +1492,18 @@ impl Ppu {
 
         // Fine Y rolls over, advance coarse Y.
         self.registers.vram.v.set_fine_y(0);
-        let mut coarse_y = self.registers.vram.v.coarse_y();
-        if coarse_y == 29 {
-            coarse_y = 0;
-            let nt = self.registers.vram.v.nametable() ^ 0b10;
-            self.registers.vram.v.set_nametable(nt);
-        } else if coarse_y == 31 {
-            // Skip attribute memory gap lines.
-            coarse_y = 0;
-        } else {
-            coarse_y = coarse_y.wrapping_add(1);
-        }
+        let coarse_y = match self.registers.vram.v.coarse_y() {
+            29 => {
+                let nt = self.registers.vram.v.nametable() ^ 0b10;
+                self.registers.vram.v.set_nametable(nt);
+                0
+            }
+            31 => {
+                // Skip attribute memory gap lines.
+                0
+            }
+            coarse_y => coarse_y.wrapping_add(1),
+        };
         self.registers.vram.v.set_coarse_y(coarse_y);
     }
 
