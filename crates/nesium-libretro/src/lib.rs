@@ -4,67 +4,82 @@
 //! gradient and emits a simple sine wave so that the `libretro-bridge`
 //! integration can be validated inside RetroArch.
 
-use std::f32::consts::TAU;
-
 use libretro_bridge::{
     Frame, GameGeometry, GameInfo, LibretroCore, LoadGameError, RuntimeHandles, SystemAvInfo,
     SystemInfo, SystemTiming, export_libretro_core,
 };
+use nesium_core::{
+    Nes,
+    cartridge::load_cartridge,
+    controller::Button,
+    ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
+};
 
-const WIDTH: u32 = 320;
-const HEIGHT: u32 = 240;
+use libretro_bridge::raw::{
+    RETRO_DEVICE_ID_JOYPAD_A, RETRO_DEVICE_ID_JOYPAD_B, RETRO_DEVICE_ID_JOYPAD_DOWN,
+    RETRO_DEVICE_ID_JOYPAD_LEFT, RETRO_DEVICE_ID_JOYPAD_RIGHT, RETRO_DEVICE_ID_JOYPAD_SELECT,
+    RETRO_DEVICE_ID_JOYPAD_START, RETRO_DEVICE_ID_JOYPAD_UP, RETRO_DEVICE_JOYPAD,
+};
+
+const WIDTH: u32 = SCREEN_WIDTH as u32;
+const HEIGHT: u32 = SCREEN_HEIGHT as u32;
 const SAMPLE_RATE: f64 = 44_100.0;
 const AUDIO_FRAMES: usize = (SAMPLE_RATE as usize) / 60;
+const COLOR_FORMAT: ColorFormat = ColorFormat::Rgb555;
 
 struct DemoCore {
-    frame: u64,
-    pixels: Vec<u16>,
-    tone_phase: f32,
+    nes: Nes,
 }
 
 impl DemoCore {
     fn new() -> Self {
         Self {
-            frame: 0,
-            pixels: vec![0; (WIDTH * HEIGHT) as usize],
-            tone_phase: 0.0,
+            nes: Nes::new(COLOR_FORMAT),
         }
     }
 
-    fn render_pattern(&mut self) {
-        for y in 0..HEIGHT {
-            for x in 0..WIDTH {
-                let idx = (y * WIDTH + x) as usize;
-                let phase = self.frame as u32;
-                let r = (((x + phase) & 0x1F) as u16) << 10;
-                let g = (((y + (phase >> 1)) & 0x1F) as u16) << 5;
-                let b = (((x ^ y) + phase) & 0x1F) as u16;
-                self.pixels[idx] = r | g | b;
+    /// Polls libretro input and updates the NES controller state.
+    fn update_input(&mut self, runtime: &mut RuntimeHandles) {
+        if let Some(input) = runtime.input() {
+            // Libretro convention: poll once per frame before querying state.
+            input.poll();
+
+            // Handle up to two players: port 0 (player 1) and port 1 (player 2).
+            for port in 0..=1 {
+                let is_pressed = |id| input.state(port, RETRO_DEVICE_JOYPAD, 0, id) != 0;
+                let pad = port as usize;
+
+                self.nes
+                    .set_button(pad, Button::A, is_pressed(RETRO_DEVICE_ID_JOYPAD_A));
+                self.nes
+                    .set_button(pad, Button::B, is_pressed(RETRO_DEVICE_ID_JOYPAD_B));
+                self.nes.set_button(
+                    pad,
+                    Button::Select,
+                    is_pressed(RETRO_DEVICE_ID_JOYPAD_SELECT),
+                );
+                self.nes
+                    .set_button(pad, Button::Start, is_pressed(RETRO_DEVICE_ID_JOYPAD_START));
+                self.nes
+                    .set_button(pad, Button::Up, is_pressed(RETRO_DEVICE_ID_JOYPAD_UP));
+                self.nes
+                    .set_button(pad, Button::Down, is_pressed(RETRO_DEVICE_ID_JOYPAD_DOWN));
+                self.nes
+                    .set_button(pad, Button::Left, is_pressed(RETRO_DEVICE_ID_JOYPAD_LEFT));
+                self.nes
+                    .set_button(pad, Button::Right, is_pressed(RETRO_DEVICE_ID_JOYPAD_RIGHT));
             }
         }
-        self.frame = self.frame.wrapping_add(1);
     }
 
-    fn pixel_bytes(&self) -> &[u8] {
-        unsafe {
-            std::slice::from_raw_parts(
-                self.pixels.as_ptr() as *const u8,
-                self.pixels.len() * std::mem::size_of::<u16>(),
-            )
-        }
-    }
-
+    /// Generates a single frame of silent stereo audio.
+    ///
+    /// This is a temporary placeholder so that the frontend can use audio
+    /// timing to throttle the core to ~60 FPS without affecting gameplay.
     fn generate_audio(&mut self) -> [[i16; 2]; AUDIO_FRAMES] {
-        let mut frames = [[0i16; 2]; AUDIO_FRAMES];
-        let step = (220.0f32 / SAMPLE_RATE as f32) * TAU;
-        for sample in &mut frames {
-            let value = (self.tone_phase).sin();
-            let amplitude = (value * 5_000.0) as i16;
-            sample[0] = amplitude;
-            sample[1] = amplitude;
-            self.tone_phase = (self.tone_phase + step) % TAU;
-        }
-        frames
+        // Each element is a stereo sample [left, right]. We fill the entire
+        // buffer with zeros to produce silence.
+        [[0i16; 2]; AUDIO_FRAMES]
     }
 }
 
@@ -77,8 +92,7 @@ impl LibretroCore for DemoCore {
     }
 
     fn system_info() -> SystemInfo {
-        SystemInfo::new("Nesium Demo Core", env!("CARGO_PKG_VERSION"))
-            .with_extensions("bin|nes|rom")
+        SystemInfo::new("Nesium Core", env!("CARGO_PKG_VERSION")).with_extensions("bin|nes|rom")
     }
 
     fn system_av_info(&mut self) -> SystemAvInfo {
@@ -98,10 +112,18 @@ impl LibretroCore for DemoCore {
     }
 
     fn run(&mut self, runtime: &mut RuntimeHandles) {
-        self.render_pattern();
+        // Update controller state from libretro input before running a frame.
+        self.update_input(runtime);
+
+        self.nes.run_frame();
         if let Some(video) = runtime.video() {
-            let pitch = WIDTH as usize * std::mem::size_of::<u16>();
-            video.submit(Frame::from_pixels(self.pixel_bytes(), WIDTH, HEIGHT, pitch));
+            let pitch = WIDTH as usize * COLOR_FORMAT.bytes_per_pixel();
+            video.submit(Frame::from_pixels(
+                self.nes.render_buffer(),
+                WIDTH,
+                HEIGHT,
+                pitch,
+            ));
         }
 
         let audio_frames = self.generate_audio();
@@ -109,17 +131,23 @@ impl LibretroCore for DemoCore {
     }
 
     fn load_game(&mut self, game: &GameInfo<'_>) -> Result<(), LoadGameError> {
-        if game.data.is_none() && game.path.is_none() {
-            // Allow RetroArch to boot even with "No content".
-            return Ok(());
+        match game.data {
+            Some(data) => {
+                let cartridge =
+                    load_cartridge(data).map_err(|e| LoadGameError::Message(e.to_string()))?;
+                self.nes.insert_cartridge(cartridge);
+                Ok(())
+            }
+            None => Err(LoadGameError::MissingContent),
         }
-        Ok(())
     }
 
     fn unload_game(&mut self) {
-        self.frame = 0;
-        self.tone_phase = 0.0;
-        self.pixels.fill(0);
+        self.nes.eject_cartridge();
+    }
+
+    fn reset(&mut self) {
+        self.nes.reset();
     }
 }
 

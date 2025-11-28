@@ -36,7 +36,7 @@ const TRAINER_BASE_ADDR: u16 = 0x7000;
 const TRAINER_RAM_OFFSET: usize = (TRAINER_BASE_ADDR - cpu_mem::PRG_RAM_START) as usize;
 
 /// Core mapper interface implemented by all cartridge boards.
-pub trait Mapper: Debug + DynClone + Any + 'static {
+pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     /// Returns the CPU-visible byte for `addr`, or `None` when the bus should
     /// float (open-bus behavior) because the addressed resource is disabled or
     /// absent.

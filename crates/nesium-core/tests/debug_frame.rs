@@ -5,7 +5,7 @@ use std::{
 };
 
 use nesium_core::{
-    CpuSnapshot, NES,
+    CpuSnapshot, Nes,
     cpu::{addressing::Addressing, opcode_meta},
 };
 
@@ -24,7 +24,7 @@ pub fn dump_instruction_trace<P: AsRef<Path>, Q: AsRef<Path>>(
     end_frame: u64,
     max_instructions: usize,
 ) {
-    let mut nes = NES::default();
+    let mut nes = Nes::default();
     nes.load_cartridge_from_file(&rom_path).expect("load rom");
 
     let file = File::create(out_path).expect("create trace file");
@@ -131,7 +131,7 @@ fn cpu_cycle_in_frame(nmi_dbg: &nesium_core::ppu::NmiDebugState) -> u64 {
     }
 }
 
-fn format_instruction_line(nes: &mut NES, snap: &CpuSnapshot) -> String {
+fn format_instruction_line(nes: &mut Nes, snap: &CpuSnapshot) -> String {
     let mut bytes = [0u8; 3];
     nes.peek_cpu_slice(snap.pc, &mut bytes);
     let opcode = bytes[0];
@@ -146,7 +146,7 @@ fn format_operands(
     addressing: Addressing,
     operands: &[u8],
     snap: &CpuSnapshot,
-    _nes: &mut NES,
+    _nes: &mut Nes,
 ) -> String {
     match addressing {
         Addressing::Implied => mnemonic.to_string(),
