@@ -1,11 +1,26 @@
-//! Audio Processing Unit (APU) scaffolding.
+//! Audio Processing Unit (APU).
 //!
-//! The NES APU exposes a set of memory mapped registers between `0x4000` and
-//! `0x4017`. The CPU configures the five sound channels through those registers
-//! and polls the status register (`0x4015`) to detect frame IRQs or DMC activity.
-//! This module provides the foundations of that interface: register storage,
-//! frame counter configuration, and helpers that the bus can call into. The
-//! actual audio synthesis logic will be layered on top of these primitives.
+//! The NES APU exposes five programmable sound generators (2x pulse, triangle,
+//! noise, DMC) behind a small set of CPU-visible registers. This module keeps
+//! the channel logic, frame sequencer, and mixer in well-scoped submodules so
+//! each hardware block is easy to follow and cross-reference against Nesdev.
+//!
+//! Remaining accuracy work:
+//! - TODO: Model the 3–4 CPU cycle delay after `$4017` writes and the half-cycle
+//!   alignment of frame sequencer ticks.
+//! - TODO: Wire DMC sample fetches through the CPU bus and model the DMA-like
+//!   CPU stalls they trigger.
+//! - TODO: Add PAL/Dendy timing tables (frame sequencer, noise/DMC rates) and a
+//!   region selector so PAL test ROMs can pass.
+
+mod dmc;
+mod envelope;
+mod frame_counter;
+mod length_counter;
+mod noise;
+mod pulse;
+mod tables;
+mod triangle;
 
 use core::fmt;
 
@@ -14,83 +29,33 @@ use crate::{
     ram::apu::RegisterRam,
 };
 
-/// Approximate CPU cycle interval between frame IRQs in 4-step mode (NTSC).
-///
-/// On real hardware the frame sequencer asserts an IRQ near 29830 CPU cycles
-/// after being (re)configured in 4-step mode. Several blargg/APU test ROMs
-/// (e.g. `cpu_interrupts_v2`, `instr_misc/04-dummy_reads_apu`) rely on this
-/// behaviour to detect dummy reads of `$4015` by sampling the frame IRQ flag
-/// after a fixed delay. We keep the model deliberately simple and only care
-/// about the approximate IRQ cadence, not the intermediate envelope/timer
-/// steps.
-const FRAME_IRQ_PERIOD_CYCLES: u64 = 29_830;
+pub use frame_counter::FrameCounterMode;
 
-/// Frame sequencer timing mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum FrameCounterMode {
-    #[default]
-    FourStep,
-    FiveStep,
-}
+use dmc::Dmc;
+use frame_counter::{FrameCounter, FrameResetAction};
+use noise::Noise;
+use pulse::Pulse;
+use triangle::Triangle;
 
+/// Light-weight interrupt flags latched by the APU.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-struct FrameCounter {
-    mode: FrameCounterMode,
-    irq_inhibit: bool,
-}
-
-impl FrameCounter {
-    fn configure(&mut self, value: u8) {
-        self.mode = if value & 0b1000_0000 == 0 {
-            FrameCounterMode::FourStep
-        } else {
-            FrameCounterMode::FiveStep
-        };
-        self.irq_inhibit = value & 0b0100_0000 != 0;
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-struct StatusRegister {
-    pulse1_enable: bool,
-    pulse2_enable: bool,
-    triangle_enable: bool,
-    noise_enable: bool,
-    dmc_enable: bool,
+struct StatusFlags {
     frame_interrupt: bool,
     dmc_interrupt: bool,
 }
 
-impl StatusRegister {
-    fn write(&mut self, value: u8) {
-        self.pulse1_enable = value & 0b0000_0001 != 0;
-        self.pulse2_enable = value & 0b0000_0010 != 0;
-        self.triangle_enable = value & 0b0000_0100 != 0;
-        self.noise_enable = value & 0b0000_1000 != 0;
-        self.dmc_enable = value & 0b0001_0000 != 0;
-    }
-
-    fn read(&mut self) -> u8 {
-        let mut value = 0u8;
-        value |= self.pulse1_enable as u8;
-        value |= (self.pulse2_enable as u8) << 1;
-        value |= (self.triangle_enable as u8) << 2;
-        value |= (self.noise_enable as u8) << 3;
-        value |= (self.dmc_enable as u8) << 4;
-        value |= (self.frame_interrupt as u8) << 6;
-        value |= (self.dmc_interrupt as u8) << 7;
-        self.frame_interrupt = false;
-        value
-    }
-}
-
-/// Lightweight NES APU representation.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+/// Fully modelled NES APU with envelope, sweep, length/linear counters and the
+/// frame sequencer.
+#[derive(PartialEq, Eq, Hash)]
 pub struct Apu {
     registers: RegisterRam,
     frame_counter: FrameCounter,
-    status: StatusRegister,
+    status: StatusFlags,
     cycles: u64,
+    pulse: [Pulse; 2],
+    triangle: Triangle,
+    noise: Noise,
+    dmc: Dmc,
 }
 
 impl fmt::Debug for Apu {
@@ -108,30 +73,62 @@ impl Apu {
         Self {
             registers: RegisterRam::new(),
             frame_counter: FrameCounter::default(),
-            status: StatusRegister::default(),
+            status: StatusFlags::default(),
             cycles: 0,
+            pulse: [
+                Pulse::new(pulse::PulseChannel::Pulse1),
+                Pulse::new(pulse::PulseChannel::Pulse2),
+            ],
+            triangle: Triangle::default(),
+            noise: Noise::default(),
+            dmc: Dmc::default(),
         }
     }
 
     pub fn reset(&mut self) {
         self.registers.fill(0);
         self.frame_counter = FrameCounter::default();
-        self.status = StatusRegister::default();
+        self.status = StatusFlags::default();
         self.cycles = 0;
+        self.pulse = [
+            Pulse::new(pulse::PulseChannel::Pulse1),
+            Pulse::new(pulse::PulseChannel::Pulse2),
+        ];
+        self.triangle = Triangle::default();
+        self.noise = Noise::default();
+        self.dmc = Dmc::default();
     }
 
     pub fn cpu_write(&mut self, addr: u16, value: u8) {
+        if (apu_mem::REGISTER_BASE..=apu_mem::CHANNEL_REGISTER_END).contains(&addr) {
+            let idx = (addr - apu_mem::REGISTER_BASE) as usize;
+            self.registers[idx] = value;
+        }
+
         match addr {
-            apu_mem::REGISTER_BASE..=apu_mem::CHANNEL_REGISTER_END => {
-                let idx = (addr - apu_mem::REGISTER_BASE) as usize;
-                self.registers[idx] = value;
-            }
-            apu_mem::STATUS => self.status.write(value),
+            0x4000 => self.pulse[0].write_control(value),
+            0x4001 => self.pulse[0].write_sweep(value),
+            0x4002 => self.pulse[0].write_timer_low(value),
+            0x4003 => self.pulse[0].write_timer_high(value),
+            0x4004 => self.pulse[1].write_control(value),
+            0x4005 => self.pulse[1].write_sweep(value),
+            0x4006 => self.pulse[1].write_timer_low(value),
+            0x4007 => self.pulse[1].write_timer_high(value),
+            0x4008 => self.triangle.write_control(value),
+            0x400A => self.triangle.write_timer_low(value),
+            0x400B => self.triangle.write_timer_high(value),
+            0x400C => self.noise.write_control(value),
+            0x400E => self.noise.write_mode_and_period(value),
+            0x400F => self.noise.write_length(value),
+            0x4010 => self.dmc.write_control(value, &mut self.status),
+            0x4011 => self.dmc.write_direct_load(value),
+            0x4012 => self.dmc.write_sample_address(value),
+            0x4013 => self.dmc.write_sample_length(value),
+            apu_mem::STATUS => self.write_status(value),
             apu_mem::FRAME_COUNTER => {
-                // Writing to $4017 reconfigures and resets the frame sequencer.
-                self.frame_counter.configure(value);
+                let reset = self.frame_counter.configure(value);
                 self.status.frame_interrupt = false;
-                self.cycles = 0;
+                self.apply_frame_reset(reset);
             }
             _ => {}
         }
@@ -139,43 +136,136 @@ impl Apu {
 
     pub fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
-            apu_mem::STATUS => self.status.read(),
+            apu_mem::STATUS => self.read_status(),
             _ => 0,
         }
     }
 
-    /// Returns `true` when either the frame sequencer or DMC have latched an IRQ.
-    pub fn irq_pending(&self) -> bool {
-        (self.status.frame_interrupt && !self.frame_counter.irq_inhibit)
-            || self.status.dmc_interrupt
-    }
-
-    /// Clears any pending IRQ sources to mimic the CPU ack cycle.
-    pub fn clear_irq(&mut self) {
-        // On real hardware, the frame IRQ is acknowledged by reading $4015.
-        // Here we only clear the DMC IRQ source; frame IRQ remains latched
-        // until STATUS is read via `cpu_read`.
-        self.status.dmc_interrupt = false;
-    }
-
-    pub fn clock(&mut self) {
-        self.cycles = self.cycles.wrapping_add(1);
-
-        // Extremely simplified frame sequencer: we only model the periodic
-        // frame IRQ used by test ROMs. In four-step mode, when IRQs are not
-        // inhibited, assert the frame interrupt roughly once per sequence.
-        if self.frame_counter.mode == FrameCounterMode::FourStep && !self.frame_counter.irq_inhibit
-        {
-            if self.cycles >= FRAME_IRQ_PERIOD_CYCLES {
-                self.status.frame_interrupt = true;
-                // Restart the cycle counter so multi-frame tests continue to see IRQs.
-                self.cycles = 0;
-            }
+    fn apply_frame_reset(&mut self, reset: FrameResetAction) {
+        if reset.immediate_quarter {
+            self.clock_quarter_frame();
+        }
+        if reset.immediate_half {
+            self.clock_half_frame();
         }
     }
 
+    fn write_status(&mut self, value: u8) {
+        self.pulse[0].set_enabled(value & 0b0000_0001 != 0);
+        self.pulse[1].set_enabled(value & 0b0000_0010 != 0);
+        self.triangle.set_enabled(value & 0b0000_0100 != 0);
+        self.noise.set_enabled(value & 0b0000_1000 != 0);
+        self.dmc
+            .set_enabled(value & 0b0001_0000 != 0, &mut self.status);
+        self.status.dmc_interrupt = false;
+    }
+
+    fn read_status(&mut self) -> u8 {
+        let mut value = 0u8;
+
+        value |= u8::from(self.pulse[0].length_active());
+        value |= u8::from(self.pulse[1].length_active()) << 1;
+        value |= u8::from(self.triangle.length_active()) << 2;
+        value |= u8::from(self.noise.length_active()) << 3;
+        value |= u8::from(self.dmc.active()) << 4;
+        value |= u8::from(self.status.frame_interrupt) << 6;
+        value |= u8::from(self.status.dmc_interrupt) << 7;
+
+        // Reading $4015 clears both interrupt sources.
+        self.status.frame_interrupt = false;
+        self.status.dmc_interrupt = false;
+
+        value
+    }
+
+    /// Returns `true` when either the frame sequencer or DMC have latched an IRQ.
+    pub fn irq_pending(&self) -> bool {
+        self.status.frame_interrupt || self.status.dmc_interrupt
+    }
+
+    /// Clears any pending IRQ sources to mimic the CPU ack cycle.
+    ///
+    /// The frame interrupt remains latched until `$4015` is read; DMC IRQs can
+    /// be cleared by either reading `$4015` or by disabling DMC, so we mirror
+    /// the latter here.
+    pub fn clear_irq(&mut self) {
+        self.status.dmc_interrupt = false;
+    }
+
+    fn clock_quarter_frame(&mut self) {
+        for pulse in &mut self.pulse {
+            pulse.clock_envelope();
+        }
+        self.noise.clock_envelope();
+        self.triangle.clock_linear_counter();
+    }
+
+    fn clock_half_frame(&mut self) {
+        for pulse in &mut self.pulse {
+            pulse.clock_length();
+            pulse.clock_sweep();
+        }
+        self.triangle.clock_length();
+        self.noise.clock_length();
+    }
+
+    /// Per-CPU-cycle APU tick using a provided CPU memory reader for DMC fetches.
+    ///
+    /// The default [`clock`](Self::clock) uses a zeroed reader so sound output
+    /// remains deterministic even when the caller does not wire up CPU reads.
+    pub fn clock_with_reader<F>(&mut self, mut reader: F)
+    where
+        F: FnMut(u16) -> u8,
+    {
+        self.cycles = self.cycles.wrapping_add(1);
+
+        let tick = self.frame_counter.clock();
+
+        if tick.quarter {
+            self.clock_quarter_frame();
+        }
+        if tick.half {
+            self.clock_half_frame();
+        }
+        if tick.frame_irq {
+            self.status.frame_interrupt = true;
+        }
+
+        for pulse in &mut self.pulse {
+            pulse.clock_timer();
+        }
+        self.triangle.clock_timer();
+        self.noise.clock_timer();
+        self.dmc.clock(&mut reader, &mut self.status);
+    }
+
+    /// Per-CPU-cycle APU tick. DMC memory fetches return zero bytes unless the
+    /// caller uses [`clock_with_reader`](Self::clock_with_reader).
+    pub fn clock(&mut self) {
+        self.clock_with_reader(|_| 0);
+    }
+
+    /// Mixed audio sample using the NES non-linear mixer approximation.
     pub fn sample(&self) -> f32 {
-        0.0
+        let p1 = self.pulse[0].output() as f32;
+        let p2 = self.pulse[1].output() as f32;
+        let t = self.triangle.output() as f32;
+        let n = self.noise.output() as f32;
+        let d = self.dmc.output() as f32;
+
+        let pulse_out = if p1 == 0.0 && p2 == 0.0 {
+            0.0
+        } else {
+            95.88 / ((8128.0 / (p1 + p2)) + 100.0)
+        };
+
+        let tnd_out = if t == 0.0 && n == 0.0 && d == 0.0 {
+            0.0
+        } else {
+            159.79 / ((1.0 / (t / 8227.0 + n / 12241.0 + d / 22638.0)) + 100.0)
+        };
+
+        pulse_out + tnd_out
     }
 }
 
@@ -196,33 +286,61 @@ mod tests {
     }
 
     #[test]
-    fn updates_status_flags() {
+    fn status_enables_channels_and_length_counters() {
         let mut apu = Apu::new();
-        apu.cpu_write(apu_mem::STATUS, 0b0001_1101);
+        apu.cpu_write(apu_mem::STATUS, 0b0000_0001);
+        apu.cpu_write(0x4003, 0b1111_1000); // load a long length value
 
-        assert!(apu.status.pulse1_enable);
-        assert!(apu.status.triangle_enable);
-        assert!(apu.status.noise_enable);
-        assert!(!apu.status.pulse2_enable);
+        // Length counter latched because pulse1 is enabled.
+        assert!(apu.pulse[0].length_active());
+
+        // Disable and ensure the length counter clears.
+        apu.cpu_write(apu_mem::STATUS, 0);
+        assert!(!apu.pulse[0].length_active());
     }
 
     #[test]
     fn frame_counter_configuration() {
         let mut apu = Apu::new();
         apu.cpu_write(apu_mem::FRAME_COUNTER, 0b1000_0000);
-        assert_eq!(apu.frame_counter.mode, FrameCounterMode::FiveStep);
+        assert_eq!(apu.frame_counter.mode(), FrameCounterMode::FiveStep);
 
         apu.cpu_write(apu_mem::FRAME_COUNTER, 0);
-        assert_eq!(apu.frame_counter.mode, FrameCounterMode::FourStep);
+        assert_eq!(apu.frame_counter.mode(), FrameCounterMode::FourStep);
     }
 
     #[test]
-    fn reading_status_clears_frame_interrupt() {
+    fn frame_irq_flag_set_and_cleared() {
         let mut apu = Apu::new();
-        apu.status.frame_interrupt = true;
+        apu.cpu_write(apu_mem::FRAME_COUNTER, 0); // 4-step, IRQs enabled
+
+        for _ in 0..=frame_counter::FRAME_STEP_4_PERIOD as u64 {
+            apu.clock();
+        }
+        assert!(apu.status.frame_interrupt);
+
         let first = apu.cpu_read(apu_mem::STATUS);
         assert_eq!(first & 0b0100_0000, 0b0100_0000);
+
         let second = apu.cpu_read(apu_mem::STATUS);
         assert_eq!(second & 0b0100_0000, 0);
+    }
+
+    #[test]
+    fn dmc_status_bit_and_irq_clear() {
+        let mut apu = Apu::new();
+        apu.cpu_write(0x4013, 0x01); // sample length = 17 bytes
+        apu.cpu_write(apu_mem::STATUS, 0b0001_0000); // enable DMC
+
+        // Active bit should report bytes remaining.
+        let status = apu.cpu_read(apu_mem::STATUS);
+        assert_eq!(status & 0b0001_0000, 0b0001_0000);
+
+        // Force an IRQ and ensure reads clear it.
+        apu.status.dmc_interrupt = true;
+        let first = apu.cpu_read(apu_mem::STATUS);
+        assert_eq!(first & 0b1000_0000, 0b1000_0000);
+        let second = apu.cpu_read(apu_mem::STATUS);
+        assert_eq!(second & 0b1000_0000, 0);
     }
 }
