@@ -1,0 +1,12 @@
+[package]
+name = "nesium-flutter"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[lib]
+name = "nesium_flutter"
+crate-type = ["staticlib"]
+
+[dependencies]
+nesium-core.path = "../nesium-core"

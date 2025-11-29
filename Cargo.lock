@@ -503,16 +503,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nesium"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "egui",
- "nesium-core",
- "sdl2",
-]
-
-[[package]]
 name = "nesium-core"
 version = "0.1.0"
 dependencies = [
@@ -525,6 +515,23 @@ dependencies = [
  "rand",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "nesium-egui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "egui",
+ "nesium-core",
+ "sdl2",
+]
+
+[[package]]
+name = "nesium-flutter"
+version = "0.1.0"
+dependencies = [
+ "nesium-core",
 ]
 
 [[package]]
