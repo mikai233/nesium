@@ -6,7 +6,11 @@ license.workspace = true
 
 [lib]
 name = "nesium_flutter"
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "cdylib"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
 
 [dependencies]
 nesium-core.path = "../nesium-core"
+flutter_rust_bridge = "=2.11.1"

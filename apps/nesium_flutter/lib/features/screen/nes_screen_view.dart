@@ -59,20 +59,28 @@ class NesScreenView extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        const double aspect = nesWidth / nesHeight;
-        double width = constraints.maxWidth;
-        double height = width / aspect;
+        // Scale to fit the window while preserving aspect; keep a minimum of 1x.
+        final double scale =
+            (constraints.maxWidth / nesWidth).clamp(0, constraints.maxWidth) <
+                (constraints.maxHeight / nesHeight).clamp(
+                  0,
+                  constraints.maxHeight,
+                )
+            ? (constraints.maxWidth / nesWidth)
+            : (constraints.maxHeight / nesHeight);
 
-        if (height > constraints.maxHeight) {
-          height = constraints.maxHeight;
-          width = height * aspect;
-        }
+        final double finalScale = scale < 1.0 ? 1.0 : scale;
+        final double width = nesWidth * finalScale;
+        final double height = nesHeight * finalScale;
 
         return Center(
           child: SizedBox(
             width: width,
             height: height,
-            child: Texture(textureId: textureId!),
+            child: Texture(
+              textureId: textureId!,
+              filterQuality: FilterQuality.none, // nearest-neighbor scaling
+            ),
           ),
         );
       },

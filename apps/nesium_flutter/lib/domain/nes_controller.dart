@@ -3,10 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'nes_state.dart';
 import 'nes_texture_service.dart';
 
-class NesController extends StateNotifier<NesState> {
-  NesController(this._textureService) : super(NesState.initial());
+class NesController extends Notifier<NesState> {
+  late final NesTextureService _textureService;
 
-  final NesTextureService _textureService;
+  @override
+  NesState build() {
+    _textureService = NesTextureService();
+    return NesState.initial();
+  }
 
   Future<void> initTexture() async {
     state = state.copyWith(loading: true, clearError: true);
@@ -19,13 +23,6 @@ class NesController extends StateNotifier<NesState> {
   }
 }
 
-final nesTextureServiceProvider = Provider<NesTextureService>((ref) {
-  return NesTextureService();
-});
-
-final nesControllerProvider = StateNotifierProvider<NesController, NesState>((
-  ref,
-) {
-  final service = ref.watch(nesTextureServiceProvider);
-  return NesController(service);
-});
+final nesControllerProvider = NotifierProvider<NesController, NesState>(
+  NesController.new,
+);
