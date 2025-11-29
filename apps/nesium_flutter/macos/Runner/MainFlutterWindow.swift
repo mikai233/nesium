@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import desktop_multi_window
 
 class MainFlutterWindow: NSWindow {
   private var nesiumManager: NesiumTextureManager?
@@ -11,6 +12,11 @@ class MainFlutterWindow: NSWindow {
     self.setFrame(windowFrame, display: true)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+
+    // Ensure plugins are registered for newly created secondary windows.
+    FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
+      RegisterGeneratedPlugins(registry: controller)
+    }
 
     // Set up a MethodChannel and NesiumTextureManager to bridge the NES
     // renderer into a Flutter Texture widget on macOS.

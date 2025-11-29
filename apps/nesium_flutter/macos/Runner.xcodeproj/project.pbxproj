@@ -21,6 +21,7 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		2DECEC55B939D5FF39D2DBE8 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B97C60FD0DA4CADB3D6D4B81 /* Pods_Runner.framework */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
@@ -31,6 +32,7 @@
 		A55319002ED9BD95009257FA /* NesiumTexture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55318FF2ED9BD8E009257FA /* NesiumTexture.swift */; };
 		A55319022ED9CF39009257FA /* NesiumRustBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55319012ED9CF35009257FA /* NesiumRustBridge.swift */; };
 		A55319062ED9D3C4009257FA /* libnesium_flutter.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A55319052ED9D3C4009257FA /* libnesium_flutter.a */; };
+		F4A8E552B6B61F1E36D05643 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6302FD14D9A5EFC7DD2835D /* Pods_RunnerTests.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +66,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		097EE004B37BDF37BFA8EA98 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
+		1A56FB9ED3C4E12EAEE1C775 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
+		1DAD2C48B2578184CD2DF803 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		331C80D5294CF71000263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		333000ED22D3DE5D00554162 /* Warnings.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Warnings.xcconfig; sourceTree = "<group>"; };
@@ -80,6 +85,8 @@
 		33E51913231747F40026EE4D /* DebugProfile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DebugProfile.entitlements; sourceTree = "<group>"; };
 		33E51914231749380026EE4D /* Release.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Release.entitlements; sourceTree = "<group>"; };
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
+		4DC00D619D7376FD30381218 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
+		650FA98DF03E3F93BCABF129 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		A55318FD2ED9AEF6009257FA /* NesiumTextureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NesiumTextureManager.swift; sourceTree = "<group>"; };
@@ -87,6 +94,9 @@
 		A55319012ED9CF35009257FA /* NesiumRustBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NesiumRustBridge.swift; sourceTree = "<group>"; };
 		A55319032ED9D287009257FA /* libnesium_flutter.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libnesium_flutter.a; path = ../../../target/release/libnesium_flutter.a; sourceTree = "<group>"; };
 		A55319052ED9D3C4009257FA /* libnesium_flutter.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libnesium_flutter.a; path = Frameworks/libnesium_flutter.a; sourceTree = "<group>"; };
+		B97C60FD0DA4CADB3D6D4B81 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6302FD14D9A5EFC7DD2835D /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCA63679F82811EA8B2EE71D /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +104,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F4A8E552B6B61F1E36D05643 /* Pods_RunnerTests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -102,6 +113,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A55319062ED9D3C4009257FA /* libnesium_flutter.a in Frameworks */,
+				2DECEC55B939D5FF39D2DBE8 /* Pods_Runner.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -135,6 +147,7 @@
 				331C80D6294CF71000263BE5 /* RunnerTests */,
 				33CC10EE2044A3C60003C045 /* Products */,
 				D73912EC22F37F3D000D13A0 /* Frameworks */,
+				35CE1428DA2514D146BCD0B7 /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -185,11 +198,27 @@
 			path = Runner;
 			sourceTree = "<group>";
 		};
+		35CE1428DA2514D146BCD0B7 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				4DC00D619D7376FD30381218 /* Pods-Runner.debug.xcconfig */,
+				1A56FB9ED3C4E12EAEE1C775 /* Pods-Runner.release.xcconfig */,
+				097EE004B37BDF37BFA8EA98 /* Pods-Runner.profile.xcconfig */,
+				650FA98DF03E3F93BCABF129 /* Pods-RunnerTests.debug.xcconfig */,
+				DCA63679F82811EA8B2EE71D /* Pods-RunnerTests.release.xcconfig */,
+				1DAD2C48B2578184CD2DF803 /* Pods-RunnerTests.profile.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		D73912EC22F37F3D000D13A0 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				A55319052ED9D3C4009257FA /* libnesium_flutter.a */,
 				A55319032ED9D287009257FA /* libnesium_flutter.a */,
+				B97C60FD0DA4CADB3D6D4B81 /* Pods_Runner.framework */,
+				D6302FD14D9A5EFC7DD2835D /* Pods_RunnerTests.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -201,6 +230,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 331C80DE294CF71000263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */;
 			buildPhases = (
+				0F409FDC81DC829B512756C9 /* [CP] Check Pods Manifest.lock */,
 				331C80D1294CF70F00263BE5 /* Sources */,
 				331C80D2294CF70F00263BE5 /* Frameworks */,
 				331C80D3294CF70F00263BE5 /* Resources */,
@@ -219,12 +249,14 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 33CC10FB2044A3C60003C045 /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
+				E4A5AE98FA4E3810C5916E5E /* [CP] Check Pods Manifest.lock */,
 				A55319072ED9D805009257FA /* ShellScript */,
 				33CC10E92044A3C60003C045 /* Sources */,
 				33CC10EA2044A3C60003C045 /* Frameworks */,
 				33CC10EB2044A3C60003C045 /* Resources */,
 				33CC110E2044A8840003C045 /* Bundle Framework */,
 				3399D490228B24CF009A79C7 /* ShellScript */,
+				D9E85C2CF38AB30B9A734248 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -307,6 +339,28 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		0F409FDC81DC829B512756C9 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-RunnerTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
 		3399D490228B24CF009A79C7 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -362,6 +416,45 @@
 			shellPath = /bin/sh;
 			shellScript = "#!/bin/bash\nset -euo pipefail\n\n# --- Ensure cargo is available on PATH -------------------------------------\n# Xcode runs build scripts in a non-login shell, so your usual shell\n# configuration (~/.zshrc, ~/.bashrc) is not sourced. We need to manually\n# add the Rust toolchain bin directory to PATH.\nif [ -d \"$HOME/.cargo/bin\" ]; then\n  export PATH=\"$HOME/.cargo/bin:$PATH\"\nfi\n# If you installed Rust via Homebrew, you can also add:\n# if [ -d \"/opt/homebrew/bin\" ]; then\n#   export PATH=\"/opt/homebrew/bin:$PATH\"\n# fi\n\n# --- Configuration ---------------------------------------------------------\n# SRCROOT points to: apps/nesium_flutter/macos\n# The Rust crate lives at: nesium/crates/nesium-flutter\nRUST_CRATE_DIR=\"$SRCROOT/../../../crates/nesium-flutter\"\n\n# We want to support both Apple Silicon (arm64) and Intel (x86_64)\nARM_TARGET=\"aarch64-apple-darwin\"\nX86_TARGET=\"x86_64-apple-darwin\"\n\n# Output directory for the static library inside the macOS project.\n# This should match the folder where Xcode expects libnesium_flutter.a.\nFRAMEWORKS_DIR=\"$SRCROOT/Frameworks\"\nOUTPUT_LIB_NAME=\"libnesium_flutter.a\"\n\n# --- Sanity checks ---------------------------------------------------------\nif [ ! -d \"$RUST_CRATE_DIR\" ]; then\n  echo \"[Rust] ERROR: Crate directory not found: $RUST_CRATE_DIR\" >&2\n  exit 1\nfi\n\nif ! command -v cargo >/dev/null 2>&1; then\n  echo \"[Rust] ERROR: 'cargo' not found in PATH. Please install Rust toolchain or update PATH.\" >&2\n  echo \"[Rust] Current PATH: $PATH\" >&2\n  exit 1\nfi\n\n# --- Determine build type (Debug / Release) --------------------------------\nif [ \"$CONFIGURATION\" = \"Release\" ]; then\n  BUILD_TYPE=\"release\"\n  CARGO_FLAGS=\"--release\"\n  # In Release we build both architectures and merge them into a universal lib.\n  TARGETS=(\"$ARM_TARGET\" \"$X86_TARGET\")\nelse\n  BUILD_TYPE=\"debug\"\n  CARGO_FLAGS=\"\"\n  # In Debug we only build for arm64 (faster, only for local dev).\n  TARGETS=(\"$ARM_TARGET\")\nfi\n\n# --- Build the Rust static library -----------------------------------------\n# Important: we run cargo from the workspace root so that artifacts are placed\n# in the shared workspace `target/` directory.\nWORKSPACE_ROOT=\"$RUST_CRATE_DIR/../..\"\n\ncd \"$WORKSPACE_ROOT\"\n\nfor TARGET in \"${TARGETS[@]}\"; do\n  echo \"[Rust] Building nesium-flutter ($BUILD_TYPE) for $TARGET\"\n  cargo build --target \"$TARGET\" $CARGO_FLAGS -p nesium-flutter\ndone\n\nmkdir -p \"$FRAMEWORKS_DIR\"\nDST_LIB=\"$FRAMEWORKS_DIR/$OUTPUT_LIB_NAME\"\n\nif [ \"$CONFIGURATION\" = \"Release\" ]; then\n  # --- Release: create a universal (fat) static library --------------------\n  ARM_LIB=\"target/$ARM_TARGET/$BUILD_TYPE/$OUTPUT_LIB_NAME\"\n  X86_LIB=\"target/$X86_TARGET/$BUILD_TYPE/$OUTPUT_LIB_NAME\"\n\n  if [ ! -f \"$ARM_LIB\" ] || [ ! -f \"$X86_LIB\" ]; then\n    echo \"[Rust] ERROR: Built libraries not found for all targets.\" >&2\n    echo \"[Rust] Expected:\" >&2\n    echo \"  $ARM_LIB\" >&2\n    echo \"  $X86_LIB\" >&2\n    echo \"[Rust] Available files in target/$ARM_TARGET/$BUILD_TYPE:\" >&2\n    ls \"target/$ARM_TARGET/$BUILD_TYPE\" >&2 || true\n    echo \"[Rust] Available files in target/$X86_TARGET/$BUILD_TYPE:\" >&2\n    ls \"target/$X86_TARGET/$BUILD_TYPE\" >&2 || true\n    exit 1\n  fi\n\n  echo \"[Rust] Creating universal static library: $DST_LIB\"\n  lipo -create \"$ARM_LIB\" \"$X86_LIB\" -output \"$DST_LIB\"\n  echo \"[Rust] Done (universal lib).\"\nelse\n  # --- Debug: just copy the arm64 static library ---------------------------\n  ARM_LIB=\"target/$ARM_TARGET/$BUILD_TYPE/$OUTPUT_LIB_NAME\"\n\n  if [ ! -f \"$ARM_LIB\" ]; then\n    echo \"[Rust] ERROR: Built library not found: $ARM_LIB\" >&2\n    echo \"[Rust] Available files in target/$ARM_TARGET/$BUILD_TYPE:\" >&2\n    ls \"target/$ARM_TARGET/$BUILD_TYPE\" >&2 || true\n    exit 1\n  fi\n\n  cp \"$ARM_LIB\" \"$DST_LIB\"\n  echo \"[Rust] Copied $ARM_LIB -> $DST_LIB (Debug, arm64 only)\"\nfi\n";
 		};
+		D9E85C2CF38AB30B9A734248 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		E4A5AE98FA4E3810C5916E5E /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Runner-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -416,6 +509,7 @@
 /* Begin XCBuildConfiguration section */
 		331C80DB294CF71000263BE5 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 650FA98DF03E3F93BCABF129 /* Pods-RunnerTests.debug.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CURRENT_PROJECT_VERSION = 1;
@@ -430,6 +524,7 @@
 		};
 		331C80DC294CF71000263BE5 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = DCA63679F82811EA8B2EE71D /* Pods-RunnerTests.release.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CURRENT_PROJECT_VERSION = 1;
@@ -444,6 +539,7 @@
 		};
 		331C80DD294CF71000263BE5 /* Profile */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1DAD2C48B2578184CD2DF803 /* Pods-RunnerTests.profile.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CURRENT_PROJECT_VERSION = 1;
