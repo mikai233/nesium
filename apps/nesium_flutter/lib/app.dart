@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'shell/nes_shell.dart';
-import 'windows/secondary_window.dart';
+import 'windows/window_routing.dart';
 
 class NesiumApp extends StatelessWidget {
-  const NesiumApp({super.key, this.windowKind});
-
-  final String? windowKind;
+  const NesiumApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -21,24 +18,7 @@ class NesiumApp extends StatelessWidget {
         useMaterial3: true,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: _buildHome(),
+      home: const WindowRouter(),
     );
-  }
-
-  Widget _buildHome() {
-    switch (windowKind) {
-      case 'debugger':
-        return const SecondaryWindow(
-          title: 'Nesium Debugger',
-          child: SecondaryDebuggerContent(),
-        );
-      case 'tools':
-        return const SecondaryWindow(
-          title: 'Nesium Tools',
-          child: SecondaryToolsContent(),
-        );
-      default:
-        return const NesShell();
-    }
   }
 }
