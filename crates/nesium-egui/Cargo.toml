@@ -1,0 +1,11 @@
+[package]
+name = "nesium-egui"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+nesium-core.path = "../nesium-core"
+egui.workspace = true
+sdl2.workspace = true
+anyhow.workspace = true

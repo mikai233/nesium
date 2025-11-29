@@ -145,6 +145,38 @@ impl FrameBuffer {
         &self.planes[self.active_index]
     }
 
+    /// Returns a read-only view of the given plane by index.
+    ///
+    /// This is a low-level accessor intended for bridge layers (e.g. FFI to
+    /// libretro/Flutter) that need to expose the raw backing storage. For
+    /// normal PPU usage prefer [`render`] and [`write`].
+    #[inline]
+    pub fn plane(&self, index: usize) -> &[u8] {
+        &self.planes[index]
+    }
+
+    /// Returns the number of bytes per scanline (pitch) for the current mode.
+    ///
+    /// In `Index` mode this is simply `SCREEN_WIDTH` (1 byte per pixel).
+    /// In `Color` mode it is `SCREEN_WIDTH * format.bytes_per_pixel()`.
+    #[inline]
+    pub fn pitch(&self) -> usize {
+        match &self.mode {
+            BufferMode::Index => SCREEN_WIDTH,
+            BufferMode::Color { format, .. } => SCREEN_WIDTH * format.bytes_per_pixel(),
+        }
+    }
+
+    /// Returns the index of the currently active plane.
+    ///
+    /// This can be used by higher-level code to decide which plane should be
+    /// treated as the "front" or "back" buffer when integrating with an
+    /// external renderer.
+    #[inline]
+    pub fn active_plane_index(&self) -> usize {
+        self.active_index
+    }
+
     /// Returns a mutable view of the currently active plane for PPU writes.
     ///
     /// Typically the PPU will write into this slice and the frontend will read

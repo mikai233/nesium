@@ -1,10 +1,11 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/nesium",
+    "crates/nesium-egui",
     "crates/nesium-core",
     "crates/libretro-bridge",
     "crates/nesium-libretro",
+    "crates/nesium-flutter",
 ]
 
 [workspace.package]
