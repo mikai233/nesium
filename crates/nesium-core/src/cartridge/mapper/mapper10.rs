@@ -391,4 +391,3 @@ impl Mapper for Mapper10 {
         Cow::Borrowed("MMC4")
     }
 }
-

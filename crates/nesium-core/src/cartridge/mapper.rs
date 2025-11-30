@@ -8,6 +8,8 @@ use std::{any::Any, borrow::Cow, fmt::Debug};
 
 use dyn_clone::DynClone;
 
+use crate::apu::ExpansionAudio;
+
 pub mod chr_storage;
 pub mod mapper0;
 pub mod mapper1;
@@ -22,6 +24,7 @@ pub mod mapper9;
 pub mod mapper10;
 pub mod mapper11;
 pub mod mapper13;
+pub mod mapper19;
 
 pub(crate) use chr_storage::{ChrStorage, select_chr_storage};
 pub use mapper0::Mapper0;
@@ -37,6 +40,7 @@ pub use mapper9::Mapper9;
 pub use mapper10::Mapper10;
 pub use mapper11::Mapper11;
 pub use mapper13::Mapper13;
+pub use mapper19::Mapper19;
 
 use crate::{
     cartridge::{
@@ -87,6 +91,10 @@ pub enum NametableTarget {
 }
 
 /// Core mapper interface implemented by all cartridge boards.
+///
+/// Boards that expose extra sound channels can additionally implement
+/// [`ExpansionAudio`] and opt into the optional `as_expansion_audio`/`mut`
+/// hooks below so the core can treat expansion audio generically.
 pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     /// Returns the CPU-visible byte for `addr`, or `None` when the bus should
     /// float (open-bus behavior) because the addressed resource is disabled or
@@ -99,6 +107,23 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     /// Optional per-CPU-cycle hook for mappers that implement hardware timers or
     /// IRQ counters. Default implementation does nothing.
     fn cpu_clock(&mut self, _cpu_cycle: u64) {}
+
+    /// Returns this mapper as an expansion audio source, when supported.
+    ///
+    /// The default implementation returns `None`, meaning the board does not
+    /// provide any extra audio channels beyond the core APU.
+    fn as_expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
+        None
+    }
+
+    /// Mutable variant of [`as_expansion_audio`](Self::as_expansion_audio).
+    ///
+    /// Mappers that implement [`ExpansionAudio`] typically return
+    /// `Some(self)` here; boards without expansion audio keep the
+    /// default `None` implementation.
+    fn as_expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
+        None
+    }
 
     /// Called once when the mapper is first powered on / constructed.
     ///

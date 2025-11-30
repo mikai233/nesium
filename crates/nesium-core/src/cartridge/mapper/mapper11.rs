@@ -231,4 +231,3 @@ impl Mapper for Mapper11 {
         Cow::Borrowed("Color Dreams")
     }
 }
-

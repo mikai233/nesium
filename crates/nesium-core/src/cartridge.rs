@@ -7,7 +7,7 @@ use crate::{
 
 use self::mapper::{
     Mapper0, Mapper1, Mapper2, Mapper3, Mapper4, Mapper5, Mapper6, Mapper7, Mapper8, Mapper9,
-    Mapper10, Mapper11, Mapper13, NametableTarget,
+    Mapper10, Mapper11, Mapper13, Mapper19, NametableTarget,
 };
 
 pub const TRAINER_SIZE: usize = 512;
@@ -68,9 +68,12 @@ impl Cartridge {
         self.mapper.ppu_vram_access(addr, ctx);
     }
 
-    /// Advance mapper-internal CPU-based timers by one bus cycle.
+    /// Advance mapper-internal CPU-based timers and expansion audio by one bus cycle.
     pub fn cpu_clock(&mut self, cpu_cycle: u64) {
         self.mapper.cpu_clock(cpu_cycle);
+        if let Some(expansion) = self.mapper.as_expansion_audio_mut() {
+            expansion.clock_audio();
+        }
     }
 
     /// Resolve a PPU nametable address to its backing storage.
@@ -138,6 +141,7 @@ pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
         10 => Box::new(Mapper10::with_trainer(header, prg_rom, chr_rom, trainer)),
         11 => Box::new(Mapper11::with_trainer(header, prg_rom, chr_rom, trainer)),
         13 => Box::new(Mapper13::with_trainer(header, prg_rom, chr_rom, trainer)),
+        19 => Box::new(Mapper19::with_trainer(header, prg_rom, chr_rom, trainer)),
         _ => unimplemented!("Mapper {} not implemented", header.mapper),
     };
 

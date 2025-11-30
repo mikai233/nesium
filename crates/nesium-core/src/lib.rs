@@ -175,9 +175,16 @@ impl Nes {
         self.step_dot()
     }
 
-    /// Latest audio sample from the APU mixer.
+    /// Latest audio sample from the APU mixer plus any cartridge expansion audio.
     pub fn audio_sample(&self) -> f32 {
-        self.apu.sample()
+        let base = self.apu.sample();
+        let expansion = self
+            .cartridge
+            .as_ref()
+            .and_then(|cart| cart.mapper().as_expansion_audio())
+            .map(|exp| exp.sample())
+            .unwrap_or(0.0);
+        base + expansion
     }
 
     /// Palette indices for the latest frame (PPU native format).
