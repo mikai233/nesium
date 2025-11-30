@@ -1,0 +1,622 @@
+//! Mapper 4 (MMC3) implementation.
+//!
+//! This mapper powers many of the most popular NES games (e.g. Super Mario
+//! Bros. 3, Kirby's Adventure). It provides:
+//! - 8 KiB PRG-ROM banking with two switchable windows and two fixed windows.
+//! - Fine‑grained CHR banking using 2 KiB + 1 KiB pages with optional A12
+//!   inversion for better sprite/background layout.
+//! - A scanline IRQ counter driven by PPU A12 rising edges.
+//! - Mapper‑controlled mirroring and PRG‑RAM enable/write‑protect bits.
+//!
+//! Behaviour is modelled against the Nesdev MMC3 documentation and broadly
+//! matches the timing used by Mesen2. A few details (such as power‑on state
+//! and PRG‑RAM write protection) are approximations that are safe for the
+//! majority of licensed games.
+
+use std::borrow::Cow;
+
+use crate::{
+    cartridge::{
+        Mapper, TRAINER_SIZE,
+        header::{Header, Mirroring},
+        mapper::{
+            ChrStorage, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram,
+            select_chr_storage, trainer_destination,
+        },
+    },
+    memory::cpu as cpu_mem,
+};
+
+/// PRG-ROM bank size exposed to the CPU (8 KiB).
+const PRG_BANK_SIZE_8K: usize = 8 * 1024;
+/// CHR banking granularity (1 KiB).
+const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+
+#[derive(Debug, Clone)]
+pub struct Mapper4 {
+    prg_rom: Box<[u8]>,
+    prg_ram: Box<[u8]>,
+    chr: ChrStorage,
+
+    /// Number of 8 KiB PRG-ROM banks.
+    prg_bank_count: usize,
+
+    /// Base mirroring mode from the header. Some MMC3 boards use fixed
+    /// four‑screen mirroring and ignore $A000 writes entirely.
+    base_mirroring: Mirroring,
+    /// Current effective mirroring (may be overridden by $A000).
+    mirroring: Mirroring,
+
+    // Banking registers ----------------------------------------------------
+    /// Bank select register ($8000). Layout:
+    /// - Bits 0-2: select target bank register (0‑7).
+    /// - Bit 6: PRG mode (0: swap at $8000, 1: swap at $C000).
+    /// - Bit 7: CHR A12 inversion (0: 2 KiB banks at $0000/$0800,
+    ///   1: 2 KiB banks at $1000/$1800).
+    bank_select: u8,
+    /// Bank data registers ($8001 writes). Index 0‑5 control CHR, 6‑7 control
+    /// the two switchable PRG banks.
+    bank_regs: [u8; 8],
+
+    /// PRG‑RAM enable flag from $A001 bit7.
+    prg_ram_enable: bool,
+    /// PRG‑RAM write protection flag derived from $A001 bit6.
+    ///
+    /// Nesdev: Some boards use bit6 to disable writes when 0. We follow that
+    /// behaviour: writes are only allowed when `prg_ram_enable` is set and
+    /// `prg_ram_write_protect` is false.
+    prg_ram_write_protect: bool,
+
+    // IRQ registers --------------------------------------------------------
+    /// IRQ latch value ($C000).
+    irq_latch: u8,
+    /// Internal down counter.
+    irq_counter: u8,
+    /// Reload flag set by $C001; causes the next A12 clock to reload from
+    /// `irq_latch` instead of decrementing.
+    irq_reload: bool,
+    /// Whether IRQ output is enabled ($E001 / $E000).
+    irq_enabled: bool,
+    /// Latched IRQ line visible to the CPU core.
+    irq_pending: bool,
+
+    // PPU A12 edge detection -----------------------------------------------
+    /// Last observed value of PPU address line A12.
+    last_a12_high: bool,
+    /// PPU cycle of the last A12 rising edge we acted on. Used as a simple
+    /// debounce so that tightly spaced pattern fetches do not clock the
+    /// counter multiple times within a single scanline.
+    last_a12_rise_ppu_cycle: u64,
+}
+
+impl Mapper4 {
+    pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
+        Self::with_trainer(header, prg_rom, chr_rom, None)
+    }
+
+    pub(crate) fn with_trainer(
+        header: Header,
+        prg_rom: Box<[u8]>,
+        chr_rom: Box<[u8]>,
+        trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+    ) -> Self {
+        let mut prg_ram = allocate_prg_ram(&header);
+        if let (Some(trainer), Some(dst)) = (trainer.as_ref(), trainer_destination(&mut prg_ram)) {
+            dst.copy_from_slice(trainer.as_ref());
+        }
+
+        let chr = select_chr_storage(&header, chr_rom);
+        let prg_bank_count = (prg_rom.len() / PRG_BANK_SIZE_8K).max(1);
+
+        Self {
+            prg_rom,
+            prg_ram,
+            chr,
+            prg_bank_count,
+            base_mirroring: header.mirroring,
+            mirroring: header.mirroring,
+            bank_select: 0,
+            bank_regs: [0; 8],
+            prg_ram_enable: false,
+            prg_ram_write_protect: true,
+            irq_latch: 0,
+            irq_counter: 0,
+            irq_reload: false,
+            irq_enabled: false,
+            irq_pending: false,
+            last_a12_high: false,
+            last_a12_rise_ppu_cycle: 0,
+        }
+    }
+
+    /// Returns true when CHR A12 inversion is active (bank select bit7 set).
+    #[inline]
+    fn chr_invert(&self) -> bool {
+        self.bank_select & 0x80 != 0
+    }
+
+    /// Returns the current PRG banking mode (bank select bit6).
+    ///
+    /// false => mode 0: swap at $8000.
+    /// true  => mode 1: swap at $C000.
+    #[inline]
+    fn prg_swap_at_c000(&self) -> bool {
+        self.bank_select & 0x40 != 0
+    }
+
+    #[inline]
+    fn prg_ram_enabled(&self) -> bool {
+        !self.prg_ram.is_empty() && self.prg_ram_enable
+    }
+
+    fn read_prg_ram(&self, addr: u16) -> Option<u8> {
+        if !self.prg_ram_enabled() {
+            return None;
+        }
+        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
+        Some(self.prg_ram[idx])
+    }
+
+    fn write_prg_ram(&mut self, addr: u16, data: u8) {
+        if !self.prg_ram_enabled() || self.prg_ram_write_protect {
+            return;
+        }
+        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
+        self.prg_ram[idx] = data;
+    }
+
+    /// Resolve an 8 KiB PRG-ROM bank index, wrapping to the available ROM size.
+    #[inline]
+    fn prg_bank_index(&self, reg_value: u8) -> usize {
+        if self.prg_bank_count == 0 {
+            0
+        } else {
+            (reg_value as usize) % self.prg_bank_count
+        }
+    }
+
+    fn read_prg_rom(&self, addr: u16) -> u8 {
+        if self.prg_rom.is_empty() {
+            return 0;
+        }
+
+        // Determine which 8 KiB slot this address falls into.
+        let bank_slot = match addr {
+            0x8000..=0x9FFF => 0,
+            0xA000..=0xBFFF => 1,
+            0xC000..=0xDFFF => 2,
+            0xE000..=0xFFFF => 3,
+            _ => return 0,
+        };
+
+        let last_bank = self.prg_bank_count.saturating_sub(1);
+        let second_last_bank = self.prg_bank_count.saturating_sub(2);
+
+        // PRG mode controls whether the first or third 8 KiB window is fixed.
+        let bank = if !self.prg_swap_at_c000() {
+            // Mode 0:
+            //   $8000-$9FFF: bank 6 (switchable)
+            //   $A000-$BFFF: bank 7 (switchable)
+            //   $C000-$DFFF: second last bank (fixed)
+            //   $E000-$FFFF: last bank (fixed)
+            match bank_slot {
+                0 => self.prg_bank_index(self.bank_regs[6]),
+                1 => self.prg_bank_index(self.bank_regs[7]),
+                2 => second_last_bank,
+                _ => last_bank,
+            }
+        } else {
+            // Mode 1:
+            //   $8000-$9FFF: second last bank (fixed)
+            //   $A000-$BFFF: bank 7 (switchable)
+            //   $C000-$DFFF: bank 6 (switchable)
+            //   $E000-$FFFF: last bank (fixed)
+            match bank_slot {
+                0 => second_last_bank,
+                1 => self.prg_bank_index(self.bank_regs[7]),
+                2 => self.prg_bank_index(self.bank_regs[6]),
+                _ => last_bank,
+            }
+        };
+
+        let base = bank.saturating_mul(PRG_BANK_SIZE_8K);
+        let offset = (addr as usize - cpu_mem::PRG_ROM_START as usize) & (PRG_BANK_SIZE_8K - 1);
+        let idx = base.saturating_add(offset);
+        self.prg_rom.get(idx).copied().unwrap_or(0)
+    }
+
+    /// Resolve a CHR byte for the given PPU address, applying the current
+    /// banking mode and A12 inversion. Both CHR ROM and CHR RAM cartridges are
+    /// supported via the shared [`ChrStorage`] helper.
+    fn read_chr(&self, addr: u16) -> u8 {
+        let a = addr & 0x1FFF;
+        let offset = a as usize;
+
+        let (base, inner) = if !self.chr_invert() {
+            // Normal layout:
+            //   R0: 2 KiB at $0000-$07FF
+            //   R1: 2 KiB at $0800-$0FFF
+            //   R2: 1 KiB at $1000-$13FF
+            //   R3: 1 KiB at $1400-$17FF
+            //   R4: 1 KiB at $1800-$1BFF
+            //   R5: 1 KiB at $1C00-$1FFF
+            match a {
+                0x0000..=0x07FF => {
+                    let bank = (self.bank_regs[0] & !1) as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset)
+                }
+                0x0800..=0x0FFF => {
+                    let bank = (self.bank_regs[1] & !1) as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x0800)
+                }
+                0x1000..=0x13FF => {
+                    let bank = self.bank_regs[2] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1000)
+                }
+                0x1400..=0x17FF => {
+                    let bank = self.bank_regs[3] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1400)
+                }
+                0x1800..=0x1BFF => {
+                    let bank = self.bank_regs[4] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1800)
+                }
+                _ => {
+                    let bank = self.bank_regs[5] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1C00)
+                }
+            }
+        } else {
+            // Inverted layout:
+            //   R2: 1 KiB at $0000-$03FF
+            //   R3: 1 KiB at $0400-$07FF
+            //   R4: 1 KiB at $0800-$0BFF
+            //   R5: 1 KiB at $0C00-$0FFF
+            //   R0: 2 KiB at $1000-$17FF
+            //   R1: 2 KiB at $1800-$1FFF
+            match a {
+                0x0000..=0x03FF => {
+                    let bank = self.bank_regs[2] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset)
+                }
+                0x0400..=0x07FF => {
+                    let bank = self.bank_regs[3] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x0400)
+                }
+                0x0800..=0x0BFF => {
+                    let bank = self.bank_regs[4] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x0800)
+                }
+                0x0C00..=0x0FFF => {
+                    let bank = self.bank_regs[5] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x0C00)
+                }
+                0x1000..=0x17FF => {
+                    let bank = (self.bank_regs[0] & !1) as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1000)
+                }
+                _ => {
+                    let bank = (self.bank_regs[1] & !1) as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1800)
+                }
+            }
+        };
+
+        self.chr.read_indexed(base, inner)
+    }
+
+    fn write_chr(&mut self, addr: u16, data: u8) {
+        let a = addr & 0x1FFF;
+        let offset = a as usize;
+
+        let (base, inner) = if !self.chr_invert() {
+            match a {
+                0x0000..=0x07FF => {
+                    let bank = (self.bank_regs[0] & !1) as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset)
+                }
+                0x0800..=0x0FFF => {
+                    let bank = (self.bank_regs[1] & !1) as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x0800)
+                }
+                0x1000..=0x13FF => {
+                    let bank = self.bank_regs[2] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1000)
+                }
+                0x1400..=0x17FF => {
+                    let bank = self.bank_regs[3] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1400)
+                }
+                0x1800..=0x1BFF => {
+                    let bank = self.bank_regs[4] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1800)
+                }
+                _ => {
+                    let bank = self.bank_regs[5] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1C00)
+                }
+            }
+        } else {
+            match a {
+                0x0000..=0x03FF => {
+                    let bank = self.bank_regs[2] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset)
+                }
+                0x0400..=0x07FF => {
+                    let bank = self.bank_regs[3] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x0400)
+                }
+                0x0800..=0x0BFF => {
+                    let bank = self.bank_regs[4] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x0800)
+                }
+                0x0C00..=0x0FFF => {
+                    let bank = self.bank_regs[5] as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x0C00)
+                }
+                0x1000..=0x17FF => {
+                    let bank = (self.bank_regs[0] & !1) as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1000)
+                }
+                _ => {
+                    let bank = (self.bank_regs[1] & !1) as usize;
+                    (bank * CHR_BANK_SIZE_1K, offset - 0x1800)
+                }
+            }
+        };
+
+        self.chr.write_indexed(base, inner, data);
+    }
+
+    fn write_bank_select(&mut self, data: u8) {
+        // Only bits 0-2, 6, and 7 are documented; keep other bits unchanged
+        // to avoid surprising games that accidentally rely on them.
+        self.bank_select = data;
+    }
+
+    fn write_bank_data(&mut self, data: u8) {
+        let index = (self.bank_select & 0x07) as usize;
+        if index >= self.bank_regs.len() {
+            return;
+        }
+
+        // Nesdev: For R0/R1 (2 KiB CHR banks) the low bit is ignored by the
+        // hardware because A10 is forced to 0. We keep the original value
+        // around and mask when decoding the CHR address so that test ROMs can
+        // still observe the written value if necessary.
+        self.bank_regs[index] = data;
+    }
+
+    fn write_mirroring(&mut self, data: u8) {
+        // Boards that use four‑screen VRAM typically ignore $A000 mirroring
+        // writes and keep their fixed layout, so preserve that behaviour.
+        if self.base_mirroring == Mirroring::FourScreen {
+            return;
+        }
+
+        self.mirroring = if data & 0x01 == 0 {
+            Mirroring::Vertical
+        } else {
+            Mirroring::Horizontal
+        };
+    }
+
+    fn write_prg_ram_protect(&mut self, data: u8) {
+        // Bit 7: PRG-RAM enable (when 0, RAM is effectively disabled).
+        self.prg_ram_enable = data & 0x80 != 0;
+        // Bit 6: write protection. Many boards treat 0 = write-protect,
+        // 1 = write-enabled. We follow that convention.
+        self.prg_ram_write_protect = data & 0x40 == 0;
+    }
+
+    fn write_irq_latch(&mut self, data: u8) {
+        self.irq_latch = data;
+    }
+
+    fn write_irq_reload(&mut self) {
+        // The next A12 rising edge reloads the counter from the latch.
+        self.irq_reload = true;
+    }
+
+    fn write_irq_disable(&mut self) {
+        // Writes to $E000 disable further IRQs and also acknowledge any
+        // pending one, matching the behaviour described on Nesdev.
+        self.irq_enabled = false;
+        self.irq_pending = false;
+    }
+
+    fn write_irq_enable(&mut self) {
+        self.irq_enabled = true;
+    }
+
+    /// Called when a debounced PPU A12 rising edge is detected during
+    /// rendering. This clocks the internal IRQ counter in the usual MMC3
+    /// manner.
+    fn clock_irq_counter(&mut self) {
+        if self.irq_reload || self.irq_counter == 0 {
+            self.irq_counter = self.irq_latch;
+            self.irq_reload = false;
+        } else {
+            self.irq_counter = self.irq_counter.wrapping_sub(1);
+        }
+
+        // When the counter transitions to 0, an IRQ is requested on the next
+        // CPU instruction boundary (the CPU core observes `irq_pending`).
+        if self.irq_counter == 0 && self.irq_enabled {
+            self.irq_pending = true;
+        }
+    }
+
+    /// Observe a PPU VRAM access and detect A12 rising edges during rendering.
+    fn observe_ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
+        // IRQ counter is clocked by PPU A12 rising edges while rendering.
+        if ctx.kind != PpuVramAccessKind::RenderingFetch {
+            return;
+        }
+
+        if addr >= 0x2000 {
+            // Only pattern table accesses ($0000-$1FFF) affect the counter.
+            return;
+        }
+
+        let a12_high = addr & 0x1000 != 0;
+
+        // Nesdev: MMC3 requires A12 to be low for a period (~8 PPU cycles)
+        // before a new rising edge is recognised. We approximate this by
+        // enforcing a minimum PPU cycle distance between edges.
+        if a12_high && !self.last_a12_high {
+            let delta = ctx.ppu_cycle.saturating_sub(self.last_a12_rise_ppu_cycle);
+            if delta >= 8 {
+                self.last_a12_rise_ppu_cycle = ctx.ppu_cycle;
+                self.clock_irq_counter();
+            }
+        }
+
+        self.last_a12_high = a12_high;
+    }
+}
+
+impl Mapper for Mapper4 {
+    fn power_on(&mut self) {
+        // Power-on defaults chosen to match common emulator behaviour:
+        // - PRG mode = 1 (swap at $C000) so that the last bank appears at
+        //   $E000-$FFFF and the second last at $8000-$9FFF.
+        // - CHR A12 inversion disabled.
+        // - PRG-RAM disabled until the game explicitly enables it via $A001.
+        self.bank_select = 0x40;
+        self.bank_regs = [0; 8];
+        self.prg_ram_enable = false;
+        self.prg_ram_write_protect = true;
+        self.irq_latch = 0;
+        self.irq_counter = 0;
+        self.irq_reload = false;
+        self.irq_enabled = false;
+        self.irq_pending = false;
+        self.last_a12_high = false;
+        self.last_a12_rise_ppu_cycle = 0;
+        self.mirroring = self.base_mirroring;
+    }
+
+    fn reset(&mut self) {
+        // Many games program the MMC3 fully on reset, but keeping behaviour
+        // roughly consistent with power-on improves compatibility with test
+        // ROMs that probe initial state.
+        self.power_on();
+    }
+
+    fn cpu_read(&self, addr: u16) -> Option<u8> {
+        let value = match addr {
+            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => return self.read_prg_ram(addr),
+            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
+            _ => return None,
+        };
+        Some(value)
+    }
+
+    fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
+        match addr {
+            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
+            0x8000..=0x9FFF => {
+                if addr & 1 == 0 {
+                    self.write_bank_select(data);
+                } else {
+                    self.write_bank_data(data);
+                }
+            }
+            0xA000..=0xBFFF => {
+                if addr & 1 == 0 {
+                    self.write_mirroring(data);
+                } else {
+                    self.write_prg_ram_protect(data);
+                }
+            }
+            0xC000..=0xDFFF => {
+                if addr & 1 == 0 {
+                    self.write_irq_latch(data);
+                } else {
+                    self.write_irq_reload();
+                }
+            }
+            0xE000..=0xFFFF => {
+                if addr & 1 == 0 {
+                    self.write_irq_disable();
+                } else {
+                    self.write_irq_enable();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn ppu_read(&self, addr: u16) -> Option<u8> {
+        Some(self.read_chr(addr))
+    }
+
+    fn ppu_write(&mut self, addr: u16, data: u8) {
+        self.write_chr(addr, data);
+    }
+
+    fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
+        self.observe_ppu_vram_access(addr, ctx);
+    }
+
+    fn irq_pending(&self) -> bool {
+        self.irq_pending
+    }
+
+    fn clear_irq(&mut self) {
+        self.irq_pending = false;
+    }
+
+    fn prg_rom(&self) -> Option<&[u8]> {
+        Some(self.prg_rom.as_ref())
+    }
+
+    fn prg_ram(&self) -> Option<&[u8]> {
+        if self.prg_ram.is_empty() {
+            None
+        } else {
+            Some(self.prg_ram.as_ref())
+        }
+    }
+
+    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
+        if self.prg_ram.is_empty() {
+            None
+        } else {
+            Some(self.prg_ram.as_mut())
+        }
+    }
+
+    fn prg_save_ram(&self) -> Option<&[u8]> {
+        self.prg_ram()
+    }
+
+    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
+        self.prg_ram_mut()
+    }
+
+    fn chr_rom(&self) -> Option<&[u8]> {
+        self.chr.as_rom()
+    }
+
+    fn chr_ram(&self) -> Option<&[u8]> {
+        self.chr.as_ram()
+    }
+
+    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
+        self.chr.as_ram_mut()
+    }
+
+    fn mirroring(&self) -> Mirroring {
+        self.mirroring
+    }
+
+    fn mapper_id(&self) -> u16 {
+        4
+    }
+
+    fn name(&self) -> Cow<'static, str> {
+        Cow::Borrowed("MMC3")
+    }
+}

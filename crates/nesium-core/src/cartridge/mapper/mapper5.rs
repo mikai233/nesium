@@ -1,15 +1,12 @@
 use std::borrow::Cow;
 
-use crate::{
-    cartridge::{
-        Mapper, TRAINER_SIZE,
-        header::{Header, Mirroring},
-        mapper::{
-            ChrStorage, NametableTarget, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram,
-            select_chr_storage, trainer_destination,
-        },
+use crate::cartridge::{
+    Mapper, TRAINER_SIZE,
+    header::{Header, Mirroring},
+    mapper::{
+        ChrStorage, NametableTarget, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram,
+        select_chr_storage, trainer_destination,
     },
-    memory::cpu as cpu_mem,
 };
 
 /// MMC5 PRG bank size (8 KiB).
