@@ -63,6 +63,44 @@ impl ChrStorage {
         }
     }
 
+    /// Read a byte from an explicitly indexed CHR window.
+    ///
+    /// `base` and `offset` describe an absolute index into the CHR space
+    /// (ROM or RAM), and are wrapped to the underlying length. This is useful
+    /// for mappers that provide finer-grained CHR banking (e.g. 1 KiB pages).
+    pub(crate) fn read_indexed(&self, base: usize, offset: usize) -> u8 {
+        match self {
+            ChrStorage::Rom(rom) => {
+                if rom.is_empty() {
+                    0
+                } else {
+                    let len = rom.len();
+                    rom[(base + offset) % len]
+                }
+            }
+            ChrStorage::Ram(ram) => {
+                if ram.is_empty() {
+                    0
+                } else {
+                    let len = ram.len();
+                    ram[(base + offset) % len]
+                }
+            }
+            ChrStorage::None => 0,
+        }
+    }
+
+    /// Write a byte to an explicitly indexed CHR window, if CHR RAM is present.
+    pub(crate) fn write_indexed(&mut self, base: usize, offset: usize, data: u8) {
+        if let ChrStorage::Ram(ram) = self {
+            if !ram.is_empty() {
+                let len = ram.len();
+                let idx = (base + offset) % len;
+                ram[idx] = data;
+            }
+        }
+    }
+
     /// Returns a view of the underlying CHR ROM, when present.
     pub(crate) fn as_rom(&self) -> Option<&[u8]> {
         if let ChrStorage::Rom(rom) = self {
