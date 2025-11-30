@@ -8,7 +8,7 @@ use crate::{
 use self::mapper::{
     Mapper0, Mapper1, Mapper2, Mapper3, Mapper4, Mapper5, Mapper6, Mapper7, Mapper8, Mapper9,
     Mapper10, Mapper11, Mapper13, Mapper19, Mapper21, Mapper23, Mapper25, Mapper26, Mapper34,
-    Mapper66, NametableTarget,
+    Mapper66, Mapper71, NametableTarget,
 };
 
 pub const TRAINER_SIZE: usize = 512;
@@ -149,6 +149,7 @@ pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
         26 => Box::new(Mapper26::with_trainer(header, prg_rom, chr_rom, trainer)),
         34 => Box::new(Mapper34::with_trainer(header, prg_rom, chr_rom, trainer)),
         66 => Box::new(Mapper66::with_trainer(header, prg_rom, chr_rom, trainer)),
+        71 => Box::new(Mapper71::with_trainer(header, prg_rom, chr_rom, trainer)),
         other => return Err(Error::UnsupportedMapper(other)),
     };
 
