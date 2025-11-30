@@ -62,9 +62,9 @@ pub struct Mapper4 {
     prg_ram_enable: bool,
     /// PRG‑RAM write protection flag derived from $A001 bit6.
     ///
-    /// Nesdev: Some boards use bit6 to disable writes when 0. We follow that
-    /// behaviour: writes are only allowed when `prg_ram_enable` is set and
-    /// `prg_ram_write_protect` is false.
+    /// Nesdev MMC3 doc: bit6 = 1 denies writes, 0 allows writes. We model
+    /// that directly: when `prg_ram_write_protect` is true, writes are
+    /// blocked even if PRG‑RAM is enabled.
     prg_ram_write_protect: bool,
 
     // IRQ registers --------------------------------------------------------
@@ -402,11 +402,15 @@ impl Mapper4 {
     }
 
     fn write_prg_ram_protect(&mut self, data: u8) {
-        // Bit 7: PRG-RAM enable (when 0, RAM is effectively disabled).
+        // Nesdev PRG RAM protect ($A001):
+        // Bit 7: PRG RAM chip enable (0: disable; 1: enable)
+        // Bit 6: write protection (0: allow writes; 1: deny writes)
         self.prg_ram_enable = data & 0x80 != 0;
-        // Bit 6: write protection. Many boards treat 0 = write-protect,
-        // 1 = write-enabled. We follow that convention.
-        self.prg_ram_write_protect = data & 0x40 == 0;
+        self.prg_ram_write_protect = data & 0x40 != 0;
+        // NOTE: Some emulators choose to ignore these bits (or invert bit 6)
+        // to approximate MMC6 behaviour under iNES mapper 4. We keep MMC3's
+        // documented semantics here; MMC6 should be modelled as a separate
+        // mapper or via NES 2.0 submappers.
     }
 
     fn write_irq_latch(&mut self, data: u8) {
