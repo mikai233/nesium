@@ -6,7 +6,8 @@ use crate::{
 };
 
 use self::mapper::{
-    Mapper0, Mapper1, Mapper2, Mapper3, Mapper4, Mapper5, Mapper7, Mapper9, NametableTarget,
+    Mapper0, Mapper1, Mapper2, Mapper3, Mapper4, Mapper5, Mapper6, Mapper7, Mapper9,
+    NametableTarget,
 };
 
 pub const TRAINER_SIZE: usize = 512;
@@ -130,6 +131,7 @@ pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
         3 => Box::new(Mapper3::with_trainer(header, prg_rom, chr_rom, trainer)),
         4 => Box::new(Mapper4::with_trainer(header, prg_rom, chr_rom, trainer)),
         5 => Box::new(Mapper5::with_trainer(header, prg_rom, chr_rom, trainer)),
+        6 => Box::new(Mapper6::with_trainer(header, prg_rom, chr_rom, trainer)),
         7 => Box::new(Mapper7::with_trainer(header, prg_rom, chr_rom, trainer)),
         9 => Box::new(Mapper9::with_trainer(header, prg_rom, chr_rom, trainer)),
         _ => unimplemented!("Mapper {} not implemented", header.mapper),
