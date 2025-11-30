@@ -100,43 +100,43 @@ impl Apu {
     }
 
     pub fn cpu_write(&mut self, addr: u16, value: u8) {
-        if (apu_mem::REGISTER_BASE..=apu_mem::CHANNEL_REGISTER_END).contains(&addr) {
-            let idx = (addr - apu_mem::REGISTER_BASE) as usize;
-            self.registers[idx] = value;
-        }
-
-        match addr {
-            0x4000 => self.pulse[0].write_control(value),
-            0x4001 => self.pulse[0].write_sweep(value),
-            0x4002 => self.pulse[0].write_timer_low(value),
-            0x4003 => self.pulse[0].write_timer_high(value),
-            0x4004 => self.pulse[1].write_control(value),
-            0x4005 => self.pulse[1].write_sweep(value),
-            0x4006 => self.pulse[1].write_timer_low(value),
-            0x4007 => self.pulse[1].write_timer_high(value),
-            0x4008 => self.triangle.write_control(value),
-            0x400A => self.triangle.write_timer_low(value),
-            0x400B => self.triangle.write_timer_high(value),
-            0x400C => self.noise.write_control(value),
-            0x400E => self.noise.write_mode_and_period(value),
-            0x400F => self.noise.write_length(value),
-            0x4010 => self.dmc.write_control(value, &mut self.status),
-            0x4011 => self.dmc.write_direct_load(value),
-            0x4012 => self.dmc.write_sample_address(value),
-            0x4013 => self.dmc.write_sample_length(value),
-            apu_mem::STATUS => self.write_status(value),
-            apu_mem::FRAME_COUNTER => {
-                let reset = self.frame_counter.configure(value);
-                self.status.frame_interrupt = false;
-                self.apply_frame_reset(reset);
+        if let Some(reg) = apu_mem::Register::from_cpu_addr(addr) {
+            if let Some(idx) = reg.channel_ram_index() {
+                self.registers[idx] = value;
             }
-            _ => {}
+
+            match reg {
+                apu_mem::Register::Pulse1Control => self.pulse[0].write_control(value),
+                apu_mem::Register::Pulse1Sweep => self.pulse[0].write_sweep(value),
+                apu_mem::Register::Pulse1TimerLow => self.pulse[0].write_timer_low(value),
+                apu_mem::Register::Pulse1TimerHigh => self.pulse[0].write_timer_high(value),
+                apu_mem::Register::Pulse2Control => self.pulse[1].write_control(value),
+                apu_mem::Register::Pulse2Sweep => self.pulse[1].write_sweep(value),
+                apu_mem::Register::Pulse2TimerLow => self.pulse[1].write_timer_low(value),
+                apu_mem::Register::Pulse2TimerHigh => self.pulse[1].write_timer_high(value),
+                apu_mem::Register::TriangleControl => self.triangle.write_control(value),
+                apu_mem::Register::TriangleTimerLow => self.triangle.write_timer_low(value),
+                apu_mem::Register::TriangleTimerHigh => self.triangle.write_timer_high(value),
+                apu_mem::Register::NoiseControl => self.noise.write_control(value),
+                apu_mem::Register::NoiseModeAndPeriod => self.noise.write_mode_and_period(value),
+                apu_mem::Register::NoiseLength => self.noise.write_length(value),
+                apu_mem::Register::DmcControl => self.dmc.write_control(value, &mut self.status),
+                apu_mem::Register::DmcDirectLoad => self.dmc.write_direct_load(value),
+                apu_mem::Register::DmcSampleAddress => self.dmc.write_sample_address(value),
+                apu_mem::Register::DmcSampleLength => self.dmc.write_sample_length(value),
+                apu_mem::Register::Status => self.write_status(value),
+                apu_mem::Register::FrameCounter => {
+                    let reset = self.frame_counter.configure(value);
+                    self.status.frame_interrupt = false;
+                    self.apply_frame_reset(reset);
+                }
+            }
         }
     }
 
     pub fn cpu_read(&mut self, addr: u16) -> u8 {
-        match addr {
-            apu_mem::STATUS => self.read_status(),
+        match apu_mem::Register::from_cpu_addr(addr) {
+            Some(apu_mem::Register::Status) => self.read_status(),
             _ => 0,
         }
     }

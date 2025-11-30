@@ -163,8 +163,144 @@ pub mod apu {
     /// Final channel register before the status and DMA/OAM bridges.
     pub const CHANNEL_REGISTER_END: u16 = 0x4013;
 
+    /// CPU-visible APU register identifiers.
+    ///
+    /// The NES APU exposes a small set of CPU-mapped registers in the
+    /// `$4000-$4017` range. Most of these configure the individual audio
+    /// channels; a handful of control registers manage global status and the
+    /// frame counter. Keeping the mapping in one place avoids magic numbers
+    /// in the APU implementation and mirrors the layout described on Nesdev.
+    #[repr(u16)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub enum Register {
+        /// `$4000` - Pulse channel 1: duty, envelope, length counter halt.
+        Pulse1Control = 0x4000,
+        /// `$4001` - Pulse channel 1: sweep unit configuration.
+        Pulse1Sweep = 0x4001,
+        /// `$4002` - Pulse channel 1: timer low byte.
+        Pulse1TimerLow = 0x4002,
+        /// `$4003` - Pulse channel 1: timer high 3 bits + length counter load.
+        Pulse1TimerHigh = 0x4003,
+
+        /// `$4004` - Pulse channel 2: duty, envelope, length counter halt.
+        Pulse2Control = 0x4004,
+        /// `$4005` - Pulse channel 2: sweep unit configuration.
+        Pulse2Sweep = 0x4005,
+        /// `$4006` - Pulse channel 2: timer low byte.
+        Pulse2TimerLow = 0x4006,
+        /// `$4007` - Pulse channel 2: timer high 3 bits + length counter load.
+        Pulse2TimerHigh = 0x4007,
+
+        /// `$4008` - Triangle channel: length counter halt + linear counter.
+        TriangleControl = 0x4008,
+        /// `$400A` - Triangle channel: timer low byte.
+        TriangleTimerLow = 0x400A,
+        /// `$400B` - Triangle channel: timer high 3 bits + length counter load.
+        TriangleTimerHigh = 0x400B,
+
+        /// `$400C` - Noise channel: envelope and length counter halt.
+        NoiseControl = 0x400C,
+        /// `$400E` - Noise channel: mode flag and period index.
+        NoiseModeAndPeriod = 0x400E,
+        /// `$400F` - Noise channel: length counter load.
+        NoiseLength = 0x400F,
+
+        /// `$4010` - DMC: IRQ enable, loop flag, and rate index.
+        DmcControl = 0x4010,
+        /// `$4011` - DMC: direct load value for the sample DAC.
+        DmcDirectLoad = 0x4011,
+        /// `$4012` - DMC: sample address (high bits of the CPU address).
+        DmcSampleAddress = 0x4012,
+        /// `$4013` - DMC: sample length (number of bytes to play).
+        DmcSampleLength = 0x4013,
+
+        /// `$4015` - APU status: channel enables and IRQ flags.
+        Status = 0x4015,
+        /// `$4017` - Frame counter: mode select and IRQ inhibit.
+        FrameCounter = 0x4017,
+    }
+
+    impl Register {
+        /// Raw CPU address for this APU register.
+        pub const fn addr(self) -> u16 {
+            self as u16
+        }
+
+        /// Resolves a CPU address to an APU register, if the address is one of
+        /// the documented APU-visible locations.
+        ///
+        /// Returns `None` for unused holes in the `$4000-$4017` range (for
+        /// example `$4009`, `$400D`, `$4014`, `$4016` which are handled by
+        /// other subsystems such as the PPU or controllers).
+        pub const fn from_cpu_addr(addr: u16) -> Option<Self> {
+            match addr {
+                0x4000 => Some(Self::Pulse1Control),
+                0x4001 => Some(Self::Pulse1Sweep),
+                0x4002 => Some(Self::Pulse1TimerLow),
+                0x4003 => Some(Self::Pulse1TimerHigh),
+                0x4004 => Some(Self::Pulse2Control),
+                0x4005 => Some(Self::Pulse2Sweep),
+                0x4006 => Some(Self::Pulse2TimerLow),
+                0x4007 => Some(Self::Pulse2TimerHigh),
+                0x4008 => Some(Self::TriangleControl),
+                0x400A => Some(Self::TriangleTimerLow),
+                0x400B => Some(Self::TriangleTimerHigh),
+                0x400C => Some(Self::NoiseControl),
+                0x400E => Some(Self::NoiseModeAndPeriod),
+                0x400F => Some(Self::NoiseLength),
+                0x4010 => Some(Self::DmcControl),
+                0x4011 => Some(Self::DmcDirectLoad),
+                0x4012 => Some(Self::DmcSampleAddress),
+                0x4013 => Some(Self::DmcSampleLength),
+                0x4015 => Some(Self::Status),
+                0x4017 => Some(Self::FrameCounter),
+                _ => None,
+            }
+        }
+
+        /// Returns `true` if this register is a channel parameter register
+        /// that is mirrored into the internal APU register RAM window
+        /// (`$4000-$4013`).
+        pub const fn is_channel_register(self) -> bool {
+            matches!(
+                self,
+                Self::Pulse1Control
+                    | Self::Pulse1Sweep
+                    | Self::Pulse1TimerLow
+                    | Self::Pulse1TimerHigh
+                    | Self::Pulse2Control
+                    | Self::Pulse2Sweep
+                    | Self::Pulse2TimerLow
+                    | Self::Pulse2TimerHigh
+                    | Self::TriangleControl
+                    | Self::TriangleTimerLow
+                    | Self::TriangleTimerHigh
+                    | Self::NoiseControl
+                    | Self::NoiseModeAndPeriod
+                    | Self::NoiseLength
+                    | Self::DmcControl
+                    | Self::DmcDirectLoad
+                    | Self::DmcSampleAddress
+                    | Self::DmcSampleLength
+            )
+        }
+
+        /// Index into the APU's internal register RAM for channel parameter
+        /// registers (`$4000-$4013`).
+        ///
+        /// Returns `None` for registers that are not mirrored into the APU
+        /// register RAM (such as `$4015` and `$4017`).
+        pub const fn channel_ram_index(self) -> Option<usize> {
+            if self.is_channel_register() {
+                Some((self.addr() - REGISTER_BASE) as usize)
+            } else {
+                None
+            }
+        }
+    }
+
     /// Address of the status register (`$4015`).
-    pub const STATUS: u16 = 0x4015;
+    pub const STATUS: u16 = Register::Status as u16;
     /// Address of the frame counter configuration register (`$4017`).
-    pub const FRAME_COUNTER: u16 = 0x4017;
+    pub const FRAME_COUNTER: u16 = Register::FrameCounter as u16;
 }
