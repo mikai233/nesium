@@ -3,7 +3,7 @@
 /// This module provides a simple front/back framebuffer with two modes:
 /// - index mode: stores raw palette indices for debugging or PPU inspection
 /// - color mode: stores packed RGB/RGBA pixels ready to be consumed by a frontend (SDL, libretro, Flutter, etc.)
-use crate::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, palette::Palette};
+use crate::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, palette::Color};
 
 /// Describes how a logical RGB color is packed into the underlying byte buffer.
 ///
@@ -60,9 +60,8 @@ pub enum BufferMode {
     /// Palette index buffer (1 byte per pixel).
     #[default]
     Index,
-    /// Packed color buffer using a palette and a concrete `ColorFormat`.
+    /// Packed color buffer using a concrete `ColorFormat`.
     Color {
-        palette: Palette,
         format: ColorFormat,
     },
 }
@@ -73,7 +72,7 @@ impl FrameBuffer {
     /// This is a low-level constructor. Prefer the `new_*` convenience constructors
     /// when you want a framebuffer sized to the NES screen.
     pub fn new(mode: BufferMode, len: usize) -> Self {
-        if let BufferMode::Color { format, .. } = &mode {
+        if let BufferMode::Color { format } = &mode {
             let expected = SCREEN_WIDTH * SCREEN_HEIGHT * format.bytes_per_pixel();
             debug_assert!(
                 len == expected,
@@ -99,41 +98,41 @@ impl FrameBuffer {
         Self::new(BufferMode::Index, SCREEN_WIDTH * SCREEN_HEIGHT)
     }
 
-    /// Creates a new color framebuffer with the given palette and format,
+    /// Creates a new color framebuffer with the given format,
     /// sized to the NES screen.
-    pub fn new_color(palette: Palette, format: ColorFormat) -> Self {
+    pub fn new_color(format: ColorFormat) -> Self {
         let len = SCREEN_WIDTH * SCREEN_HEIGHT * format.bytes_per_pixel();
-        Self::new(BufferMode::Color { palette, format }, len)
+        Self::new(BufferMode::Color { format }, len)
     }
 
-    /// Creates a new 16-bit RGB555 framebuffer using the given palette.
-    pub fn new_rgb555(palette: Palette) -> Self {
-        Self::new_color(palette, ColorFormat::Rgb555)
+    /// Creates a new 16-bit RGB555 framebuffer.
+    pub fn new_rgb555() -> Self {
+        Self::new_color(ColorFormat::Rgb555)
     }
 
-    /// Creates a new 16-bit RGB565 framebuffer using the given palette.
-    pub fn new_rgb565(palette: Palette) -> Self {
-        Self::new_color(palette, ColorFormat::Rgb565)
+    /// Creates a new 16-bit RGB565 framebuffer.
+    pub fn new_rgb565() -> Self {
+        Self::new_color(ColorFormat::Rgb565)
     }
 
-    /// Creates a new 24-bit RGB888 framebuffer using the given palette.
-    pub fn new_rgb888(palette: Palette) -> Self {
-        Self::new_color(palette, ColorFormat::Rgb888)
+    /// Creates a new 24-bit RGB888 framebuffer.
+    pub fn new_rgb888() -> Self {
+        Self::new_color(ColorFormat::Rgb888)
     }
 
-    /// Creates a new 32-bit RGBA8888 framebuffer using the given palette.
-    pub fn new_rgba8888(palette: Palette) -> Self {
-        Self::new_color(palette, ColorFormat::Rgba8888)
+    /// Creates a new 32-bit RGBA8888 framebuffer.
+    pub fn new_rgba8888() -> Self {
+        Self::new_color(ColorFormat::Rgba8888)
     }
 
-    /// Creates a new 32-bit BGRA8888 framebuffer using the given palette.
-    pub fn new_bgra8888(palette: Palette) -> Self {
-        Self::new_color(palette, ColorFormat::Bgra8888)
+    /// Creates a new 32-bit BGRA8888 framebuffer.
+    pub fn new_bgra8888() -> Self {
+        Self::new_color(ColorFormat::Bgra8888)
     }
 
-    /// Creates a new 32-bit ARGB8888 framebuffer using the given palette.
-    pub fn new_argb8888(palette: Palette) -> Self {
-        Self::new_color(palette, ColorFormat::Argb8888)
+    /// Creates a new 32-bit ARGB8888 framebuffer.
+    pub fn new_argb8888() -> Self {
+        Self::new_color(ColorFormat::Argb8888)
     }
 
     /// Returns a read-only view of the currently active plane for rendering.
@@ -203,20 +202,42 @@ impl FrameBuffer {
         }
     }
 
+    /// Returns `true` if the framebuffer is currently configured in index mode.
+    ///
+    /// In index mode each pixel is stored as a single palette index byte
+    /// (`0..=63`) instead of a packed RGB/RGBA color.
+    #[inline]
+    pub fn is_index_mode(&self) -> bool {
+        matches!(self.mode, BufferMode::Index)
+    }
+
     /// Writes a single pixel at `(x, y)` using a palette index.
     ///
-    /// In `Index` mode the index is written directly into the buffer.
-    /// In `Color` mode the index is resolved through the `Palette` and then
-    /// encoded into the underlying buffer according to the active `ColorFormat`.
-    pub fn write_pixel(&mut self, x: usize, y: usize, index: u8) {
+    /// This helper is only valid when the framebuffer is in `Index` mode.
+    pub fn write_index(&mut self, x: usize, y: usize, index: u8) {
         match &mut self.mode {
             BufferMode::Index => {
                 let idx = y * SCREEN_WIDTH + x;
                 self.write()[idx] = index;
             }
-            BufferMode::Color { palette, format } => {
+            BufferMode::Color { .. } => {
+                panic!("write_index called on color framebuffer");
+            }
+        }
+    }
+
+    /// Writes a single pixel at `(x, y)` using an RGB triplet.
+    ///
+    /// This helper is only valid when the framebuffer is in `Color` mode and
+    /// encodes the color into the underlying buffer according to the active
+    /// `ColorFormat`.
+    pub fn write_color(&mut self, x: usize, y: usize, color: Color) {
+        match &mut self.mode {
+            BufferMode::Index => {
+                panic!("write_color called on index framebuffer");
+            }
+            BufferMode::Color { format } => {
                 let buffer = &mut self.planes[self.active_index];
-                let color = palette.color(index);
                 let bpp = format.bytes_per_pixel();
                 let idx = (y * SCREEN_WIDTH + x) * bpp;
                 debug_assert!(idx + bpp <= buffer.len());
@@ -268,28 +289,6 @@ impl FrameBuffer {
                     }
                 }
             }
-        }
-    }
-
-    /// Replaces the palette used by the color buffer.
-    ///
-    /// Panics if called while the framebuffer is in `Index` mode.
-    pub fn set_palette(&mut self, palette: Palette) {
-        match &mut self.mode {
-            BufferMode::Index => panic!("Cannot set palette on index buffer"),
-            BufferMode::Color { palette: p, .. } => {
-                *p = palette;
-            }
-        }
-    }
-
-    /// Returns a reference to the palette used by the color buffer.
-    ///
-    /// Panics if called while the framebuffer is in `Index` mode.
-    pub fn get_palette(&self) -> &Palette {
-        match &self.mode {
-            BufferMode::Index => panic!("Cannot get palette on index buffer"),
-            BufferMode::Color { palette, .. } => palette,
         }
     }
 }

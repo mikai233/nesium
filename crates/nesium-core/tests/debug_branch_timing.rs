@@ -24,7 +24,7 @@ fn log_nmi_edges() -> Result<()> {
     let mut falls = 0;
     let mut last_edge_dot: u64 = 0;
     while edges < 4 {
-        nes.clock_dot();
+        nes.step_dot();
         guard += 1;
         if guard > 2_000_000 {
             panic!("timeout waiting for NMI output edges (got {edges})");

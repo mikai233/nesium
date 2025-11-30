@@ -50,7 +50,7 @@ pub struct Nes {
 impl Nes {
     /// Constructs a powered-on NES instance with cleared RAM and default palette.
     pub fn new(format: ColorFormat) -> Self {
-        let buffer = FrameBuffer::new_color(PaletteKind::NesdevNtsc.palette(), format);
+        let buffer = FrameBuffer::new_color(format);
         let mut nes = Self {
             cpu: Cpu::new(),
             ppu: Ppu::new(buffer),
@@ -65,6 +65,7 @@ impl Nes {
             open_bus: OpenBus::new(),
             cpu_bus_cycle: 0,
         };
+        nes.ppu.set_palette(PaletteKind::NesdevNtsc.palette());
         nes.reset();
         nes
     }
@@ -113,11 +114,9 @@ impl Nes {
         self.dot_counter = 0;
     }
 
-    /// Advances the system by a single PPU dot (master tick).
-    ///
-    /// Runs PPU every call; runs CPU/APU every 3 dots (NTSC ratio).
-    /// Returns `true` when a new frame has just been produced.
-    pub fn clock_dot(&mut self) -> bool {
+    /// Advances the system by a single PPU dot (master tick) and reports whether
+    /// CPU/APU were clocked on this dot.
+    pub fn step_dot(&mut self) -> ClockResult {
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
@@ -136,27 +135,46 @@ impl Nes {
         bus.clock_ppu();
         // Run CPU/APU once every 3 PPU dots with a phase that aligns CPU work
         // just after the second PPU dot in each trio, matching common PPU-first cadence.
-        if (self.dot_counter + 2) % 3 == 0 {
+        let apu_clocked = if (self.dot_counter + 2) % 3 == 0 {
             self.cpu.clock(&mut bus);
             bus.apu_mut().clock();
-        }
+            true
+        } else {
+            false
+        };
 
         self.dot_counter = self.dot_counter.wrapping_add(1);
 
         let frame_count = bus.ppu().frame_count();
-        let new_frame = frame_count != self.last_frame;
-        if new_frame {
+        let frame_advanced = if frame_count != self.last_frame {
             self.last_frame = frame_count;
+            true
+        } else {
+            false
+        };
+
+        ClockResult {
+            frame_advanced,
+            apu_clocked,
         }
-        new_frame
     }
 
     /// Runs CPU/PPU/APU ticks until the PPU completes the next frame.
     pub fn run_frame(&mut self) {
         let target_frame = self.last_frame.wrapping_add(1);
         while self.ppu.frame_count() < target_frame {
-            self.clock_dot();
+            self.step_dot();
         }
+    }
+
+    /// Advances the system by a single PPU dot (debug helper alias for [`step_dot`]).
+    pub fn clock_dot(&mut self) -> ClockResult {
+        self.step_dot()
+    }
+
+    /// Latest audio sample from the APU mixer.
+    pub fn audio_sample(&self) -> f32 {
+        self.apu.sample()
     }
 
     /// Palette indices for the latest frame (PPU native format).
@@ -166,12 +184,12 @@ impl Nes {
 
     /// Selects one of the built-in palettes.
     pub fn set_palette(&mut self, palette: Palette) {
-        self.ppu.framebuffer.set_palette(palette);
+        self.ppu.set_palette(palette);
     }
 
     /// Active palette reference.
     pub fn palette(&self) -> &Palette {
-        self.ppu.framebuffer.get_palette()
+        self.ppu.palette()
     }
 
     /// Updates the pressed state of a controller button (0 = port 1).
@@ -215,7 +233,7 @@ impl Nes {
     pub fn step_instruction(&mut self) {
         let mut seen_active = false;
         loop {
-            self.clock_dot();
+            self.step_dot();
             if self.cpu.opcode_active() {
                 seen_active = true;
             } else if seen_active {
@@ -267,6 +285,13 @@ impl Nes {
     pub fn take_serial_output(&mut self) -> Vec<u8> {
         self.serial_log.drain()
     }
+}
+
+/// Result of a single dot tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClockResult {
+    pub frame_advanced: bool,
+    pub apu_clocked: bool,
 }
 
 impl Default for Nes {

@@ -131,9 +131,7 @@ pub fn run_trace<P: AsRef<Path>>(rom_path: P, log_path: P) -> Result<()> {
 
 pub fn run_frame_report<P: AsRef<Path>>(rom: P, frames: usize) -> Result<()> {
     let mut nes = Nes::new(ColorFormat::Argb8888);
-    nes.ppu
-        .framebuffer
-        .set_palette(PaletteKind::RawLinear.palette());
+    nes.set_palette(PaletteKind::RawLinear.palette());
     nes.load_cartridge_from_file(rom)?;
 
     for _ in 0..frames {

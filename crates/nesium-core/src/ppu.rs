@@ -51,7 +51,7 @@ use crate::{
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
         buffer::FrameBuffer,
-        palette::PaletteRam,
+        palette::{Palette, PaletteRam},
         registers::{Control, Mask, Registers, Status, VramAddr},
         sprite::SpriteView,
     },
@@ -139,6 +139,8 @@ pub struct Ppu {
     sprite_fetch: SpriteFetchState,
     /// Buffered secondary-OAM sprite bytes/patterns for the next scanline.
     sprite_line_next: SpriteLineBuffers,
+    /// Master system palette used to map palette indices to RGB colors.
+    palette: Palette,
     /// Background + sprite rendering target for the current frame.
     pub framebuffer: FrameBuffer,
 }
@@ -243,6 +245,7 @@ impl Ppu {
             sprite_eval: SpriteEvalState::default(),
             sprite_fetch: SpriteFetchState::default(),
             sprite_line_next: SpriteLineBuffers::new(),
+            palette: Palette::default(),
             framebuffer,
         }
     }
@@ -302,8 +305,9 @@ impl Ppu {
 
     /// Returns an immutable view of the current framebuffer.
     ///
-    /// Each entry is a palette index (0..=63) which can be resolved using
-    /// the palette RAM and a host-side color palette.
+    /// In color mode the buffer contains packed pixels in the active
+    /// [`buffer::ColorFormat`]. In index mode it contains one byte per pixel
+    /// with palette indices (`0..=63`).
     pub fn render_buffer(&self) -> &[u8] {
         self.framebuffer.render()
     }
@@ -332,6 +336,16 @@ impl Ppu {
     /// Clears the framebuffer to palette index 0.
     fn clear_framebuffer(&mut self) {
         self.framebuffer.clear();
+    }
+
+    /// Replaces the master system palette used for color conversion.
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
+    }
+
+    /// Returns a reference to the active master system palette.
+    pub fn palette(&self) -> &Palette {
+        &self.palette
     }
 
     /// Copies CHR ROM/RAM contents into the pattern table window (`$0000-$1FFF`).
@@ -818,9 +832,15 @@ impl Ppu {
         if self.registers.mask.contains(Mask::GRAYSCALE) {
             color_index &= 0x30;
         }
-        self.framebuffer.write_pixel(x, y, color_index);
-        if x * y >= SCREEN_WIDTH * SCREEN_HEIGHT {
-            self.framebuffer.swap();
+
+        if self.framebuffer.is_index_mode() {
+            // Index mode: store palette index directly for debugging/inspection.
+            self.framebuffer.write_index(x, y, color_index);
+        } else {
+            // Color mode: resolve index through the master palette and write
+            // packed RGB/RGBA pixels into the framebuffer.
+            let color = self.palette.color(color_index);
+            self.framebuffer.write_color(x, y, color);
         }
     }
 
