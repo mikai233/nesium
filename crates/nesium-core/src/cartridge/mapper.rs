@@ -19,6 +19,7 @@ pub mod mapper13;
 pub mod mapper19;
 pub mod mapper2;
 pub mod mapper21;
+pub mod mapper23;
 pub mod mapper3;
 pub mod mapper4;
 pub mod mapper5;
@@ -43,6 +44,7 @@ pub use mapper11::Mapper11;
 pub use mapper13::Mapper13;
 pub use mapper19::Mapper19;
 pub use mapper21::Mapper21;
+pub use mapper23::Mapper23;
 
 use crate::{
     cartridge::{
