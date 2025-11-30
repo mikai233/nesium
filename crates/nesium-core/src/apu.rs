@@ -26,6 +26,7 @@ mod triangle;
 use core::fmt;
 
 use crate::{
+    audio::{AudioChannel, NesSoundMixer},
     memory::apu::{self as apu_mem},
     ram::apu::RegisterRam,
 };
@@ -57,6 +58,7 @@ pub struct Apu {
     triangle: Triangle,
     noise: Noise,
     dmc: Dmc,
+    last_levels: [f32; 5],
 }
 
 impl fmt::Debug for Apu {
@@ -83,6 +85,7 @@ impl Apu {
             triangle: Triangle::default(),
             noise: Noise::default(),
             dmc: Dmc::default(),
+            last_levels: [0.0; 5],
         }
     }
 
@@ -98,6 +101,7 @@ impl Apu {
         self.triangle = Triangle::default();
         self.noise = Noise::default();
         self.dmc = Dmc::default();
+        self.last_levels = [0.0; 5];
     }
 
     pub fn cpu_write(&mut self, addr: u16, value: u8) {
@@ -214,7 +218,7 @@ impl Apu {
     ///
     /// The default [`clock`](Self::clock) uses a zeroed reader so sound output
     /// remains deterministic even when the caller does not wire up CPU reads.
-    pub fn clock_with_reader<F>(&mut self, mut reader: F)
+    pub fn clock_with_reader<F>(&mut self, mut reader: F, mixer: Option<&mut NesSoundMixer>)
     where
         F: FnMut(u16) -> u8,
     {
@@ -239,12 +243,20 @@ impl Apu {
         self.noise.clock_timer();
         self.dmc.clock(&mut reader, &mut self.status);
 
+        if let Some(mixer) = mixer {
+            self.push_audio_levels(mixer);
+        }
     }
 
     /// Per-CPU-cycle APU tick. DMC memory fetches return zero bytes unless the
     /// caller uses [`clock_with_reader`](Self::clock_with_reader).
     pub fn clock(&mut self) {
-        self.clock_with_reader(|_| 0);
+        self.clock_with_reader(|_| 0, None);
+    }
+
+    /// Per-CPU-cycle APU tick that also feeds the shared mixer.
+    pub fn clock_with_mixer(&mut self, mixer: &mut NesSoundMixer) {
+        self.clock_with_reader(|_| 0, Some(mixer));
     }
 
     /// Mixed audio sample using the NES non-linear mixer approximation.
@@ -268,6 +280,37 @@ impl Apu {
         };
 
         pulse_out + tnd_out
+    }
+
+    pub fn cycle_count(&self) -> u64 {
+        self.cycles
+    }
+
+    fn push_audio_levels(&mut self, mixer: &mut NesSoundMixer) {
+        const CHANNELS: [AudioChannel; 5] = [
+            AudioChannel::Pulse1,
+            AudioChannel::Pulse2,
+            AudioChannel::Triangle,
+            AudioChannel::Noise,
+            AudioChannel::Dmc,
+        ];
+
+        let outputs = [
+            self.pulse[0].output() as f32,
+            self.pulse[1].output() as f32,
+            self.triangle.output() as f32,
+            self.noise.output() as f32,
+            self.dmc.output() as f32,
+        ];
+
+        let clock = self.cycles as i64;
+        for (idx, &level) in outputs.iter().enumerate() {
+            let delta = level - self.last_levels[idx];
+            if delta != 0.0 {
+                mixer.add_delta(CHANNELS[idx], clock, delta);
+                self.last_levels[idx] = level;
+            }
+        }
     }
 }
 

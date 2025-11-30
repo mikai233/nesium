@@ -2376,6 +2376,8 @@ dependencies = [
 name = "nesium-flutter"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "cpal",
  "flutter_rust_bridge",
  "nesium-core",
 ]

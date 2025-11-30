@@ -2,6 +2,7 @@ use std::path::Path;
 
 use crate::{
     apu::Apu,
+    audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer},
     bus::{Bus, OpenBus, cpu::CpuBus},
     cartridge::Cartridge,
     controller::{Button, Controller},
@@ -16,6 +17,7 @@ use crate::{
 };
 
 pub mod apu;
+pub mod audio;
 pub mod bus;
 pub mod cartridge;
 pub mod controller;
@@ -45,11 +47,18 @@ pub struct Nes {
     open_bus: OpenBus,
     /// CPU bus access counter (fed into timing-sensitive mappers).
     cpu_bus_cycle: u64,
+    mixer: NesSoundMixer,
+    audio_sample_rate: u32,
 }
 
 impl Nes {
     /// Constructs a powered-on NES instance with cleared RAM and default palette.
     pub fn new(format: ColorFormat) -> Self {
+        Self::new_with_sample_rate(format, 48_000)
+    }
+
+    /// Constructs a powered-on NES instance with a specified audio sample rate.
+    pub fn new_with_sample_rate(format: ColorFormat, sample_rate: u32) -> Self {
         let buffer = FrameBuffer::new_color(format);
         let mut nes = Self {
             cpu: Cpu::new(),
@@ -64,6 +73,8 @@ impl Nes {
             oam_dma_request: None,
             open_bus: OpenBus::new(),
             cpu_bus_cycle: 0,
+            mixer: NesSoundMixer::new(CPU_CLOCK_NTSC, sample_rate),
+            audio_sample_rate: sample_rate,
         };
         nes.ppu.set_palette(PaletteKind::NesdevNtsc.palette());
         nes.reset();
@@ -101,6 +112,7 @@ impl Nes {
         self.serial_log.drain();
         self.open_bus.reset();
         self.cpu_bus_cycle = 0;
+        self.mixer.reset();
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
@@ -162,6 +174,57 @@ impl Nes {
         }
     }
 
+    /// Advances the system by a single PPU dot while feeding audio deltas into the shared mixer.
+    pub fn step_dot_with_audio(&mut self) -> ClockResult {
+        let mut bus = CpuBus::new(
+            &mut self.ram,
+            &mut self.ppu,
+            &mut self.apu,
+            self.cartridge.as_mut(),
+            &mut self.controllers,
+            Some(&mut self.serial_log),
+            &mut self.oam_dma_request,
+            &mut self.open_bus,
+            &mut self.cpu_bus_cycle,
+        );
+
+        bus.clock_ppu();
+        let apu_clocked = if (self.dot_counter + 2) % 3 == 0 {
+            self.cpu.clock(&mut bus);
+            bus.apu_mut().clock_with_mixer(&mut self.mixer);
+
+            if let Some(expansion) = bus
+                .cartridge()
+                .and_then(|cart| cart.mapper().as_expansion_audio())
+            {
+                let sample = expansion.sample();
+                self.mixer.set_channel_level(
+                    AudioChannel::Expansion,
+                    bus.cpu_cycles() as i64,
+                    sample,
+                );
+            }
+            true
+        } else {
+            false
+        };
+
+        self.dot_counter = self.dot_counter.wrapping_add(1);
+
+        let frame_count = bus.ppu().frame_count();
+        let frame_advanced = if frame_count != self.last_frame {
+            self.last_frame = frame_count;
+            true
+        } else {
+            false
+        };
+
+        ClockResult {
+            frame_advanced,
+            apu_clocked,
+        }
+    }
+
     /// Runs CPU/PPU/APU ticks until the PPU completes the next frame.
     pub fn run_frame(&mut self) {
         let target_frame = self.last_frame.wrapping_add(1);
@@ -185,6 +248,33 @@ impl Nes {
             .map(|exp| exp.sample())
             .unwrap_or(0.0);
         base + expansion
+    }
+
+    /// Run a full frame and emit mixed PCM samples.
+    pub fn run_frame_with_audio(&mut self, out: &mut Vec<f32>) {
+        let end_clock = loop {
+            let res = self.step_dot_with_audio();
+            if res.frame_advanced {
+                break self.apu_cycles() as i64;
+            }
+        };
+        self.mixer.end_frame(end_clock, out);
+    }
+
+    /// Update the mixer to a new host sample rate (resets mixer state).
+    pub fn set_audio_sample_rate(&mut self, sample_rate: u32) {
+        self.audio_sample_rate = sample_rate;
+        self.mixer = NesSoundMixer::new(CPU_CLOCK_NTSC, sample_rate);
+    }
+
+    /// Current audio sample rate used by the internal mixer.
+    pub fn audio_sample_rate(&self) -> u32 {
+        self.audio_sample_rate
+    }
+
+    /// Current APU cycle counter (CPU-rate ticks since power-on/reset).
+    pub fn apu_cycles(&self) -> u64 {
+        self.apu.cycle_count()
     }
 
     /// Palette indices for the latest frame (PPU native format).

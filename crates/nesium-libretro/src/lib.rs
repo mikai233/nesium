@@ -24,7 +24,6 @@ use libretro_bridge::raw::{
 const WIDTH: u32 = SCREEN_WIDTH as u32;
 const HEIGHT: u32 = SCREEN_HEIGHT as u32;
 const SAMPLE_RATE: f64 = 44_100.0;
-const AUDIO_FRAMES: usize = (SAMPLE_RATE as usize) / 60;
 const COLOR_FORMAT: ColorFormat = ColorFormat::Rgb555;
 
 struct DemoCore {
@@ -34,7 +33,7 @@ struct DemoCore {
 impl DemoCore {
     fn new() -> Self {
         Self {
-            nes: Nes::new(COLOR_FORMAT),
+            nes: Nes::new_with_sample_rate(COLOR_FORMAT, SAMPLE_RATE as u32),
         }
     }
 
@@ -72,14 +71,16 @@ impl DemoCore {
         }
     }
 
-    /// Generates a single frame of silent stereo audio.
-    ///
-    /// This is a temporary placeholder so that the frontend can use audio
-    /// timing to throttle the core to ~60 FPS without affecting gameplay.
-    fn generate_audio(&mut self) -> [[i16; 2]; AUDIO_FRAMES] {
-        // Each element is a stereo sample [left, right]. We fill the entire
-        // buffer with zeros to produce silence.
-        [[0i16; 2]; AUDIO_FRAMES]
+    fn render_audio(&mut self) -> Vec<[i16; 2]> {
+        let mut samples = Vec::new();
+        self.nes.run_frame_with_audio(&mut samples);
+        samples
+            .into_iter()
+            .map(|s| {
+                let clamped = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                [clamped, clamped]
+            })
+            .collect()
     }
 }
 
@@ -115,7 +116,7 @@ impl LibretroCore for DemoCore {
         // Update controller state from libretro input before running a frame.
         self.update_input(runtime);
 
-        self.nes.run_frame();
+        let audio_frames = self.render_audio();
         if let Some(video) = runtime.video() {
             let pitch = WIDTH as usize * COLOR_FORMAT.bytes_per_pixel();
             video.submit(Frame::from_pixels(
@@ -126,8 +127,9 @@ impl LibretroCore for DemoCore {
             ));
         }
 
-        let audio_frames = self.generate_audio();
-        runtime.audio().push_frames(&audio_frames);
+        if !audio_frames.is_empty() {
+            runtime.audio().push_frames(&audio_frames);
+        }
     }
 
     fn load_game(&mut self, game: &GameInfo<'_>) -> Result<(), LoadGameError> {

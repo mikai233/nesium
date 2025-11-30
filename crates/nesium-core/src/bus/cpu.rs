@@ -60,6 +60,11 @@ impl<'a> CpuBus<'a> {
         self.cartridge.as_ref().map(|c| &**c)
     }
 
+    /// Current CPU cycle counter (increments per bus access).
+    pub fn cpu_cycles(&self) -> u64 {
+        *self.cpu_cycle_counter
+    }
+
     /// Immutable access to the PPU for visualization-heavy systems.
     pub fn ppu(&self) -> &Ppu {
         self.ppu

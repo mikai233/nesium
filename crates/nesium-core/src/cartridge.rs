@@ -142,7 +142,7 @@ pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
         11 => Box::new(Mapper11::with_trainer(header, prg_rom, chr_rom, trainer)),
         13 => Box::new(Mapper13::with_trainer(header, prg_rom, chr_rom, trainer)),
         19 => Box::new(Mapper19::with_trainer(header, prg_rom, chr_rom, trainer)),
-        _ => unimplemented!("Mapper {} not implemented", header.mapper),
+        other => return Err(Error::UnsupportedMapper(other)),
     };
 
     // Apply mapper-specific power-on defaults once after construction.
@@ -264,5 +264,18 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn errors_when_mapper_not_implemented() {
+        // Choose a mapper number that is currently not implemented by this core.
+        // With flags7/upper bytes zeroed, the high nibble of flags6 becomes
+        // the mapper number. 0xC0 >> 4 = 12.
+        let mut rom = base_header(1, 1, 0xC0).to_vec();
+        rom.extend(vec![0xAA; 16 * 1024]); // PRG
+        rom.extend(vec![0x55; 8 * 1024]); // CHR
+
+        let err = load_cartridge(&rom).expect_err("unsupported mapper should fail");
+        assert!(matches!(err, Error::UnsupportedMapper(12)));
     }
 }

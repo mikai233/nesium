@@ -292,11 +292,11 @@ impl Mapper9 {
         if self.base_mirroring == Mirroring::FourScreen {
             return;
         }
-            self.mirroring = if data & 0x01 == 0 {
-                Mirroring::Vertical
-            } else {
-                Mirroring::Horizontal
-            };
+        self.mirroring = if data & 0x01 == 0 {
+            Mirroring::Vertical
+        } else {
+            Mirroring::Horizontal
+        };
     }
 }
 

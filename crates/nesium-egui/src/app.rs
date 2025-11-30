@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::audio::{AudioTiming, NesAudioPlayer};
+use crate::audio::NesAudioPlayer;
 use anyhow::{Context, Result};
 use eframe::egui;
 use egui::{
@@ -29,7 +29,6 @@ pub struct NesiumApp {
     rom_path: Option<PathBuf>,
     start_pc: Option<u16>,
     audio: Option<NesAudioPlayer>,
-    audio_timing: Option<AudioTiming>,
     paused: bool,
     status_line: Option<String>,
     show_debugger: bool,
@@ -45,8 +44,6 @@ impl NesiumApp {
         cc.egui_ctx.set_visuals(Visuals::light());
         install_cjk_font(&cc.egui_ctx);
 
-        let nes = Nes::new(ColorFormat::Rgba8888);
-
         let mut status_line = None;
         let audio = match NesAudioPlayer::new() {
             Ok(player) => Some(player),
@@ -56,7 +53,8 @@ impl NesiumApp {
                 None
             }
         };
-        let audio_timing = audio.as_ref().map(|a| AudioTiming::new(a.sample_rate()));
+        let sample_rate = audio.as_ref().map(|a| a.sample_rate()).unwrap_or(48_000);
+        let nes = Nes::new_with_sample_rate(ColorFormat::Rgba8888, sample_rate);
 
         let mut app = Self {
             nes,
@@ -72,7 +70,6 @@ impl NesiumApp {
             show_input: false,
             controller: ControllerInput::default(),
             next_frame_deadline: None,
-            audio_timing,
         };
 
         if let Some(path) = config.rom_path {
@@ -84,26 +81,17 @@ impl NesiumApp {
         app
     }
 
-    /// Runs one video frame while emitting audio samples at the host sample rate using a simple time accumulator.
+    /// Runs one video frame while emitting audio samples at the host sample rate.
     fn run_frame_with_audio(&mut self) {
-        match (&self.audio, &mut self.audio_timing) {
-            (Some(audio), Some(timing)) => {
+        match &self.audio {
+            Some(audio) => {
                 let mut samples = Vec::new();
-                loop {
-                    let res = self.nes.step_dot();
-                    if res.apu_clocked {
-                        let sample = self.nes.audio_sample();
-                        timing.step(sample, &mut samples);
-                    }
-                    if res.frame_advanced {
-                        break;
-                    }
-                }
+                self.nes.run_frame_with_audio(&mut samples);
                 if !samples.is_empty() {
                     audio.push_samples(&samples);
                 }
             }
-            _ => self.nes.run_frame(),
+            None => self.nes.run_frame(),
         }
     }
 
@@ -131,6 +119,10 @@ impl NesiumApp {
         self.rom_path = Some(path.to_path_buf());
         self.paused = false;
         self.status_line = Some(format!("已加载 {}", path.display()));
+        // Reset the frame scheduler so we don't try to "catch up" for the
+        // time spent before the ROM was loaded, which would otherwise cause
+        // a brief period of fast-forward.
+        self.next_frame_deadline = Some(Instant::now() + TARGET_FRAME);
         Ok(())
     }
 
@@ -142,6 +134,9 @@ impl NesiumApp {
         if let Some(audio) = &self.audio {
             audio.clear();
         }
+        // After a reset, restart the frame scheduler from "now" to avoid a
+        // burst of catch-up frames.
+        self.next_frame_deadline = Some(Instant::now() + TARGET_FRAME);
     }
 
     fn eject(&mut self) {
@@ -152,6 +147,8 @@ impl NesiumApp {
         if let Some(audio) = &self.audio {
             audio.clear();
         }
+        // When ejecting, reset the frame scheduler as well.
+        self.next_frame_deadline = Some(Instant::now() + TARGET_FRAME);
     }
 
     fn update_frame_texture(&mut self, ctx: &EguiContext) {
