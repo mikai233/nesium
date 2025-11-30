@@ -21,6 +21,7 @@ pub mod mapper7;
 pub mod mapper9;
 pub mod mapper10;
 pub mod mapper11;
+pub mod mapper13;
 
 pub(crate) use chr_storage::{ChrStorage, select_chr_storage};
 pub use mapper0::Mapper0;
@@ -35,6 +36,7 @@ pub use mapper7::Mapper7;
 pub use mapper9::Mapper9;
 pub use mapper10::Mapper10;
 pub use mapper11::Mapper11;
+pub use mapper13::Mapper13;
 
 use crate::{
     cartridge::{
