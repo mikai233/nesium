@@ -34,6 +34,7 @@ pub mod mapper78;
 pub mod mapper8;
 pub mod mapper85;
 pub mod mapper9;
+pub mod mapper90;
 
 pub(crate) use chr_storage::{ChrStorage, select_chr_storage};
 pub use mapper0::Mapper0;
@@ -59,6 +60,7 @@ pub use mapper66::Mapper66;
 pub use mapper71::Mapper71;
 pub use mapper78::Mapper78;
 pub use mapper85::Mapper85;
+pub use mapper90::Mapper90;
 
 use crate::{
     cartridge::{
