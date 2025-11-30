@@ -1,4 +1,5 @@
 mod app;
+mod audio;
 mod trace;
 
 use std::{env, path::PathBuf};

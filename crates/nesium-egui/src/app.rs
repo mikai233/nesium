@@ -3,6 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::audio::{AudioTiming, NesAudioPlayer};
 use anyhow::{Context, Result};
 use eframe::egui;
 use egui::{
@@ -12,7 +13,7 @@ use egui::{
 use nesium_core::{
     CpuSnapshot, Nes,
     controller::Button,
-    ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat, palette::PaletteKind},
+    ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
 };
 
 const TARGET_FRAME: Duration = Duration::from_nanos(16_683_000); // ~59.94 Hz
@@ -27,6 +28,8 @@ pub struct NesiumApp {
     frame_texture: Option<TextureHandle>,
     rom_path: Option<PathBuf>,
     start_pc: Option<u16>,
+    audio: Option<NesAudioPlayer>,
+    audio_timing: Option<AudioTiming>,
     paused: bool,
     status_line: Option<String>,
     show_debugger: bool,
@@ -42,24 +45,34 @@ impl NesiumApp {
         cc.egui_ctx.set_visuals(Visuals::light());
         install_cjk_font(&cc.egui_ctx);
 
-        let mut nes = Nes::new(ColorFormat::Rgba8888);
-        nes.ppu
-            .framebuffer
-            .set_palette(PaletteKind::RawLinear.palette());
+        let nes = Nes::new(ColorFormat::Rgba8888);
+
+        let mut status_line = None;
+        let audio = match NesAudioPlayer::new() {
+            Ok(player) => Some(player),
+            Err(err) => {
+                status_line = Some(format!("Audio init failed: {err}"));
+                tracing::warn!("Audio init failed: {err}");
+                None
+            }
+        };
+        let audio_timing = audio.as_ref().map(|a| AudioTiming::new(a.sample_rate()));
 
         let mut app = Self {
             nes,
             frame_texture: None,
             rom_path: None,
             start_pc: config.start_pc,
+            audio,
             paused: false,
-            status_line: None,
+            status_line,
             show_debugger: false,
             show_tools: false,
             show_palette: false,
             show_input: false,
             controller: ControllerInput::default(),
             next_frame_deadline: None,
+            audio_timing,
         };
 
         if let Some(path) = config.rom_path {
@@ -69,6 +82,29 @@ impl NesiumApp {
         }
 
         app
+    }
+
+    /// Runs one video frame while emitting audio samples at the host sample rate using a simple time accumulator.
+    fn run_frame_with_audio(&mut self) {
+        match (&self.audio, &mut self.audio_timing) {
+            (Some(audio), Some(timing)) => {
+                let mut samples = Vec::new();
+                loop {
+                    let res = self.nes.step_dot();
+                    if res.apu_clocked {
+                        let sample = self.nes.audio_sample();
+                        timing.step(sample, &mut samples);
+                    }
+                    if res.frame_advanced {
+                        break;
+                    }
+                }
+                if !samples.is_empty() {
+                    audio.push_samples(&samples);
+                }
+            }
+            _ => self.nes.run_frame(),
+        }
     }
 
     fn has_rom(&self) -> bool {
@@ -103,6 +139,9 @@ impl NesiumApp {
         self.paused = false;
         self.status_line = Some("已重置主机".to_string());
         self.controller.release_all(&mut self.nes);
+        if let Some(audio) = &self.audio {
+            audio.clear();
+        }
     }
 
     fn eject(&mut self) {
@@ -110,6 +149,9 @@ impl NesiumApp {
         self.rom_path = None;
         self.status_line = Some("已弹出卡带".to_string());
         self.controller.release_all(&mut self.nes);
+        if let Some(audio) = &self.audio {
+            audio.clear();
+        }
     }
 
     fn update_frame_texture(&mut self, ctx: &EguiContext) {
@@ -370,7 +412,7 @@ impl eframe::App for NesiumApp {
         let mut run_count = 0u32;
         while now >= deadline && run_count < 3 {
             if self.has_rom() && !self.paused {
-                self.nes.run_frame();
+                self.run_frame_with_audio();
             }
             deadline += TARGET_FRAME;
             run_count += 1;

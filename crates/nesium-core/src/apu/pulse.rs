@@ -87,6 +87,7 @@ pub(super) struct Pulse {
     duty_pos: u8,
     timer: u16,
     timer_period: u16,
+    phase_toggle: bool,
     pub(super) envelope: Envelope,
     pub(super) length: LengthCounter,
     pub(super) sweep: Sweep,
@@ -100,6 +101,7 @@ impl Pulse {
             duty_pos: 0,
             timer: 0,
             timer_period: 0,
+            phase_toggle: false,
             envelope: Envelope::default(),
             length: LengthCounter::default(),
             sweep: Sweep {
@@ -121,11 +123,13 @@ impl Pulse {
 
     pub(super) fn write_timer_low(&mut self, value: u8) {
         self.timer_period = (self.timer_period & 0xFF00) | value as u16;
+        self.phase_toggle = false;
     }
 
     pub(super) fn write_timer_high(&mut self, value: u8) {
         self.timer_period = (self.timer_period & 0x00FF) | (((value & 0b0000_0111) as u16) << 8);
         self.duty_pos = 0;
+        self.phase_toggle = false;
         self.envelope.restart();
         self.length.load(value >> 3, self.enabled);
         self.timer = self.timer_period;
@@ -142,7 +146,11 @@ impl Pulse {
     pub(super) fn clock_timer(&mut self) {
         if self.timer == 0 {
             self.timer = self.timer_period;
-            self.duty_pos = (self.duty_pos + 1) & 0b111;
+            // Pulse timer output advances the sequencer every other timer reload.
+            self.phase_toggle = !self.phase_toggle;
+            if self.phase_toggle {
+                self.duty_pos = (self.duty_pos + 1) & 0b111;
+            }
         } else {
             self.timer = self.timer.saturating_sub(1);
         }

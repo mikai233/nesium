@@ -12,3 +12,5 @@ anyhow.workspace = true
 rfd.workspace = true
 fontdb.workspace = true
 ttf-parser.workspace = true
+cpal.workspace = true
+tracing.workspace = true
