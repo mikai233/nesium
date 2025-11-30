@@ -1,21 +1,18 @@
-//! Mapper 9 (MMC2) implementation.
+//! Mapper 10 (MMC4) implementation.
 //!
-//! MMC2 is used by games like Punch-Out!! and provides:
-//! - One 8 KiB switchable PRG-ROM bank at `$8000-$9FFF`.
-//! - Three 8 KiB PRG-ROM banks fixed to the last three banks at `$A000-$FFFF`.
-//! - Two 4 KiB CHR windows (`$0000-$0FFF` and `$1000-$1FFF`), each with two
-//!   banks that are selected at run time by CHR "latches".
-//! - Mapper-controlled nametable mirroring via writes in the `$F000-$FFFF`
-//!   range.
+//! MMC4 is a close relative of MMC2 and is used by games such as Fire Emblem.
+//! It provides:
+//! - One 16 KiB switchable PRG-ROM bank at `$8000-$BFFF`.
+//! - One 16 KiB fixed PRG-ROM bank at `$C000-$FFFF` (last bank).
+//! - Two 4 KiB CHR windows (`$0000-$0FFF` and `$1000-$1FFF`) controlled by
+//!   FD/FE latches, just like MMC2.
+//! - Mapper-controlled nametable mirroring via `$F000-$FFFF`.
 //!
-//! The CHR latches are the distinctive feature: when the PPU reads specific
-//! pattern table addresses (tiles `$FD` or `$FE`), the MMC2 remembers which
-//! tile was seen and uses that to pick one of two 4 KiB CHR banks for the
-//! corresponding 4 KiB region. This lets games double the effective CHR tile
-//! set during rendering without involving the CPU.
-//!
-//! Behaviour here is based on the Nesdev MMC2 documentation and mirrors the
-//! overall power-on/reset behaviour used by modern emulators like Mesen2.
+//! The key difference from MMC2 is that both CHR windows use tile *ranges*
+//! to trigger the FD/FE latches (see Nesdev MMC4 docs). We approximate the
+//! "latch updates after fetch" behaviour by updating latch state in
+//! [`ppu_vram_access`] whenever the PPU performs a rendering fetch from the
+//! documented trigger addresses.
 
 use std::borrow::Cow;
 
@@ -31,57 +28,48 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
-/// PRG-ROM banking granularity (8 KiB).
-const PRG_BANK_SIZE_8K: usize = 8 * 1024;
+/// PRG-ROM banking granularity (16 KiB).
+const PRG_BANK_SIZE_16K: usize = 16 * 1024;
 /// CHR banking granularity (4 KiB).
 const CHR_BANK_SIZE_4K: usize = 4 * 1024;
 
 /// Internal representation of the CHR latch state.
-///
-/// Nesdev describes the latches as storing `$FD` or `$FE`, chosen by pattern
-/// table reads from specific addresses. We only need to distinguish the two
-/// states, so a small enum keeps the code clearer than raw bytes.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum ChrLatch {
-    /// Latch is in the `$FD` state.
     Fd,
-    /// Latch is in the `$FE` state.
     Fe,
 }
 
 impl ChrLatch {
     fn power_on_latch0() -> Self {
-        // Most documentation and emulator implementations initialise latch 0
-        // to the `$FD` state so that the first sprite fetches use the
-        // `$FD/0000` bank until the game explicitly hits a switching tile.
+        // Power-on default: use `$FD/0000` bank until the game hits a
+        // switching tile. Matches the common behaviour used by Mesen2.
         ChrLatch::Fd
     }
 
     fn power_on_latch1() -> Self {
-        // Latch 1 is typically initialised to `$FE` so that background
-        // fetches start from the `$FE/1000` bank. This matches Mesen2 and is
-        // compatible with known commercial games.
+        // Power-on default: use `$FE/1000` bank for the right pattern table.
         ChrLatch::Fe
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Mapper9 {
+pub struct Mapper10 {
     prg_rom: Box<[u8]>,
     prg_ram: Box<[u8]>,
     chr: ChrStorage,
 
-    /// Number of 8 KiB PRG-ROM banks.
-    prg_bank_count: usize,
+    /// Number of 16 KiB PRG-ROM banks.
+    prg_bank_count_16k: usize,
 
-    /// Base mirroring mode from the header. Some MMC2 boards use fixed
-    /// four-screen VRAM; in that case we ignore writes to the mirroring
-    /// register and always report the header mirroring.
+    /// Base mirroring mode from the header. Some MMC4 boards use fixed
+    /// four-screen VRAM; in that case we ignore `$F000` writes and always
+    /// report the header mirroring.
     base_mirroring: Mirroring,
-    /// Current effective mirroring, controlled via `$F000-$FFFF`.
+    /// Current effective nametable mirroring.
     mirroring: Mirroring,
 
-    /// 8 KiB PRG-ROM bank number for CPU `$8000-$9FFF` (`$A000` writes).
+    /// 16 KiB PRG-ROM bank for `$8000-$BFFF` (`$A000` writes).
     prg_bank: u8,
 
     /// CHR bank numbers for the two 4 KiB windows when latch 0/1 are in the
@@ -97,7 +85,7 @@ pub struct Mapper9 {
     latch1: ChrLatch,
 }
 
-impl Mapper9 {
+impl Mapper10 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
         Self::with_trainer(header, prg_rom, chr_rom, None)
     }
@@ -114,13 +102,13 @@ impl Mapper9 {
         }
 
         let chr = select_chr_storage(&header, chr_rom);
-        let prg_bank_count = (prg_rom.len() / PRG_BANK_SIZE_8K).max(1);
+        let prg_bank_count_16k = (prg_rom.len() / PRG_BANK_SIZE_16K).max(1);
 
         Self {
             prg_rom,
             prg_ram,
             chr,
-            prg_bank_count,
+            prg_bank_count_16k,
             base_mirroring: header.mirroring,
             mirroring: header.mirroring,
             prg_bank: 0,
@@ -154,26 +142,21 @@ impl Mapper9 {
         self.prg_ram[idx] = data;
     }
 
-    /// Resolve an 8 KiB PRG-ROM bank index, wrapping safely when the ROM is
-    /// smaller than expected.
     #[inline]
     fn prg_bank_index(&self, bank: u8) -> usize {
-        if self.prg_bank_count == 0 {
+        if self.prg_bank_count_16k == 0 {
             0
         } else {
-            (bank as usize) % self.prg_bank_count
+            (bank as usize) % self.prg_bank_count_16k
         }
     }
 
-    /// Return the index of the Nth bank from the end (1 = last, 2 = second
-    /// last, etc.), saturating gracefully for very small ROM sizes.
-    fn prg_bank_from_end(&self, n: usize) -> usize {
-        if self.prg_bank_count == 0 {
+    /// Index of the last 16 KiB PRG bank.
+    fn last_prg_bank_index(&self) -> usize {
+        if self.prg_bank_count_16k == 0 {
             0
-        } else if self.prg_bank_count > n {
-            self.prg_bank_count - n
         } else {
-            0
+            self.prg_bank_count_16k - 1
         }
     }
 
@@ -183,18 +166,16 @@ impl Mapper9 {
         }
 
         // Nesdev: CPU mapping
-        // - $8000-$9FFF: 8 KB bank selected by $A000.
-        // - $A000-$FFFF: 3× 8 KB banks fixed to the last three PRG banks.
+        // - $8000-$BFFF: 16 KiB bank selected by $A000.
+        // - $C000-$FFFF: last 16 KiB bank.
         let bank = match addr {
-            0x8000..=0x9FFF => self.prg_bank_index(self.prg_bank),
-            0xA000..=0xBFFF => self.prg_bank_from_end(3),
-            0xC000..=0xDFFF => self.prg_bank_from_end(2),
-            0xE000..=0xFFFF => self.prg_bank_from_end(1),
+            0x8000..=0xBFFF => self.prg_bank_index(self.prg_bank),
+            0xC000..=0xFFFF => self.last_prg_bank_index(),
             _ => return 0,
         };
 
-        let base = bank.saturating_mul(PRG_BANK_SIZE_8K);
-        let offset = (addr as usize - cpu_mem::PRG_ROM_START as usize) & (PRG_BANK_SIZE_8K - 1);
+        let base = bank.saturating_mul(PRG_BANK_SIZE_16K);
+        let offset = (addr as usize - cpu_mem::PRG_ROM_START as usize) & (PRG_BANK_SIZE_16K - 1);
         let idx = base.saturating_add(offset);
         self.prg_rom.get(idx).copied().unwrap_or(0)
     }
@@ -209,14 +190,12 @@ impl Mapper9 {
         let offset = (a & 0x0FFF) as usize;
 
         if a < 0x1000 {
-            // Left pattern table: choose between the FD/FE banks based on latch 0.
             let bank = match self.latch0 {
                 ChrLatch::Fd => self.chr_fd_0000,
                 ChrLatch::Fe => self.chr_fe_0000,
             } as usize;
             (bank * CHR_BANK_SIZE_4K, offset)
         } else {
-            // Right pattern table: choose between the FD/FE banks based on latch 1.
             let bank = match self.latch1 {
                 ChrLatch::Fd => self.chr_fd_1000,
                 ChrLatch::Fe => self.chr_fe_1000,
@@ -235,38 +214,9 @@ impl Mapper9 {
         self.chr.write_indexed(base, offset, data);
     }
 
-    /// Update latch 0/1 after a CHR read, following the rules from Nesdev:
-    ///
-    /// - PPU reads $0FD8: latch 0 := $FD
-    /// - PPU reads $0FE8: latch 0 := $FE
-    /// - PPU reads $1FD8-$1FDF: latch 1 := $FD
-    /// - PPU reads $1FE8-$1FEF: latch 1 := $FE
-    ///
-    /// The latch is updated *after* the pattern data is fetched, so the
-    /// switching tile itself is drawn using the old bank. We respect this by
-    /// calling `update_latches_after_read` only after fetching CHR data.
-    fn update_latches_after_read(&mut self, addr: u16) {
-        let a = addr & 0x1FFF;
-        match a {
-            0x0FD8 => {
-                self.latch0 = ChrLatch::Fd;
-            }
-            0x0FE8 => {
-                self.latch0 = ChrLatch::Fe;
-            }
-            0x1FD8..=0x1FDF => {
-                self.latch1 = ChrLatch::Fd;
-            }
-            0x1FE8..=0x1FEF => {
-                self.latch1 = ChrLatch::Fe;
-            }
-            _ => {}
-        }
-    }
-
     fn write_prg_bank(&mut self, data: u8) {
-        // Nesdev: only the low 4 bits are used (`PPPP`). We keep the full
-        // byte for completeness but mask when converting to an index.
+        // Nesdev: only low 4 bits are used (`PPPP`); we keep the full
+        // byte for completeness but mask when mapping.
         self.prg_bank = data & 0x0F;
     }
 
@@ -287,9 +237,8 @@ impl Mapper9 {
     }
 
     fn write_mirroring(&mut self, data: u8) {
-        // Some MMC2 boards use fixed four-screen mirroring; in that case we
-        // ignore the register and always report the header mirroring.
         if self.base_mirroring == Mirroring::FourScreen {
+            // Boards with four-screen VRAM ignore $F000 mirroring writes.
             return;
         }
         self.mirroring = if data & 0x01 == 0 {
@@ -298,15 +247,49 @@ impl Mapper9 {
             Mirroring::Horizontal
         };
     }
+
+    /// Update latch state in response to a PPU rendering fetch from the
+    /// documented trigger addresses. For MMC4, *both* pattern tables use
+    /// address ranges:
+    ///
+    /// - $0FD8-$0FDF: latch0 := $FD
+    /// - $0FE8-$0FEF: latch0 := $FE
+    /// - $1FD8-$1FDF: latch1 := $FD
+    /// - $1FE8-$1FEF: latch1 := $FE
+    fn update_latches_on_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
+        if ctx.kind != PpuVramAccessKind::RenderingFetch {
+            return;
+        }
+        if addr >= 0x2000 {
+            // Only pattern table fetches ($0000-$1FFF) affect the latches.
+            return;
+        }
+
+        let a = addr & 0x1FFF;
+        match a {
+            0x0FD8..=0x0FDF => {
+                self.latch0 = ChrLatch::Fd;
+            }
+            0x0FE8..=0x0FEF => {
+                self.latch0 = ChrLatch::Fe;
+            }
+            0x1FD8..=0x1FDF => {
+                self.latch1 = ChrLatch::Fd;
+            }
+            0x1FE8..=0x1FEF => {
+                self.latch1 = ChrLatch::Fe;
+            }
+            _ => {}
+        }
+    }
 }
 
-impl Mapper for Mapper9 {
+impl Mapper for Mapper10 {
     fn power_on(&mut self) {
-        // Reset state roughly matches the typical behaviour described on
-        // Nesdev and implemented by Mesen2:
+        // Power-on defaults:
         // - PRG bank at $8000 defaults to 0.
         // - CHR FD/FE banks default to 0.
-        // - Latch 0 starts in the $FD state; latch 1 starts in the $FE state.
+        // - Latches initialised to FD/FE as described above.
         // - Mirroring follows the header until the game writes to $F000-$FFFF.
         self.prg_bank = 0;
         self.chr_fd_0000 = 0;
@@ -319,8 +302,6 @@ impl Mapper for Mapper9 {
     }
 
     fn reset(&mut self) {
-        // Treat console reset like a fresh power-on for this mapper; commercial
-        // games reinitialise MMC2 state after reset.
         self.power_on();
     }
 
@@ -355,12 +336,7 @@ impl Mapper for Mapper9 {
     }
 
     fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
-        // Update MMC2 latches when the PPU performs a rendering fetch from
-        // the documented trigger addresses. This approximates the hardware
-        // behaviour where the latch flips just after fetching the tile.
-        if addr < 0x2000 && ctx.kind == PpuVramAccessKind::RenderingFetch {
-            self.update_latches_after_read(addr);
-        }
+        self.update_latches_on_vram_access(addr, ctx);
     }
 
     fn prg_rom(&self) -> Option<&[u8]> {
@@ -408,10 +384,11 @@ impl Mapper for Mapper9 {
     }
 
     fn mapper_id(&self) -> u16 {
-        9
+        10
     }
 
     fn name(&self) -> Cow<'static, str> {
-        Cow::Borrowed("MMC2")
+        Cow::Borrowed("MMC4")
     }
 }
+

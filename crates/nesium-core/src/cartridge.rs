@@ -6,7 +6,7 @@ use crate::{
 };
 
 use self::mapper::{
-    Mapper0, Mapper1, Mapper2, Mapper3, Mapper4, Mapper5, Mapper6, Mapper7, Mapper9,
+    Mapper0, Mapper1, Mapper2, Mapper3, Mapper4, Mapper5, Mapper6, Mapper7, Mapper9, Mapper10,
     NametableTarget,
 };
 
@@ -134,6 +134,7 @@ pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
         6 => Box::new(Mapper6::with_trainer(header, prg_rom, chr_rom, trainer)),
         7 => Box::new(Mapper7::with_trainer(header, prg_rom, chr_rom, trainer)),
         9 => Box::new(Mapper9::with_trainer(header, prg_rom, chr_rom, trainer)),
+        10 => Box::new(Mapper10::with_trainer(header, prg_rom, chr_rom, trainer)),
         _ => unimplemented!("Mapper {} not implemented", header.mapper),
     };
 
