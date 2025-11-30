@@ -95,6 +95,9 @@ impl Nes {
         self.ram.fill(0);
         self.ppu.reset();
         self.apu.reset();
+        if let Some(cart) = self.cartridge.as_mut() {
+            cart.reset();
+        }
         self.serial_log.drain();
         self.open_bus.reset();
         self.cpu_bus_cycle = 0;

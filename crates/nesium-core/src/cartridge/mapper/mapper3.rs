@@ -137,8 +137,8 @@ impl Mapper for Mapper3 {
         }
     }
 
-    fn ppu_read(&self, addr: u16) -> u8 {
-        self.read_chr(addr)
+    fn ppu_read(&self, addr: u16) -> Option<u8> {
+        Some(self.read_chr(addr))
     }
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
@@ -163,6 +163,14 @@ impl Mapper for Mapper3 {
         } else {
             Some(self.prg_ram.as_mut())
         }
+    }
+
+    fn prg_save_ram(&self) -> Option<&[u8]> {
+        self.prg_ram()
+    }
+
+    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
+        self.prg_ram_mut()
     }
 
     fn chr_rom(&self) -> Option<&[u8]> {
@@ -258,10 +266,10 @@ mod tests {
     #[test]
     fn switches_chr_banks() {
         let mut cart = rom_cart(2, 4);
-        assert_eq!(cart.ppu_read(0x0000), 0);
+        assert_eq!(cart.ppu_read(0x0000), Some(0));
 
         cart.cpu_write(cpu_mem::PRG_ROM_START, 0x02, 0);
-        assert_eq!(cart.ppu_read(0x0000), 0x02);
+        assert_eq!(cart.ppu_read(0x0000), Some(0x02));
     }
 
     #[test]
@@ -280,6 +288,6 @@ mod tests {
         let mut cart = Mapper3::new(header, prg, chr);
 
         cart.ppu_write(0x0010, 0x77);
-        assert_eq!(cart.ppu_read(0x0010), 0x77);
+        assert_eq!(cart.ppu_read(0x0010), Some(0x77));
     }
 }

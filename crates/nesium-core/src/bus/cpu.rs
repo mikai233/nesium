@@ -82,7 +82,7 @@ impl<'a> CpuBus<'a> {
 
     /// Tick the PPU once, wiring CHR accesses through the currently inserted cartridge.
     pub fn clock_ppu(&mut self) {
-        let mut pattern = PatternBus::new(self.cartridge.as_deref_mut());
+        let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
         self.ppu.clock(&mut pattern);
     }
 
@@ -100,7 +100,7 @@ impl<'a> CpuBus<'a> {
     pub fn ppu_pattern_read(&mut self, addr: u16) -> u8 {
         self.cartridge
             .as_ref()
-            .map(|cart| cart.ppu_read(addr))
+            .and_then(|cart| cart.ppu_read(addr))
             .unwrap_or(0)
     }
 
@@ -173,6 +173,9 @@ impl Bus for CpuBus<'_> {
 
     fn read(&mut self, addr: u16) -> u8 {
         *self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.cpu_clock(*self.cpu_cycle_counter);
+        }
         self.open_bus.step();
 
         let mut driven = true;
@@ -181,7 +184,8 @@ impl Bus for CpuBus<'_> {
                 self.read_internal_ram(addr)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
-                let mut pattern = PatternBus::new(self.cartridge.as_deref_mut());
+                let mut pattern =
+                    PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
                 self.ppu.cpu_read(addr, &mut pattern)
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
@@ -230,6 +234,9 @@ impl Bus for CpuBus<'_> {
 
     fn write(&mut self, addr: u16, data: u8) {
         *self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.cpu_clock(*self.cpu_cycle_counter);
+        }
         self.open_bus.step();
         self.open_bus.latch(data);
 
@@ -238,7 +245,8 @@ impl Bus for CpuBus<'_> {
                 self.write_internal_ram(addr, data)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
-                let mut pattern = PatternBus::new(self.cartridge.as_deref_mut());
+                let mut pattern =
+                    PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
                 self.ppu.cpu_write(addr, data, &mut pattern)
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {

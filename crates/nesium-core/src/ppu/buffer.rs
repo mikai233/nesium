@@ -61,9 +61,7 @@ pub enum BufferMode {
     #[default]
     Index,
     /// Packed color buffer using a concrete `ColorFormat`.
-    Color {
-        format: ColorFormat,
-    },
+    Color { format: ColorFormat },
 }
 
 impl FrameBuffer {

@@ -5,7 +5,7 @@ use crate::{
     error::Error,
 };
 
-use self::mapper::{Mapper0, Mapper1, Mapper2, Mapper3, Mapper7};
+use self::mapper::{Mapper0, Mapper1, Mapper2, Mapper3, Mapper7, NametableTarget};
 
 pub const TRAINER_SIZE: usize = 512;
 
@@ -48,12 +48,41 @@ impl Cartridge {
         self.mapper.cpu_write(addr, data, cpu_cycle);
     }
 
-    pub fn ppu_read(&self, addr: u16) -> u8 {
+    pub fn ppu_read(&self, addr: u16) -> Option<u8> {
         self.mapper.ppu_read(addr)
     }
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) {
         self.mapper.ppu_write(addr, data);
+    }
+
+    /// Notify the mapper about a PPU VRAM access, including CPU bus timing.
+    pub fn ppu_vram_access(
+        &mut self,
+        addr: u16,
+        ctx: crate::cartridge::mapper::PpuVramAccessContext,
+    ) {
+        self.mapper.ppu_vram_access(addr, ctx);
+    }
+
+    /// Advance mapper-internal CPU-based timers by one bus cycle.
+    pub fn cpu_clock(&mut self, cpu_cycle: u64) {
+        self.mapper.cpu_clock(cpu_cycle);
+    }
+
+    /// Resolve a PPU nametable address to its backing storage.
+    pub fn map_nametable(&self, addr: u16) -> NametableTarget {
+        self.mapper.map_nametable(addr)
+    }
+
+    /// Mapper-controlled nametable read when [`map_nametable`] selects mapper VRAM/ROM.
+    pub fn mapper_nametable_read(&self, offset: u16) -> u8 {
+        self.mapper.mapper_nametable_read(offset)
+    }
+
+    /// Mapper-controlled nametable write when [`map_nametable`] selects mapper VRAM/ROM.
+    pub fn mapper_nametable_write(&mut self, offset: u16, value: u8) {
+        self.mapper.mapper_nametable_write(offset, value);
     }
 
     pub fn irq_pending(&self) -> bool {
@@ -62,6 +91,16 @@ impl Cartridge {
 
     pub fn clear_irq(&mut self) {
         self.mapper.clear_irq();
+    }
+
+    /// Applies a power-on reset sequence to the mapper.
+    pub fn power_on(&mut self) {
+        self.mapper.power_on();
+    }
+
+    /// Applies a console reset to the mapper.
+    pub fn reset(&mut self) {
+        self.mapper.reset();
     }
 }
 
@@ -82,7 +121,7 @@ pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
     let header = Header::parse(header_bytes)?;
     let (trainer, prg_rom, chr_rom) = slice_sections(bytes, &header)?;
 
-    let mapper: Box<dyn Mapper> = match header.mapper {
+    let mut mapper: Box<dyn Mapper> = match header.mapper {
         0 => Box::new(Mapper0::with_trainer(header, prg_rom, chr_rom, trainer)),
         1 => Box::new(Mapper1::with_trainer(header, prg_rom, chr_rom, trainer)),
         2 => Box::new(Mapper2::with_trainer(header, prg_rom, chr_rom, trainer)),
@@ -90,6 +129,9 @@ pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
         7 => Box::new(Mapper7::with_trainer(header, prg_rom, chr_rom, trainer)),
         _ => unimplemented!("Mapper {} not implemented", header.mapper),
     };
+
+    // Apply mapper-specific power-on defaults once after construction.
+    mapper.power_on();
 
     Ok(Cartridge::new(header, mapper))
 }
@@ -178,7 +220,7 @@ mod tests {
         assert_eq!(cartridge.header().prg_rom_size, 16 * 1024);
         assert_eq!(cartridge.header().chr_rom_size, 8 * 1024);
         assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), Some(0xAA));
-        assert_eq!(cartridge.ppu_read(0x0000), 0x55);
+        assert_eq!(cartridge.ppu_read(0x0000), Some(0x55));
     }
 
     #[test]

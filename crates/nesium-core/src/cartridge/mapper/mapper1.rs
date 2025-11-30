@@ -64,25 +64,6 @@ pub struct Mapper1 {
 }
 
 impl Mapper1 {
-    fn power_on_init(&mut self) {
-        // Power-on defaults observed in Mesen2 for iNES mapper 1.
-        // NOTE: Real hardware power-on state is not strictly defined across MMC1
-        // revisions/boards; most games reinitialize MMC1 on reset.
-        // TODO(accuracy): consider board/submapper-specific or undefined/randomized
-        // power-on state if strict hardware fidelity is desired.
-        //
-        // - Control = 0b01100 (16 KiB banking, fixed LAST bank)
-        // - PRG/CHR banks = 0
-        // - Shift register = 0x10 (bit4 set so the next 5 writes latch cleanly)
-        self.control = 0x0C;
-        self.chr_bank0 = 0;
-        self.chr_bank1 = 0;
-        self.prg_bank = 0;
-        self.shift_reg = 0x10;
-        self.shift_count = 0;
-        self.last_serial_cycle = None;
-    }
-
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
         Self::with_trainer(header, prg_rom, chr_rom, None)
     }
@@ -119,7 +100,7 @@ impl Mapper1 {
 
         let prg_bank_count = (prg_rom.len() / PRG_BANK_SIZE_16K).max(1);
 
-        let mut mapper = Self {
+        let mapper = Self {
             prg_rom,
             prg_ram,
             chr_rom,
@@ -134,8 +115,6 @@ impl Mapper1 {
             shift_count: 0,
             last_serial_cycle: None,
         };
-
-        mapper.power_on_init();
         mapper
     }
 
@@ -366,6 +345,23 @@ impl Mapper1 {
 }
 
 impl Mapper for Mapper1 {
+    fn power_on(&mut self) {
+        // Power-on defaults observed in Mesen2 for iNES mapper 1.
+        // NOTE: Real hardware power-on state is not strictly defined across MMC1
+        // revisions/boards; most games reinitialize MMC1 on reset.
+        //
+        // - Control = 0b01100 (16 KiB banking, fixed LAST bank)
+        // - PRG/CHR banks = 0
+        // - Shift register = 0x10 (bit4 set so the next 5 writes latch cleanly)
+        self.control = 0x0C;
+        self.chr_bank0 = 0;
+        self.chr_bank1 = 0;
+        self.prg_bank = 0;
+        self.shift_reg = 0x10;
+        self.shift_count = 0;
+        self.last_serial_cycle = None;
+    }
+
     fn cpu_read(&self, addr: u16) -> Option<u8> {
         let value = match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => return self.read_prg_ram(addr),
@@ -385,8 +381,8 @@ impl Mapper for Mapper1 {
         }
     }
 
-    fn ppu_read(&self, addr: u16) -> u8 {
-        self.read_chr(addr)
+    fn ppu_read(&self, addr: u16) -> Option<u8> {
+        Some(self.read_chr(addr))
     }
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
@@ -411,6 +407,14 @@ impl Mapper for Mapper1 {
         } else {
             Some(self.prg_ram.as_mut())
         }
+    }
+
+    fn prg_save_ram(&self) -> Option<&[u8]> {
+        self.prg_ram()
+    }
+
+    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
+        self.prg_ram_mut()
     }
 
     fn chr_rom(&self) -> Option<&[u8]> {
@@ -499,11 +503,14 @@ mod tests {
 
         let chr_rom = Vec::new().into_boxed_slice();
 
-        Mapper1::new(
+        let mut mapper = Mapper1::new(
             header(prg.len(), 0, 8 * 1024),
             prg.into_boxed_slice(),
             chr_rom,
-        )
+        );
+        // Tests expect the same power-on state as a freshly loaded cartridge.
+        <Mapper1 as Mapper>::power_on(&mut mapper);
+        mapper
     }
 
     fn write_serial_reg(mapper: &mut Mapper1, addr: u16, value: u8) {

@@ -45,6 +45,7 @@ use self::{
 
 use core::fmt;
 
+use crate::cartridge::mapper::NametableTarget;
 use crate::{
     bus::OpenBus,
     cartridge::{Cartridge, header::Mirroring},
@@ -159,32 +160,84 @@ enum ScrollGlitchSource {
 #[derive(Default)]
 pub struct PatternBus<'a> {
     cartridge: Option<&'a mut Cartridge>,
+    /// Snapshot of the current CPU bus cycle when this view was created.
+    cpu_cycle: u64,
 }
 
 impl<'a> PatternBus<'a> {
-    pub fn new(cartridge: Option<&'a mut Cartridge>) -> Self {
-        Self { cartridge }
-    }
-
-    pub fn none() -> Self {
-        Self { cartridge: None }
-    }
-
-    pub fn from_cartridge(cartridge: &'a mut Cartridge) -> Self {
+    pub fn new(cartridge: Option<&'a mut Cartridge>, cpu_cycle: u64) -> Self {
         Self {
-            cartridge: Some(cartridge),
+            cartridge,
+            cpu_cycle,
         }
     }
 
-    fn read(&mut self, addr: u16) -> Option<u8> {
-        self.cartridge
-            .as_deref_mut()
-            .map(|cart| cart.ppu_read(addr))
+    pub fn none() -> Self {
+        Self {
+            cartridge: None,
+            cpu_cycle: 0,
+        }
     }
 
-    fn write(&mut self, addr: u16, value: u8) -> bool {
+    pub fn from_cartridge(cartridge: &'a mut Cartridge, cpu_cycle: u64) -> Self {
+        Self {
+            cartridge: Some(cartridge),
+            cpu_cycle,
+        }
+    }
+
+    fn cpu_cycle(&self) -> u64 {
+        self.cpu_cycle
+    }
+
+    fn read(
+        &mut self,
+        addr: u16,
+        ctx: crate::cartridge::mapper::PpuVramAccessContext,
+    ) -> Option<u8> {
         if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.ppu_vram_access(addr, ctx);
+            cart.ppu_read(addr)
+        } else {
+            None
+        }
+    }
+
+    fn write(
+        &mut self,
+        addr: u16,
+        value: u8,
+        ctx: crate::cartridge::mapper::PpuVramAccessContext,
+    ) -> bool {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.ppu_vram_access(addr, ctx);
             cart.ppu_write(addr, value);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn map_nametable(&self, addr: u16) -> NametableTarget {
+        if let Some(cart) = self.cartridge.as_deref() {
+            cart.map_nametable(addr)
+        } else {
+            // No cartridge: treat nametable area as a simple 2 KiB CIRAM window.
+            let base = addr & 0x0FFF;
+            let offset = base & 0x07FF;
+            NametableTarget::Ciram(offset)
+        }
+    }
+
+    fn mapper_nametable_read(&self, offset: u16) -> Option<u8> {
+        self.cartridge
+            .as_deref()
+            .map(|cart| cart.mapper_nametable_read(offset))
+    }
+
+    fn mapper_nametable_write(&mut self, offset: u16, value: u8) -> bool {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.mapper_nametable_write(offset, value);
             true
         } else {
             false
@@ -698,6 +751,15 @@ impl Ppu {
         self.odd_frame = frame % 2 == 1;
     }
 
+    /// Returns a monotonically increasing PPU dot counter across frames.
+    fn current_ppu_cycle(&self) -> u64 {
+        // Map scanline -1..=260 to 0..=261 for indexing.
+        let scanline_index = (self.scanline + 1) as i64;
+        let per_frame = (SCANLINES_PER_FRAME as i64) * (CYCLES_PER_SCANLINE as i64);
+        let within_frame = scanline_index * (CYCLES_PER_SCANLINE as i64) + (self.cycle as i64);
+        (self.frame as i64 * per_frame + within_frame) as u64
+    }
+
     /// Advances to the next dot / scanline / frame.
     fn advance_cycle(&mut self) {
         self.cycle += 1;
@@ -1160,10 +1222,18 @@ impl Ppu {
         // "garbage" nametable and attribute reads on sub-cycles 0 and 2.
         // These reads don't affect pixels but do affect mapper IRQ timing (A12 toggles).
         if sub == 0 {
-            let _ = self.read_vram(pattern, self.nametable_addr());
+            let _ = self.read_vram(
+                pattern,
+                self.nametable_addr(),
+                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+            );
         }
         if sub == 2 {
-            let _ = self.read_vram(pattern, self.attribute_addr());
+            let _ = self.read_vram(
+                pattern,
+                self.attribute_addr(),
+                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+            );
         }
 
         // Read sprite bytes from secondary OAM.
@@ -1243,11 +1313,19 @@ impl Ppu {
 
         // sub 4/6 are the low/high plane fetches in a classic 8-dot slot.
         if sub == 4 {
-            let pattern_low = self.read_vram(pattern, addr);
+            let pattern_low = self.read_vram(
+                pattern,
+                addr,
+                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+            );
             self.sprite_line_next.set_pattern_low(i, pattern_low);
         }
         if sub == 6 {
-            let pattern_high = self.read_vram(pattern, addr + 8);
+            let pattern_high = self.read_vram(
+                pattern,
+                addr + 8,
+                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+            );
             self.sprite_line_next.set_pattern_high(i, pattern_high);
         }
 
@@ -1383,7 +1461,11 @@ impl Ppu {
             // Compute the "under" VRAM address (3Fxx -> 2Fxx) and use the normal
             // VRAM path to refill the internal buffer.
             let vram_addr_for_buffer = addr & 0x2FFF;
-            let vram_data = self.read_vram(pattern, vram_addr_for_buffer);
+            let vram_data = self.read_vram(
+                pattern,
+                vram_addr_for_buffer,
+                crate::cartridge::mapper::PpuVramAccessKind::CpuRead,
+            );
             self.registers.vram_buffer = vram_data;
 
             // Palette reads drive the low 6 bits of the bus; high 2 bits stay from
@@ -1397,7 +1479,11 @@ impl Ppu {
         } else {
             // Nametable/CHR reads go through the buffered path: $2007 returns the
             // previous buffered value, and then refills the buffer from VRAM.
-            let data = self.read_vram(pattern, addr);
+            let data = self.read_vram(
+                pattern,
+                addr,
+                crate::cartridge::mapper::PpuVramAccessKind::CpuRead,
+            );
             let buffered = self.registers.vram_buffer;
             self.registers.vram_buffer = data;
 
@@ -1408,21 +1494,48 @@ impl Ppu {
 
     fn write_vram(&mut self, pattern: &mut PatternBus<'_>, addr: u16, value: u8) {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
-        let addr = self.mirror_vram_addr(addr, pattern);
+
+        // Palette space is handled separately from nametable/CHR.
         if addr >= ppu_mem::PALETTE_BASE {
             self.palette_ram.write(addr, value);
-        } else if addr < 0x2000 {
-            if !pattern.write(addr, value) {
+            return;
+        }
+
+        // Pattern tables ($0000-$1FFF): delegate to mapper CHR path, falling back to VRAM.
+        if addr < ppu_mem::NAMETABLE_BASE {
+            let ctx = crate::cartridge::mapper::PpuVramAccessContext {
+                ppu_cycle: self.current_ppu_cycle(),
+                cpu_cycle: pattern.cpu_cycle(),
+                kind: crate::cartridge::mapper::PpuVramAccessKind::CpuWrite,
+            };
+            if !pattern.write(addr, value, ctx) {
                 self.vram[addr as usize] = value;
             }
-        } else {
-            self.vram[addr as usize] = value;
+            return;
+        }
+
+        // Nametable space ($2000-$3EFF): delegate mapping to the mapper.
+        match pattern.map_nametable(addr) {
+            NametableTarget::Ciram(offset) => {
+                let ciram_index = (ppu_mem::NAMETABLE_BASE + (offset & 0x07FF)) as usize;
+                self.vram[ciram_index] = value;
+            }
+            NametableTarget::MapperVram(offset) => {
+                let _ = pattern.mapper_nametable_write(offset, value);
+            }
+            NametableTarget::None => {
+                // No backing store: writes are ignored (open-bus semantics).
+            }
         }
     }
 
-    fn read_vram(&mut self, pattern: &mut PatternBus<'_>, addr: u16) -> u8 {
+    fn read_vram(
+        &mut self,
+        pattern: &mut PatternBus<'_>,
+        addr: u16,
+        kind: crate::cartridge::mapper::PpuVramAccessKind,
+    ) -> u8 {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
-        let addr = self.mirror_vram_addr(addr, pattern);
 
         // read_vram is intended for nametable/pattern table accesses only; palette
         // RAM is handled separately in read_vram_data / write_vram_data.
@@ -1432,38 +1545,32 @@ impl Ppu {
             addr
         );
 
-        if addr < 0x2000 {
-            pattern
-                .read(addr)
-                .unwrap_or_else(|| self.vram[addr as usize])
-        } else {
-            self.vram[addr as usize]
-        }
-    }
-
-    /// Applies nametable mirroring rules for addresses in `$2000-$3EFF`.
-    fn mirror_vram_addr(&self, addr: u16, pattern: &PatternBus<'_>) -> u16 {
-        if addr < ppu_mem::NAMETABLE_BASE || addr >= ppu_mem::PALETTE_BASE {
-            return addr;
+        // Pattern tables ($0000-$1FFF).
+        if addr < ppu_mem::NAMETABLE_BASE {
+            let ctx = crate::cartridge::mapper::PpuVramAccessContext {
+                ppu_cycle: self.current_ppu_cycle(),
+                cpu_cycle: pattern.cpu_cycle(),
+                kind,
+            };
+            return pattern
+                .read(addr, ctx)
+                .unwrap_or_else(|| self.vram[addr as usize]);
         }
 
-        // $3000-$3EFF mirrors $2000-$2EFF.
-        let mirrored = if addr >= 0x3000 { addr - 0x1000 } else { addr };
-        let relative = mirrored - ppu_mem::NAMETABLE_BASE;
-        let table = ((relative / ppu_mem::NAMETABLE_SIZE) & 0b11) as u8;
-        let offset = relative % ppu_mem::NAMETABLE_SIZE;
-
-        let target_table = match pattern.mirroring() {
-            // Vertical mirroring: $2000/$2800 share, $2400/$2C00 share (table & 1).
-            Mirroring::Vertical => table & 0b01,
-            // Horizontal mirroring: $2000/$2400 share, $2800/$2C00 share (table >> 1).
-            Mirroring::Horizontal => (table >> 1) & 0b01,
-            Mirroring::FourScreen => table,
-            Mirroring::SingleScreenLower => 0,
-            Mirroring::SingleScreenUpper => 1,
-        };
-
-        ppu_mem::NAMETABLE_BASE + (target_table as u16 * ppu_mem::NAMETABLE_SIZE) + offset
+        // Nametable space ($2000-$3EFF).
+        match pattern.map_nametable(addr) {
+            NametableTarget::Ciram(offset) => {
+                let ciram_index = (ppu_mem::NAMETABLE_BASE + (offset & 0x07FF)) as usize;
+                self.vram[ciram_index]
+            }
+            NametableTarget::MapperVram(offset) => {
+                pattern.mapper_nametable_read(offset).unwrap_or(0)
+            }
+            NametableTarget::None => {
+                // No backing store; higher-level paths model open-bus.
+                0
+            }
+        }
     }
 
     /// Loads the current tile/attribute data into the background shifters.
@@ -1471,7 +1578,11 @@ impl Ppu {
         let v = self.registers.vram.v;
         let base_nt = ppu_mem::NAMETABLE_BASE + (v.nametable() as u16 * ppu_mem::NAMETABLE_SIZE);
         let tile_index_addr = base_nt + (v.coarse_y() as u16 * 32) + (v.coarse_x() as u16);
-        let tile_index = self.read_vram(pattern, tile_index_addr);
+        let tile_index = self.read_vram(
+            pattern,
+            tile_index_addr,
+            crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+        );
 
         let fine_y = v.fine_y() as u16;
         let pattern_base = if self.registers.control.contains(Control::BACKGROUND_TABLE) {
@@ -1481,13 +1592,25 @@ impl Ppu {
         };
         let pattern_addr = pattern_base + (tile_index as u16 * 16) + fine_y;
         let tile_pattern = [
-            self.read_vram(pattern, pattern_addr),
-            self.read_vram(pattern, pattern_addr + 8),
+            self.read_vram(
+                pattern,
+                pattern_addr,
+                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+            ),
+            self.read_vram(
+                pattern,
+                pattern_addr + 8,
+                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+            ),
         ];
 
         let attr_addr =
             base_nt + 0x03C0 + (v.coarse_y() as u16 / 4) * 8 + (v.coarse_x() as u16 / 4);
-        let attr_byte = self.read_vram(pattern, attr_addr);
+        let attr_byte = self.read_vram(
+            pattern,
+            attr_addr,
+            crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+        );
         let quadrant_shift = ((v.coarse_y() & 0b10) << 1) | (v.coarse_x() & 0b10);
         let palette_index = (attr_byte >> quadrant_shift) & 0b11;
 

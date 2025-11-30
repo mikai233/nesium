@@ -15,6 +15,7 @@
 
 mod dmc;
 mod envelope;
+mod expansion;
 mod frame_counter;
 mod length_counter;
 mod noise;
@@ -29,9 +30,11 @@ use crate::{
     ram::apu::RegisterRam,
 };
 
+pub use expansion::ExpansionAudio;
 pub use frame_counter::FrameCounterMode;
 
 use dmc::Dmc;
+use expansion::ExpansionAudio as ExpansionAudioTrait;
 use frame_counter::{FrameCounter, FrameResetAction};
 use noise::Noise;
 use pulse::Pulse;
@@ -46,7 +49,6 @@ struct StatusFlags {
 
 /// Fully modelled NES APU with envelope, sweep, length/linear counters and the
 /// frame sequencer.
-#[derive(PartialEq, Eq, Hash)]
 pub struct Apu {
     registers: RegisterRam,
     frame_counter: FrameCounter,
@@ -56,6 +58,8 @@ pub struct Apu {
     triangle: Triangle,
     noise: Noise,
     dmc: Dmc,
+    /// Optional cartridge-provided expansion audio generator.
+    expansion: Option<Box<dyn ExpansionAudioTrait>>,
 }
 
 impl fmt::Debug for Apu {
@@ -82,6 +86,7 @@ impl Apu {
             triangle: Triangle::default(),
             noise: Noise::default(),
             dmc: Dmc::default(),
+            expansion: None,
         }
     }
 
@@ -97,6 +102,13 @@ impl Apu {
         self.triangle = Triangle::default();
         self.noise = Noise::default();
         self.dmc = Dmc::default();
+        // Expansion audio is owned by the cartridge/board; resetting the APU
+        // does not drop the attached generator.
+    }
+
+    /// Attaches a cartridge-provided expansion audio generator to the mixer.
+    pub fn set_expansion_audio(&mut self, expansion: Option<Box<dyn ExpansionAudioTrait>>) {
+        self.expansion = expansion;
     }
 
     pub fn cpu_write(&mut self, addr: u16, value: u8) {
@@ -237,6 +249,10 @@ impl Apu {
         self.triangle.clock_timer();
         self.noise.clock_timer();
         self.dmc.clock(&mut reader, &mut self.status);
+
+        if let Some(expansion) = self.expansion.as_deref_mut() {
+            expansion.clock_audio();
+        }
     }
 
     /// Per-CPU-cycle APU tick. DMC memory fetches return zero bytes unless the
@@ -265,7 +281,9 @@ impl Apu {
             159.79 / ((1.0 / (t / 8227.0 + n / 12241.0 + d / 22638.0)) + 100.0)
         };
 
-        pulse_out + tnd_out
+        let expansion = self.expansion.as_ref().map(|e| e.sample()).unwrap_or(0.0);
+
+        pulse_out + tnd_out + expansion
     }
 }
 

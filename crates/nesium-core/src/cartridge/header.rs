@@ -58,6 +58,8 @@ pub enum Mirroring {
     SingleScreenLower,
     /// Single-screen mirroring using the second nametable (`$2400` region).
     SingleScreenUpper,
+    /// Nametable mapping is fully controlled by the mapper via `map_nametable`.
+    MapperControlled,
 }
 
 /// Identifies the header flavour encountered.

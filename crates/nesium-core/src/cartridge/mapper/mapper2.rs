@@ -117,8 +117,8 @@ impl Mapper for Mapper2 {
         }
     }
 
-    fn ppu_read(&self, addr: u16) -> u8 {
-        self.chr.read(addr)
+    fn ppu_read(&self, addr: u16) -> Option<u8> {
+        Some(self.chr.read(addr))
     }
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
@@ -143,6 +143,14 @@ impl Mapper for Mapper2 {
         } else {
             Some(self.prg_ram.as_mut())
         }
+    }
+
+    fn prg_save_ram(&self) -> Option<&[u8]> {
+        self.prg_ram()
+    }
+
+    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
+        self.prg_ram_mut()
     }
 
     fn chr_rom(&self) -> Option<&[u8]> {
