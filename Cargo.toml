@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-license = "MIT"
+license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
 bitflags = "2.10.0"
