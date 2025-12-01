@@ -467,18 +467,7 @@ impl Ppu {
                 // OAMDATA drives the full bus when read.
                 self.open_bus.apply_masked(0x00, v)
             }
-            PpuRegister::Data => {
-                if self.ignore_vram_read != 0 {
-                    // Consecutive $2007 read within the ignore window: return open bus
-                    // and do not touch VRAM buffer or increment the VRAM address.
-                    self.open_bus.sample()
-                } else {
-                    let value = self.read_vram_data(pattern);
-                    // Roughly match Mesen2's window of ~6 PPU cycles (~2 CPU cycles).
-                    self.ignore_vram_read = 6;
-                    value
-                }
-            }
+            PpuRegister::Data => self.read_vram_data(pattern),
             _ => self.open_bus.sample(),
         };
         value
@@ -1386,13 +1375,9 @@ impl Ppu {
         } else {
             let idx = self.registers.oam_addr as usize;
             if idx < ppu_mem::OAM_RAM_SIZE {
-                // Mask off the 3 unimplemented bits of sprite byte 2 so they always read back as 0.
-                let mut v = value;
-                if (self.registers.oam_addr & 0x03) == 0x02 {
-                    v &= 0xE3;
-                }
-
-                self.registers.oam[idx] = v;
+                // Outside rendering, writes go directly into primary OAM and
+                // auto-increment OAMADDR.
+                self.registers.oam[idx] = value;
                 self.registers.oam_addr = self.registers.oam_addr.wrapping_add(1);
             }
         }
@@ -1421,7 +1406,12 @@ impl Ppu {
         } else {
             let idx = self.registers.oam_addr as usize;
             if idx < ppu_mem::OAM_RAM_SIZE {
-                let v = self.registers.oam[idx];
+                let mut v = self.registers.oam[idx];
+                // Mask off the 3 unimplemented bits of sprite byte 2 so they
+                // read back as 0, mirroring hardware behaviour.
+                if (self.registers.oam_addr & 0x03) == 0x02 {
+                    v &= 0xE3;
+                }
                 // Outside rendering, $2004 reads primary OAM and also update
                 // the internal OAM bus copybuffer.
                 self.oam_copybuffer = v;
@@ -1433,7 +1423,7 @@ impl Ppu {
     }
 
     fn write_vram_data(&mut self, value: u8, pattern: &mut PatternBus<'_>) {
-        let addr = self.registers.vram.v.raw() & ppu_mem::VRAM_MIRROR_MASK;
+        let addr = self.effective_vram_addr() & ppu_mem::VRAM_MIRROR_MASK;
         self.write_vram(pattern, addr, value);
         // Delay VRAM increment by one PPU dot to match Mesen2 / hardware
         // behaviour (used by some test ROMs to observe transient colours).
@@ -1442,7 +1432,7 @@ impl Ppu {
     }
 
     fn read_vram_data(&mut self, pattern: &mut PatternBus<'_>) -> u8 {
-        let vaddr = self.registers.vram.v.raw();
+        let vaddr = self.effective_vram_addr();
         let addr = vaddr & ppu_mem::VRAM_MIRROR_MASK;
 
         // Delay VRAM increment by one PPU dot to match Mesen2 / hardware
@@ -1469,8 +1459,9 @@ impl Ppu {
             self.registers.vram_buffer = vram_data;
 
             // Palette reads drive the low 6 bits of the bus; high 2 bits stay from
-            // open bus. Apply grayscale mask when requested.
-            let mut value = palette_value;
+            // open bus. Clamp to 6 bits here (hardware only stores 0x00-0x3F),
+            // and apply grayscale mask when requested.
+            let mut value = palette_value & 0x3F;
             if self.registers.mask.contains(Mask::GRAYSCALE) {
                 // Grayscale: keep only the grey column ($00, $10, $20, $30).
                 value &= 0x30;
@@ -1489,6 +1480,21 @@ impl Ppu {
 
             // Nametable/CHR reads fully drive the bus.
             self.open_bus.apply_masked(0x00, buffered)
+        }
+    }
+
+    /// Returns the effective VRAM address for CPU-side $2007 accesses.
+    ///
+    /// When a $2006 write has been staged but not yet committed to `v` via the
+    /// delayed update in `step_pending_vram_addr`, use the pending address so
+    /// CPU reads/writes see the most recent VRAM pointer even if the PPU
+    /// clock has not advanced yet (as in unit tests).
+    #[inline]
+    fn effective_vram_addr(&self) -> u16 {
+        if self.pending_vram_delay != 0 {
+            self.pending_vram_addr.raw()
+        } else {
+            self.registers.vram.v.raw()
         }
     }
 

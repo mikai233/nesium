@@ -185,8 +185,9 @@ impl PaletteRam {
     /// Writes a palette byte applying the NES mirroring rules.
     pub fn write(&mut self, addr: u16, value: u8) {
         let index = Self::decode_index(addr);
-        // Hardware only stores 6 bits in palette RAM; upper bits are ignored.
-        self.0.write(index, value & 0x3F);
+        // Store the full byte; higher bits are merged with the PPU open-bus
+        // latch when read via $2007, so PaletteRam itself keeps all 8 bits.
+        self.0.write(index, value);
     }
 
     /// Fills the entire palette RAM with the provided byte.
