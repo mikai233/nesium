@@ -2343,6 +2343,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nesium-audio"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cpal",
+]
+
+[[package]]
 name = "nesium-blip"
 version = "0.1.0"
 dependencies = [
@@ -2375,6 +2383,7 @@ dependencies = [
  "eframe",
  "egui",
  "fontdb",
+ "nesium-audio",
  "nesium-core",
  "rfd",
  "tracing",
@@ -2386,8 +2395,8 @@ name = "nesium-flutter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cpal",
  "flutter_rust_bridge",
+ "nesium-audio",
  "nesium-core",
 ]
 

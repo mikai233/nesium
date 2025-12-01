@@ -12,6 +12,7 @@ use egui::{
 };
 use nesium_core::{
     CpuSnapshot, Nes,
+    audio::bus::AudioBusConfig,
     controller::Button,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
 };

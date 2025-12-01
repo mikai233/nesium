@@ -8,10 +8,6 @@ license = "GPL-3.0-or-later"
 default = []
 boxed-ram = []
 
-[profile.test]
-opt-level = 2
-debug = true
-
 [dependencies]
 bitflags.workspace = true
 dyn-clone.workspace = true

@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 nesium-core.path = "../nesium-core"
+nesium-audio.path = "../nesium-audio"
 egui.workspace = true
 eframe.workspace = true
 anyhow.workspace = true

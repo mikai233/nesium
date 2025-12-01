@@ -14,5 +14,5 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
 [dependencies]
 nesium-core.path = "../nesium-core"
 flutter_rust_bridge = "=2.11.1"
-cpal.workspace = true
 anyhow.workspace = true
+nesium-audio.path = "../nesium-audio"
