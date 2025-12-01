@@ -1,5 +1,19 @@
 use core::fmt::Debug;
 
+/// Per-chip expansion audio samples produced by cartridge mappers.
+///
+/// Each field represents the instantaneous linear amplitude for a given
+/// expansion audio source. Most boards will only ever drive a single field.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ExpansionSamples {
+    pub fds: f32,
+    pub mmc5: f32,
+    pub namco163: f32,
+    pub sunsoft5b: f32,
+    pub vrc6: f32,
+    pub vrc7: f32,
+}
+
 /// Optional expansion audio interface implemented by certain cartridge boards.
 ///
 /// Boards such as VRC6/VRC7, Sunsoft 5B, MMC5, Namco 163, or FDS provide extra
@@ -18,12 +32,12 @@ pub trait ExpansionAudio: Debug + Send {
     /// Advance the expansion audio state by one CPU cycle.
     fn clock_audio(&mut self) {}
 
-    /// Current expansion audio sample in linear amplitude space.
+    /// Current expansion audio samples in linear amplitude space.
     ///
-    /// The value is expected to be in a reasonable range (e.g. `0.0..=1.0`);
-    /// the mixer may apply additional scaling when combining it with the core
-    /// APU output.
-    fn sample(&self) -> f32 {
-        0.0
+    /// Each implementation should populate the field corresponding to the
+    /// chip it models (e.g. `namco163` for Namco 163); the mixer applies
+    /// appropriate per-chip scaling when combining with the core APU output.
+    fn samples(&self) -> ExpansionSamples {
+        ExpansionSamples::default()
     }
 }

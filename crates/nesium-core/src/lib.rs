@@ -212,12 +212,20 @@ impl Nes {
                 .cartridge()
                 .and_then(|cart| cart.mapper().as_expansion_audio())
             {
-                let sample = expansion.sample();
-                self.mixer.set_channel_level(
-                    AudioChannel::Expansion,
-                    bus.cpu_cycles() as i64,
-                    sample,
-                );
+                let samples = expansion.samples();
+                let clock = bus.cpu_cycles() as i64;
+
+                self.mixer.set_channel_level(AudioChannel::Fds, clock, samples.fds);
+                self.mixer
+                    .set_channel_level(AudioChannel::Mmc5, clock, samples.mmc5);
+                self.mixer
+                    .set_channel_level(AudioChannel::Namco163, clock, samples.namco163);
+                self.mixer
+                    .set_channel_level(AudioChannel::Sunsoft5B, clock, samples.sunsoft5b);
+                self.mixer
+                    .set_channel_level(AudioChannel::Vrc6, clock, samples.vrc6);
+                self.mixer
+                    .set_channel_level(AudioChannel::Vrc7, clock, samples.vrc7);
             }
             true
         } else {
@@ -260,12 +268,21 @@ impl Nes {
             .cartridge
             .as_ref()
             .and_then(|cart| cart.mapper().as_expansion_audio())
-            .map(|exp| exp.sample())
-            .unwrap_or(0.0);
-        base + expansion
+            .map(|exp| exp.samples())
+            .unwrap_or_default();
+
+        // Collapse expansion into a single scalar matching the mixer weights.
+        let expansion_mono = expansion.fds
+            + expansion.mmc5
+            + expansion.namco163
+            + expansion.sunsoft5b
+            + expansion.vrc6
+            + expansion.vrc7;
+
+        base + expansion_mono
     }
 
-    /// Run a full frame and emit mixed PCM samples.
+    /// Run a full frame and emit interleaved stereo PCM samples.
     pub fn run_frame_with_audio(&mut self, out: &mut Vec<f32>) {
         let end_clock = loop {
             let res = self.step_dot_with_audio();
@@ -280,6 +297,11 @@ impl Nes {
     pub fn set_audio_sample_rate(&mut self, sample_rate: u32) {
         self.audio_sample_rate = sample_rate;
         self.mixer = NesSoundMixer::new(CPU_CLOCK_NTSC, sample_rate);
+    }
+
+    /// Apply per-channel mixer settings (volume / panning).
+    pub fn set_mixer_settings(&mut self, settings: &crate::audio::MixerSettings) {
+        self.mixer.apply_mixer_settings(settings);
     }
 
     /// Current audio sample rate used by the internal mixer.

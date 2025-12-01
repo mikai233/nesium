@@ -6,6 +6,7 @@ members = [
     "crates/libretro-bridge",
     "crates/nesium-libretro",
     "crates/nesium-flutter",
+    "crates/nesium-blip",
 ]
 
 [workspace.package]

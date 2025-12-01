@@ -23,7 +23,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    apu::ExpansionAudio,
+    apu::{ExpansionAudio, expansion::ExpansionSamples},
     cartridge::{
         Mapper, TRAINER_SIZE,
         header::{Header, Mirroring},
@@ -422,8 +422,12 @@ impl ExpansionAudio for Mapper19 {
         }
     }
 
-    fn sample(&self) -> f32 {
-        self.audio.as_ref().map_or(0.0, |a| a.sample())
+    fn samples(&self) -> ExpansionSamples {
+        let namco163 = self.audio.as_ref().map_or(0.0, |a| a.sample());
+        ExpansionSamples {
+            namco163,
+            ..ExpansionSamples::default()
+        }
     }
 }
 

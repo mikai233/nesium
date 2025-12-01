@@ -1,0 +1,11 @@
+[package]
+name = "nesium-blip"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+
+[build-dependencies]
+bindgen.workspace = true
+cc = "1"

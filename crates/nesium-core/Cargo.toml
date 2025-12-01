@@ -17,6 +17,7 @@ bitflags.workspace = true
 dyn-clone.workspace = true
 bincode.workspace = true
 tracing.workspace = true
+nesium-blip = { path = "../nesium-blip" }
 
 [dev-dependencies]
 rand.workspace = true

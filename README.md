@@ -2,6 +2,8 @@
 
 A cycle-accurate NES emulator written in Rust, designed to faithfully replicate the behavior of the Nintendo Entertainment System hardware. This project strives to provide precise emulation of the CPU, PPU, APU, and other critical components, ensuring that every game runs as it would on the original hardware.
 
+This emulator’s design and implementation draw heavily from the excellent Mesen2 project. Mesen2’s documentation, code structure, and many of its implementation ideas (especially around timing, open-bus behaviour, and audio mixing) have been an invaluable reference. Huge thanks to the Mesen2 authors and contributors for making such a high‑quality emulator available.
+
 ## Key Features:
 - **Cycle-accurate emulation**: Every clock cycle is emulated precisely to ensure accurate game behavior.
 - **CPU (6502) Emulation**: Full emulation of the 6502 processor with support for all instructions.

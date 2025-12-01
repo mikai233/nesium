@@ -74,13 +74,15 @@ impl DemoCore {
     fn render_audio(&mut self) -> Vec<[i16; 2]> {
         let mut samples = Vec::new();
         self.nes.run_frame_with_audio(&mut samples);
-        samples
-            .into_iter()
-            .map(|s| {
-                let clamped = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-                [clamped, clamped]
-            })
-            .collect()
+        let mut frames = Vec::new();
+        for chunk in samples.chunks(2) {
+            let l = *chunk.get(0).unwrap_or(&0.0);
+            let r = *chunk.get(1).unwrap_or(&l);
+            let l_i16 = (l.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+            let r_i16 = (r.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+            frames.push([l_i16, r_i16]);
+        }
+        frames
     }
 }
 

@@ -15,7 +15,7 @@
 
 mod dmc;
 mod envelope;
-mod expansion;
+pub mod expansion;
 mod frame_counter;
 mod length_counter;
 mod noise;

@@ -9,8 +9,8 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 
-/// Thin audio output wrapper that feeds PCM samples from the emulator into
-/// cpal's default output stream.
+/// Thin audio output wrapper that feeds interleaved stereo PCM samples from the
+/// emulator into cpal's default output stream.
 pub struct NesAudioPlayer {
     buffer: Arc<Mutex<VecDeque<f32>>>,
     sample_rate: u32,
@@ -70,12 +70,30 @@ impl NesAudioPlayer {
             config,
             move |data: &mut [T], _| {
                 for frame in data.chunks_mut(channels) {
-                    let sample = {
+                    let (l, r) = {
                         let mut guard = buffer.lock().unwrap();
-                        guard.pop_front().unwrap_or(0.0)
+                        let left = guard.pop_front().unwrap_or(0.0);
+                        let right = guard.pop_front().unwrap_or(left);
+                        (left, right)
                     };
-                    let converted: T = sample.to_sample::<T>();
-                    frame.iter_mut().for_each(|out| *out = converted);
+                    let l_conv: T = l.to_sample::<T>();
+                    let r_conv: T = r.to_sample::<T>();
+                    match channels {
+                        0 => {}
+                        1 => {
+                            // Downmix stereo to mono if the device is mono.
+                            let mono: T = ((l + r) * 0.5).to_sample::<T>();
+                            frame[0] = mono;
+                        }
+                        _ => {
+                            frame[0] = l_conv;
+                            frame[1] = r_conv;
+                            // For extra channels, just mirror the right channel.
+                            for ch in &mut frame[2..] {
+                                *ch = r_conv;
+                            }
+                        }
+                    }
                 }
             },
             err_fn,
@@ -84,15 +102,19 @@ impl NesAudioPlayer {
         Ok(stream)
     }
 
-    /// Pushes a batch of mono samples into the output buffer.
+    /// Pushes a batch of interleaved stereo samples into the output buffer.
     pub fn push_samples(&self, samples: &[f32]) {
         if samples.is_empty() {
             return;
         }
         if let Ok(mut guard) = self.buffer.lock() {
-            for &raw in samples {
-                let scaled = (raw * 0.9).clamp(-1.0, 1.0);
-                guard.push_back(scaled);
+            for chunk in samples.chunks(2) {
+                let l = *chunk.get(0).unwrap_or(&0.0);
+                let r = *chunk.get(1).unwrap_or(&l);
+                let l = (l * 0.9).clamp(-1.0, 1.0);
+                let r = (r * 0.9).clamp(-1.0, 1.0);
+                guard.push_back(l);
+                guard.push_back(r);
             }
             if guard.len() > self.max_queue {
                 let drop_count = guard.len() - self.max_queue;
