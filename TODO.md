@@ -1,3 +1,216 @@
+# TODO: NES Audio System – Mesen2 Parity
+
+High-level plan: first make normal gameplay audio behaviour match Mesen2 as closely as possible (no obvious clipping, consistent loudness/balance), then gradually cover extreme scenarios, configuration options, and tooling.
+
+## Phase 0 – APU/DMC Scheduling and Timing (match NesApu/DeltaModulationChannel)
+
+Goal: bring the internal APU timing model (especially DMC) much closer to Mesen2’s `NesApu` + `DeltaModulationChannel`, so that `apu_debug.raw` aligns with `apu_debug_mesen.raw` not only statistically, but also around timing-sensitive DMC drums (e.g., Shadow of the Ninja intro cutscene).
+
+### 0.1 – Introduce an APU “range runner” like NesApu::Run/Exec
+
+- **Problem today**
+  - `Apu::clock_with_reader` in `crates/nesium-core/src/apu.rs` runs the entire APU one CPU tick at a time, and `push_audio_levels` feeds deltas into `NesSoundMixer` based on “current per-channel level”.
+  - Mesen2 uses `NesApu::_currentCycle` / `_previousCycle` and `NesApu::Run(cyclesToRun)` to advance the APU over a range of cycles, with each channel’s `Run(targetCycle)` using an `ApuTimer` to generate per-channel audio deltas at precise timestamps.
+
+- **Target design**
+  - Add an internal APU cycle counter and “range runner”:
+    - Track `apu_cycle_current` and `apu_cycle_previous` inside `Apu`.
+    - Expose `fn run_until(&mut self, target_cycle: u64, reader: &mut impl FnMut(u16) -> u8, mixer: Option<&mut NesSoundMixer>)`.
+    - `run_until` should:
+      - Use the frame counter to schedule quarter/half frame events between `apu_cycle_previous..target_cycle` (mirroring `FrameCounter::Run`).
+      - Call each channel’s `run(target_cycle, mixer)` to emit audio deltas over the interval instead of one-cycle-at-a-time ticking.
+
+- **Migration steps**
+  1. Introduce a thin “range mode” behind a feature flag or internal helper while keeping the existing per-cycle `clock_with_reader` path for compatibility.
+  2. Start by using `run_until` only from `Nes::run_frame_with_audio` / `step_dot_with_audio`:
+     - For each dot where `(dot_counter + 2) % 3 == 0`, compute the corresponding CPU/APU cycle and call `apu.run_until(cycle, reader, Some(&mut mixer))`.
+  3. Once stable, deprecate the per-cycle `clock_with_mixer` path in favour of the range-based one.
+
+### 0.2 – Per-channel timers and Run(targetCycle) (Square/Triangle/Noise)
+
+- **Problem today**
+  - Pulse/triangle/noise channels in nesium use simple per-cycle timers (e.g., `clock_timer` decrementing a period counter), with audio deltas computed once per APU cycle from `output()` and mixed in `push_audio_levels`.
+  - Mesen2’s `SquareChannel::Run`, `TriangleChannel::Run`, `NoiseChannel::Run` wrap their counters in an `ApuTimer` that:
+    - Receives a `targetCycle` (CPU clock).
+    - Emits one or more “ticks” with precise cycle-aligned output changes via `_timer.AddOutput(output)`.
+
+- **Target design**
+  - Introduce a small Rust `ApuTimer` helper in `nesium-core`:
+    - Fields: `previous_cycle: u64`, `timer: u16`, `period: u16`, `last_output: i8` (or u8/f32 as needed).
+    - Methods mirroring Mesen2:
+      - `fn reset(&mut self, soft_reset: bool)`.
+      - `fn set_period(&mut self, p: u16)` / `fn set_timer(&mut self, value: u16)`.
+      - `fn run<F>(&mut self, target_cycle: u64, mut on_tick: F)` where `F: FnMut(u64)`:
+        - While “cycles to run > timer”，调用 `on_tick(current_cycle)`，重装 timer 并更新 `previous_cycle`.
+  - For each core channel (pulse1/2, triangle, noise):
+    - Add a `timer: ApuTimer` field.
+    - Refactor the existing per-cycle `clock_timer` into a `run(target_cycle, &mut NesSoundMixer)` that:
+      - Calls `timer.run(target_cycle, |tick_cycle| { update internal phase; compute new output; mixer.add_delta(channel, tick_cycle as i64, delta); })`.
+
+- **Migration steps**
+  1. Implement `ApuTimer` in Rust, with unit tests that mirror `Core/NES/APU/ApuTimer` semantics (period/timer/reload behaviour).
+  2. Port `SquareChannel::Run` semantics into `Pulse`:
+     - Duty sequencing, sweep/length envelope tick points remain driven by the frame counter.
+     - Timer-driven part becomes `Pulse::run(target_cycle, mixer)` using `ApuTimer`.
+  3. Repeat for `Triangle` and `Noise`, validating that:
+     - For a simple test pattern, `NesSoundMixer::mix_channels_stereo` still matches Mesen2’s `GetOutputVolume()` scaling tests.
+
+### 0.3 – DMC state machine: _needToRun / transferStartDelay / disableDelay
+
+- **Problem today**
+  - Our `Dmc` in `crates/nesium-core/src/apu/dmc.rs` models:
+    - Basic IRQ/loop flags, sample address/length, bit shifting, and a timer that now matches `DMC_RATE_TABLE[index]` in period.
+    - Sample fetch as a simple “if buffer empty & bytes remaining > 0, read byte now” with no CPU DMA timing.
+  - Missing compared to Mesen2’s `DeltaModulationChannel`:
+    - `_needToRun` / `NeedToRun()` scheduling.
+    - `_transferStartDelay` and `_disableDelay` based on CPU cycle odd/even.
+    - DMA end behaviour when `sampleLength == 1` (sample duplication glitch / abort-on-next-bit).
+
+- **Target design**
+  - Extend `Dmc` with:
+    - `need_to_run: bool`, `transfer_start_delay: u8`, `disable_delay: u8`.
+  - Implement methods analogous to Mesen2:
+    - `fn set_enabled(&mut self, enabled: bool, status: &mut StatusFlags, cpu_cycle: u64)`:
+      - When disabling, set `disable_delay` to 2 or 3 based on `cpu_cycle & 1` and mark `need_to_run`.
+      - When enabling with `bytes_remaining == 0`, call `restart_sample()` and set `transfer_start_delay` similarly, `need_to_run = true`.
+    - `fn process_clock<F>(&mut self, mut reader: F, status: &mut StatusFlags, cpu_cycle: u64)`:
+      - Decrement `disable_delay`; when it hits 0, cancel any pending DMA and clear `bytes_remaining`.
+      - Decrement `transfer_start_delay`; when 0 and buffer empty & bytes_remaining > 0, trigger a “logical” DMA read via the provided `reader` (no CPU stall yet).
+      - Update `need_to_run` based on `disable_delay`, `transfer_start_delay`, and `bytes_remaining`.
+    - `fn need_to_run(&mut self, cpu_cycle: u64) -> bool`:
+      - Mirror `DeltaModulationChannel::NeedToRun` by calling `process_clock` when `need_to_run` is true and returning the new flag state.
+    - Implement the sample-length==1 glitch paths:
+      - When DMA ends exactly when `_bitsRemaining == 8` and `_timer.GetTimer() == _timer.GetPeriod()`, optionally duplicate the last sample byte as Mesen2 does (behind a config flag in nesium).
+      - When DMA ends on the cycle before bit counter resets (`_bitsRemaining == 1` and `_timer.GetTimer() < 2`), abort a single-byte DMA but still cause the halted CPU cycle (we can approximate this without a full stall model).
+
+- **Integration steps**
+  1. Thread `cpu_cycle` into DMC calls from `Apu` (we already track an internal cycle counter).
+  2. Update `Apu::clock_with_reader` / future `run_until` to:
+     - Call `dmc.need_to_run(cpu_cycle)` and, if true, run `dmc.process_clock(reader, &mut status, cpu_cycle)` on each relevant cycle.
+  3. Keep CPU stall modelling as a future enhancement; for now, limit ourselves to “logical” DMA timing and glitch behaviour.
+
+### 0.4 – Align APU<->Mixer wiring with Mesen2’s AddDelta/EndFrame
+
+- **Problem today**
+  - nesium’s `NesSoundMixer::add_delta` immediately mixes all channels via `mix_channels_stereo` and sends left/right deltas to blip_buf.
+  - Mesen2 stores per-channel deltas in `_channelOutput[channel][time]`, then in `EndFrame`:
+    - Sorts timestamps.
+    - Incrementally updates `_currentOutput[channel]` over time.
+    - Calls `GetOutputVolume()` at each timestamp and feeds that into `blip_add_delta`.
+
+- **Target design**
+  - Keep the existing `mix_channels_stereo` and scaling (they already match `GetOutputVolume()*4/32768`), but move toward an “APU ≥ NesSoundMixer” contract like Mesen2:
+    - Each channel’s `run(target_cycle)` calls `mixer.add_delta(AudioChannel::X, tick_cycle, delta)` at the time its output changes.
+    - `add_delta` appends per-channel deltas to a timestamped buffer, not immediately mixing stereo.
+    - `end_frame(frame_end_clock, out)`:
+      - Sorts timestamps.
+      - Accumulates per-channel outputs.
+      - Calls `mix_channels_stereo` at each timestamp to generate stereo deltas for blip_buf.
+  - This is a larger refactor but brings the model almost 1:1 with Mesen2’s `NesSoundMixer`.
+
+- **Incremental steps**
+  1. Introduce an internal “per-channel delta buffer” type in `NesSoundMixer` behind a feature flag, while keeping the current fast path.
+  2. During transition:
+     - Use the buffered mode only in debug/profile builds when generating `apu_debug.raw`, so we can validate waveform parity without impacting runtime too much.
+  3. Once parity is acceptable on key test ROMs and problematic games (e.g., 赤影战士鼓点段不再爆音), consider making the buffered mode the default.
+     - Once parity is acceptable on key test ROMs and problematic games (e.g., Shadow of the Ninja drum-heavy cutscene segments no longer pop), consider making the buffered mode the default.
+
+## Phase 1 – Core Mixer Parity (most important: clean, stable audio)
+
+1. ~~**Match NesSoundMixer channel math and scaling**~~
+   - Verify `GetChannelOutput` + `GetOutputVolume` vs `audio::mixer::NesSoundMixer::mix_channels_stereo`:
+     - Square/TND/expansion coefficients identical (95.88, 159.79, 8128, 22638, FDS/MMC5/N163/S5B/VRC6/VRC7 weights).
+   - Rework our `mixed / 8192.0 + BLIP_SCALE + soft_clip` path to match Mesen2’s effective range:
+     - Derive a mapping from `GetOutputVolume()*4` (int16) to our float [-1,1] without relying heavily on tanh.
+     - Keep enough headroom so strong drum hits (for example, intro cutscenes with heavy percussion) do not hit hard clipping.
+
+2. ~~**Align blip_buf usage and frame timing**~~
+   - Ensure `NesSoundMixer::add_delta` and `end_frame` use clock-relative timestamps like `NesSoundMixer::AddDelta/EndFrame`:
+     - Non-decreasing per-frame clock, correct frame duration passed to `blip_end_frame`.
+   - Confirm we never silently drop or truncate samples under normal NTSC/PAL rates.
+
+3. ~~**Implement Mesen2-style UpdateRates and panning behaviour**~~
+   - Add a dedicated `update_rates(clock_rate, sample_rate)` path mirroring `NesSoundMixer::UpdateRates`:
+     - Update blip rates when region/clock/sample rate changes.
+     - Track `_hasPanning` and clear left/right blip buffers when panning switches between “all center” and “per-channel”.
+   - Mirror exact `ChannelPanning` mapping:
+     - `(ChannelPanning[i] + 100) / 100.0` → `[0,2]` internal representation.
+
+4. ~~**Expansion audio wiring audit**~~
+   - ~~Cross-check `ExpansionSamples` → `AudioChannel::{Fds,Mmc5,Namco163,Sunsoft5B,Vrc6,Vrc7}` mapping against Mesen2’s channel indices.~~
+   - ~~Verify per-chip gains (20/43/20/15/5/1) are applied identically in both left/right paths.~~
+
+5. ~~**Stereo post-filter parity (Delay/Panning/Comb)**~~
+   - ~~Compare Rust `StereoDelayState`, `StereoPanningState`, `StereoCombState` with their Mesen2 counterparts:~~
+     - ~~Units (ms vs samples), strength ranges, angle mapping.~~
+   - ~~Ensure default filter config (i.e., “StereoFilter: None” and its params) matches Mesen2 defaults.~~
+   - Known behavioural differences (intended for now):
+     - Comb strength uses a `[0.0, 1.0]` float ratio (`MixerSettings::stereo_comb_strength`) instead of Mesen2's integer `0..100` scale (`StereoCombFilterStrength`); frontends must divide the Mesen2-style value by 100 when mapping configs.
+     - Panning filter in nesium leaves stereo intact when `angle_deg == 0` (no-op), while Mesen2 still runs the filter and effectively collapses to mono at 0°.
+     - Delay/comb filters in nesium early-return when `delay_ms <= 0`, whereas Mesen2 still runs the filter with a zero delay; in practice UIs avoid "enabled filter with zero delay", so this is unlikely to matter.
+
+6. ~~**Shared audio output wrapper parity (nesium-audio)**~~
+   - ~~Confirm `nesium-audio::NesAudioPlayer` matches Mesen2’s device-facing expectations:~~
+     - ~~Interleaved stereo input (L,R), downmix behaviour for mono devices, extra channels mirroring.~~
+   - ~~Use the same implementation for `nesium-egui` and `nesium-flutter` to eliminate frontend differences.~~
+   - Notes:
+     - nesium currently uses `cpal`’s default output config and a small (~0.2s) float FIFO in `NesAudioPlayer`; Mesen2 routes `int16` samples through a configurable `IAudioDevice` with latency control in `AudioConfig` and a separate `SoundMixer` bus (tracked under Phase 2 resampling/master-volume tasks).
+     - Both `nesium-egui` and `nesium-flutter` now construct `Nes` with the runtime audio device’s sample rate and feed the same interleaved stereo stream into `NesAudioPlayer`, so frontend‑specific audio differences are eliminated at this layer.
+
+## Phase 2 – Global SoundMixer Bus (after core behaviour matches, unify bus/config)
+
+7. **Introduce a SoundMixer-equivalent bus layer**
+   - Add a Rust module/crate mirroring `Core/Shared/Audio/SoundMixer`:
+     - Accepts PCM from one or more `NesSoundMixer` instances.
+     - Owns global resampler, EQ, reverb, crossfeed, and master volume.
+
+8. ~~**Match resampling path (96 kHz → user sample rate)**~~
+   - ~~Mirror Mesen2’s fixed `_sampleRate = 96000` in `NesSoundMixer` and resample to user-configurable rate:~~
+     - ~~Implement a `SoundResampler` equivalent (can start with a simple quality setting).~~
+     - **Remaining difference:** nesium currently uses a per-frame linear resampler in `SoundMixerBus` without dynamic rate adjustment hooks for fast-forward / slow motion; Mesen2’s `SoundResampler` and `HermiteResampler` support higher-quality resampling and pitch-adjust for variable emulation speed.
+
+9. ~~**Master volume and background/fast-forward attenuation**~~
+   - ~~Introduce `AudioConfig`-style master volume handling:~~
+     - ~~MasterVolume, MuteSoundInBackground, ReduceSoundInBackground, ReduceSoundInFastForward, VolumeReduction.~~
+   - ~~Apply these scalings in the bus right before sending to the audio device.~~
+   - Notes:
+     - nesium’s `AudioBusConfig` uses `master_volume` and `volume_reduction` as `[0.0, 1.0]` floats, whereas Mesen2’s `AudioConfig` uses `0..100` integer percentages; frontends must map UI values accordingly (e.g. 75% reduction → `volume_reduction = 0.75`).
+     - Background / fast-forward attenuation in nesium is driven by `AudioBusConfig::{in_background,is_fast_forward}` flags, which frontends can toggle; Mesen2 derives them from `EmulationFlags`.
+     - Scaling is applied in float space after mixing/resampling on the global bus, while Mesen2 applies it on the `int16` buffer; behaviour is equivalent for normal ranges but not bit‑exact.
+
+10. ~~**Basic EQ / reverb / crossfeed integration**~~
+    - ~~Implement minimal versions of `Equalizer`, `ReverbFilter`, `CrossFeedFilter`:~~
+      - ~~Initially wired with default/neutral settings, then tuned to Mesen2’s defaults.~~
+    - ~~Add hooks so they can be configured from frontends later, even if UI is not exposed yet.~~
+    - Notes / differences:
+      - The bus-level `Equalizer` currently approximates the 20-band EQ with a single global gain derived from the average band gain (no per-band frequency shaping yet), whereas Mesen2 uses `orfanidis_eq` to realise true multi-band filters.
+      - The `ReverbFilter` implementation in nesium uses a single stereo feedback delay line controlled by `reverb_strength` and `reverb_delay_ms`; Mesen2 uses a bank of 5 delays per channel with tuned taps/decays.
+      - `CrossFeedFilter` in nesium expects a `[0.0, 1.0]` float ratio (applied directly) instead of Mesen2’s integer `0..100` percent; frontends must map UI values accordingly.
+
+## Phase 3 – Advanced Features and Edge Cases
+
+11. **VS DualSystem audio routing**
+    - Mirror `NesSoundMixer::ProcessVsDualSystemAudio`:
+      - Support Main/Sub/Both output modes.
+      - Implement buffering and mixing semantics for dual-console setups.
+
+12. **Save-state integration for audio state**
+    - Include `NesSoundMixer` and global SoundMixer state in save/load:
+      - blip_buf internal state, filter histories, resampler state, per-channel levels.
+    - Aim to avoid pops/phase jumps when loading states mid-frame or mid-note.
+
+13. **Audio configuration and frontend UI mapping**
+    - Define a shared `AudioConfig` struct that mirrors Mesen2’s audio settings:
+      - SampleRate, StereoFilter, per-channel volume/pan, EQ band gains, reverb/crossfeed options, VS DualSystem settings.
+    - Expose a minimal subset in `nesium-egui` and Flutter UIs for manual tuning.
+
+14. **Verification against Mesen2 recordings**
+    - Build a small set of reference WAVs from Mesen2 (e.g., intro cutscenes with strong drums, typical BGMs, noisy/percussion-heavy passages) and record corresponding nesium output:
+      - Compare peaks/RMS and visually inspect waveforms to ensure no extra clipping or obvious spectral differences under default settings.
+    - Re-run under different sample rates and stereo filter configs to catch regressions.
+
+---
+
 # TODO: PPU Open Bus (Mesen2-aligned)
 
 Follow-up tasks to finish parity with Mesen2's open-bus behaviour on the PPU side.
