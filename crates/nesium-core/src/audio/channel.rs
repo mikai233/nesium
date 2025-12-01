@@ -20,4 +20,3 @@ impl AudioChannel {
         self as usize
     }
 }
-

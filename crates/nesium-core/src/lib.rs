@@ -1,8 +1,8 @@
-use std::path::Path;
+use std::{fs::File, io::Write, path::Path};
 
 use crate::{
     apu::Apu,
-    audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer},
+    audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
     bus::{Bus, OpenBus, cpu::CpuBus},
     cartridge::{Cartridge, Provider},
     controller::{Button, Controller},
@@ -48,9 +48,23 @@ pub struct Nes {
     open_bus: OpenBus,
     /// CPU bus access counter (fed into timing-sensitive mappers).
     cpu_bus_cycle: u64,
+    /// Per-console mixer that produces band-limited PCM at a fixed internal rate.
     mixer: NesSoundMixer,
+    /// Global audio bus that resamples from the internal mixer rate to the host sample rate.
+    sound_bus: SoundMixerBus,
     audio_sample_rate: u32,
+    /// Scratch buffer for a single frame of internal-rate audio from the per-console mixer.
+    mixer_frame_buffer: Vec<f32>,
+    /// Optional debug dump of the internal 96 kHz mixer output (for waveform comparison).
+    debug_apu_dump: Option<File>,
+    debug_apu_frames_written: u64,
+    /// Optional debug dump of the post-bus PCM (for waveform comparison).
+    debug_bus_dump: Option<File>,
+    debug_bus_frames_written: u64,
 }
+
+/// Internal mixer output sample rate (matches Mesen2's fixed 96 kHz path).
+const INTERNAL_MIXER_SAMPLE_RATE: u32 = 96_000;
 
 impl Nes {
     /// Constructs a powered-on NES instance with cleared RAM and default palette.
@@ -75,11 +89,21 @@ impl Nes {
             oam_dma_request: None,
             open_bus: OpenBus::new(),
             cpu_bus_cycle: 0,
-            mixer: NesSoundMixer::new(CPU_CLOCK_NTSC, sample_rate),
+            mixer: NesSoundMixer::new(CPU_CLOCK_NTSC, INTERNAL_MIXER_SAMPLE_RATE),
+            sound_bus: SoundMixerBus::new(INTERNAL_MIXER_SAMPLE_RATE, sample_rate),
             audio_sample_rate: sample_rate,
+            mixer_frame_buffer: Vec::new(),
+            debug_apu_dump: None,
+            debug_apu_frames_written: 0,
+            debug_bus_dump: None,
+            debug_bus_frames_written: 0,
         };
         nes.ppu.set_palette(PaletteKind::NesdevNtsc.palette());
-        nes.reset();
+        // Apply a power-on style reset once at construction time. This matches
+        // the console being turned on from a cold state (CPU/PPU/APU and RAM
+        // cleared) and is distinct from subsequent warm resets triggered by
+        // the user pressing the reset button.
+        nes.power_on_reset();
         nes
     }
 
@@ -107,18 +131,57 @@ impl Nes {
     pub fn insert_cartridge(&mut self, cartridge: Cartridge) {
         self.ppu.attach_cartridge(&cartridge);
         self.cartridge = Some(cartridge);
-        self.reset();
+        // Inserting a new cartridge is effectively a power cycle for the
+        // console, so apply a full power-on reset rather than a warm reset.
+        self.power_on_reset();
     }
 
     /// Ejects the currently inserted cartridge and resets the system.
     pub fn eject_cartridge(&mut self) {
         self.cartridge = None;
-        self.reset();
+        // Treat cartridge removal as a full power cycle from the core's
+        // perspective so all state, including RAM, returns to power-on.
+        self.power_on_reset();
     }
 
-    /// Resets the CPU, RAM, and attached peripherals to their power-on state.
-    pub fn reset(&mut self) {
+    /// Applies a power-on style reset: clears CPU RAM and fully reinitializes
+    /// CPU/PPU/APU, open bus, mixer state, and any attached cartridge.
+    ///
+    /// This corresponds to turning the console off and back on.
+    fn power_on_reset(&mut self) {
         self.ram.fill(0);
+        self.ppu.reset();
+        self.apu.power_on_reset();
+        if let Some(cart) = self.cartridge.as_mut() {
+            cart.power_on();
+        }
+        self.serial_log.drain();
+        self.open_bus.reset();
+        self.cpu_bus_cycle = 0;
+        self.mixer.reset();
+        self.sound_bus.reset();
+        self.mixer_frame_buffer.clear();
+        let mut bus = CpuBus::new(
+            &mut self.ram,
+            &mut self.ppu,
+            &mut self.apu,
+            self.cartridge.as_mut(),
+            &mut self.controllers,
+            Some(&mut self.serial_log),
+            &mut self.oam_dma_request,
+            &mut self.open_bus,
+            &mut self.cpu_bus_cycle,
+        );
+        self.cpu.reset(&mut bus);
+        self.last_frame = bus.ppu().frame_count();
+        self.dot_counter = 0;
+    }
+
+    /// Applies a warm console reset: resets CPU/PPU/APU and mapper state while
+    /// preserving CPU RAM contents. This mirrors the behaviour expected by
+    /// reset-sensitive test ROMs (for example, blargg's `apu_reset` suite),
+    /// which store metadata and counters in non-volatile RAM across resets.
+    pub fn reset(&mut self) {
         self.ppu.reset();
         self.apu.reset();
         if let Some(cart) = self.cartridge.as_mut() {
@@ -128,6 +191,8 @@ impl Nes {
         self.open_bus.reset();
         self.cpu_bus_cycle = 0;
         self.mixer.reset();
+        self.sound_bus.reset();
+        self.mixer_frame_buffer.clear();
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
@@ -191,31 +256,72 @@ impl Nes {
 
     /// Advances the system by a single PPU dot while feeding audio deltas into the shared mixer.
     pub fn step_dot_with_audio(&mut self) -> ClockResult {
-        let mut bus = CpuBus::new(
-            &mut self.ram,
-            &mut self.ppu,
-            &mut self.apu,
-            self.cartridge.as_mut(),
-            &mut self.controllers,
-            Some(&mut self.serial_log),
-            &mut self.oam_dma_request,
-            &mut self.open_bus,
-            &mut self.cpu_bus_cycle,
-        );
+        // First, run PPU + CPU for this dot using the shared CPU bus.
+        let (frame_advanced, apu_clocked, cpu_cycles, expansion_samples) = {
+            let mut bus = CpuBus::new(
+                &mut self.ram,
+                &mut self.ppu,
+                &mut self.apu,
+                self.cartridge.as_mut(),
+                &mut self.controllers,
+                Some(&mut self.serial_log),
+                &mut self.oam_dma_request,
+                &mut self.open_bus,
+                &mut self.cpu_bus_cycle,
+            );
 
-        bus.clock_ppu();
-        let apu_clocked = if (self.dot_counter + 2) % 3 == 0 {
-            self.cpu.clock(&mut bus);
-            bus.apu_mut().clock_with_mixer(&mut self.mixer);
+            bus.clock_ppu();
+            let apu_clocked = if (self.dot_counter + 2) % 3 == 0 {
+                self.cpu.clock(&mut bus);
 
-            if let Some(expansion) = bus
-                .cartridge()
-                .and_then(|cart| cart.mapper().as_expansion_audio())
-            {
-                let samples = expansion.samples();
-                let clock = bus.cpu_cycles() as i64;
+                // Expansion audio samples are taken at the same CPU clock as
+                // the core APU tick, mirroring Mesen2's behaviour.
+                let expansion = bus
+                    .cartridge()
+                    .and_then(|cart| cart.mapper().as_expansion_audio())
+                    .map(|exp| exp.samples());
+                (true, expansion)
+            } else {
+                (false, None)
+            };
 
-                self.mixer.set_channel_level(AudioChannel::Fds, clock, samples.fds);
+            self.dot_counter = self.dot_counter.wrapping_add(1);
+
+            let frame_count = bus.ppu().frame_count();
+            let frame_advanced = if frame_count != self.last_frame {
+                self.last_frame = frame_count;
+                true
+            } else {
+                false
+            };
+
+            let cpu_cycles = bus.cpu_cycles();
+            (frame_advanced, apu_clocked.0, cpu_cycles, apu_clocked.1)
+        };
+
+        // After dropping the bus (and its borrows of the cartridge), run the
+        // APU tick and feed deltas into the shared mixer, wiring the DMC
+        // sample fetch path directly to the PRG space.
+        if apu_clocked {
+            use crate::memory::cpu as cpu_mem;
+
+            let mut reader = |addr: u16| {
+                if addr < cpu_mem::CARTRIDGE_SPACE_BASE {
+                    0
+                } else {
+                    self.cartridge
+                        .as_ref()
+                        .and_then(|cart| cart.cpu_read(addr))
+                        .unwrap_or(0)
+                }
+            };
+            self.apu
+                .clock_with_reader(&mut reader, Some(&mut self.mixer));
+
+            if let Some(samples) = expansion_samples {
+                let clock = cpu_cycles as i64;
+                self.mixer
+                    .set_channel_level(AudioChannel::Fds, clock, samples.fds);
                 self.mixer
                     .set_channel_level(AudioChannel::Mmc5, clock, samples.mmc5);
                 self.mixer
@@ -227,20 +333,7 @@ impl Nes {
                 self.mixer
                     .set_channel_level(AudioChannel::Vrc7, clock, samples.vrc7);
             }
-            true
-        } else {
-            false
-        };
-
-        self.dot_counter = self.dot_counter.wrapping_add(1);
-
-        let frame_count = bus.ppu().frame_count();
-        let frame_advanced = if frame_count != self.last_frame {
-            self.last_frame = frame_count;
-            true
-        } else {
-            false
-        };
+        }
 
         ClockResult {
             frame_advanced,
@@ -290,13 +383,96 @@ impl Nes {
                 break self.apu_cycles() as i64;
             }
         };
-        self.mixer.end_frame(end_clock, out);
+        self.mixer_frame_buffer.clear();
+        self.mixer
+            .end_frame(end_clock, &mut self.mixer_frame_buffer);
+
+        // Optional debug path: dump the internal 96 kHz mixer output to a raw
+        // float file for waveform comparison against Mesen2. This writes a
+        // small header once, followed by interleaved f32 stereo samples:
+        //
+        //   magic: [u8;4] = b\"APU0\"
+        //   sample_rate: u32 (little-endian) = 96_000
+        //   channels: u16 (little-endian) = 2
+        //   reserved: u16 (little-endian) = 0
+        //   then repeated { left: f32 LE, right: f32 LE } samples.
+        //
+        // The dump is limited to roughly 60 seconds to avoid unbounded files.
+        const DEBUG_MAX_SECONDS: u64 = 60;
+        let max_debug_frames = INTERNAL_MIXER_SAMPLE_RATE as u64 * DEBUG_MAX_SECONDS;
+        if self.debug_apu_frames_written < max_debug_frames {
+            if self.debug_apu_dump.is_none() {
+                if let Ok(mut file) = File::create("apu_debug.raw") {
+                    let _ = file.write_all(b"APU0");
+                    let _ = file.write_all(&INTERNAL_MIXER_SAMPLE_RATE.to_le_bytes());
+                    let channels: u16 = 2;
+                    let _ = file.write_all(&channels.to_le_bytes());
+                    let reserved: u16 = 0;
+                    let _ = file.write_all(&reserved.to_le_bytes());
+                    self.debug_apu_dump = Some(file);
+                }
+            }
+            if let Some(file) = self.debug_apu_dump.as_mut() {
+                let mut buf = Vec::with_capacity(self.mixer_frame_buffer.len() * 4);
+                for &s in &self.mixer_frame_buffer {
+                    buf.extend_from_slice(&s.to_le_bytes());
+                }
+                let _ = file.write_all(&buf);
+                self.debug_apu_frames_written += (self.mixer_frame_buffer.len() / 2) as u64;
+            }
+        }
+
+        let out_start = out.len();
+        self.sound_bus.mix_frame(&[&self.mixer_frame_buffer], out);
+
+        // Optional debug path: dump the post-bus PCM at the host sample rate
+        // (after resampling/EQ/reverb/crossfeed/master volume) to a raw float
+        // file. The format matches `apu_debug.raw`, only the sample rate
+        // differs:
+        //
+        //   magic: [u8;4] = b\"APU0\"
+        //   sample_rate: u32 (little-endian) = self.audio_sample_rate()
+        //   channels: u16 (little-endian) = 2
+        //   reserved: u16 (little-endian) = 0
+        //   then repeated { left: f32 LE, right: f32 LE } samples.
+        //
+        // Also limited to ~60s to keep file size reasonable.
+        const DEBUG_BUS_MAX_SECONDS: u64 = 60;
+        let max_bus_frames = self.audio_sample_rate as u64 * DEBUG_BUS_MAX_SECONDS;
+        let new_samples = &out[out_start..];
+        let new_frames = (new_samples.len() / 2) as u64;
+        if self.debug_bus_frames_written < max_bus_frames && new_frames > 0 {
+            if self.debug_bus_dump.is_none() {
+                if let Ok(mut file) = File::create("bus_debug.raw") {
+                    let _ = file.write_all(b"APU0");
+                    let _ = file.write_all(&self.audio_sample_rate.to_le_bytes());
+                    let channels: u16 = 2;
+                    let _ = file.write_all(&channels.to_le_bytes());
+                    let reserved: u16 = 0;
+                    let _ = file.write_all(&reserved.to_le_bytes());
+                    self.debug_bus_dump = Some(file);
+                }
+            }
+            if let Some(file) = self.debug_bus_dump.as_mut() {
+                // Clamp to remaining budget.
+                let frames_to_write =
+                    (max_bus_frames - self.debug_bus_frames_written).min(new_frames) as usize;
+                let samples_to_write = frames_to_write * 2;
+                let slice = &new_samples[..samples_to_write];
+                let mut buf = Vec::with_capacity(slice.len() * 4);
+                for &s in slice {
+                    buf.extend_from_slice(&s.to_le_bytes());
+                }
+                let _ = file.write_all(&buf);
+                self.debug_bus_frames_written += frames_to_write as u64;
+            }
+        }
     }
 
     /// Update the mixer to a new host sample rate (resets mixer state).
     pub fn set_audio_sample_rate(&mut self, sample_rate: u32) {
         self.audio_sample_rate = sample_rate;
-        self.mixer = NesSoundMixer::new(CPU_CLOCK_NTSC, sample_rate);
+        self.sound_bus.set_output_rate(sample_rate);
     }
 
     /// Apply per-channel mixer settings (volume / panning).
@@ -307,6 +483,11 @@ impl Nes {
     /// Current audio sample rate used by the internal mixer.
     pub fn audio_sample_rate(&self) -> u32 {
         self.audio_sample_rate
+    }
+
+    /// Updates the audio bus configuration (master volume and attenuation).
+    pub fn set_audio_bus_config(&mut self, config: AudioBusConfig) {
+        self.sound_bus.set_config(config);
     }
 
     /// Current APU cycle counter (CPU-rate ticks since power-on/reset).

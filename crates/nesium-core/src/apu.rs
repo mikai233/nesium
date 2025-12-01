@@ -59,6 +59,10 @@ pub struct Apu {
     noise: Noise,
     dmc: Dmc,
     last_levels: [f32; 5],
+    /// Last value written to `$4017` (frame counter). Used to distinguish
+    /// power-on behaviour (acts as if `$00` were written) from warm resets,
+    /// where hardware effectively re-applies the last written mode.
+    last_frame_counter_value: u8,
 }
 
 impl fmt::Debug for Apu {
@@ -86,10 +90,15 @@ impl Apu {
             noise: Noise::default(),
             dmc: Dmc::default(),
             last_levels: [0.0; 5],
+            last_frame_counter_value: 0x00,
         }
     }
 
-    pub fn reset(&mut self) {
+    /// Applies a power-on style reset to the APU. This matches turning the
+    /// console off and back on: all channel registers are cleared and the
+    /// frame counter behaves as if `$4017` were written with `$00` shortly
+    /// before code execution begins.
+    pub fn power_on_reset(&mut self) {
         self.registers.fill(0);
         self.frame_counter = FrameCounter::default();
         self.status = StatusFlags::default();
@@ -102,6 +111,33 @@ impl Apu {
         self.noise = Noise::default();
         self.dmc = Dmc::default();
         self.last_levels = [0.0; 5];
+        self.last_frame_counter_value = 0x00;
+    }
+
+    /// Applies a warm reset to the APU. Channel registers are cleared and
+    /// length/Envelope state reset, but the frame counter is reconfigured as
+    /// if the last value written to `$4017` were written again just before
+    /// execution resumes. This approximates the behaviour described in
+    /// blargg's `apu_reset` tests and implemented in Mesen2's
+    /// `ApuFrameCounter::Reset(softReset = true)`.
+    pub fn reset(&mut self) {
+        self.registers.fill(0);
+        self.status = StatusFlags::default();
+        self.cycles = 0;
+        self.pulse = [
+            Pulse::new(pulse::PulseChannel::Pulse1),
+            Pulse::new(pulse::PulseChannel::Pulse2),
+        ];
+        self.triangle = Triangle::default();
+        self.noise = Noise::default();
+        self.dmc = Dmc::default();
+        self.last_levels = [0.0; 5];
+
+        // Re-apply the last frame counter mode / IRQ inhibit setting so
+        // reset behaviour differs from power-on, as on real hardware.
+        let reset = self.frame_counter.configure(self.last_frame_counter_value);
+        self.status.frame_interrupt = false;
+        self.apply_frame_reset(reset);
     }
 
     pub fn cpu_write(&mut self, addr: u16, value: u8) {
@@ -131,6 +167,11 @@ impl Apu {
                 apu_mem::Register::DmcSampleLength => self.dmc.write_sample_length(value),
                 apu_mem::Register::Status => self.write_status(value),
                 apu_mem::Register::FrameCounter => {
+                    // Track the last written value so warm resets can restore
+                    // the current frame counter mode, matching hardware
+                    // behaviour where `$4017` is effectively re-applied on
+                    // reset rather than forced back to `$00`.
+                    self.last_frame_counter_value = value;
                     let reset = self.frame_counter.configure(value);
                     self.status.frame_interrupt = false;
                     self.apply_frame_reset(reset);

@@ -1,11 +1,12 @@
 mod common;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use common::{
-    RESULT_ZP_ADDR, require_color_diversity, run_rom_frames, run_rom_status,
+    RESULT_ZP_ADDR, ROM_ROOT, STATUS_ADDR, require_color_diversity, run_rom_frames, run_rom_status,
     run_rom_zeropage_result,
 };
 use ctor::ctor;
+use nesium_core::Nes;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
@@ -77,8 +78,37 @@ fn apu_reset_suite() -> Result<()> {
         "apu_reset/len_ctrs_enabled.nes",
         "apu_reset/works_immediately.nes",
     ] {
+        eprintln!("Running APU reset test ROM: {rom}");
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
+    Ok(())
+}
+
+#[test]
+#[ignore = "debug helper for apu_reset/4017_timing.nes"]
+fn apu_reset_4017_timing_debug() -> Result<()> {
+    // Run the 4017_timing ROM once and print a few internal state bytes
+    // (including the nv_res counters used by run_at_reset.s) to help
+    // diagnose reset behaviour.
+    let rom = "apu_reset/4017_timing.nes";
+    let path = std::path::Path::new(ROM_ROOT).join(rom);
+    let mut nes = Nes::default();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+
+    for frame in 0..DEFAULT_FRAMES {
+        nes.run_frame();
+        let status = nes.peek_cpu_byte(STATUS_ADDR);
+        let mut magic = [0u8; 3];
+        nes.peek_cpu_slice(STATUS_ADDR + 1, &mut magic);
+        let power_flag = nes.peek_cpu_byte(0x0224);
+        let num_resets = nes.peek_cpu_byte(0x0225);
+        eprintln!(
+            "frame {frame}: status={:#04X}, magic={:02X?}, power_flag={:#04X}, num_resets={}",
+            status, magic, power_flag, num_resets
+        );
+    }
+
     Ok(())
 }
 

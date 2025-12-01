@@ -32,24 +32,30 @@ pub(super) struct FrameResetAction {
     pub(super) immediate_half: bool,
 }
 
-/// Frame sequencer timeline for 4-step mode: (cycle, quarter, half, irq).
+/// Frame sequencer timeline for 4-step mode: (CPU cycle, quarter, half, irq).
+///
+/// The values and period mirror Mesen2's NTSC `_stepCyclesNtsc[0]` table
+/// (derived from NESdev), expressed directly in CPU cycles.
 pub(super) const FRAME_STEP_4: &[(u16, bool, bool, bool)] = &[
-    (3729, true, false, false),
-    (7457, true, true, false),
-    (11186, true, false, false),
-    (14915, true, true, true),
+    (7457, true, false, false),
+    (14913, true, true, false),
+    (22371, true, false, false),
+    (29829, true, true, true),
 ];
-pub(super) const FRAME_STEP_4_PERIOD: u16 = 14915;
+pub(super) const FRAME_STEP_4_PERIOD: u16 = 29830;
 
-/// Frame sequencer timeline for 5-step mode: (cycle, quarter, half, irq).
+/// Frame sequencer timeline for 5-step mode: (CPU cycle, quarter, half, irq).
+///
+/// The 5-step mode never generates frame IRQs; this table again mirrors the
+/// NTSC timings from Mesen2's `_stepCyclesNtsc[1]`.
 pub(super) const FRAME_STEP_5: &[(u16, bool, bool, bool)] = &[
-    (3729, true, false, false),
-    (7457, true, true, false),
-    (11186, true, false, false),
-    (14915, true, true, false),
-    (18641, false, false, false),
+    (7457, true, false, false),
+    (14913, true, true, false),
+    (22371, true, false, false),
+    (29829, true, true, false),
+    (37281, false, false, false),
 ];
-pub(super) const FRAME_STEP_5_PERIOD: u16 = 18641;
+pub(super) const FRAME_STEP_5_PERIOD: u16 = 37282;
 
 impl FrameCounter {
     pub(super) fn mode(&self) -> FrameCounterMode {

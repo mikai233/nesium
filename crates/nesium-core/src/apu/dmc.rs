@@ -20,7 +20,12 @@ pub(super) struct Dmc {
     shift_register: u8,
     bits_remaining: u8,
     silence: bool,
+    /// Current down-counter used to time DMC bit output in CPU cycles.
     timer: u16,
+    /// Reload value for the DMC timer. This mirrors Mesen2's use of
+    /// `ApuTimer` with a period of `DMC_RATE_TABLE[rate] - 1`, so each
+    /// bit output occurs every `DMC_RATE_TABLE[rate]` CPU cycles.
+    timer_period: u16,
 }
 
 impl Default for Dmc {
@@ -37,9 +42,16 @@ impl Default for Dmc {
             bytes_remaining: 0,
             sample_buffer: None,
             shift_register: 0,
-            bits_remaining: 0,
+            // Hardware powers up with the bit counter at 8; Mesen2 mirrors
+            // this and we follow suit so the first reloaded sample is
+            // consumed over a full 8-bit period.
+            bits_remaining: 8,
             silence: true,
-            timer: DMC_RATE_TABLE[0],
+            // Default to the first (slowest) NTSC rate. The effective DMC
+            // bit period in CPU cycles is `timer_period + 1`, matching the
+            // lookup table entries.
+            timer: DMC_RATE_TABLE[0] - 1,
+            timer_period: DMC_RATE_TABLE[0] - 1,
         }
     }
 }
@@ -52,10 +64,35 @@ impl Dmc {
         }
         self.loop_flag = value & 0b0100_0000 != 0;
         self.rate_index = value & 0b0000_1111;
+
+        // Update the timer period to match the selected rate. Mesen2 programs
+        // its `ApuTimer` with `DMC_RATE_TABLE[index] - 1`, so that each DMC
+        // output tick occurs every `lookup[index]` CPU cycles. We mirror that
+        // convention here so bit timing aligns with Mesen2's DMC behaviour.
+        let idx = self.rate_index as usize;
+        self.timer_period = DMC_RATE_TABLE[idx].saturating_sub(1);
     }
 
     pub(super) fn write_direct_load(&mut self, value: u8) {
-        self.output_level = value & 0b0111_1111;
+        // Direct 7-bit DAC load on `$4011`. Large instantaneous jumps in the
+        // output level can produce very audible pops, especially when games
+        // use `$4011` as a crude DAC for kick drums or other percussive
+        // sounds.
+        //
+        // Mesen2 exposes an optional "ReduceDmcPopping" setting that halves
+        // large jumps in `_outputLevel` when writing `$4011`. Here we apply a
+        // similar smoothing unconditionally to better match Mesen2 with that
+        // option enabled and to tame worst-case pops in common games.
+        let new_level = value & 0b0111_1111;
+        let previous = self.output_level;
+        self.output_level = new_level;
+
+        let diff = (self.output_level as i16 - previous as i16).abs();
+        if diff > 50 {
+            let delta = self.output_level as i16 - previous as i16;
+            let smoothed = self.output_level as i16 - delta / 2;
+            self.output_level = smoothed.clamp(0, 127) as u8;
+        }
     }
 
     pub(super) fn write_sample_address(&mut self, value: u8) {
@@ -86,11 +123,8 @@ impl Dmc {
     where
         F: FnMut(u16) -> u8,
     {
-        if self.timer == 0 {
-            self.timer = self.period();
+        if self.enabled && self.tick_timer() {
             self.shift_output();
-        } else {
-            self.timer = self.timer.saturating_sub(1);
         }
 
         if self.enabled {
@@ -108,7 +142,24 @@ impl Dmc {
     }
 
     fn period(&self) -> u16 {
-        DMC_RATE_TABLE[self.rate_index as usize]
+        // Effective DMC bit period in CPU cycles. The internal down-counter
+        // counts from `timer_period` down to zero, so each bit tick spans
+        // `timer_period + 1` CPU cycles, matching the values in
+        // `DMC_RATE_TABLE`.
+        self.timer_period + 1
+    }
+
+    /// Advances the internal DMC timer by one CPU cycle and reports whether a
+    /// bit output tick should occur on this cycle.
+    fn tick_timer(&mut self) -> bool {
+        if self.timer == 0 {
+            // Reload from the programmed period and signal a bit tick.
+            self.timer = self.timer_period;
+            true
+        } else {
+            self.timer = self.timer.saturating_sub(1);
+            false
+        }
     }
 
     fn next_address(addr: u16) -> u16 {

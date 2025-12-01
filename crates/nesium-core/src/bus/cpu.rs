@@ -65,6 +65,26 @@ impl<'a> CpuBus<'a> {
         *self.cpu_cycle_counter
     }
 
+    /// CPU-visible read used by the DMC sample fetch path.
+    ///
+    /// Mesen2 models DMC DMA as a series of bus reads that can stall the CPU
+    /// and interact with mappers. Nesium does not yet emulate those stalls, but
+    /// for audio parity we still need to feed real PRG data into the DMC.
+    /// This helper mirrors the cartridge space mapping without mutating any
+    /// CPU-visible timing state.
+    pub fn dmc_read(&self, addr: u16) -> u8 {
+        use crate::memory::cpu as cpu_mem;
+
+        // On the NES, the DMC sample address range is always in CPU cartridge
+        // space ($8000-$FFFF). For any other range, return open bus (0) for
+        // now. If no cartridge is present, there is nothing valid to read.
+        if addr < cpu_mem::CARTRIDGE_SPACE_BASE {
+            return 0;
+        }
+
+        self.read_cartridge(addr).unwrap_or(0)
+    }
+
     /// Immutable access to the PPU for visualization-heavy systems.
     pub fn ppu(&self) -> &Ppu {
         self.ppu
