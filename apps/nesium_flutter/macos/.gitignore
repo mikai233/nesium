@@ -5,4 +5,4 @@
 # Xcode-related
 **/dgph
 **/xcuserdata/
-!/Frameworks/libnesium_flutter.dylib
+/Frameworks/libnesium_flutter.dylib
