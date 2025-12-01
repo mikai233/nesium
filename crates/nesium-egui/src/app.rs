@@ -1,4 +1,6 @@
 use std::{
+    fs::File,
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -36,6 +38,12 @@ pub struct NesiumApp {
     show_tools: bool,
     show_palette: bool,
     show_input: bool,
+    show_audio: bool,
+    audio_cfg: AudioBusConfig,
+    recording: bool,
+    record_buffer: Vec<f32>,
+    record_sample_rate: u32,
+    record_path: Option<PathBuf>,
     controller: ControllerInput,
     next_frame_deadline: Option<Instant>,
 }
@@ -55,7 +63,10 @@ impl NesiumApp {
             }
         };
         let sample_rate = audio.as_ref().map(|a| a.sample_rate()).unwrap_or(48_000);
-        let nes = Nes::new_with_sample_rate(ColorFormat::Rgba8888, sample_rate);
+        let mut nes = Nes::new_with_sample_rate(ColorFormat::Rgba8888, sample_rate);
+
+        let audio_cfg = AudioBusConfig::default();
+        nes.set_audio_bus_config(audio_cfg);
 
         let mut app = Self {
             nes,
@@ -69,6 +80,12 @@ impl NesiumApp {
             show_tools: false,
             show_palette: false,
             show_input: false,
+            show_audio: false,
+            audio_cfg,
+            recording: false,
+            record_buffer: Vec::new(),
+            record_sample_rate: sample_rate,
+            record_path: None,
             controller: ControllerInput::default(),
             next_frame_deadline: None,
         };
@@ -88,6 +105,9 @@ impl NesiumApp {
             Some(audio) => {
                 let mut samples = Vec::new();
                 self.nes.run_frame_with_audio(&mut samples);
+                if self.recording && !samples.is_empty() {
+                    self.record_buffer.extend_from_slice(&samples);
+                }
                 if !samples.is_empty() {
                     audio.push_samples(&samples);
                 }
@@ -198,6 +218,23 @@ impl NesiumApp {
                         ui.close();
                     }
                     ui.separator();
+                    let rec_label = if self.recording {
+                        "停止录制 WAV"
+                    } else {
+                        "开始录制 WAV…"
+                    };
+                    if ui
+                        .add_enabled(self.has_rom(), egui::Button::new(rec_label))
+                        .clicked()
+                    {
+                        if self.recording {
+                            cmd.stop_record = true;
+                        } else {
+                            cmd.start_record = true;
+                        }
+                        ui.close();
+                    }
+                    ui.separator();
                     if ui.button("退出").clicked() {
                         cmd.quit = true;
                         ui.close();
@@ -229,6 +266,7 @@ impl NesiumApp {
                     ui.toggle_value(&mut self.show_tools, "Tools");
                     ui.toggle_value(&mut self.show_palette, "Palette");
                     ui.toggle_value(&mut self.show_input, "Input");
+                    ui.toggle_value(&mut self.show_audio, "Audio");
                 });
 
                 ui.menu_button("帮助", |ui| {
@@ -385,6 +423,98 @@ impl NesiumApp {
                 });
             });
         }
+
+        if self.show_audio {
+            let builder = ViewportBuilder::default()
+                .with_title("Audio")
+                .with_inner_size([320.0, 320.0]);
+            ctx.show_viewport_immediate(ViewportId::from_hash_of("audio"), builder, |ctx, _| {
+                if ctx.input(|i| i.viewport().close_requested()) {
+                    self.show_audio = false;
+                    return;
+                }
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.heading("音频设置");
+                    ui.separator();
+
+                    let cfg = &mut self.audio_cfg;
+
+                    // Master volume
+                    let mut vol_percent = (cfg.master_volume * 100.0).clamp(0.0, 100.0);
+                    ui.horizontal(|ui| {
+                        ui.label("主音量");
+                        if ui
+                            .add(egui::Slider::new(&mut vol_percent, 0.0..=100.0).suffix("%"))
+                            .changed()
+                        {
+                            cfg.master_volume = (vol_percent / 100.0).clamp(0.0, 1.0);
+                        }
+                    });
+
+                    ui.separator();
+                    ui.label("后台 / 快进行为");
+                    ui.checkbox(&mut cfg.mute_in_background, "后台静音");
+                    ui.checkbox(&mut cfg.reduce_in_background, "后台降低音量");
+                    ui.checkbox(&mut cfg.reduce_in_fast_forward, "快进时降低音量");
+                    let mut red_percent = (cfg.volume_reduction * 100.0).clamp(0.0, 100.0);
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut red_percent, 0.0..=100.0)
+                                .suffix("%")
+                                .text("降低幅度"),
+                        )
+                        .changed()
+                    {
+                        cfg.volume_reduction = (red_percent / 100.0).clamp(0.0, 1.0);
+                    }
+
+                    ui.separator();
+                    ui.collapsing("混响 (Reverb)", |ui| {
+                        ui.checkbox(&mut cfg.reverb_enabled, "启用混响");
+                        if cfg.reverb_enabled {
+                            ui.add(
+                                egui::Slider::new(&mut cfg.reverb_strength, 0.0..=1.0).text("强度"),
+                            );
+                            ui.add(
+                                egui::Slider::new(&mut cfg.reverb_delay_ms, 1.0..=250.0)
+                                    .text("延迟 (ms)"),
+                            );
+                        }
+                    });
+
+                    ui.collapsing("串音 (Crossfeed)", |ui| {
+                        ui.checkbox(&mut cfg.crossfeed_enabled, "启用串音");
+                        if cfg.crossfeed_enabled {
+                            ui.add(
+                                egui::Slider::new(&mut cfg.crossfeed_ratio, 0.0..=1.0).text("比率"),
+                            );
+                        }
+                    });
+
+                    ui.collapsing("均衡器 (EQ)", |ui| {
+                        ui.checkbox(&mut cfg.enable_equalizer, "启用 EQ");
+                        if cfg.enable_equalizer {
+                            // 统一使用单一增益控制 20 个频段。
+                            let mut gain_db = cfg.eq_band_gains[0];
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut gain_db, -12.0..=12.0)
+                                        .text("全局增益 (dB)"),
+                                )
+                                .changed()
+                            {
+                                for g in cfg.eq_band_gains.iter_mut() {
+                                    *g = gain_db;
+                                }
+                            }
+                        }
+                    });
+
+                    // Apply configuration to the core each frame where it might change.
+                    self.nes.set_audio_bus_config(*cfg);
+                });
+            });
+        }
     }
 }
 
@@ -444,6 +574,35 @@ impl eframe::App for NesiumApp {
                     "已继续".to_string()
                 });
             }
+            if cmd.start_record {
+                if let Some(path) = save_wav_dialog() {
+                    self.record_buffer.clear();
+                    self.record_sample_rate = self
+                        .audio
+                        .as_ref()
+                        .map(|a| a.sample_rate())
+                        .unwrap_or_else(|| self.nes.audio_sample_rate());
+                    self.record_path = Some(path.clone());
+                    self.recording = true;
+                    self.status_line = Some(format!("开始录制音频到 {}", path.display()));
+                }
+            }
+            if cmd.stop_record {
+                if self.recording {
+                    self.recording = false;
+                    if let Some(path) = self.record_path.take() {
+                        match write_wav(&path, self.record_sample_rate, &self.record_buffer) {
+                            Ok(()) => {
+                                self.status_line = Some(format!("已保存录音到 {}", path.display()));
+                            }
+                            Err(err) => {
+                                self.status_line = Some(format!("保存录音失败: {err}"));
+                            }
+                        }
+                        self.record_buffer.clear();
+                    }
+                }
+            }
             if cmd.quit {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
@@ -460,6 +619,8 @@ struct AppCommand {
     reset: bool,
     eject: bool,
     toggle_pause: bool,
+    start_record: bool,
+    stop_record: bool,
     quit: bool,
 }
 
@@ -535,6 +696,63 @@ fn pick_file_dialog() -> Option<PathBuf> {
     rfd::FileDialog::new()
         .add_filter("NES ROM", &["nes", "fds"])
         .pick_file()
+}
+
+fn save_wav_dialog() -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .add_filter("WAV audio", &["wav"])
+        .set_file_name("recording.wav")
+        .save_file()
+}
+
+fn write_wav(path: &Path, sample_rate: u32, samples: &[f32]) -> std::io::Result<()> {
+    let channels: u16 = 2;
+    let bits_per_sample: u16 = 16;
+    let bytes_per_sample = (bits_per_sample / 8) as u32;
+
+    let frames = (samples.len() / 2) as u32;
+    let data_len = frames * bytes_per_sample * channels as u32;
+    let riff_len = 36 + data_len;
+
+    let file = File::create(path)?;
+    let mut w = BufWriter::new(file);
+
+    // RIFF header
+    w.write_all(b"RIFF")?;
+    w.write_all(&riff_len.to_le_bytes())?;
+    w.write_all(b"WAVE")?;
+
+    // fmt chunk
+    w.write_all(b"fmt ")?;
+    w.write_all(&16u32.to_le_bytes())?; // PCM chunk size
+    w.write_all(&1u16.to_le_bytes())?; // PCM format
+    w.write_all(&channels.to_le_bytes())?;
+    w.write_all(&sample_rate.to_le_bytes())?;
+    let byte_rate = sample_rate * channels as u32 * bytes_per_sample;
+    w.write_all(&byte_rate.to_le_bytes())?;
+    let block_align = channels * bits_per_sample / 8;
+    w.write_all(&block_align.to_le_bytes())?;
+    w.write_all(&bits_per_sample.to_le_bytes())?;
+
+    // data chunk
+    w.write_all(b"data")?;
+    w.write_all(&data_len.to_le_bytes())?;
+
+    for chunk in samples.chunks(2) {
+        let l = *chunk.get(0).unwrap_or(&0.0);
+        let r = *chunk.get(1).unwrap_or(&l);
+        let to_i16 = |x: f32| -> i16 {
+            let v = x.clamp(-1.0, 1.0) * 32767.0;
+            v.round() as i16
+        };
+        let li = to_i16(l);
+        let ri = to_i16(r);
+        w.write_all(&li.to_le_bytes())?;
+        w.write_all(&ri.to_le_bytes())?;
+    }
+
+    w.flush()?;
+    Ok(())
 }
 
 fn install_cjk_font(ctx: &EguiContext) {
