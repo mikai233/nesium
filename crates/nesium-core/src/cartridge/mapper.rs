@@ -37,8 +37,9 @@ pub mod mapper8;
 pub mod mapper85;
 pub mod mapper9;
 pub mod mapper90;
+pub mod provider;
 
-pub(crate) use chr_storage::{ChrStorage, select_chr_storage};
+pub use chr_storage::{ChrStorage, select_chr_storage};
 pub use mapper0::Mapper0;
 pub use mapper1::Mapper1;
 pub use mapper2::Mapper2;
@@ -65,6 +66,7 @@ pub use mapper85::Mapper85;
 pub use mapper90::Mapper90;
 pub use mapper119::Mapper119;
 pub use mapper228::Mapper228;
+pub use provider::Provider;
 
 use crate::{
     cartridge::{
@@ -328,7 +330,7 @@ pub fn mapper_downcast_mut<T: Mapper + 'static>(mapper: &mut dyn Mapper) -> Opti
 ///
 /// For NES 2.0 headers this picks the larger of volatile and battery‑backed
 /// PRG RAM sizes. Legacy iNES headers with `0` fall back to an empty slice.
-pub(crate) fn allocate_prg_ram(header: &Header) -> Box<[u8]> {
+pub fn allocate_prg_ram(header: &Header) -> Box<[u8]> {
     let size = header.prg_ram_size.max(header.prg_nvram_size);
     if size == 0 {
         Vec::new().into_boxed_slice()
@@ -341,7 +343,7 @@ pub(crate) fn allocate_prg_ram(header: &Header) -> Box<[u8]> {
 ///
 /// When the PRG RAM region is too small to host the trainer, `None` is
 /// returned and the trainer contents are silently ignored.
-pub(crate) fn trainer_destination(prg_ram: &mut [u8]) -> Option<&mut [u8]> {
+pub fn trainer_destination(prg_ram: &mut [u8]) -> Option<&mut [u8]> {
     if prg_ram.len() < TRAINER_RAM_OFFSET + TRAINER_SIZE {
         return None;
     }

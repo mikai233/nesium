@@ -4,7 +4,7 @@ use crate::{
     apu::Apu,
     audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer},
     bus::{Bus, OpenBus, cpu::CpuBus},
-    cartridge::Cartridge,
+    cartridge::{Cartridge, Provider},
     controller::{Button, Controller},
     cpu::Cpu,
     error::Error,
@@ -36,6 +36,7 @@ pub struct Nes {
     apu: Apu,
     ram: cpu_ram::Ram,
     cartridge: Option<Cartridge>,
+    mapper_provider: Option<Box<dyn Provider>>,
     controllers: [Controller; 2],
     last_frame: u64,
     /// Master PPU dot counter used to drive CPU/PPU/APU in lockstep (3 dots per CPU cycle).
@@ -66,6 +67,7 @@ impl Nes {
             apu: Apu::new(),
             ram: cpu_ram::Ram::new(),
             cartridge: None,
+            mapper_provider: None,
             controllers: [Controller::new(), Controller::new()],
             last_frame: 0,
             dot_counter: 0,
@@ -81,9 +83,22 @@ impl Nes {
         nes
     }
 
+    /// Replaces the mapper provider used when loading cartridges.
+    pub fn set_mapper_provider(&mut self, provider: Option<Box<dyn Provider>>) {
+        self.mapper_provider = provider;
+    }
+
+    /// Current mapper provider, when one has been supplied.
+    pub fn mapper_provider(&self) -> Option<&dyn Provider> {
+        self.mapper_provider.as_deref()
+    }
+
     /// Loads a cartridge from disk, inserts it, and performs a reset sequence.
     pub fn load_cartridge_from_file<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        let cartridge = cartridge::load_cartridge_from_file(path)?;
+        let cartridge = cartridge::load_cartridge_from_file_with_provider(
+            path,
+            self.mapper_provider.as_deref(),
+        )?;
         self.insert_cartridge(cartridge);
         Ok(())
     }

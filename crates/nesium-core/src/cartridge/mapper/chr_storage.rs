@@ -16,7 +16,7 @@ use crate::cartridge::header::Header;
 
 /// High‑level description of PPU‑side CHR storage.
 #[derive(Debug, Clone)]
-pub(crate) enum ChrStorage {
+pub enum ChrStorage {
     /// No CHR memory is present; reads return `0` and writes are ignored.
     None,
     /// CHR is backed by read‑only ROM data from the cartridge image.
@@ -27,7 +27,7 @@ pub(crate) enum ChrStorage {
 
 impl ChrStorage {
     /// Read a byte from CHR space, applying 8 KiB mirroring.
-    pub(crate) fn read(&self, addr: u16) -> u8 {
+    pub fn read(&self, addr: u16) -> u8 {
         let offset = (addr as usize) & 0x1FFF;
         match self {
             ChrStorage::Rom(rom) => {
@@ -53,7 +53,7 @@ impl ChrStorage {
     /// Write a byte to CHR RAM, if present.
     ///
     /// Writes are ignored when the cartridge only provides CHR ROM or no CHR at all.
-    pub(crate) fn write(&mut self, addr: u16, data: u8) {
+    pub fn write(&mut self, addr: u16, data: u8) {
         let offset = (addr as usize) & 0x1FFF;
         if let ChrStorage::Ram(ram) = self {
             let len = ram.len();
@@ -68,7 +68,7 @@ impl ChrStorage {
     /// `base` and `offset` describe an absolute index into the CHR space
     /// (ROM or RAM), and are wrapped to the underlying length. This is useful
     /// for mappers that provide finer-grained CHR banking (e.g. 1 KiB pages).
-    pub(crate) fn read_indexed(&self, base: usize, offset: usize) -> u8 {
+    pub fn read_indexed(&self, base: usize, offset: usize) -> u8 {
         match self {
             ChrStorage::Rom(rom) => {
                 if rom.is_empty() {
@@ -91,7 +91,7 @@ impl ChrStorage {
     }
 
     /// Write a byte to an explicitly indexed CHR window, if CHR RAM is present.
-    pub(crate) fn write_indexed(&mut self, base: usize, offset: usize, data: u8) {
+    pub fn write_indexed(&mut self, base: usize, offset: usize, data: u8) {
         if let ChrStorage::Ram(ram) = self {
             if !ram.is_empty() {
                 let len = ram.len();
@@ -102,7 +102,7 @@ impl ChrStorage {
     }
 
     /// Returns a view of the underlying CHR ROM, when present.
-    pub(crate) fn as_rom(&self) -> Option<&[u8]> {
+    pub fn as_rom(&self) -> Option<&[u8]> {
         if let ChrStorage::Rom(rom) = self {
             Some(rom.as_ref())
         } else {
@@ -111,7 +111,7 @@ impl ChrStorage {
     }
 
     /// Returns a view of the underlying CHR RAM, when present.
-    pub(crate) fn as_ram(&self) -> Option<&[u8]> {
+    pub fn as_ram(&self) -> Option<&[u8]> {
         if let ChrStorage::Ram(ram) = self {
             Some(ram.as_ref())
         } else {
@@ -120,7 +120,7 @@ impl ChrStorage {
     }
 
     /// Returns a mutable view of the underlying CHR RAM, when present.
-    pub(crate) fn as_ram_mut(&mut self) -> Option<&mut [u8]> {
+    pub fn as_ram_mut(&mut self) -> Option<&mut [u8]> {
         if let ChrStorage::Ram(ram) = self {
             Some(ram.as_mut())
         } else {
@@ -135,7 +135,7 @@ impl ChrStorage {
 /// - Otherwise, a CHR RAM slice is allocated using the larger of the volatile
 ///   and battery‑backed CHR sizes, if any.
 /// - When neither ROM nor RAM is present, [`ChrStorage::None`] is used.
-pub(crate) fn select_chr_storage(header: &Header, chr_rom: Box<[u8]>) -> ChrStorage {
+pub fn select_chr_storage(header: &Header, chr_rom: Box<[u8]>) -> ChrStorage {
     if header.chr_rom_size > 0 {
         ChrStorage::Rom(chr_rom)
     } else {

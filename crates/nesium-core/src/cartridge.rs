@@ -15,7 +15,7 @@ pub const TRAINER_SIZE: usize = 512;
 
 pub mod header;
 pub mod mapper;
-pub use mapper::{Mapper, mapper_downcast_mut, mapper_downcast_ref};
+pub use mapper::{Mapper, Provider, mapper_downcast_mut, mapper_downcast_ref};
 
 #[derive(Debug)]
 pub struct Cartridge {
@@ -122,6 +122,14 @@ impl Clone for Cartridge {
 
 /// Load a cartridge from an in-memory byte slice.
 pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
+    load_cartridge_with_provider(bytes, None)
+}
+
+/// Load a cartridge from an in-memory byte slice with an optional mapper provider.
+pub fn load_cartridge_with_provider(
+    bytes: &[u8],
+    provider: Option<&dyn Provider>,
+) -> Result<Cartridge, Error> {
     let header_bytes = bytes.get(..NES_HEADER_LEN).ok_or(Error::TooShort {
         actual: bytes.len(),
     })?;
@@ -155,7 +163,9 @@ pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
         90 => Box::new(Mapper90::with_trainer(header, prg_rom, chr_rom, trainer)),
         119 => Box::new(Mapper119::with_trainer(header, prg_rom, chr_rom, trainer)),
         228 => Box::new(Mapper228::with_trainer(header, prg_rom, chr_rom, trainer)),
-        other => return Err(Error::UnsupportedMapper(other)),
+        other => provider
+            .and_then(|provider| provider.get_mapper(header, prg_rom, chr_rom, trainer))
+            .ok_or(Error::UnsupportedMapper(other))?,
     };
 
     // Apply mapper-specific power-on defaults once after construction.
@@ -169,8 +179,19 @@ pub fn load_cartridge_from_file<P>(path: P) -> Result<Cartridge, Error>
 where
     P: AsRef<Path>,
 {
+    load_cartridge_from_file_with_provider(path, None)
+}
+
+/// Load a cartridge directly from disk with an optional mapper provider.
+pub fn load_cartridge_from_file_with_provider<P>(
+    path: P,
+    provider: Option<&dyn Provider>,
+) -> Result<Cartridge, Error>
+where
+    P: AsRef<Path>,
+{
     let bytes = fs::read(path)?;
-    load_cartridge(&bytes)
+    load_cartridge_with_provider(&bytes, provider)
 }
 
 fn slice_sections(
@@ -290,5 +311,58 @@ mod tests {
 
         let err = load_cartridge(&rom).expect_err("unsupported mapper should fail");
         assert!(matches!(err, Error::UnsupportedMapper(12)));
+    }
+
+    #[derive(Debug, Clone)]
+    struct DummyMapper;
+
+    impl Mapper for DummyMapper {
+        fn cpu_read(&self, _addr: u16) -> Option<u8> {
+            Some(0xFF)
+        }
+
+        fn cpu_write(&mut self, _addr: u16, _data: u8, _cpu_cycle: u64) {}
+
+        fn ppu_read(&self, _addr: u16) -> Option<u8> {
+            Some(0)
+        }
+
+        fn ppu_write(&mut self, _addr: u16, _data: u8) {}
+
+        fn mirroring(&self) -> Mirroring {
+            Mirroring::Horizontal
+        }
+
+        fn mapper_id(&self) -> u16 {
+            999
+        }
+    }
+
+    #[derive(Debug)]
+    struct DummyProvider;
+
+    impl Provider for DummyProvider {
+        fn get_mapper(
+            &self,
+            _header: Header,
+            _prg_rom: Box<[u8]>,
+            _chr_rom: Box<[u8]>,
+            _trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+        ) -> Option<Box<dyn Mapper>> {
+            Some(Box::new(DummyMapper))
+        }
+    }
+
+    #[test]
+    fn uses_provider_for_unknown_mapper() {
+        let mut rom = base_header(1, 1, 0xC0).to_vec();
+        rom.extend(vec![0xAA; 16 * 1024]); // PRG
+        rom.extend(vec![0x55; 8 * 1024]); // CHR
+
+        let provider = DummyProvider;
+        let cartridge =
+            load_cartridge_with_provider(&rom, Some(&provider)).expect("provider supplies mapper");
+
+        assert_eq!(cartridge.mapper().mapper_id(), 999);
     }
 }
