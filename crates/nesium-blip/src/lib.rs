@@ -121,12 +121,13 @@ impl BlipBuf {
     /// `min_buffer_samples` is used as a lower bound; the actual capacity is
     /// at least one second at the output sample rate to avoid overflow.
     pub fn new(clock_rate: f64, sample_rate: f64, min_buffer_samples: usize) -> Self {
-        let size = min_buffer_samples
-            .max(sample_rate.ceil() as usize)
-            .max(1);
+        let size = min_buffer_samples.max(sample_rate.ceil() as usize).max(1);
         let mut raw = BlipBufRaw::new(size as i32);
         raw.set_rates(clock_rate, sample_rate);
-        Self { raw, capacity: size }
+        Self {
+            raw,
+            capacity: size,
+        }
     }
 
     pub fn set_rates(&mut self, clock_rate: f64, sample_rate: f64) {
@@ -146,9 +147,7 @@ impl BlipBuf {
             self.samples_avail() + sample_count <= self.capacity,
             "requested samples exceed buffer capacity"
         );
-        self.raw
-            .clocks_needed(sample_count as i32)
-            .into()
+        self.raw.clocks_needed(sample_count as i32).into()
     }
 
     pub fn add_delta(&mut self, clock_time: i64, delta: f32) {

@@ -46,8 +46,5 @@ fn rust_port_stays_close_to_c_impl() {
         }
     }
 
-    assert!(
-        max_diff <= 200,
-        "max sample diff too large: {max_diff}"
-    );
+    assert!(max_diff <= 200, "max sample diff too large: {max_diff}");
 }

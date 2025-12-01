@@ -194,8 +194,7 @@ impl BlipBuf {
             "blip_buf overflow in add_delta_fast"
         );
 
-        let interp =
-            ((fixed >> (FRAC_BITS - DELTA_BITS)) & (DELTA_UNIT as u64 - 1)) as i32;
+        let interp = ((fixed >> (FRAC_BITS - DELTA_BITS)) & (DELTA_UNIT as u64 - 1)) as i32;
         let delta2 = delta * interp;
         let delta1 = delta * DELTA_UNIT as i32 - delta2;
 
