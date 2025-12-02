@@ -101,7 +101,7 @@ impl NesiumApp {
 
     /// Runs one video frame while emitting audio samples at the host sample rate.
     fn run_frame_with_audio(&mut self) {
-        match &self.audio {
+        match &mut self.audio {
             Some(audio) => {
                 let mut samples = Vec::new();
                 self.nes.run_frame_with_audio(&mut samples);

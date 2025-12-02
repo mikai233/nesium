@@ -1,96 +1,93 @@
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Context, Result};
 use cpal::{
-    FromSample, Sample, SampleFormat, SizedSample,
+    SampleFormat,
     traits::{DeviceTrait, HostTrait, StreamTrait},
+};
+use ringbuf::{
+    HeapRb,
+    traits::{Consumer, Producer, Split},
 };
 
 /// Thin audio output wrapper that feeds interleaved stereo PCM samples from the
-/// emulator into cpal's default output stream.
+/// emulator into cpal's default output stream, backed by a lock-free SPSC
+/// ring buffer.
 pub struct NesAudioPlayer {
-    buffer: Arc<Mutex<VecDeque<f32>>>,
+    /// Single producer handle used by the emulator thread to push samples.
+    producer: ringbuf::HeapProd<f32>,
+    /// Output sample rate for this device.
     sample_rate: u32,
-    max_queue: usize,
+    /// Underlying CPAL output stream (kept alive by this struct).
     _stream: cpal::Stream,
+    /// Flag to request clearing any queued samples from the audio thread.
+    clear_flag: Arc<AtomicBool>,
 }
 
 impl NesAudioPlayer {
+    /// Create a new audio player on the default output device.
+    ///
+    /// This currently assumes the default output config uses `f32` samples.
     pub fn new() -> Result<Self> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
             .context("no default output device")?;
 
-        let config = device.default_output_config()?;
-        let sample_rate = config.sample_rate().0;
+        let supported_config = device
+            .default_output_config()
+            .context("no default output config")?;
 
-        let buffer = Arc::new(Mutex::new(VecDeque::with_capacity(
-            (sample_rate / 5) as usize,
-        )));
-        // Allow ~0.2s of queued audio to avoid underruns; avoid aggressive dropping that skews pitch.
-        let max_queue = (sample_rate as f32 * 0.2).ceil() as usize;
-        let stream = match config.sample_format() {
-            SampleFormat::F32 => {
-                Self::build_stream::<f32>(&device, &config.into(), buffer.clone())?
-            }
-            SampleFormat::I16 => {
-                Self::build_stream::<i16>(&device, &config.into(), buffer.clone())?
-            }
-            SampleFormat::U16 => {
-                Self::build_stream::<u16>(&device, &config.into(), buffer.clone())?
-            }
-            other => anyhow::bail!("unsupported sample format {other:?}"),
-        };
+        let sample_format = supported_config.sample_format();
+        if sample_format != SampleFormat::F32 {
+            anyhow::bail!("only f32 output format is supported, got {sample_format:?}");
+        }
 
-        stream.play()?;
-
-        Ok(Self {
-            buffer,
-            sample_rate,
-            max_queue,
-            _stream: stream,
-        })
-    }
-
-    fn build_stream<T>(
-        device: &cpal::Device,
-        config: &cpal::StreamConfig,
-        buffer: Arc<Mutex<VecDeque<f32>>>,
-    ) -> Result<cpal::Stream>
-    where
-        T: Sample + SizedSample + FromSample<f32>,
-    {
+        let config: cpal::StreamConfig = supported_config.into();
+        let sample_rate = config.sample_rate.0;
         let channels = config.channels as usize;
+
+        // Allocate ~0.2 seconds of audio in the ring buffer.
+        // We store raw samples (interleaved channels), so capacity is:
+        //   sample_rate * seconds * channels
+        let latency_seconds = 0.2_f32;
+        let capacity = (sample_rate as f32 * latency_seconds * channels as f32).ceil() as usize;
+        let capacity = capacity.max(1);
+
+        let rb = HeapRb::<f32>::new(capacity);
+        let (producer, mut consumer) = rb.split();
+
+        let clear_flag = Arc::new(AtomicBool::new(false));
+        let clear_flag_for_cb = clear_flag.clone();
+
         let err_fn = |err| eprintln!("Audio stream error: {err}");
+
         let stream = device.build_output_stream(
-            config,
-            move |data: &mut [T], _| {
+            &config,
+            move |data: &mut [f32], _| {
+                // If a clear was requested, drop everything currently queued.
+                if clear_flag_for_cb.swap(false, Ordering::SeqCst) {
+                    while consumer.try_pop().is_some() {}
+                }
+
                 for frame in data.chunks_mut(channels) {
-                    let (l, r) = {
-                        let mut guard = buffer.lock().unwrap();
-                        let left = guard.pop_front().unwrap_or(0.0);
-                        let right = guard.pop_front().unwrap_or(left);
-                        (left, right)
-                    };
-                    let l_conv: T = l.to_sample::<T>();
-                    let r_conv: T = r.to_sample::<T>();
+                    let left = consumer.try_pop().unwrap_or(0.0);
+                    let right = consumer.try_pop().unwrap_or(left);
+
                     match channels {
                         0 => {}
                         1 => {
                             // Downmix stereo to mono if the device is mono.
-                            let mono: T = ((l + r) * 0.5).to_sample::<T>();
+                            let mono = (left + right) * 0.5;
                             frame[0] = mono;
                         }
                         _ => {
-                            frame[0] = l_conv;
-                            frame[1] = r_conv;
+                            frame[0] = left;
+                            frame[1] = right;
                             // For extra channels, just mirror the right channel.
                             for ch in &mut frame[2..] {
-                                *ch = r_conv;
+                                *ch = right;
                             }
                         }
                     }
@@ -99,39 +96,51 @@ impl NesAudioPlayer {
             err_fn,
             None,
         )?;
-        Ok(stream)
+
+        stream.play()?;
+
+        Ok(Self {
+            producer,
+            sample_rate,
+            _stream: stream,
+            clear_flag,
+        })
     }
 
     /// Pushes a batch of interleaved stereo samples into the output buffer.
-    pub fn push_samples(&self, samples: &[f32]) {
+    ///
+    /// This method is intended to be called from the emulator / producer
+    /// thread. If the buffer is full, newest samples are dropped rather than
+    /// blocking the caller.
+    pub fn push_samples(&mut self, samples: &[f32]) {
         if samples.is_empty() {
             return;
         }
-        if let Ok(mut guard) = self.buffer.lock() {
-            for chunk in samples.chunks(2) {
-                let l = *chunk.get(0).unwrap_or(&0.0);
-                let r = *chunk.get(1).unwrap_or(&l);
-                let l = (l * 0.9).clamp(-1.0, 1.0);
-                let r = (r * 0.9).clamp(-1.0, 1.0);
-                guard.push_back(l);
-                guard.push_back(r);
-            }
-            if guard.len() > self.max_queue {
-                let drop_count = guard.len() - self.max_queue;
-                for _ in 0..drop_count {
-                    guard.pop_front();
-                }
-            }
+
+        for chunk in samples.chunks(2) {
+            let l = *chunk.get(0).unwrap_or(&0.0);
+            let r = *chunk.get(1).unwrap_or(&l);
+
+            // Apply a small headroom and clamp to [-1.0, 1.0].
+            let l = (l * 0.9).clamp(-1.0, 1.0);
+            let r = (r * 0.9).clamp(-1.0, 1.0);
+
+            // Drop-on-full semantics: if we run out of space, skip the newest
+            // samples rather than blocking or touching the audio thread.
+            let _ = self.producer.try_push(l);
+            let _ = self.producer.try_push(r);
         }
     }
 
-    /// Clears any queued samples (useful when resetting the emulator).
+    /// Requests that any queued samples be dropped.
+    ///
+    /// The actual draining happens on the audio callback thread at the start
+    /// of the next callback invocation to avoid sharing the consumer handle.
     pub fn clear(&self) {
-        if let Ok(mut guard) = self.buffer.lock() {
-            guard.clear();
-        }
+        self.clear_flag.store(true, Ordering::SeqCst);
     }
 
+    /// Returns the output sample rate.
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
     }

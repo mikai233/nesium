@@ -10,11 +10,10 @@
 pub mod api;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 use std::{
-    collections::VecDeque,
     os::raw::{c_uint, c_void},
     path::PathBuf,
     sync::{
-        Arc, Mutex, OnceLock,
+        OnceLock,
         atomic::{AtomicPtr, Ordering},
         mpsc::{self, Sender},
     },
@@ -22,7 +21,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use nesium_audio::NesAudioPlayer;
 use nesium_core::{
@@ -124,7 +123,7 @@ fn nes_thread(rx: std::sync::mpsc::Receiver<ControlMessage>) {
 
     // Best-effort audio initialization; if the host has no default output
     // device, the emulator will still run but remain silent.
-    let audio: Option<NesAudioPlayer> = NesAudioPlayer::new().ok();
+    let mut audio: Option<NesAudioPlayer> = NesAudioPlayer::new().ok();
     let runtime_sample_rate = audio.as_ref().map(|a| a.sample_rate()).unwrap_or(48_000);
 
     // Simple fade-in after load/reset to reduce initial pops: ramp from 0 to
@@ -202,7 +201,7 @@ fn nes_thread(rx: std::sync::mpsc::Receiver<ControlMessage>) {
 
         let mut frames_run: u32 = 0;
         while Instant::now() >= next_frame_deadline && frames_run < 3 {
-            match &audio {
+            match &mut audio {
                 Some(audio) => {
                     let mut samples = Vec::new();
                     nes.run_frame_with_audio(&mut samples);
