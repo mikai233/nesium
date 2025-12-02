@@ -23,6 +23,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::ByteBlock;
+
 /// PRG banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -36,8 +38,8 @@ pub struct Mapper85 {
 
     prg_bank_count_8k: usize,
 
-    prg_banks: [u8; 3], // $8000, $A000, $C000
-    chr_banks: [u8; 8],
+    prg_banks: Mapper85PrgBanks, // $8000, $A000, $C000
+    chr_banks: Mapper85ChrBanks,
 
     control: u8,
     mirroring: Mirroring,
@@ -50,6 +52,9 @@ pub struct Mapper85 {
     irq_cycle_mode: bool,
     irq_pending: bool,
 }
+
+type Mapper85PrgBanks = ByteBlock<3>;
+type Mapper85ChrBanks = ByteBlock<8>;
 
 impl Mapper85 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -75,8 +80,8 @@ impl Mapper85 {
             prg_ram,
             chr,
             prg_bank_count_8k,
-            prg_banks: [0; 3],
-            chr_banks: [0; 8],
+            prg_banks: Mapper85PrgBanks::new(),
+            chr_banks: Mapper85ChrBanks::new(),
             control: 0,
             mirroring: header.mirroring,
             irq_reload: 0,
@@ -221,11 +226,9 @@ impl Mapper85 {
 
 impl Mapper for Mapper85 {
     fn power_on(&mut self) {
-        self.prg_banks = [0; 3];
-        self.chr_banks = [0; 8];
+        self.prg_banks.fill(0);
+        self.chr_banks.fill(0);
         self.control = 0;
-        self.mirroring = self.mirroring; // keep header mirroring until written
-
         self.irq_reload = 0;
         self.irq_counter = 0;
         self.irq_prescaler = 0;

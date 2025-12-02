@@ -1,12 +1,15 @@
 use std::borrow::Cow;
 
-use crate::cartridge::{
-    Mapper, TRAINER_SIZE,
-    header::{Header, Mirroring},
-    mapper::{
-        ChrStorage, NametableTarget, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram,
-        select_chr_storage, trainer_destination,
+use crate::{
+    cartridge::{
+        Mapper, TRAINER_SIZE,
+        header::{Header, Mirroring},
+        mapper::{
+            ChrStorage, NametableTarget, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram,
+            select_chr_storage, trainer_destination,
+        },
     },
+    mem_block::ByteBlock,
 };
 
 /// MMC5 PRG bank size (8 KiB).
@@ -56,7 +59,7 @@ pub struct Mapper5 {
     // ($5128-$512B) for now and treat these as the unified set.
     // TODO: Implement BG-specific banks once PpuVramAccessContext exposes
     // whether a given fetch is BG or sprite.
-    chr_banks: [u8; 8],
+    chr_banks: Mapper5ChrBanks,
     chr_upper_bits: u8, // $5130 (upper CHR bank bits)
 
     // IRQ / scanline registers.
@@ -84,6 +87,8 @@ pub struct Mapper5 {
     nt_addr_repeat_count: u8,
     expect_scanline_on_next_fetch: bool,
 }
+
+type Mapper5ChrBanks = ByteBlock<8>;
 
 impl Mapper5 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -127,7 +132,7 @@ impl Mapper5 {
             prg_bank_a000: 0,
             prg_bank_c000: 0,
             prg_bank_e000: 0,
-            chr_banks: [0; 8],
+            chr_banks: Mapper5ChrBanks::new(),
             chr_upper_bits: 0,
             irq_scanline: 0,
             irq_enabled: false,
@@ -511,7 +516,7 @@ impl Mapper5 {
 
         let bank_val = self.chr_banks[reg_index];
         let upper = (self.chr_upper_bits & 0x03) as usize;
-        let bank_index = ((upper << 8) | bank_val as usize);
+        let bank_index = (upper << 8) | bank_val as usize;
         (bank_index, bank_size)
     }
 
@@ -561,7 +566,7 @@ impl Mapper for Mapper5 {
         self.prg_bank_a000 = 1;
         self.prg_bank_c000 = 2;
         self.prg_bank_e000 = (self.prg_bank_count.saturating_sub(1)) as u8;
-        self.chr_banks = [0; 8];
+        self.chr_banks.fill(0);
         self.chr_upper_bits = 0;
         self.irq_scanline = 0;
         self.irq_enabled = false;

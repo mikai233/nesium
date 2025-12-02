@@ -1,4 +1,4 @@
-use crate::{bus::Bus, ram::cpu::AddressSpace};
+use crate::{bus::Bus, mem_block::cpu::AddressSpace};
 
 #[derive(Debug)]
 pub(crate) struct MockBus {

@@ -5,7 +5,7 @@ use crate::{bus::Bus, cpu::Cpu};
 type MicroFn = fn(&mut Cpu, bus: &mut dyn Bus);
 
 #[derive(Clone, Copy, Eq, Hash)]
-pub(crate) struct MicroOp {
+pub struct MicroOp {
     pub(crate) name: &'static str,
     pub(crate) micro_fn: MicroFn,
 }

@@ -29,6 +29,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::ByteBlock;
+
 /// PRG-ROM banking granularity (16 KiB).
 const PRG_BANK_SIZE_16K: usize = 16 * 1024;
 /// CHR banking granularity (8 KiB).
@@ -46,10 +48,12 @@ pub struct Mapper228 {
     prg_bank_c000: usize,
     chr_bank_8k: usize,
 
-    mram: [u8; 4],
+    mram: Mapper228Mram,
 
     mirroring: Mirroring,
 }
+
+type Mapper228Mram = ByteBlock<4>;
 
 impl Mapper228 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -78,7 +82,7 @@ impl Mapper228 {
             prg_bank_8000: 0,
             prg_bank_c000: prg_bank_count_16k.saturating_sub(1),
             chr_bank_8k: 0,
-            mram: [0; 4],
+            mram: Mapper228Mram::new(),
             mirroring: header.mirroring,
         }
     }
@@ -143,7 +147,7 @@ impl Mapper228 {
 
 impl Mapper for Mapper228 {
     fn power_on(&mut self) {
-        self.mram = [0; 4];
+        self.mram.fill(0);
         self.sync_from_write(0x8000, 0);
     }
 

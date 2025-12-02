@@ -17,6 +17,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::ByteBlock;
+
 /// PRG-ROM banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -44,8 +46,8 @@ pub struct Mapper23 {
     /// PRG mode swap flag (only meaningful for VRC4e).
     prg_mode_swap: bool,
 
-    chr_low_regs: [u8; 8],
-    chr_high_regs: [u8; 8],
+    chr_low_regs: Mapper23ChrLowRegs,
+    chr_high_regs: Mapper23ChrHighRegs,
 
     mirroring: Mirroring,
     base_mirroring: Mirroring,
@@ -63,6 +65,9 @@ pub struct Mapper23 {
     /// When true (submapper 0), OR both VRC2b/VRC4e address layouts.
     use_heuristics: bool,
 }
+
+type Mapper23ChrLowRegs = ByteBlock<8>;
+type Mapper23ChrHighRegs = ByteBlock<8>;
 
 impl Mapper23 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -97,8 +102,8 @@ impl Mapper23 {
             prg_bank_8000: 0,
             prg_bank_a000: 0,
             prg_mode_swap: false,
-            chr_low_regs: [0; 8],
-            chr_high_regs: [0; 8],
+            chr_low_regs: Mapper23ChrLowRegs::new(),
+            chr_high_regs: Mapper23ChrHighRegs::new(),
             mirroring: header.mirroring,
             base_mirroring: header.mirroring,
             irq_reload: 0,
@@ -288,8 +293,8 @@ impl Mapper for Mapper23 {
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1;
         self.prg_mode_swap = false;
-        self.chr_low_regs = [0; 8];
-        self.chr_high_regs = [0; 8];
+        self.chr_low_regs.fill(0);
+        self.chr_high_regs.fill(0);
         self.mirroring = self.base_mirroring;
 
         self.irq_reload = 0;

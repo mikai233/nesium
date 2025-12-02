@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use nesium_blip::BlipBuf;
 
 use crate::audio::{
-    AudioChannel,
+    AudioChannel, ChannelLevels, ChannelPanning, ChannelVolumes,
     filters::{StereoCombState, StereoDelayState, StereoFilterType, StereoPanningState},
     settings::MixerSettings,
 };
@@ -28,10 +28,10 @@ pub struct NesSoundMixer {
     sample_rate: f32,
     last_frame_clock: i64,
     /// Last linear output level per channel (pulse1/2, triangle, noise, DMC, plus per-chip expansion).
-    channel_levels: [f32; AudioChannel::COUNT],
+    channel_levels: ChannelLevels,
     /// Per-channel volume and panning (0.0 = hard left, 1.0 = center, 2.0 = hard right).
-    volumes: [f32; AudioChannel::COUNT],
-    panning: [f32; AudioChannel::COUNT],
+    volumes: ChannelVolumes,
+    panning: ChannelPanning,
     /// Cached mixed amplitude after the non-linear APU combiner (left/right).
     mixed_left: f32,
     mixed_right: f32,
@@ -80,8 +80,10 @@ impl NesSoundMixer {
         let rumble_coeff = pole_coeff(sr, rumble_cut);
         let lowpass_alpha = pole_alpha(sr, lowpass_cut);
 
-        let volumes = [1.0; AudioChannel::COUNT];
-        let panning = [1.0; AudioChannel::COUNT];
+        let mut volumes = ChannelVolumes::new();
+        volumes.fill(1.0);
+        let mut panning = ChannelPanning::new();
+        panning.fill(1.0);
 
         Self {
             blip_left: BlipBuf::new(clock_rate, sample_rate as f64, 24),
@@ -89,7 +91,7 @@ impl NesSoundMixer {
             clock_rate,
             sample_rate: sr,
             last_frame_clock: 0,
-            channel_levels: [0.0; AudioChannel::COUNT],
+            channel_levels: ChannelLevels::new(),
             volumes,
             panning,
             mixed_left: 0.0,
@@ -129,7 +131,7 @@ impl NesSoundMixer {
         self.blip_left.clear();
         self.blip_right.clear();
         self.last_frame_clock = 0;
-        self.channel_levels = [0.0; AudioChannel::COUNT];
+        self.channel_levels.fill(0.0);
         self.mixed_left = 0.0;
         self.mixed_right = 0.0;
         self.dc_last_input_l = 0.0;

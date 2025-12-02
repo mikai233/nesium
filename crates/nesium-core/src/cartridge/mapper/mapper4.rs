@@ -27,6 +27,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::ByteBlock;
+
 /// PRG-ROM bank size exposed to the CPU (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -56,7 +58,7 @@ pub struct Mapper4 {
     bank_select: u8,
     /// Bank data registers ($8001 writes). Index 0‑5 control CHR, 6‑7 control
     /// the two switchable PRG banks.
-    bank_regs: [u8; 8],
+    bank_regs: Mapper4BankRegs,
 
     /// PRG‑RAM enable flag from $A001 bit7.
     prg_ram_enable: bool,
@@ -89,6 +91,8 @@ pub struct Mapper4 {
     last_a12_rise_ppu_cycle: u64,
 }
 
+type Mapper4BankRegs = ByteBlock<8>;
+
 impl Mapper4 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
         Self::with_trainer(header, prg_rom, chr_rom, None)
@@ -116,7 +120,7 @@ impl Mapper4 {
             base_mirroring: header.mirroring,
             mirroring: header.mirroring,
             bank_select: 0,
-            bank_regs: [0; 8],
+            bank_regs: Mapper4BankRegs::new(),
             prg_ram_enable: false,
             prg_ram_write_protect: true,
             irq_latch: 0,
@@ -488,7 +492,7 @@ impl Mapper for Mapper4 {
         // - CHR A12 inversion disabled.
         // - PRG-RAM disabled until the game explicitly enables it via $A001.
         self.bank_select = 0x40;
-        self.bank_regs = [0; 8];
+        self.bank_regs.fill(0);
         self.prg_ram_enable = false;
         self.prg_ram_write_protect = true;
         self.irq_latch = 0;

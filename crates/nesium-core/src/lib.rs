@@ -8,12 +8,12 @@ use crate::{
     controller::{Button, Controller},
     cpu::Cpu,
     error::Error,
+    mem_block::cpu as cpu_ram,
     ppu::{
         Ppu,
         buffer::{ColorFormat, FrameBuffer},
         palette::{Palette, PaletteKind},
     },
-    ram::cpu as cpu_ram,
 };
 
 pub mod apu;
@@ -23,9 +23,9 @@ pub mod cartridge;
 pub mod controller;
 pub mod cpu;
 pub mod error;
+pub mod mem_block;
 pub mod memory;
 pub mod ppu;
-pub mod ram;
 
 pub use cpu::CpuSnapshot;
 

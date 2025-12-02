@@ -32,6 +32,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::{ByteBlock, MemBlock};
+
 /// PRG-ROM banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -40,8 +42,8 @@ const CHR_BANK_SIZE_1K: usize = 1 * 1024;
 /// Namco 163 audio state (adapted from Mesen2's `Namco163Audio`).
 #[derive(Debug, Clone)]
 struct Namco163AudioState {
-    internal_ram: [u8; 0x80],
-    channel_output: [i16; 8],
+    internal_ram: Namco163InternalRam,
+    channel_output: Namco163ChannelOutput,
     ram_position: u8,
     auto_increment: bool,
     update_counter: u8,
@@ -50,11 +52,15 @@ struct Namco163AudioState {
     disabled: bool,
 }
 
+type Namco163InternalRam = ByteBlock<0x80>;
+type Namco163ChannelOutput = MemBlock<i16, 8>;
+type Namco163ChrBankRegs = ByteBlock<8>;
+
 impl Namco163AudioState {
     fn new() -> Self {
         Self {
-            internal_ram: [0; 0x80],
-            channel_output: [0; 8],
+            internal_ram: Namco163InternalRam::new(),
+            channel_output: Namco163ChannelOutput::new(),
             ram_position: 0,
             auto_increment: false,
             update_counter: 0,
@@ -215,7 +221,7 @@ pub struct Mapper19 {
     prg_bank_c000: u8,
 
     /// Eight 1 KiB CHR bank registers backing `$0000-$1FFF`.
-    chr_banks: [u8; 8],
+    chr_banks: Namco163ChrBankRegs,
 
     /// Namco 163 expansion audio generator state, when this board revision
     /// includes the N163 audio block.
@@ -268,7 +274,7 @@ impl Mapper19 {
             prg_bank_8000: 0,
             prg_bank_a000: 1,
             prg_bank_c000: 2,
-            chr_banks: [0; 8],
+            chr_banks: Namco163ChrBankRegs::new(),
             audio,
             irq_counter: 0,
             irq_pending: false,
@@ -436,7 +442,7 @@ impl Mapper for Mapper19 {
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
         self.prg_bank_c000 = 2.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
-        self.chr_banks = [0; 8];
+        self.chr_banks.fill(0);
         self.irq_counter = 0;
         self.irq_pending = false;
     }

@@ -15,6 +15,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::ByteBlock;
+
 /// PRG-ROM bank size exposed to the CPU (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -37,7 +39,7 @@ pub struct Mapper119 {
 
     // Banking registers (MMC3 style) ----------------------------
     bank_select: u8,
-    bank_regs: [u8; 8], // 0-5 CHR, 6-7 PRG
+    bank_regs: Mapper119BankRegs, // 0-5 CHR, 6-7 PRG
 
     prg_ram_enable: bool,
     prg_ram_write_protect: bool,
@@ -53,6 +55,8 @@ pub struct Mapper119 {
     last_a12_high: bool,
     last_a12_rise_ppu_cycle: u64,
 }
+
+type Mapper119BankRegs = ByteBlock<8>;
 
 impl Mapper119 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -82,7 +86,7 @@ impl Mapper119 {
             base_mirroring: header.mirroring,
             mirroring: header.mirroring,
             bank_select: 0,
-            bank_regs: [0; 8],
+            bank_regs: Mapper119BankRegs::new(),
             prg_ram_enable: false,
             prg_ram_write_protect: true,
             irq_latch: 0,
@@ -212,7 +216,7 @@ impl Mapper119 {
         let bank = if !self.chr_invert() {
             match addr {
                 0x0000..=0x07FF => self.bank_regs[0] & !0x01,
-                0x0800..=0x0FFF => (self.bank_regs[0] | 0x01),
+                0x0800..=0x0FFF => self.bank_regs[0] | 0x01,
                 0x1000..=0x13FF => self.bank_regs[2],
                 0x1400..=0x17FF => self.bank_regs[3],
                 0x1800..=0x1BFF => self.bank_regs[4],
@@ -264,7 +268,7 @@ impl Mapper119 {
 impl Mapper for Mapper119 {
     fn power_on(&mut self) {
         self.bank_select = 0;
-        self.bank_regs = [0; 8];
+        self.bank_regs.fill(0);
         self.prg_ram_enable = false;
         self.prg_ram_write_protect = true;
         self.irq_latch = 0;

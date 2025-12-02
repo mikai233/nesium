@@ -16,7 +16,7 @@ pub(crate) use status::Status;
 pub(crate) use vram_addr::VramAddr;
 pub(crate) use vram_registers::VramRegisters;
 
-use crate::ram::ppu::OamRam;
+use crate::mem_block::ppu::OamRam;
 
 /// Aggregates the state of all CPU visible PPU registers.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

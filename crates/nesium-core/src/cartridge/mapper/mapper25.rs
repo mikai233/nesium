@@ -18,6 +18,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::ByteBlock;
+
 /// PRG-ROM banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -45,8 +47,8 @@ pub struct Mapper25 {
     prg_bank_a000: u8,
     prg_mode_swap: bool,
 
-    chr_low_regs: [u8; 8],
-    chr_high_regs: [u8; 8],
+    chr_low_regs: Mapper25ChrLowRegs,
+    chr_high_regs: Mapper25ChrHighRegs,
 
     mirroring: Mirroring,
     base_mirroring: Mirroring,
@@ -64,6 +66,9 @@ pub struct Mapper25 {
     /// Submapper 0 heuristic: OR both VRC4b/VRC4d address layouts.
     use_heuristics: bool,
 }
+
+type Mapper25ChrLowRegs = ByteBlock<8>;
+type Mapper25ChrHighRegs = ByteBlock<8>;
 
 impl Mapper25 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -99,8 +104,8 @@ impl Mapper25 {
             prg_bank_8000: 0,
             prg_bank_a000: 0,
             prg_mode_swap: false,
-            chr_low_regs: [0; 8],
-            chr_high_regs: [0; 8],
+            chr_low_regs: Mapper25ChrLowRegs::new(),
+            chr_high_regs: Mapper25ChrHighRegs::new(),
             mirroring: header.mirroring,
             base_mirroring: header.mirroring,
             irq_reload: 0,
@@ -291,8 +296,8 @@ impl Mapper for Mapper25 {
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1;
         self.prg_mode_swap = false;
-        self.chr_low_regs = [0; 8];
-        self.chr_high_regs = [0; 8];
+        self.chr_low_regs.fill(0);
+        self.chr_high_regs.fill(0);
         self.mirroring = self.base_mirroring;
 
         self.irq_reload = 0;

@@ -28,7 +28,7 @@ use core::fmt;
 use crate::{
     audio::{AudioChannel, NesSoundMixer},
     memory::apu::{self as apu_mem},
-    ram::apu::RegisterRam,
+    mem_block::apu::RegisterRam,
 };
 
 pub use expansion::ExpansionAudio;
@@ -47,6 +47,8 @@ struct StatusFlags {
     dmc_interrupt: bool,
 }
 
+type LastLevels = crate::mem_block::MemBlock<f32, 5>;
+
 /// Fully modelled NES APU with envelope, sweep, length/linear counters and the
 /// frame sequencer.
 pub struct Apu {
@@ -58,7 +60,7 @@ pub struct Apu {
     triangle: Triangle,
     noise: Noise,
     dmc: Dmc,
-    last_levels: [f32; 5],
+    last_levels: LastLevels,
     /// Last value written to `$4017` (frame counter). Used to distinguish
     /// power-on behaviour (acts as if `$00` were written) from warm resets,
     /// where hardware effectively re-applies the last written mode.
@@ -89,7 +91,7 @@ impl Apu {
             triangle: Triangle::default(),
             noise: Noise::default(),
             dmc: Dmc::default(),
-            last_levels: [0.0; 5],
+            last_levels: LastLevels::new(),
             last_frame_counter_value: 0x00,
         }
     }
@@ -110,7 +112,7 @@ impl Apu {
         self.triangle = Triangle::default();
         self.noise = Noise::default();
         self.dmc = Dmc::default();
-        self.last_levels = [0.0; 5];
+        self.last_levels.fill(0.0);
         self.last_frame_counter_value = 0x00;
     }
 
@@ -131,7 +133,7 @@ impl Apu {
         self.triangle = Triangle::default();
         self.noise = Noise::default();
         self.dmc = Dmc::default();
-        self.last_levels = [0.0; 5];
+        self.last_levels.fill(0.0);
 
         // Re-apply the last frame counter mode / IRQ inhibit setting so
         // reset behaviour differs from power-on, as on real hardware.

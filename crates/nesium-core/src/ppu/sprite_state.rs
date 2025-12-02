@@ -1,4 +1,4 @@
-use crate::ram::ppu::SpriteLineRam;
+use crate::mem_block::ppu::SpriteLineRam;
 
 /// Phases of the hardware sprite evaluation state machine.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]

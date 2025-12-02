@@ -7,12 +7,16 @@
 //! zero after a few frames; we mirror that behaviour here with a per-bit decay
 //! stamp and mask-aware updates (`SetOpenBus`/`ApplyOpenBus`).
 
+use crate::mem_block::MemBlock;
+
 /// Number of bus `step()` calls before a driven `1` bit decays to `0`.
 ///
 /// For the PPU, `step()` is called once per frame, so a value of 3 matches
 /// Mesen2's "decay after ~3 frames" behaviour. On the CPU side, decay is
 /// disabled entirely (`decay_enabled = false`).
 const DECAY_TICKS: u64 = 3;
+
+type DecayDeadlines = MemBlock<u64, 8>;
 
 /// Tracks the last value driven on the data bus and per-bit decay.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
@@ -21,7 +25,7 @@ pub(crate) struct OpenBus {
     value: u8,
     /// Internal CPU data bus latch (used for APU/$4015 quirks, etc.).
     internal_value: u8,
-    decay_deadline: [u64; 8],
+    decay_deadline: DecayDeadlines,
     tick: u64,
     /// When false, `step`/decay are effectively disabled (CPU-side open bus).
     decay_enabled: bool,
@@ -32,7 +36,7 @@ impl OpenBus {
         Self {
             value: 0,
             internal_value: 0,
-            decay_deadline: [0; 8],
+            decay_deadline: DecayDeadlines::new(),
             tick: 0,
             decay_enabled: false,
         }
@@ -43,7 +47,7 @@ impl OpenBus {
         Self {
             value: 0,
             internal_value: 0,
-            decay_deadline: [0; 8],
+            decay_deadline: DecayDeadlines::new(),
             tick: 0,
             decay_enabled: true,
         }
@@ -53,7 +57,7 @@ impl OpenBus {
     pub(crate) fn reset(&mut self) {
         self.value = 0;
         self.internal_value = 0;
-        self.decay_deadline = [0; 8];
+        self.decay_deadline.fill(0);
         self.tick = 0;
     }
 
@@ -91,7 +95,7 @@ impl OpenBus {
             self.value = value;
             if self.decay_enabled {
                 let decay_at = self.tick.wrapping_add(DECAY_TICKS);
-                for deadline in &mut self.decay_deadline {
+                for deadline in self.decay_deadline.as_mut_slice() {
                     *deadline = decay_at;
                 }
             }

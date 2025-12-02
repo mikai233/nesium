@@ -16,6 +16,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::ByteBlock;
+
 /// PRG-ROM banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -37,7 +39,7 @@ pub struct Mapper26 {
     banking_mode: u8,
 
     /// Eight 8-bit CHR registers.
-    chr_regs: [u8; 8],
+    chr_regs: Mapper26ChrRegs,
 
     mirroring: Mirroring,
     base_mirroring: Mirroring,
@@ -51,6 +53,8 @@ pub struct Mapper26 {
     irq_cycle_mode: bool,
     irq_pending: bool,
 }
+
+type Mapper26ChrRegs = ByteBlock<8>;
 
 impl Mapper26 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -79,7 +83,7 @@ impl Mapper26 {
             prg_bank_8000_2x: 0,
             prg_bank_c000: 0,
             banking_mode: 0,
-            chr_regs: [0; 8],
+            chr_regs: Mapper26ChrRegs::new(),
             mirroring: header.mirroring,
             base_mirroring: header.mirroring,
             irq_reload: 0,
@@ -286,7 +290,7 @@ impl Mapper for Mapper26 {
         self.prg_bank_8000_2x = 0;
         self.prg_bank_c000 = self.prg_bank_count_8k.saturating_sub(2);
         self.banking_mode = 0;
-        self.chr_regs = [0; 8];
+        self.chr_regs.fill(0);
         self.mirroring = self.base_mirroring;
 
         self.irq_reload = 0;

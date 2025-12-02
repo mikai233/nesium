@@ -18,6 +18,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::ByteBlock;
+
 /// PRG-ROM banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -49,9 +51,9 @@ pub struct Mapper21 {
     prg_mode_swap: bool,
 
     /// Low 4 bits of each 1 KiB CHR bank register.
-    chr_low_regs: [u8; 8],
+    chr_low_regs: Mapper21ChrLowRegs,
     /// High 5 bits of each 1 KiB CHR bank register.
-    chr_high_regs: [u8; 8],
+    chr_high_regs: Mapper21ChrHighRegs,
 
     /// Current nametable mirroring configuration.
     mirroring: Mirroring,
@@ -72,6 +74,9 @@ pub struct Mapper21 {
     variant: Vrc4Variant,
     use_heuristics: bool,
 }
+
+type Mapper21ChrLowRegs = ByteBlock<8>;
+type Mapper21ChrHighRegs = ByteBlock<8>;
 
 impl Mapper21 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -106,8 +111,8 @@ impl Mapper21 {
             prg_bank_8000: 0,
             prg_bank_a000: 0,
             prg_mode_swap: false,
-            chr_low_regs: [0; 8],
-            chr_high_regs: [0; 8],
+            chr_low_regs: Mapper21ChrLowRegs::new(),
+            chr_high_regs: Mapper21ChrHighRegs::new(),
             mirroring: header.mirroring,
             base_mirroring: header.mirroring,
             irq_reload: 0,
@@ -300,8 +305,8 @@ impl Mapper for Mapper21 {
         self.prg_mode_swap = false;
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1;
-        self.chr_low_regs = [0; 8];
-        self.chr_high_regs = [0; 8];
+        self.chr_low_regs.fill(0);
+        self.chr_high_regs.fill(0);
         self.mirroring = self.base_mirroring;
 
         self.irq_reload = 0;

@@ -1,4 +1,4 @@
-use crate::audio::AudioChannel;
+use crate::audio::{ChannelPanning, ChannelVolumes};
 
 use super::filters::StereoFilterType;
 
@@ -10,9 +10,9 @@ use super::filters::StereoFilterType;
 #[derive(Debug, Clone)]
 pub struct MixerSettings {
     /// Per-channel volume in `[0.0, 1.0]` (0 = muted, 1 = full).
-    pub volume: [f32; AudioChannel::COUNT],
+    pub volume: ChannelVolumes,
     /// Per-channel panning in `[-1.0, 1.0]` (-1 = hard left, 0 = center, 1 = hard right).
-    pub panning: [f32; AudioChannel::COUNT],
+    pub panning: ChannelPanning,
     /// Optional stereo post-filter applied after mixing.
     pub stereo_filter: StereoFilterType,
     /// Delay (ms) for [`StereoFilterType::Delay`] and [`StereoFilterType::Comb`].
@@ -27,9 +27,11 @@ pub struct MixerSettings {
 
 impl Default for MixerSettings {
     fn default() -> Self {
+        let mut volume = ChannelVolumes::new();
+        volume.fill(1.0);
         Self {
-            volume: [1.0; AudioChannel::COUNT],
-            panning: [0.0; AudioChannel::COUNT],
+            volume,
+            panning: ChannelPanning::new(),
             stereo_filter: StereoFilterType::None,
             stereo_delay_ms: 0.0,
             stereo_panning_angle_deg: 0.0,

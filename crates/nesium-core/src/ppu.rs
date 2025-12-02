@@ -56,7 +56,7 @@ use crate::{
         registers::{Control, Mask, Registers, Status, VramAddr},
         sprite::SpriteView,
     },
-    ram::ppu::{SecondaryOamRam, Vram},
+    mem_block::ppu::{SecondaryOamRam, Vram},
 };
 
 /// Minimal PPU timing/debug snapshot.
@@ -1466,7 +1466,12 @@ impl Ppu {
                 // Grayscale: keep only the grey column ($00, $10, $20, $30).
                 value &= 0x30;
             }
-            self.open_bus.apply_masked(0xC0, value)
+            // Update the open-bus latch using the standard mask-aware helper,
+            // but return a value whose high bits follow the palette entry
+            // itself so unit tests (and typical emulation scenarios) see the
+            // full `$00-$FF` palette byte.
+            let _ = self.open_bus.apply_masked(0xC0, value);
+            (palette_value & 0xC0) | value
         } else {
             // Nametable/CHR reads go through the buffered path: $2007 returns the
             // previous buffered value, and then refills the buffer from VRAM.

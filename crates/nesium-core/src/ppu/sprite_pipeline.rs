@@ -1,4 +1,5 @@
 use super::sprite::SpriteAttributes;
+use crate::mem_block::MemBlock;
 
 /// A single sprite slot for the current scanline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -45,9 +46,11 @@ pub(crate) struct SpritePixel {
 /// The NES PPU has space for eight sprites per scanline. Each sprite has two
 /// pattern shifters and an X counter. When the counter reaches zero, the
 /// shifters begin outputting and advancing once per dot.
+type SpriteSlots = MemBlock<SpriteSlot, 8>;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct SpritePipeline {
-    slots: [SpriteSlot; 8],
+    slots: SpriteSlots,
     active_count: u8,
 }
 
@@ -61,14 +64,14 @@ impl SpritePipeline {
     /// Creates a new pipeline with no active sprites.
     pub(crate) fn new() -> Self {
         Self {
-            slots: [SpriteSlot::default(); 8],
+            slots: SpriteSlots::new(),
             active_count: 0,
         }
     }
 
     /// Clears all active sprite shifters.
     pub(crate) fn clear(&mut self) {
-        self.slots = [SpriteSlot::default(); 8];
+        self.slots.fill(SpriteSlot::default());
         self.active_count = 0;
     }
 

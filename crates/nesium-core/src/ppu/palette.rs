@@ -41,7 +41,7 @@
 
 use std::{fs, path::Path};
 
-use crate::{error::Error, memory::ppu as ppu_mem, ram::ppu::PaletteRam as PaletteStorage};
+use crate::{error::Error, mem_block::ppu::PaletteRam as PaletteStorage, memory::ppu as ppu_mem};
 
 /// Encodes a palette selection and color index as used by the NES PPU.
 ///
@@ -179,7 +179,7 @@ impl PaletteRam {
     /// Returns the palette byte for a VRAM address in `$3F00-$3FFF`.
     pub fn read(&self, addr: u16) -> u8 {
         let index = Self::decode_index(addr);
-        self.0.read(index)
+        self.0[index]
     }
 
     /// Writes a palette byte applying the NES mirroring rules.
@@ -187,12 +187,12 @@ impl PaletteRam {
         let index = Self::decode_index(addr);
         // Store the full byte; higher bits are merged with the PPU open-bus
         // latch when read via $2007, so PaletteRam itself keeps all 8 bits.
-        self.0.write(index, value);
+        self.0[index] = value;
     }
 
     /// Fills the entire palette RAM with the provided byte.
     pub fn fill(&mut self, value: u8) {
-        self.0.as_mut_slice().fill(value);
+        self.0.fill(value);
     }
 
     /// Immutable view into the raw palette bytes.

@@ -25,6 +25,8 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+use crate::mem_block::ByteBlock;
+
 /// PRG banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -38,9 +40,9 @@ pub struct Mapper90 {
 
     prg_bank_count_8k: usize,
 
-    prg_regs: [u8; 4],
-    chr_low: [u8; 8],
-    chr_high: [u8; 8],
+    prg_regs: Mapper90PrgRegs,
+    chr_low: Mapper90ChrLowRegs,
+    chr_high: Mapper90ChrHighRegs,
 
     mirroring: Mirroring,
 
@@ -51,6 +53,10 @@ pub struct Mapper90 {
     irq_enabled: bool,
     irq_pending: bool,
 }
+
+type Mapper90PrgRegs = ByteBlock<4>;
+type Mapper90ChrLowRegs = ByteBlock<8>;
+type Mapper90ChrHighRegs = ByteBlock<8>;
 
 impl Mapper90 {
     pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
@@ -76,9 +82,9 @@ impl Mapper90 {
             prg_ram,
             chr,
             prg_bank_count_8k,
-            prg_regs: [0; 4],
-            chr_low: [0; 8],
-            chr_high: [0; 8],
+            prg_regs: Mapper90PrgRegs::new(),
+            chr_low: Mapper90ChrLowRegs::new(),
+            chr_high: Mapper90ChrHighRegs::new(),
             mirroring: header.mirroring,
             irq_reload: 0,
             irq_counter: 0,
@@ -223,9 +229,12 @@ impl Mapper90 {
 
 impl Mapper for Mapper90 {
     fn power_on(&mut self) {
-        self.prg_regs = [0, 1, 2, 0x7F];
-        self.chr_low = [0; 8];
-        self.chr_high = [0; 8];
+        self.prg_regs[0] = 0;
+        self.prg_regs[1] = 1;
+        self.prg_regs[2] = 2;
+        self.prg_regs[3] = 0x7F;
+        self.chr_low.fill(0);
+        self.chr_high.fill(0);
         self.irq_reload = 0;
         self.irq_counter = 0;
         self.irq_prescaler = 0;
