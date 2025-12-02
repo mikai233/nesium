@@ -80,11 +80,6 @@ impl NesSoundMixer {
         let rumble_coeff = pole_coeff(sr, rumble_cut);
         let lowpass_alpha = pole_alpha(sr, lowpass_cut);
 
-        let mut volumes = ChannelVolumes::new();
-        volumes.fill(1.0);
-        let mut panning = ChannelPanning::new();
-        panning.fill(1.0);
-
         Self {
             blip_left: BlipBuf::new(clock_rate, sample_rate as f64, 24),
             blip_right: BlipBuf::new(clock_rate, sample_rate as f64, 24),
@@ -92,8 +87,8 @@ impl NesSoundMixer {
             sample_rate: sr,
             last_frame_clock: 0,
             channel_levels: ChannelLevels::new(),
-            volumes,
-            panning,
+            volumes: ChannelVolumes::filled(1.0),
+            panning: ChannelPanning::filled(1.0),
             mixed_left: 0.0,
             mixed_right: 0.0,
             dc_last_input_l: 0.0,

@@ -27,10 +27,8 @@ pub struct MixerSettings {
 
 impl Default for MixerSettings {
     fn default() -> Self {
-        let mut volume = ChannelVolumes::new();
-        volume.fill(1.0);
         Self {
-            volume,
+            volume: ChannelVolumes::filled(1.0),
             panning: ChannelPanning::new(),
             stereo_filter: StereoFilterType::None,
             stereo_delay_ms: 0.0,

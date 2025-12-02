@@ -95,6 +95,14 @@ impl<T: Copy + Default, const N: usize> MemBlock<T, N> {
     }
 }
 
+impl<T: Copy, const N: usize> MemBlock<T, N> {
+    /// Create a `MemBlock` where every element is initialized to `value`.
+    #[inline]
+    pub fn filled(value: T) -> Self {
+        Self(new_storage_filled(value))
+    }
+}
+
 impl<T: Copy + Default, const N: usize> Default for MemBlock<T, N> {
     fn default() -> Self {
         Self::new()
@@ -133,6 +141,15 @@ fn new_storage<T: Copy + Default, const N: usize>() -> MemBlockStorage<T, N> {
     Box::new([T::default(); N])
 }
 
+#[cfg(any(
+    feature = "boxed-memblock",
+    target_arch = "wasm32",
+    target_arch = "xtensa"
+))]
+fn new_storage_filled<T: Copy, const N: usize>(value: T) -> MemBlockStorage<T, N> {
+    Box::new([value; N])
+}
+
 #[cfg(not(any(
     feature = "boxed-memblock",
     target_arch = "wasm32",
@@ -140,4 +157,13 @@ fn new_storage<T: Copy + Default, const N: usize>() -> MemBlockStorage<T, N> {
 )))]
 fn new_storage<T: Copy + Default, const N: usize>() -> MemBlockStorage<T, N> {
     [T::default(); N]
+}
+
+#[cfg(not(any(
+    feature = "boxed-memblock",
+    target_arch = "wasm32",
+    target_arch = "xtensa"
+)))]
+fn new_storage_filled<T: Copy, const N: usize>(value: T) -> MemBlockStorage<T, N> {
+    [value; N]
 }
