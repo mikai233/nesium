@@ -9,7 +9,7 @@ use std::borrow::Cow;
 
 use crate::{
     cartridge::{
-        Mapper, TRAINER_SIZE,
+        ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{ChrStorage, allocate_prg_ram, select_chr_storage, trainer_destination},
     },
@@ -25,7 +25,7 @@ const CHR_BANK_SIZE_1K: usize = 1 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct Mapper26 {
-    prg_rom: Box<[u8]>,
+    prg_rom: PrgRom,
     prg_ram: Box<[u8]>,
     chr: ChrStorage,
 
@@ -57,19 +57,19 @@ pub struct Mapper26 {
 type Mapper26ChrRegs = ByteBlock<8>;
 
 impl Mapper26 {
-    pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
+    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
         Self::with_trainer(header, prg_rom, chr_rom, None)
     }
 
     pub(crate) fn with_trainer(
         header: Header,
-        prg_rom: Box<[u8]>,
-        chr_rom: Box<[u8]>,
-        trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+        prg_rom: PrgRom,
+        chr_rom: ChrRom,
+        trainer: TrainerBytes,
     ) -> Self {
         let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer.as_ref(), trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer.as_ref());
+        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
+            dst.copy_from_slice(trainer);
         }
 
         let chr = select_chr_storage(&header, chr_rom);

@@ -49,6 +49,7 @@ use crate::cartridge::mapper::NametableTarget;
 use crate::{
     bus::OpenBus,
     cartridge::{Cartridge, header::Mirroring},
+    mem_block::ppu::{SecondaryOamRam, Vram},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
         buffer::FrameBuffer,
@@ -56,7 +57,6 @@ use crate::{
         registers::{Control, Mask, Registers, Status, VramAddr},
         sprite::SpriteView,
     },
-    mem_block::ppu::{SecondaryOamRam, Vram},
 };
 
 /// Minimal PPU timing/debug snapshot.

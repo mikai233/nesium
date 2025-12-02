@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::cartridge::{Mapper, TRAINER_SIZE, header::Header};
+use crate::cartridge::{ChrRom, Mapper, PrgRom, TrainerBytes, header::Header};
 
 /// Source of user-provided mappers when the core does not implement a board.
 ///
@@ -37,10 +37,11 @@ use crate::cartridge::{Mapper, TRAINER_SIZE, header::Header};
 ///     fn get_mapper(
 ///         &self,
 ///         header: Header,
-///         prg_rom: Box<[u8]>,
-///         chr_rom: Box<[u8]>,
+///         prg_rom: PrgRom,
+///         chr_rom: ChrRom,
 ///         trainer: Option<Box<[u8; TRAINER_SIZE]>>,
 ///     ) -> Option<Box<dyn Mapper>> {
+///         let _ = (prg_rom, chr_rom, trainer);
 ///         (header.mapper == 1234).then(|| Box::new(CustomMapper) as Box<dyn Mapper>)
 ///     }
 /// }
@@ -58,8 +59,8 @@ pub trait Provider: Debug + Send {
     fn get_mapper(
         &self,
         header: Header,
-        prg_rom: Box<[u8]>,
-        chr_rom: Box<[u8]>,
-        trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+        prg_rom: PrgRom,
+        chr_rom: ChrRom,
+        trainer: TrainerBytes,
     ) -> Option<Box<dyn Mapper>>;
 }

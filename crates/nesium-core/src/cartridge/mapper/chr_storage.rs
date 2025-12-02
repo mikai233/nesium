@@ -12,7 +12,7 @@
 //! - Introspection helpers (`as_rom` / `as_ram` / `as_ram_mut`) let tests or
 //!   tools peek at the underlying CHR contents.
 
-use crate::cartridge::header::Header;
+use crate::cartridge::{ChrRom, header::Header};
 
 /// High‑level description of PPU‑side CHR storage.
 #[derive(Debug, Clone)]
@@ -20,7 +20,7 @@ pub enum ChrStorage {
     /// No CHR memory is present; reads return `0` and writes are ignored.
     None,
     /// CHR is backed by read‑only ROM data from the cartridge image.
-    Rom(Box<[u8]>),
+    Rom(ChrRom),
     /// CHR is backed by writable RAM located on the cartridge.
     Ram(Box<[u8]>),
 }
@@ -135,7 +135,7 @@ impl ChrStorage {
 /// - Otherwise, a CHR RAM slice is allocated using the larger of the volatile
 ///   and battery‑backed CHR sizes, if any.
 /// - When neither ROM nor RAM is present, [`ChrStorage::None`] is used.
-pub fn select_chr_storage(header: &Header, chr_rom: Box<[u8]>) -> ChrStorage {
+pub fn select_chr_storage(header: &Header, chr_rom: ChrRom) -> ChrStorage {
     if header.chr_rom_size > 0 {
         ChrStorage::Rom(chr_rom)
     } else {

@@ -8,7 +8,7 @@ use std::borrow::Cow;
 
 use crate::{
     cartridge::{
-        Mapper, TRAINER_SIZE,
+        ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram, trainer_destination},
     },
@@ -26,9 +26,9 @@ const CHR_RAM_SIZE: usize = 8 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct Mapper119 {
-    prg_rom: Box<[u8]>,
+    prg_rom: PrgRom,
     prg_ram: Box<[u8]>,
-    chr_rom: Box<[u8]>,
+    chr_rom: ChrRom,
     chr_ram: Box<[u8]>,
 
     /// Number of 8 KiB PRG-ROM banks.
@@ -59,19 +59,19 @@ pub struct Mapper119 {
 type Mapper119BankRegs = ByteBlock<8>;
 
 impl Mapper119 {
-    pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
+    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
         Self::with_trainer(header, prg_rom, chr_rom, None)
     }
 
     pub(crate) fn with_trainer(
         header: Header,
-        prg_rom: Box<[u8]>,
-        chr_rom: Box<[u8]>,
-        trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+        prg_rom: PrgRom,
+        chr_rom: ChrRom,
+        trainer: TrainerBytes,
     ) -> Self {
         let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer.as_ref(), trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer.as_ref());
+        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
+            dst.copy_from_slice(trainer);
         }
 
         let chr_ram = vec![0u8; CHR_RAM_SIZE].into_boxed_slice();

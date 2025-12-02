@@ -27,8 +27,8 @@ use core::fmt;
 
 use crate::{
     audio::{AudioChannel, NesSoundMixer},
-    memory::apu::{self as apu_mem},
     mem_block::apu::RegisterRam,
+    memory::apu::{self as apu_mem},
 };
 
 pub use expansion::ExpansionAudio;

@@ -28,7 +28,7 @@ use std::borrow::Cow;
 
 use crate::{
     cartridge::{
-        Mapper, TRAINER_SIZE,
+        ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{ChrStorage, allocate_prg_ram, trainer_destination},
     },
@@ -45,7 +45,7 @@ const CHR_RAM_SIZE: usize = 32 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct Mapper6 {
-    prg_rom: Box<[u8]>,
+    prg_rom: PrgRom,
     prg_ram: Box<[u8]>,
     chr: ChrStorage,
 
@@ -89,21 +89,21 @@ pub struct Mapper6 {
 }
 
 impl Mapper6 {
-    pub fn new(header: Header, prg_rom: Box<[u8]>, _chr_rom: Box<[u8]>) -> Self {
-        Self::with_trainer(header, prg_rom, Box::new([]), None)
+    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
+        Self::with_trainer(header, prg_rom, chr_rom, None)
     }
 
     pub(crate) fn with_trainer(
         header: Header,
-        prg_rom: Box<[u8]>,
-        _chr_rom: Box<[u8]>,
-        trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+        prg_rom: PrgRom,
+        _chr_rom: ChrRom,
+        trainer: TrainerBytes,
     ) -> Self {
         // Allocate PRG-RAM using the shared helper so NES 2.0 save/work RAM
         // sizing is respected.
         let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer.as_ref(), trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer.as_ref());
+        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
+            dst.copy_from_slice(trainer);
         }
 
         // Front Fareast carts expose a large CHR-RAM region regardless of the

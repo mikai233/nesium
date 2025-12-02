@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{borrow::Cow, fs, path::Path};
 
 use crate::{
     cartridge::header::{Header, Mirroring, NES_HEADER_LEN},
@@ -12,6 +12,60 @@ use self::mapper::{
 };
 
 pub const TRAINER_SIZE: usize = 512;
+
+/// Borrowed view of the optional 512-byte trainer section.
+///
+/// The trainer is always exactly [`TRAINER_SIZE`] bytes when present, and
+/// is only needed during mapper construction to initialize any RAM that
+/// should be preloaded with trainer data. By borrowing from the original
+/// ROM image instead of allocating a boxed array, we avoid an extra copy.
+pub type TrainerBytes<'a> = Option<&'a [u8; TRAINER_SIZE]>;
+
+/// Backing type for PRG ROM data.
+///
+/// - On desktop/host platforms, this is typically `Cow::Owned(Vec<u8>)`.
+/// - On embedded targets (e.g. ESP32), this can borrow from a static
+///   `include_bytes!` blob via `Cow::Borrowed(&'static [u8])` so that
+///   loading a cartridge does not require heap allocation for PRG ROM.
+pub type PrgRom = Cow<'static, [u8]>;
+
+/// Backing type for CHR ROM data (PPU pattern tables).
+///
+/// Follows the same ownership model as [`PrgRom`], allowing CHR data to be
+/// borrowed from static blobs on platforms where heap usage is constrained.
+
+pub type ChrRom = Cow<'static, [u8]>;
+
+/// Source image used to construct a [`Cartridge`].
+///
+/// This allows a single loading API to support both heap-owned ROM
+/// bytes (e.g. loaded from disk or network) and statically embedded
+/// ROM blobs (e.g. via `include_bytes!` on embedded targets).
+pub enum CartridgeImage {
+    /// ROM bytes owned in heap memory.
+    Owned(Vec<u8>),
+    /// ROM bytes embedded in the binary or other static storage.
+    Static(&'static [u8]),
+}
+
+impl From<Vec<u8>> for CartridgeImage {
+    fn from(v: Vec<u8>) -> Self {
+        CartridgeImage::Owned(v)
+    }
+}
+
+impl<const N: usize> From<&'static [u8; N]> for CartridgeImage {
+    fn from(bytes: &'static [u8; N]) -> Self {
+        CartridgeImage::Static(&bytes[..])
+    }
+}
+
+impl<'a> From<&'a [u8]> for CartridgeImage {
+    fn from(bytes: &'a [u8]) -> Self {
+        // Fall back to owning a copy when given a non-'static slice.
+        CartridgeImage::Owned(bytes.to_vec())
+    }
+}
 
 pub mod header;
 pub mod mapper;
@@ -120,22 +174,32 @@ impl Clone for Cartridge {
     }
 }
 
-/// Load a cartridge from an in-memory byte slice.
-pub fn load_cartridge(bytes: &[u8]) -> Result<Cartridge, Error> {
-    load_cartridge_with_provider(bytes, None)
+/// Load a cartridge from a ROM image.
+///
+/// The image can be provided as a heap-owned `Vec<u8>` (e.g. from disk
+/// or network) or as a statically embedded blob (e.g. `include_bytes!`).
+pub fn load_cartridge(image: impl Into<CartridgeImage>) -> Result<Cartridge, Error> {
+    load_cartridge_with_provider(image, None)
 }
 
-/// Load a cartridge from an in-memory byte slice with an optional mapper provider.
+/// Load a cartridge from a ROM image with an optional mapper provider.
 pub fn load_cartridge_with_provider(
-    bytes: &[u8],
+    image: impl Into<CartridgeImage>,
     provider: Option<&dyn Provider>,
 ) -> Result<Cartridge, Error> {
-    let header_bytes = bytes.get(..NES_HEADER_LEN).ok_or(Error::TooShort {
-        actual: bytes.len(),
-    })?;
-    let header = Header::parse(header_bytes)?;
-    let (trainer, prg_rom, chr_rom) = slice_sections(bytes, &header)?;
+    match image.into() {
+        CartridgeImage::Owned(bytes) => load_cartridge_from_bytes(&bytes, provider),
+        CartridgeImage::Static(bytes) => load_cartridge_from_static_bytes(bytes, provider),
+    }
+}
 
+fn build_cartridge_from_sections<'a>(
+    header: Header,
+    trainer: TrainerBytes<'a>,
+    prg_rom: PrgRom,
+    chr_rom: ChrRom,
+    provider: Option<&dyn Provider>,
+) -> Result<Cartridge, Error> {
     let mut mapper: Box<dyn Mapper> = match header.mapper {
         0 => Box::new(Mapper0::with_trainer(header, prg_rom, chr_rom, trainer)),
         1 => Box::new(Mapper1::with_trainer(header, prg_rom, chr_rom, trainer)),
@@ -170,8 +234,33 @@ pub fn load_cartridge_with_provider(
 
     // Apply mapper-specific power-on defaults once after construction.
     mapper.power_on();
-
     Ok(Cartridge::new(header, mapper))
+}
+
+fn load_cartridge_from_bytes(
+    bytes: &[u8],
+    provider: Option<&dyn Provider>,
+) -> Result<Cartridge, Error> {
+    let header_bytes = bytes.get(..NES_HEADER_LEN).ok_or(Error::TooShort {
+        actual: bytes.len(),
+    })?;
+    let header = Header::parse(header_bytes)?;
+    let (trainer, prg_rom, chr_rom) = slice_sections(bytes, &header)?;
+
+    build_cartridge_from_sections(header, trainer, prg_rom, chr_rom, provider)
+}
+
+fn load_cartridge_from_static_bytes(
+    bytes: &'static [u8],
+    provider: Option<&dyn Provider>,
+) -> Result<Cartridge, Error> {
+    let header_bytes = bytes.get(..NES_HEADER_LEN).ok_or(Error::TooShort {
+        actual: bytes.len(),
+    })?;
+    let header = Header::parse(header_bytes)?;
+    let (trainer, prg_rom, chr_rom) = slice_sections_static(bytes, &header)?;
+
+    build_cartridge_from_sections(header, trainer, prg_rom, chr_rom, provider)
 }
 
 /// Load a cartridge directly from disk.
@@ -191,44 +280,43 @@ where
     P: AsRef<Path>,
 {
     let bytes = fs::read(path)?;
-    load_cartridge_with_provider(&bytes, provider)
+    load_cartridge_with_provider(bytes, provider)
 }
 
-fn slice_sections(
-    bytes: &[u8],
+fn slice_trainer<'a>(
+    bytes: &'a [u8],
+    cursor: &mut usize,
     header: &Header,
-) -> Result<(Option<Box<[u8; TRAINER_SIZE]>>, Box<[u8]>, Box<[u8]>), Error> {
-    let mut cursor = NES_HEADER_LEN;
-    let trainer = if header.trainer_present {
-        let trainer_slice = section(bytes, &mut cursor, TRAINER_SIZE, "trainer")?;
-        Some(
-            trainer_slice
-                .into_boxed_slice()
-                .try_into()
-                .expect("trainer length mismatch"),
-        )
-    } else {
-        None
-    };
+) -> Result<TrainerBytes<'a>, Error> {
+    if !header.trainer_present {
+        return Ok(None);
+    }
 
-    let prg_rom = section(bytes, &mut cursor, header.prg_rom_size, "PRG ROM")?;
-    let chr_rom = section(bytes, &mut cursor, header.chr_rom_size, "CHR ROM")?;
-
-    Ok((
-        trainer,
-        prg_rom.into_boxed_slice(),
-        chr_rom.into_boxed_slice(),
-    ))
+    let end = cursor
+        .checked_add(TRAINER_SIZE)
+        .ok_or(Error::SectionTooShort {
+            section: "trainer",
+            expected: TRAINER_SIZE,
+            actual: bytes.len().saturating_sub(*cursor),
+        })?;
+    let slice = bytes.get(*cursor..end).ok_or(Error::SectionTooShort {
+        section: "trainer",
+        expected: TRAINER_SIZE,
+        actual: bytes.len().saturating_sub(*cursor),
+    })?;
+    *cursor = end;
+    let array_ref: &[u8; TRAINER_SIZE] = slice.try_into().expect("trainer length mismatch");
+    Ok(Some(array_ref))
 }
 
-fn section(
-    bytes: &[u8],
+fn slice_section<'a>(
+    bytes: &'a [u8],
     cursor: &mut usize,
     len: usize,
     name: &'static str,
-) -> Result<Vec<u8>, Error> {
+) -> Result<&'a [u8], Error> {
     if len == 0 {
-        return Ok(Vec::new());
+        return Ok(&bytes[0..0]);
     }
 
     let end = cursor.checked_add(len).ok_or(Error::SectionTooShort {
@@ -244,7 +332,41 @@ fn section(
     })?;
 
     *cursor = end;
-    Ok(slice.to_vec())
+    Ok(slice)
+}
+
+fn slice_sections_static(
+    bytes: &'static [u8],
+    header: &Header,
+) -> Result<(TrainerBytes<'static>, PrgRom, ChrRom), Error> {
+    let mut cursor = NES_HEADER_LEN;
+    let trainer = slice_trainer(bytes, &mut cursor, header)?;
+
+    let prg_slice = slice_section(bytes, &mut cursor, header.prg_rom_size, "PRG ROM")?;
+    let chr_slice = slice_section(bytes, &mut cursor, header.chr_rom_size, "CHR ROM")?;
+
+    Ok((
+        trainer,
+        PrgRom::Borrowed(prg_slice),
+        ChrRom::Borrowed(chr_slice),
+    ))
+}
+
+fn slice_sections<'a>(
+    bytes: &'a [u8],
+    header: &Header,
+) -> Result<(TrainerBytes<'a>, PrgRom, ChrRom), Error> {
+    let mut cursor = NES_HEADER_LEN;
+    let trainer = slice_trainer(bytes, &mut cursor, header)?;
+
+    let prg_rom = slice_section(bytes, &mut cursor, header.prg_rom_size, "PRG ROM")?;
+    let chr_rom = slice_section(bytes, &mut cursor, header.chr_rom_size, "CHR ROM")?;
+
+    Ok((
+        trainer,
+        PrgRom::Owned(prg_rom.to_vec()),
+        ChrRom::Owned(chr_rom.to_vec()),
+    ))
 }
 
 #[cfg(test)]
@@ -264,7 +386,7 @@ mod tests {
         rom.extend(vec![0xAA; 16 * 1024]);
         rom.extend(vec![0x55; 8 * 1024]);
 
-        let cartridge = load_cartridge(&rom).expect("parse cartridge");
+        let cartridge = load_cartridge(rom).expect("parse cartridge");
 
         assert_eq!(cartridge.header().prg_rom_size, 16 * 1024);
         assert_eq!(cartridge.header().chr_rom_size, 8 * 1024);
@@ -278,7 +400,7 @@ mod tests {
         rom.extend(vec![0xFE; TRAINER_SIZE]);
         rom.extend(vec![0xAA; 16 * 1024]);
 
-        let cartridge = load_cartridge(&rom).expect("parse cartridge");
+        let cartridge = load_cartridge(rom).expect("parse cartridge");
 
         assert!(cartridge.header().trainer_present);
         assert_eq!(cartridge.header().prg_rom_size, 16 * 1024);
@@ -290,7 +412,7 @@ mod tests {
         let mut rom = base_header(1, 0, 0).to_vec();
         rom.extend(vec![0xAA; 1024]); // insufficient PRG data
 
-        let err = load_cartridge(&rom).expect_err("should fail");
+        let err = load_cartridge(rom).expect_err("should fail");
         assert!(matches!(
             err,
             Error::SectionTooShort {
@@ -309,7 +431,7 @@ mod tests {
         rom.extend(vec![0xAA; 16 * 1024]); // PRG
         rom.extend(vec![0x55; 8 * 1024]); // CHR
 
-        let err = load_cartridge(&rom).expect_err("unsupported mapper should fail");
+        let err = load_cartridge(rom).expect_err("unsupported mapper should fail");
         assert!(matches!(err, Error::UnsupportedMapper(12)));
     }
 
@@ -345,9 +467,9 @@ mod tests {
         fn get_mapper(
             &self,
             _header: Header,
-            _prg_rom: Box<[u8]>,
-            _chr_rom: Box<[u8]>,
-            _trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+            _prg_rom: PrgRom,
+            _chr_rom: ChrRom,
+            _trainer: TrainerBytes<'_>,
         ) -> Option<Box<dyn Mapper>> {
             Some(Box::new(DummyMapper))
         }
@@ -361,7 +483,7 @@ mod tests {
 
         let provider = DummyProvider;
         let cartridge =
-            load_cartridge_with_provider(&rom, Some(&provider)).expect("provider supplies mapper");
+            load_cartridge_with_provider(rom, Some(&provider)).expect("provider supplies mapper");
 
         assert_eq!(cartridge.mapper().mapper_id(), 999);
     }

@@ -3,9 +3,9 @@ use crate::{
     bus::{Bus, OpenBus},
     cartridge::Cartridge,
     controller::{Controller, SerialLogger},
+    mem_block::cpu as cpu_ram,
     memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem},
     ppu::{PatternBus, Ppu},
-    mem_block::cpu as cpu_ram,
 };
 
 /// CPU-visible bus that bridges the core to RAM, the PPU, the APU, and the
@@ -349,8 +349,8 @@ mod tests {
         let prg_rom = (0..prg_rom_size)
             .map(|value| (value & 0xFF) as u8)
             .collect::<Vec<_>>()
-            .into_boxed_slice();
-        let chr_rom = vec![0; header.chr_rom_size].into_boxed_slice();
+            .into();
+        let chr_rom = vec![0; header.chr_rom_size].into();
         let mapper = Mapper0::new(header, prg_rom, chr_rom);
         Cartridge::new(header, Box::new(mapper))
     }

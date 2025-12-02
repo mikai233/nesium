@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{
     cartridge::{
-        Mapper, TRAINER_SIZE,
+        ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{allocate_prg_ram, trainer_destination},
     },
@@ -13,9 +13,9 @@ const CHR_BANK_SIZE: usize = 8 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct Mapper3 {
-    prg_rom: Box<[u8]>,
+    prg_rom: PrgRom,
     prg_ram: Box<[u8]>,
-    chr_rom: Box<[u8]>,
+    chr_rom: ChrRom,
     chr_ram: Box<[u8]>,
     chr_bank: usize,
     chr_bank_count: usize,
@@ -23,19 +23,19 @@ pub struct Mapper3 {
 }
 
 impl Mapper3 {
-    pub fn new(header: Header, prg_rom: Box<[u8]>, chr_rom: Box<[u8]>) -> Self {
+    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
         Self::with_trainer(header, prg_rom, chr_rom, None)
     }
 
     pub(crate) fn with_trainer(
         header: Header,
-        prg_rom: Box<[u8]>,
-        chr_rom: Box<[u8]>,
-        trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+        prg_rom: PrgRom,
+        chr_rom: ChrRom,
+        trainer: TrainerBytes,
     ) -> Self {
         let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer.as_ref(), trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer.as_ref());
+        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
+            dst.copy_from_slice(trainer);
         }
 
         let chr_bank_count = if chr_rom.is_empty() {
@@ -256,11 +256,7 @@ mod tests {
             chr[start..end].fill(bank as u8);
         }
 
-        Mapper3::new(
-            header(prg.len(), chr.len(), 0),
-            prg.into_boxed_slice(),
-            chr.into_boxed_slice(),
-        )
+        Mapper3::new(header(prg.len(), chr.len(), 0), prg.into(), chr.into())
     }
 
     #[test]
@@ -283,8 +279,8 @@ mod tests {
     #[test]
     fn falls_back_to_chr_ram() {
         let header = header(0x8000, 0, 8 * 1024);
-        let prg = vec![0; 0x8000].into_boxed_slice();
-        let chr = Vec::new().into_boxed_slice();
+        let prg = vec![0; 0x8000].into();
+        let chr = Vec::new().into();
         let mut cart = Mapper3::new(header, prg, chr);
 
         cart.ppu_write(0x0010, 0x77);
