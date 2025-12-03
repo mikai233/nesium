@@ -15,9 +15,9 @@
 //!   are explicit in `clock()`.
 //!
 //! **Why some code looks strange**
-//! - The odd-frame skip on prerender: real hardware drops cycle 0 on odd
-//!   frames when rendering is enabled. We model that by jumping `cycle` from 0
-//!   to 1 and bailing early.
+//! - Odd frames are one PPU tick shorter when rendering is enabled: the PPU
+//!   skips the first idle tick on the first visible scanline by jumping from
+//!   the last prerender dot directly to scanline 0, cycle 1 (per NESdev).
 //! - The PPU data bus floats when undriven; we mirror that with an open-bus
 //!   latch (with decay) so untouched register reads see the last driven value.
 //! - OAM reads during rendering: hardware doesn’t expose live primary OAM then;
@@ -488,36 +488,22 @@ impl Ppu {
         }
 
         if self.pending_vram_increment {
-            self.registers
-                .vram
-                .v
-                .increment(self.pending_vram_increment_step);
+            // Mesen2 / hardware: the simple "+1 or +32" VRAM increment after
+            // a $2007 access only applies when rendering is disabled or during
+            // VBlank/post-render scanlines. While rendering is active on the
+            // prerender/visible scanlines, VRAM address progression is driven
+            // by the scroll increment logic (coarse/fine X/Y) instead.
+            if self.scanline >= 240 || !rendering_enabled {
+                self.registers
+                    .vram
+                    .v
+                    .increment(self.pending_vram_increment_step);
+            }
             self.pending_vram_increment = false;
         }
 
         // NOTE: We clear VBlank and drop NMI output at dot 1 of prerender.
         // Dot 0 should NOT clear VBlank on normal frames (avoids early NMI fall).
-        // For odd-frame skip, we clear explicitly in the skip path below.
-
-        // Odd-frame cycle skip: on prerender line, when rendering is enabled,
-        // the PPU omits cycle 0 on odd frames.
-        if self.scanline == -1 && self.cycle == 0 && self.odd_frame && rendering_enabled {
-            // Odd-frame prerender skip: hardware still clears VBlank/flags at dot 1.
-            // Since we skip dot 1 processing, clear here.
-            self.registers.status.remove(Status::VERTICAL_BLANK);
-            self.registers
-                .status
-                .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
-            self.sprite0_hit_pos = None;
-            self.nmi_output = false;
-            self.nmi_pending = false;
-            self.prevent_vblank_flag = false;
-            self.cycle = 1;
-            // Skip the rest of match processing for this dot.
-            self.update_nmi_output(prev_nmi_output);
-            self.advance_cycle();
-            return;
-        }
 
         // Load sprite shifters for the new scanline before rendering begins.
         if self.cycle == 1 && (0..=239).contains(&self.scanline) {
@@ -751,6 +737,24 @@ impl Ppu {
 
     /// Advances to the next dot / scanline / frame.
     fn advance_cycle(&mut self) {
+        // NESdev / 2C02: with rendering enabled, each odd frame is one PPU
+        // clock shorter. This is implemented by skipping the first idle tick
+        // on the first visible scanline, i.e. by jumping directly from the
+        // last prerender dot to scanline 0, cycle 1. See:
+        // https://www.nesdev.org/wiki/PPU_frame_timing
+        if self.scanline == -1
+            && self.cycle == CYCLES_PER_SCANLINE - 1
+            && self.odd_frame
+            && self.registers.mask.rendering_enabled()
+        {
+            // We just finished the last dot of the prerender scanline on an
+            // odd frame with rendering enabled. Skip scanline 0, cycle 0 and
+            // start the first visible scanline at cycle 1.
+            self.scanline = 0;
+            self.cycle = 1;
+            return;
+        }
+
         self.cycle += 1;
         if self.cycle >= CYCLES_PER_SCANLINE {
             self.cycle = 0;
