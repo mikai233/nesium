@@ -6,6 +6,7 @@ use std::{
 mod controller;
 mod dialogs;
 mod fonts;
+mod gamepad;
 mod main_view;
 mod menu;
 mod viewports;
@@ -20,7 +21,11 @@ use nesium_core::{
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
 };
 
-use self::{controller::ControllerInput, fonts::install_cjk_font};
+use self::{
+    controller::{ControllerDevice, ControllerInput, InputPreset},
+    fonts::install_cjk_font,
+    gamepad::GamepadManager,
+};
 
 const TARGET_FRAME: Duration = Duration::from_nanos(16_683_000); // ~59.94 Hz
 
@@ -47,7 +52,11 @@ pub struct NesiumApp {
     record_buffer: Vec<f32>,
     record_sample_rate: u32,
     record_path: Option<PathBuf>,
-    controller: ControllerInput,
+    controllers: [ControllerInput; 4],
+    controller_devices: [ControllerDevice; 4],
+    controller_presets: [InputPreset; 4],
+    active_input_port: usize,
+    gamepads: Option<GamepadManager>,
     next_frame_deadline: Option<Instant>,
 }
 
@@ -89,7 +98,16 @@ impl NesiumApp {
             record_buffer: Vec::new(),
             record_sample_rate: sample_rate,
             record_path: None,
-            controller: ControllerInput::default(),
+            controllers: std::array::from_fn(|_| ControllerInput::new_with_defaults()),
+            controller_devices: [
+                ControllerDevice::Keyboard,
+                ControllerDevice::Keyboard,
+                ControllerDevice::Disabled,
+                ControllerDevice::Disabled,
+            ],
+            controller_presets: [InputPreset::NesStandard; 4],
+            active_input_port: 0,
+            gamepads: GamepadManager::new(),
             next_frame_deadline: None,
         };
 
@@ -154,7 +172,9 @@ impl NesiumApp {
         self.nes.reset();
         self.paused = false;
         self.status_line = Some("已重置主机".to_string());
-        self.controller.release_all(&mut self.nes);
+        for ctrl in &mut self.controllers {
+            ctrl.release_all(&mut self.nes);
+        }
         if let Some(audio) = &self.audio {
             audio.clear();
         }
@@ -167,7 +187,9 @@ impl NesiumApp {
         self.nes.eject_cartridge();
         self.rom_path = None;
         self.status_line = Some("已弹出卡带".to_string());
-        self.controller.release_all(&mut self.nes);
+        for ctrl in &mut self.controllers {
+            ctrl.release_all(&mut self.nes);
+        }
         if let Some(audio) = &self.audio {
             audio.clear();
         }
@@ -201,9 +223,30 @@ impl eframe::App for NesiumApp {
         // Drive UI every loop; emulator step pacing is handled below.
         ctx.request_repaint();
 
-        let keyboard_blocked = ctx.wants_keyboard_input();
-        self.controller
-            .sync_from_input(ctx, &mut self.nes, keyboard_blocked);
+        // Keep gamepad state fresh.
+        if let Some(manager) = &mut self.gamepads {
+            manager.poll();
+        }
+
+        let keyboard_busy = ctx.wants_keyboard_input();
+        for (port, ctrl) in self.controllers.iter_mut().enumerate() {
+            match self.controller_devices[port] {
+                ControllerDevice::Keyboard => {
+                    let blocked = keyboard_busy;
+                    ctrl.sync_from_input(ctx, &mut self.nes, port, blocked);
+                }
+                ControllerDevice::Gamepad(id) => {
+                    if let Some(manager) = &self.gamepads {
+                        ctrl.sync_from_gamepad(&mut self.nes, port, manager, id);
+                    } else {
+                        ctrl.release_all(&mut self.nes);
+                    }
+                }
+                ControllerDevice::Disabled => {
+                    ctrl.release_all(&mut self.nes);
+                }
+            }
+        }
 
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         if let Some(path) = dropped.iter().filter_map(|f| f.path.clone()).last() {

@@ -1,8 +1,12 @@
 use eframe::egui;
 use egui::{Color32, Context as EguiContext, Vec2, ViewportBuilder, ViewportId};
+use gilrs::Button as GilrsButton;
 use nesium_core::controller::Button;
 
-use super::{NesiumApp, controller};
+use super::{
+    NesiumApp, controller,
+    controller::{ControllerDevice, InputPreset},
+};
 
 impl NesiumApp {
     pub(super) fn show_viewports(&mut self, ctx: &EguiContext) {
@@ -76,38 +80,295 @@ impl NesiumApp {
         if self.show_input {
             let builder = ViewportBuilder::default()
                 .with_title("Input")
-                .with_inner_size([260.0, 220.0]);
+                .with_inner_size([420.0, 300.0]);
             ctx.show_viewport_immediate(ViewportId::from_hash_of("input"), builder, |ctx, _| {
                 if ctx.input(|i| i.viewport().close_requested()) {
                     self.show_input = false;
                     return;
                 }
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.heading("输入状态");
-                    ui.label("键盘 -> 手柄 1");
-                    ui.separator();
-                    for button in [
-                        Button::Up,
-                        Button::Down,
-                        Button::Left,
-                        Button::Right,
-                        Button::A,
-                        Button::B,
-                        Button::Select,
-                        Button::Start,
-                    ] {
-                        let active = self.controller.is_pressed(button);
-                        let label = format!(
-                            "{:>6}: {}",
-                            controller::format_button_name(button),
-                            if active { "ON" } else { "off" }
-                        );
-                        if active {
-                            ui.colored_label(Color32::GREEN, label);
-                        } else {
-                            ui.label(label);
-                        }
-                    }
+                    ui.heading("输入配置");
+
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("控制器端口:");
+                                for port in 0..4 {
+                                    let label = format!("端口 {}", port + 1);
+                                    ui.selectable_value(&mut self.active_input_port, port, label);
+                                }
+                            });
+
+                            ui.separator();
+                            let port = self.active_input_port.min(3);
+
+                            ui.horizontal(|ui| {
+                                ui.label(format!("端口 {} 设备:", port + 1));
+                                let dev = &mut self.controller_devices[port];
+                                ui.selectable_value(dev, ControllerDevice::Keyboard, "键盘");
+                                if let Some(manager) = &self.gamepads {
+                                    let gamepads = manager.gamepads();
+                                    for (id, name) in &gamepads {
+                                        let label = format!("手柄: {}", name);
+                                        ui.selectable_value(
+                                            dev,
+                                            ControllerDevice::Gamepad(*id),
+                                            label,
+                                        );
+                                    }
+                                    if gamepads.is_empty() {
+                                        ui.label("无手柄连接");
+                                    }
+                                } else {
+                                    ui.label("手柄不可用");
+                                }
+                                ui.selectable_value(dev, ControllerDevice::Disabled, "禁用");
+                            });
+
+                            if port >= 2 {
+                                ui.colored_label(
+                                    Color32::DARK_GRAY,
+                                    "注意：端口 3 和 4 当前尚未接入 NES 核心，仅用于预配置映射。",
+                                );
+                            }
+
+                            ui.separator();
+                            ui.horizontal(|ui| {
+                                ui.label("预设:");
+                                let preset = &mut self.controller_presets[port];
+                                egui::ComboBox::from_id_salt(format!("input_preset_combo_{port}"))
+                                    .selected_text(match preset {
+                                        InputPreset::NesStandard => "NES 标准手柄",
+                                        InputPreset::FightStick => "Fight Stick",
+                                        InputPreset::ArcadeLayout => "Arcade Layout",
+                                    })
+                                    .show_ui(ui, |ui| {
+                                        if ui
+                                            .selectable_value(
+                                                preset,
+                                                InputPreset::NesStandard,
+                                                "NES 标准手柄",
+                                            )
+                                            .clicked()
+                                        {
+                                            self.controllers[port]
+                                                .apply_preset(InputPreset::NesStandard);
+                                        }
+                                        if ui
+                                            .selectable_value(
+                                                preset,
+                                                InputPreset::FightStick,
+                                                "Fight Stick",
+                                            )
+                                            .clicked()
+                                        {
+                                            self.controllers[port]
+                                                .apply_preset(InputPreset::FightStick);
+                                        }
+                                        if ui
+                                            .selectable_value(
+                                                preset,
+                                                InputPreset::ArcadeLayout,
+                                                "Arcade Layout",
+                                            )
+                                            .clicked()
+                                        {
+                                            self.controllers[port]
+                                                .apply_preset(InputPreset::ArcadeLayout);
+                                        }
+                                    });
+                            });
+
+                            ui.separator();
+                            ui.label("键盘映射 → NES 手柄");
+                            ui.small("点击“绑定”后按一个键，Esc 清除绑定；右下角“恢复默认”可还原出厂配置。");
+
+                            ui.separator();
+                            egui::Grid::new("input_mapping_grid")
+                                .num_columns(4)
+                                .spacing([12.0, 4.0])
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    ui.strong("类别");
+                                    ui.strong("按钮");
+                                    ui.strong("当前键位");
+                                    ui.strong("操作");
+                                    ui.end_row();
+
+                                    let mapping_rows: &[(&str, Button)] = &[
+                                        ("方向", Button::Up),
+                                        ("方向", Button::Down),
+                                        ("方向", Button::Left),
+                                        ("方向", Button::Right),
+                                        ("动作", Button::A),
+                                        ("动作", Button::B),
+                                        ("系统", Button::Select),
+                                        ("系统", Button::Start),
+                                    ];
+
+                                    for (category, button) in mapping_rows {
+                                        let name = controller::format_button_name(*button);
+                                        let ctrl = &mut self.controllers[port];
+                                        let bound = ctrl.binding_for(*button);
+                                        let is_capturing =
+                                            ctrl.capture_target() == Some(*button);
+
+                                        ui.label(*category);
+                                        ui.label(name);
+
+                                        if is_capturing {
+                                            ui.colored_label(
+                                                Color32::LIGHT_YELLOW,
+                                                "按任意键...",
+                                            );
+                                        } else if let Some(key) = bound {
+                                            ui.monospace(format!("{key:?}"));
+                                        } else {
+                                            ui.colored_label(
+                                                Color32::DARK_GRAY,
+                                                "未绑定",
+                                            );
+                                        }
+
+                                        let button_label =
+                                            if is_capturing { "取消" } else { "绑定" };
+                                        if ui.button(button_label).clicked() {
+                                            if is_capturing {
+                                                ctrl.clear_capture();
+                                            } else {
+                                                ctrl.begin_capture(*button);
+                                            }
+                                        }
+
+                                        ui.end_row();
+                                    }
+                                });
+
+                            ui.horizontal(|ui| {
+                                ui.label("当前按下的按钮:");
+                                ui.horizontal_wrapped(|ui| {
+                                    let ctrl = &self.controllers[port];
+                                    for button in [
+                                        Button::Up,
+                                        Button::Down,
+                                        Button::Left,
+                                        Button::Right,
+                                        Button::A,
+                                        Button::B,
+                                        Button::Select,
+                                        Button::Start,
+                                    ] {
+                                        if ctrl.is_pressed(button) {
+                                            ui.colored_label(
+                                                Color32::LIGHT_GREEN,
+                                                controller::format_button_name(button),
+                                            );
+                                        }
+                                    }
+                                });
+                            });
+
+                            ui.separator();
+                            ui.collapsing("手柄映射", |ui| {
+                                ui.label("NES 按钮 → 手柄按键");
+                                let all_buttons: &[GilrsButton] = &[
+                                    GilrsButton::South,
+                                    GilrsButton::East,
+                                    GilrsButton::West,
+                                    GilrsButton::North,
+                                    GilrsButton::LeftTrigger,
+                                    GilrsButton::RightTrigger,
+                                    GilrsButton::LeftTrigger2,
+                                    GilrsButton::RightTrigger2,
+                                    GilrsButton::DPadUp,
+                                    GilrsButton::DPadDown,
+                                    GilrsButton::DPadLeft,
+                                    GilrsButton::DPadRight,
+                                    GilrsButton::Start,
+                                    GilrsButton::Select,
+                                ];
+
+                                egui::Grid::new("gamepad_mapping_grid")
+                                    .num_columns(3)
+                                    .spacing([12.0, 4.0])
+                                    .striped(true)
+                                    .show(ui, |ui| {
+                                        ui.strong("类别");
+                                        ui.strong("按钮");
+                                        ui.strong("手柄按键");
+                                        ui.end_row();
+
+                                        let mapping_rows: &[(&str, Button)] = &[
+                                            ("方向", Button::Up),
+                                            ("方向", Button::Down),
+                                            ("方向", Button::Left),
+                                            ("方向", Button::Right),
+                                            ("动作", Button::A),
+                                            ("动作", Button::B),
+                                            ("系统", Button::Select),
+                                            ("系统", Button::Start),
+                                        ];
+
+                                        for (category, button) in mapping_rows {
+                                            let name = controller::format_button_name(*button);
+                                            let ctrl = &mut self.controllers[port];
+                                            let mut binding =
+                                                ctrl.gamepad_binding_for(*button);
+
+                                            ui.label(*category);
+                                            ui.label(name);
+
+                                            let current_label = binding
+                                                .map(|b| format!("{b:?}"))
+                                                .unwrap_or_else(|| "未绑定".to_string());
+
+                                            egui::ComboBox::from_id_salt(format!(
+                                                "gp_map_{port}_{name}"
+                                            ))
+                                            .selected_text(current_label)
+                                            .show_ui(ui, |ui| {
+                                                if ui
+                                                    .selectable_label(
+                                                        binding.is_none(),
+                                                        "未绑定",
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    binding = None;
+                                                }
+                                                for btn in all_buttons {
+                                                    let label = format!("{btn:?}");
+                                                    let selected =
+                                                        binding == Some(*btn);
+                                                    if ui
+                                                        .selectable_label(
+                                                            selected,
+                                                            label,
+                                                        )
+                                                        .clicked()
+                                                    {
+                                                        binding = Some(*btn);
+                                                    }
+                                                }
+                                            });
+
+                                            ctrl.set_gamepad_binding(*button, binding);
+                                            ui.end_row();
+                                        }
+                                    });
+
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if ui.button("恢复默认").clicked() {
+                                            self.controllers[port] =
+                                                controller::ControllerInput::new_with_defaults();
+                                        }
+                                    },
+                                );
+                            });
+                        });
                 });
             });
         }

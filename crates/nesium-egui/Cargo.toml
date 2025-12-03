@@ -8,6 +8,7 @@ license.workspace = true
 nesium-core.path = "../nesium-core"
 nesium-audio.path = "../nesium-audio"
 eframe.workspace = true
+gilrs.workspace = true
 anyhow.workspace = true
 rfd.workspace = true
 fontdb.workspace = true
