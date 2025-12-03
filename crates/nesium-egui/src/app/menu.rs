@@ -151,6 +151,14 @@ impl NesiumApp {
                     ui.label(self.t(TextId::MenuHelpLine1));
                     ui.label(self.t(TextId::MenuHelpLine2));
                 });
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if self.has_rom() && !self.paused && self.fps > 0.0 {
+                        ui.label(format!("FPS: {:.1}", self.fps));
+                    } else {
+                        ui.label("FPS: --");
+                    }
+                });
             });
         });
 

@@ -45,6 +45,9 @@ pub struct NesiumApp {
     paused: bool,
     status_line: Option<String>,
     i18n: I18n,
+    fps: f32,
+    fps_accum_frames: u32,
+    fps_last_update: Instant,
     show_debugger: bool,
     show_tools: bool,
     show_palette: bool,
@@ -92,6 +95,9 @@ impl NesiumApp {
             paused: false,
             status_line,
             i18n: I18n::new(Language::ChineseSimplified),
+            fps: 0.0,
+            fps_accum_frames: 0,
+            fps_last_update: Instant::now(),
             show_debugger: false,
             show_tools: false,
             show_palette: false,
@@ -167,6 +173,9 @@ impl NesiumApp {
 
         self.rom_path = Some(path.to_path_buf());
         self.paused = false;
+        self.fps = 0.0;
+        self.fps_accum_frames = 0;
+        self.fps_last_update = Instant::now();
         self.status_line = Some(match self.language() {
             Language::English => format!("Loaded {}", path.display()),
             Language::ChineseSimplified => format!("已加载 {}", path.display()),
@@ -205,6 +214,8 @@ impl NesiumApp {
         }
         // When ejecting, reset the frame scheduler as well.
         self.next_frame_deadline = Some(Instant::now() + TARGET_FRAME);
+        self.fps = 0.0;
+        self.fps_accum_frames = 0;
     }
 
     fn update_frame_texture(&mut self, ctx: &EguiContext) {
@@ -281,14 +292,31 @@ impl eframe::App for NesiumApp {
             .next_frame_deadline
             .unwrap_or_else(|| now + TARGET_FRAME);
         let mut run_count = 0u32;
+        let mut frames_run = 0u32;
         while now >= deadline && run_count < 3 {
             if self.has_rom() && !self.paused {
                 self.run_frame_with_audio();
+                frames_run += 1;
             }
             deadline += TARGET_FRAME;
             run_count += 1;
         }
         self.next_frame_deadline = Some(deadline);
+
+        // Update FPS based on how many emulation frames we actually ran.
+        if frames_run > 0 {
+            self.fps_accum_frames = self.fps_accum_frames.saturating_add(frames_run);
+        }
+        let elapsed = self.fps_last_update.elapsed();
+        if elapsed >= Duration::from_secs(1) {
+            if elapsed.as_secs_f32() > 0.0 {
+                self.fps = self.fps_accum_frames as f32 / elapsed.as_secs_f32();
+            } else {
+                self.fps = 0.0;
+            }
+            self.fps_accum_frames = 0;
+            self.fps_last_update = now;
+        }
 
         if let Some(next) = self.next_frame_deadline {
             let wait = next.saturating_duration_since(Instant::now());
