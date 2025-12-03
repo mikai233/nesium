@@ -57,12 +57,7 @@ type Mapper85PrgBanks = ByteBlock<3>;
 type Mapper85ChrBanks = ByteBlock<8>;
 
 impl Mapper85 {
-    pub fn new(
-        header: Header,
-        prg_rom: PrgRom,
-        chr_rom: ChrRom,
-        trainer: TrainerBytes,
-    ) -> Self {
+    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         let chr = select_chr_storage(&header, chr_rom);

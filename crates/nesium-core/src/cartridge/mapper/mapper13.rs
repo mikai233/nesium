@@ -48,12 +48,7 @@ pub struct Mapper13 {
 }
 
 impl Mapper13 {
-    pub fn new(
-        header: Header,
-        prg_rom: PrgRom,
-        _chr_rom: ChrRom,
-        trainer: TrainerBytes,
-    ) -> Self {
+    pub fn new(header: Header, prg_rom: PrgRom, _chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         // Always allocate 16 KiB of CHR-RAM as per the CPROM spec.

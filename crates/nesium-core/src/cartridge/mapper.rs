@@ -70,8 +70,7 @@ pub use provider::Provider;
 
 use crate::{
     cartridge::{
-        TRAINER_SIZE,
-        TrainerBytes,
+        TRAINER_SIZE, TrainerBytes,
         header::{Header, Mirroring, RomFormat},
     },
     memory::cpu as cpu_mem,

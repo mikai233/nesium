@@ -23,12 +23,7 @@ pub struct Mapper3 {
 }
 
 impl Mapper3 {
-    pub fn new(
-        header: Header,
-        prg_rom: PrgRom,
-        chr_rom: ChrRom,
-        trainer: TrainerBytes,
-    ) -> Self {
+    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         let chr_bank_count = if chr_rom.is_empty() {
@@ -249,7 +244,12 @@ mod tests {
             chr[start..end].fill(bank as u8);
         }
 
-        Mapper3::new(header(prg.len(), chr.len(), 0), prg.into(), chr.into(), None)
+        Mapper3::new(
+            header(prg.len(), chr.len(), 0),
+            prg.into(),
+            chr.into(),
+            None,
+        )
     }
 
     #[test]

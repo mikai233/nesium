@@ -22,12 +22,7 @@ pub struct Mapper7 {
 }
 
 impl Mapper7 {
-    pub fn new(
-        header: Header,
-        prg_rom: PrgRom,
-        chr_rom: ChrRom,
-        trainer: TrainerBytes,
-    ) -> Self {
+    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         let bank_count = (prg_rom.len() / PRG_BANK_SIZE).max(1);

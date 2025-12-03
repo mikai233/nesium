@@ -89,12 +89,7 @@ pub struct Mapper6 {
 }
 
 impl Mapper6 {
-    pub fn new(
-        header: Header,
-        prg_rom: PrgRom,
-        _chr_rom: ChrRom,
-        trainer: TrainerBytes,
-    ) -> Self {
+    pub fn new(header: Header, prg_rom: PrgRom, _chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         // Allocate PRG-RAM using the shared helper so NES 2.0 save/work RAM
         // sizing is respected and any trainer bytes are copied in.
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);

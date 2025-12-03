@@ -10,9 +10,7 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{
-            PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram_with_trainer,
-        },
+        mapper::{PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram_with_trainer},
     },
     memory::cpu as cpu_mem,
 };
@@ -61,12 +59,7 @@ pub struct Mapper119 {
 type Mapper119BankRegs = ByteBlock<8>;
 
 impl Mapper119 {
-    pub fn new(
-        header: Header,
-        prg_rom: PrgRom,
-        chr_rom: ChrRom,
-        trainer: TrainerBytes,
-    ) -> Self {
+    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         let chr_ram = vec![0u8; CHR_RAM_SIZE].into_boxed_slice();

@@ -7,11 +7,10 @@
 //! - let board-specific crates implement those traits without modifying
 //!   the emulator internals.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use nesium_core::{
-    Nes,
-    cartridge,
-    ppu::{buffer::ColorFormat, SCREEN_HEIGHT, SCREEN_WIDTH},
+    Nes, cartridge,
+    ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
 };
 
 /// Abstraction for a frame output backend (LCD, framebuffer, etc.).
