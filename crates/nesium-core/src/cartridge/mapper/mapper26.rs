@@ -4,6 +4,16 @@
 //! following Mesen2's layout. VRC6's expansion audio registers are accepted
 //! but do not currently generate audio output; this can be extended via the
 //! [`ExpansionAudio`] trait in the future.
+//!
+//! | Area | Address range       | Behaviour                                          | IRQ/Audio                         |
+//! |------|---------------------|----------------------------------------------------|-----------------------------------|
+//! | CPU  | `$6000-$7FFF`       | Optional PRG-RAM (enabled via banking_mode bit 7)  | None                              |
+//! | CPU  | `$8000-$BFFF`       | 16 KiB switchable PRG-ROM window (2×8 KiB)         | None                              |
+//! | CPU  | `$C000-$DFFF`       | 8 KiB switchable PRG-ROM window                    | None                              |
+//! | CPU  | `$E000-$FFFF`       | 8 KiB fixed PRG-ROM window (last)                  | None                              |
+//! | CPU  | `$B003/$F000-$F002` | Banking/mirroring/IRQ control registers           | VRC6 IRQ (audio regs stubbed)     |
+//! | PPU  | `$0000-$1FFF`       | Eight 1 KiB CHR banks with mode‑dependent mapping  | None                              |
+//! | PPU  | `$2000-$3EFF`       | Mirroring from VRC6 control (`banking_mode`)       | None                              |
 
 use std::borrow::Cow;
 
@@ -22,6 +32,59 @@ use crate::mem_block::ByteBlock;
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
 const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+
+/// CPU `$8000-$FFFF`: VRC6b register I/O and PRG banking window. Writes in
+/// this range, after address translation, select PRG/CHR/IRQ/mirroring state.
+const VRC6_IO_WINDOW_START: u16 = 0x8000;
+const VRC6_IO_WINDOW_END: u16 = 0xFFFF;
+
+/// CPU-visible VRC6b register set after address translation.
+///
+/// VRC6b uses a compact decoded address space (after `translate_address`)
+/// where only a handful of masked values represent actual registers. This
+/// enum mirrors that layout to make the CPU-side logic easier to follow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Vrc6CpuRegister {
+    /// `$8000-$8003` – PRG bank for `$8000-$BFFF` (2×8 KiB window).
+    PrgBank8000_2x,
+    /// `$9000-$B002` – expansion audio registers (currently ignored).
+    ExpansionAudio,
+    /// `$B003` – banking/mirroring/CHR mode/PRG-RAM control.
+    Control,
+    /// `$C000-$C003` – PRG bank for `$C000-$DFFF`.
+    PrgBankC000,
+    /// `$D000-$D003` – CHR bank registers 0-3.
+    ChrBankLow,
+    /// `$E000-$E003` – CHR bank registers 4-7.
+    ChrBankHigh,
+    /// `$F000` – IRQ reload value.
+    IrqReload,
+    /// `$F001` – IRQ control (enable/mode).
+    IrqControl,
+    /// `$F002` – IRQ acknowledge / re-enable.
+    IrqAck,
+}
+
+impl Vrc6CpuRegister {
+    fn from_addr(addr: u16) -> Option<Self> {
+        use Vrc6CpuRegister::*;
+
+        match addr & 0xF003 {
+            0x8000 | 0x8001 | 0x8002 | 0x8003 => Some(PrgBank8000_2x),
+            0x9000 | 0x9001 | 0x9002 | 0x9003 => Some(ExpansionAudio),
+            0xA000 | 0xA001 | 0xA002 | 0xA003 => Some(ExpansionAudio),
+            0xB000 | 0xB001 | 0xB002 => Some(ExpansionAudio),
+            0xB003 => Some(Control),
+            0xC000 | 0xC001 | 0xC002 | 0xC003 => Some(PrgBankC000),
+            0xD000 | 0xD001 | 0xD002 | 0xD003 => Some(ChrBankLow),
+            0xE000 | 0xE001 | 0xE002 | 0xE003 => Some(ChrBankHigh),
+            0xF000 => Some(IrqReload),
+            0xF001 => Some(IrqControl),
+            0xF002 => Some(IrqAck),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Mapper26 {
@@ -203,48 +266,51 @@ impl Mapper26 {
     }
 
     fn write_register(&mut self, addr: u16, value: u8) {
-        match addr & 0xF003 {
-            0x8000 | 0x8001 | 0x8002 | 0x8003 => {
-                self.update_prg_bank_8000(value);
-            }
+        if let Some(reg) = Vrc6CpuRegister::from_addr(addr) {
+            use Vrc6CpuRegister::*;
 
-            // Expansion audio registers ($9000-$B002) are accepted but ignored for now.
-            0x9000 | 0x9001 | 0x9002 | 0x9003 => {}
-            0xA000 | 0xA001 | 0xA002 | 0xA003 => {}
-            0xB000 | 0xB001 | 0xB002 => {}
-
-            0xB003 => {
-                self.banking_mode = value;
-                self.update_mirroring();
-            }
-
-            0xC000 | 0xC001 | 0xC002 | 0xC003 => self.update_prg_bank_c000(value),
-
-            0xD000 | 0xD001 | 0xD002 | 0xD003 => {
-                let idx = (addr & 0x0003) as usize;
-                self.chr_regs[idx] = value;
-            }
-            0xE000 | 0xE001 | 0xE002 | 0xE003 => {
-                let idx = 4 + (addr & 0x0003) as usize;
-                self.chr_regs[idx] = value;
-            }
-
-            0xF000 => self.irq_reload = value,
-            0xF001 => {
-                self.irq_enabled_after_ack = (value & 0x01) != 0;
-                self.irq_enabled = (value & 0x02) != 0;
-                self.irq_cycle_mode = (value & 0x04) != 0;
-                if self.irq_enabled {
-                    self.irq_counter = self.irq_reload;
-                    self.irq_prescaler = 341;
+            match reg {
+                PrgBank8000_2x => {
+                    self.update_prg_bank_8000(value);
+                }
+                ExpansionAudio => {
+                    // Expansion audio registers ($9000-$B002) are accepted but
+                    // ignored for now; integration with an ExpansionAudio
+                    // implementation can extend this in the future.
+                }
+                Control => {
+                    self.banking_mode = value;
+                    self.update_mirroring();
+                }
+                PrgBankC000 => {
+                    self.update_prg_bank_c000(value);
+                }
+                ChrBankLow => {
+                    let idx = (addr & 0x0003) as usize;
+                    self.chr_regs[idx] = value;
+                }
+                ChrBankHigh => {
+                    let idx = 4 + (addr & 0x0003) as usize;
+                    self.chr_regs[idx] = value;
+                }
+                IrqReload => {
+                    self.irq_reload = value;
+                }
+                IrqControl => {
+                    self.irq_enabled_after_ack = (value & 0x01) != 0;
+                    self.irq_enabled = (value & 0x02) != 0;
+                    self.irq_cycle_mode = (value & 0x04) != 0;
+                    if self.irq_enabled {
+                        self.irq_counter = self.irq_reload;
+                        self.irq_prescaler = 341;
+                        self.irq_pending = false;
+                    }
+                }
+                IrqAck => {
+                    self.irq_enabled = self.irq_enabled_after_ack;
                     self.irq_pending = false;
                 }
             }
-            0xF002 => {
-                self.irq_enabled = self.irq_enabled_after_ack;
-                self.irq_pending = false;
-            }
-            _ => {}
         }
     }
 
@@ -305,7 +371,7 @@ impl Mapper for Mapper26 {
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            0x8000..=0xFFFF => {
+            VRC6_IO_WINDOW_START..=VRC6_IO_WINDOW_END => {
                 let translated = self.translate_address(addr);
                 self.write_register(translated, data);
             }

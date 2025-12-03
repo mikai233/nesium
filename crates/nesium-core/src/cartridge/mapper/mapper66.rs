@@ -7,6 +7,13 @@
 //!
 //! Bus conflicts on PRG writes are ignored here, matching the approach in
 //! Mesen2's `GxRom` implementation.
+//!
+//! | Area | Address range     | Behaviour                                      | IRQ/Audio |
+//! |------|-------------------|------------------------------------------------|-----------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                               | None      |
+//! | CPU  | `$8000-$FFFF`     | 32 KiB PRG bank + 8 KiB CHR bank latch         | None      |
+//! | PPU  | `$0000-$1FFF`     | 8 KiB CHR ROM/RAM, bank selected by latch      | None      |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from header                          | None      |
 
 use std::borrow::Cow;
 

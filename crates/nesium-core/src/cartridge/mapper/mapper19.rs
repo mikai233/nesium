@@ -19,6 +19,16 @@
 //!
 //! Nametable‑as‑CHR configurations and some of the more exotic pin behaviours
 //! are currently omitted; most commercial games should still behave correctly.
+//!
+//! | Area | Address range     | Behaviour                                          | IRQ/Audio      |
+//! |------|-------------------|----------------------------------------------------|----------------|
+//! | CPU  | `$6000-$7FFF`     | Optional 8 KiB PRG-RAM                             | None           |
+//! | CPU  | `$8000-$DFFF`     | Three switchable 8 KiB PRG-ROM banks               | None           |
+//! | CPU  | `$E000-$FFFF`     | 8 KiB PRG-ROM bank (typically fixed to last bank)  | None           |
+//! | CPU  | `$4800-$4FFF`     | Namco 163 audio RAM ports                          | Namco163 audio |
+//! | CPU  | `$5000/$5800`     | 15-bit IRQ counter low/high access                 | Namco163 IRQ   |
+//! | CPU  | `$8000-$BFFF`     | Eight 1 KiB CHR bank registers for `$0000-$1FFF`   | None           |
+//! | PPU  | `$0000-$1FFF`     | CHR ROM/RAM in 1 KiB banks                         | None           |
 
 use std::borrow::Cow;
 
@@ -38,6 +48,99 @@ use crate::mem_block::{ByteBlock, MemBlock};
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
 const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+
+/// CPU `$8000-$9FFF/$A000-$BFFF/$C000-$DFFF/$E000-$FFFF`: four 8 KiB PRG windows.
+const NAMCO163_PRG_SLOT0_START: u16 = 0x8000;
+const NAMCO163_PRG_SLOT0_END: u16 = 0x9FFF;
+const NAMCO163_PRG_SLOT1_START: u16 = 0xA000;
+const NAMCO163_PRG_SLOT1_END: u16 = 0xBFFF;
+const NAMCO163_PRG_SLOT2_START: u16 = 0xC000;
+const NAMCO163_PRG_SLOT2_END: u16 = 0xDFFF;
+const NAMCO163_PRG_FIXED_SLOT_START: u16 = 0xE000;
+const NAMCO163_PRG_FIXED_SLOT_END: u16 = 0xFFFF;
+
+/// Namco 163 audio register decode mask and ports.
+/// - `$4800-$4FFF`: internal wave RAM data port.
+/// - `$E000-$E7FF`: audio control (also overlaps PRG select).
+/// - `$F800-$FFFF`: audio RAM address/auto-increment port.
+const NAMCO163_AUDIO_ADDR_MASK: u16 = 0xF800;
+const NAMCO163_AUDIO_RAM_PORT_BASE: u16 = 0x4800;
+const NAMCO163_AUDIO_CTRL_PORT_BASE: u16 = 0xE000;
+const NAMCO163_AUDIO_ADDR_PORT_BASE: u16 = 0xF800;
+
+/// IRQ counter access windows:
+/// - `$5000-$57FF`: IRQ low byte.
+/// - `$5800-$5FFF`: IRQ high byte / enable.
+const NAMCO163_IRQ_LOW_START: u16 = 0x5000;
+const NAMCO163_IRQ_LOW_END: u16 = 0x57FF;
+const NAMCO163_IRQ_HIGH_START: u16 = 0x5800;
+const NAMCO163_IRQ_HIGH_END: u16 = 0x5FFF;
+
+/// CHR and PRG banking registers:
+/// - `$8000-$BFFF`: 1 KiB CHR banks for `$0000-$1FFF` (grouped into 0x800 ranges).
+/// - `$E000-$E7FF`: PRG bank for `$8000-$9FFF`.
+/// - `$E800-$EFFF`: PRG bank for `$A000-$BFFF`.
+/// - `$F000-$F7FF`: PRG bank for `$C000-$DFFF`.
+/// - `$F800-$FFFF`: write-protect / audio RAM address port.
+const NAMCO163_CHR_BANK_WRITE_START: u16 = 0x8000;
+const NAMCO163_CHR_BANK_WRITE_END: u16 = 0xBFFF;
+const NAMCO163_PRG_SELECT_8000_START: u16 = 0xE000;
+const NAMCO163_PRG_SELECT_8000_END: u16 = 0xE7FF;
+const NAMCO163_PRG_SELECT_A000_START: u16 = 0xE800;
+const NAMCO163_PRG_SELECT_A000_END: u16 = 0xEFFF;
+const NAMCO163_PRG_SELECT_C000_START: u16 = 0xF000;
+const NAMCO163_PRG_SELECT_C000_END: u16 = 0xF7FF;
+const NAMCO163_AUDIO_ADDR_PORT_START: u16 = 0xF800;
+const NAMCO163_AUDIO_ADDR_PORT_END: u16 = 0xFFFF;
+
+/// CPU-visible Namco 163 mapper register windows.
+///
+/// These variants describe the coarse register regions documented on Nesdev:
+/// most are mirrored over small ranges, but they behave as a single logical
+/// register from the CPU's point of view.
+#[repr(u16)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Namco163CpuRegister {
+    /// `$4800-$4FFF` – audio wave RAM data port.
+    AudioRamData = NAMCO163_AUDIO_RAM_PORT_BASE,
+    /// `$5000-$57FF` – IRQ counter low byte.
+    IrqCounterLow = NAMCO163_IRQ_LOW_START,
+    /// `$5800-$5FFF` – IRQ counter high byte / enable.
+    IrqCounterHigh = NAMCO163_IRQ_HIGH_START,
+    /// `$8000-$BFFF` – CHR bank select windows for `$0000-$1FFF`.
+    ChrBankBase = NAMCO163_CHR_BANK_WRITE_START,
+    /// `$E000-$E7FF` – PRG bank for `$8000-$9FFF` (also carries audio control bits).
+    PrgSelect8000 = NAMCO163_PRG_SELECT_8000_START,
+    /// `$E800-$EFFF` – PRG bank for `$A000-$BFFF`.
+    PrgSelectA000 = NAMCO163_PRG_SELECT_A000_START,
+    /// `$F000-$F7FF` – PRG bank for `$C000-$DFFF`.
+    PrgSelectC000 = NAMCO163_PRG_SELECT_C000_START,
+    /// `$F800-$FFFF` – audio RAM address / auto-increment and write-protect.
+    AudioRamAddr = NAMCO163_AUDIO_ADDR_PORT_START,
+}
+
+impl Namco163CpuRegister {
+    /// Decode a raw CPU address into a logical Namco 163 mapper register.
+    ///
+    /// This intentionally groups mirrored ranges into a single variant so that
+    /// the rest of the mapper code works with register names instead of raw
+    /// magic addresses.
+    fn from_addr(addr: u16) -> Option<Self> {
+        use Namco163CpuRegister::*;
+
+        match addr {
+            NAMCO163_AUDIO_RAM_PORT_BASE..=0x4FFF => Some(AudioRamData),
+            NAMCO163_IRQ_LOW_START..=NAMCO163_IRQ_LOW_END => Some(IrqCounterLow),
+            NAMCO163_IRQ_HIGH_START..=NAMCO163_IRQ_HIGH_END => Some(IrqCounterHigh),
+            NAMCO163_CHR_BANK_WRITE_START..=NAMCO163_CHR_BANK_WRITE_END => Some(ChrBankBase),
+            NAMCO163_PRG_SELECT_8000_START..=NAMCO163_PRG_SELECT_8000_END => Some(PrgSelect8000),
+            NAMCO163_PRG_SELECT_A000_START..=NAMCO163_PRG_SELECT_A000_END => Some(PrgSelectA000),
+            NAMCO163_PRG_SELECT_C000_START..=NAMCO163_PRG_SELECT_C000_END => Some(PrgSelectC000),
+            NAMCO163_AUDIO_ADDR_PORT_START..=NAMCO163_AUDIO_ADDR_PORT_END => Some(AudioRamAddr),
+            _ => None,
+        }
+    }
+}
 
 /// Namco 163 audio state (adapted from Mesen2's `Namco163Audio`).
 #[derive(Debug, Clone)]
@@ -169,18 +272,18 @@ impl Namco163AudioState {
     }
 
     fn write_register(&mut self, addr: u16, value: u8) {
-        match addr & 0xF800 {
-            0x4800 => {
+        match addr & NAMCO163_AUDIO_ADDR_MASK {
+            NAMCO163_AUDIO_RAM_PORT_BASE => {
                 self.internal_ram[self.ram_position as usize] = value;
                 if self.auto_increment {
                     self.ram_position = (self.ram_position + 1) & 0x7F;
                 }
             }
-            0xE000 => {
+            NAMCO163_AUDIO_CTRL_PORT_BASE => {
                 // Bit 6 disables sound; other bits handled by PRG banking.
                 self.disabled = (value & 0x40) != 0;
             }
-            0xF800 => {
+            NAMCO163_AUDIO_ADDR_PORT_BASE => {
                 self.ram_position = value & 0x7F;
                 self.auto_increment = (value & 0x80) != 0;
             }
@@ -189,8 +292,8 @@ impl Namco163AudioState {
     }
 
     fn read_register(&mut self, addr: u16) -> u8 {
-        match addr & 0xF800 {
-            0x4800 => {
+        match addr & NAMCO163_AUDIO_ADDR_MASK {
+            NAMCO163_AUDIO_RAM_PORT_BASE => {
                 let val = self.internal_ram[self.ram_position as usize];
                 if self.auto_increment {
                     self.ram_position = (self.ram_position + 1) & 0x7F;
@@ -292,10 +395,18 @@ impl Mapper19 {
         }
 
         let bank = match addr {
-            0x8000..=0x9FFF => self.prg_bank_index(self.prg_bank_8000),
-            0xA000..=0xBFFF => self.prg_bank_index(self.prg_bank_a000),
-            0xC000..=0xDFFF => self.prg_bank_index(self.prg_bank_c000),
-            0xE000..=0xFFFF => self.last_prg_bank_index(),
+            NAMCO163_PRG_SLOT0_START..=NAMCO163_PRG_SLOT0_END => {
+                self.prg_bank_index(self.prg_bank_8000)
+            }
+            NAMCO163_PRG_SLOT1_START..=NAMCO163_PRG_SLOT1_END => {
+                self.prg_bank_index(self.prg_bank_a000)
+            }
+            NAMCO163_PRG_SLOT2_START..=NAMCO163_PRG_SLOT2_END => {
+                self.prg_bank_index(self.prg_bank_c000)
+            }
+            NAMCO163_PRG_FIXED_SLOT_START..=NAMCO163_PRG_FIXED_SLOT_END => {
+                self.last_prg_bank_index()
+            }
             _ => return 0,
         };
 
@@ -360,10 +471,10 @@ impl Mapper19 {
         // Nesdev: $8000-$BFFF grouped in 0x800 ranges select 1 KiB CHR banks
         // for $0000-$1FFF. We ignore the nametable‑as‑CHR feature for now and
         // treat all values as CHR ROM/RAM page indices.
-        if !(0x8000..=0xBFFF).contains(&addr) {
+        if !(NAMCO163_CHR_BANK_WRITE_START..=NAMCO163_CHR_BANK_WRITE_END).contains(&addr) {
             return;
         }
-        let index = ((addr - 0x8000) >> 11) as usize; // 0..7
+        let index = ((addr - NAMCO163_CHR_BANK_WRITE_START) >> 11) as usize; // 0..7
         if index < self.chr_banks.len() {
             self.chr_banks[index] = value;
         }
@@ -440,42 +551,64 @@ impl Mapper for Mapper19 {
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
-        let value = match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => return self.read_prg_ram(addr),
-            0x4800..=0x4FFF => self.read_audio_register(addr),
-            0x5000..=0x57FF => self.read_irq_low(),
-            0x5800..=0x5FFF => self.read_irq_high(),
-            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
-            _ => return None,
-        };
-        Some(value)
+        // PRG-RAM has priority over mapper registers/ROM.
+        if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
+            return self.read_prg_ram(addr);
+        }
+
+        // Decode mapper register windows into a logical register enum and
+        // handle the ones that are readable. Write-only registers fall back
+        // to PRG-ROM, mirroring the previous behaviour.
+        if let Some(reg) = Namco163CpuRegister::from_addr(addr) {
+            let value = match reg {
+                Namco163CpuRegister::AudioRamData => self.read_audio_register(addr),
+                Namco163CpuRegister::IrqCounterLow => self.read_irq_low(),
+                Namco163CpuRegister::IrqCounterHigh => self.read_irq_high(),
+                Namco163CpuRegister::ChrBankBase
+                | Namco163CpuRegister::PrgSelect8000
+                | Namco163CpuRegister::PrgSelectA000
+                | Namco163CpuRegister::PrgSelectC000
+                | Namco163CpuRegister::AudioRamAddr => self.read_prg_rom(addr),
+            };
+            return Some(value);
+        }
+
+        if (cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END).contains(&addr) {
+            Some(self.read_prg_rom(addr))
+        } else {
+            None
+        }
     }
 
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
-        match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
+        if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
+            self.write_prg_ram(addr, data);
+            return;
+        }
 
-            // Chip RAM / audio data port.
-            0x4800..=0x4FFF => self.write_audio_register(addr, data),
+        if let Some(reg) = Namco163CpuRegister::from_addr(addr) {
+            match reg {
+                // Chip RAM / audio data port.
+                Namco163CpuRegister::AudioRamData => self.write_audio_register(addr, data),
 
-            // IRQ counter low/high (both readable and writable).
-            0x5000..=0x57FF => self.write_irq_low(data),
-            0x5800..=0x5FFF => self.write_irq_high(data),
+                // IRQ counter low/high (both readable and writable).
+                Namco163CpuRegister::IrqCounterLow => self.write_irq_low(data),
+                Namco163CpuRegister::IrqCounterHigh => self.write_irq_high(data),
 
-            // CHR bank selects for 1 KiB pattern table windows.
-            0x8000..=0xBFFF => self.write_chr_bank(addr, data),
+                // CHR bank selects for 1 KiB pattern table windows.
+                Namco163CpuRegister::ChrBankBase => self.write_chr_bank(addr, data),
 
-            // PRG bank selects for the 3 switchable 8 KiB windows.
-            0xE000..=0xE7FF => {
-                self.write_prg_select_8000(data);
-                self.write_audio_register(addr, data);
+                // PRG bank selects for the 3 switchable 8 KiB windows.
+                Namco163CpuRegister::PrgSelect8000 => {
+                    self.write_prg_select_8000(data);
+                    self.write_audio_register(addr, data);
+                }
+                Namco163CpuRegister::PrgSelectA000 => self.write_prg_select_a000(data),
+                Namco163CpuRegister::PrgSelectC000 => self.write_prg_select_c000(data),
+
+                // Write-protect / audio RAM address port.
+                Namco163CpuRegister::AudioRamAddr => self.write_audio_register(addr, data),
             }
-            0xE800..=0xEFFF => self.write_prg_select_a000(data),
-            0xF000..=0xF7FF => self.write_prg_select_c000(data),
-
-            // Write-protect / audio RAM address port.
-            0xF800..=0xFFFF => self.write_audio_register(addr, data),
-            _ => {}
         }
     }
 

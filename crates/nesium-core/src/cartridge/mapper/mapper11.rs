@@ -21,6 +21,13 @@
 //!
 //! Lockout defeat bits are not modelled here because they do not affect the
 //! CPU/PPU address mapping in an emulator.
+//!
+//! | Area | Address range     | Behaviour                                      | IRQ/Audio |
+//! |------|-------------------|------------------------------------------------|-----------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                               | None      |
+//! | CPU  | `$8000-$FFFF`     | 32 KiB switchable PRG-ROM bank + bank latch    | None      |
+//! | PPU  | `$0000-$1FFF`     | 8 KiB switchable CHR ROM/RAM bank              | None      |
+//! | PPU  | `$2000-$3EFF`     | Fixed mirroring from header (no mapper control)| None      |
 
 use std::borrow::Cow;
 
@@ -37,6 +44,11 @@ use crate::{
 const PRG_BANK_SIZE_32K: usize = 32 * 1024;
 /// Size of a single CHR bank exposed to the PPU (8 KiB).
 const CHR_BANK_SIZE_8K: usize = 8 * 1024;
+
+/// CPU `$8000-$FFFF`: Color Dreams bank-select register region. Writes anywhere
+/// in this range update both the 32 KiB PRG bank and the 8 KiB CHR bank.
+const COLOR_DREAMS_BANK_SELECT_START: u16 = 0x8000;
+const COLOR_DREAMS_BANK_SELECT_END: u16 = 0xFFFF;
 
 #[derive(Debug, Clone)]
 pub struct Mapper11 {
@@ -154,7 +166,9 @@ impl Mapper for Mapper11 {
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            0x8000..=0xFFFF => self.write_bank_select(data),
+            COLOR_DREAMS_BANK_SELECT_START..=COLOR_DREAMS_BANK_SELECT_END => {
+                self.write_bank_select(data)
+            }
             _ => {}
         }
     }

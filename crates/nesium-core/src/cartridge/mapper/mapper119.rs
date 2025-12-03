@@ -3,6 +3,15 @@
 //! This reuses MMC3 banking and IRQ behaviour but interprets CHR bank bit6 to
 //! select CHR RAM instead of ROM. CHR RAM is treated as 8 KiB split into 1 KiB
 //! pages; CHR ROM uses the low 6 bits as the 1 KiB page index.
+//!
+//! | Area | Address range     | Behaviour                                          | IRQ/Audio         |
+//! |------|-------------------|----------------------------------------------------|-------------------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM with enable/write-protect bits   | None              |
+//! | CPU  | `$8000-$DFFF`     | MMC3-style 8 KiB PRG windows (bank select at `$8000`)| None           |
+//! | CPU  | `$A000-$BFFF`     | Mirroring + PRG-RAM enable/write-protect          | None              |
+//! | CPU  | `$C000-$FFFF`     | IRQ latch/reload and enable/ack registers         | MMC3 scanline IRQ |
+//! | PPU  | `$0000-$1FFF`     | 1 KiB CHR banks, bit6 selects CHR RAM vs ROM      | None              |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from header or TQROM mirroring control  | None              |
 
 use std::borrow::Cow;
 
@@ -23,6 +32,80 @@ const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 const CHR_BANK_SIZE_1K: usize = 1 * 1024;
 /// Fixed CHR-RAM size used by TQROM boards.
 const CHR_RAM_SIZE: usize = 8 * 1024;
+
+/// CPU `$8000-$9FFF`: bank select and bank data registers (MMC3-style slot 0).
+const TQROM_BANK_SELECT_START: u16 = 0x8000;
+const TQROM_BANK_SELECT_END: u16 = 0x9FFF;
+
+/// CPU `$A000-$BFFF`: mirroring mode and PRG-RAM enable/write-protect registers.
+const TQROM_MIRROR_PRGRAM_START: u16 = 0xA000;
+const TQROM_MIRROR_PRGRAM_END: u16 = 0xBFFF;
+
+/// CPU `$C000-$DFFF`: IRQ latch value and reload control.
+const TQROM_IRQ_LATCH_START: u16 = 0xC000;
+const TQROM_IRQ_LATCH_END: u16 = 0xDFFF;
+
+/// CPU `$E000-$FFFF`: IRQ enable/disable and acknowledge.
+const TQROM_IRQ_ENABLE_START: u16 = 0xE000;
+const TQROM_IRQ_ENABLE_END: u16 = 0xFFFF;
+
+/// CPU-visible TQROM (MMC3-style) register set.
+///
+/// TQROM reuses the MMC3 register layout but adds mixed CHR ROM/RAM banking.
+/// Grouping the CPU register windows into an enum keeps the write logic clear.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum TqromCpuRegister {
+    /// `$8000/$8001` – bank select and bank data.
+    BankSelect,
+    BankData,
+    /// `$A000/$A001` – mirroring control and PRG-RAM enable/write-protect.
+    MirrorControl,
+    PrgRamControl,
+    /// `$C000/$C001` – IRQ latch value and reload strobe.
+    IrqLatch,
+    IrqReload,
+    /// `$E000/$E001` – IRQ disable/ack and enable.
+    IrqDisable,
+    IrqEnable,
+}
+
+impl TqromCpuRegister {
+    fn from_addr(addr: u16) -> Option<Self> {
+        use TqromCpuRegister::*;
+
+        match addr {
+            TQROM_BANK_SELECT_START..=TQROM_BANK_SELECT_END => {
+                if addr & 0x0001 == 0 {
+                    Some(BankSelect)
+                } else {
+                    Some(BankData)
+                }
+            }
+            TQROM_MIRROR_PRGRAM_START..=TQROM_MIRROR_PRGRAM_END => {
+                if addr & 0x0001 == 0 {
+                    Some(MirrorControl)
+                } else {
+                    Some(PrgRamControl)
+                }
+            }
+            TQROM_IRQ_LATCH_START..=TQROM_IRQ_LATCH_END => {
+                if addr & 0x0001 == 0 {
+                    Some(IrqLatch)
+                } else {
+                    Some(IrqReload)
+                }
+            }
+            TQROM_IRQ_ENABLE_START..=TQROM_IRQ_ENABLE_END => {
+                if addr & 0x0001 == 0 {
+                    Some(IrqDisable)
+                } else {
+                    Some(IrqEnable)
+                }
+            }
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Mapper119 {
@@ -133,10 +216,10 @@ impl Mapper119 {
         }
 
         let bank_slot = match addr {
-            0x8000..=0x9FFF => 0,
-            0xA000..=0xBFFF => 1,
-            0xC000..=0xDFFF => 2,
-            0xE000..=0xFFFF => 3,
+            TQROM_BANK_SELECT_START..=TQROM_BANK_SELECT_END => 0,
+            TQROM_MIRROR_PRGRAM_START..=TQROM_MIRROR_PRGRAM_END => 1,
+            TQROM_IRQ_LATCH_START..=TQROM_IRQ_LATCH_END => 2,
+            TQROM_IRQ_ENABLE_START..=TQROM_IRQ_ENABLE_END => 3,
             _ => return 0,
         };
 
@@ -283,20 +366,25 @@ impl Mapper for Mapper119 {
     }
 
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
-        match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            0x8000..=0x9FFF => {
-                if addr & 0x0001 == 0 {
+        if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
+            self.write_prg_ram(addr, data);
+            return;
+        }
+
+        if let Some(reg) = TqromCpuRegister::from_addr(addr) {
+            use TqromCpuRegister::*;
+
+            match reg {
+                BankSelect => {
                     self.bank_select = data & 0xC7;
-                } else {
+                }
+                BankData => {
                     let target = (self.bank_select & 0x07) as usize;
                     if target < self.bank_regs.len() {
                         self.bank_regs[target] = data;
                     }
                 }
-            }
-            0xA000..=0xBFFF => {
-                if addr & 0x0001 == 0 {
+                MirrorControl => {
                     self.mirroring = if data & 0x01 == 0 {
                         self.base_mirroring
                     } else {
@@ -306,27 +394,25 @@ impl Mapper for Mapper119 {
                             other => other,
                         }
                     };
-                } else {
+                }
+                PrgRamControl => {
                     self.prg_ram_write_protect = data & 0x40 != 0;
                     self.prg_ram_enable = data & 0x80 != 0;
                 }
-            }
-            0xC000..=0xDFFF => {
-                if addr & 0x0001 == 0 {
+                IrqLatch => {
                     self.irq_latch = data;
-                } else {
+                }
+                IrqReload => {
                     self.irq_reload = true;
                 }
-            }
-            0xE000..=0xFFFF => {
-                if addr & 0x0001 == 0 {
+                IrqDisable => {
                     self.irq_enabled = false;
                     self.irq_pending = false;
-                } else {
+                }
+                IrqEnable => {
                     self.irq_enabled = true;
                 }
             }
-            _ => {}
         }
     }
 

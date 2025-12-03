@@ -9,6 +9,14 @@
 //! - CPU `$8000-$FFFF` writes latch both the PRG bank (low nibble) and the
 //!   mirroring bit (bit 4: 0 = single-screen lower, 1 = single-screen upper).
 //! - Optional 8 KiB PRG-RAM at `$6000-$7FFF` respects NES 2.0 sizing.
+//!
+//! | Area | Address range     | Behaviour                                      | IRQ/Audio |
+//! |------|-------------------|------------------------------------------------|-----------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                               | None      |
+//! | CPU  | `$8000-$BFFF`     | Switchable 16 KiB PRG-ROM bank                 | None      |
+//! | CPU  | `$C000-$FFFF`     | Fixed 16 KiB PRG-ROM bank (last)               | None      |
+//! | PPU  | `$0000-$1FFF`     | 8 KiB CHR ROM/RAM                              | None      |
+//! | PPU  | `$2000-$3EFF`     | Single-screen mirroring via latch bit 4        | None      |
 
 use std::borrow::Cow;
 

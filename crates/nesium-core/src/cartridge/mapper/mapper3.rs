@@ -9,6 +9,15 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+// Mapper 3 – CnROM 8 KiB CHR banking.
+//
+// | Area | Address range     | Behaviour                                  | IRQ/Audio |
+// |------|-------------------|--------------------------------------------|-----------|
+// | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                           | None      |
+// | CPU  | `$8000-$FFFF`     | Fixed 32 KiB PRG-ROM (mirrored if smaller) | None      |
+// | PPU  | `$0000-$1FFF`     | 8 KiB CHR ROM/RAM, banked via `$8000-$FFFF`| None      |
+// | PPU  | `$2000-$3EFF`     | Mirroring from header (no mapper control)  | None      |
+
 const CHR_BANK_SIZE: usize = 8 * 1024;
 
 #[derive(Debug, Clone)]

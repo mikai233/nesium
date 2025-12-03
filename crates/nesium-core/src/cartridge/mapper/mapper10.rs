@@ -13,6 +13,16 @@
 //! "latch updates after fetch" behaviour by updating latch state in
 //! [`ppu_vram_access`] whenever the PPU performs a rendering fetch from the
 //! documented trigger addresses.
+//!
+//! | Area | Address range     | Behaviour                                          | IRQ/Audio |
+//! |------|-------------------|----------------------------------------------------|-----------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                                   | None      |
+//! | CPU  | `$8000-$BFFF`     | Switchable 16 KiB PRG-ROM bank (`$A000` register)  | None      |
+//! | CPU  | `$C000-$FFFF`     | Fixed 16 KiB PRG-ROM bank (last)                   | None      |
+//! | CPU  | `$A000-$EFFF`     | CHR FD/FE bank registers (`$B000-$E000` ranges)    | None      |
+//! | CPU  | `$F000-$FFFF`     | Nametable mirroring control                        | None      |
+//! | PPU  | `$0000-$1FFF`     | Two 4 KiB CHR windows with FD/FE latch switching   | None      |
+//! | PPU  | `$0FD8-$0FEF/...` | Tile ranges that update MMC4 CHR latches           | None      |
 
 use std::borrow::Cow;
 
@@ -32,6 +42,77 @@ use crate::{
 const PRG_BANK_SIZE_16K: usize = 16 * 1024;
 /// CHR banking granularity (4 KiB).
 const CHR_BANK_SIZE_4K: usize = 4 * 1024;
+
+/// CPU `$A000-$AFFF`: 16 KiB PRG-ROM bank select register for `$8000-$BFFF`.
+const MMC4_PRG_BANK_REG_START: u16 = 0xA000;
+const MMC4_PRG_BANK_REG_END: u16 = 0xAFFF;
+
+/// CPU `$B000-$BFFF`: CHR bank for `$0000-$0FFF` when latch 0 is in the `$FD` state.
+const MMC4_CHR_FD_0000_REG_START: u16 = 0xB000;
+const MMC4_CHR_FD_0000_REG_END: u16 = 0xBFFF;
+/// CPU `$C000-$CFFF`: CHR bank for `$0000-$0FFF` when latch 0 is in the `$FE` state.
+const MMC4_CHR_FE_0000_REG_START: u16 = 0xC000;
+const MMC4_CHR_FE_0000_REG_END: u16 = 0xCFFF;
+/// CPU `$D000-$DFFF`: CHR bank for `$1000-$1FFF` when latch 1 is in the `$FD` state.
+const MMC4_CHR_FD_1000_REG_START: u16 = 0xD000;
+const MMC4_CHR_FD_1000_REG_END: u16 = 0xDFFF;
+/// CPU `$E000-$EFFF`: CHR bank for `$1000-$1FFF` when latch 1 is in the `$FE` state.
+const MMC4_CHR_FE_1000_REG_START: u16 = 0xE000;
+const MMC4_CHR_FE_1000_REG_END: u16 = 0xEFFF;
+
+/// CPU `$F000-$FFFF`: nametable mirroring control register.
+const MMC4_MIRRORING_REG_START: u16 = 0xF000;
+const MMC4_MIRRORING_REG_END: u16 = 0xFFFF;
+
+/// PPU `$0FD8-$0FDF`: left pattern table (`$0000-$0FFF`) tile `$FD` range; sets latch 0 to `$FD`.
+const MMC4_LATCH0_FD_TRIGGER_START: u16 = 0x0FD8;
+const MMC4_LATCH0_FD_TRIGGER_END: u16 = 0x0FDF;
+/// PPU `$0FE8-$0FEF`: left pattern table tile `$FE` range; sets latch 0 to `$FE`.
+const MMC4_LATCH0_FE_TRIGGER_START: u16 = 0x0FE8;
+const MMC4_LATCH0_FE_TRIGGER_END: u16 = 0x0FEF;
+/// PPU `$1FD8-$1FDF`: right pattern table (`$1000-$1FFF`) tile `$FD` range; sets latch 1 to `$FD`.
+const MMC4_LATCH1_FD_TRIGGER_START: u16 = 0x1FD8;
+const MMC4_LATCH1_FD_TRIGGER_END: u16 = 0x1FDF;
+/// PPU `$1FE8-$1FEF`: right pattern table tile `$FE` range; sets latch 1 to `$FE`.
+const MMC4_LATCH1_FE_TRIGGER_START: u16 = 0x1FE8;
+const MMC4_LATCH1_FE_TRIGGER_END: u16 = 0x1FEF;
+
+/// CPU-visible MMC4 register windows.
+///
+/// MMC4 exposes a small set of write-only registers in `$A000-$FFFF`. Grouping
+/// them into an enum keeps the CPU side logic aligned with how CPU/PPU
+/// registers are modelled elsewhere in the core.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Mmc4CpuRegister {
+    /// `$A000-$AFFF` – PRG bank select for `$8000-$BFFF`.
+    PrgBank,
+    /// `$B000-$BFFF` – CHR bank for `$0000-$0FFF` when latch 0 is `$FD`.
+    ChrFd0000,
+    /// `$C000-$CFFF` – CHR bank for `$0000-$0FFF` when latch 0 is `$FE`.
+    ChrFe0000,
+    /// `$D000-$DFFF` – CHR bank for `$1000-$1FFF` when latch 1 is `$FD`.
+    ChrFd1000,
+    /// `$E000-$EFFF` – CHR bank for `$1000-$1FFF` when latch 1 is `$FE`.
+    ChrFe1000,
+    /// `$F000-$FFFF` – nametable mirroring control.
+    Mirroring,
+}
+
+impl Mmc4CpuRegister {
+    fn from_addr(addr: u16) -> Option<Self> {
+        use Mmc4CpuRegister::*;
+
+        match addr {
+            MMC4_PRG_BANK_REG_START..=MMC4_PRG_BANK_REG_END => Some(PrgBank),
+            MMC4_CHR_FD_0000_REG_START..=MMC4_CHR_FD_0000_REG_END => Some(ChrFd0000),
+            MMC4_CHR_FE_0000_REG_START..=MMC4_CHR_FE_0000_REG_END => Some(ChrFe0000),
+            MMC4_CHR_FD_1000_REG_START..=MMC4_CHR_FD_1000_REG_END => Some(ChrFd1000),
+            MMC4_CHR_FE_1000_REG_START..=MMC4_CHR_FE_1000_REG_END => Some(ChrFe1000),
+            MMC4_MIRRORING_REG_START..=MMC4_MIRRORING_REG_END => Some(Mirroring),
+            _ => None,
+        }
+    }
+}
 
 /// Internal representation of the CHR latch state.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -255,16 +336,16 @@ impl Mapper10 {
 
         let a = addr & 0x1FFF;
         match a {
-            0x0FD8..=0x0FDF => {
+            MMC4_LATCH0_FD_TRIGGER_START..=MMC4_LATCH0_FD_TRIGGER_END => {
                 self.latch0 = ChrLatch::Fd;
             }
-            0x0FE8..=0x0FEF => {
+            MMC4_LATCH0_FE_TRIGGER_START..=MMC4_LATCH0_FE_TRIGGER_END => {
                 self.latch0 = ChrLatch::Fe;
             }
-            0x1FD8..=0x1FDF => {
+            MMC4_LATCH1_FD_TRIGGER_START..=MMC4_LATCH1_FD_TRIGGER_END => {
                 self.latch1 = ChrLatch::Fd;
             }
-            0x1FE8..=0x1FEF => {
+            MMC4_LATCH1_FE_TRIGGER_START..=MMC4_LATCH1_FE_TRIGGER_END => {
                 self.latch1 = ChrLatch::Fe;
             }
             _ => {}
@@ -294,24 +375,30 @@ impl Mapper for Mapper10 {
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
-        let value = match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => return self.read_prg_ram(addr),
-            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
-            _ => return None,
-        };
-        Some(value)
+        if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
+            return self.read_prg_ram(addr);
+        }
+        if (cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END).contains(&addr) {
+            return Some(self.read_prg_rom(addr));
+        }
+        None
     }
 
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
-        match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            0xA000..=0xAFFF => self.write_prg_bank(data),
-            0xB000..=0xBFFF => self.write_chr_fd_0000(data),
-            0xC000..=0xCFFF => self.write_chr_fe_0000(data),
-            0xD000..=0xDFFF => self.write_chr_fd_1000(data),
-            0xE000..=0xEFFF => self.write_chr_fe_1000(data),
-            0xF000..=0xFFFF => self.write_mirroring(data),
-            _ => {}
+        if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
+            self.write_prg_ram(addr, data);
+            return;
+        }
+
+        if let Some(reg) = Mmc4CpuRegister::from_addr(addr) {
+            match reg {
+                Mmc4CpuRegister::PrgBank => self.write_prg_bank(data),
+                Mmc4CpuRegister::ChrFd0000 => self.write_chr_fd_0000(data),
+                Mmc4CpuRegister::ChrFe0000 => self.write_chr_fe_0000(data),
+                Mmc4CpuRegister::ChrFd1000 => self.write_chr_fd_1000(data),
+                Mmc4CpuRegister::ChrFe1000 => self.write_chr_fe_1000(data),
+                Mmc4CpuRegister::Mirroring => self.write_mirroring(data),
+            }
         }
     }
 

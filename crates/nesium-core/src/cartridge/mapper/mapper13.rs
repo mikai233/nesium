@@ -13,6 +13,15 @@
 //! PRG is not banked; the entire PRG-ROM image is mirrored into the
 //! `$8000-$FFFF` window as needed. This behaviour matches both the Nesdev
 //! CPROM description and Mesen2's `CpRom` mapper.
+//!
+//! | Area | Address range     | Behaviour                                        | IRQ/Audio |
+//! |------|-------------------|--------------------------------------------------|-----------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                                 | None      |
+//! | CPU  | `$8000-$FFFF`     | Fixed 32 KiB PRG-ROM (mirrored if smaller)      | None      |
+//! | CPU  | `$8000-$FFFF`     | CHR-RAM bank-select register (`CC` bits)        | None      |
+//! | PPU  | `$0000-$0FFF`     | Fixed 4 KiB CHR-RAM bank 0                      | None      |
+//! | PPU  | `$1000-$1FFF`     | 4 KiB switchable CHR-RAM bank (0-3)             | None      |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from header (no mapper-side control)  | None      |
 
 use std::borrow::Cow;
 
@@ -31,6 +40,11 @@ const PRG_WINDOW_SIZE_32K: usize = 32 * 1024;
 const CHR_BANK_SIZE_4K: usize = 4 * 1024;
 /// Total CHR-RAM size used by CPROM (4 banks × 4 KiB).
 const CHR_RAM_SIZE: usize = 4 * CHR_BANK_SIZE_4K;
+
+/// CPU `$8000-$FFFF`: CPROM CHR-RAM bank-select register. Writes in this range
+/// update the 4 KiB bank mapped at PPU `$1000-$1FFF`.
+const CPROM_BANK_SELECT_START: u16 = 0x8000;
+const CPROM_BANK_SELECT_END: u16 = 0xFFFF;
 
 #[derive(Debug, Clone)]
 pub struct Mapper13 {
@@ -158,7 +172,7 @@ impl Mapper for Mapper13 {
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            0x8000..=0xFFFF => self.write_chr_bank_select(data),
+            CPROM_BANK_SELECT_START..=CPROM_BANK_SELECT_END => self.write_chr_bank_select(data),
             _ => {}
         }
     }

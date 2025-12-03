@@ -22,6 +22,17 @@
 //!   - CHR 8 KiB bank at `$0000-$1FFF`:
 //!     - Use low 3 bits `c = value & 0x07`.
 //!     - Map `$0000-$1FFF` to CHR-RAM bytes starting at `c * 8 KiB`.
+//!
+//! | Area | Address range     | Behaviour                                     | IRQ/Audio           |
+//! |------|-------------------|-----------------------------------------------|---------------------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                              | None                |
+//! | CPU  | `$42FE/$42FF`     | One-screen A/B + H/V mirroring control        | None                |
+//! | CPU  | `$4501-$4503`     | 16-bit IRQ counter control                    | CPU-activity IRQ    |
+//! | CPU  | `$8000-$BFFF`     | 16 KiB switchable PRG-ROM window              | CPU-activity IRQ    |
+//! | CPU  | `$C000-$FFFF`     | 16 KiB fixed PRG-ROM window (last)            | CPU-activity IRQ    |
+//! | CPU  | `$8000-$FFFF`     | Combined PRG (16 KiB) + CHR (8 KiB) bank sel  | CPU-activity IRQ    |
+//! | PPU  | `$0000-$1FFF`     | 8 KiB CHR-RAM window inside 32 KiB space      | None                |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from Front Fareast control regs     | None                |
 
 use std::borrow::Cow;
 
@@ -38,6 +49,22 @@ use crate::{
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// Total CHR-RAM size used by the Front Fareast board in GUI mode.
 const CHR_RAM_SIZE: usize = 32 * 1024;
+
+/// CPU `$42FE`: one-screen mirroring base (nametable A vs B) control.
+const FF_CTRL_MIRROR_ONE_SCREEN_ADDR: u16 = 0x42FE;
+/// CPU `$42FF`: vertical vs horizontal mirroring control.
+const FF_CTRL_MIRROR_ORIENTATION_ADDR: u16 = 0x42FF;
+
+/// CPU `$4501`: IRQ disable/acknowledge register (disables and clears pending IRQ).
+const FF_IRQ_DISABLE_ADDR: u16 = 0x4501;
+/// CPU `$4502`: low byte of the 16-bit IRQ counter.
+const FF_IRQ_COUNTER_LOW_ADDR: u16 = 0x4502;
+/// CPU `$4503`: high byte of the IRQ counter and IRQ enable.
+const FF_IRQ_COUNTER_HIGH_ADDR: u16 = 0x4503;
+
+/// CPU `$8000-$FFFF`: combined PRG/CHR bank select register mirror.
+const FF_BANK_SELECT_START: u16 = 0x8000;
+const FF_BANK_SELECT_END: u16 = 0xFFFF;
 
 #[derive(Debug, Clone)]
 pub struct Mapper8 {
@@ -255,14 +282,16 @@ impl Mapper for Mapper8 {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
 
-            0x42FE => self.write_control_42fe(data),
-            0x42FF => self.write_control_42ff(data),
+            FF_CTRL_MIRROR_ONE_SCREEN_ADDR => self.write_control_42fe(data),
+            FF_CTRL_MIRROR_ORIENTATION_ADDR => self.write_control_42ff(data),
 
-            0x4501 => self.write_irq_disable_4501(),
-            0x4502 => self.write_irq_low_4502(data),
-            0x4503 => self.write_irq_high_4503(data),
+            FF_IRQ_DISABLE_ADDR => self.write_irq_disable_4501(),
+            FF_IRQ_COUNTER_LOW_ADDR => self.write_irq_low_4502(data),
+            FF_IRQ_COUNTER_HIGH_ADDR => self.write_irq_high_4503(data),
 
-            0x8000..=0xFFFF => self.write_bank_select_8000_plus(addr, data),
+            FF_BANK_SELECT_START..=FF_BANK_SELECT_END => {
+                self.write_bank_select_8000_plus(addr, data)
+            }
             _ => {}
         }
     }

@@ -11,6 +11,15 @@
 //! - PRG-RAM enable: control register bit 7 (when present via header sizing).
 //! - IRQ: VRC-style counter with reload (`$E008`), control (`$F000`), ack
 //!   (`$F008`), prescaler clocked by CPU cycles (divide by ~341).
+//!
+//! | Area | Address range       | Behaviour                                          | IRQ/Audio                          |
+//! |------|---------------------|----------------------------------------------------|------------------------------------|
+//! | CPU  | `$6000-$7FFF`       | Optional PRG-RAM with enable bit in control       | None                               |
+//! | CPU  | `$8000/$A000/$C000` | Three switchable 8 KiB PRG-ROM banks             | None                               |
+//! | CPU  | `$E000-$FFFF`       | Fixed 8 KiB PRG-ROM bank (last) + control/IRQ    | VRC7 IRQ (expansion audio muted)   |
+//! | CPU  | `$8000-$D008`       | VRC7 PRG/CHR/mirroring/IRQ registers              | VRC7 IRQ (audio registers, muted)  |
+//! | PPU  | `$0000-$1FFF`       | Eight 1 KiB CHR banks                             | None                               |
+//! | PPU  | `$2000-$3EFF`       | Mirroring from VRC7 control register              | None                               |
 
 use std::borrow::Cow;
 
@@ -29,6 +38,95 @@ use crate::mem_block::ByteBlock;
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
 const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+
+/// CPU `$8000-$9FFF`: switchable 8 KiB PRG-ROM bank mapped at `$8000`.
+const VRC7_PRG_SLOT0_START: u16 = 0x8000;
+const VRC7_PRG_SLOT0_END: u16 = 0x9FFF;
+/// CPU `$A000-$BFFF`: switchable 8 KiB PRG-ROM bank mapped at `$A000`.
+const VRC7_PRG_SLOT1_START: u16 = 0xA000;
+const VRC7_PRG_SLOT1_END: u16 = 0xBFFF;
+/// CPU `$C000-$DFFF`: switchable 8 KiB PRG-ROM bank mapped at `$C000`.
+const VRC7_PRG_SLOT2_START: u16 = 0xC000;
+const VRC7_PRG_SLOT2_END: u16 = 0xDFFF;
+/// CPU `$E000-$FFFF`: fixed 8 KiB PRG-ROM bank mapped to the last bank.
+const VRC7_PRG_FIXED_SLOT_START: u16 = 0xE000;
+const VRC7_PRG_FIXED_SLOT_END: u16 = 0xFFFF;
+
+/// Mask used to decode VRC7 register addresses after board-specific mirroring.
+const VRC7_REG_ADDR_MASK: u16 = 0xF038;
+
+/// VRC7 PRG bank select registers (after address decoding).
+/// - `$8000`: 8 KiB bank for `$8000-$9FFF`.
+/// - `$8008`: 8 KiB bank for `$A000-$BFFF`.
+/// - `$9000`: 8 KiB bank for `$C000-$DFFF`.
+const VRC7_REG_PRG_BANK_8000: u16 = 0x8000;
+const VRC7_REG_PRG_BANK_A000: u16 = 0x8008;
+const VRC7_REG_PRG_BANK_C000: u16 = 0x9000;
+
+/// VRC7 CHR bank registers (`$A000-$D008` – eight 1 KiB slots).
+const VRC7_REG_CHR_BANK_0: u16 = 0xA000;
+const VRC7_REG_CHR_BANK_1: u16 = 0xA008;
+const VRC7_REG_CHR_BANK_2: u16 = 0xB000;
+const VRC7_REG_CHR_BANK_3: u16 = 0xB008;
+const VRC7_REG_CHR_BANK_4: u16 = 0xC000;
+const VRC7_REG_CHR_BANK_5: u16 = 0xC008;
+const VRC7_REG_CHR_BANK_6: u16 = 0xD000;
+const VRC7_REG_CHR_BANK_7: u16 = 0xD008;
+
+/// VRC7 control and IRQ registers.
+/// - `$E000`: mirroring / PRG-RAM enable control.
+/// - `$E008`: IRQ reload value.
+/// - `$F000`: IRQ control (enable/mode).
+/// - `$F008`: IRQ acknowledge / re-enable.
+const VRC7_REG_CONTROL: u16 = 0xE000;
+const VRC7_REG_IRQ_RELOAD: u16 = 0xE008;
+const VRC7_REG_IRQ_CONTROL: u16 = 0xF000;
+const VRC7_REG_IRQ_ACK: u16 = 0xF008;
+
+/// CPU-visible VRC7 register set after address decoding.
+///
+/// Similar to VRC4, VRC7 maps its control registers into `$8000-$FFFF` after
+/// some address-line mixing. Using a dedicated enum keeps the logical
+/// registers clear and close to the documented layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Vrc7CpuRegister {
+    /// `$8000` – PRG bank for `$8000-$9FFF`.
+    PrgBank8000,
+    /// `$8008` – PRG bank for `$A000-$BFFF`.
+    PrgBankA000,
+    /// `$9000` – PRG bank for `$C000-$DFFF`.
+    PrgBankC000,
+    /// `$A000-$D008` – eight 1 KiB CHR bank registers.
+    ChrBank,
+    /// `$E000` – mirroring / PRG-RAM control.
+    Control,
+    /// `$E008` – IRQ reload value.
+    IrqReload,
+    /// `$F000` – IRQ control.
+    IrqControl,
+    /// `$F008` – IRQ acknowledge / re-enable.
+    IrqAck,
+}
+
+impl Vrc7CpuRegister {
+    fn from_addr(addr: u16) -> Option<Self> {
+        use Vrc7CpuRegister::*;
+
+        match addr & VRC7_REG_ADDR_MASK {
+            VRC7_REG_PRG_BANK_8000 => Some(PrgBank8000),
+            VRC7_REG_PRG_BANK_A000 => Some(PrgBankA000),
+            VRC7_REG_PRG_BANK_C000 => Some(PrgBankC000),
+            VRC7_REG_CHR_BANK_0 | VRC7_REG_CHR_BANK_1 | VRC7_REG_CHR_BANK_2
+            | VRC7_REG_CHR_BANK_3 | VRC7_REG_CHR_BANK_4 | VRC7_REG_CHR_BANK_5
+            | VRC7_REG_CHR_BANK_6 | VRC7_REG_CHR_BANK_7 => Some(ChrBank),
+            VRC7_REG_CONTROL => Some(Control),
+            VRC7_REG_IRQ_RELOAD => Some(IrqReload),
+            VRC7_REG_IRQ_CONTROL => Some(IrqControl),
+            VRC7_REG_IRQ_ACK => Some(IrqAck),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Mapper85 {
@@ -121,10 +219,12 @@ impl Mapper85 {
         }
 
         let bank = match addr {
-            0x8000..=0x9FFF => self.prg_bank_index(self.prg_banks[0]),
-            0xA000..=0xBFFF => self.prg_bank_index(self.prg_banks[1]),
-            0xC000..=0xDFFF => self.prg_bank_index(self.prg_banks[2]),
-            0xE000..=0xFFFF => self.prg_bank_count_8k.saturating_sub(1),
+            VRC7_PRG_SLOT0_START..=VRC7_PRG_SLOT0_END => self.prg_bank_index(self.prg_banks[0]),
+            VRC7_PRG_SLOT1_START..=VRC7_PRG_SLOT1_END => self.prg_bank_index(self.prg_banks[1]),
+            VRC7_PRG_SLOT2_START..=VRC7_PRG_SLOT2_END => self.prg_bank_index(self.prg_banks[2]),
+            VRC7_PRG_FIXED_SLOT_START..=VRC7_PRG_FIXED_SLOT_END => {
+                self.prg_bank_count_8k.saturating_sub(1)
+            }
             _ => 0,
         };
         let offset = (addr & 0x1FFF) as usize;
@@ -167,38 +267,41 @@ impl Mapper85 {
     }
 
     fn write_register(&mut self, addr: u16, value: u8) {
-        match addr & 0xF038 {
-            0x8000 => self.prg_banks[0] = value & 0x3F,
-            0x8008 => self.prg_banks[1] = value & 0x3F,
-            0x9000 => self.prg_banks[2] = value & 0x3F,
-            0xA000 => self.chr_banks[0] = value,
-            0xA008 => self.chr_banks[1] = value,
-            0xB000 => self.chr_banks[2] = value,
-            0xB008 => self.chr_banks[3] = value,
-            0xC000 => self.chr_banks[4] = value,
-            0xC008 => self.chr_banks[5] = value,
-            0xD000 => self.chr_banks[6] = value,
-            0xD008 => self.chr_banks[7] = value,
-            0xE000 => self.update_control(value),
-            0xE008 => {
-                self.irq_reload = value;
-            }
-            0xF000 => {
-                self.irq_enabled_after_ack = (value & 0x01) != 0;
-                self.irq_enabled = (value & 0x02) != 0;
-                self.irq_cycle_mode = (value & 0x04) != 0;
-                if self.irq_enabled {
-                    self.irq_counter = self.irq_reload;
-                    self.irq_prescaler = 341;
+        if let Some(reg) = Vrc7CpuRegister::from_addr(addr) {
+            match reg {
+                Vrc7CpuRegister::PrgBank8000 => self.prg_banks[0] = value & 0x3F,
+                Vrc7CpuRegister::PrgBankA000 => self.prg_banks[1] = value & 0x3F,
+                Vrc7CpuRegister::PrgBankC000 => self.prg_banks[2] = value & 0x3F,
+                Vrc7CpuRegister::ChrBank => match addr & VRC7_REG_ADDR_MASK {
+                    VRC7_REG_CHR_BANK_0 => self.chr_banks[0] = value,
+                    VRC7_REG_CHR_BANK_1 => self.chr_banks[1] = value,
+                    VRC7_REG_CHR_BANK_2 => self.chr_banks[2] = value,
+                    VRC7_REG_CHR_BANK_3 => self.chr_banks[3] = value,
+                    VRC7_REG_CHR_BANK_4 => self.chr_banks[4] = value,
+                    VRC7_REG_CHR_BANK_5 => self.chr_banks[5] = value,
+                    VRC7_REG_CHR_BANK_6 => self.chr_banks[6] = value,
+                    VRC7_REG_CHR_BANK_7 => self.chr_banks[7] = value,
+                    _ => {}
+                },
+                Vrc7CpuRegister::Control => self.update_control(value),
+                Vrc7CpuRegister::IrqReload => {
+                    self.irq_reload = value;
+                }
+                Vrc7CpuRegister::IrqControl => {
+                    self.irq_enabled_after_ack = (value & 0x01) != 0;
+                    self.irq_enabled = (value & 0x02) != 0;
+                    self.irq_cycle_mode = (value & 0x04) != 0;
+                    if self.irq_enabled {
+                        self.irq_counter = self.irq_reload;
+                        self.irq_prescaler = 341;
+                        self.irq_pending = false;
+                    }
+                }
+                Vrc7CpuRegister::IrqAck => {
+                    self.irq_enabled = self.irq_enabled_after_ack;
                     self.irq_pending = false;
                 }
             }
-            0xF008 => {
-                self.irq_enabled = self.irq_enabled_after_ack;
-                self.irq_pending = false;
-            }
-            // $9010/$9030 audio registers are ignored (muted).
-            _ => {}
         }
     }
 

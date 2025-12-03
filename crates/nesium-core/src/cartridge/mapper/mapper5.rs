@@ -12,11 +12,152 @@ use crate::{
     mem_block::ByteBlock,
 };
 
+// Mapper 5 – MMC5 with extended PRG/CHR/nametable features.
+//
+// | Area | Address range     | Behaviour                                              | IRQ/Audio      |
+// |------|-------------------|--------------------------------------------------------|----------------|
+// | CPU  | `$6000-$7FFF`     | Bankswitched PRG-RAM via `$5113` (when enabled)       | None           |
+// | CPU  | `$8000-$FFFF`     | PRG ROM/RAM windows in 8/16/32 KiB modes (`$5100`)    | MMC5 scanline  |
+// | CPU  | `$5100-$5117`     | PRG/CHR/ExRAM/nametable control + PRG banking regs    | None           |
+// | CPU  | `$5120-$5127`     | CHR bank registers (1/2/4/8 KiB modes)                | None           |
+// | CPU  | `$5200-$5206`     | Split-screen, IRQ, multiplier, and status registers   | MMC5 scanline  |
+// | CPU  | `$5C00-$5FFF`     | 1 KiB ExRAM CPU window (mode‑dependent behaviour)     | None           |
+// | PPU  | `$0000-$1FFF`     | CHR ROM/RAM with flexible banking via `$5120-$5127`   | MMC5 scanline  |
+// | PPU  | `$2000-$3EFF`     | Nametable mapping/fill using ExRAM and `$5105-$5107`  | None           |
+
 /// MMC5 PRG bank size (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 
 /// MMC5 has 1 KiB of internal extended RAM.
 const EXRAM_SIZE: usize = 1024;
+
+/// CPU `$6000-$7FFF`: bankswitched PRG-RAM window controlled by `$5113`.
+const MMC5_PRG_RAM_WINDOW_START: u16 = 0x6000;
+const MMC5_PRG_RAM_WINDOW_END: u16 = 0x7FFF;
+
+/// CPU `$8000-$FFFF`: bankswitched PRG-ROM/PRG-RAM windows.
+const MMC5_PRG_WINDOW_START: u16 = 0x8000;
+const MMC5_PRG_WINDOW_END: u16 = 0xFFFF;
+/// CPU `$A000`, `$C000`, `$E000`: boundaries between PRG sub-windows.
+const MMC5_PRG_WINDOW_A000_START: u16 = 0xA000;
+const MMC5_PRG_WINDOW_C000_START: u16 = 0xC000;
+const MMC5_PRG_WINDOW_E000_START: u16 = 0xE000;
+
+/// MMC5 control/configuration registers in `$5100-$5107`.
+/// - `$5100`: PRG mode (8/16/32 KiB windows).
+/// - `$5101`: CHR mode (1/2/4/8 KiB pages).
+/// - `$5102/$5103`: PRG-RAM write-protect keys.
+/// - `$5104`: ExRAM mode (nametable/attribute/CPU RAM behaviour).
+/// - `$5105`: per-nametable mapping control.
+/// - `$5106/$5107`: fill tile and attribute for extended nametable modes.
+const MMC5_REG_PRG_MODE: u16 = 0x5100;
+const MMC5_REG_CHR_MODE: u16 = 0x5101;
+const MMC5_REG_PRG_RAM_PROTECT1: u16 = 0x5102;
+const MMC5_REG_PRG_RAM_PROTECT2: u16 = 0x5103;
+const MMC5_REG_EXRAM_MODE: u16 = 0x5104;
+const MMC5_REG_NAMETABLE_MAPPING: u16 = 0x5105;
+const MMC5_REG_FILL_TILE: u16 = 0x5106;
+const MMC5_REG_FILL_ATTR: u16 = 0x5107;
+
+/// MMC5 PRG banking registers.
+/// - `$5113`: PRG-RAM page for `$6000-$7FFF`.
+/// - `$5114-$5117`: PRG-ROM/PRG-RAM bank registers for `$8000/$A000/$C000/$E000`.
+const MMC5_REG_PRG_BANK_6000_7FFF: u16 = 0x5113;
+const MMC5_REG_PRG_BANK_8000: u16 = 0x5114;
+const MMC5_REG_PRG_BANK_A000: u16 = 0x5115;
+const MMC5_REG_PRG_BANK_C000: u16 = 0x5116;
+const MMC5_REG_PRG_BANK_E000: u16 = 0x5117;
+
+/// MMC5 CHR banking registers `$5120-$5127` and upper CHR bank bits `$5130`.
+const MMC5_REG_CHR_BANK_FIRST: u16 = 0x5120;
+const MMC5_REG_CHR_BANK_LAST: u16 = 0x5127;
+const MMC5_REG_CHR_UPPER_BITS: u16 = 0x5130;
+
+/// MMC5 split-screen / IRQ / multiplier registers in `$5200-$5206`.
+const MMC5_REG_SPLIT_CONTROL: u16 = 0x5200;
+const MMC5_REG_SPLIT_SCROLL: u16 = 0x5201;
+const MMC5_REG_SPLIT_CHR_BANK: u16 = 0x5202;
+/// CPU `$5203`: scanline IRQ target.
+const MMC5_REG_IRQ_SCANLINE: u16 = 0x5203;
+/// CPU `$5204`: IRQ status (pending + in-frame bits).
+const MMC5_REG_IRQ_STATUS: u16 = 0x5204;
+/// CPU `$5205/$5206`: 8×8→16 multiplier result low/high bytes.
+const MMC5_REG_MULTIPLIER_A: u16 = 0x5205;
+const MMC5_REG_MULTIPLIER_B: u16 = 0x5206;
+
+/// CPU `$5C00-$5FFF`: ExRAM CPU window.
+const MMC5_EXRAM_CPU_START: u16 = 0x5C00;
+const MMC5_EXRAM_CPU_END: u16 = 0x5FFF;
+
+/// CPU-visible MMC5 register set.
+///
+/// MMC5 exposes a rich set of control registers across `$5100-$5206` as well
+/// as CPU-mapped ExRAM and PRG-RAM/PRG-ROM windows. This enum groups the
+/// major logical registers so that CPU-side logic can work with names instead
+/// of raw addresses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Mmc5CpuRegister {
+    PrgMode,
+    ChrMode,
+    PrgRamProtect1,
+    PrgRamProtect2,
+    ExRamMode,
+    NametableMapping,
+    FillTile,
+    FillAttr,
+    PrgBank6000,
+    PrgBank8000,
+    PrgBankA000,
+    PrgBankC000,
+    PrgBankE000,
+    ChrBank,
+    ChrUpperBits,
+    SplitControl,
+    SplitScroll,
+    SplitChrBank,
+    IrqScanline,
+    IrqStatus,
+    MultiplierA,
+    MultiplierB,
+    ExRamCpu,
+    PrgRamWindow,
+    PrgWindow,
+}
+
+impl Mmc5CpuRegister {
+    fn from_addr(addr: u16) -> Option<Self> {
+        use Mmc5CpuRegister::*;
+
+        match addr {
+            MMC5_REG_PRG_MODE => Some(PrgMode),
+            MMC5_REG_CHR_MODE => Some(ChrMode),
+            MMC5_REG_PRG_RAM_PROTECT1 => Some(PrgRamProtect1),
+            MMC5_REG_PRG_RAM_PROTECT2 => Some(PrgRamProtect2),
+            MMC5_REG_EXRAM_MODE => Some(ExRamMode),
+            MMC5_REG_NAMETABLE_MAPPING => Some(NametableMapping),
+            MMC5_REG_FILL_TILE => Some(FillTile),
+            MMC5_REG_FILL_ATTR => Some(FillAttr),
+            MMC5_REG_PRG_BANK_6000_7FFF => Some(PrgBank6000),
+            MMC5_REG_PRG_BANK_8000 => Some(PrgBank8000),
+            MMC5_REG_PRG_BANK_A000 => Some(PrgBankA000),
+            MMC5_REG_PRG_BANK_C000 => Some(PrgBankC000),
+            MMC5_REG_PRG_BANK_E000 => Some(PrgBankE000),
+            MMC5_REG_CHR_BANK_FIRST..=MMC5_REG_CHR_BANK_LAST => Some(ChrBank),
+            MMC5_REG_CHR_UPPER_BITS => Some(ChrUpperBits),
+            MMC5_REG_SPLIT_CONTROL => Some(SplitControl),
+            MMC5_REG_SPLIT_SCROLL => Some(SplitScroll),
+            MMC5_REG_SPLIT_CHR_BANK => Some(SplitChrBank),
+            MMC5_REG_IRQ_SCANLINE => Some(IrqScanline),
+            MMC5_REG_IRQ_STATUS => Some(IrqStatus),
+            MMC5_REG_MULTIPLIER_A => Some(MultiplierA),
+            MMC5_REG_MULTIPLIER_B => Some(MultiplierB),
+            MMC5_EXRAM_CPU_START..=MMC5_EXRAM_CPU_END => Some(ExRamCpu),
+            MMC5_PRG_RAM_WINDOW_START..=MMC5_PRG_RAM_WINDOW_END => Some(PrgRamWindow),
+            MMC5_PRG_WINDOW_START..=MMC5_PRG_WINDOW_END => Some(PrgWindow),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum PrgWindowSize {
@@ -243,14 +384,14 @@ impl Mapper5 {
 
     fn read_prg(&self, addr: u16) -> Option<u8> {
         match addr {
-            0x6000..=0x7FFF => {
+            MMC5_PRG_RAM_WINDOW_START..=MMC5_PRG_RAM_WINDOW_END => {
                 if self.prg_ram.is_empty() {
                     return None;
                 }
                 // $6000-$7FFF always map PRG-RAM via $5113.
                 Some(self.read_prg_ram_page(addr, self.prg_bank_6000_7fff))
             }
-            0x8000..=0xFFFF => {
+            MMC5_PRG_WINDOW_START..=MMC5_PRG_WINDOW_END => {
                 let mode = self.prg_mode & 0x03;
                 let value = match mode {
                     0 => {
@@ -261,7 +402,7 @@ impl Mapper5 {
                         // PRG mode 1:
                         // $8000-$BFFF: 16 KiB switchable ROM/RAM via $5115.
                         // $C000-$FFFF: 16 KiB ROM via $5117.
-                        if addr < 0xC000 {
+                        if addr < MMC5_PRG_WINDOW_C000_START {
                             self.read_prg_window_switchable(
                                 addr,
                                 self.prg_bank_a000,
@@ -280,13 +421,13 @@ impl Mapper5 {
                         // $8000-$BFFF: 16 KiB switchable ROM/RAM via $5115.
                         // $C000-$DFFF: 8 KiB switchable ROM/RAM via $5116.
                         // $E000-$FFFF: 8 KiB ROM via $5117.
-                        if addr < 0xC000 {
+                        if addr < MMC5_PRG_WINDOW_C000_START {
                             self.read_prg_window_switchable(
                                 addr,
                                 self.prg_bank_a000,
                                 PrgWindowSize::Size16K,
                             )
-                        } else if addr < 0xE000 {
+                        } else if addr < MMC5_PRG_WINDOW_E000_START {
                             self.read_prg_window_switchable(
                                 addr,
                                 self.prg_bank_c000,
@@ -306,19 +447,19 @@ impl Mapper5 {
                         // $A000-$BFFF: 8 KiB ROM/RAM via $5115.
                         // $C000-$DFFF: 8 KiB ROM/RAM via $5116.
                         // $E000-$FFFF: 8 KiB ROM via $5117.
-                        if addr < 0xA000 {
+                        if addr < MMC5_PRG_WINDOW_A000_START {
                             self.read_prg_window_switchable(
                                 addr,
                                 self.prg_bank_8000,
                                 PrgWindowSize::Size8K,
                             )
-                        } else if addr < 0xC000 {
+                        } else if addr < MMC5_PRG_WINDOW_C000_START {
                             self.read_prg_window_switchable(
                                 addr,
                                 self.prg_bank_a000,
                                 PrgWindowSize::Size8K,
                             )
-                        } else if addr < 0xE000 {
+                        } else if addr < MMC5_PRG_WINDOW_E000_START {
                             self.read_prg_window_switchable(
                                 addr,
                                 self.prg_bank_c000,
@@ -340,27 +481,27 @@ impl Mapper5 {
     }
 
     fn write_prg(&mut self, addr: u16, data: u8) {
-        match addr {
+        match Mmc5CpuRegister::from_addr(addr) {
             // MMC5 control/config registers live in $5100-$51FF and $5200+.
-            0x5100 => self.prg_mode = data & 0x03,
-            0x5101 => self.chr_mode = data & 0x03,
-            0x5102 => self.prg_ram_protect1 = data,
-            0x5103 => self.prg_ram_protect2 = data,
-            0x5104 => self.exram_mode = data & 0x03,
-            0x5105 => self.nt_mapping = data,
-            0x5106 => self.fill_tile = data,
-            0x5107 => self.fill_attr = data & 0x03,
-            0x5113 => self.prg_bank_6000_7fff = data,
-            0x5114 => self.prg_bank_8000 = data,
-            0x5115 => self.prg_bank_a000 = data,
-            0x5116 => self.prg_bank_c000 = data,
-            0x5117 => self.prg_bank_e000 = data,
-            0x5120..=0x5127 => {
-                let idx = (addr - 0x5120) as usize;
+            Some(Mmc5CpuRegister::PrgMode) => self.prg_mode = data & 0x03,
+            Some(Mmc5CpuRegister::ChrMode) => self.chr_mode = data & 0x03,
+            Some(Mmc5CpuRegister::PrgRamProtect1) => self.prg_ram_protect1 = data,
+            Some(Mmc5CpuRegister::PrgRamProtect2) => self.prg_ram_protect2 = data,
+            Some(Mmc5CpuRegister::ExRamMode) => self.exram_mode = data & 0x03,
+            Some(Mmc5CpuRegister::NametableMapping) => self.nt_mapping = data,
+            Some(Mmc5CpuRegister::FillTile) => self.fill_tile = data,
+            Some(Mmc5CpuRegister::FillAttr) => self.fill_attr = data & 0x03,
+            Some(Mmc5CpuRegister::PrgBank6000) => self.prg_bank_6000_7fff = data,
+            Some(Mmc5CpuRegister::PrgBank8000) => self.prg_bank_8000 = data,
+            Some(Mmc5CpuRegister::PrgBankA000) => self.prg_bank_a000 = data,
+            Some(Mmc5CpuRegister::PrgBankC000) => self.prg_bank_c000 = data,
+            Some(Mmc5CpuRegister::PrgBankE000) => self.prg_bank_e000 = data,
+            Some(Mmc5CpuRegister::ChrBank) => {
+                let idx = (addr - MMC5_REG_CHR_BANK_FIRST) as usize;
                 self.chr_banks[idx] = data;
             }
-            0x5130 => self.chr_upper_bits = data & 0x03,
-            0x5200 => {
+            Some(Mmc5CpuRegister::ChrUpperBits) => self.chr_upper_bits = data & 0x03,
+            Some(Mmc5CpuRegister::SplitControl) => {
                 // Vertical split control. We only latch the value here; the
                 // actual split behaviour is implemented in ppu_vram_access
                 // and currently requires more detailed PPU context.
@@ -369,40 +510,40 @@ impl Mapper5 {
                 // implement MMC5 vertical split once PpuVramAccessContext
                 // exposes tile X/Y and BG vs sprite fetch information.
             }
-            0x5201 => {
+            Some(Mmc5CpuRegister::SplitScroll) => {
                 // Vertical split scroll value.
                 self.split_scroll = data;
                 // TODO: Honour split_scroll when emulating the split region.
             }
-            0x5202 => {
+            Some(Mmc5CpuRegister::SplitChrBank) => {
                 // Vertical split CHR bank.
                 self.split_chr_bank = data;
                 // TODO: Use split_chr_bank for BG CHR selection in split area.
             }
-            0x5203 => self.irq_scanline = data,
-            0x5204 => {
+            Some(Mmc5CpuRegister::IrqScanline) => self.irq_scanline = data,
+            Some(Mmc5CpuRegister::IrqStatus) => {
                 // Writing with bit7 set enables IRQ, clearing it disables.
                 self.irq_enabled = data & 0x80 != 0;
                 if !self.irq_enabled {
                     self.irq_pending = false;
                 }
             }
-            0x5205 => {
+            Some(Mmc5CpuRegister::MultiplierA) => {
                 // Unsigned 8-bit multiplicand.
                 self.mul_a = data;
                 self.mul_result = (self.mul_a as u16) * (self.mul_b as u16);
             }
-            0x5206 => {
+            Some(Mmc5CpuRegister::MultiplierB) => {
                 // Unsigned 8-bit multiplier.
                 self.mul_b = data;
                 self.mul_result = (self.mul_a as u16) * (self.mul_b as u16);
             }
-            0x5C00..=0x5FFF => {
+            Some(Mmc5CpuRegister::ExRamCpu) => {
                 // Internal ExRAM writes. $5104 controls CPU accessibility:
                 // modes 0/1 are write-only, mode 2 is read/write, mode 3 is
                 // read-only. We only gate writes in mode 3 here; timing
                 // restrictions while the PPU is rendering are not modelled.
-                let idx = (addr - 0x5C00) as usize;
+                let idx = (addr - MMC5_EXRAM_CPU_START) as usize;
                 if idx < EXRAM_SIZE {
                     if (self.exram_mode & 0x03) != 0b11 {
                         self.exram[idx] = data;
@@ -413,11 +554,11 @@ impl Mapper5 {
                     }
                 }
             }
-            0x6000..=0x7FFF => {
+            Some(Mmc5CpuRegister::PrgRamWindow) => {
                 // $6000-$7FFF always map PRG-RAM via $5113.
                 self.write_prg_ram_page(addr, self.prg_bank_6000_7fff, data);
             }
-            0x8000..=0xFFFF => {
+            Some(Mmc5CpuRegister::PrgWindow) => {
                 // Some PRG windows in modes 1–3 can be mapped to PRG-RAM.
                 if self.prg_ram.is_empty() || !self.prg_ram_enabled() {
                     return;
@@ -429,18 +570,18 @@ impl Mapper5 {
                     }
                     1 => {
                         // $8000-$BFFF: 16 KiB ROM/RAM via $5115.
-                        if addr < 0xC000 && (self.prg_bank_a000 & 0x80) == 0 {
+                        if addr < MMC5_PRG_WINDOW_C000_START && (self.prg_bank_a000 & 0x80) == 0 {
                             self.write_prg_ram_page(addr, self.prg_bank_a000, data);
                         }
                     }
                     2 => {
                         // $8000-$BFFF: 16 KiB ROM/RAM via $5115.
                         // $C000-$DFFF: 8 KiB ROM/RAM via $5116.
-                        if addr < 0xC000 {
+                        if addr < MMC5_PRG_WINDOW_C000_START {
                             if (self.prg_bank_a000 & 0x80) == 0 {
                                 self.write_prg_ram_page(addr, self.prg_bank_a000, data);
                             }
-                        } else if addr < 0xE000 {
+                        } else if addr < MMC5_PRG_WINDOW_E000_START {
                             if (self.prg_bank_c000 & 0x80) == 0 {
                                 self.write_prg_ram_page(addr, self.prg_bank_c000, data);
                             }
@@ -448,15 +589,15 @@ impl Mapper5 {
                     }
                     _ => {
                         // Mode 3: three 8 KiB ROM/RAM windows.
-                        if addr < 0xA000 {
+                        if addr < MMC5_PRG_WINDOW_A000_START {
                             if (self.prg_bank_8000 & 0x80) == 0 {
                                 self.write_prg_ram_page(addr, self.prg_bank_8000, data);
                             }
-                        } else if addr < 0xC000 {
+                        } else if addr < MMC5_PRG_WINDOW_C000_START {
                             if (self.prg_bank_a000 & 0x80) == 0 {
                                 self.write_prg_ram_page(addr, self.prg_bank_a000, data);
                             }
-                        } else if addr < 0xE000 {
+                        } else if addr < MMC5_PRG_WINDOW_E000_START {
                             if (self.prg_bank_c000 & 0x80) == 0 {
                                 self.write_prg_ram_page(addr, self.prg_bank_c000, data);
                             }
@@ -577,12 +718,12 @@ impl Mapper for Mapper5 {
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
-        match addr {
-            // IRQ status ($5204). We expose the pending and "in frame" bits,
-            // but do not clear irq_pending here because cpu_read() only has
-            // &self; the CPU core is expected to call clear_irq() when it
-            // actually acknowledges the interrupt.
-            0x5204 => {
+        match Mmc5CpuRegister::from_addr(addr) {
+            Some(Mmc5CpuRegister::IrqStatus) => {
+                // IRQ status ($5204). We expose the pending and "in frame" bits,
+                // but do not clear irq_pending here because cpu_read() only has
+                // &self; the CPU core is expected to call clear_irq() when it
+                // actually acknowledges the interrupt.
                 let mut value = 0u8;
                 if self.irq_pending {
                     value |= 0x80;
@@ -590,17 +731,13 @@ impl Mapper for Mapper5 {
                 if self.in_frame {
                     value |= 0x40;
                 }
-                // TODO: Real hardware clears the pending flag on read of $5204.
-                // With the current trait signature, IRQ acknowledge must be done
-                // by the CPU core via clear_irq().
                 Some(value)
             }
-            // Unsigned 8x8->16 multiplier result ($5205/$5206).
-            0x5205 => Some(self.mul_result as u8),
-            0x5206 => Some((self.mul_result >> 8) as u8),
-            // Internal ExRAM CPU reads ($5C00-$5FFF).
-            0x5C00..=0x5FFF => {
-                let idx = (addr - 0x5C00) as usize;
+            Some(Mmc5CpuRegister::MultiplierA) => Some(self.mul_result as u8),
+            Some(Mmc5CpuRegister::MultiplierB) => Some((self.mul_result >> 8) as u8),
+            Some(Mmc5CpuRegister::ExRamCpu) => {
+                // Internal ExRAM CPU reads ($5C00-$5FFF).
+                let idx = (addr - MMC5_EXRAM_CPU_START) as usize;
                 if idx >= EXRAM_SIZE {
                     return Some(0);
                 }

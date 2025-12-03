@@ -12,6 +12,13 @@
 //! - Mirroring controlled by Control bits 0-1.
 //! - MMC1B-style PRG-RAM disable via PRG bank bit4.
 //!
+//! | Area | Address range     | Behaviour                                          | IRQ/Audio |
+//! |------|-------------------|----------------------------------------------------|-----------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM (enable/disable via header/MMC1B) | None      |
+//! | CPU  | `$8000-$FFFF`     | PRG banking + serial control/CHR/PRG registers     | None      |
+//! | PPU  | `$0000-$1FFF`     | CHR ROM/RAM, 8 KiB or 4 KiB banked                 | None      |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from MMC1 control register               | None      |
+//!
 //! TODOs (accuracy improvements):
 //! - Use CPU cycle information to implement precise consecutive-write ignore.
 //! - Return open-bus value when PRG-RAM is disabled (requires bus support).
@@ -31,6 +38,12 @@ use crate::{
 
 const PRG_BANK_SIZE_16K: usize = 16 * 1024;
 const CHR_BANK_SIZE_4K: usize = 4 * 1024;
+
+/// CPU `$C000`: boundary between the lower and upper 16 KiB PRG windows.
+const MMC1_PRG_UPPER_WINDOW_START: u16 = 0xC000;
+/// PPU `$1000`: boundary between the left (`$0000-$0FFF`) and right (`$1000-$1FFF`)
+/// 4 KiB CHR windows.
+const MMC1_CHR_RIGHT_WINDOW_START: u16 = 0x1000;
 
 #[derive(Debug, Clone)]
 pub struct Mapper1 {
@@ -169,7 +182,7 @@ impl Mapper1 {
             }
             // Fix first 16 KiB at $8000, switch 16 KiB at $C000.
             2 => {
-                if addr < 0xC000 {
+                if addr < MMC1_PRG_UPPER_WINDOW_START {
                     0
                 } else {
                     bank.min(self.prg_bank_count - 1)
@@ -177,7 +190,7 @@ impl Mapper1 {
             }
             // Fix last 16 KiB at $C000, switch 16 KiB at $8000.
             _ => {
-                if addr < 0xC000 {
+                if addr < MMC1_PRG_UPPER_WINDOW_START {
                     bank.min(self.prg_bank_count - 1)
                 } else {
                     self.prg_bank_count - 1
@@ -204,12 +217,12 @@ impl Mapper1 {
         let bank_index = if !chr_mode_4k {
             // 8 KiB CHR mode: ignore low bit of bank 0.
             let base_bank = (self.chr_bank0 & !1) as usize;
-            if addr < 0x1000 {
+            if addr < MMC1_CHR_RIGHT_WINDOW_START {
                 base_bank
             } else {
                 base_bank + 1
             }
-        } else if addr < 0x1000 {
+        } else if addr < MMC1_CHR_RIGHT_WINDOW_START {
             self.chr_bank0 as usize
         } else {
             self.chr_bank1 as usize
@@ -243,12 +256,12 @@ impl Mapper1 {
         // TODO(accuracy): SxROM variants use CHR bank high bits for outer PRG/PRG-RAM banking.
         let bank_index = if !chr_mode_4k {
             let base_bank = (self.chr_bank0 & !1) as usize;
-            if addr < 0x1000 {
+            if addr < MMC1_CHR_RIGHT_WINDOW_START {
                 base_bank
             } else {
                 base_bank + 1
             }
-        } else if addr < 0x1000 {
+        } else if addr < MMC1_CHR_RIGHT_WINDOW_START {
             self.chr_bank0 as usize
         } else {
             self.chr_bank1 as usize
@@ -303,7 +316,6 @@ impl Mapper1 {
         if self.shift_count == 5 {
             let value = self.shift_reg & 0x1F;
             let target = (addr >> 13) & 0b11;
-            // Target selection uses A14-A13 on the 5th write only.
 
             match target {
                 0 => {

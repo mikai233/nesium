@@ -4,6 +4,13 @@
 //! mapped to `$8000-$FFFF`, with CHR provided directly by the cartridge
 //! storage (typically CHR-RAM). Writes to `$8000-$FFFF` latch the PRG bank
 //! number; bus conflicts are ignored.
+//!
+//! | Area | Address range     | Behaviour                                      | IRQ/Audio |
+//! |------|-------------------|------------------------------------------------|-----------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                               | None      |
+//! | CPU  | `$8000-$FFFF`     | 32 KiB switchable PRG-ROM bank                 | None      |
+//! | PPU  | `$0000-$1FFF`     | CHR ROM/RAM (no mapper-side CHR banking)       | None      |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from header                          | None      |
 
 use std::borrow::Cow;
 

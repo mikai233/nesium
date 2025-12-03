@@ -9,7 +9,21 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+// Mapper 2 – UxROM simple 16 KiB PRG banking.
+//
+// | Area | Address range     | Behaviour                                  | IRQ/Audio |
+// |------|-------------------|--------------------------------------------|-----------|
+// | CPU  | `$6000-$7FFF`     | Optional PRG-RAM (when present)            | None      |
+// | CPU  | `$8000-$BFFF`     | 16 KiB switchable PRG-ROM bank             | None      |
+// | CPU  | `$C000-$FFFF`     | 16 KiB fixed PRG-ROM bank (last)           | None      |
+// | PPU  | `$0000-$1FFF`     | CHR ROM/RAM (no mapper-side CHR banking)   | None      |
+// | PPU  | `$2000-$3EFF`     | Mirroring from iNES header (no registers)  | None      |
+
 const PRG_BANK_SIZE: usize = 16 * 1024;
+
+/// CPU `$C000`: boundary between the switchable 16 KiB window (`$8000-$BFFF`)
+/// and the fixed 16 KiB window mapped to the last PRG bank.
+const UXROM_FIXED_WINDOW_START: u16 = 0xC000;
 
 #[derive(Debug, Clone)]
 pub struct Mapper2 {
@@ -46,7 +60,7 @@ impl Mapper2 {
             return 0;
         }
 
-        let bank = if addr < 0xC000 {
+        let bank = if addr < UXROM_FIXED_WINDOW_START {
             self.selected_bank
         } else {
             self.fixed_bank()

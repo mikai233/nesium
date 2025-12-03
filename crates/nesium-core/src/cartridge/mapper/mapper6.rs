@@ -23,6 +23,15 @@
 //! - When the counter overflows from `$FFFF` to `$0000`, the mapper
 //!   asserts the external IRQ line and disables further counting until
 //!   the game reinitialises the counter.
+//!
+//! | Area | Address range     | Behaviour                                     | IRQ/Audio           |
+//! |------|-------------------|-----------------------------------------------|---------------------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                              | None                |
+//! | CPU  | `$42FE/$42FF`     | Front Fareast mirroring + alt-mode control   | None                |
+//! | CPU  | `$4501-$4503`     | 16-bit IRQ counter control                   | CPU-write IRQ timer |
+//! | CPU  | `$8000-$FFFF`     | Combined PRG (16 KiB) + CHR (8 KiB) bank sel | CPU-write IRQ timer |
+//! | PPU  | `$0000-$1FFF`     | 8 KiB CHR-RAM window inside 32 KiB space     | None                |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from FFE control registers         | None                |
 
 use std::borrow::Cow;
 
@@ -42,6 +51,23 @@ const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// Nesdev / Mesen2 model this as a 32 KiB CHR-RAM space, regardless of the
 /// CHR sizes advertised in the original ROM header.
 const CHR_RAM_SIZE: usize = 32 * 1024;
+
+/// CPU `$42FE`: Front Fareast control register (one-screen mirroring base and alt-mode).
+const FF_CTRL_MIRROR_ONE_SCREEN_ADDR: u16 = 0x42FE;
+/// CPU `$42FF`: Front Fareast control register (vertical vs horizontal mirroring).
+const FF_CTRL_MIRROR_ORIENTATION_ADDR: u16 = 0x42FF;
+
+/// CPU `$4501/$4502/$4503`: 16-bit IRQ counter control.
+/// - `$4501`: disable/acknowledge IRQ and stop counting.
+/// - `$4502`: low byte of IRQ counter.
+/// - `$4503`: high byte of IRQ counter and enable counting.
+const FF_IRQ_DISABLE_ADDR: u16 = 0x4501;
+const FF_IRQ_COUNTER_LOW_ADDR: u16 = 0x4502;
+const FF_IRQ_COUNTER_HIGH_ADDR: u16 = 0x4503;
+
+/// CPU `$8000-$FFFF`: combined PRG/CHR bank select window.
+const FF_BANK_SELECT_START: u16 = 0x8000;
+const FF_BANK_SELECT_END: u16 = 0xFFFF;
 
 #[derive(Debug, Clone)]
 pub struct Mapper6 {
@@ -306,16 +332,18 @@ impl Mapper for Mapper6 {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
 
             // Front Fareast control registers.
-            0x42FE => self.write_ffe_control_42fe(data),
-            0x42FF => self.write_ffe_control_42ff(data),
+            FF_CTRL_MIRROR_ONE_SCREEN_ADDR => self.write_ffe_control_42fe(data),
+            FF_CTRL_MIRROR_ORIENTATION_ADDR => self.write_ffe_control_42ff(data),
 
             // IRQ control and 16‑bit counter.
-            0x4501 => self.write_irq_disable_4501(),
-            0x4502 => self.write_irq_low_4502(data),
-            0x4503 => self.write_irq_high_4503(data),
+            FF_IRQ_DISABLE_ADDR => self.write_irq_disable_4501(),
+            FF_IRQ_COUNTER_LOW_ADDR => self.write_irq_low_4502(data),
+            FF_IRQ_COUNTER_HIGH_ADDR => self.write_irq_high_4503(data),
 
             // PRG/CHR banking via `$8000-$FFFF`.
-            0x8000..=0xFFFF => self.write_bank_select_8000_plus(addr, data),
+            FF_BANK_SELECT_START..=FF_BANK_SELECT_END => {
+                self.write_bank_select_8000_plus(addr, data)
+            }
 
             _ => {}
         }

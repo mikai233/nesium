@@ -12,6 +12,16 @@
 //! matches the timing used by Mesen2. A few details (such as power‑on state
 //! and PRG‑RAM write protection) are approximations that are safe for the
 //! majority of licensed games.
+//!
+//! | Area | Address range     | Behaviour                                       | IRQ/Audio     |
+//! |------|-------------------|-------------------------------------------------|---------------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM with enable/write-protect     | None          |
+//! | CPU  | `$8000-$9FFF`     | Switchable 8 KiB PRG (slot 0) + bank select    | MMC3 scanline |
+//! | CPU  | `$A000-$BFFF`     | Switchable 8 KiB PRG (slot 1) + mirroring/RAM  | MMC3 scanline |
+//! | CPU  | `$C000-$DFFF`     | Switchable/fixed 8 KiB PRG (slot 2) + IRQ regs | MMC3 scanline |
+//! | CPU  | `$E000-$FFFF`     | Fixed 8 KiB PRG (last) + IRQ enable/ack        | MMC3 scanline |
+//! | PPU  | `$0000-$1FFF`     | 2×2 KiB + 4×1 KiB CHR banks, A12‑aware         | MMC3 scanline |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from header or MMC3 register         | None          |
 
 use std::borrow::Cow;
 
@@ -33,6 +43,78 @@ use crate::mem_block::ByteBlock;
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
 const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+
+/// CPU `$8000-$9FFF`: first 8 KiB PRG-ROM window and MMC3 bank select/data registers.
+const MMC3_PRG_SLOT0_START: u16 = 0x8000;
+const MMC3_PRG_SLOT0_END: u16 = 0x9FFF;
+/// CPU `$A000-$BFFF`: second 8 KiB PRG-ROM window and mirroring/PRG-RAM control registers.
+const MMC3_PRG_SLOT1_START: u16 = 0xA000;
+const MMC3_PRG_SLOT1_END: u16 = 0xBFFF;
+/// CPU `$C000-$DFFF`: third 8 KiB PRG-ROM window and IRQ latch/reload registers.
+const MMC3_PRG_SLOT2_START: u16 = 0xC000;
+const MMC3_PRG_SLOT2_END: u16 = 0xDFFF;
+/// CPU `$E000-$FFFF`: fixed 8 KiB PRG-ROM window and IRQ enable/ack registers.
+const MMC3_PRG_FIXED_SLOT_START: u16 = 0xE000;
+const MMC3_PRG_FIXED_SLOT_END: u16 = 0xFFFF;
+
+/// CPU-visible MMC3 register set.
+///
+/// MMC3 exposes a handful of control registers in the `$8000-$FFFF` range,
+/// mapped as even/odd addresses within each 8 KiB PRG window. Grouping these
+/// into an enum keeps the CPU-side logic aligned with the documented layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Mmc3CpuRegister {
+    /// `$8000/$8001` – bank select and bank data.
+    BankSelect,
+    BankData,
+    /// `$A000/$A001` – mirroring control and PRG-RAM enable/write-protect.
+    Mirroring,
+    PrgRamProtect,
+    /// `$C000/$C001` – IRQ latch value and reload strobe.
+    IrqLatch,
+    IrqReload,
+    /// `$E000/$E001` – IRQ disable/ack and IRQ enable.
+    IrqDisable,
+    IrqEnable,
+}
+
+impl Mmc3CpuRegister {
+    fn from_addr(addr: u16) -> Option<Self> {
+        use Mmc3CpuRegister::*;
+
+        match addr {
+            MMC3_PRG_SLOT0_START..=MMC3_PRG_SLOT0_END => {
+                if addr & 1 == 0 {
+                    Some(BankSelect)
+                } else {
+                    Some(BankData)
+                }
+            }
+            MMC3_PRG_SLOT1_START..=MMC3_PRG_SLOT1_END => {
+                if addr & 1 == 0 {
+                    Some(Mirroring)
+                } else {
+                    Some(PrgRamProtect)
+                }
+            }
+            MMC3_PRG_SLOT2_START..=MMC3_PRG_SLOT2_END => {
+                if addr & 1 == 0 {
+                    Some(IrqLatch)
+                } else {
+                    Some(IrqReload)
+                }
+            }
+            MMC3_PRG_FIXED_SLOT_START..=MMC3_PRG_FIXED_SLOT_END => {
+                if addr & 1 == 0 {
+                    Some(IrqDisable)
+                } else {
+                    Some(IrqEnable)
+                }
+            }
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Mapper4 {
@@ -174,10 +256,10 @@ impl Mapper4 {
 
         // Determine which 8 KiB slot this address falls into.
         let bank_slot = match addr {
-            0x8000..=0x9FFF => 0,
-            0xA000..=0xBFFF => 1,
-            0xC000..=0xDFFF => 2,
-            0xE000..=0xFFFF => 3,
+            MMC3_PRG_SLOT0_START..=MMC3_PRG_SLOT0_END => 0,
+            MMC3_PRG_SLOT1_START..=MMC3_PRG_SLOT1_END => 1,
+            MMC3_PRG_SLOT2_START..=MMC3_PRG_SLOT2_END => 2,
+            MMC3_PRG_FIXED_SLOT_START..=MMC3_PRG_FIXED_SLOT_END => 3,
             _ => return 0,
         };
 
@@ -510,37 +592,24 @@ impl Mapper for Mapper4 {
     }
 
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
-        match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            0x8000..=0x9FFF => {
-                if addr & 1 == 0 {
-                    self.write_bank_select(data);
-                } else {
-                    self.write_bank_data(data);
-                }
+        if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
+            self.write_prg_ram(addr, data);
+            return;
+        }
+
+        if let Some(reg) = Mmc3CpuRegister::from_addr(addr) {
+            use Mmc3CpuRegister::*;
+
+            match reg {
+                BankSelect => self.write_bank_select(data),
+                BankData => self.write_bank_data(data),
+                Mirroring => self.write_mirroring(data),
+                PrgRamProtect => self.write_prg_ram_protect(data),
+                IrqLatch => self.write_irq_latch(data),
+                IrqReload => self.write_irq_reload(),
+                IrqDisable => self.write_irq_disable(),
+                IrqEnable => self.write_irq_enable(),
             }
-            0xA000..=0xBFFF => {
-                if addr & 1 == 0 {
-                    self.write_mirroring(data);
-                } else {
-                    self.write_prg_ram_protect(data);
-                }
-            }
-            0xC000..=0xDFFF => {
-                if addr & 1 == 0 {
-                    self.write_irq_latch(data);
-                } else {
-                    self.write_irq_reload();
-                }
-            }
-            0xE000..=0xFFFF => {
-                if addr & 1 == 0 {
-                    self.write_irq_disable();
-                } else {
-                    self.write_irq_enable();
-                }
-            }
-            _ => {}
         }
     }
 

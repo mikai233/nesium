@@ -9,6 +9,15 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+// Mapper 7 – AxROM single-screen 32 KiB PRG banking.
+//
+// | Area | Address range     | Behaviour                                      | IRQ/Audio |
+// |------|-------------------|------------------------------------------------|-----------|
+// | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                               | None      |
+// | CPU  | `$8000-$FFFF`     | 32 KiB switchable PRG-ROM bank (AxROM style)   | None      |
+// | PPU  | `$0000-$1FFF`     | CHR ROM/RAM (no mapper-side CHR banking)       | None      |
+// | PPU  | `$2000-$3EFF`     | Single-screen mirroring (lower/upper via data) | None      |
+
 const PRG_BANK_SIZE: usize = 32 * 1024;
 
 #[derive(Debug, Clone)]

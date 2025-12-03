@@ -4,6 +4,13 @@
 //! *Donkey Kong*, and *Excitebike*. It provides no banking capabilities, meaning
 //! the CPU sees the entire PRG ROM and the PPU sees the entire CHR ROM/RAM directly.
 //!
+//! | Area | Address range     | Behaviour                          | IRQ/Audio |
+//! |------|-------------------|------------------------------------|-----------|
+//! | CPU  | `$6000-$7FFF`     | Optional 8 KiB PRG-RAM             | None      |
+//! | CPU  | `$8000-$FFFF`     | 16/32 KiB PRG-ROM, mirrored as NROM | None      |
+//! | PPU  | `$0000-$1FFF`     | 8 KiB CHR ROM/RAM                  | None      |
+//! | PPU  | `$2000-$3EFF`     | Fixed mirroring from header        | None      |
+//!
 //! # Memory Layout
 //!
 //! - **PRG ROM**: 16 KiB or 32 KiB mapped at `$8000-$FFFF`.

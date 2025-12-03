@@ -17,6 +17,15 @@
 //!   4 bits per write) used by some test ROMs.
 //!
 //! No IRQs are present on this board.
+//!
+//! | Area | Address range     | Behaviour                                          | IRQ/Audio |
+//! |------|-------------------|----------------------------------------------------|-----------|
+//! | CPU  | `$5000-$5FFF`     | 4-byte mapper RAM window (low 4 bits stored)      | None      |
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                                   | None      |
+//! | CPU  | `$8000-$BFFF`     | 16 KiB PRG-ROM bank derived from latched address   | None      |
+//! | CPU  | `$C000-$FFFF`     | 16 KiB PRG-ROM bank derived from latched address   | None      |
+//! | PPU  | `$0000-$1FFF`     | 8 KiB CHR ROM/RAM bank from address/data combo     | None      |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from latched A13 (H/V)                   | None      |
 
 use std::borrow::Cow;
 
@@ -35,6 +44,23 @@ use crate::mem_block::ByteBlock;
 const PRG_BANK_SIZE_16K: usize = 16 * 1024;
 /// CHR banking granularity (8 KiB).
 const CHR_BANK_SIZE_8K: usize = 8 * 1024;
+
+/// CPU `$5000-$5FFF`: 4-byte mapper RAM ("MRAM") window used by some test
+/// ROMs. Writes are masked to 4 bits; reads return the stored nibble.
+const AE_MRAM_WINDOW_START: u16 = 0x5000;
+const AE_MRAM_WINDOW_END: u16 = 0x5FFF;
+
+/// CPU `$8000-$BFFF/$C000-$FFFF`: two 16 KiB PRG windows controlled by the
+/// Action 52 banking algorithm.
+const AE_PRG_SLOT0_START: u16 = 0x8000;
+const AE_PRG_SLOT0_END: u16 = 0xBFFF;
+const AE_PRG_SLOT1_START: u16 = 0xC000;
+const AE_PRG_SLOT1_END: u16 = 0xFFFF;
+
+/// CPU `$8000-$FFFF`: bank-select write window; writes latch both the address
+/// and data to control PRG/CHR/mirroring.
+const AE_BANK_WRITE_WINDOW_START: u16 = 0x8000;
+const AE_BANK_WRITE_WINDOW_END: u16 = 0xFFFF;
 
 #[derive(Debug, Clone)]
 pub struct Mapper228 {
@@ -107,8 +133,8 @@ impl Mapper228 {
             return 0;
         }
         let bank = match addr {
-            0x8000..=0xBFFF => self.prg_bank_8000,
-            0xC000..=0xFFFF => self.prg_bank_c000,
+            AE_PRG_SLOT0_START..=AE_PRG_SLOT0_END => self.prg_bank_8000,
+            AE_PRG_SLOT1_START..=AE_PRG_SLOT1_END => self.prg_bank_c000,
             _ => 0,
         };
         let offset = (addr & 0x3FFF) as usize;
@@ -145,7 +171,7 @@ impl Mapper for Mapper228 {
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
         match addr {
-            0x5000..=0x5FFF => Some(self.mram[(addr & 0x0003) as usize]),
+            AE_MRAM_WINDOW_START..=AE_MRAM_WINDOW_END => Some(self.mram[(addr & 0x0003) as usize]),
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => Some(self.read_prg_rom(addr)),
             _ => None,
@@ -154,11 +180,13 @@ impl Mapper for Mapper228 {
 
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
-            0x5000..=0x5FFF => {
+            AE_MRAM_WINDOW_START..=AE_MRAM_WINDOW_END => {
                 self.mram[(addr & 0x0003) as usize] = data & 0x0F;
             }
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            0x8000..=0xFFFF => self.sync_from_write(addr, data),
+            AE_BANK_WRITE_WINDOW_START..=AE_BANK_WRITE_WINDOW_END => {
+                self.sync_from_write(addr, data)
+            }
             _ => {}
         }
     }

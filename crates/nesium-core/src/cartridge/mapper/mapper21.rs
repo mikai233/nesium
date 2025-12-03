@@ -6,6 +6,15 @@
 //! - Mapper‑controlled nametable mirroring.
 //! - An IRQ counter modelled after Mesen2's `VrcIrq` (prescaler + reloadable 8‑bit
 //!   counter with optional CPU‑cycle mode).
+//!
+//! | Area | Address range     | Behaviour                                          | IRQ/Audio   |
+//! |------|-------------------|----------------------------------------------------|-------------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                                   | None        |
+//! | CPU  | `$8000-$DFFF`     | Two switchable 8 KiB PRG banks + one fixed window  | None        |
+//! | CPU  | `$8000-$E003`     | PRG/CHR/mirroring/IRQ registers (after translation)| VRC4 IRQ    |
+//! | CPU  | `$E000-$FFFF`     | Fixed 8 KiB PRG (last) + IRQ control/ack          | VRC4 IRQ    |
+//! | PPU  | `$0000-$1FFF`     | Eight 1 KiB CHR banks with split low/high nibbles  | None        |
+//! | PPU  | `$2000-$3EFF`     | Mirroring controlled by VRC4 register              | None        |
 
 use std::borrow::Cow;
 
@@ -24,6 +33,88 @@ use crate::mem_block::ByteBlock;
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
 const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+
+/// CPU `$8000-$9FFF/$A000-$BFFF/$C000-$DFFF/$E000-$FFFF`: four 8 KiB PRG windows.
+const VRC4_PRG_SLOT0_START: u16 = 0x8000;
+const VRC4_PRG_SLOT0_END: u16 = 0x9FFF;
+const VRC4_PRG_SLOT1_START: u16 = 0xA000;
+const VRC4_PRG_SLOT1_END: u16 = 0xBFFF;
+const VRC4_PRG_SLOT2_START: u16 = 0xC000;
+const VRC4_PRG_SLOT2_END: u16 = 0xDFFF;
+const VRC4_PRG_FIXED_SLOT_START: u16 = 0xE000;
+const VRC4_PRG_FIXED_SLOT_END: u16 = 0xFFFF;
+
+/// VRC4 register decode addresses after `translate_address` and masking:
+/// - `$8000-$8006`: PRG bank for `$8000-$9FFF`.
+/// - `$9000-$9001`: mirroring control.
+/// - `$9002-$9003`: PRG mode (swap at `$C000`) and IRQ mode bits.
+/// - `$A000-$A006`: PRG bank for `$A000-$BFFF`.
+/// - `$B000-$E006`: CHR bank low/high nibbles.
+/// - `$F000-$F003`: IRQ reload low/high, IRQ control and acknowledge.
+const VRC4_REG_PRG_BANK_8000_START: u16 = 0x8000;
+const VRC4_REG_PRG_BANK_8000_END: u16 = 0x8006;
+const VRC4_REG_MIRRORING_START: u16 = 0x9000;
+const VRC4_REG_MIRRORING_END: u16 = 0x9001;
+const VRC4_REG_MODE_START: u16 = 0x9002;
+const VRC4_REG_MODE_END: u16 = 0x9003;
+const VRC4_REG_PRG_BANK_A000_START: u16 = 0xA000;
+const VRC4_REG_PRG_BANK_A000_END: u16 = 0xA006;
+const VRC4_REG_CHR_BANK_FIRST: u16 = 0xB000;
+const VRC4_REG_CHR_BANK_LAST: u16 = 0xE006;
+const VRC4_REG_IRQ_RELOAD_LOW: u16 = 0xF000;
+const VRC4_REG_IRQ_RELOAD_HIGH: u16 = 0xF001;
+const VRC4_REG_IRQ_CONTROL: u16 = 0xF002;
+const VRC4_REG_IRQ_ACK: u16 = 0xF003;
+
+/// CPU `$8000-$FFFF`: VRC4 register I/O window.
+const VRC4_IO_WINDOW_START: u16 = 0x8000;
+const VRC4_IO_WINDOW_END: u16 = 0xFFFF;
+
+/// CPU-visible VRC4 register set after address translation.
+///
+/// VRC4 exposes a compact set of control registers spread across the
+/// `$8000-$FFFF` window. After `translate_address` has normalised the wiring
+/// differences, these logical registers behave consistently across variants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Vrc4CpuRegister {
+    /// `$8000-$8006` – PRG bank for `$8000-$9FFF`.
+    PrgBank8000,
+    /// `$9000-$9001` – nametable mirroring control.
+    Mirroring,
+    /// `$9002-$9003` – PRG mode / IRQ mode bits.
+    Mode,
+    /// `$A000-$A006` – PRG bank for `$A000-$BFFF`.
+    PrgBankA000,
+    /// `$B000-$E006` – CHR bank low/high nibble registers.
+    ChrBank,
+    /// `$F000` – IRQ reload low nibble.
+    IrqReloadLow,
+    /// `$F001` – IRQ reload high nibble.
+    IrqReloadHigh,
+    /// `$F002` – IRQ control (enable/mode).
+    IrqControl,
+    /// `$F003` – IRQ acknowledge / re-enable.
+    IrqAck,
+}
+
+impl Vrc4CpuRegister {
+    fn from_addr(addr: u16) -> Option<Self> {
+        use Vrc4CpuRegister::*;
+
+        match addr {
+            VRC4_REG_PRG_BANK_8000_START..=VRC4_REG_PRG_BANK_8000_END => Some(PrgBank8000),
+            VRC4_REG_MIRRORING_START..=VRC4_REG_MIRRORING_END => Some(Mirroring),
+            VRC4_REG_MODE_START..=VRC4_REG_MODE_END => Some(Mode),
+            VRC4_REG_PRG_BANK_A000_START..=VRC4_REG_PRG_BANK_A000_END => Some(PrgBankA000),
+            VRC4_REG_CHR_BANK_FIRST..=VRC4_REG_CHR_BANK_LAST => Some(ChrBank),
+            VRC4_REG_IRQ_RELOAD_LOW => Some(IrqReloadLow),
+            VRC4_REG_IRQ_RELOAD_HIGH => Some(IrqReloadHigh),
+            VRC4_REG_IRQ_CONTROL => Some(IrqControl),
+            VRC4_REG_IRQ_ACK => Some(IrqAck),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Vrc4Variant {
@@ -157,15 +248,23 @@ impl Mapper21 {
 
         match (self.prg_mode_swap, addr) {
             // Mode 0: switchable at $8000/$A000, fixed at $C000(second last)/$E000(last).
-            (false, 0x8000..=0x9FFF) => self.prg_bank_index(self.prg_bank_8000),
-            (false, 0xA000..=0xBFFF) => self.prg_bank_index(self.prg_bank_a000),
-            (false, 0xC000..=0xDFFF) => second_last,
+            (false, VRC4_PRG_SLOT0_START..=VRC4_PRG_SLOT0_END) => {
+                self.prg_bank_index(self.prg_bank_8000)
+            }
+            (false, VRC4_PRG_SLOT1_START..=VRC4_PRG_SLOT1_END) => {
+                self.prg_bank_index(self.prg_bank_a000)
+            }
+            (false, VRC4_PRG_SLOT2_START..=VRC4_PRG_SLOT2_END) => second_last,
             (false, _) => last,
 
             // Mode 1: fixed second-last at $8000, switchable $A000 + $C000 swapped.
-            (true, 0x8000..=0x9FFF) => second_last,
-            (true, 0xA000..=0xBFFF) => self.prg_bank_index(self.prg_bank_a000),
-            (true, 0xC000..=0xDFFF) => self.prg_bank_index(self.prg_bank_8000),
+            (true, VRC4_PRG_SLOT0_START..=VRC4_PRG_SLOT0_END) => second_last,
+            (true, VRC4_PRG_SLOT1_START..=VRC4_PRG_SLOT1_END) => {
+                self.prg_bank_index(self.prg_bank_a000)
+            }
+            (true, VRC4_PRG_SLOT2_START..=VRC4_PRG_SLOT2_END) => {
+                self.prg_bank_index(self.prg_bank_8000)
+            }
             (true, _) => last,
         }
     }
@@ -228,52 +327,53 @@ impl Mapper21 {
     }
 
     fn write_register(&mut self, addr: u16, value: u8) {
-        match addr {
-            0x8000..=0x8006 => {
-                self.prg_bank_8000 = value & 0x1F;
-            }
-            0x9000..=0x9001 => {
-                self.set_mirroring_from_value(value);
-            }
-            0x9002..=0x9003 => {
-                self.prg_mode_swap = (value & 0x02) != 0;
-            }
-            0xA000..=0xA006 => {
-                self.prg_bank_a000 = value & 0x1F;
-            }
-            0xB000..=0xE006 => {
-                // Eight 1 KiB CHR banks spread across B/C/D/E regions.
-                let reg_number = ((((addr >> 12) & 0x07) - 3) << 1) + ((addr >> 1) & 0x01);
-                let idx = reg_number as usize;
-                if idx < 8 {
-                    if addr & 0x01 == 0 {
-                        self.chr_low_regs[idx] = value & 0x0F;
-                    } else {
-                        self.chr_high_regs[idx] = value & 0x1F;
+        if let Some(reg) = Vrc4CpuRegister::from_addr(addr) {
+            match reg {
+                Vrc4CpuRegister::PrgBank8000 => {
+                    self.prg_bank_8000 = value & 0x1F;
+                }
+                Vrc4CpuRegister::Mirroring => {
+                    self.set_mirroring_from_value(value);
+                }
+                Vrc4CpuRegister::Mode => {
+                    self.prg_mode_swap = (value & 0x02) != 0;
+                }
+                Vrc4CpuRegister::PrgBankA000 => {
+                    self.prg_bank_a000 = value & 0x1F;
+                }
+                Vrc4CpuRegister::ChrBank => {
+                    // Eight 1 KiB CHR banks spread across B/C/D/E regions.
+                    let reg_number = ((((addr >> 12) & 0x07) - 3) << 1) + ((addr >> 1) & 0x01);
+                    let idx = reg_number as usize;
+                    if idx < 8 {
+                        if addr & 0x01 == 0 {
+                            self.chr_low_regs[idx] = value & 0x0F;
+                        } else {
+                            self.chr_high_regs[idx] = value & 0x1F;
+                        }
                     }
                 }
-            }
-            0xF000 => {
-                self.irq_reload = (self.irq_reload & 0xF0) | (value & 0x0F);
-            }
-            0xF001 => {
-                self.irq_reload = (self.irq_reload & 0x0F) | ((value & 0x0F) << 4);
-            }
-            0xF002 => {
-                self.irq_enabled_after_ack = (value & 0x01) != 0;
-                self.irq_enabled = (value & 0x02) != 0;
-                self.irq_cycle_mode = (value & 0x04) != 0;
-                if self.irq_enabled {
-                    self.irq_counter = self.irq_reload;
-                    self.irq_prescaler = 341;
+                Vrc4CpuRegister::IrqReloadLow => {
+                    self.irq_reload = (self.irq_reload & 0xF0) | (value & 0x0F);
+                }
+                Vrc4CpuRegister::IrqReloadHigh => {
+                    self.irq_reload = (self.irq_reload & 0x0F) | ((value & 0x0F) << 4);
+                }
+                Vrc4CpuRegister::IrqControl => {
+                    self.irq_enabled_after_ack = (value & 0x01) != 0;
+                    self.irq_enabled = (value & 0x02) != 0;
+                    self.irq_cycle_mode = (value & 0x04) != 0;
+                    if self.irq_enabled {
+                        self.irq_counter = self.irq_reload;
+                        self.irq_prescaler = 341;
+                        self.irq_pending = false;
+                    }
+                }
+                Vrc4CpuRegister::IrqAck => {
+                    self.irq_enabled = self.irq_enabled_after_ack;
                     self.irq_pending = false;
                 }
             }
-            0xF003 => {
-                self.irq_enabled = self.irq_enabled_after_ack;
-                self.irq_pending = false;
-            }
-            _ => {}
         }
     }
 
@@ -326,7 +426,7 @@ impl Mapper for Mapper21 {
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            0x8000..=0xFFFF => {
+            VRC4_IO_WINDOW_START..=VRC4_IO_WINDOW_END => {
                 let translated = self.translate_address(addr) & 0xF00F;
                 self.write_register(translated, data);
             }

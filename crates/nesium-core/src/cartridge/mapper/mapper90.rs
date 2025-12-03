@@ -13,6 +13,16 @@
 //! Known limitations:
 //! - Advanced nametable mapping and block/chunk CHR modes are omitted.
 //! - IRQ details on real JY hardware differ; this uses a VRC-like approximation.
+//!
+//! | Area | Address range                             | Behaviour                                          | IRQ/Audio      |
+//! |------|-------------------------------------------|----------------------------------------------------|----------------|
+//! | CPU  | `$6000-$7FFF`                             | Optional PRG-RAM                                   | None           |
+//! | CPU  | `$8000-$9FFF`                             | PRG bank register 0 / 8 KiB PRG slot               | None           |
+//! | CPU  | `$A000-$BFFF`                             | PRG bank register 1 / 8 KiB PRG slot               | None           |
+//! | CPU  | `$C000-$DFFF`                             | PRG bank register 2 / 8 KiB PRG slot               | None           |
+//! | CPU  | `$E000-$FFFF`                             | PRG bank register 3 / 8 KiB PRG slot (often fixed) | None           |
+//! | CPU  | `$9000/$A000/$B000/$C000-$C007/$D001`     | CHR, IRQ, mirroring registers                      | JY IRQ timer   |
+//! | PPU  | `$0000-$1FFF`                             | Eight 1 KiB CHR banks (split low/high regs)        | None           |
 
 use std::borrow::Cow;
 
@@ -31,6 +41,72 @@ use crate::mem_block::ByteBlock;
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
 const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+
+/// CPU `$8000-$FFFF`: J.Y. Company mapper 90 register window. Writes in this
+/// range select PRG/CHR banks, mirroring, and IRQ configuration.
+const JY90_IO_WINDOW_START: u16 = 0x8000;
+const JY90_IO_WINDOW_END: u16 = 0xFFFF;
+
+/// CPU-visible JY-90 mapper register set.
+///
+/// JY-90 exposes four PRG bank registers, CHR low/high registers, nametable
+/// control and a small IRQ/feature control area. Grouping them into an enum
+/// makes the decoded layout clearer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Jy90CpuRegister {
+    /// `$8000-$8003` – four 8 KiB PRG bank registers.
+    PrgBank,
+    /// `$9000-$9007` – CHR low bytes for eight 1 KiB banks.
+    ChrLow,
+    /// `$A000-$A007` – CHR high bytes for eight 1 KiB banks.
+    ChrHigh,
+    /// `$B000-$B007` – nametable/mode control (ignored in this implementation).
+    NametableCtrl,
+    /// `$C000` – IRQ enable.
+    IrqEnable,
+    /// `$C001` – IRQ mode (ignored).
+    IrqMode,
+    /// `$C002` – IRQ disable.
+    IrqDisable,
+    /// `$C003` – IRQ enable (alternate).
+    IrqEnableAlt,
+    /// `$C004` – IRQ prescaler value.
+    IrqPrescaler,
+    /// `$C005` – IRQ reload value.
+    IrqReload,
+    /// `$C006-$C007` – unused IRQ-related registers.
+    IrqUnused,
+    /// `$D000` – mode bits (ignored).
+    ModeControl,
+    /// `$D001` – mirroring control.
+    Mirroring,
+    /// `$D002-$D003` – unused.
+    MiscUnused,
+}
+
+impl Jy90CpuRegister {
+    fn from_addr(addr: u16) -> Option<Self> {
+        use Jy90CpuRegister::*;
+
+        match addr {
+            0x8000..=0x8003 => Some(PrgBank),
+            0x9000..=0x9007 => Some(ChrLow),
+            0xA000..=0xA007 => Some(ChrHigh),
+            0xB000..=0xB007 => Some(NametableCtrl),
+            0xC000 => Some(IrqEnable),
+            0xC001 => Some(IrqMode),
+            0xC002 => Some(IrqDisable),
+            0xC003 => Some(IrqEnableAlt),
+            0xC004 => Some(IrqPrescaler),
+            0xC005 => Some(IrqReload),
+            0xC006 | 0xC007 => Some(IrqUnused),
+            0xD000 => Some(ModeControl),
+            0xD001 => Some(Mirroring),
+            0xD002 | 0xD003 => Some(MiscUnused),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Mapper90 {
@@ -147,61 +223,64 @@ impl Mapper90 {
     }
 
     fn write_register(&mut self, addr: u16, value: u8) {
-        match addr {
-            0x8000..=0x8003 => {
-                self.prg_regs[(addr & 0x0003) as usize] = value & 0x7F;
-            }
-            0x9000..=0x9007 => {
-                self.chr_low[(addr & 0x0007) as usize] = value;
-            }
-            0xA000..=0xA007 => {
-                self.chr_high[(addr & 0x0007) as usize] = value & 0x1F;
-            }
-            0xB000..=0xB007 => {
-                // Nametable control ignored in this simplified model.
-                let _ = value;
-            }
-            0xC000 => {
-                self.irq_enabled = (value & 0x01) != 0;
-                if !self.irq_enabled {
+        if let Some(reg) = Jy90CpuRegister::from_addr(addr) {
+            use Jy90CpuRegister::*;
+
+            match reg {
+                PrgBank => {
+                    self.prg_regs[(addr & 0x0003) as usize] = value & 0x7F;
+                }
+                ChrLow => {
+                    self.chr_low[(addr & 0x0007) as usize] = value;
+                }
+                ChrHigh => {
+                    self.chr_high[(addr & 0x0007) as usize] = value & 0x1F;
+                }
+                NametableCtrl => {
+                    // Nametable control ignored in this simplified model.
+                    let _ = value;
+                }
+                IrqEnable => {
+                    self.irq_enabled = (value & 0x01) != 0;
+                    if !self.irq_enabled {
+                        self.irq_pending = false;
+                    }
+                }
+                IrqMode => {
+                    let _ = value; // IRQ mode bits ignored.
+                }
+                IrqDisable => {
+                    self.irq_enabled = false;
                     self.irq_pending = false;
                 }
+                IrqEnableAlt => {
+                    self.irq_enabled = true;
+                }
+                IrqPrescaler => {
+                    self.irq_prescaler = (value as i32) & 0xFF;
+                }
+                IrqReload => {
+                    self.irq_reload = value;
+                }
+                IrqUnused => {
+                    let _ = value; // Unused in this simplified model.
+                }
+                ModeControl => {
+                    // Mode bits ignored; base implementation uses direct registers.
+                    let _ = value;
+                }
+                Mirroring => {
+                    self.mirroring = match value & 0x03 {
+                        0 => crate::cartridge::header::Mirroring::Vertical,
+                        1 => crate::cartridge::header::Mirroring::Horizontal,
+                        2 => crate::cartridge::header::Mirroring::SingleScreenLower,
+                        _ => crate::cartridge::header::Mirroring::SingleScreenUpper,
+                    };
+                }
+                MiscUnused => {
+                    let _ = value; // Ignored
+                }
             }
-            0xC001 => {
-                let _ = value; // IRQ mode bits ignored.
-            }
-            0xC002 => {
-                self.irq_enabled = false;
-                self.irq_pending = false;
-            }
-            0xC003 => {
-                self.irq_enabled = true;
-            }
-            0xC004 => {
-                self.irq_prescaler = (value as i32) & 0xFF;
-            }
-            0xC005 => {
-                self.irq_reload = value;
-            }
-            0xC006 | 0xC007 => {
-                let _ = value; // Unused in this simplified model.
-            }
-            0xD000 => {
-                // Mode bits ignored; base implementation uses direct registers.
-                let _ = value;
-            }
-            0xD001 => {
-                self.mirroring = match value & 0x03 {
-                    0 => Mirroring::Vertical,
-                    1 => Mirroring::Horizontal,
-                    2 => Mirroring::SingleScreenLower,
-                    _ => Mirroring::SingleScreenUpper,
-                };
-            }
-            0xD002 | 0xD003 => {
-                let _ = value; // Ignored
-            }
-            _ => {}
         }
     }
 
@@ -245,7 +324,7 @@ impl Mapper for Mapper90 {
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            0x8000..=0xFFFF => self.write_register(addr, data),
+            JY90_IO_WINDOW_START..=JY90_IO_WINDOW_END => self.write_register(addr, data),
             _ => {}
         }
     }

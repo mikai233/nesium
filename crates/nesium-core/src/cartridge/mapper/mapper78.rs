@@ -6,6 +6,14 @@
 //! - CHR: 8 KiB bank (high nibble) covering `$0000-$1FFF` (ROM or RAM).
 //! - Mirroring: bit 2 selects horizontal (1) vs vertical (0) mirroring.
 //! Bus conflicts are ignored to match common emulator behaviour.
+//!
+//! | Area | Address range     | Behaviour                                      | IRQ/Audio |
+//! |------|-------------------|------------------------------------------------|-----------|
+//! | CPU  | `$6000-$7FFF`     | Optional PRG-RAM                               | None      |
+//! | CPU  | `$8000-$BFFF`     | Switchable 16 KiB PRG-ROM bank (low nibble)    | None      |
+//! | CPU  | `$C000-$FFFF`     | Fixed 16 KiB PRG-ROM bank (last)               | None      |
+//! | PPU  | `$0000-$1FFF`     | 8 KiB CHR ROM/RAM bank (high nibble)           | None      |
+//! | PPU  | `$2000-$3EFF`     | Mirroring from latch bit 2                     | None      |
 
 use std::borrow::Cow;
 
