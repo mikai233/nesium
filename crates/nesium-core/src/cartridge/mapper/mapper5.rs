@@ -5,8 +5,8 @@ use crate::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{
-            ChrStorage, NametableTarget, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram,
-            select_chr_storage, trainer_destination,
+            ChrStorage, NametableTarget, PpuVramAccessContext, PpuVramAccessKind,
+            allocate_prg_ram_with_trainer, select_chr_storage,
         },
     },
     mem_block::ByteBlock,
@@ -91,20 +91,13 @@ pub struct Mapper5 {
 type Mapper5ChrBanks = ByteBlock<8>;
 
 impl Mapper5 {
-    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
-        Self::with_trainer(header, prg_rom, chr_rom, None)
-    }
-
-    pub(crate) fn with_trainer(
+    pub fn new(
         header: Header,
         prg_rom: PrgRom,
         chr_rom: ChrRom,
         trainer: TrainerBytes,
     ) -> Self {
-        let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer);
-        }
+        let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         // MMC5 boards often have large PRG-RAM; the allocate_prg_ram helper
         // already considers NES 2.0 hints. Games that rely on banking PRG-RAM

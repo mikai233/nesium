@@ -4,7 +4,7 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{allocate_prg_ram, trainer_destination},
+        mapper::allocate_prg_ram_with_trainer,
     },
     memory::cpu as cpu_mem,
 };
@@ -23,20 +23,13 @@ pub struct Mapper3 {
 }
 
 impl Mapper3 {
-    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
-        Self::with_trainer(header, prg_rom, chr_rom, None)
-    }
-
-    pub(crate) fn with_trainer(
+    pub fn new(
         header: Header,
         prg_rom: PrgRom,
         chr_rom: ChrRom,
         trainer: TrainerBytes,
     ) -> Self {
-        let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer);
-        }
+        let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         let chr_bank_count = if chr_rom.is_empty() {
             0
@@ -256,7 +249,7 @@ mod tests {
             chr[start..end].fill(bank as u8);
         }
 
-        Mapper3::new(header(prg.len(), chr.len(), 0), prg.into(), chr.into())
+        Mapper3::new(header(prg.len(), chr.len(), 0), prg.into(), chr.into(), None)
     }
 
     #[test]
@@ -281,7 +274,7 @@ mod tests {
         let header = header(0x8000, 0, 8 * 1024);
         let prg = vec![0; 0x8000].into();
         let chr = Vec::new().into();
-        let mut cart = Mapper3::new(header, prg, chr);
+        let mut cart = Mapper3::new(header, prg, chr, None);
 
         cart.ppu_write(0x0010, 0x77);
         assert_eq!(cart.ppu_read(0x0010), Some(0x77));

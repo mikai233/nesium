@@ -4,7 +4,7 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram, select_chr_storage, trainer_destination},
+        mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
     },
     memory::cpu as cpu_mem,
 };
@@ -22,20 +22,13 @@ pub struct Mapper7 {
 }
 
 impl Mapper7 {
-    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
-        Self::with_trainer(header, prg_rom, chr_rom, None)
-    }
-
-    pub(crate) fn with_trainer(
+    pub fn new(
         header: Header,
         prg_rom: PrgRom,
         chr_rom: ChrRom,
         trainer: TrainerBytes,
     ) -> Self {
-        let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer);
-        }
+        let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         let bank_count = (prg_rom.len() / PRG_BANK_SIZE).max(1);
 
@@ -207,7 +200,7 @@ mod tests {
             prg[start..end].fill(bank as u8);
         }
 
-        Mapper7::new(header(prg.len()), prg.into(), vec![0; 0].into())
+        Mapper7::new(header(prg.len()), prg.into(), vec![0; 0].into(), None)
     }
 
     #[test]

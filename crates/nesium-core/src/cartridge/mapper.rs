@@ -71,7 +71,8 @@ pub use provider::Provider;
 use crate::{
     cartridge::{
         TRAINER_SIZE,
-        header::{Header, Mirroring},
+        TrainerBytes,
+        header::{Header, Mirroring, RomFormat},
     },
     memory::cpu as cpu_mem,
 };
@@ -331,7 +332,16 @@ pub fn mapper_downcast_mut<T: Mapper + 'static>(mapper: &mut dyn Mapper) -> Opti
 /// For NES 2.0 headers this picks the larger of volatile and battery‑backed
 /// PRG RAM sizes. Legacy iNES headers with `0` fall back to an empty slice.
 pub fn allocate_prg_ram(header: &Header) -> Box<[u8]> {
-    let size = header.prg_ram_size.max(header.prg_nvram_size);
+    let mut size = header.prg_ram_size.max(header.prg_nvram_size);
+
+    // Some iNES 1.0 ROMs specify 0 PRG RAM, but were designed for systems
+    // that provided 8 KiB by default. Mesen2 provides 8 KiB for such ROMs
+    // (except for specific board types like Action 52), so we do the same
+    // here.
+    if header.format == RomFormat::INes && size == 0 {
+        size = 8192; // 8 KiB
+    }
+
     if size == 0 {
         Vec::new().into_boxed_slice()
     } else {
@@ -348,4 +358,16 @@ pub fn trainer_destination(prg_ram: &mut [u8]) -> Option<&mut [u8]> {
         return None;
     }
     Some(&mut prg_ram[TRAINER_RAM_OFFSET..TRAINER_RAM_OFFSET + TRAINER_SIZE])
+}
+
+/// Allocates CPU-visible PRG RAM and optionally copies the trainer into it.
+///
+/// This combines [`allocate_prg_ram`] and [`trainer_destination`] into a single
+/// convenience helper used by most mappers during initialization.
+pub fn allocate_prg_ram_with_trainer(header: &Header, trainer: TrainerBytes) -> Box<[u8]> {
+    let mut prg_ram = allocate_prg_ram(header);
+    if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
+        dst.copy_from_slice(trainer);
+    }
+    prg_ram
 }

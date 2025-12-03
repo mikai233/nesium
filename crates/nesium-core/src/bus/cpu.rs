@@ -351,7 +351,7 @@ mod tests {
             .collect::<Vec<_>>()
             .into();
         let chr_rom = vec![0; header.chr_rom_size].into();
-        let mapper = Mapper0::new(header, prg_rom, chr_rom);
+        let mapper = Mapper0::new(header, prg_rom, chr_rom, None);
         Cartridge::new(header, Box::new(mapper))
     }
 

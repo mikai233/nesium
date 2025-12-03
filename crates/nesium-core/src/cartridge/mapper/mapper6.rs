@@ -30,7 +30,7 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram, trainer_destination},
+        mapper::{ChrStorage, allocate_prg_ram_with_trainer},
     },
     memory::cpu as cpu_mem,
 };
@@ -89,22 +89,15 @@ pub struct Mapper6 {
 }
 
 impl Mapper6 {
-    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
-        Self::with_trainer(header, prg_rom, chr_rom, None)
-    }
-
-    pub(crate) fn with_trainer(
+    pub fn new(
         header: Header,
         prg_rom: PrgRom,
         _chr_rom: ChrRom,
         trainer: TrainerBytes,
     ) -> Self {
         // Allocate PRG-RAM using the shared helper so NES 2.0 save/work RAM
-        // sizing is respected.
-        let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer);
-        }
+        // sizing is respected and any trainer bytes are copied in.
+        let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         // Front Fareast carts expose a large CHR-RAM region regardless of the
         // original header; we model this directly instead of using

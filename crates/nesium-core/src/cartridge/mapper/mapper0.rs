@@ -1,37 +1,59 @@
+//! Mapper 0 (NROM) implementation.
+//!
+//! NROM is the simplest NES mapper, used by early titles like *Super Mario Bros.*,
+//! *Donkey Kong*, and *Excitebike*. It provides no banking capabilities, meaning
+//! the CPU sees the entire PRG ROM and the PPU sees the entire CHR ROM/RAM directly.
+//!
+//! # Memory Layout
+//!
+//! - **PRG ROM**: 16 KiB or 32 KiB mapped at `$8000-$FFFF`.
+//!   - **NROM-128 (16 KiB)**: Mirrored at `$8000-$BFFF` and `$C000-$FFFF`.
+//!   - **NROM-256 (32 KiB)**: Occupies the full `$8000-$FFFF` range.
+//! - **PRG RAM**: Optional 2 KiB or 4 KiB at `$6000-$7FFF` (Family Basic).
+//!   - *Note*: Many emulators (and this implementation) provide 8 KiB of PRG RAM by
+//!     default for iNES 1.0 ROMs to support homebrew/hacks, unless specified otherwise.
+//! - **CHR**: 8 KiB of ROM or RAM mapped at `$0000-$1FFF` (PPU).
+//!
+//! # Reference
+//! - [NROM on NESdev Wiki](https://www.nesdev.org/wiki/NROM)
+
 use std::borrow::Cow;
 
 use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram, select_chr_storage, trainer_destination},
+        mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
     },
     memory::cpu as cpu_mem,
 };
 
+/// Mapper 0 (NROM) state.
 #[derive(Debug, Clone)]
 pub struct Mapper0 {
+    /// PRG ROM data (16 KiB or 32 KiB).
     prg_rom: PrgRom,
+    /// PRG RAM (Work RAM), typically 8 KiB at `$6000`.
+    /// Contains the Trainer if one was present in the header.
     prg_ram: Box<[u8]>,
+    /// CHR memory (ROM or RAM) mapped to PPU `$0000`.
     chr: ChrStorage,
+    /// Hardwired mirroring mode (Horizontal/Vertical).
     mirroring: Mirroring,
 }
 
 impl Mapper0 {
-    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
-        Self::with_trainer(header, prg_rom, chr_rom, None)
-    }
-
-    pub(crate) fn with_trainer(
+    /// Constructs a new NROM mapper instance.
+    ///
+    /// This handles the allocation of PRG RAM (including trainer copying)
+    /// and selects the appropriate CHR storage backend.
+    pub fn new(
         header: Header,
         prg_rom: PrgRom,
         chr_rom: ChrRom,
         trainer: TrainerBytes,
     ) -> Self {
-        let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer);
-        }
+        let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         Self {
             prg_rom,
@@ -41,14 +63,22 @@ impl Mapper0 {
         }
     }
 
+    /// Reads from PRG ROM handling the NROM-128 mirroring.
+    ///
+    /// If the ROM is only 16 KiB (NROM-128), accesses to `$C000-$FFFF` are
+    /// mapped back to the first 16 KiB.
     fn read_prg_rom(&self, addr: u16) -> u8 {
         if self.prg_rom.is_empty() {
             return 0;
         }
+        // Modulo operator handles the 16 KiB mirroring automatically:
+        // - 32 KiB ROM: (offset % 32768) -> linear access.
+        // - 16 KiB ROM: (offset % 16384) -> mirrors upper bank to lower.
         let idx = (addr - cpu_mem::PRG_ROM_START) as usize % self.prg_rom.len();
         self.prg_rom[idx]
     }
 
+    /// Reads from PRG RAM (WRAM).
     fn read_prg_ram(&self, addr: u16) -> u8 {
         if self.prg_ram.is_empty() {
             return 0;
@@ -57,6 +87,7 @@ impl Mapper0 {
         self.prg_ram[idx]
     }
 
+    /// Writes to PRG RAM (WRAM).
     fn write_prg_ram(&mut self, addr: u16, data: u8) {
         if self.prg_ram.is_empty() {
             return;
@@ -179,7 +210,7 @@ mod tests {
             .map(|value| (value & 0xFF) as u8)
             .collect::<Vec<_>>();
         let chr = vec![0; chr_rom_size];
-        Mapper0::new(header, prg.into(), chr.into())
+        Mapper0::new(header, prg.into(), chr.into(), None)
     }
 
     #[test]
@@ -202,5 +233,11 @@ mod tests {
         let mut cart = new_mapper0(0x8000, 0, 0);
         cart.ppu_write(0x0010, 0x77);
         assert_eq!(cart.ppu_read(0x0010), Some(0x77));
+    }
+
+    #[test]
+    fn defaults_to_8k_prg_ram_for_ines1_0_roms_with_0_prg_ram() {
+        let cart = new_mapper0(0x4000, 0, 0);
+        assert_eq!(cart.prg_ram.len(), 8192);
     }
 }

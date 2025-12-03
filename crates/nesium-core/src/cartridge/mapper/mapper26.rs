@@ -11,7 +11,7 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram, select_chr_storage, trainer_destination},
+        mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
     },
     memory::cpu as cpu_mem,
 };
@@ -57,20 +57,13 @@ pub struct Mapper26 {
 type Mapper26ChrRegs = ByteBlock<8>;
 
 impl Mapper26 {
-    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
-        Self::with_trainer(header, prg_rom, chr_rom, None)
-    }
-
-    pub(crate) fn with_trainer(
+    pub fn new(
         header: Header,
         prg_rom: PrgRom,
         chr_rom: ChrRom,
         trainer: TrainerBytes,
     ) -> Self {
-        let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer);
-        }
+        let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         let chr = select_chr_storage(&header, chr_rom);
         let prg_bank_count_8k = (prg_rom.len() / PRG_BANK_SIZE_8K).max(1);

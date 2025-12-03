@@ -24,7 +24,7 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{allocate_prg_ram, trainer_destination},
+        mapper::allocate_prg_ram_with_trainer,
     },
     memory::cpu as cpu_mem,
 };
@@ -64,20 +64,13 @@ pub struct Mapper1 {
 }
 
 impl Mapper1 {
-    pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom) -> Self {
-        Self::with_trainer(header, prg_rom, chr_rom, None)
-    }
-
-    pub(crate) fn with_trainer(
+    pub fn new(
         header: Header,
         prg_rom: PrgRom,
         chr_rom: ChrRom,
         trainer: TrainerBytes,
     ) -> Self {
-        let mut prg_ram = allocate_prg_ram(&header);
-        if let (Some(trainer), Some(dst)) = (trainer, trainer_destination(&mut prg_ram)) {
-            dst.copy_from_slice(trainer);
-        }
+        let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
         let chr_rom_present = header.chr_rom_size > 0;
         let chr_ram = if chr_rom_present {
@@ -501,7 +494,8 @@ mod tests {
             prg[start..end].fill(bank as u8);
         }
 
-        let mut mapper = Mapper1::new(header(prg.len(), 0, 8 * 1024), prg.into(), vec![].into());
+        let mut mapper =
+            Mapper1::new(header(prg.len(), 0, 8 * 1024), prg.into(), vec![].into(), None);
         // Tests expect the same power-on state as a freshly loaded cartridge.
         mapper.power_on();
         mapper
