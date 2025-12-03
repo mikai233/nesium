@@ -1,0 +1,10 @@
+[package]
+name = "nesium-esp32"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+nesium-core.path = "../nesium-core"
+anyhow.workspace = true
+esp-idf-sys = { workspace = true, features = ["binstart"] }
