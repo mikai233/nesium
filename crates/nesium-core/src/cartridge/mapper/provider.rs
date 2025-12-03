@@ -11,7 +11,7 @@ use crate::cartridge::{ChrRom, Mapper, PrgRom, TrainerBytes, header::Header};
 /// # Example
 /// ```no_run
 /// use nesium_core::{
-///     cartridge::{Mapper, Provider, TRAINER_SIZE, header::Header, load_cartridge_with_provider},
+///     cartridge::{Mapper, Provider, TrainerBytes, header::Header, load_cartridge_with_provider},
 ///     ppu::palette::PaletteKind,
 ///     Nes,
 /// };
@@ -34,12 +34,17 @@ use crate::cartridge::{ChrRom, Mapper, PrgRom, TrainerBytes, header::Header};
 /// struct CustomProvider;
 ///
 /// impl Provider for CustomProvider {
+///     fn supports_mapper(&self, mapper_id: u16) -> bool {
+///         // Take over mapper ID 1234 even if the core implements it.
+///         mapper_id == 1234
+///     }
+///
 ///     fn get_mapper(
 ///         &self,
 ///         header: Header,
 ///         prg_rom: PrgRom,
 ///         chr_rom: ChrRom,
-///         trainer: Option<Box<[u8; TRAINER_SIZE]>>,
+///         trainer: TrainerBytes<'_>,
 ///     ) -> Option<Box<dyn Mapper>> {
 ///         let _ = (prg_rom, chr_rom, trainer);
 ///         (header.mapper == 1234).then(|| Box::new(CustomMapper) as Box<dyn Mapper>)
@@ -53,9 +58,21 @@ use crate::cartridge::{ChrRom, Mapper, PrgRom, TrainerBytes, header::Header};
 /// let mut nes = Nes::new(nesium_core::ppu::buffer::ColorFormat::Rgb555);
 /// nes.set_palette(PaletteKind::NesdevNtsc.palette());
 /// nes.set_mapper_provider(Some(Box::new(provider)));
-/// // Unknown mapper IDs will now ask `CustomProvider` for an implementation.
+/// // Mapper 1234 (and any other IDs for which `supports_mapper` returns true)
+/// // will now use `CustomProvider`'s implementation. Unknown mapper IDs that
+/// // are not supported by the core will still fall back to `CustomProvider`.
 /// ```
 pub trait Provider: Debug + Send {
+    /// Returns `true` when this provider wants to supply the mapper
+    /// implementation for the given mapper ID.
+    ///
+    /// When this returns `true`, the core will prefer the provider's
+    /// implementation even if it has a built‑in mapper for that ID.
+    /// The default implementation returns `false`, meaning the provider
+    /// only participates as a fallback for mapper IDs that the core
+    /// does not implement.
+    fn supports_mapper(&self, mapper_id: u16) -> bool;
+
     fn get_mapper(
         &self,
         header: Header,

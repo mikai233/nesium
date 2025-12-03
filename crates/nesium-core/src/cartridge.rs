@@ -200,6 +200,19 @@ fn build_cartridge_from_sections<'a>(
     chr_rom: ChrRom,
     provider: Option<&dyn Provider>,
 ) -> Result<Cartridge, Error> {
+    // 1) Give the external provider first chance when it explicitly
+    //    declares support for this mapper ID.
+    if let Some(provider) = provider {
+        if provider.supports_mapper(header.mapper) {
+            let mut mapper = provider
+                .get_mapper(header, prg_rom, chr_rom, trainer)
+                .ok_or(Error::UnsupportedMapper(header.mapper))?;
+            mapper.power_on();
+            return Ok(Cartridge::new(header, mapper));
+        }
+    }
+
+    // 2) Fall back to the built-in mapper registry for known IDs.
     let mut mapper: Box<dyn Mapper> = match header.mapper {
         0 => Box::new(Mapper0::new(header, prg_rom, chr_rom, trainer)),
         1 => Box::new(Mapper1::new(header, prg_rom, chr_rom, trainer)),
@@ -227,6 +240,8 @@ fn build_cartridge_from_sections<'a>(
         90 => Box::new(Mapper90::new(header, prg_rom, chr_rom, trainer)),
         119 => Box::new(Mapper119::new(header, prg_rom, chr_rom, trainer)),
         228 => Box::new(Mapper228::new(header, prg_rom, chr_rom, trainer)),
+        // 3) Unknown to the core: let the provider try to supply a mapper
+        //    implementation as a final fallback.
         other => provider
             .and_then(|provider| provider.get_mapper(header, prg_rom, chr_rom, trainer))
             .ok_or(Error::UnsupportedMapper(other))?,
@@ -472,6 +487,10 @@ mod tests {
             _trainer: TrainerBytes<'_>,
         ) -> Option<Box<dyn Mapper>> {
             Some(Box::new(DummyMapper))
+        }
+
+        fn supports_mapper(&self, mapper_id: u16) -> bool {
+            mapper_id == 999
         }
     }
 
