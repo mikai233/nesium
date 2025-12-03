@@ -1,11 +1,11 @@
 mod app;
-mod audio;
 mod trace;
 
 use std::{env, path::PathBuf};
 
 use anyhow::{Result, anyhow};
 use app::{AppConfig, NesiumApp};
+use eframe::egui;
 use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use trace::{run_frame_report, run_trace};
 

@@ -2726,7 +2726,6 @@ dependencies = [
  "anyhow",
  "cpal",
  "eframe",
- "egui",
  "fontdb",
  "nesium-audio",
  "nesium-core",
