@@ -7,6 +7,7 @@ mod controller;
 mod dialogs;
 mod fonts;
 mod gamepad;
+mod i18n;
 mod main_view;
 mod menu;
 mod viewports;
@@ -25,6 +26,7 @@ use self::{
     controller::{ControllerDevice, ControllerInput, InputPreset},
     fonts::install_cjk_font,
     gamepad::GamepadManager,
+    i18n::{I18n, Language, TextId},
 };
 
 const TARGET_FRAME: Duration = Duration::from_nanos(16_683_000); // ~59.94 Hz
@@ -42,6 +44,7 @@ pub struct NesiumApp {
     audio: Option<NesAudioPlayer>,
     paused: bool,
     status_line: Option<String>,
+    i18n: I18n,
     show_debugger: bool,
     show_tools: bool,
     show_palette: bool,
@@ -88,6 +91,7 @@ impl NesiumApp {
             audio,
             paused: false,
             status_line,
+            i18n: I18n::new(Language::ChineseSimplified),
             show_debugger: false,
             show_tools: false,
             show_palette: false,
@@ -113,7 +117,10 @@ impl NesiumApp {
 
         if let Some(path) = config.rom_path {
             if let Err(err) = app.load_rom(&path) {
-                app.status_line = Some(format!("加载 ROM 失败: {err}"));
+                app.status_line = Some(match app.language() {
+                    Language::English => format!("Failed to load ROM: {err}"),
+                    Language::ChineseSimplified => format!("加载 ROM 失败: {err}"),
+                });
             }
         }
 
@@ -160,7 +167,10 @@ impl NesiumApp {
 
         self.rom_path = Some(path.to_path_buf());
         self.paused = false;
-        self.status_line = Some(format!("已加载 {}", path.display()));
+        self.status_line = Some(match self.language() {
+            Language::English => format!("Loaded {}", path.display()),
+            Language::ChineseSimplified => format!("已加载 {}", path.display()),
+        });
         // Reset the frame scheduler so we don't try to "catch up" for the
         // time spent before the ROM was loaded, which would otherwise cause
         // a brief period of fast-forward.
@@ -171,7 +181,7 @@ impl NesiumApp {
     fn reset(&mut self) {
         self.nes.reset();
         self.paused = false;
-        self.status_line = Some("已重置主机".to_string());
+        self.status_line = Some(self.t(TextId::StatusReset).to_string());
         for ctrl in &mut self.controllers {
             ctrl.release_all(&mut self.nes);
         }
@@ -186,7 +196,7 @@ impl NesiumApp {
     fn eject(&mut self) {
         self.nes.eject_cartridge();
         self.rom_path = None;
-        self.status_line = Some("已弹出卡带".to_string());
+        self.status_line = Some(self.t(TextId::StatusEject).to_string());
         for ctrl in &mut self.controllers {
             ctrl.release_all(&mut self.nes);
         }
@@ -215,6 +225,18 @@ impl NesiumApp {
                     Some(ctx.load_texture("framebuffer", image, TextureOptions::NEAREST));
             }
         }
+    }
+
+    fn t(&self, id: TextId) -> &'static str {
+        self.i18n.text(id)
+    }
+
+    fn language(&self) -> Language {
+        self.i18n.language()
+    }
+
+    fn set_language(&mut self, language: Language) {
+        self.i18n.set_language(language);
     }
 }
 

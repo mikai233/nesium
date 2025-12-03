@@ -1,4 +1,4 @@
-use gilrs::{Button as GilrsButton, Event, Gilrs, GamepadId};
+use gilrs::{Button as GilrsButton, Event, GamepadId, Gilrs};
 
 /// Thin wrapper around `gilrs` that keeps gamepad state fresh and provides
 /// helpers for querying connected pads.

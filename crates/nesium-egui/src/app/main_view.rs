@@ -2,7 +2,7 @@ use eframe::egui;
 use egui::{Color32, Context as EguiContext, Vec2};
 use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
-use super::NesiumApp;
+use super::{NesiumApp, TextId};
 
 impl NesiumApp {
     pub(super) fn draw_main_view(&mut self, ctx: &EguiContext) {
@@ -10,9 +10,15 @@ impl NesiumApp {
             if let Some(status) = &self.status_line {
                 ui.label(status);
             } else if let Some(path) = &self.rom_path {
-                ui.label(format!("已加载：{}", path.display()));
+                let text = match self.language() {
+                    super::Language::English => format!("Loaded: {}", path.display()),
+                    super::Language::ChineseSimplified => {
+                        format!("已加载：{}", path.display())
+                    }
+                };
+                ui.label(text);
             } else {
-                ui.label("未加载 ROM");
+                ui.label(self.t(TextId::MainNoRom));
             }
 
             ui.separator();
@@ -33,7 +39,10 @@ impl NesiumApp {
                             let desired = base * scale;
                             ui.add(egui::Image::from_texture(tex).fit_to_exact_size(desired));
                         } else {
-                            ui.colored_label(Color32::DARK_GRAY, "等待首帧…");
+                            ui.colored_label(
+                                Color32::DARK_GRAY,
+                                self.t(TextId::MainWaitingFirstFrame),
+                            );
                         }
                     });
                 });

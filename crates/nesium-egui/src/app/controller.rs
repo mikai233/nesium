@@ -1,7 +1,7 @@
+use super::gamepad::GamepadManager;
 use eframe::egui::{Context as EguiContext, Event, Key};
 use gilrs::{Button as GilrsButton, GamepadId};
 use nesium_core::{Nes, controller::Button};
-use super::gamepad::GamepadManager;
 
 /// Logical input device for a single NES controller port.
 ///
@@ -66,9 +66,7 @@ impl ControllerInput {
 
             if let Some(key) = captured {
                 let new_binding = if key == Key::Escape { None } else { Some(key) };
-                if let Some((_, slot)) =
-                    self.bindings.iter_mut().find(|(btn, _)| *btn == target)
-                {
+                if let Some((_, slot)) = self.bindings.iter_mut().find(|(btn, _)| *btn == target) {
                     *slot = new_binding;
                 }
                 self.capture_target = None;
