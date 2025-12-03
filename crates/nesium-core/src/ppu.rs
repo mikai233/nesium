@@ -129,9 +129,8 @@ pub struct Ppu {
     ignore_vram_read: u8,
     /// Internal OAM data bus copy buffer used during rendering for `$2004` reads.
     oam_copybuffer: u8,
-    /// Pending VRAM increment step after a `$2007` read/write (applied one dot later).
-    pending_vram_increment: bool,
-    pending_vram_increment_step: u16,
+    /// Pending VRAM increment after a `$2007` read/write (applied one dot later).
+    pending_vram_increment: PendingVramIncrement,
     /// Secondary OAM used during sprite evaluation for the current scanline.
     secondary_oam: SecondaryOamRam,
     /// Sprite evaluation state (cycle-accurate structure).
@@ -270,6 +269,43 @@ impl Default for Ppu {
     }
 }
 
+/// Delayed VRAM auto-increment kind after a `$2007` access.
+///
+/// Hardware supports only two increments (1 or 32), and in many cases there is
+/// no pending increment at all, so we can encode this in a compact enum instead
+/// of a separate `bool + u16` pair.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+enum PendingVramIncrement {
+    #[default]
+    None,
+    By1,
+    By32,
+}
+
+impl PendingVramIncrement {
+    fn from_control(control: Control) -> Self {
+        match control.vram_increment() {
+            1 => PendingVramIncrement::By1,
+            32 => PendingVramIncrement::By32,
+            _ => PendingVramIncrement::None,
+        }
+    }
+
+    #[inline]
+    fn is_pending(self) -> bool {
+        !matches!(self, PendingVramIncrement::None)
+    }
+
+    #[inline]
+    fn amount(self) -> u16 {
+        match self {
+            PendingVramIncrement::None => 0,
+            PendingVramIncrement::By1 => 1,
+            PendingVramIncrement::By32 => 32,
+        }
+    }
+}
+
 impl Ppu {
     /// Creates a new PPU instance with cleared VRAM and default register values.
     pub fn new(framebuffer: FrameBuffer) -> Self {
@@ -292,8 +328,7 @@ impl Ppu {
             open_bus: OpenBus::new_with_decay(),
             ignore_vram_read: 0,
             oam_copybuffer: 0,
-            pending_vram_increment: false,
-            pending_vram_increment_step: 0,
+            pending_vram_increment: PendingVramIncrement::None,
             secondary_oam: SecondaryOamRam::new(),
             sprite_eval: SpriteEvalState::default(),
             sprite_fetch: SpriteFetchState::default(),
@@ -341,8 +376,7 @@ impl Ppu {
         self.open_bus.reset();
         self.ignore_vram_read = 0;
         self.oam_copybuffer = 0;
-        self.pending_vram_increment = false;
-        self.pending_vram_increment_step = 0;
+        self.pending_vram_increment = PendingVramIncrement::None;
         self.secondary_oam.fill(0);
         self.sprite_eval = SpriteEvalState::default();
         self.sprite_fetch = SpriteFetchState::default();
@@ -487,19 +521,19 @@ impl Ppu {
             self.ignore_vram_read -= 1;
         }
 
-        if self.pending_vram_increment {
+        if self.pending_vram_increment.is_pending() {
             // Mesen2 / hardware: the simple "+1 or +32" VRAM increment after
             // a $2007 access only applies when rendering is disabled or during
             // VBlank/post-render scanlines. While rendering is active on the
             // prerender/visible scanlines, VRAM address progression is driven
             // by the scroll increment logic (coarse/fine X/Y) instead.
             if self.scanline >= 240 || !rendering_enabled {
-                self.registers
-                    .vram
-                    .v
-                    .increment(self.pending_vram_increment_step);
+                let step = self.pending_vram_increment.amount();
+                if step != 0 {
+                    self.registers.vram.v.increment(step);
+                }
             }
-            self.pending_vram_increment = false;
+            self.pending_vram_increment = PendingVramIncrement::None;
         }
 
         // NOTE: We clear VBlank and drop NMI output at dot 1 of prerender.
@@ -1431,8 +1465,7 @@ impl Ppu {
         self.write_vram(pattern, addr, value);
         // Delay VRAM increment by one PPU dot to match Mesen2 / hardware
         // behaviour (used by some test ROMs to observe transient colours).
-        self.pending_vram_increment_step = self.registers.control.vram_increment();
-        self.pending_vram_increment = true;
+        self.pending_vram_increment = PendingVramIncrement::from_control(self.registers.control);
     }
 
     fn read_vram_data(&mut self, pattern: &mut PatternBus<'_>) -> u8 {
@@ -1441,8 +1474,7 @@ impl Ppu {
 
         // Delay VRAM increment by one PPU dot to match Mesen2 / hardware
         // behaviour (used by some test ROMs to observe transient colours).
-        self.pending_vram_increment_step = self.registers.control.vram_increment();
-        self.pending_vram_increment = true;
+        self.pending_vram_increment = PendingVramIncrement::from_control(self.registers.control);
 
         if addr >= ppu_mem::PALETTE_BASE {
             // Palette reads bypass the VRAM read buffer, but the buffer is still
