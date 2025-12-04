@@ -111,6 +111,13 @@ impl Apu {
         self.dmc = Dmc::default();
         self.last_levels.fill(0.0);
         self.last_frame_counter_value = 0x00;
+        // Hardware behaves as if $4017 were written with $00 shortly before
+        // execution begins; apply that with the reset-style latency (~3 CPU
+        // cycles before the CPU resumes fetching instructions).
+        let reset = self
+            .frame_counter
+            .configure_after_reset(self.last_frame_counter_value);
+        self.apply_frame_reset(reset);
     }
 
     /// Applies a warm reset to the APU. Channel registers are cleared and
@@ -120,28 +127,21 @@ impl Apu {
     /// blargg's `apu_reset` tests and implemented in Mesen2's
     /// `ApuFrameCounter::Reset(softReset = true)`.
     pub fn reset(&mut self) {
-        self.registers.fill(0);
         self.status = StatusFlags::default();
         self.cycles = 0;
-        self.pulse = [
-            Pulse::new(pulse::PulseChannel::Pulse1),
-            Pulse::new(pulse::PulseChannel::Pulse2),
-        ];
-        self.triangle = Triangle::default();
-        self.noise = Noise::default();
-        self.dmc = Dmc::default();
-        self.last_levels.fill(0.0);
+        self.rebuild_channels_from_registers();
 
-        // Re-apply the last frame counter mode / IRQ inhibit setting so
-        // reset behaviour differs from power-on, as on real hardware.
+        // Hardware reset re-applies the last written frame counter value just
+        // before execution resumes, with the same small latency as the
+        // implicit power-on write.
         let reset = self
             .frame_counter
-            .configure(self.last_frame_counter_value, self.cycles);
+            .configure_after_reset(self.last_frame_counter_value);
         self.status.frame_interrupt = false;
         self.apply_frame_reset(reset);
     }
 
-    pub fn cpu_write(&mut self, addr: u16, value: u8) {
+    pub fn cpu_write(&mut self, addr: u16, value: u8, cpu_cycle: u64) {
         if let Some(reg) = apu_mem::Register::from_cpu_addr(addr) {
             if let Some(idx) = reg.channel_ram_index() {
                 self.registers[idx] = value;
@@ -173,7 +173,7 @@ impl Apu {
                     // behaviour where `$4017` is effectively re-applied on
                     // reset rather than forced back to `$00`.
                     self.last_frame_counter_value = value;
-                    let reset = self.frame_counter.configure(value, self.cycles);
+                    let reset = self.frame_counter.configure(value, cpu_cycle);
                     self.status.frame_interrupt = false;
                     self.apply_frame_reset(reset);
                 }
@@ -411,6 +411,68 @@ impl Apu {
     pub fn last_fetch_addr(&self) -> u16 {
         self.dmc.last_fetch_addr()
     }
+
+    /// Rebuilds channel state from the cached APU register RAM while keeping
+    /// all channels disabled (matching hardware reset where `$4015` is
+    /// cleared). Length counters remain cleared; control/loop flags and timer
+    /// periods are restored so that subsequent writes observe the preserved
+    /// register values.
+    fn rebuild_channels_from_registers(&mut self) {
+        // Reset channel state to power-on defaults, then reapply the cached
+        // register contents with all channels still disabled so length
+        // counters stay zeroed.
+        self.pulse = [
+            Pulse::new(pulse::PulseChannel::Pulse1),
+            Pulse::new(pulse::PulseChannel::Pulse2),
+        ];
+        self.triangle = Triangle::default();
+        self.noise = Noise::default();
+        self.dmc = Dmc::default();
+        self.last_levels.fill(0.0);
+
+        let reg = |r: apu_mem::Register| -> u8 {
+            let idx = r.channel_ram_index().expect("channel register");
+            self.registers[idx]
+        };
+
+        // Reapply pulse 1/2 configuration.
+        self.pulse[0].write_control(reg(apu_mem::Register::Pulse1Control));
+        self.pulse[0].write_sweep(reg(apu_mem::Register::Pulse1Sweep));
+        self.pulse[0].write_timer_low(reg(apu_mem::Register::Pulse1TimerLow));
+        self.pulse[0].write_timer_high(reg(apu_mem::Register::Pulse1TimerHigh));
+
+        self.pulse[1].write_control(reg(apu_mem::Register::Pulse2Control));
+        self.pulse[1].write_sweep(reg(apu_mem::Register::Pulse2Sweep));
+        self.pulse[1].write_timer_low(reg(apu_mem::Register::Pulse2TimerLow));
+        self.pulse[1].write_timer_high(reg(apu_mem::Register::Pulse2TimerHigh));
+
+        // Triangle preserves the control (halt) flag across reset; timers are
+        // also restored so the phase aligns with preserved register state.
+        self.triangle
+            .write_control(reg(apu_mem::Register::TriangleControl));
+        self.triangle
+            .write_timer_low(reg(apu_mem::Register::TriangleTimerLow));
+        self.triangle
+            .write_timer_high(reg(apu_mem::Register::TriangleTimerHigh));
+
+        // Noise configuration.
+        self.noise
+            .write_control(reg(apu_mem::Register::NoiseControl));
+        self.noise
+            .write_mode_and_period(reg(apu_mem::Register::NoiseModeAndPeriod));
+        self.noise.write_length(reg(apu_mem::Register::NoiseLength));
+
+        // DMC configuration registers are preserved across reset; enabling
+        // still requires a post-reset `$4015` write.
+        self.dmc
+            .write_control(reg(apu_mem::Register::DmcControl), &mut self.status);
+        self.dmc
+            .write_direct_load(reg(apu_mem::Register::DmcDirectLoad));
+        self.dmc
+            .write_sample_address(reg(apu_mem::Register::DmcSampleAddress));
+        self.dmc
+            .write_sample_length(reg(apu_mem::Register::DmcSampleLength));
+    }
 }
 
 #[cfg(test)]
@@ -420,9 +482,9 @@ mod tests {
     #[test]
     fn stores_channel_registers() {
         let mut apu = Apu::new();
-        apu.cpu_write(apu_mem::REGISTER_BASE, 0xAA);
-        apu.cpu_write(apu_mem::REGISTER_BASE + 4, 0x55);
-        apu.cpu_write(apu_mem::REGISTER_BASE + 8, 0x0F);
+        apu.cpu_write(apu_mem::REGISTER_BASE, 0xAA, 0);
+        apu.cpu_write(apu_mem::REGISTER_BASE + 4, 0x55, 0);
+        apu.cpu_write(apu_mem::REGISTER_BASE + 8, 0x0F, 0);
 
         assert_eq!(apu.registers[0], 0xAA);
         assert_eq!(apu.registers[4], 0x55);
@@ -432,31 +494,31 @@ mod tests {
     #[test]
     fn status_enables_channels_and_length_counters() {
         let mut apu = Apu::new();
-        apu.cpu_write(apu_mem::STATUS, 0b0000_0001);
-        apu.cpu_write(0x4003, 0b1111_1000); // load a long length value
+        apu.cpu_write(apu_mem::STATUS, 0b0000_0001, 0);
+        apu.cpu_write(0x4003, 0b1111_1000, 0); // load a long length value
 
         // Length counter latched because pulse1 is enabled.
         assert!(apu.pulse[0].length_active());
 
         // Disable and ensure the length counter clears.
-        apu.cpu_write(apu_mem::STATUS, 0);
+        apu.cpu_write(apu_mem::STATUS, 0, 0);
         assert!(!apu.pulse[0].length_active());
     }
 
     #[test]
     fn frame_counter_configuration() {
         let mut apu = Apu::new();
-        apu.cpu_write(apu_mem::FRAME_COUNTER, 0b1000_0000);
+        apu.cpu_write(apu_mem::FRAME_COUNTER, 0b1000_0000, 0);
         assert_eq!(apu.frame_counter.mode(), FrameCounterMode::FiveStep);
 
-        apu.cpu_write(apu_mem::FRAME_COUNTER, 0);
+        apu.cpu_write(apu_mem::FRAME_COUNTER, 0, 0);
         assert_eq!(apu.frame_counter.mode(), FrameCounterMode::FourStep);
     }
 
     #[test]
     fn frame_irq_flag_set_and_cleared() {
         let mut apu = Apu::new();
-        apu.cpu_write(apu_mem::FRAME_COUNTER, 0); // 4-step, IRQs enabled
+        apu.cpu_write(apu_mem::FRAME_COUNTER, 0, 0); // 4-step, IRQs enabled
 
         for _ in 0..=frame_counter::FRAME_STEP_4_PERIOD as u64 {
             apu.clock();
@@ -473,8 +535,8 @@ mod tests {
     #[test]
     fn dmc_status_bit_and_irq_clear() {
         let mut apu = Apu::new();
-        apu.cpu_write(0x4013, 0x01); // sample length = 17 bytes
-        apu.cpu_write(apu_mem::STATUS, 0b0001_0000); // enable DMC
+        apu.cpu_write(0x4013, 0x01, 0); // sample length = 17 bytes
+        apu.cpu_write(apu_mem::STATUS, 0b0001_0000, 0); // enable DMC
 
         // Active bit should report bytes remaining.
         let status = apu.cpu_read(apu_mem::STATUS);

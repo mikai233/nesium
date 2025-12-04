@@ -275,13 +275,13 @@ impl Bus for CpuBus<'_> {
                 self.ppu.cpu_write(addr, data, &mut pattern)
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
-                self.apu.cpu_write(addr, data)
+                self.apu.cpu_write(addr, data, *self.cpu_cycle_counter)
             }
             ppu_mem::OAM_DMA => self.write_oam_dma(data),
-            cpu_mem::APU_STATUS => self.apu.cpu_write(addr, data),
+            cpu_mem::APU_STATUS => self.apu.cpu_write(addr, data, *self.cpu_cycle_counter),
             apu_mem::FRAME_COUNTER => {
                 // $4017 doubles as both controller port 2 and the APU frame counter.
-                self.apu.cpu_write(addr, data);
+                self.apu.cpu_write(addr, data, *self.cpu_cycle_counter);
                 self.log_serial_bit(data);
                 for ctrl in self.controllers.iter_mut() {
                     ctrl.write_strobe(data);

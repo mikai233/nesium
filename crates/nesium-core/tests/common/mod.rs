@@ -57,6 +57,7 @@ where
 
     let mut reset_delay_frames: Option<usize> = None;
     let mut serial_log = String::new();
+    let mut reset_latched = false;
 
     for frame in 0..frames {
         serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
@@ -84,13 +85,12 @@ where
                 verify(&mut nes)?;
                 return Ok(message_or_none(msg));
             }
-            Progress::Failed(code, msg) => {
-                bail!(
-                    "failed with status byte {:#04X}{}",
-                    code,
-                    format_status(msg)
-                )
-            }
+            Progress::Failed(code, msg) => bail!(
+                "[{}] failed with status byte {:#04X}{}",
+                rom_rel_path,
+                code,
+                format_status(msg)
+            ),
             Progress::Running {
                 message,
                 needs_reset,
@@ -122,15 +122,20 @@ where
                     }
                 }
 
-                if needs_reset && reset_delay_frames.is_none() {
-                    let status_byte = nes.peek_cpu_byte(STATUS_ADDR);
-                    if rom_rel_path.starts_with("apu_reset/4017_timing") {
-                        eprintln!(
-                            "[apu_reset/4017_timing] needs reset at frame {} (status={:#04X})",
-                            frame, status_byte
-                        );
+                if needs_reset {
+                    if !reset_latched && reset_delay_frames.is_none() {
+                        let status_byte = nes.peek_cpu_byte(STATUS_ADDR);
+                        if rom_rel_path.starts_with("apu_reset/4017_timing") {
+                            eprintln!(
+                                "[apu_reset/4017_timing] needs reset at frame {} (status={:#04X})",
+                                frame, status_byte
+                            );
+                        }
+                        reset_delay_frames = Some(RESET_DELAY_FRAMES);
                     }
-                    reset_delay_frames = Some(RESET_DELAY_FRAMES);
+                    reset_latched = true;
+                } else {
+                    reset_latched = false;
                 }
             }
         }

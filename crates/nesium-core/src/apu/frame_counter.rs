@@ -18,6 +18,8 @@ pub(super) struct FrameCounter {
     half_cycle: u64,
     /// Pending reconfiguration delay (3–4 CPU cycles after a `$4017` write).
     reset_delay_half: u8,
+    /// Optional bootstrap offset applied when a reset reconfiguration completes.
+    reset_headstart_half: u16,
     pending_mode: FrameCounterMode,
     pending_irq_inhibit: bool,
 }
@@ -36,6 +38,15 @@ pub(super) struct FrameResetAction {
     pub(super) immediate_quarter: bool,
     pub(super) immediate_half: bool,
 }
+
+/// Hardware latency for the implicit `$4017` write performed on power-on and
+/// warm resets. Measurements (and Mesen2's model) apply the write effects 3
+/// CPU cycles after reset.
+const RESET_WRITE_DELAY_CYCLES: u8 = 3;
+/// Frame counter head-start applied on reset so the implicit `$4017` write
+/// effectively predates the first executed instruction by roughly 9–12 CPU
+/// cycles. Expressed in half-cycles.
+const RESET_HEADSTART_HALF_CYCLES: u16 = 12;
 
 /// Frame sequencer timeline for 4-step mode: (CPU cycle, quarter, half, irq).
 ///
@@ -60,8 +71,8 @@ pub(super) const FRAME_STEP_5: &[(u32, bool, bool, bool)] = &[
     (14915, true, false, false),  // 7457.5
     (29827, true, true, false),   // 14913.5
     (44743, true, false, false),  // 22371.5
-    (59659, true, true, false),   // 29829.5
-    (74563, false, false, false), // 37281.5
+    (59659, false, false, false), // 29829.5 (no clock)
+    (74563, true, true, false),   // 37281.5
 ];
 pub(super) const FRAME_STEP_5_PERIOD: u32 = 74564;
 
@@ -82,6 +93,7 @@ impl FrameCounter {
         } else {
             FrameCounterMode::FiveStep
         };
+        self.reset_headstart_half = 0;
         self.pending_irq_inhibit = value & 0b0100_0000 != 0;
         // Hardware applies the new mode 3–4 CPU cycles after the write. The
         // latency depends on the CPU cycle parity at the time of the write:
@@ -94,6 +106,52 @@ impl FrameCounter {
         let delay_cycles: u8 = if is_odd { 3 } else { 4 };
         self.reset_delay_half = delay_cycles.saturating_mul(2);
         let immediate = self.pending_mode == FrameCounterMode::FiveStep;
+        FrameResetAction {
+            immediate_quarter: immediate,
+            immediate_half: immediate,
+        }
+    }
+
+    /// Schedule a frame counter reset as if `$4017` were written during a
+    /// console reset. Hardware re-applies the last frame counter value a few
+    /// CPU cycles before the CPU resumes execution; we mirror the 3-cycle
+    /// delay used by Mesen2 for this implicit write.
+    pub(super) fn configure_after_reset(&mut self, value: u8) -> FrameResetAction {
+        self.pending_mode = if value & 0b1000_0000 == 0 {
+            FrameCounterMode::FourStep
+        } else {
+            FrameCounterMode::FiveStep
+        };
+        self.reset_headstart_half = if self.pending_mode == FrameCounterMode::FiveStep {
+            FRAME_STEP_5[1].0 as u16
+        } else {
+            RESET_HEADSTART_HALF_CYCLES
+        };
+        self.pending_irq_inhibit = value & 0b0100_0000 != 0;
+        self.reset_delay_half = RESET_WRITE_DELAY_CYCLES.saturating_mul(2);
+        // Unlike a CPU write to $4017, the implicit reset write does not clock
+        // the frame units immediately even when requesting 5-step mode.
+        let immediate = false;
+        FrameResetAction {
+            immediate_quarter: immediate,
+            immediate_half: immediate,
+        }
+    }
+
+    /// Reconfigure the frame counter immediately (used for power-on/warm reset
+    /// where the hardware state is effectively re-applied without the 3–4
+    /// cycle latency of a CPU write).
+    pub(super) fn configure_immediate(&mut self, value: u8) -> FrameResetAction {
+        self.mode = if value & 0b1000_0000 == 0 {
+            FrameCounterMode::FourStep
+        } else {
+            FrameCounterMode::FiveStep
+        };
+        self.irq_inhibit = value & 0b0100_0000 != 0;
+        self.half_cycle = 0;
+        self.reset_delay_half = 0;
+        self.reset_headstart_half = 0;
+        let immediate = self.mode == FrameCounterMode::FiveStep;
         FrameResetAction {
             immediate_quarter: immediate,
             immediate_half: immediate,
@@ -123,7 +181,8 @@ impl FrameCounter {
             if self.reset_delay_half == 0 {
                 self.mode = self.pending_mode;
                 self.irq_inhibit = self.pending_irq_inhibit;
-                self.half_cycle = 0;
+                self.half_cycle = self.reset_headstart_half as u64;
+                self.reset_headstart_half = 0;
             }
             return FrameTick::default();
         }

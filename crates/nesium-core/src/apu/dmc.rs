@@ -109,11 +109,7 @@ impl Dmc {
     }
 
     /// Returns (stall_cycles, dma_address_to_read)
-    pub(super) fn clock<F>(
-        &mut self,
-        mut reader: F,
-        status: &mut StatusFlags,
-    ) -> (u8, Option<u16>)
+    pub(super) fn clock<F>(&mut self, mut reader: F, status: &mut StatusFlags) -> (u8, Option<u16>)
     where
         F: FnMut(u16) -> u8,
     {
@@ -198,11 +194,7 @@ impl Dmc {
     }
 
     /// Returns (stall_cycles, dma_address_to_read)
-    fn fetch_sample<F>(
-        &mut self,
-        _reader: &mut F,
-        status: &mut StatusFlags,
-    ) -> (u8, Option<u16>)
+    fn fetch_sample<F>(&mut self, _reader: &mut F, status: &mut StatusFlags) -> (u8, Option<u16>)
     where
         F: FnMut(u16) -> u8,
     {

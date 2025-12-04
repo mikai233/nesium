@@ -628,38 +628,9 @@ impl Nes {
         // internally; idle cycles advance it explicitly and still clock the
         // mapper/open-bus decay to match hardware.
         let mut frame_advanced = false;
-        let mut run_cycle =
-            |nes: &mut Nes, read_addr: Option<u16>, frame_advanced: &mut bool| {
-                if let Some(addr) = read_addr {
-                    let byte = {
-                        let mut bus = CpuBus::new(
-                            &mut nes.ram,
-                            &mut nes.ppu,
-                            &mut nes.apu,
-                            nes.cartridge.as_mut(),
-                            &mut nes.controllers,
-                            Some(&mut nes.serial_log),
-                            &mut nes.oam_dma_request,
-                            &mut nes.open_bus,
-                            &mut nes.cpu_bus_cycle,
-                        );
-                        bus.read(addr)
-                    };
-                    nes.apu.finish_dma_fetch(byte);
-                    nes.open_bus.latch(byte);
-                } else {
-                    nes.cpu_bus_cycle = nes.cpu_bus_cycle.wrapping_add(1);
-                    if let Some(cart) = nes.cartridge.as_mut() {
-                        cart.cpu_clock(nes.cpu_bus_cycle);
-                    }
-                    nes.open_bus.step();
-                }
-                // Even though the CPU core is stalled, advance its cycle
-                // counter (and pause any in-progress OAM DMA) so alignment/parity
-                // stays correct.
-                nes.cpu.account_dma_cycle();
-
-                for _ in 0..3 {
+        let mut run_cycle = |nes: &mut Nes, read_addr: Option<u16>, frame_advanced: &mut bool| {
+            if let Some(addr) = read_addr {
+                let byte = {
                     let mut bus = CpuBus::new(
                         &mut nes.ram,
                         &mut nes.ppu,
@@ -671,15 +642,43 @@ impl Nes {
                         &mut nes.open_bus,
                         &mut nes.cpu_bus_cycle,
                     );
-                    bus.clock_ppu();
-                    nes.dot_counter = nes.dot_counter.wrapping_add(1);
-                    let frame_count = bus.ppu().frame_count();
-                    if frame_count != nes.last_frame {
-                        nes.last_frame = frame_count;
-                        *frame_advanced = true;
-                    }
+                    bus.read(addr)
+                };
+                nes.apu.finish_dma_fetch(byte);
+                nes.open_bus.latch(byte);
+            } else {
+                nes.cpu_bus_cycle = nes.cpu_bus_cycle.wrapping_add(1);
+                if let Some(cart) = nes.cartridge.as_mut() {
+                    cart.cpu_clock(nes.cpu_bus_cycle);
                 }
-            };
+                nes.open_bus.step();
+            }
+            // Even though the CPU core is stalled, advance its cycle
+            // counter (and pause any in-progress OAM DMA) so alignment/parity
+            // stays correct.
+            nes.cpu.account_dma_cycle();
+
+            for _ in 0..3 {
+                let mut bus = CpuBus::new(
+                    &mut nes.ram,
+                    &mut nes.ppu,
+                    &mut nes.apu,
+                    nes.cartridge.as_mut(),
+                    &mut nes.controllers,
+                    Some(&mut nes.serial_log),
+                    &mut nes.oam_dma_request,
+                    &mut nes.open_bus,
+                    &mut nes.cpu_bus_cycle,
+                );
+                bus.clock_ppu();
+                nes.dot_counter = nes.dot_counter.wrapping_add(1);
+                let frame_count = bus.ppu().frame_count();
+                if frame_count != nes.last_frame {
+                    nes.last_frame = frame_count;
+                    *frame_advanced = true;
+                }
+            }
+        };
 
         // Align to even CPU cycle when requested stall is non-zero. The first
         // cycle is idle when starting on an odd CPU cycle; the PRG read occurs

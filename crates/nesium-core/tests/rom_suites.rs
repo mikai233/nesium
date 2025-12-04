@@ -2,8 +2,8 @@ mod common;
 
 use anyhow::{Context, Result};
 use common::{
-    RESULT_ZP_ADDR, ROM_ROOT, STATUS_ADDR, require_color_diversity, run_rom_frames, run_rom_status,
-    run_rom_zeropage_result,
+    RESULT_ZP_ADDR, ROM_ROOT, STATUS_ADDR, STATUS_MESSAGE_ADDR, require_color_diversity,
+    run_rom_frames, run_rom_status, run_rom_zeropage_result,
 };
 use ctor::ctor;
 use nesium_core::Nes;
@@ -78,7 +78,6 @@ fn apu_reset_suite() -> Result<()> {
         "apu_reset/len_ctrs_enabled.nes",
         "apu_reset/works_immediately.nes",
     ] {
-        eprintln!("Running APU reset test ROM: {rom}");
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -107,6 +106,69 @@ fn apu_reset_4017_timing_debug() -> Result<()> {
             "frame {frame}: status={:#04X}, magic={:02X?}, power_flag={:#04X}, num_resets={}",
             status, magic, power_flag, num_resets
         );
+    }
+
+    Ok(())
+}
+
+#[test]
+#[ignore = "debug helper for apu_reset/4017_written.nes"]
+fn apu_reset_4017_written_debug() -> Result<()> {
+    let rom = "apu_reset/4017_written.nes";
+    let path = std::path::Path::new(ROM_ROOT).join(rom);
+    let mut nes = Nes::default();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+
+    let mut reset_delay_frames: Option<usize> = None;
+    let mut reset_latched = false;
+
+    for frame in 0..400 {
+        if let Some(counter) = reset_delay_frames.as_mut() {
+            if *counter == 0 {
+                eprintln!("-- applying reset at frame {frame}");
+                nes.reset();
+                reset_delay_frames = None;
+            } else {
+                *counter -= 1;
+            }
+        }
+
+        nes.run_frame();
+        let status = nes.peek_cpu_byte(STATUS_ADDR);
+        let mut buf = [0u8; 128];
+        nes.peek_cpu_slice(STATUS_MESSAGE_ADDR, &mut buf);
+        let printable = buf
+            .iter()
+            .take_while(|&&b| b != 0)
+            .map(|&b| {
+                if (0x20..=0x7E).contains(&b) || b == b'\n' {
+                    b as char
+                } else {
+                    '.'
+                }
+            })
+            .collect::<String>();
+        eprintln!("frame {frame}: status={:#04X}, msg={:?}", status, printable);
+        if status == 0x81 {
+            if !reset_latched && reset_delay_frames.is_none() {
+                reset_delay_frames = Some(6);
+            }
+            reset_latched = true;
+        } else {
+            reset_latched = false;
+        }
+
+        let power_flag = nes.peek_cpu_byte(0x0224);
+        let num_resets = nes.peek_cpu_byte(0x0225);
+        if num_resets != 0 {
+            let mut log = [0u8; 4];
+            nes.peek_cpu_slice(0x0226, &mut log);
+            eprintln!(
+                "  nv: power_flag={:#04X}, num_resets={}, log={:02X?}",
+                power_flag, num_resets, log
+            );
+        }
     }
 
     Ok(())
