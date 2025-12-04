@@ -2,22 +2,27 @@ use std::{env, path::PathBuf};
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let header = manifest_dir.join("csrc/blip_buf.h");
-    let source = manifest_dir.join("csrc/blip_buf.c");
-    let license = manifest_dir.join("csrc/license.md");
+    let vendor = manifest_dir.join("vendor");
+    let header = vendor.join("blip_buf.h");
+    let source = vendor.join("blip_buf.cpp");
+    let license = vendor.join("LGPL.txt");
 
-    // Re-run if any of the C sources or license change.
-    println!("cargo:rerun-if-changed={}", header.display());
-    println!("cargo:rerun-if-changed={}", source.display());
-    println!("cargo:rerun-if-changed={}", license.display());
+    for path in [&header, &source, &license] {
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
 
     cc::Build::new()
+        .cpp(true)
         .file(&source)
-        .include(header.parent().unwrap())
-        .compile("blip_buf_c");
+        .include(&vendor)
+        .flag_if_supported("-std=c++17")
+        .compile("blip_buf_vendor");
 
     let bindings = bindgen::Builder::default()
         .header(header.to_string_lossy())
+        .clang_arg("-std=c++17")
+        .clang_arg("-xc++")
+        .clang_arg(format!("-I{}", vendor.display()))
         .allowlist_function("blip_.*")
         .allowlist_type("blip_.*")
         .allowlist_var("blip_.*")

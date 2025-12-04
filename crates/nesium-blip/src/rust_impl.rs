@@ -1,7 +1,7 @@
-//! BlipBuf — Rust port of Shay Green's blip_buf with matching timing/filter logic.
+//! BlipBuf — Rust port of Shay Green's blip_buf (1.1.0) with matching timing/filter logic.
 //!
 //! - Original C source: http://www.slack.net/~ant/blip_buf.html
-//! - License: LGPL-2.1; see `csrc/license.md` in the crate root.
+//! - License: LGPL-2.1; see `vendor/LGPL.txt` in the crate root.
 //! - API mirrors the C library: add clock-tagged deltas, call [`end_frame`],
 //!   then pull samples with [`read_samples`] / [`read_samples_i16`]. Internally
 //!   this keeps the same fixed-point resampling, kernel, and high-pass steps as
@@ -86,17 +86,22 @@ impl BlipBuf {
             "clock_rate/sample_rate exceeds blip_max_ratio"
         );
 
-        let size = min_buffer_samples.max(1);
-        let factor = Self::compute_factor(clock_rate, sample_rate);
+        let size = min_buffer_samples.max(sample_rate.ceil() as usize).max(1);
+        let default_factor = TIME_UNIT / BLIP_MAX_RATIO;
 
-        Self {
-            factor,
-            offset: factor / 2,
+        let mut this = Self {
+            factor: default_factor,
+            offset: default_factor / 2,
             avail: 0,
             size,
             integrator: 0,
             buf: vec![0; size + BUF_EXTRA],
-        }
+        };
+
+        // Match C behavior: set_rates updates factor but leaves offset as-is;
+        // the initial offset comes from blip_new()'s default factor.
+        this.set_rates(clock_rate, sample_rate);
+        this
     }
 
     /// Reconfigure the input and output rates.
@@ -166,15 +171,17 @@ impl BlipBuf {
         let in0 = &BL_STEP[phase];
         let in1 = &BL_STEP[phase + 1];
         for k in 0..HALF_WIDTH {
-            self.buf[out_index + k] += (in0[k] as i32) * delta1 + (in1[k] as i32) * delta2;
+            let inc = (in0[k] as i32) * delta1 + (in1[k] as i32) * delta2;
+            self.buf[out_index + k] = self.buf[out_index + k].wrapping_add(inc);
         }
 
         let rev = &BL_STEP[PHASE_COUNT - phase];
         let rev_prev = &BL_STEP[PHASE_COUNT - phase - 1];
         for k in 0..HALF_WIDTH {
             let idx = HALF_WIDTH - 1 - k;
-            self.buf[out_index + HALF_WIDTH + k] +=
-                (rev[idx] as i32) * delta1 + (rev_prev[idx] as i32) * delta2;
+            let inc = (rev[idx] as i32) * delta1 + (rev_prev[idx] as i32) * delta2;
+            self.buf[out_index + HALF_WIDTH + k] =
+                self.buf[out_index + HALF_WIDTH + k].wrapping_add(inc);
         }
     }
 
@@ -198,8 +205,9 @@ impl BlipBuf {
         let delta2 = delta * interp;
         let delta1 = delta * DELTA_UNIT as i32 - delta2;
 
-        self.buf[out_index + HALF_WIDTH - 1] += delta1;
-        self.buf[out_index + HALF_WIDTH] += delta2;
+        self.buf[out_index + HALF_WIDTH - 1] =
+            self.buf[out_index + HALF_WIDTH - 1].wrapping_add(delta1);
+        self.buf[out_index + HALF_WIDTH] = self.buf[out_index + HALF_WIDTH].wrapping_add(delta2);
     }
 
     /// Makes clocks before `clock_duration` available as output samples.
@@ -244,16 +252,36 @@ impl BlipBuf {
         let mut sum = self.integrator;
         for (dst, in_sample) in out.iter_mut().take(count).zip(self.buf.iter()) {
             let mut s = sum >> DELTA_BITS;
-            sum += *in_sample;
+            sum = sum.wrapping_add(*in_sample);
 
-            if s > i16::MAX as i32 {
-                s = i16::MAX as i32;
-            } else if s < i16::MIN as i32 {
-                s = i16::MIN as i32;
-            }
+            s = clamp_to_i16_c_style(s);
 
             *dst = s as i16;
-            sum -= s << (DELTA_BITS - BASS_SHIFT);
+            sum = sum.wrapping_sub(s << (DELTA_BITS - BASS_SHIFT));
+        }
+
+        self.integrator = sum;
+        self.remove_samples(count);
+        count
+    }
+
+    /// Reads up to `out.len()/2` stereo samples (interleaved). Matches the C API stereo path.
+    pub fn read_samples_i16_stereo(&mut self, out: &mut [i16]) -> usize {
+        let usable = out.len() / 2;
+        let count = min(usable, self.avail);
+        if count == 0 {
+            return 0;
+        }
+
+        let mut sum = self.integrator;
+        for (idx, in_sample) in self.buf.iter().take(count).enumerate() {
+            let mut s = sum >> DELTA_BITS;
+            sum = sum.wrapping_add(*in_sample);
+
+            s = clamp_to_i16_c_style(s);
+
+            out[idx * 2] = s as i16;
+            sum = sum.wrapping_sub(s << (DELTA_BITS - BASS_SHIFT));
         }
 
         self.integrator = sum;
@@ -278,5 +306,16 @@ impl BlipBuf {
             factor += 1;
         }
         factor
+    }
+}
+
+#[inline]
+fn clamp_to_i16_c_style(s: i32) -> i32 {
+    // Match blip_buf's CLAMP macro: if casting to i16 changes the value,
+    // use (s >> 16) ^ 0x7FFF instead of saturating.
+    if (s as i16 as i32) != s {
+        (s >> 16) ^ 0x7FFF
+    } else {
+        s
     }
 }
