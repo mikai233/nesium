@@ -4,11 +4,19 @@ version = "0.1.0"
 edition = "2024"
 license.workspace = true
 
+[features]
+# Compile against the vendored C++ implementation.
+c-impl = ["dep:cc", "dep:bindgen"]
+# Compile the pure Rust port.
+rust-impl = []
+# Default to Rust-only; enable `c-impl` to build the C++ side (and disable rust-impl if desired).
+default = ["rust-impl"]
+
 [dependencies]
 
 [build-dependencies]
-bindgen.workspace = true
-cc = "1"
+bindgen = { workspace = true, optional = true }
+cc = { version = "1", optional = true }
 
 [dev-dependencies]
 proptest = "1"

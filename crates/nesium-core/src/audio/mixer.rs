@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use nesium_blip::c_impl::BlipBuf;
+use nesium_blip::BlipBuf;
 
 use crate::audio::{
     AudioChannel, ChannelLevels, ChannelPanning, ChannelVolumes,

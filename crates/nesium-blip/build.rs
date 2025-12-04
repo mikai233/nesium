@@ -1,6 +1,18 @@
+#[cfg(feature = "c-impl")]
 use std::{env, path::PathBuf};
 
 fn main() {
+    if !cfg!(feature = "c-impl") {
+        // No-op build when C++ impl is disabled.
+        return;
+    }
+
+    #[cfg(feature = "c-impl")]
+    build_c_impl();
+}
+
+#[cfg(feature = "c-impl")]
+fn build_c_impl() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let vendor = manifest_dir.join("vendor");
     let header = vendor.join("blip_buf.h");
