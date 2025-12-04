@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, path::Path};
+use std::{fs::File, path::Path};
 
 use crate::{
     apu::Apu,
@@ -26,6 +26,7 @@ pub mod error;
 pub mod mem_block;
 pub mod memory;
 pub mod ppu;
+pub mod state;
 
 pub use cpu::CpuSnapshot;
 
@@ -422,7 +423,7 @@ impl Nes {
         //     }
         // }
 
-        let out_start = out.len();
+        let _out_start = out.len();
         self.sound_bus.mix_frame(&[&self.mixer_frame_buffer], out);
 
         // Optional debug path: dump the post-bus PCM at the host sample rate

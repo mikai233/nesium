@@ -51,6 +51,7 @@ type LastLevels = crate::mem_block::MemBlock<f32, 5>;
 
 /// Fully modelled NES APU with envelope, sweep, length/linear counters and the
 /// frame sequencer.
+#[derive(Clone)]
 pub struct Apu {
     registers: RegisterRam,
     frame_counter: FrameCounter,
