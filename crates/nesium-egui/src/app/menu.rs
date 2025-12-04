@@ -148,6 +148,11 @@ impl NesiumApp {
                 ui.menu_button(self.t(TextId::MenuHelp), |ui| {
                     ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
 
+                    if ui.button(self.t(TextId::MenuHelpAbout)).clicked() {
+                        self.show_about = true;
+                        ui.close();
+                    }
+                    ui.separator();
                     ui.label(self.t(TextId::MenuHelpLine1));
                     ui.label(self.t(TextId::MenuHelpLine2));
                 });

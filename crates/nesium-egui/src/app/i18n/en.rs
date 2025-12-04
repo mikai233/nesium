@@ -28,9 +28,17 @@ impl LanguagePack for En {
             MenuWindowAudio => "Audio",
 
             MenuHelp => "Help",
+            MenuHelpAbout => "About",
             MenuHelpLine1 => "Mesen2-style frontend built with eframe + egui",
             MenuHelpLine2 => "Drag .nes/.fds here or use File → Load ROM",
             MenuLanguage => "Language",
+            AboutWindowTitle => "About Nesium",
+            AboutLead => "Nesium: Rust NES/FC emulator frontend built on nesium-core.",
+            AboutIntro => {
+                "Desktop UI uses eframe + egui, with nesium-audio/cpal for sound and gilrs for controllers."
+            }
+            AboutComponentsHeading => "Open-source components",
+            AboutComponentsHint => "Click a component to open GitHub or crates.io.",
 
             // Status line / notifications
             StatusReset => "Console reset",

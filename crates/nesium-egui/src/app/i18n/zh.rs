@@ -28,9 +28,17 @@ impl LanguagePack for Zh {
             MenuWindowAudio => "音频",
 
             MenuHelp => "帮助",
+            MenuHelpAbout => "关于",
             MenuHelpLine1 => "Mesen2 风格，eframe + egui 前端",
             MenuHelpLine2 => "拖拽 .nes/.fds 或使用 文件 → 加载 ROM",
             MenuLanguage => "语言",
+            AboutWindowTitle => "关于 Nesium",
+            AboutLead => "Nesium：基于 nesium-core 的 Rust NES/FC 前端。",
+            AboutIntro => {
+                "桌面界面使用 eframe + egui，nesium-audio/cpal 负责音频，gilrs 负责手柄。"
+            }
+            AboutComponentsHeading => "开源组件",
+            AboutComponentsHint => "点击名称跳转到 GitHub 或 crates.io。",
 
             // Status line / notifications
             StatusReset => "已重置主机",

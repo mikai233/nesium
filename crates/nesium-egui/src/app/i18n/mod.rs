@@ -38,9 +38,15 @@ pub enum TextId {
     MenuWindowInput,
     MenuWindowAudio,
     MenuHelp,
+    MenuHelpAbout,
     MenuHelpLine1,
     MenuHelpLine2,
     MenuLanguage,
+    AboutWindowTitle,
+    AboutLead,
+    AboutIntro,
+    AboutComponentsHeading,
+    AboutComponentsHint,
 
     // Status line / notifications
     StatusReset,

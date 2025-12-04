@@ -49,6 +49,83 @@ impl NesiumApp {
             });
         }
 
+        if self.show_about {
+            let builder = ViewportBuilder::default()
+                .with_title(self.t(TextId::AboutWindowTitle))
+                .with_inner_size([520.0, 420.0]);
+            ctx.show_viewport_immediate(ViewportId::from_hash_of("about"), builder, |ctx, _| {
+                if ctx.input(|i| i.viewport().close_requested()) {
+                    self.show_about = false;
+                    return;
+                }
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.heading(self.t(TextId::AboutWindowTitle));
+                            ui.label(self.t(TextId::AboutLead));
+                            ui.add_space(4.0);
+                            ui.label(self.t(TextId::AboutIntro));
+                            ui.separator();
+                            ui.heading(self.t(TextId::AboutComponentsHeading));
+                            ui.label(self.t(TextId::AboutComponentsHint));
+                            ui.add_space(6.0);
+
+                            struct ComponentInfo {
+                                name: &'static str,
+                                desc_en: &'static str,
+                                desc_zh: &'static str,
+                                url: &'static str,
+                            }
+
+                            const COMPONENTS: [ComponentInfo; 4] = [
+                                ComponentInfo {
+                                    name: "eframe / egui",
+                                    desc_en: "Rust-native UI + windowing shell",
+                                    desc_zh: "Rust 原生 UI 与窗口框架",
+                                    url: "https://github.com/emilk/egui",
+                                },
+                                ComponentInfo {
+                                    name: "gilrs",
+                                    desc_en: "Gamepad input layer",
+                                    desc_zh: "手柄输入层",
+                                    url: "https://crates.io/crates/gilrs",
+                                },
+                                ComponentInfo {
+                                    name: "cpal",
+                                    desc_en: "Native audio I/O backend",
+                                    desc_zh: "本地音频 I/O 后端",
+                                    url: "https://crates.io/crates/cpal",
+                                },
+                                ComponentInfo {
+                                    name: "rfd",
+                                    desc_en: "Native file dialogs",
+                                    desc_zh: "原生文件选择对话框",
+                                    url: "https://crates.io/crates/rfd",
+                                },
+                            ];
+
+                            let lang = self.language();
+                            egui::Grid::new("about_components_grid")
+                                .num_columns(2)
+                                .spacing([12.0, 8.0])
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    for component in COMPONENTS {
+                                        let desc = match lang {
+                                            super::Language::English => component.desc_en,
+                                            super::Language::ChineseSimplified => component.desc_zh,
+                                        };
+                                        ui.hyperlink_to(component.name, component.url);
+                                        ui.label(desc);
+                                        ui.end_row();
+                                    }
+                                });
+                        });
+                });
+            });
+        }
+
         if self.show_palette {
             let builder = ViewportBuilder::default()
                 .with_title(self.t(TextId::MenuWindowPalette))
