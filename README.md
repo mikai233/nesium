@@ -43,6 +43,16 @@ This emulator’s design and implementation draw heavily from the excellent Mese
 - [x] 119 – TQROM (MMC3 with CHR ROM/RAM bit) – verify against edge cases
 - [x] 228 – Action 52 / Cheetahmen II
 
+### Mapper gaps / caveats
+- **MMC5 (mapper 5)**: ExRAM-as-nametable modes and extended attribute/fill features are still TODO; expansion audio unimplemented.
+- **Namco 163 (mapper 19)**: Only basic audio routing implemented; full 8-channel wavetable behaviour and per-channel timing/phase wrapping remain to be completed.
+- **VRC6b (mapper 26)**: Expansion audio stubbed; CHR-ROM nametable modes not finished.
+- **VRC7 (mapper 85)**: Audio core not wired; OPLL implementation pending.
+- **J.Y. Company 90**: Multicart NT/IRQ tricks are simplified; advanced nametable/IRQ behaviour needs work.
+- **TQROM (mapper 119)**: Edge cases around CHR ROM/RAM bit toggling still need verification.
+- **Action 52 / Cheetahmen II (mapper 228)**: Mapper RAM window behaviour is minimal; verify against all carts.
+- **Generic**: Bus conflict handling for certain discrete boards (e.g., some UNROM/CNROM variants) is not fully modelled yet.
+
 ## Accuracy notes
 - **Open bus (Mesen2-style)**: CPU bus keeps a decaying latch (~1s of CPU cycles) and feeds it back for write-only/unmapped reads ($4000-$4013, $4014 read, $4018-$401F, or no cartridge PRG space). PPU register traffic refreshes the latch so Blargg/Mesen2 open-bus expectations hold.
 
