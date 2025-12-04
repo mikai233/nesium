@@ -72,6 +72,13 @@ impl OamDma {
         }
     }
 
+    /// Marks that an external DMA (e.g., DMC) stole this CPU bus cycle while
+    /// OAM DMA was in progress. The transfer pauses for this cycle, preserving
+    /// read/write phase and remaining bytes.
+    fn stall_cycle(&mut self) {
+        // No state changes; the DMA simply does not advance this cycle.
+    }
+
     /// Runs one DMA micro-step (one CPU cycle). Returns `true` when the
     /// transfer has finished copying all 256 bytes into OAM.
     fn step(&mut self, bus: &mut dyn Bus) -> bool {
@@ -400,6 +407,16 @@ impl Cpu {
         self.base = 0;
         self.effective_addr = 0;
         self.branch_taken_defer_irq = false;
+    }
+
+    /// Accounts for a CPU bus cycle consumed externally (e.g., DMC DMA) without
+    /// advancing any instruction micro-ops. This keeps cycle parity and DMA
+    /// alignment consistent with hardware timing.
+    pub(crate) fn account_dma_cycle(&mut self) {
+        if let Some(dma) = self.oam_dma.as_mut() {
+            dma.stall_cycle();
+        }
+        self.cycles = self.cycles.wrapping_add(1);
     }
 
     fn apply_pending_irq_mask(&mut self) {

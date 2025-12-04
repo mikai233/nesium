@@ -6,10 +6,6 @@
 //! each hardware block is easy to follow and cross-reference against Nesdev.
 //!
 //! Remaining accuracy work:
-//! - TODO: Model the 3–4 CPU cycle delay after `$4017` writes and the half-cycle
-//!   alignment of frame sequencer ticks.
-//! - TODO: Wire DMC sample fetches through the CPU bus and model the DMA-like
-//!   CPU stalls they trigger.
 //! - TODO: Add PAL/Dendy timing tables (frame sequencer, noise/DMC rates) and a
 //!   region selector so PAL test ROMs can pass.
 
@@ -138,7 +134,9 @@ impl Apu {
 
         // Re-apply the last frame counter mode / IRQ inhibit setting so
         // reset behaviour differs from power-on, as on real hardware.
-        let reset = self.frame_counter.configure(self.last_frame_counter_value);
+        let reset = self
+            .frame_counter
+            .configure(self.last_frame_counter_value, self.cycles);
         self.status.frame_interrupt = false;
         self.apply_frame_reset(reset);
     }
@@ -175,7 +173,7 @@ impl Apu {
                     // behaviour where `$4017` is effectively re-applied on
                     // reset rather than forced back to `$00`.
                     self.last_frame_counter_value = value;
-                    let reset = self.frame_counter.configure(value);
+                    let reset = self.frame_counter.configure(value, self.cycles);
                     self.status.frame_interrupt = false;
                     self.apply_frame_reset(reset);
                 }
@@ -258,11 +256,18 @@ impl Apu {
         self.noise.clock_length();
     }
 
-    /// Per-CPU-cycle APU tick using a provided CPU memory reader for DMC fetches.
-    ///
-    /// The default [`clock`](Self::clock) uses a zeroed reader so sound output
-    /// remains deterministic even when the caller does not wire up CPU reads.
-    pub fn clock_with_reader<F>(&mut self, mut reader: F, mixer: Option<&mut NesSoundMixer>)
+    /// Core per-CPU-cycle APU tick. DMC sample fetches are surfaced as
+    /// `(stall_cycles, dma_addr)` to let the caller decide how to service the
+    /// DMA (for bus-accurate mappers/open-bus timing). The provided reader is
+    /// *not* used for DMC fetches in this path; use
+    /// [`clock_with_reader_inline_dma`](Self::clock_with_reader_inline_dma) if
+    /// you want the APU to perform the read immediately and populate the DMC
+    /// buffer without mapper-visible side effects.
+    fn clock_core<F>(
+        &mut self,
+        reader: &mut F,
+        mixer: Option<&mut NesSoundMixer>,
+    ) -> (u8, Option<u16>)
     where
         F: FnMut(u16) -> u8,
     {
@@ -285,22 +290,62 @@ impl Apu {
         }
         self.triangle.clock_timer();
         self.noise.clock_timer();
-        self.dmc.clock(&mut reader, &mut self.status);
+        let (stall, dma_addr) = self.dmc.clock(reader, &mut self.status);
 
         if let Some(mixer) = mixer {
             self.push_audio_levels(mixer);
         }
+        (stall, dma_addr)
+    }
+
+    /// Per-CPU-cycle APU tick using a provided CPU memory reader for timing
+    /// (but with DMC DMA surfaced to the caller for bus-accurate handling).
+    ///
+    /// The default [`clock`](Self::clock) uses a zeroed reader so sound output
+    /// remains deterministic even when the caller does not wire up CPU reads.
+    pub fn clock_with_reader<F>(
+        &mut self,
+        mut reader: F,
+        mixer: Option<&mut NesSoundMixer>,
+    ) -> (u8, Option<u16>)
+    where
+        F: FnMut(u16) -> u8,
+    {
+        self.clock_core(&mut reader, mixer)
+    }
+
+    /// Per-CPU-cycle APU tick that *immediately* performs any pending DMC DMA
+    /// read via the supplied reader, populating the DMC sample buffer without
+    /// mapper/open-bus side effects. This is useful for standalone APU usage
+    /// where bus-level accuracy is not required.
+    pub fn clock_with_reader_inline_dma<F>(
+        &mut self,
+        mut reader: F,
+        mixer: Option<&mut NesSoundMixer>,
+    ) -> (u8, Option<u16>)
+    where
+        F: FnMut(u16) -> u8,
+    {
+        let (stall, dma_addr) = self.clock_core(&mut reader, mixer);
+        if let Some(addr) = dma_addr {
+            let byte = reader(addr);
+            self.finish_dma_fetch(byte);
+            (stall, None)
+        } else {
+            (stall, None)
+        }
     }
 
     /// Per-CPU-cycle APU tick. DMC memory fetches return zero bytes unless the
-    /// caller uses [`clock_with_reader`](Self::clock_with_reader).
-    pub fn clock(&mut self) {
-        self.clock_with_reader(|_| 0, None);
+    /// caller uses [`clock_with_reader`](Self::clock_with_reader) or
+    /// [`clock_with_reader_inline_dma`](Self::clock_with_reader_inline_dma).
+    pub fn clock(&mut self) -> (u8, Option<u16>) {
+        self.clock_with_reader(|_| 0, None)
     }
 
     /// Per-CPU-cycle APU tick that also feeds the shared mixer.
-    pub fn clock_with_mixer(&mut self, mixer: &mut NesSoundMixer) {
-        self.clock_with_reader(|_| 0, Some(mixer));
+    pub fn clock_with_mixer(&mut self, mixer: &mut NesSoundMixer) -> (u8, Option<u16>) {
+        self.clock_with_reader(|_| 0, Some(mixer))
     }
 
     /// Mixed audio sample using the NES non-linear mixer approximation.
@@ -355,6 +400,16 @@ impl Apu {
                 self.last_levels[idx] = level;
             }
         }
+    }
+
+    /// Completes a pending DMC DMA fetch with the provided PRG byte.
+    pub fn finish_dma_fetch(&mut self, byte: u8) {
+        self.dmc.finish_dma_fetch(byte);
+    }
+
+    /// Last DMC sample fetch address (used for DMA stall bus access).
+    pub fn last_fetch_addr(&self) -> u16 {
+        self.dmc.last_fetch_addr()
     }
 }
 

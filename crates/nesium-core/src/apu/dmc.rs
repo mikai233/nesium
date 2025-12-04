@@ -26,6 +26,10 @@ pub(super) struct Dmc {
     /// `ApuTimer` with a period of `DMC_RATE_TABLE[rate] - 1`, so each
     /// bit output occurs every `DMC_RATE_TABLE[rate]` CPU cycles.
     timer_period: u16,
+    /// Address of the most recent DMA fetch (for bus-side DMA emulation).
+    last_fetch_addr: u16,
+    /// Pending DMA fetch address to be performed during stall cycles.
+    pending_fetch: Option<u16>,
 }
 
 impl Default for Dmc {
@@ -52,6 +56,8 @@ impl Default for Dmc {
             // lookup table entries.
             timer: DMC_RATE_TABLE[0] - 1,
             timer_period: DMC_RATE_TABLE[0] - 1,
+            last_fetch_addr: DMC_SAMPLE_BASE,
+            pending_fetch: None,
         }
     }
 }
@@ -74,25 +80,8 @@ impl Dmc {
     }
 
     pub(super) fn write_direct_load(&mut self, value: u8) {
-        // Direct 7-bit DAC load on `$4011`. Large instantaneous jumps in the
-        // output level can produce very audible pops, especially when games
-        // use `$4011` as a crude DAC for kick drums or other percussive
-        // sounds.
-        //
-        // Mesen2 exposes an optional "ReduceDmcPopping" setting that halves
-        // large jumps in `_outputLevel` when writing `$4011`. Here we apply a
-        // similar smoothing unconditionally to better match Mesen2 with that
-        // option enabled and to tame worst-case pops in common games.
-        let new_level = value & 0b0111_1111;
-        let previous = self.output_level;
-        self.output_level = new_level;
-
-        let diff = (self.output_level as i16 - previous as i16).abs();
-        if diff > 50 {
-            let delta = self.output_level as i16 - previous as i16;
-            let smoothed = self.output_level as i16 - delta / 2;
-            self.output_level = smoothed.clamp(0, 127) as u8;
-        }
+        // Hardware: direct 7-bit DAC load, no smoothing.
+        self.output_level = value & 0b0111_1111;
     }
 
     pub(super) fn write_sample_address(&mut self, value: u8) {
@@ -119,17 +108,28 @@ impl Dmc {
         self.bytes_remaining > 0
     }
 
-    pub(super) fn clock<F>(&mut self, mut reader: F, status: &mut StatusFlags)
+    /// Returns (stall_cycles, dma_address_to_read)
+    pub(super) fn clock<F>(
+        &mut self,
+        mut reader: F,
+        status: &mut StatusFlags,
+    ) -> (u8, Option<u16>)
     where
         F: FnMut(u16) -> u8,
     {
+        let mut stall_cycles = 0;
+        let mut dma_addr = None;
+
         if self.enabled && self.tick_timer() {
             self.shift_output();
         }
 
         if self.enabled {
-            self.fetch_sample(&mut reader, status);
+            let (stall, addr) = self.fetch_sample(&mut reader, status);
+            stall_cycles = stall;
+            dma_addr = addr;
         }
+        (stall_cycles, dma_addr)
     }
 
     pub(super) fn output(&self) -> u8 {
@@ -197,18 +197,22 @@ impl Dmc {
         }
     }
 
-    fn fetch_sample<F>(&mut self, reader: &mut F, status: &mut StatusFlags)
+    /// Returns (stall_cycles, dma_address_to_read)
+    fn fetch_sample<F>(
+        &mut self,
+        _reader: &mut F,
+        status: &mut StatusFlags,
+    ) -> (u8, Option<u16>)
     where
         F: FnMut(u16) -> u8,
     {
-        // TODO: Wire this path to the CPU bus and model the DMA-like stalls the
-        // DMC triggers while fetching bytes.
-        if self.sample_buffer.is_some() || self.bytes_remaining == 0 {
-            return;
+        if self.sample_buffer.is_some() || self.bytes_remaining == 0 || self.pending_fetch.is_some()
+        {
+            return (0, None);
         }
 
-        let byte = reader(self.current_address);
-        self.sample_buffer = Some(byte);
+        self.last_fetch_addr = self.current_address;
+        self.pending_fetch = Some(self.current_address);
         self.current_address = Self::next_address(self.current_address);
         self.bytes_remaining = self.bytes_remaining.saturating_sub(1);
 
@@ -218,6 +222,20 @@ impl Dmc {
             } else if self.irq_enable {
                 status.dmc_interrupt = true;
             }
+        }
+        // Each sample fetch steals 4 CPU cycles on hardware; surface that as
+        // a stall hint so the caller can account for it, and return the DMA
+        // address to let the caller perform the bus read once.
+        (4, self.pending_fetch)
+    }
+
+    pub(super) fn last_fetch_addr(&self) -> u16 {
+        self.last_fetch_addr
+    }
+
+    pub(super) fn finish_dma_fetch(&mut self, byte: u8) {
+        if self.pending_fetch.take().is_some() {
+            self.sample_buffer = Some(byte);
         }
     }
 }

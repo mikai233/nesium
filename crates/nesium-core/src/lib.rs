@@ -9,6 +9,7 @@ use crate::{
     cpu::Cpu,
     error::Error,
     mem_block::cpu as cpu_ram,
+    memory::cpu as cpu_mem,
     ppu::{
         Ppu,
         buffer::{ColorFormat, FrameBuffer},
@@ -213,41 +214,45 @@ impl Nes {
     /// Advances the system by a single PPU dot (master tick) and reports whether
     /// CPU/APU were clocked on this dot.
     pub fn step_dot(&mut self) -> ClockResult {
-        let mut bus = CpuBus::new(
-            &mut self.ram,
-            &mut self.ppu,
-            &mut self.apu,
-            self.cartridge.as_mut(),
-            &mut self.controllers,
-            Some(&mut self.serial_log),
-            &mut self.oam_dma_request,
-            &mut self.open_bus,
-            &mut self.cpu_bus_cycle,
-        );
+        let (mut frame_advanced, apu_clocked) = {
+            let mut bus = CpuBus::new(
+                &mut self.ram,
+                &mut self.ppu,
+                &mut self.apu,
+                self.cartridge.as_mut(),
+                &mut self.controllers,
+                Some(&mut self.serial_log),
+                &mut self.oam_dma_request,
+                &mut self.open_bus,
+                &mut self.cpu_bus_cycle,
+            );
 
-        // NTSC timing: 1 CPU tick per 3 PPU dots. Run one PPU dot every call,
-        // and run CPU/APU after the third dot in each 3-dot group so timing
-        // matches the common PPU-first, CPU-later cadence.
-        bus.clock_ppu();
-        // Run CPU/APU once every 3 PPU dots with a phase that aligns CPU work
-        // just after the second PPU dot in each trio, matching common PPU-first cadence.
-        let apu_clocked = if (self.dot_counter + 2) % 3 == 0 {
-            self.cpu.clock(&mut bus);
-            bus.apu_mut().clock();
-            true
-        } else {
-            false
+            bus.clock_ppu();
+            let apu_clocked = if (self.dot_counter + 2) % 3 == 0 {
+                self.cpu.clock(&mut bus);
+                true
+            } else {
+                false
+            };
+
+            self.dot_counter = self.dot_counter.wrapping_add(1);
+
+            let frame_count = bus.ppu().frame_count();
+            let frame_advanced = if frame_count != self.last_frame {
+                self.last_frame = frame_count;
+                true
+            } else {
+                false
+            };
+            (frame_advanced, apu_clocked)
         };
 
-        self.dot_counter = self.dot_counter.wrapping_add(1);
-
-        let frame_count = bus.ppu().frame_count();
-        let frame_advanced = if frame_count != self.last_frame {
-            self.last_frame = frame_count;
-            true
-        } else {
-            false
-        };
+        if apu_clocked {
+            let (stall_cycles, dma_addr) = self.apu.clock();
+            if stall_cycles > 0 && self.apply_dmc_stall(stall_cycles, dma_addr) {
+                frame_advanced = true;
+            }
+        }
 
         ClockResult {
             frame_advanced,
@@ -258,7 +263,7 @@ impl Nes {
     /// Advances the system by a single PPU dot while feeding audio deltas into the shared mixer.
     pub fn step_dot_with_audio(&mut self) -> ClockResult {
         // First, run PPU + CPU for this dot using the shared CPU bus.
-        let (frame_advanced, apu_clocked, cpu_cycles, expansion_samples) = {
+        let (mut frame_advanced, apu_clocked, cpu_cycles, expansion_samples) = {
             let mut bus = CpuBus::new(
                 &mut self.ram,
                 &mut self.ppu,
@@ -304,9 +309,7 @@ impl Nes {
         // APU tick and feed deltas into the shared mixer, wiring the DMC
         // sample fetch path directly to the PRG space.
         if apu_clocked {
-            use crate::memory::cpu as cpu_mem;
-
-            let mut reader = |addr: u16| {
+            let prg_read = |addr: u16| {
                 if addr < cpu_mem::CARTRIDGE_SPACE_BASE {
                     0
                 } else {
@@ -316,8 +319,12 @@ impl Nes {
                         .unwrap_or(0)
                 }
             };
-            self.apu
-                .clock_with_reader(&mut reader, Some(&mut self.mixer));
+            let (stall_cycles, dma_addr) =
+                self.apu.clock_with_reader(prg_read, Some(&mut self.mixer));
+
+            if stall_cycles > 0 && self.apply_dmc_stall(stall_cycles, dma_addr) {
+                frame_advanced = true;
+            }
 
             if let Some(samples) = expansion_samples {
                 let clock = cpu_cycles as i64;
@@ -603,6 +610,92 @@ impl Nes {
     /// Drains any bytes emitted on controller port 1 via the blargg serial protocol.
     pub fn take_serial_output(&mut self) -> Vec<u8> {
         self.serial_log.drain()
+    }
+
+    /// DMC DMA stall: freeze CPU for the specified cycles and perform a single
+    /// PRG read so mappers can observe the DMA.
+    ///
+    /// Each DMC DMA is 4 CPU cycles; if initiated on an odd cycle an extra
+    /// cycle precedes the DMA to align to even. Only one PRG read occurs per
+    /// DMA (not per stall cycle).
+    fn apply_dmc_stall(&mut self, stall_cycles: u8, dma_addr: Option<u16>) -> bool {
+        if stall_cycles == 0 {
+            return false;
+        }
+
+        // Helper to advance one CPU cycle (with optional PRG read) and keep the
+        // PPU in lockstep. The bus read path increments `cpu_bus_cycle`
+        // internally; idle cycles advance it explicitly and still clock the
+        // mapper/open-bus decay to match hardware.
+        let mut frame_advanced = false;
+        let mut run_cycle =
+            |nes: &mut Nes, read_addr: Option<u16>, frame_advanced: &mut bool| {
+                if let Some(addr) = read_addr {
+                    let byte = {
+                        let mut bus = CpuBus::new(
+                            &mut nes.ram,
+                            &mut nes.ppu,
+                            &mut nes.apu,
+                            nes.cartridge.as_mut(),
+                            &mut nes.controllers,
+                            Some(&mut nes.serial_log),
+                            &mut nes.oam_dma_request,
+                            &mut nes.open_bus,
+                            &mut nes.cpu_bus_cycle,
+                        );
+                        bus.read(addr)
+                    };
+                    nes.apu.finish_dma_fetch(byte);
+                    nes.open_bus.latch(byte);
+                } else {
+                    nes.cpu_bus_cycle = nes.cpu_bus_cycle.wrapping_add(1);
+                    if let Some(cart) = nes.cartridge.as_mut() {
+                        cart.cpu_clock(nes.cpu_bus_cycle);
+                    }
+                    nes.open_bus.step();
+                }
+                // Even though the CPU core is stalled, advance its cycle
+                // counter (and pause any in-progress OAM DMA) so alignment/parity
+                // stays correct.
+                nes.cpu.account_dma_cycle();
+
+                for _ in 0..3 {
+                    let mut bus = CpuBus::new(
+                        &mut nes.ram,
+                        &mut nes.ppu,
+                        &mut nes.apu,
+                        nes.cartridge.as_mut(),
+                        &mut nes.controllers,
+                        Some(&mut nes.serial_log),
+                        &mut nes.oam_dma_request,
+                        &mut nes.open_bus,
+                        &mut nes.cpu_bus_cycle,
+                    );
+                    bus.clock_ppu();
+                    nes.dot_counter = nes.dot_counter.wrapping_add(1);
+                    let frame_count = bus.ppu().frame_count();
+                    if frame_count != nes.last_frame {
+                        nes.last_frame = frame_count;
+                        *frame_advanced = true;
+                    }
+                }
+            };
+
+        // Align to even CPU cycle when requested stall is non-zero. The first
+        // cycle is idle when starting on an odd CPU cycle; the PRG read occurs
+        // on the following (even) cycle.
+        if (self.cpu_bus_cycle & 1) == 1 {
+            run_cycle(self, None, &mut frame_advanced);
+        }
+
+        // Apply the DMA cycles; the PRG read is performed on the first DMA
+        // cycle only.
+        for i in 0..stall_cycles {
+            let read_addr = if i == 0 { dma_addr } else { None };
+            run_cycle(self, read_addr, &mut frame_advanced);
+        }
+
+        frame_advanced
     }
 }
 
