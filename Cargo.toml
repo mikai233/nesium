@@ -35,7 +35,7 @@ license = "GPL-3.0-or-later"
 
 [workspace.dependencies]
 bitflags = "2.10.0"
-esp-idf-sys = "0.35"
+esp-idf-sys = "0.36"
 rand = "0.9.2"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
