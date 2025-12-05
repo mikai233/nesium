@@ -101,7 +101,8 @@ impl Mapper1 {
 
         let prg_bank_count = (prg_rom.len() / PRG_BANK_SIZE_16K).max(1);
 
-        let mapper = Self {
+        
+        Self {
             prg_rom,
             prg_ram,
             chr_rom,
@@ -115,8 +116,7 @@ impl Mapper1 {
             shift_reg: 0,
             shift_count: 0,
             last_serial_cycle: None,
-        };
-        mapper
+        }
     }
 
     #[inline]
@@ -295,12 +295,11 @@ impl Mapper1 {
 
         // NESdev/Mesen2: if two serial (D0) writes occur on consecutive CPU cycles,
         // only the first is honored (commonly triggered by RMW instructions).
-        if let Some(last) = self.last_serial_cycle {
-            if cpu_cycle == last.wrapping_add(1) {
+        if let Some(last) = self.last_serial_cycle
+            && cpu_cycle == last.wrapping_add(1) {
                 self.last_serial_cycle = None;
                 return;
             }
-        }
 
         if self.last_serial_cycle == Some(cpu_cycle) {
             // Defensive: avoid double-counting within the same cycle.

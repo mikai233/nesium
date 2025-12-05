@@ -8,17 +8,14 @@ use nesium_core::{Nes, controller::Button};
 /// Currently only keyboard input is implemented. Gamepad support can be
 /// added later without changing the public NES core API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ControllerDevice {
     Disabled,
+    #[default]
     Keyboard,
     Gamepad(GamepadId),
 }
 
-impl Default for ControllerDevice {
-    fn default() -> Self {
-        ControllerDevice::Keyboard
-    }
-}
 
 #[derive(Default)]
 pub struct ControllerInput {
@@ -56,11 +53,10 @@ impl ControllerInput {
             let mut captured: Option<Key> = None;
             ctx.input(|i| {
                 for ev in &i.events {
-                    if let Event::Key { key, pressed, .. } = ev {
-                        if *pressed {
+                    if let Event::Key { key, pressed, .. } = ev
+                        && *pressed {
                             captured = Some(*key);
                         }
-                    }
                 }
             });
 
@@ -78,11 +74,10 @@ impl ControllerInput {
 
         if !keyboard_blocked {
             for (button, key_opt) in &self.bindings {
-                if let Some(key) = key_opt {
-                    if keys.contains(key) && !desired.contains(button) {
+                if let Some(key) = key_opt
+                    && keys.contains(key) && !desired.contains(button) {
                         desired.push(*button);
                     }
-                }
             }
         }
 
@@ -106,11 +101,10 @@ impl ControllerInput {
         let mut desired: Vec<Button> = Vec::new();
 
         for (button, binding) in &self.gamepad_bindings {
-            if let Some(gb) = binding {
-                if gamepads.is_pressed(gamepad_id, *gb) {
+            if let Some(gb) = binding
+                && gamepads.is_pressed(gamepad_id, *gb) {
                     desired.push(*button);
                 }
-            }
         }
 
         // Release all previous buttons for this pad, then apply desired.
@@ -130,7 +124,7 @@ impl ControllerInput {
     }
 
     pub fn is_pressed(&self, button: Button) -> bool {
-        self.pressed.iter().any(|b| *b == button)
+        self.pressed.contains(&button)
     }
 
     /// Current key binding for a given NES button.

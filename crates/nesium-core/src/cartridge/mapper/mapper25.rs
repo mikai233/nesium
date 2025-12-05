@@ -31,7 +31,7 @@ use crate::mem_block::ByteBlock;
 /// PRG-ROM banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
-const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+const CHR_BANK_SIZE_1K: usize = 1024;
 
 /// CPU `$8000-$FFFF`: VRC4b/VRC4d/VRC2c register I/O window. Writes in this
 /// range, after address translation, hit PRG/CHR/mirroring/IRQ registers.
@@ -187,7 +187,7 @@ impl Mapper25 {
                 Variant::Vrc4d => ((addr >> 3) & 0x01, (addr >> 2) & 0x01),
             }
         };
-        (addr & 0xFF00) | ((a1 as u16) << 1) | (a0 as u16)
+        (addr & 0xFF00) | (a1 << 1) | a0
     }
 
     #[inline]

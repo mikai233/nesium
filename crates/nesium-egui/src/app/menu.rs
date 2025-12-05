@@ -202,8 +202,8 @@ impl NesiumApp {
                 self.t(TextId::StatusResumed).to_string()
             });
         }
-        if cmd.start_record {
-            if let Some(path) = save_wav_dialog() {
+        if cmd.start_record
+            && let Some(path) = save_wav_dialog() {
                 self.record_buffer.clear();
                 self.record_sample_rate = self
                     .audio
@@ -219,9 +219,8 @@ impl NesiumApp {
                     }
                 });
             }
-        }
-        if cmd.stop_record {
-            if self.recording {
+        if cmd.stop_record
+            && self.recording {
                 self.recording = false;
                 if let Some(path) = self.record_path.take() {
                     match write_wav(&path, self.record_sample_rate, &self.record_buffer) {
@@ -249,7 +248,6 @@ impl NesiumApp {
                     self.record_buffer.clear();
                 }
             }
-        }
         if cmd.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }

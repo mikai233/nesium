@@ -76,7 +76,7 @@ impl DemoCore {
         self.nes.run_frame_with_audio(&mut samples);
         let mut frames = Vec::new();
         for chunk in samples.chunks(2) {
-            let l = *chunk.get(0).unwrap_or(&0.0);
+            let l = *chunk.first().unwrap_or(&0.0);
             let r = *chunk.get(1).unwrap_or(&l);
             let l_i16 = (l.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
             let r_i16 = (r.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;

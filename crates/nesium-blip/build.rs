@@ -2,11 +2,6 @@
 use std::{env, path::PathBuf};
 
 fn main() {
-    if !cfg!(feature = "c-impl") {
-        // No-op build when C++ impl is disabled.
-        return;
-    }
-
     #[cfg(feature = "c-impl")]
     build_c_impl();
 }

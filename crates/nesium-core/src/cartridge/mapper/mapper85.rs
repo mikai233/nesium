@@ -37,7 +37,7 @@ use crate::mem_block::ByteBlock;
 /// PRG banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
-const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+const CHR_BANK_SIZE_1K: usize = 1024;
 
 /// CPU `$8000-$9FFF`: switchable 8 KiB PRG-ROM bank mapped at `$8000`.
 const VRC7_PRG_SLOT0_START: u16 = 0x8000;

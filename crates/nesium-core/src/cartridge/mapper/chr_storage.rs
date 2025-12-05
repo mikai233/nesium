@@ -92,13 +92,12 @@ impl ChrStorage {
 
     /// Write a byte to an explicitly indexed CHR window, if CHR RAM is present.
     pub fn write_indexed(&mut self, base: usize, offset: usize, data: u8) {
-        if let ChrStorage::Ram(ram) = self {
-            if !ram.is_empty() {
+        if let ChrStorage::Ram(ram) = self
+            && !ram.is_empty() {
                 let len = ram.len();
                 let idx = (base + offset) % len;
                 ram[idx] = data;
             }
-        }
     }
 
     /// Returns a view of the underlying CHR ROM, when present.

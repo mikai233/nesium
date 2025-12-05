@@ -223,7 +223,7 @@ impl SoundMixerBus {
             config: AudioBusConfig::default(),
             eq: Equalizer::default(),
             reverb: ReverbFilter::default(),
-            crossfeed: CrossFeedFilter::default(),
+            crossfeed: CrossFeedFilter,
             mix_scratch: Vec::new(),
         }
     }

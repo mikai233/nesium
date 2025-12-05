@@ -103,7 +103,7 @@ impl OpenBus {
         }
 
         let mut open_bus = (self.value as u16) << 8;
-        for (_bit, deadline) in self.decay_deadline.iter_mut().enumerate() {
+        for deadline in self.decay_deadline.iter_mut() {
             open_bus >>= 1;
             if mask & 0x01 != 0 {
                 if value & 0x01 != 0 {

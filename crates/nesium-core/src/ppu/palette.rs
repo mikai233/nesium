@@ -213,7 +213,7 @@ impl PaletteRam {
             addr
         };
         let mut index = (relative % ppu_mem::PALETTE_STRIDE) as usize;
-        if index >= 16 && index % 4 == 0 {
+        if index >= 16 && index.is_multiple_of(4) {
             index -= 16;
         }
         index % ppu_mem::PALETTE_RAM_SIZE

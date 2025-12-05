@@ -42,7 +42,7 @@ use crate::mem_block::ByteBlock;
 /// PRG-ROM bank size exposed to the CPU (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
-const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+const CHR_BANK_SIZE_1K: usize = 1024;
 
 /// CPU `$8000-$9FFF`: first 8 KiB PRG-ROM window and MMC3 bank select/data registers.
 const MMC3_PRG_SLOT0_START: u16 = 0x8000;

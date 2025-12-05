@@ -74,6 +74,12 @@ impl fmt::Debug for Apu {
     }
 }
 
+impl Default for Apu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Apu {
     pub fn new() -> Self {
         Self {

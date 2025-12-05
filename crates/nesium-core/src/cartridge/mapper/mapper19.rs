@@ -47,7 +47,7 @@ use crate::mem_block::{ByteBlock, MemBlock};
 /// PRG-ROM banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
-const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+const CHR_BANK_SIZE_1K: usize = 1024;
 
 /// CPU `$8000-$9FFF/$A000-$BFFF/$C000-$DFFF/$E000-$FFFF`: four 8 KiB PRG windows.
 const NAMCO163_PRG_SLOT0_START: u16 = 0x8000;

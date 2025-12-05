@@ -228,7 +228,7 @@ impl Nes {
             );
 
             bus.clock_ppu();
-            let apu_clocked = if (self.dot_counter + 2) % 3 == 0 {
+            let apu_clocked = if (self.dot_counter + 2).is_multiple_of(3) {
                 self.cpu.clock(&mut bus);
                 true
             } else {
@@ -277,7 +277,7 @@ impl Nes {
             );
 
             bus.clock_ppu();
-            let apu_clocked = if (self.dot_counter + 2) % 3 == 0 {
+            let apu_clocked = if (self.dot_counter + 2).is_multiple_of(3) {
                 self.cpu.clock(&mut bus);
 
                 // Expansion audio samples are taken at the same CPU clock as
@@ -628,7 +628,7 @@ impl Nes {
         // internally; idle cycles advance it explicitly and still clock the
         // mapper/open-bus decay to match hardware.
         let mut frame_advanced = false;
-        let mut run_cycle = |nes: &mut Nes, read_addr: Option<u16>, frame_advanced: &mut bool| {
+        let run_cycle = |nes: &mut Nes, read_addr: Option<u16>, frame_advanced: &mut bool| {
             if let Some(addr) = read_addr {
                 let byte = {
                     let mut bus = CpuBus::new(

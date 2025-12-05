@@ -581,11 +581,10 @@ impl Mapper5 {
                             if (self.prg_bank_a000 & 0x80) == 0 {
                                 self.write_prg_ram_page(addr, self.prg_bank_a000, data);
                             }
-                        } else if addr < MMC5_PRG_WINDOW_E000_START {
-                            if (self.prg_bank_c000 & 0x80) == 0 {
+                        } else if addr < MMC5_PRG_WINDOW_E000_START
+                            && (self.prg_bank_c000 & 0x80) == 0 {
                                 self.write_prg_ram_page(addr, self.prg_bank_c000, data);
                             }
-                        }
                     }
                     _ => {
                         // Mode 3: three 8 KiB ROM/RAM windows.
@@ -597,11 +596,10 @@ impl Mapper5 {
                             if (self.prg_bank_a000 & 0x80) == 0 {
                                 self.write_prg_ram_page(addr, self.prg_bank_a000, data);
                             }
-                        } else if addr < MMC5_PRG_WINDOW_E000_START {
-                            if (self.prg_bank_c000 & 0x80) == 0 {
+                        } else if addr < MMC5_PRG_WINDOW_E000_START
+                            && (self.prg_bank_c000 & 0x80) == 0 {
                                 self.write_prg_ram_page(addr, self.prg_bank_c000, data);
                             }
-                        }
                         // $E000-$FFFF is ROM-only.
                     }
                 }
@@ -852,7 +850,7 @@ impl Mapper for Mapper5 {
 
     fn map_nametable(&self, addr: u16) -> NametableTarget {
         // Derive nametable index (0-3) from PPU address.
-        if addr < 0x2000 || addr >= 0x3000 {
+        if !(0x2000..0x3000).contains(&addr) {
             return NametableTarget::Ciram(addr & 0x07FF);
         }
         let nt = ((addr - 0x2000) / 0x0400) as u8; // 0..3
@@ -891,7 +889,7 @@ impl Mapper for Mapper5 {
                 // Attribute bytes replaced by fill-color replicated into all 4 quads.
                 let bits = self.fill_attr & 0x03;
                 // Replicate two bits across the byte: b1b0 b1b0 b1b0 b1b0.
-                (bits * 0x55) & 0xFF
+                (bits * 0x55)
             }
         } else {
             // ExRAM-backed nametable. When $5104 is %10 or %11, the

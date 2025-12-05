@@ -81,17 +81,14 @@ pub struct SerialLogger {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 enum SerialState {
+    #[default]
     Idle,
     Data { byte: u8, bit: u8 },
     Stop { byte: u8 },
 }
 
-impl Default for SerialState {
-    fn default() -> Self {
-        SerialState::Idle
-    }
-}
 
 impl SerialLogger {
     pub(crate) fn push_bit(&mut self, bit: bool) {

@@ -29,7 +29,7 @@ use crate::mem_block::ByteBlock;
 /// PRG-ROM bank size exposed to the CPU (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
-const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+const CHR_BANK_SIZE_1K: usize = 1024;
 /// Fixed CHR-RAM size used by TQROM boards.
 const CHR_RAM_SIZE: usize = 8 * 1024;
 

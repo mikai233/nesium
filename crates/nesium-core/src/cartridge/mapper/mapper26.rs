@@ -31,7 +31,7 @@ use crate::mem_block::ByteBlock;
 /// PRG-ROM banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
-const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+const CHR_BANK_SIZE_1K: usize = 1024;
 
 /// CPU `$8000-$FFFF`: VRC6b register I/O and PRG banking window. Writes in
 /// this range, after address translation, select PRG/CHR/IRQ/mirroring state.
@@ -70,14 +70,14 @@ impl Vrc6CpuRegister {
         use Vrc6CpuRegister::*;
 
         match addr & 0xF003 {
-            0x8000 | 0x8001 | 0x8002 | 0x8003 => Some(PrgBank8000_2x),
-            0x9000 | 0x9001 | 0x9002 | 0x9003 => Some(ExpansionAudio),
-            0xA000 | 0xA001 | 0xA002 | 0xA003 => Some(ExpansionAudio),
-            0xB000 | 0xB001 | 0xB002 => Some(ExpansionAudio),
+            0x8000..=0x8003 => Some(PrgBank8000_2x),
+            0x9000..=0x9003 => Some(ExpansionAudio),
+            0xA000..=0xA003 => Some(ExpansionAudio),
+            0xB000..=0xB002 => Some(ExpansionAudio),
             0xB003 => Some(Control),
-            0xC000 | 0xC001 | 0xC002 | 0xC003 => Some(PrgBankC000),
-            0xD000 | 0xD001 | 0xD002 | 0xD003 => Some(ChrBankLow),
-            0xE000 | 0xE001 | 0xE002 | 0xE003 => Some(ChrBankHigh),
+            0xC000..=0xC003 => Some(PrgBankC000),
+            0xD000..=0xD003 => Some(ChrBankLow),
+            0xE000..=0xE003 => Some(ChrBankHigh),
             0xF000 => Some(IrqReload),
             0xF001 => Some(IrqControl),
             0xF002 => Some(IrqAck),

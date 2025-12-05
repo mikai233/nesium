@@ -302,11 +302,7 @@ impl Mapper for Mapper6 {
         // Low 16 KiB starts at the first two 8 KiB banks.
         self.prg_bank_low_2x = 0;
         // High 16 KiB fixed to the last pair of 8 KiB banks.
-        self.prg_bank_high_2x = if self.prg_bank_count_8k >= 2 {
-            self.prg_bank_count_8k - 2
-        } else {
-            0
-        };
+        self.prg_bank_high_2x = self.prg_bank_count_8k.saturating_sub(2);
     }
 
     fn reset(&mut self) {

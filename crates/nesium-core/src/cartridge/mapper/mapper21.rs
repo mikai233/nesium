@@ -32,7 +32,7 @@ use crate::mem_block::ByteBlock;
 /// PRG-ROM banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
-const CHR_BANK_SIZE_1K: usize = 1 * 1024;
+const CHR_BANK_SIZE_1K: usize = 1024;
 
 /// CPU `$8000-$9FFF/$A000-$BFFF/$C000-$DFFF/$E000-$FFFF`: four 8 KiB PRG windows.
 const VRC4_PRG_SLOT0_START: u16 = 0x8000;
@@ -230,7 +230,7 @@ impl Mapper21 {
 
         a0 &= 0x01;
         a1 &= 0x01;
-        (addr & 0xFF00) | ((a1 as u16) << 1) | (a0 as u16)
+        (addr & 0xFF00) | (a1 << 1) | a0
     }
 
     #[inline]

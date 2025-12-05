@@ -141,7 +141,7 @@ impl BlipBuf {
         if needed < self.offset {
             return 0;
         }
-        let clocks = (needed - self.offset + self.factor - 1) / self.factor;
+        let clocks = (needed - self.offset).div_ceil(self.factor);
         clocks as i64
     }
 

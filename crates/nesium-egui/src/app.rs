@@ -123,14 +123,13 @@ impl NesiumApp {
             next_frame_deadline: None,
         };
 
-        if let Some(path) = config.rom_path {
-            if let Err(err) = app.load_rom(&path) {
+        if let Some(path) = config.rom_path
+            && let Err(err) = app.load_rom(&path) {
                 app.status_line = Some(match app.language() {
                     Language::English => format!("Failed to load ROM: {err}"),
                     Language::ChineseSimplified => format!("加载 ROM 失败: {err}"),
                 });
             }
-        }
 
         app
     }
@@ -227,7 +226,7 @@ impl NesiumApp {
         }
 
         let image = ColorImage::from_rgba_unmultiplied(
-            [SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize],
+            [SCREEN_WIDTH, SCREEN_HEIGHT],
             frame,
         );
 
@@ -284,7 +283,7 @@ impl eframe::App for NesiumApp {
         }
 
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
-        if let Some(path) = dropped.iter().filter_map(|f| f.path.clone()).last() {
+        if let Some(path) = dropped.iter().filter_map(|f| f.path.clone()).next_back() {
             let _ = self.load_rom(&path);
         }
 

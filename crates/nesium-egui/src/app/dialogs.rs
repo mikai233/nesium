@@ -51,7 +51,7 @@ pub fn write_wav(path: &Path, sample_rate: u32, samples: &[f32]) -> std::io::Res
     w.write_all(&data_len.to_le_bytes())?;
 
     for chunk in samples.chunks(2) {
-        let l = *chunk.get(0).unwrap_or(&0.0);
+        let l = *chunk.first().unwrap_or(&0.0);
         let r = *chunk.get(1).unwrap_or(&l);
         let to_i16 = |x: f32| -> i16 {
             let v = x.clamp(-1.0, 1.0) * 32767.0;

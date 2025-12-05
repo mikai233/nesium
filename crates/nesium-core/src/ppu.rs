@@ -494,7 +494,8 @@ impl Ppu {
     /// Unhandled reads return the last bus value to approximate open-bus
     /// behavior.
     pub fn cpu_read(&mut self, addr: u16, pattern: &mut PatternBus<'_>) -> u8 {
-        let value = match PpuRegister::from_cpu_addr(addr) {
+        
+        match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Status => self.read_status(),
             PpuRegister::OamData => {
                 let v = self.read_oam_data();
@@ -503,8 +504,7 @@ impl Ppu {
             }
             PpuRegister::Data => self.read_vram_data(pattern),
             _ => self.open_bus.sample(),
-        };
-        value
+        }
     }
 
     /// Advances the PPU by a single dot, keeping cycle and frame counters up to date.
@@ -984,7 +984,7 @@ impl Ppu {
         );
 
         // Fetch and reload shifters every 8 dots (tile boundary) during fetch windows.
-        if self.cycle % 8 == 0 {
+        if self.cycle.is_multiple_of(8) {
             self.load_background_tile(pattern);
             self.increment_scroll_x();
         }
@@ -1279,7 +1279,7 @@ impl Ppu {
         }
 
         // Compute which row of the sprite to fetch for the next scanline.
-        let next_scanline = self.scanline.wrapping_add(1) as i16;
+        let next_scanline = self.scanline.wrapping_add(1);
         let sprite_height: i16 = if (self.registers.control.bits() & 0x20) != 0 {
             16
         } else {

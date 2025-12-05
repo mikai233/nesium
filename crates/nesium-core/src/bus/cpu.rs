@@ -57,7 +57,7 @@ impl<'a> CpuBus<'a> {
 
     /// Returns the cartridge currently inserted on the bus, when present.
     pub fn cartridge(&self) -> Option<&Cartridge> {
-        self.cartridge.as_ref().map(|c| &**c)
+        self.cartridge.as_deref()
     }
 
     /// Current CPU cycle counter (increments per bus access).

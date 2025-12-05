@@ -17,12 +17,11 @@ pub fn install_cjk_font(ctx: &EguiContext) {
                 .iter()
                 .all(|ch| face.glyph_index(*ch).is_some())
         });
-        if has_all == Some(true) {
-            if let Some(bytes) = db.with_face_data(face.id, |data, _| data.to_vec()) {
+        if has_all == Some(true)
+            && let Some(bytes) = db.with_face_data(face.id, |data, _| data.to_vec()) {
                 picked = Some(bytes);
                 break;
             }
-        }
     }
 
     if let Some(data) = picked {
