@@ -201,6 +201,7 @@ fn read_u16(operands: &[u8]) -> u16 {
 }
 
 #[test]
+#[ignore = "manual test"]
 fn debug_dump_instructions_example() {
     let rom = "/Users/mikai/RustroverProjects/nesium/crates/nesium-core/vendor/nes-test-roms/instr_test-v5/all_instrs.nes";
     let out = "/Users/mikai/RustroverProjects/nesium/nesium_instr.log";
