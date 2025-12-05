@@ -10,8 +10,11 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  CRATE_NAME: nesium-core
   CRATE_MANIFEST: crates/nesium-core/Cargo.toml
+  # Skip ESP32 crate here because it needs the Xtensa toolchain/SDK.
+  WORKSPACE_FLAGS: --workspace --exclude nesium-esp32
+  PUBLISH_MANIFESTS: |
+    crates/nesium-core/Cargo.toml
 
 jobs:
   build:
@@ -25,6 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: List workspace members
+        run: cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name' | sort
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -36,17 +42,22 @@ jobs:
         with:
           key: ${{ matrix.rust }}
 
+      - name: Install ALSA development libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
+
       - name: Build
-        run: cargo build --workspace --all-targets --verbose
+        run: cargo build ${{ env.WORKSPACE_FLAGS }} --all-targets --verbose
 
       - name: Run tests
-        run: cargo test --workspace --all-targets --verbose
+        run: cargo test ${{ env.WORKSPACE_FLAGS }} --all-targets --verbose
 
       - name: Format
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy ${{ env.WORKSPACE_FLAGS }} --all-targets -- -D warnings
 
       - name: Install cargo-llvm-cov
         if: matrix.rust == 'stable'
@@ -54,7 +65,7 @@ jobs:
 
       - name: Generate coverage report
         if: matrix.rust == 'stable'
-        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov ${{ env.WORKSPACE_FLAGS }} --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
         if: matrix.rust == 'stable'
@@ -87,22 +98,27 @@ jobs:
           version=${GITHUB_REF#refs/tags/}
           echo "version=$version" >> $GITHUB_OUTPUT
 
-      - name: Publish to crates.io (skip prerelease)
+      - name: Publish crates to crates.io (skip prerelease)
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           version=${{ steps.tag.outputs.version }}
           if [[ "$version" =~ -(dev|alpha|beta|rc|prerelease).* ]]; then
             echo "Pre-release version ($version), skip publishing to crates.io"
-          else
-            cargo publish --manifest-path "$CRATE_MANIFEST" --token "$CARGO_REGISTRY_TOKEN"
+            exit 0
           fi
+
+          for manifest in $PUBLISH_MANIFESTS; do
+            echo "Publishing $manifest..."
+            cargo publish --manifest-path "$manifest" --token "$CARGO_REGISTRY_TOKEN"
+          done
 
       - name: Package source code
         run: |
           version=${{ steps.tag.outputs.version }}
-          git archive --format=tar.gz --output=${{env.CRATE_NAME}}-${version}.tar.gz HEAD
-          sha256sum ${{env.CRATE_NAME}}-${version}.tar.gz > ${{env.CRATE_NAME}}-${version}.tar.gz.sha256
+          repo_name=${{ github.event.repository.name }}
+          git archive --format=tar.gz --output=${repo_name}-${version}.tar.gz HEAD
+          sha256sum ${repo_name}-${version}.tar.gz > ${repo_name}-${version}.tar.gz.sha256
 
       - name: Generate changelog
         id: changelog
@@ -129,7 +145,7 @@ jobs:
           tag_name: ${{ steps.tag.outputs.version }}
           body: ${{ steps.changelog.outputs.log }}
           files: |
-            ${{env.CRATE_NAME}}-${{ steps.tag.outputs.version }}.tar.gz
-            ${{env.CRATE_NAME}}-${{ steps.tag.outputs.version }}.tar.gz.sha256
+            ${{ github.event.repository.name }}-${{ steps.tag.outputs.version }}.tar.gz
+            ${{ github.event.repository.name }}-${{ steps.tag.outputs.version }}.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

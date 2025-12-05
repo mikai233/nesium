@@ -80,15 +80,18 @@ pub struct SerialLogger {
     buffer: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum SerialState {
     #[default]
     Idle,
-    Data { byte: u8, bit: u8 },
-    Stop { byte: u8 },
+    Data {
+        byte: u8,
+        bit: u8,
+    },
+    Stop {
+        byte: u8,
+    },
 }
-
 
 impl SerialLogger {
     pub(crate) fn push_bit(&mut self, bit: bool) {

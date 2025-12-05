@@ -494,7 +494,6 @@ impl Ppu {
     /// Unhandled reads return the last bus value to approximate open-bus
     /// behavior.
     pub fn cpu_read(&mut self, addr: u16, pattern: &mut PatternBus<'_>) -> u8 {
-        
         match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Status => self.read_status(),
             PpuRegister::OamData => {

@@ -203,51 +203,51 @@ impl NesiumApp {
             });
         }
         if cmd.start_record
-            && let Some(path) = save_wav_dialog() {
-                self.record_buffer.clear();
-                self.record_sample_rate = self
-                    .audio
-                    .as_ref()
-                    .map(|a| a.sample_rate())
-                    .unwrap_or_else(|| self.nes.audio_sample_rate());
-                self.record_path = Some(path.clone());
-                self.recording = true;
-                self.status_line = Some(match self.language() {
-                    Language::English => format!("Started recording audio to {}", path.display()),
-                    Language::ChineseSimplified => {
-                        format!("开始录制音频到 {}", path.display())
-                    }
-                });
-            }
-        if cmd.stop_record
-            && self.recording {
-                self.recording = false;
-                if let Some(path) = self.record_path.take() {
-                    match write_wav(&path, self.record_sample_rate, &self.record_buffer) {
-                        Ok(()) => {
-                            self.status_line = Some(match self.language() {
-                                Language::English => {
-                                    format!("Saved recording to {}", path.display())
-                                }
-                                Language::ChineseSimplified => {
-                                    format!("已保存录音到 {}", path.display())
-                                }
-                            });
-                        }
-                        Err(err) => {
-                            self.status_line = Some(match self.language() {
-                                Language::English => {
-                                    format!("Failed to save recording: {err}")
-                                }
-                                Language::ChineseSimplified => {
-                                    format!("保存录音失败: {err}")
-                                }
-                            });
-                        }
-                    }
-                    self.record_buffer.clear();
+            && let Some(path) = save_wav_dialog()
+        {
+            self.record_buffer.clear();
+            self.record_sample_rate = self
+                .audio
+                .as_ref()
+                .map(|a| a.sample_rate())
+                .unwrap_or_else(|| self.nes.audio_sample_rate());
+            self.record_path = Some(path.clone());
+            self.recording = true;
+            self.status_line = Some(match self.language() {
+                Language::English => format!("Started recording audio to {}", path.display()),
+                Language::ChineseSimplified => {
+                    format!("开始录制音频到 {}", path.display())
                 }
+            });
+        }
+        if cmd.stop_record && self.recording {
+            self.recording = false;
+            if let Some(path) = self.record_path.take() {
+                match write_wav(&path, self.record_sample_rate, &self.record_buffer) {
+                    Ok(()) => {
+                        self.status_line = Some(match self.language() {
+                            Language::English => {
+                                format!("Saved recording to {}", path.display())
+                            }
+                            Language::ChineseSimplified => {
+                                format!("已保存录音到 {}", path.display())
+                            }
+                        });
+                    }
+                    Err(err) => {
+                        self.status_line = Some(match self.language() {
+                            Language::English => {
+                                format!("Failed to save recording: {err}")
+                            }
+                            Language::ChineseSimplified => {
+                                format!("保存录音失败: {err}")
+                            }
+                        });
+                    }
+                }
+                self.record_buffer.clear();
             }
+        }
         if cmd.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }

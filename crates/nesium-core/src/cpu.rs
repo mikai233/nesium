@@ -232,12 +232,11 @@ impl Cpu {
                 // Special-case BRK: allow NMI/IRQ to be serviced after the dummy read
                 // micro-op (index 1) so that NMI can "interrupt" BRK and still push
                 // a status byte with the B flag set.
-                if opcode == 0x00 && self.index == 1
-                    && self.sample_interrupts(bus) {
-                        tracing::debug!("sample interrupts");
-                        self.cycles = self.cycles.wrapping_add(1);
-                        return;
-                    }
+                if opcode == 0x00 && self.index == 1 && self.sample_interrupts(bus) {
+                    tracing::debug!("sample interrupts");
+                    self.cycles = self.cycles.wrapping_add(1);
+                    return;
+                }
 
                 let instr = &LOOKUP_TABLE[opcode as usize];
                 let micro_op = &instr[self.index()];
@@ -433,13 +432,14 @@ impl Cpu {
         }
 
         if self.opcode_in_flight.is_none()
-            && let Some(page) = bus.take_oam_dma_request() {
-                let start_on_odd_cycle = (self.cycles & 1) == 1;
-                let mut dma = OamDma::new(page, start_on_odd_cycle);
-                let done = dma.step(bus);
-                self.oam_dma = if done { None } else { Some(dma) };
-                return true;
-            }
+            && let Some(page) = bus.take_oam_dma_request()
+        {
+            let start_on_odd_cycle = (self.cycles & 1) == 1;
+            let mut dma = OamDma::new(page, start_on_odd_cycle);
+            let done = dma.step(bus);
+            self.oam_dma = if done { None } else { Some(dma) };
+            return true;
+        }
 
         false
     }

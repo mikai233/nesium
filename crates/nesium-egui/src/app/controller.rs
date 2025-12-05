@@ -7,15 +7,13 @@ use nesium_core::{Nes, controller::Button};
 ///
 /// Currently only keyboard input is implemented. Gamepad support can be
 /// added later without changing the public NES core API.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ControllerDevice {
     Disabled,
     #[default]
     Keyboard,
     Gamepad(GamepadId),
 }
-
 
 #[derive(Default)]
 pub struct ControllerInput {
@@ -54,9 +52,10 @@ impl ControllerInput {
             ctx.input(|i| {
                 for ev in &i.events {
                     if let Event::Key { key, pressed, .. } = ev
-                        && *pressed {
-                            captured = Some(*key);
-                        }
+                        && *pressed
+                    {
+                        captured = Some(*key);
+                    }
                 }
             });
 
@@ -75,9 +74,11 @@ impl ControllerInput {
         if !keyboard_blocked {
             for (button, key_opt) in &self.bindings {
                 if let Some(key) = key_opt
-                    && keys.contains(key) && !desired.contains(button) {
-                        desired.push(*button);
-                    }
+                    && keys.contains(key)
+                    && !desired.contains(button)
+                {
+                    desired.push(*button);
+                }
             }
         }
 
@@ -102,9 +103,10 @@ impl ControllerInput {
 
         for (button, binding) in &self.gamepad_bindings {
             if let Some(gb) = binding
-                && gamepads.is_pressed(gamepad_id, *gb) {
-                    desired.push(*button);
-                }
+                && gamepads.is_pressed(gamepad_id, *gb)
+            {
+                desired.push(*button);
+            }
         }
 
         // Release all previous buttons for this pad, then apply desired.

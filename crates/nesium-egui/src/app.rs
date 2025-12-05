@@ -124,12 +124,13 @@ impl NesiumApp {
         };
 
         if let Some(path) = config.rom_path
-            && let Err(err) = app.load_rom(&path) {
-                app.status_line = Some(match app.language() {
-                    Language::English => format!("Failed to load ROM: {err}"),
-                    Language::ChineseSimplified => format!("加载 ROM 失败: {err}"),
-                });
-            }
+            && let Err(err) = app.load_rom(&path)
+        {
+            app.status_line = Some(match app.language() {
+                Language::English => format!("Failed to load ROM: {err}"),
+                Language::ChineseSimplified => format!("加载 ROM 失败: {err}"),
+            });
+        }
 
         app
     }
@@ -225,10 +226,7 @@ impl NesiumApp {
             return;
         }
 
-        let image = ColorImage::from_rgba_unmultiplied(
-            [SCREEN_WIDTH, SCREEN_HEIGHT],
-            frame,
-        );
+        let image = ColorImage::from_rgba_unmultiplied([SCREEN_WIDTH, SCREEN_HEIGHT], frame);
 
         match &mut self.frame_texture {
             Some(tex) => tex.set(image, TextureOptions::NEAREST),

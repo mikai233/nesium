@@ -203,13 +203,14 @@ fn build_cartridge_from_sections<'a>(
     // 1) Give the external provider first chance when it explicitly
     //    declares support for this mapper ID.
     if let Some(provider) = provider
-        && provider.supports_mapper(header.mapper) {
-            let mut mapper = provider
-                .get_mapper(header, prg_rom, chr_rom, trainer)
-                .ok_or(Error::UnsupportedMapper(header.mapper))?;
-            mapper.power_on();
-            return Ok(Cartridge::new(header, mapper));
-        }
+        && provider.supports_mapper(header.mapper)
+    {
+        let mut mapper = provider
+            .get_mapper(header, prg_rom, chr_rom, trainer)
+            .ok_or(Error::UnsupportedMapper(header.mapper))?;
+        mapper.power_on();
+        return Ok(Cartridge::new(header, mapper));
+    }
 
     // 2) Fall back to the built-in mapper registry for known IDs.
     let mut mapper: Box<dyn Mapper> = match header.mapper {

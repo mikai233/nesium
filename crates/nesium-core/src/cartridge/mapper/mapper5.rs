@@ -582,9 +582,10 @@ impl Mapper5 {
                                 self.write_prg_ram_page(addr, self.prg_bank_a000, data);
                             }
                         } else if addr < MMC5_PRG_WINDOW_E000_START
-                            && (self.prg_bank_c000 & 0x80) == 0 {
-                                self.write_prg_ram_page(addr, self.prg_bank_c000, data);
-                            }
+                            && (self.prg_bank_c000 & 0x80) == 0
+                        {
+                            self.write_prg_ram_page(addr, self.prg_bank_c000, data);
+                        }
                     }
                     _ => {
                         // Mode 3: three 8 KiB ROM/RAM windows.
@@ -597,9 +598,10 @@ impl Mapper5 {
                                 self.write_prg_ram_page(addr, self.prg_bank_a000, data);
                             }
                         } else if addr < MMC5_PRG_WINDOW_E000_START
-                            && (self.prg_bank_c000 & 0x80) == 0 {
-                                self.write_prg_ram_page(addr, self.prg_bank_c000, data);
-                            }
+                            && (self.prg_bank_c000 & 0x80) == 0
+                        {
+                            self.write_prg_ram_page(addr, self.prg_bank_c000, data);
+                        }
                         // $E000-$FFFF is ROM-only.
                     }
                 }

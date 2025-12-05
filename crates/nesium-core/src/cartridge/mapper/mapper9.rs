@@ -236,7 +236,9 @@ impl Mapper9 {
     fn prg_bank_from_end(&self, n: usize) -> usize {
         if self.prg_bank_count == 0 {
             0
-        } else { self.prg_bank_count.saturating_sub(n) }
+        } else {
+            self.prg_bank_count.saturating_sub(n)
+        }
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
