@@ -111,9 +111,9 @@ impl BgPipeline {
     pub fn reload(&mut self, tile_pattern: [u8; 2], palette_index: u8) {
         // Reload pattern shifters: keep the high byte, replace the low byte
         // with the newly fetched tile row for each bitplane.
-        for i in 0..=1 {
+        for (i, pattern) in tile_pattern.iter().enumerate() {
             self.pattern[i].clear_low_byte();
-            self.pattern[i].load_low_byte(tile_pattern[i]);
+            self.pattern[i].load_low_byte(*pattern);
         }
 
         // Reload palette shifters: each palette bit is replicated across

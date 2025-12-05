@@ -278,7 +278,8 @@ fn branch_timing_tests_suite() -> Result<()> {
 #[test]
 fn cpu_dummy_reads_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["cpu_dummy_reads/cpu_dummy_reads.nes"] {
+    {
+        let rom = "cpu_dummy_reads/cpu_dummy_reads.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -340,7 +341,8 @@ fn cpu_reset_suite() -> Result<()> {
 #[ignore = "this test fails and needs investigation"]
 fn cpu_timing_test6_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["cpu_timing_test6/cpu_timing_test.nes"] {
+    {
+        let rom = "cpu_timing_test6/cpu_timing_test.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -381,7 +383,8 @@ fn dmc_tests_suite() -> Result<()> {
 #[ignore = "this test fails and needs investigation"]
 fn dpcmletterbox_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["dpcmletterbox/dpcmletterbox.nes"] {
+    {
+        let rom = "dpcmletterbox/dpcmletterbox.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -557,7 +560,8 @@ fn mmc3_test_2_suite() -> Result<()> {
 #[ignore = "this test fails and needs investigation"]
 fn mmc5test_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["mmc5test/mmc5test.nes"] {
+    {
+        let rom = "mmc5test/mmc5test.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -567,7 +571,8 @@ fn mmc5test_suite() -> Result<()> {
 #[ignore = "this test fails and needs investigation"]
 fn mmc5test_v2_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["mmc5test_v2/mmc5test.nes"] {
+    {
+        let rom = "mmc5test_v2/mmc5test.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -633,7 +638,8 @@ fn ny2011_suite() -> Result<()> {
 #[test]
 fn oam_read_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["oam_read/oam_read.nes"] {
+    {
+        let rom = "oam_read/oam_read.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -642,7 +648,8 @@ fn oam_read_suite() -> Result<()> {
 #[test]
 fn oam_stress_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["oam_stress/oam_stress.nes"] {
+    {
+        let rom = "oam_stress/oam_stress.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -722,7 +729,8 @@ fn pal_apu_tests_suite() -> Result<()> {
 #[ignore = "this test fails and needs investigation"]
 fn ppu_open_bus_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["ppu_open_bus/ppu_open_bus.nes"] {
+    {
+        let rom = "ppu_open_bus/ppu_open_bus.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -731,7 +739,8 @@ fn ppu_open_bus_suite() -> Result<()> {
 #[test]
 fn ppu_read_buffer_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["ppu_read_buffer/test_ppu_read_buffer.nes"] {
+    {
+        let rom = "ppu_read_buffer/test_ppu_read_buffer.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -778,7 +787,8 @@ fn read_joy3_suite() -> Result<()> {
 #[ignore = "this test fails and needs investigation"]
 fn scanline_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["scanline/scanline.nes"] {
+    {
+        let rom = "scanline/scanline.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -788,7 +798,8 @@ fn scanline_suite() -> Result<()> {
 #[ignore = "this test fails and needs investigation"]
 fn scanline_a1_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["scanline-a1/scanline.nes"] {
+    {
+        let rom = "scanline-a1/scanline.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -798,7 +809,8 @@ fn scanline_a1_suite() -> Result<()> {
 #[ignore = "this test fails and needs investigation"]
 fn scrolltest_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["scrolltest/scroll.nes"] {
+    {
+        let rom = "scrolltest/scroll.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())
@@ -918,7 +930,8 @@ fn vbl_nmi_timing_suite() -> Result<()> {
 #[ignore = "this test fails and needs investigation"]
 fn volume_tests_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in ["volume_tests/volumes.nes"] {
+    {
+        let rom = "volume_tests/volumes.nes";
         run_rom_status(rom, DEFAULT_FRAMES)?;
     }
     Ok(())

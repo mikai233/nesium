@@ -272,8 +272,26 @@ pub extern "C" fn nesium_set_frame_ready_callback(
     let _ = send_command(ControlMessage::SetCallback(cb, user_data));
 }
 
+/// Copy the current NES frame into a BGRA8888 destination buffer.
+///
+/// The frame is laid out row-by-row with a configurable destination pitch
+/// (bytes per row). Excess height or width in the destination buffer is
+/// ignored; only the overlapping region is copied.
+///
+/// # Safety
+///
+/// * `dst` must be either null (in which case the function is a no-op)
+///   or a valid, properly aligned pointer to writable memory.
+/// * If non-null, `dst` must point to a buffer large enough to hold at
+///   least `dst_pitch * dst_height` bytes.
+/// * The memory pointed to by `dst` must remain valid for the duration
+///   of this function call and must not be mutably aliased elsewhere
+///   while the copy is in progress.
+/// * This function should only be called after the NES runtime has been
+///   started and a frame buffer has been initialized (i.e. after
+///   `nesium_runtime_start` and loading a ROM).
 #[unsafe(no_mangle)]
-pub extern "C" fn nesium_copy_frame(
+pub unsafe extern "C" fn nesium_copy_frame(
     _buffer_index: c_uint,
     dst: *mut u8,
     dst_pitch: c_uint,

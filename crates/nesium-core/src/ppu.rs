@@ -48,7 +48,7 @@ use core::fmt;
 use crate::cartridge::mapper::NametableTarget;
 use crate::{
     bus::OpenBus,
-    cartridge::{Cartridge, header::Mirroring},
+    cartridge::Cartridge,
     mem_block::ppu::{SecondaryOamRam, Vram},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
@@ -241,13 +241,6 @@ impl<'a> PatternBus<'a> {
         } else {
             false
         }
-    }
-
-    fn mirroring(&self) -> Mirroring {
-        self.cartridge
-            .as_deref()
-            .map(|cart| cart.mirroring())
-            .unwrap_or(Mirroring::Horizontal)
     }
 }
 
@@ -972,7 +965,7 @@ impl Ppu {
     /// This helper assumes it is only called:
     /// - on the prerender scanline (-1) or visible scanlines (0..=239)
     /// - during the background fetch windows (dots 1..=256 or 321..=336)
-    /// Callers are responsible for enforcing those timing constraints.
+    ///   Callers are responsible for enforcing those timing constraints.
     fn fetch_background_data(&mut self, pattern: &mut PatternBus<'_>) {
         debug_assert!(
             ((0..=239).contains(&self.scanline) || self.scanline == -1)

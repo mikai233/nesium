@@ -5,7 +5,7 @@
 //! - PRG: 16 KiB fixed to the last bank at `$C000-$FFFF`.
 //! - CHR: 8 KiB bank (high nibble) covering `$0000-$1FFF` (ROM or RAM).
 //! - Mirroring: bit 2 selects horizontal (1) vs vertical (0) mirroring.
-//! Bus conflicts are ignored to match common emulator behaviour.
+//!   Bus conflicts are ignored to match common emulator behaviour.
 //!
 //! | Area | Address range     | Behaviour                                      | IRQ/Audio |
 //! |------|-------------------|------------------------------------------------|-----------|

@@ -33,7 +33,6 @@ pub type PrgRom = Cow<'static, [u8]>;
 ///
 /// Follows the same ownership model as [`PrgRom`], allowing CHR data to be
 /// borrowed from static blobs on platforms where heap usage is constrained.
-
 pub type ChrRom = Cow<'static, [u8]>;
 
 /// Source image used to construct a [`Cartridge`].

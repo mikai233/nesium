@@ -18,12 +18,14 @@ const fn b(cycle: u8) -> Cycle {
 }
 
 impl Cycle {
+    #[cfg(test)]
     pub(crate) const fn basic_cycle(&self) -> usize {
         match self {
             Cycle::Normal(cycle) | Cycle::Cross(cycle) | Cycle::Branch(cycle) => *cycle as usize,
         }
     }
 
+    #[cfg(test)]
     pub(crate) const fn total_cycle(&self, cross_page: bool, branch_taken: bool) -> usize {
         let mut total_cycle = self.basic_cycle();
         if cross_page && matches!(self, Cycle::Cross(_)) {

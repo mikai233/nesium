@@ -298,7 +298,7 @@ mod tests {
 
         assert!(matches!(header.format, RomFormat::INes));
         assert_eq!(header.prg_rom_size, 2 * 16 * 1024);
-        assert_eq!(header.chr_rom_size, 1 * 8 * 1024);
+        assert_eq!(header.chr_rom_size, 8 * 1024);
         assert_eq!(header.mirroring, Mirroring::Vertical);
         assert!(!header.trainer_present);
         assert_eq!(header.mapper, 0);

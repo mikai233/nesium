@@ -352,7 +352,7 @@ mod tests {
                     trace!("test instruction: {}", instr);
                     let mut cpu = Self::rand_cpu(&mut rng);
                     let (verification, mut bus, crossed_page) =
-                        Self::build_mock(&instr, &mut cpu, &mut rng);
+                        Self::build_mock(&instr, &cpu, &mut rng);
                     let executed = cpu.test_clock(&mut bus, &instr);
                     let expected = instr.cycle().total_cycle(crossed_page, false);
                     assert_eq!(
@@ -674,7 +674,7 @@ mod tests {
         {
             let (zp, target) = loop {
                 let zp_candidate: u8 = rng.random();
-                let ptr = zp_candidate.wrapping_add(cpu.x) & 0xFF;
+                let ptr = zp_candidate.wrapping_add(cpu.x);
                 let ptr_lo = ptr as u16;
                 let ptr_hi = ptr.wrapping_add(1) as u16 & 0xFF;
                 let target_candidate: u16 = rng.random_range(0x0000..=0xFFFF);
@@ -690,7 +690,7 @@ mod tests {
 
                 break (zp_candidate, target_candidate);
             };
-            let ptr = zp.wrapping_add(cpu.x) & 0xFF;
+            let ptr = zp.wrapping_add(cpu.x);
             mock.write(cpu.pc + 1, zp);
             mock.write(ptr as u16, (target & 0xFF) as u8);
             mock.write(ptr.wrapping_add(1) as u16 & 0xFF, (target >> 8) as u8);

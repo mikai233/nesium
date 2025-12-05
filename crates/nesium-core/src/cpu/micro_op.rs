@@ -1,10 +1,13 @@
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    hash::{Hash, Hasher},
+};
 
 use crate::{bus::Bus, cpu::Cpu};
 
 type MicroFn = fn(&mut Cpu, bus: &mut dyn Bus);
 
-#[derive(Clone, Copy, Eq, Hash)]
+#[derive(Clone, Copy, Eq)]
 pub struct MicroOp {
     pub(crate) name: &'static str,
     pub(crate) micro_fn: MicroFn,
@@ -17,17 +20,6 @@ impl MicroOp {
     /// Execute this micro operation.
     pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut dyn Bus) {
         (self.micro_fn)(cpu, bus);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    //  Fetch & Program Counter Operations
-    // ─────────────────────────────────────────────────────────────────────────────
-    /// Cycle 1: Advance PC after fetching the opcode.
-    pub(crate) const fn advance_pc_after_opcode() -> Self {
-        MicroOp {
-            name: "advance_pc_after_opcode",
-            micro_fn: |cpu, _| cpu.incr_pc(),
-        }
     }
 
     /// Cycle 2: Read zero-page address byte from PC and increment PC.
@@ -271,6 +263,13 @@ impl Debug for MicroOp {
 impl PartialEq for MicroOp {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && std::ptr::fn_addr_eq(self.micro_fn, other.micro_fn)
+    }
+}
+
+impl Hash for MicroOp {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.micro_fn.hash(state);
     }
 }
 

@@ -94,7 +94,7 @@ pub struct Mapper6 {
     /// of the 32 KiB CHR-RAM space:
     /// - group 0 → `$0000-$1FFF` maps CHR bytes `0x0000-0x1FFF`
     /// - group 1 → `$0000-$1FFF` maps CHR bytes `0x2000-0x3FFF`
-    /// etc.
+    ///   etc.
     chr_bank_group: u8,
 
     /// 16‑bit IRQ counter incremented once per CPU bus write while enabled.

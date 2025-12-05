@@ -82,7 +82,7 @@ pub fn dump_instruction_trace<P: AsRef<Path>, Q: AsRef<Path>>(
         let x = snap.x;
         let y = snap.y;
         let sp = snap.s;
-        let p: u8 = snap.p.into();
+        let p: u8 = snap.p;
 
         // PPU position (adjust names if your NmiDebugState differs)
         let v = nmi_dbg.scanline as i32;

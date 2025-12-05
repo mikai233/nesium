@@ -179,7 +179,7 @@ where
 
     serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
 
-    return match poll_status(&mut nes) {
+    match poll_status(&mut nes) {
         Progress::Passed(msg) => {
             verify(&mut nes)?;
             Ok(message_or_none(msg))
@@ -237,7 +237,7 @@ where
                 start.elapsed()
             )
         }
-    };
+    }
 }
 
 /// Runs a ROM for `frames` without depending on $6000 status handshakes, then calls `verify`.

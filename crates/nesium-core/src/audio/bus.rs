@@ -498,8 +498,10 @@ mod tests {
     #[test]
     fn master_volume_scales_output() {
         let mut bus = SoundMixerBus::new(48_000, 48_000);
-        let mut cfg = AudioBusConfig::default();
-        cfg.master_volume = 0.5;
+        let cfg = AudioBusConfig {
+            master_volume: 0.5,
+            ..Default::default()
+        };
         bus.set_config(cfg);
 
         let src = vec![0.8f32, -0.8, 0.2, -0.2];
@@ -516,16 +518,19 @@ mod tests {
         let mut bus = SoundMixerBus::new(48_000, 48_000);
 
         // Start with unity config.
-        let mut cfg = AudioBusConfig::default();
-        cfg.master_volume = 1.0;
-        cfg.volume_reduction = 0.75; // default: keep 25% when reducing
+        let mut cfg = AudioBusConfig {
+            master_volume: 1.0,
+            // default: keep 25% when reducing
+            volume_reduction: 0.75,
+            // Background reduction only.
+            in_background: true,
+            mute_in_background: false,
+            reduce_in_background: true,
+            is_fast_forward: false,
+            reduce_in_fast_forward: false,
+            ..Default::default()
+        };
 
-        // Background reduction only.
-        cfg.in_background = true;
-        cfg.mute_in_background = false;
-        cfg.reduce_in_background = true;
-        cfg.is_fast_forward = false;
-        cfg.reduce_in_fast_forward = false;
         bus.set_config(cfg);
 
         let src = vec![1.0f32, 1.0];
@@ -549,10 +554,12 @@ mod tests {
     #[test]
     fn equalizer_applies_global_gain_when_enabled() {
         let mut bus = SoundMixerBus::new(48_000, 48_000);
-        let mut cfg = AudioBusConfig::default();
-        cfg.enable_equalizer = true;
-        // Request a modest 6 dB boost across all bands.
-        cfg.eq_band_gains = [6.0; 20];
+        let cfg = AudioBusConfig {
+            enable_equalizer: true,
+            // Request a modest 6 dB boost across all bands.
+            eq_band_gains: [6.0; 20],
+            ..Default::default()
+        };
         bus.set_config(cfg);
 
         let src = vec![0.5f32, -0.5];
@@ -568,9 +575,11 @@ mod tests {
     #[test]
     fn crossfeed_blends_channels_when_enabled() {
         let mut bus = SoundMixerBus::new(48_000, 48_000);
-        let mut cfg = AudioBusConfig::default();
-        cfg.crossfeed_enabled = true;
-        cfg.crossfeed_ratio = 0.5;
+        let cfg = AudioBusConfig {
+            crossfeed_enabled: true,
+            crossfeed_ratio: 0.5,
+            ..Default::default()
+        };
         bus.set_config(cfg);
 
         // Hard-panned left/right.
@@ -587,10 +596,12 @@ mod tests {
     #[test]
     fn reverb_adds_delayed_energy_over_time() {
         let mut bus = SoundMixerBus::new(48_000, 48_000);
-        let mut cfg = AudioBusConfig::default();
-        cfg.reverb_enabled = true;
-        cfg.reverb_strength = 0.5;
-        cfg.reverb_delay_ms = 10.0;
+        let cfg = AudioBusConfig {
+            reverb_enabled: true,
+            reverb_strength: 0.5,
+            reverb_delay_ms: 10.0,
+            ..Default::default()
+        };
         bus.set_config(cfg);
 
         let frames = 100usize;

@@ -972,7 +972,7 @@ mod arith_tests {
 
     #[test]
     fn test_adc() {
-        InstrTest::new(Mnemonic::ADC).test(|verify, cpu, bus| {
+        InstrTest::new(Mnemonic::ADC).test(|verify, cpu, _| {
             let m = verify.m;
             let a_in = verify.cpu.a;
             let c_in = if verify.cpu.p.c() { 1 } else { 0 };
@@ -1340,7 +1340,7 @@ mod arith_tests {
     fn test_slo() {
         InstrTest::new(Mnemonic::SLO).test(|verify, cpu, bus| {
             // Step 1: Perform ASL on memory
-            let asl_result = (verify.m << 1) & 0xFF;
+            let asl_result = verify.m << 1;
             let carry = (verify.m & BIT_7) != 0;
 
             // Step 2: Update memory

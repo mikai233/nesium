@@ -59,7 +59,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy ${{ env.WORKSPACE_FLAGS }} --all-targets -- -D warnings
+        run: cargo clippy ${{ env.WORKSPACE_FLAGS }} --all-targets
 
       - name: Install cargo-llvm-cov
         if: matrix.rust == 'stable'

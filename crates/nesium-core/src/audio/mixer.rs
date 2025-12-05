@@ -585,11 +585,7 @@ mod tests {
         let len = out.len();
         assert!(len > 0, "no samples generated for one frame");
 
-        let diff = if len > expected {
-            len - expected
-        } else {
-            expected - len
-        };
+        let diff = len.abs_diff(expected);
 
         // Allow a small rounding error margin.
         assert!(
@@ -619,11 +615,7 @@ mod tests {
         let len_single = single.len();
         assert!(len_split > 0 && len_single > 0);
 
-        let diff = if len_split > len_single {
-            len_split - len_single
-        } else {
-            len_single - len_split
-        };
+        let diff = len_split.abs_diff(len_single);
 
         // If `end_frame` wasn't using frame-relative durations, the split case
         // would accumulate 3x the frame time instead of 2x, and the sample
@@ -653,11 +645,7 @@ mod tests {
         let expected = (sample_rate as usize) * 2; // stereo interleaved
         let len = out.len();
 
-        let diff = if len > expected {
-            len - expected
-        } else {
-            expected - len
-        };
+        let diff = len.abs_diff(expected);
 
         // Allow a small margin for rounding between frames, but ensure we're
         // not silently dropping a large portion of samples.

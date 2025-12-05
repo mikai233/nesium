@@ -211,49 +211,49 @@ mod flags_test {
     #[test]
     fn test_clc() {
         InstrTest::new(Mnemonic::CLC).test(|_, cpu, _| {
-            assert_eq!(cpu.p.c(), false, "Carry flag should be cleared");
+            assert!(!cpu.p.c(), "Carry flag should be cleared");
         });
     }
 
     #[test]
     fn test_cld() {
         InstrTest::new(Mnemonic::CLD).test(|_, cpu, _| {
-            assert_eq!(cpu.p.d(), false, "Decimal Mode flag should be cleared");
+            assert!(!cpu.p.d(), "Decimal Mode flag should be cleared");
         });
     }
 
     #[test]
     fn test_cli() {
         InstrTest::new(Mnemonic::CLI).test(|_, cpu, _| {
-            assert_eq!(cpu.p.i(), false, "Interrupt Disable flag should be cleared");
+            assert!(!cpu.p.i(), "Interrupt Disable flag should be cleared");
         });
     }
 
     #[test]
     fn test_clv() {
         InstrTest::new(Mnemonic::CLV).test(|_, cpu, _| {
-            assert_eq!(cpu.p.v(), false, "Overflow flag should be cleared");
+            assert!(!cpu.p.v(), "Overflow flag should be cleared");
         });
     }
 
     #[test]
     fn test_sec() {
         InstrTest::new(Mnemonic::SEC).test(|_, cpu, _| {
-            assert_eq!(cpu.p.c(), true, "Carry flag should be set");
+            assert!(cpu.p.c(), "Carry flag should be set");
         });
     }
 
     #[test]
     fn test_sed() {
         InstrTest::new(Mnemonic::SED).test(|_, cpu, _| {
-            assert_eq!(cpu.p.d(), true, "Decimal Mode flag should be set");
+            assert!(cpu.p.d(), "Decimal Mode flag should be set");
         });
     }
 
     #[test]
     fn test_sei() {
         InstrTest::new(Mnemonic::SEI).test(|_, cpu, _| {
-            assert_eq!(cpu.p.i(), true, "Interrupt Disable flag should be set");
+            assert!(cpu.p.i(), "Interrupt Disable flag should be set");
         });
     }
 }

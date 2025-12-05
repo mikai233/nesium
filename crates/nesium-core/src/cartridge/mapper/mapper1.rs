@@ -199,10 +199,10 @@ impl Mapper1 {
     }
 
     fn read_chr(&self, addr: u16) -> u8 {
-        let (mem, is_rom) = if !self.chr_rom.is_empty() {
-            (self.chr_rom.as_ref(), true)
+        let mem = if !self.chr_rom.is_empty() {
+            self.chr_rom.as_ref()
         } else {
-            (self.chr_ram.as_ref(), false)
+            self.chr_ram.as_ref()
         };
 
         if mem.is_empty() {
@@ -236,12 +236,7 @@ impl Mapper1 {
         let bank = bank_index % total_banks;
         let base = bank * CHR_BANK_SIZE_4K;
         let idx = base.saturating_add(offset_in_bank);
-
-        if is_rom {
-            mem.get(idx).copied().unwrap_or(0)
-        } else {
-            mem.get(idx).copied().unwrap_or(0)
-        }
+        mem.get(idx).copied().unwrap_or(0)
     }
 
     fn write_chr(&mut self, addr: u16, data: u8) {

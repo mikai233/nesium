@@ -891,7 +891,7 @@ impl Mapper for Mapper5 {
                 // Attribute bytes replaced by fill-color replicated into all 4 quads.
                 let bits = self.fill_attr & 0x03;
                 // Replicate two bits across the byte: b1b0 b1b0 b1b0 b1b0.
-                (bits * 0x55)
+                bits * 0x55
             }
         } else {
             // ExRAM-backed nametable. When $5104 is %10 or %11, the
