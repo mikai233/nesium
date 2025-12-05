@@ -42,10 +42,10 @@ jobs:
         with:
           key: ${{ matrix.rust }}
 
-      - name: Install ALSA development libraries
+      - name: Install audio and udev development libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev
+          sudo apt-get install -y libasound2-dev libudev-dev
 
       - name: Build
         run: cargo build ${{ env.WORKSPACE_FLAGS }} --all-targets --verbose
