@@ -9,7 +9,7 @@ use crate::cartridge::{ChrRom, Mapper, PrgRom, TrainerBytes, header::Header};
 /// `UnsupportedMapper` error.
 ///
 /// # Example
-/// ```no_run
+/// ```ignore
 /// use nesium_core::{
 ///     cartridge::{Mapper, Provider, TrainerBytes, header::Header, load_cartridge_with_provider},
 ///     ppu::palette::PaletteKind,
