@@ -1,5 +1,7 @@
 use bitflags::bitflags;
 
+use core::fmt;
+
 use crate::memory::ppu as ppu_mem;
 
 bitflags! {
@@ -53,6 +55,30 @@ bitflags! {
 
         /// Enables NMI generation at the start of VBlank (bit 7).
         const GENERATE_NMI = 0b1000_0000;
+    }
+}
+
+impl fmt::Display for Control {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Control {{ nametable: {}, vram_inc: {}, sprite_table: ${:04X}, background_table: ${:04X}, sprite_size: {}, master_slave: {}, nmi: {} }}",
+            self.nametable_index(),
+            self.vram_increment(),
+            self.sprite_pattern_table(),
+            self.background_pattern_table(),
+            if self.use_8x16_sprites() {
+                "8x16"
+            } else {
+                "8x8"
+            },
+            if self.contains(Control::MASTER_SLAVE) {
+                "slave"
+            } else {
+                "master"
+            },
+            if self.nmi_enabled() { "on" } else { "off" },
+        )
     }
 }
 
