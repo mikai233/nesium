@@ -89,12 +89,12 @@ impl OamDma {
 
         if self.read_phase {
             let addr = ((self.page as u16) << 8) | self.offset;
-            self.data_latch = bus.read(addr);
+            self.data_latch = bus.mem_read(addr);
             self.read_phase = false;
             return false;
         }
 
-        bus.write(PpuRegister::OamData.addr(), self.data_latch);
+        bus.mem_write(PpuRegister::OamData.addr(), self.data_latch);
         self.offset += 1;
         if self.offset >= OAM_DMA_TRANSFER_BYTES {
             return true;
@@ -179,8 +179,8 @@ impl Cpu {
     /// It also clears internal state used by instruction execution.
     pub(crate) fn reset(&mut self, bus: &mut impl Bus) {
         // Read the reset vector from memory ($FFFC-$FFFD)
-        let lo = bus.read(RESET_VECTOR_LO);
-        let hi = bus.read(RESET_VECTOR_HI);
+        let lo = bus.peek(RESET_VECTOR_LO);
+        let hi = bus.peek(RESET_VECTOR_HI);
         self.pc = ((hi as u16) << 8) | (lo as u16);
 
         // Reset other state
@@ -194,7 +194,8 @@ impl Cpu {
         self.branch_taken_defer_irq = false;
         self.prev_nmi_line = false;
         self.nmi_latch = false;
-        self.reset_delay = 7; // 7 CPU cycles elapse during reset sequence
+        // CPU waits 8 cycles after reset before fetching the first opcode.
+        self.reset_delay = 8;
         self.index = 0;
         self.effective_addr = 0;
         self.cycles = 0;
@@ -203,6 +204,7 @@ impl Cpu {
 
     pub(crate) fn clock(&mut self, bus: &mut dyn Bus) {
         if self.reset_delay > 0 {
+            bus.internal_cycle();
             self.reset_delay -= 1;
             self.cycles = self.cycles.wrapping_add(1);
             return;
@@ -234,6 +236,7 @@ impl Cpu {
                 // a status byte with the B flag set.
                 if opcode == 0x00 && self.index == 1 && self.sample_interrupts(bus) {
                     tracing::debug!("sample interrupts");
+                    bus.internal_cycle();
                     self.cycles = self.cycles.wrapping_add(1);
                     return;
                 }
@@ -249,6 +252,7 @@ impl Cpu {
             // No instruction in flight: first service any pending interrupts, then fetch.
             None => {
                 if self.sample_interrupts(bus) {
+                    bus.internal_cycle();
                     self.cycles = self.cycles.wrapping_add(1);
                     return;
                 }
@@ -294,7 +298,7 @@ impl Cpu {
 
     #[inline]
     pub(crate) fn fetch_opcode(&mut self, bus: &mut dyn Bus) -> u8 {
-        let opcode = bus.read(self.pc);
+        let opcode = bus.mem_read(self.pc);
         self.incr_pc();
         // Starting a new instruction boundary clears any one-instruction IRQ suppression.
         self.irq_inhibit_next = false;
@@ -516,8 +520,8 @@ impl Cpu {
         // Mask further IRQs immediately upon entering the handler.
         self.set_i_immediate(true);
 
-        let lo = bus.read(vector_lo);
-        let hi = bus.read(vector_hi);
+        let lo = bus.mem_read(vector_lo);
+        let hi = bus.mem_read(vector_hi);
         self.pc = ((hi as u16) << 8) | (lo as u16);
 
         self.opcode_in_flight = None;
@@ -571,13 +575,13 @@ impl Cpu {
     }
 
     pub(crate) fn push(&mut self, bus: &mut dyn Bus, data: u8) {
-        bus.write(self.stack_addr(), data);
+        bus.mem_write(self.stack_addr(), data);
         self.s = self.s.wrapping_sub(1);
     }
 
     pub(crate) fn pull(&mut self, bus: &mut dyn Bus) -> u8 {
         self.s = self.s.wrapping_add(1);
-        bus.read(self.stack_addr())
+        bus.mem_read(self.stack_addr())
     }
 
     /// Captures the current CPU registers for tracing/debugging.

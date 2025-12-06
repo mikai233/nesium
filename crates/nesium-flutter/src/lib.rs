@@ -203,8 +203,7 @@ fn nes_thread(rx: std::sync::mpsc::Receiver<ControlMessage>) {
         while Instant::now() >= next_frame_deadline && frames_run < 3 {
             match &mut audio {
                 Some(audio) => {
-                    let mut samples = Vec::new();
-                    nes.run_frame_with_audio(&mut samples);
+                    let mut samples = nes.run_frame(true);
 
                     // Apply a short fade-in after load/reset to soften any
                     // initial transients.
@@ -223,7 +222,9 @@ fn nes_thread(rx: std::sync::mpsc::Receiver<ControlMessage>) {
                         audio.push_samples(&samples);
                     }
                 }
-                None => nes.run_frame(),
+                None => {
+                    nes.run_frame(false);
+                }
             }
 
             let buffer = nes.render_buffer();

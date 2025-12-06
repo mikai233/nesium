@@ -135,7 +135,7 @@ pub fn run_frame_report<P: AsRef<Path>>(rom: P, frames: usize) -> Result<()> {
     nes.load_cartridge_from_file(rom)?;
 
     for _ in 0..frames {
-        nes.run_frame();
+        nes.run_frame(false);
     }
 
     let fb = nes.render_buffer();

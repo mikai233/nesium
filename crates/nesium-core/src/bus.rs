@@ -18,9 +18,19 @@ pub(crate) const STACK_ADDR: u16 = memory::cpu::STACK_PAGE_START;
 /// [`open_bus::OpenBus`]), returning the last driven value for write-only or
 /// unmapped addresses when no device actively drives the data lines.
 pub trait Bus: Debug {
-    fn read(&mut self, addr: u16) -> u8;
+    fn mem_read(&mut self, addr: u16) -> u8;
 
-    fn write(&mut self, addr: u16, data: u8);
+    fn mem_write(&mut self, addr: u16, data: u8);
+
+    /// Side-effect-free read used for reset vector fetches. Defaults to a
+    /// regular timed read so existing implementations remain valid.
+    fn peek(&mut self, addr: u16) -> u8 {
+        self.mem_read(addr)
+    }
+
+    /// Internal CPU cycle that does not perform a bus access but must advance
+    /// timing (master clock, PPU/APU, open-bus decay, mapper clocks).
+    fn internal_cycle(&mut self);
 
     /// Returns a pending OAM DMA page value (written via `$4014`), if any.
     /// Default implementations have no DMA bridge, so they always return `None`.

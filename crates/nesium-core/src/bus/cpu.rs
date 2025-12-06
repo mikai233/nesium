@@ -1,5 +1,6 @@
 use crate::{
     apu::Apu,
+    audio::NesSoundMixer,
     bus::{Bus, OpenBus},
     cartridge::Cartridge,
     controller::{Controller, SerialLogger},
@@ -20,8 +21,18 @@ pub struct CpuBus<'a> {
     serial_log: Option<&'a mut SerialLogger>,
     oam_dma_request: &'a mut Option<u8>,
     open_bus: &'a mut OpenBus,
+    mixer: Option<&'a mut NesSoundMixer>,
     /// Approximate CPU bus cycle counter (increments per bus access).
     cpu_cycle_counter: &'a mut u64,
+    /// Master clock in master cycles (PPU = 4 mc, CPU = 12 mc).
+    master_clock: &'a mut u64,
+    /// CPU/PPU phase offset in master cycles.
+    ppu_offset: u8,
+    /// Master clock half-cycle lengths (start/end) in master cycles.
+    clock_start_count: u8,
+    clock_end_count: u8,
+    /// Pending DMC stall cycles surfaced by the APU tick.
+    pending_dmc_stall: Option<(u8, Option<u16>)>,
 }
 
 impl<'a> CpuBus<'a> {
@@ -35,7 +46,12 @@ impl<'a> CpuBus<'a> {
         serial_log: Option<&'a mut SerialLogger>,
         oam_dma_request: &'a mut Option<u8>,
         open_bus: &'a mut OpenBus,
+        mixer: Option<&'a mut NesSoundMixer>,
         cpu_cycle_counter: &'a mut u64,
+        master_clock: &'a mut u64,
+        ppu_offset: u8,
+        clock_start_count: u8,
+        clock_end_count: u8,
     ) -> Self {
         Self {
             ram,
@@ -46,7 +62,13 @@ impl<'a> CpuBus<'a> {
             serial_log,
             oam_dma_request,
             open_bus,
+            mixer,
             cpu_cycle_counter,
+            master_clock,
+            ppu_offset,
+            clock_start_count,
+            clock_end_count,
+            pending_dmc_stall: None,
         }
     }
 
@@ -109,6 +131,67 @@ impl<'a> CpuBus<'a> {
     pub fn clock_ppu(&mut self) {
         let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
         self.ppu.clock(&mut pattern);
+        // Keep shared master clock aligned to the PPU's master timeline plus phase offset.
+        *self.master_clock = self
+            .ppu
+            .master_clock()
+            .saturating_add(self.ppu_offset as u64);
+    }
+
+    /// Advances master clock and runs the PPU to catch up.
+    fn bump_master_clock(&mut self, delta: u8) {
+        let target = self.master_clock.wrapping_add(delta as u64);
+        let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
+        // Apply CPU/PPU phase offset before running the PPU.
+        let ppu_target = target.saturating_sub(self.ppu_offset as u64);
+        self.ppu.run_until(ppu_target, &mut pattern);
+        *self.master_clock = target;
+    }
+
+    fn begin_cycle(&mut self, for_read: bool) {
+        let start_delta = if for_read {
+            self.clock_start_count.saturating_sub(1)
+        } else {
+            self.clock_start_count.saturating_add(1)
+        };
+        self.bump_master_clock(start_delta);
+
+        // Book-keeping for this CPU cycle (mapper clocks, open-bus decay, APU tick).
+        *self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
+        if let Some(cart) = self.cartridge.as_mut() {
+            cart.cpu_clock(*self.cpu_cycle_counter);
+        }
+        self.open_bus.step();
+
+        // Run one APU CPU-cycle tick; stash any pending DMC DMA stall.
+        let (stall_cycles, dma_addr) = match &mut self.mixer {
+            Some(mixer) => self.apu.clock_with_mixer(mixer),
+            None => self.apu.clock(),
+        };
+        self.pending_dmc_stall = if stall_cycles > 0 {
+            Some((stall_cycles, dma_addr))
+        } else {
+            None
+        };
+    }
+
+    fn end_cycle(&mut self, for_read: bool) {
+        let end_delta = if for_read {
+            self.clock_end_count.saturating_add(1)
+        } else {
+            self.clock_end_count.saturating_sub(1)
+        };
+        self.bump_master_clock(end_delta);
+    }
+
+    pub fn internal_cycle(&mut self) {
+        self.begin_cycle(true);
+        self.end_cycle(true);
+    }
+
+    /// Drains and returns any pending DMC DMA stall produced by the last APU tick.
+    pub fn take_pending_dmc_stall(&mut self) -> Option<(u8, Option<u16>)> {
+        self.pending_dmc_stall.take()
     }
 
     /// Returns a read-only view of CPU RAM.
@@ -196,13 +279,59 @@ impl Bus for CpuBus<'_> {
         self.ppu_pattern_write(addr, value);
     }
 
-    fn read(&mut self, addr: u16) -> u8 {
-        *self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.cpu_clock(*self.cpu_cycle_counter);
-        }
-        self.open_bus.step();
+    fn peek(&mut self, addr: u16) -> u8 {
+        let mut driven = true;
+        let value = match addr {
+            cpu_mem::INTERNAL_RAM_START..=cpu_mem::INTERNAL_RAM_MIRROR_END => {
+                self.read_internal_ram(addr)
+            }
+            cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
+                let mut pattern =
+                    PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
+                self.ppu.cpu_read(addr, &mut pattern)
+            }
+            cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
+                driven = false;
+                self.open_bus.sample()
+            }
+            ppu_mem::OAM_DMA => {
+                driven = false;
+                self.open_bus.sample()
+            }
+            cpu_mem::APU_STATUS => {
+                driven = false;
+                let internal = self.open_bus.internal_sample();
+                let status = self.apu.cpu_read(addr);
+                let value = status | (internal & 0x20);
+                self.open_bus.set_internal_only(value);
+                value
+            }
+            cpu_mem::CONTROLLER_PORT_1 => self.controllers[0].read(),
+            cpu_mem::CONTROLLER_PORT_2 => self.controllers[1].read(),
+            cpu_mem::TEST_MODE_BASE..=cpu_mem::TEST_MODE_END => {
+                driven = false;
+                self.open_bus.sample()
+            }
+            cpu_mem::CARTRIDGE_SPACE_BASE..=cpu_mem::CPU_ADDR_END => {
+                match self.read_cartridge(addr) {
+                    Some(value) => value,
+                    None => {
+                        driven = false;
+                        self.open_bus.sample()
+                    }
+                }
+            }
+        };
 
+        if driven {
+            self.open_bus.latch(value);
+        }
+
+        value
+    }
+
+    fn mem_read(&mut self, addr: u16) -> u8 {
+        self.begin_cycle(true);
         let mut driven = true;
         let value = match addr {
             cpu_mem::INTERNAL_RAM_START..=cpu_mem::INTERNAL_RAM_MIRROR_END => {
@@ -254,15 +383,12 @@ impl Bus for CpuBus<'_> {
             self.open_bus.latch(value);
         }
 
+        self.end_cycle(true);
         value
     }
 
-    fn write(&mut self, addr: u16, data: u8) {
-        *self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.cpu_clock(*self.cpu_cycle_counter);
-        }
-        self.open_bus.step();
+    fn mem_write(&mut self, addr: u16, data: u8) {
+        self.begin_cycle(false);
         self.open_bus.latch(data);
 
         match addr {
@@ -298,6 +424,13 @@ impl Bus for CpuBus<'_> {
                 self.write_cartridge(addr, data)
             }
         }
+
+        self.end_cycle(false);
+    }
+
+    fn internal_cycle(&mut self) {
+        self.begin_cycle(true);
+        self.end_cycle(true);
     }
 
     fn irq_pending(&mut self) -> bool {
@@ -364,6 +497,7 @@ mod tests {
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
+        let mut master_clock = 0;
         let mut bus = CpuBus::new(
             &mut ram,
             &mut ppu,
@@ -373,13 +507,18 @@ mod tests {
             None,
             &mut oam_dma_request,
             &mut open_bus,
+            None,
             &mut cpu_bus_cycle,
+            &mut master_clock,
+            1,
+            6,
+            6,
         );
-        bus.write(cpu_mem::INTERNAL_RAM_START + 0x0002, 0xDE);
-        assert_eq!(bus.read(cpu_mem::INTERNAL_RAM_START + 0x0002), 0xDE);
-        assert_eq!(bus.read(0x0802), 0xDE);
-        assert_eq!(bus.read(0x1002), 0xDE);
-        assert_eq!(bus.read(0x1802), 0xDE);
+        bus.mem_write(cpu_mem::INTERNAL_RAM_START + 0x0002, 0xDE);
+        assert_eq!(bus.mem_read(cpu_mem::INTERNAL_RAM_START + 0x0002), 0xDE);
+        assert_eq!(bus.mem_read(0x0802), 0xDE);
+        assert_eq!(bus.mem_read(0x1002), 0xDE);
+        assert_eq!(bus.mem_read(0x1802), 0xDE);
     }
 
     #[test]
@@ -392,6 +531,7 @@ mod tests {
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
+        let mut master_clock = 0;
         let mut bus = CpuBus::new(
             &mut ram,
             &mut ppu,
@@ -401,11 +541,16 @@ mod tests {
             None,
             &mut oam_dma_request,
             &mut open_bus,
+            None,
             &mut cpu_bus_cycle,
+            &mut master_clock,
+            1,
+            6,
+            6,
         );
 
-        let first_bank = bus.read(cpu_mem::PRG_ROM_START);
-        let mirrored_bank = bus.read(cpu_mem::PRG_ROM_START + 0x4000);
+        let first_bank = bus.mem_read(cpu_mem::PRG_ROM_START);
+        let mirrored_bank = bus.mem_read(cpu_mem::PRG_ROM_START + 0x4000);
         assert_eq!(first_bank, mirrored_bank);
     }
 
@@ -419,6 +564,7 @@ mod tests {
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
+        let mut master_clock = 0;
         let mut bus = CpuBus::new(
             &mut ram,
             &mut ppu,
@@ -428,10 +574,15 @@ mod tests {
             None,
             &mut oam_dma_request,
             &mut open_bus,
+            None,
             &mut cpu_bus_cycle,
+            &mut master_clock,
+            1,
+            6,
+            6,
         );
 
-        bus.write(cpu_mem::PRG_RAM_START, 0x42);
-        assert_eq!(bus.read(cpu_mem::PRG_RAM_START), 0x42);
+        bus.mem_write(cpu_mem::PRG_RAM_START, 0x42);
+        assert_eq!(bus.mem_read(cpu_mem::PRG_RAM_START), 0x42);
     }
 }

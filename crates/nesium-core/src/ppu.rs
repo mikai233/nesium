@@ -106,6 +106,8 @@ pub struct Ppu {
     scanline: i16,
     /// Total number of frames produced so far.
     frame: u64,
+    /// Master clock in PPU master cycles (4 master cycles per dot).
+    master_clock: u64,
     /// Tracks whether the current frame is odd. Required for the skipped tick logic.
     odd_frame: bool,
     /// Background pixel pipeline (pattern and attribute shifters).
@@ -311,6 +313,7 @@ impl Ppu {
             cycle: 0,
             scanline: -1,
             frame: 0,
+            master_clock: 0,
             odd_frame: false,
             bg_pipeline: BgPipeline::new(),
             sprite_pipeline: SpritePipeline::new(),
@@ -353,6 +356,7 @@ impl Ppu {
         self.cycle = 0;
         self.scanline = -1;
         self.frame = 0;
+        self.master_clock = 0;
         self.odd_frame = false;
         self.pending_vram_delay = 0;
         self.pending_vram_addr = VramAddr::default();
@@ -705,6 +709,25 @@ impl Ppu {
 
         self.update_nmi_output(prev_nmi_output);
         self.advance_cycle();
+        // One PPU dot = 4 master cycles.
+        self.master_clock = self.master_clock.wrapping_add(4);
+    }
+
+    /// Advance the PPU until its master clock reaches `target_master`.
+    pub(crate) fn run_until(&mut self, target_master: u64, pattern: &mut PatternBus<'_>) {
+        while self.master_clock < target_master {
+            self.clock(pattern);
+        }
+    }
+
+    /// Current PPU master clock (4 master cycles per dot).
+    pub fn master_clock(&self) -> u64 {
+        self.master_clock
+    }
+
+    /// Total PPU dots elapsed since power-on (monotonic across frames).
+    pub fn total_dots(&self) -> u64 {
+        self.current_ppu_cycle()
     }
 
     #[inline]
@@ -750,6 +773,7 @@ impl Ppu {
         self.cycle = cycle;
         self.frame = frame;
         self.odd_frame = frame % 2 == 1;
+        self.master_clock = self.current_ppu_cycle() * 4;
     }
 
     /// Returns a monotonically increasing PPU dot counter across frames.

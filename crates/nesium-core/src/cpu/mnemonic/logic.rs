@@ -36,7 +36,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "and",
             micro_fn: |cpu, bus| {
-                let m = bus.read(cpu.effective_addr);
+                let m = bus.mem_read(cpu.effective_addr);
                 cpu.a &= m;
                 cpu.p.set_zn(cpu.a);
             },
@@ -66,7 +66,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "bit",
             micro_fn: |cpu, bus| {
-                let m = bus.read(cpu.effective_addr);
+                let m = bus.mem_read(cpu.effective_addr);
                 let and = cpu.a & m;
                 cpu.p.set_z(and == 0);
                 cpu.p.set_n(m & BIT_7 != 0);
@@ -106,7 +106,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "eor",
             micro_fn: |cpu, bus| {
-                let m = bus.read(cpu.effective_addr);
+                let m = bus.mem_read(cpu.effective_addr);
                 cpu.a ^= m;
                 cpu.p.set_zn(cpu.a);
             },
@@ -144,7 +144,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "ora",
             micro_fn: |cpu, bus| {
-                let m = bus.read(cpu.effective_addr);
+                let m = bus.mem_read(cpu.effective_addr);
                 cpu.a |= m;
                 cpu.p.set_zn(cpu.a);
             },

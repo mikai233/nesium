@@ -139,8 +139,7 @@ impl NesiumApp {
     fn run_frame_with_audio(&mut self) {
         match &mut self.audio {
             Some(audio) => {
-                let mut samples = Vec::new();
-                self.nes.run_frame_with_audio(&mut samples);
+                let samples = self.nes.run_frame(true);
                 if self.recording && !samples.is_empty() {
                     self.record_buffer.extend_from_slice(&samples);
                 }
@@ -148,7 +147,9 @@ impl NesiumApp {
                     audio.push_samples(&samples);
                 }
             }
-            None => self.nes.run_frame(),
+            None => {
+                self.nes.run_frame(false);
+            }
         }
     }
 

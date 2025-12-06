@@ -32,7 +32,7 @@ pub fn dump_instruction_trace<P: AsRef<Path>, Q: AsRef<Path>>(
 
     // Run until we enter the requested frame window.
     while nes.ppu_nmi_debug().frame < start_frame {
-        nes.run_frame();
+        nes.run_frame(false);
     }
 
     // Advance PPU naturally until it reaches the same visible boundary Mesen logs (frame 1, V:0, H:27).
@@ -43,7 +43,7 @@ pub fn dump_instruction_trace<P: AsRef<Path>, Q: AsRef<Path>>(
             let dbg = nes.ppu_nmi_debug();
             dbg.frame != 1 || dbg.scanline != 0 || dbg.cycle != 27
         } {
-            nes.clock_dot();
+            nes.clock_cpu_cycle(false);
         }
         while nes.cpu_opcode_active() {
             nes.step_instruction();

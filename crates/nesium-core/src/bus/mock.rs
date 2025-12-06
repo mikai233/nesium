@@ -6,11 +6,17 @@ pub(crate) struct MockBus {
 }
 
 impl Bus for MockBus {
-    fn read(&mut self, addr: u16) -> u8 {
+    fn peek(&mut self, addr: u16) -> u8 {
+        self.mem[addr as usize]
+    }
+
+    fn mem_read(&mut self, addr: u16) -> u8 {
         self.mem[addr as usize] // Safe: addr is 0x0000..=0xFFFF, array is size 0x10000
     }
 
-    fn write(&mut self, addr: u16, data: u8) {
+    fn mem_write(&mut self, addr: u16, data: u8) {
         self.mem[addr as usize] = data; // Safe: same reason
     }
+
+    fn internal_cycle(&mut self) {}
 }

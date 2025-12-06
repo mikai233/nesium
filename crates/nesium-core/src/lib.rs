@@ -9,7 +9,6 @@ use crate::{
     cpu::Cpu,
     error::Error,
     mem_block::cpu as cpu_ram,
-    memory::cpu as cpu_mem,
     ppu::{
         Ppu,
         buffer::{ColorFormat, FrameBuffer},
@@ -43,6 +42,13 @@ pub struct Nes {
     last_frame: u64,
     /// Master PPU dot counter used to drive CPU/PPU/APU in lockstep (3 dots per CPU cycle).
     dot_counter: u64,
+    /// Master clock in PPU ticks (4 master clocks per PPU dot, 12 per CPU cycle).
+    master_clock: u64,
+    /// Phase offset between CPU and PPU master clocks (mirrors Mesen2's default of 1).
+    ppu_offset: u8,
+    /// Start/End half-cycle lengths in master clocks (NTSC defaults to 6).
+    clock_start_count: u8,
+    clock_end_count: u8,
     serial_log: controller::SerialLogger,
     /// Pending OAM DMA page written via `$4014` (latched until CPU picks it up).
     oam_dma_request: Option<u8>,
@@ -87,6 +93,10 @@ impl Nes {
             controllers: [Controller::new(), Controller::new()],
             last_frame: 0,
             dot_counter: 0,
+            master_clock: 0,
+            ppu_offset: 1,
+            clock_start_count: 6,
+            clock_end_count: 6,
             serial_log: controller::SerialLogger::default(),
             oam_dma_request: None,
             open_bus: OpenBus::new(),
@@ -163,6 +173,7 @@ impl Nes {
         self.mixer.reset();
         self.sound_bus.reset();
         self.mixer_frame_buffer.clear();
+        self.master_clock = (self.clock_start_count + self.clock_end_count) as u64;
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
@@ -172,7 +183,12 @@ impl Nes {
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
             &mut self.open_bus,
+            Some(&mut self.mixer),
             &mut self.cpu_bus_cycle,
+            &mut self.master_clock,
+            self.ppu_offset,
+            self.clock_start_count,
+            self.clock_end_count,
         );
         self.cpu.reset(&mut bus);
         self.last_frame = bus.ppu().frame_count();
@@ -195,6 +211,7 @@ impl Nes {
         self.mixer.reset();
         self.sound_bus.reset();
         self.mixer_frame_buffer.clear();
+        self.master_clock = (self.clock_start_count + self.clock_end_count) as u64;
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
@@ -204,17 +221,22 @@ impl Nes {
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
             &mut self.open_bus,
+            None,
             &mut self.cpu_bus_cycle,
+            &mut self.master_clock,
+            self.ppu_offset,
+            self.clock_start_count,
+            self.clock_end_count,
         );
         self.cpu.reset(&mut bus);
         self.last_frame = bus.ppu().frame_count();
         self.dot_counter = 0;
     }
 
-    /// Advances the system by a single PPU dot (master tick) and reports whether
-    /// CPU/APU were clocked on this dot.
-    pub fn step_dot(&mut self) -> ClockResult {
-        let (mut frame_advanced, apu_clocked) = {
+    pub fn clock_cpu_cycle(&mut self, audio: bool) -> ClockResult {
+        let frame_before = self.ppu.frame_count();
+        let apu_clocked = true;
+        let (cpu_cycles, expansion_samples, opcode_active) = {
             let mut bus = CpuBus::new(
                 &mut self.ram,
                 &mut self.ppu,
@@ -224,108 +246,40 @@ impl Nes {
                 Some(&mut self.serial_log),
                 &mut self.oam_dma_request,
                 &mut self.open_bus,
+                if audio { Some(&mut self.mixer) } else { None },
                 &mut self.cpu_bus_cycle,
+                &mut self.master_clock,
+                self.ppu_offset,
+                self.clock_start_count,
+                self.clock_end_count,
             );
 
-            bus.clock_ppu();
-            let apu_clocked = if (self.dot_counter + 2).is_multiple_of(3) {
-                self.cpu.clock(&mut bus);
-                true
-            } else {
-                false
-            };
+            // Advance one CPU cycle (and implicitly PPU/APU).
+            self.cpu.clock(&mut bus);
+            let cycles = bus.cpu_cycles();
+            let expansion = bus
+                .cartridge()
+                .and_then(|cart| cart.mapper().as_expansion_audio())
+                .map(|exp| exp.samples());
 
-            self.dot_counter = self.dot_counter.wrapping_add(1);
-
-            let frame_count = bus.ppu().frame_count();
-            let frame_advanced = if frame_count != self.last_frame {
-                self.last_frame = frame_count;
-                true
-            } else {
-                false
-            };
-            (frame_advanced, apu_clocked)
-        };
-
-        if apu_clocked {
-            let (stall_cycles, dma_addr) = self.apu.clock();
-            if stall_cycles > 0 && self.apply_dmc_stall(stall_cycles, dma_addr) {
-                frame_advanced = true;
-            }
-        }
-
-        ClockResult {
-            frame_advanced,
-            apu_clocked,
-        }
-    }
-
-    /// Advances the system by a single PPU dot while feeding audio deltas into the shared mixer.
-    pub fn step_dot_with_audio(&mut self) -> ClockResult {
-        // First, run PPU + CPU for this dot using the shared CPU bus.
-        let (mut frame_advanced, apu_clocked, cpu_cycles, expansion_samples) = {
-            let mut bus = CpuBus::new(
-                &mut self.ram,
-                &mut self.ppu,
-                &mut self.apu,
-                self.cartridge.as_mut(),
-                &mut self.controllers,
-                Some(&mut self.serial_log),
-                &mut self.oam_dma_request,
-                &mut self.open_bus,
-                &mut self.cpu_bus_cycle,
-            );
-
-            bus.clock_ppu();
-            let apu_clocked = if (self.dot_counter + 2).is_multiple_of(3) {
-                self.cpu.clock(&mut bus);
-
-                // Expansion audio samples are taken at the same CPU clock as
-                // the core APU tick, mirroring Mesen2's behaviour.
-                let expansion = bus
-                    .cartridge()
-                    .and_then(|cart| cart.mapper().as_expansion_audio())
-                    .map(|exp| exp.samples());
-                (true, expansion)
-            } else {
-                (false, None)
-            };
-
-            self.dot_counter = self.dot_counter.wrapping_add(1);
-
-            let frame_count = bus.ppu().frame_count();
-            let frame_advanced = if frame_count != self.last_frame {
-                self.last_frame = frame_count;
-                true
-            } else {
-                false
-            };
-
-            let cpu_cycles = bus.cpu_cycles();
-            (frame_advanced, apu_clocked.0, cpu_cycles, apu_clocked.1)
-        };
-
-        // After dropping the bus (and its borrows of the cartridge), run the
-        // APU tick and feed deltas into the shared mixer, wiring the DMC
-        // sample fetch path directly to the PRG space.
-        if apu_clocked {
-            let prg_read = |addr: u16| {
-                if addr < cpu_mem::CARTRIDGE_SPACE_BASE {
-                    0
-                } else {
-                    self.cartridge
-                        .as_ref()
-                        .and_then(|cart| cart.cpu_read(addr))
-                        .unwrap_or(0)
+            if let Some((stall_cycles, dma_addr)) = bus.take_pending_dmc_stall() {
+                if stall_cycles > 0 && self.apply_dmc_stall(stall_cycles, dma_addr) {
+                    // Stall may advance PPU/frame; accounted for below.
                 }
-            };
-            let (stall_cycles, dma_addr) =
-                self.apu.clock_with_reader(prg_read, Some(&mut self.mixer));
-
-            if stall_cycles > 0 && self.apply_dmc_stall(stall_cycles, dma_addr) {
-                frame_advanced = true;
             }
 
+            let opcode_active = self.cpu_opcode_active();
+            (cycles, expansion, opcode_active)
+        };
+
+        self.dot_counter = self.ppu.total_dots();
+        self.master_clock = self
+            .ppu
+            .master_clock()
+            .saturating_add(self.ppu_offset as u64);
+
+        // Feed expansion audio into the mixer at the CPU clock edge.
+        if apu_clocked {
             if let Some(samples) = expansion_samples {
                 let clock = cpu_cycles as i64;
                 self.mixer
@@ -343,54 +297,24 @@ impl Nes {
             }
         }
 
+        let frame_after = self.ppu.frame_count();
+        self.last_frame = frame_after;
+
         ClockResult {
-            frame_advanced,
+            frame_advanced: frame_after != frame_before,
             apu_clocked,
+            opcode_active,
         }
     }
 
     /// Runs CPU/PPU/APU ticks until the PPU completes the next frame.
-    pub fn run_frame(&mut self) {
-        let target_frame = self.last_frame.wrapping_add(1);
+    pub fn run_frame(&mut self, audio: bool) -> Vec<f32> {
+        let mut samples = vec![];
+        let target_frame = self.ppu.frame_count().wrapping_add(1);
         while self.ppu.frame_count() < target_frame {
-            self.step_dot();
+            let _ = self.clock_cpu_cycle(audio);
         }
-    }
-
-    /// Advances the system by a single PPU dot (debug helper alias for [`step_dot`]).
-    pub fn clock_dot(&mut self) -> ClockResult {
-        self.step_dot()
-    }
-
-    /// Latest audio sample from the APU mixer plus any cartridge expansion audio.
-    pub fn audio_sample(&self) -> f32 {
-        let base = self.apu.sample();
-        let expansion = self
-            .cartridge
-            .as_ref()
-            .and_then(|cart| cart.mapper().as_expansion_audio())
-            .map(|exp| exp.samples())
-            .unwrap_or_default();
-
-        // Collapse expansion into a single scalar matching the mixer weights.
-        let expansion_mono = expansion.fds
-            + expansion.mmc5
-            + expansion.namco163
-            + expansion.sunsoft5b
-            + expansion.vrc6
-            + expansion.vrc7;
-
-        base + expansion_mono
-    }
-
-    /// Run a full frame and emit interleaved stereo PCM samples.
-    pub fn run_frame_with_audio(&mut self, out: &mut Vec<f32>) {
-        let end_clock = loop {
-            let res = self.step_dot_with_audio();
-            if res.frame_advanced {
-                break self.apu_cycles() as i64;
-            }
-        };
+        let end_clock = self.apu_cycles() as i64;
         self.mixer_frame_buffer.clear();
         self.mixer
             .end_frame(end_clock, &mut self.mixer_frame_buffer);
@@ -430,8 +354,8 @@ impl Nes {
         //     }
         // }
 
-        let _out_start = out.len();
-        self.sound_bus.mix_frame(&[&self.mixer_frame_buffer], out);
+        self.sound_bus
+            .mix_frame(&[&self.mixer_frame_buffer], &mut samples);
 
         // Optional debug path: dump the post-bus PCM at the host sample rate
         // (after resampling/EQ/reverb/crossfeed/master volume) to a raw float
@@ -475,6 +399,35 @@ impl Nes {
         //         self.debug_bus_frames_written += frames_to_write as u64;
         //     }
         // }
+
+        self.last_frame = self.ppu.frame_count();
+        self.dot_counter = self.ppu.total_dots();
+        self.master_clock = self
+            .ppu
+            .master_clock()
+            .saturating_add(self.ppu_offset as u64);
+        samples
+    }
+
+    /// Latest audio sample from the APU mixer plus any cartridge expansion audio.
+    pub fn audio_sample(&self) -> f32 {
+        let base = self.apu.sample();
+        let expansion = self
+            .cartridge
+            .as_ref()
+            .and_then(|cart| cart.mapper().as_expansion_audio())
+            .map(|exp| exp.samples())
+            .unwrap_or_default();
+
+        // Collapse expansion into a single scalar matching the mixer weights.
+        let expansion_mono = expansion.fds
+            + expansion.mmc5
+            + expansion.namco163
+            + expansion.sunsoft5b
+            + expansion.vrc6
+            + expansion.vrc7;
+
+        base + expansion_mono
     }
 
     /// Update the mixer to a new host sample rate (resets mixer state).
@@ -559,7 +512,7 @@ impl Nes {
     pub fn step_instruction(&mut self) {
         let mut seen_active = false;
         loop {
-            self.step_dot();
+            self.clock_cpu_cycle(false);
             if self.cpu.opcode_active() {
                 seen_active = true;
             } else if seen_active {
@@ -584,9 +537,14 @@ impl Nes {
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
             &mut self.open_bus,
+            None,
             &mut self.cpu_bus_cycle,
+            &mut self.master_clock,
+            self.ppu_offset,
+            self.clock_start_count,
+            self.clock_end_count,
         );
-        bus.read(addr)
+        bus.peek(addr)
     }
 
     /// Reads a contiguous range of CPU-visible bytes into `buffer`, starting at `base`.
@@ -600,10 +558,15 @@ impl Nes {
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
             &mut self.open_bus,
+            None,
             &mut self.cpu_bus_cycle,
+            &mut self.master_clock,
+            self.ppu_offset,
+            self.clock_start_count,
+            self.clock_end_count,
         );
         for (offset, byte) in buffer.iter_mut().enumerate() {
-            *byte = bus.read(base.wrapping_add(offset as u16));
+            *byte = bus.peek(base.wrapping_add(offset as u16));
         }
     }
 
@@ -640,9 +603,14 @@ impl Nes {
                         Some(&mut nes.serial_log),
                         &mut nes.oam_dma_request,
                         &mut nes.open_bus,
+                        None,
                         &mut nes.cpu_bus_cycle,
+                        &mut nes.master_clock,
+                        nes.ppu_offset,
+                        nes.clock_start_count,
+                        nes.clock_end_count,
                     );
-                    bus.read(addr)
+                    bus.mem_read(addr)
                 };
                 nes.apu.finish_dma_fetch(byte);
                 nes.open_bus.latch(byte);
@@ -658,6 +626,7 @@ impl Nes {
             // stays correct.
             nes.cpu.account_dma_cycle();
 
+            // Advance three PPU dots (one CPU cycle worth) to keep alignment.
             for _ in 0..3 {
                 let mut bus = CpuBus::new(
                     &mut nes.ram,
@@ -668,15 +637,20 @@ impl Nes {
                     Some(&mut nes.serial_log),
                     &mut nes.oam_dma_request,
                     &mut nes.open_bus,
+                    None,
                     &mut nes.cpu_bus_cycle,
+                    &mut nes.master_clock,
+                    nes.ppu_offset,
+                    nes.clock_start_count,
+                    nes.clock_end_count,
                 );
                 bus.clock_ppu();
-                nes.dot_counter = nes.dot_counter.wrapping_add(1);
-                let frame_count = bus.ppu().frame_count();
-                if frame_count != nes.last_frame {
-                    nes.last_frame = frame_count;
-                    *frame_advanced = true;
-                }
+            }
+            nes.dot_counter = nes.ppu.total_dots();
+            let frame_count = nes.ppu.frame_count();
+            if frame_count != nes.last_frame {
+                nes.last_frame = frame_count;
+                *frame_advanced = true;
             }
         };
 
@@ -703,6 +677,7 @@ impl Nes {
 pub struct ClockResult {
     pub frame_advanced: bool,
     pub apu_clocked: bool,
+    pub opcode_active: bool,
 }
 
 impl Default for Nes {

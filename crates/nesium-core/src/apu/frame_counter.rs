@@ -46,7 +46,7 @@ const RESET_WRITE_DELAY_CYCLES: u8 = 3;
 /// Frame counter head-start applied on reset so the implicit `$4017` write
 /// effectively predates the first executed instruction by roughly 9–12 CPU
 /// cycles. Expressed in half-cycles.
-const RESET_HEADSTART_HALF_CYCLES: u16 = 12;
+const RESET_HEADSTART_HALF_CYCLES: u16 = 0;
 
 /// Frame sequencer timeline for 4-step mode: (CPU cycle, quarter, half, irq).
 ///

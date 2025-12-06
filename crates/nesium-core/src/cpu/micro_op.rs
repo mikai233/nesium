@@ -27,7 +27,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_zp_addr_lo",
             micro_fn: |cpu, bus| {
-                cpu.effective_addr = bus.read(cpu.pc) as u16;
+                cpu.effective_addr = bus.mem_read(cpu.pc) as u16;
                 cpu.incr_pc();
             },
         }
@@ -38,7 +38,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_abs_addr_lo",
             micro_fn: |cpu, bus| {
-                cpu.effective_addr = bus.read(cpu.pc) as u16;
+                cpu.effective_addr = bus.mem_read(cpu.pc) as u16;
                 cpu.incr_pc();
             },
         }
@@ -49,7 +49,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_abs_addr_hi",
             micro_fn: |cpu, bus| {
-                let hi = bus.read(cpu.pc);
+                let hi = bus.mem_read(cpu.pc);
                 cpu.effective_addr |= (hi as u16) << 8;
                 cpu.incr_pc();
             },
@@ -61,7 +61,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_abs_addr_hi_add_x",
             micro_fn: |cpu, bus| {
-                let hi = bus.read(cpu.pc);
+                let hi = bus.mem_read(cpu.pc);
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHX
                 if cpu.opcode_in_flight == Some(0x9C) {
@@ -81,7 +81,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_abs_addr_hi_add_y",
             micro_fn: |cpu, bus| {
-                let hi = bus.read(cpu.pc);
+                let hi = bus.mem_read(cpu.pc);
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHA(0x9F) SHX(0x9E) SHS(0x9B)
                 if cpu.opcode_in_flight == Some(0x9F)
@@ -107,7 +107,7 @@ impl MicroOp {
         MicroOp {
             name: "read_zero_page",
             micro_fn: |cpu, bus| {
-                cpu.base = bus.read(cpu.effective_addr);
+                cpu.base = bus.mem_read(cpu.effective_addr);
             },
         }
     }
@@ -118,7 +118,7 @@ impl MicroOp {
             name: "read_zero_page_add_x_dummy",
             micro_fn: |cpu, bus| {
                 let addr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-                let _ = bus.read(addr); // dummy read for timing
+                let _ = bus.mem_read(addr); // dummy read for timing
                 cpu.effective_addr = addr;
             },
         }
@@ -130,7 +130,7 @@ impl MicroOp {
             name: "read_zero_page_add_y_dummy",
             micro_fn: |cpu, bus| {
                 let addr = (cpu.effective_addr + cpu.y as u16) & 0x00FF;
-                let _ = bus.read(addr); // dummy read for timing
+                let _ = bus.mem_read(addr); // dummy read for timing
                 cpu.effective_addr = addr;
             },
         }
@@ -145,7 +145,7 @@ impl MicroOp {
             name: "read_indirect_x_dummy",
             micro_fn: |cpu, bus| {
                 let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-                let _ = bus.read(ptr); // dummy read for timing
+                let _ = bus.mem_read(ptr); // dummy read for timing
             },
         }
     }
@@ -156,7 +156,7 @@ impl MicroOp {
             name: "read_indirect_x_lo",
             micro_fn: |cpu, bus| {
                 let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-                cpu.base = bus.read(ptr);
+                cpu.base = bus.mem_read(ptr);
             },
         }
     }
@@ -167,7 +167,7 @@ impl MicroOp {
             name: "read_indirect_x_hi",
             micro_fn: |cpu, bus| {
                 let ptr = (cpu.effective_addr + cpu.x as u16 + 1) & 0x00FF;
-                let hi = bus.read(ptr);
+                let hi = bus.mem_read(ptr);
                 cpu.effective_addr = ((hi as u16) << 8) | cpu.base as u16;
             },
         }
@@ -182,7 +182,7 @@ impl MicroOp {
             name: "read_indirect_y_hi",
             micro_fn: |cpu, bus| {
                 let hi_addr = (cpu.effective_addr + 1) & 0x00FF;
-                let hi = bus.read(hi_addr);
+                let hi = bus.mem_read(hi_addr);
                 let base = ((hi as u16) << 8) | (cpu.base as u16);
                 // SHA
                 if cpu.opcode_in_flight == Some(0x93) {
@@ -204,7 +204,7 @@ impl MicroOp {
         MicroOp {
             name: "read_indirect_lo",
             micro_fn: |cpu, bus| {
-                cpu.base = bus.read(cpu.effective_addr);
+                cpu.base = bus.mem_read(cpu.effective_addr);
             },
         }
     }
@@ -220,7 +220,7 @@ impl MicroOp {
                 } else {
                     cpu.effective_addr + 1
                 };
-                let hi = bus.read(hi_addr);
+                let hi = bus.mem_read(hi_addr);
                 cpu.effective_addr = ((hi as u16) << 8) | (cpu.base as u16);
             },
         }
@@ -236,7 +236,7 @@ impl MicroOp {
             micro_fn: |cpu, bus| {
                 let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
                 let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-                let _ = bus.read(dummy_addr); // dummy read for timing
+                let _ = bus.mem_read(dummy_addr); // dummy read for timing
             },
         }
     }
@@ -248,7 +248,7 @@ impl MicroOp {
             micro_fn: |cpu, bus| {
                 let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
                 let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-                let _ = bus.read(dummy_addr); // dummy read for timing
+                let _ = bus.mem_read(dummy_addr); // dummy read for timing
             },
         }
     }
@@ -273,4 +273,6 @@ impl Hash for MicroOp {
     }
 }
 
-pub(crate) fn empty_micro_fn(_: &mut Cpu, _: &mut dyn Bus) {}
+pub(crate) fn empty_micro_fn(_: &mut Cpu, bus: &mut dyn Bus) {
+    bus.internal_cycle();
+}

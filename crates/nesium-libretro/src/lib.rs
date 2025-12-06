@@ -72,8 +72,7 @@ impl DemoCore {
     }
 
     fn render_audio(&mut self) -> Vec<[i16; 2]> {
-        let mut samples = Vec::new();
-        self.nes.run_frame_with_audio(&mut samples);
+        let samples = self.nes.run_frame(true);
         let mut frames = Vec::new();
         for chunk in samples.chunks(2) {
             let l = *chunk.first().unwrap_or(&0.0);

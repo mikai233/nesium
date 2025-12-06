@@ -95,8 +95,9 @@ fn apu_reset_4017_timing_debug() -> Result<()> {
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
+    let mut first_nonrunning_logged = false;
     for frame in 0..DEFAULT_FRAMES {
-        nes.run_frame();
+        nes.run_frame(false);
         let status = nes.peek_cpu_byte(STATUS_ADDR);
         let mut magic = [0u8; 3];
         nes.peek_cpu_slice(STATUS_ADDR + 1, &mut magic);
@@ -106,6 +107,23 @@ fn apu_reset_4017_timing_debug() -> Result<()> {
             "frame {frame}: status={:#04X}, magic={:02X?}, power_flag={:#04X}, num_resets={}",
             status, magic, power_flag, num_resets
         );
+        if !first_nonrunning_logged && status != 0x80 && status != 0x00 {
+            let mut buf = [0u8; 128];
+            nes.peek_cpu_slice(STATUS_MESSAGE_ADDR, &mut buf);
+            let msg = buf
+                .iter()
+                .take_while(|&&b| b != 0)
+                .map(|&b| {
+                    if (0x20..=0x7E).contains(&b) {
+                        b as char
+                    } else {
+                        '.'
+                    }
+                })
+                .collect::<String>();
+            eprintln!("  message: {:?}", msg);
+            first_nonrunning_logged = true;
+        }
     }
 
     Ok(())
@@ -134,7 +152,7 @@ fn apu_reset_4017_written_debug() -> Result<()> {
             }
         }
 
-        nes.run_frame();
+        nes.run_frame(false);
         let status = nes.peek_cpu_byte(STATUS_ADDR);
         let mut buf = [0u8; 128];
         nes.peek_cpu_slice(STATUS_MESSAGE_ADDR, &mut buf);

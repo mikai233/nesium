@@ -174,7 +174,7 @@ where
             }
         }
 
-        nes.run_frame();
+        nes.run_frame(false);
     }
 
     serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
@@ -255,7 +255,7 @@ where
         .with_context(|| format!("loading {}", path.display()))?;
 
     for _ in 0..frames {
-        nes.run_frame();
+        nes.run_frame(false);
     }
 
     verify(&mut nes)
@@ -307,7 +307,7 @@ pub fn run_rom_zeropage_result(
                 snap.s
             );
         }
-        nes.run_frame();
+        nes.run_frame(false);
     }
 
     let result = nes.peek_cpu_byte(result_addr);

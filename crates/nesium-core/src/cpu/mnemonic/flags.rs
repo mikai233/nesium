@@ -20,7 +20,8 @@ impl Mnemonic {
     pub(crate) const fn clc() -> &'static [MicroOp] {
         &[MicroOp {
             name: "clc_clear_carry",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 // Cycle 2: C = 0
                 cpu.p.set_c(false);
             },
@@ -49,7 +50,8 @@ impl Mnemonic {
     pub(crate) const fn cld() -> &'static [MicroOp] {
         &[MicroOp {
             name: "cld_clear_decimal",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 // Cycle 2: D = 0
                 cpu.p.set_d(false);
             },
@@ -74,7 +76,8 @@ impl Mnemonic {
     pub(crate) const fn cli() -> &'static [MicroOp] {
         &[MicroOp {
             name: "cli_clear_interrupt",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 // Cycle 2: I = 0. When interrupts were previously disabled,
                 // the 6502 delays servicing a pending IRQ until *after* the
                 // next instruction completes. Model this with a one-boundary
@@ -107,7 +110,8 @@ impl Mnemonic {
     pub(crate) const fn clv() -> &'static [MicroOp] {
         &[MicroOp {
             name: "clv_clear_overflow",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 // Cycle 2: V = 0
                 cpu.p.set_v(false);
             },
@@ -133,7 +137,8 @@ impl Mnemonic {
     pub(crate) const fn sec() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sec_set_carry",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 // Cycle 2: C = 1
                 cpu.p.set_c(true);
             },
@@ -163,7 +168,8 @@ impl Mnemonic {
     pub(crate) const fn sed() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sed_set_decimal",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 // Cycle 2: D = 1
                 cpu.p.set_d(true);
             },
@@ -189,7 +195,8 @@ impl Mnemonic {
     pub(crate) const fn sei() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sei_set_interrupt",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 // Cycle 2: I = 1. If interrupts were previously enabled when
                 // SEI executes, a pending IRQ is still allowed to fire "just
                 // after" SEI. Approximate this with a one-shot override that

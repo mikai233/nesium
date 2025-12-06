@@ -400,7 +400,7 @@ mod tests {
             let mut addr_hi = 0;
 
             // Write opcode at PC
-            mock.write(cpu.pc, instr.opcode());
+            mock.mem_write(cpu.pc, instr.opcode());
 
             // Base protected addresses to avoid collisions
             let protected_addrs = vec![cpu.pc, cpu.pc + 1, cpu.pc + 2, cpu.pc + 3];
@@ -468,7 +468,7 @@ mod tests {
 
         fn immediate(mock: &mut MockBus, cpu: &Cpu, data: u8) -> u16 {
             // Immediate mode: write operand at PC+1
-            mock.write(cpu.pc + 1, data);
+            mock.mem_write(cpu.pc + 1, data);
             cpu.pc + 1
         }
 
@@ -489,8 +489,8 @@ mod tests {
                     break candidate;
                 }
             };
-            mock.write(cpu.pc + 1, addr);
-            mock.write(addr as u16, data);
+            mock.mem_write(cpu.pc + 1, addr);
+            mock.mem_write(addr as u16, data);
             trace!("ZeroPage: addr={:02X}", addr);
             addr as u16
         }
@@ -512,8 +512,8 @@ mod tests {
                     break (base_candidate, effective_candidate);
                 }
             };
-            mock.write(cpu.pc + 1, base);
-            mock.write(effective as u16, data);
+            mock.mem_write(cpu.pc + 1, base);
+            mock.mem_write(effective as u16, data);
             trace!(
                 "ZeroPageX: base={:02X}, X={:02X}, effective={:02X}",
                 base, cpu.x, effective
@@ -538,8 +538,8 @@ mod tests {
                     break (base_candidate, effective_candidate);
                 }
             };
-            mock.write(cpu.pc + 1, base);
-            mock.write(effective as u16, data);
+            mock.mem_write(cpu.pc + 1, base);
+            mock.mem_write(effective as u16, data);
             trace!(
                 "ZeroPageY: base={:02X}, Y={:02X}, effective={:02X}",
                 base, cpu.y, effective
@@ -563,9 +563,9 @@ mod tests {
                     break candidate;
                 }
             };
-            mock.write(cpu.pc + 1, (addr & 0xFF) as u8);
-            mock.write(cpu.pc + 2, (addr >> 8) as u8);
-            mock.write(addr, data);
+            mock.mem_write(cpu.pc + 1, (addr & 0xFF) as u8);
+            mock.mem_write(cpu.pc + 2, (addr >> 8) as u8);
+            mock.mem_write(addr, data);
             trace!("Absolute: addr={:04X}", addr);
             addr
         }
@@ -590,9 +590,9 @@ mod tests {
                 }
             };
             let crossed_page = (base & 0xFF00) != (effective & 0xFF00);
-            mock.write(cpu.pc + 1, (base & 0xFF) as u8);
-            mock.write(cpu.pc + 2, (base >> 8) as u8);
-            mock.write(effective, data);
+            mock.mem_write(cpu.pc + 1, (base & 0xFF) as u8);
+            mock.mem_write(cpu.pc + 2, (base >> 8) as u8);
+            mock.mem_write(effective, data);
             trace!(
                 "AbsoluteX: base={:04X}, effective={:04X}, crossed={}",
                 base, effective, crossed_page
@@ -621,9 +621,9 @@ mod tests {
                 }
             };
             let crossed_page = (base & 0xFF00) != (effective & 0xFF00);
-            mock.write(cpu.pc + 1, (base & 0xFF) as u8);
-            mock.write(cpu.pc + 2, (base >> 8) as u8);
-            mock.write(effective, data);
+            mock.mem_write(cpu.pc + 1, (base & 0xFF) as u8);
+            mock.mem_write(cpu.pc + 2, (base >> 8) as u8);
+            mock.mem_write(effective, data);
             trace!(
                 "AbsoluteY: base={:04X}, effective={:04X}, crossed={}",
                 base, effective, crossed_page
@@ -651,10 +651,10 @@ mod tests {
                 break (ptr_candidate, target_candidate);
             };
             let hi_addr = (ptr & 0xFF00) | ((ptr + 1) & 0x00FF);
-            mock.write(cpu.pc + 1, (ptr & 0xFF) as u8);
-            mock.write(cpu.pc + 2, (ptr >> 8) as u8);
-            mock.write(ptr, (target & 0xFF) as u8);
-            mock.write(hi_addr, (target >> 8) as u8);
+            mock.mem_write(cpu.pc + 1, (ptr & 0xFF) as u8);
+            mock.mem_write(cpu.pc + 2, (ptr >> 8) as u8);
+            mock.mem_write(ptr, (target & 0xFF) as u8);
+            mock.mem_write(hi_addr, (target >> 8) as u8);
             trace!(
                 "Indirect: ptr={:04X}, hi_addr={:04X}, target={:04X}",
                 ptr, hi_addr, target
@@ -691,10 +691,10 @@ mod tests {
                 break (zp_candidate, target_candidate);
             };
             let ptr = zp.wrapping_add(cpu.x);
-            mock.write(cpu.pc + 1, zp);
-            mock.write(ptr as u16, (target & 0xFF) as u8);
-            mock.write(ptr.wrapping_add(1) as u16 & 0xFF, (target >> 8) as u8);
-            mock.write(target, data);
+            mock.mem_write(cpu.pc + 1, zp);
+            mock.mem_write(ptr as u16, (target & 0xFF) as u8);
+            mock.mem_write(ptr.wrapping_add(1) as u16 & 0xFF, (target >> 8) as u8);
+            mock.mem_write(target, data);
             trace!("IndirectX: target={:04X}", target);
             target
         }
@@ -734,10 +734,10 @@ mod tests {
             let effective = base.wrapping_add(cpu.y as u16);
             let crossed_page = (base & 0xFF00) != (effective & 0xFF00);
 
-            mock.write(cpu.pc + 1, zp);
-            mock.write(zp as u16, lo);
-            mock.write(zp.wrapping_add(1) as u16 & 0xFF, hi);
-            mock.write(effective, data);
+            mock.mem_write(cpu.pc + 1, zp);
+            mock.mem_write(zp as u16, lo);
+            mock.mem_write(zp.wrapping_add(1) as u16 & 0xFF, hi);
+            mock.mem_write(effective, data);
 
             trace!(
                 "IndirectY: effective={:04X}, crossed={}",
@@ -765,8 +765,8 @@ mod tests {
                 }
             };
             let crossed_page = (cpu.pc.wrapping_add(2) & 0xFF00) != (target & 0xFF00);
-            mock.write(cpu.pc + 1, offset as u8);
-            mock.write(target, data);
+            mock.mem_write(cpu.pc + 1, offset as u8);
+            mock.mem_write(target, data);
 
             trace!(
                 "Relative: offset={}, base={:04X}, target={:04X}, crossed={}",

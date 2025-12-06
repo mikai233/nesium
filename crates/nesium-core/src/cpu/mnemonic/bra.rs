@@ -24,14 +24,15 @@ impl Mnemonic {
             MicroOp {
                 name: "bcc_fetch_branch_offset",
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.pc);
+                    cpu.base = bus.mem_read(cpu.pc);
                     cpu.incr_pc();
                     cpu.test_branch(!cpu.p.c());
                 },
             },
             MicroOp {
                 name: "bcc_add_branch_offset",
-                micro_fn: |cpu, _| {
+                micro_fn: |cpu, bus| {
+                    bus.internal_cycle();
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -42,7 +43,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bcc_add_dummy_read",
                 micro_fn: |cpu, bus| {
-                    bus.read(cpu.pc);
+                    bus.mem_read(cpu.pc);
                 },
             },
         ]
@@ -70,14 +71,15 @@ impl Mnemonic {
             MicroOp {
                 name: "bcs_fetch_branch_offset",
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.pc);
+                    cpu.base = bus.mem_read(cpu.pc);
                     cpu.incr_pc();
                     cpu.test_branch(cpu.p.c());
                 },
             },
             MicroOp {
                 name: "bcs_add_branch_offset",
-                micro_fn: |cpu, _| {
+                micro_fn: |cpu, bus| {
+                    bus.internal_cycle();
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -88,7 +90,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bcs_add_dummy_read",
                 micro_fn: |cpu, bus| {
-                    bus.read(cpu.pc);
+                    bus.mem_read(cpu.pc);
                 },
             },
         ]
@@ -119,14 +121,15 @@ impl Mnemonic {
             MicroOp {
                 name: "beq_fetch_branch_offset",
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.pc);
+                    cpu.base = bus.mem_read(cpu.pc);
                     cpu.incr_pc();
                     cpu.test_branch(cpu.p.z());
                 },
             },
             MicroOp {
                 name: "beq_add_branch_offset",
-                micro_fn: |cpu, _| {
+                micro_fn: |cpu, bus| {
+                    bus.internal_cycle();
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -137,7 +140,7 @@ impl Mnemonic {
             MicroOp {
                 name: "beq_add_dummy_read",
                 micro_fn: |cpu, bus| {
-                    bus.read(cpu.pc);
+                    bus.mem_read(cpu.pc);
                 },
             },
         ]
@@ -165,14 +168,15 @@ impl Mnemonic {
             MicroOp {
                 name: "bmi_fetch_branch_offset",
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.pc);
+                    cpu.base = bus.mem_read(cpu.pc);
                     cpu.incr_pc();
                     cpu.test_branch(cpu.p.n());
                 },
             },
             MicroOp {
                 name: "bmi_add_branch_offset",
-                micro_fn: |cpu, _| {
+                micro_fn: |cpu, bus| {
+                    bus.internal_cycle();
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -183,7 +187,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bmi_add_dummy_read",
                 micro_fn: |cpu, bus| {
-                    bus.read(cpu.pc);
+                    bus.mem_read(cpu.pc);
                 },
             },
         ]
@@ -213,14 +217,15 @@ impl Mnemonic {
             MicroOp {
                 name: "bne_fetch_branch_offset",
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.pc);
+                    cpu.base = bus.mem_read(cpu.pc);
                     cpu.incr_pc();
                     cpu.test_branch(!cpu.p.z());
                 },
             },
             MicroOp {
                 name: "bne_add_branch_offset",
-                micro_fn: |cpu, _| {
+                micro_fn: |cpu, bus| {
+                    bus.internal_cycle();
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -231,7 +236,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bne_add_dummy_read",
                 micro_fn: |cpu, bus| {
-                    bus.read(cpu.pc);
+                    bus.mem_read(cpu.pc);
                 },
             },
         ]
@@ -263,14 +268,15 @@ impl Mnemonic {
             MicroOp {
                 name: "bpl_fetch_branch_offset",
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.pc);
+                    cpu.base = bus.mem_read(cpu.pc);
                     cpu.incr_pc();
                     cpu.test_branch(!cpu.p.n());
                 },
             },
             MicroOp {
                 name: "bpl_add_branch_offset",
-                micro_fn: |cpu, _| {
+                micro_fn: |cpu, bus| {
+                    bus.internal_cycle();
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -281,7 +287,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bpl_add_dummy_read",
                 micro_fn: |cpu, bus| {
-                    bus.read(cpu.pc);
+                    bus.mem_read(cpu.pc);
                 },
             },
         ]
@@ -310,14 +316,15 @@ impl Mnemonic {
             MicroOp {
                 name: "bvc_fetch_branch_offset",
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.pc);
+                    cpu.base = bus.mem_read(cpu.pc);
                     cpu.incr_pc();
                     cpu.test_branch(!cpu.p.v());
                 },
             },
             MicroOp {
                 name: "bvc_add_branch_offset",
-                micro_fn: |cpu, _| {
+                micro_fn: |cpu, bus| {
+                    bus.internal_cycle();
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -328,7 +335,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bvc_add_dummy_read",
                 micro_fn: |cpu, bus| {
-                    bus.read(cpu.pc);
+                    bus.mem_read(cpu.pc);
                 },
             },
         ]
@@ -356,14 +363,15 @@ impl Mnemonic {
             MicroOp {
                 name: "bvs_fetch_branch_offset",
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.read(cpu.pc);
+                    cpu.base = bus.mem_read(cpu.pc);
                     cpu.incr_pc();
                     cpu.test_branch(cpu.p.v());
                 },
             },
             MicroOp {
                 name: "bvs_add_branch_offset",
-                micro_fn: |cpu, _| {
+                micro_fn: |cpu, bus| {
+                    bus.internal_cycle();
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -374,7 +382,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bvs_add_dummy_read",
                 micro_fn: |cpu, bus| {
-                    bus.read(cpu.pc);
+                    bus.mem_read(cpu.pc);
                 },
             },
         ]
@@ -392,7 +400,7 @@ mod bra_tests {
             let branch_taken = !old_carry;
 
             if branch_taken {
-                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -413,7 +421,7 @@ mod bra_tests {
             let branch_taken = old_carry;
 
             if branch_taken {
-                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -435,7 +443,7 @@ mod bra_tests {
             let branch_taken = old_zero;
 
             if branch_taken {
-                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -457,7 +465,7 @@ mod bra_tests {
             let branch_taken = old_negative;
 
             if branch_taken {
-                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -479,7 +487,7 @@ mod bra_tests {
             let branch_taken = !old_zero;
 
             if branch_taken {
-                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -501,7 +509,7 @@ mod bra_tests {
             let branch_taken = !old_negative;
 
             if branch_taken {
-                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -523,7 +531,7 @@ mod bra_tests {
             let branch_taken = !old_overflow;
 
             if branch_taken {
-                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -545,7 +553,7 @@ mod bra_tests {
             let branch_taken = old_overflow;
 
             if branch_taken {
-                let offset = bus.read(verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,

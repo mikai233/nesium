@@ -29,7 +29,7 @@ impl Mnemonic {
                 let s = cpu.a & cpu.x;
                 cpu.s = s;
                 let m = s & cpu.base.wrapping_add(1);
-                bus.write(cpu.effective_addr, m);
+                bus.mem_write(cpu.effective_addr, m);
             },
         }]
     }
@@ -55,7 +55,8 @@ impl Mnemonic {
     pub(crate) const fn tax() -> &'static [MicroOp] {
         &[MicroOp {
             name: "tax",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 cpu.x = cpu.a;
                 cpu.p.set_zn(cpu.x);
             },
@@ -82,7 +83,8 @@ impl Mnemonic {
     pub(crate) const fn tay() -> &'static [MicroOp] {
         &[MicroOp {
             name: "tay",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 cpu.y = cpu.a;
                 cpu.p.set_zn(cpu.y);
             },
@@ -110,7 +112,8 @@ impl Mnemonic {
     pub(crate) const fn tsx() -> &'static [MicroOp] {
         &[MicroOp {
             name: "tsx",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 cpu.x = cpu.s;
                 cpu.p.set_zn(cpu.x);
             },
@@ -137,7 +140,8 @@ impl Mnemonic {
     pub(crate) const fn txa() -> &'static [MicroOp] {
         &[MicroOp {
             name: "txa",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 cpu.a = cpu.x;
                 cpu.p.set_zn(cpu.a);
             },
@@ -162,7 +166,8 @@ impl Mnemonic {
     pub(crate) const fn txs() -> &'static [MicroOp] {
         &[MicroOp {
             name: "txs",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 cpu.s = cpu.x;
             },
         }]
@@ -188,7 +193,8 @@ impl Mnemonic {
     pub(crate) const fn tya() -> &'static [MicroOp] {
         &[MicroOp {
             name: "tya",
-            micro_fn: |cpu, _| {
+            micro_fn: |cpu, bus| {
+                bus.internal_cycle();
                 cpu.a = cpu.y;
                 cpu.p.set_zn(cpu.a);
             },
@@ -206,7 +212,7 @@ mod trans_tests {
             let v = verify.cpu.a & verify.cpu.x;
             assert_eq!(cpu.s, v);
             let v = v & verify.addr_hi.wrapping_add(1);
-            let m = bus.read(verify.addr);
+            let m = bus.mem_read(verify.addr);
             assert_eq!(v, m);
         });
     }

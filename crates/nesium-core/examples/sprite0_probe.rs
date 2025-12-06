@@ -15,7 +15,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut last_hit: Option<nesium_core::ppu::Sprite0HitDebug> = None;
     for _ in 0..frames {
-        nes.run_frame();
+        nes.run_frame(false);
         last_hit = nes.sprite0_hit_pos();
     }
 
