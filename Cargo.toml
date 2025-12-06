@@ -25,10 +25,14 @@ opt-level = 2
 debug = true
 
 [profile.release]
-codegen-units = 1
-lto = "fat"
+opt-level = 3
 panic = "abort"
 debug = false
+
+[profile.release-dist]
+inherits = "release"
+codegen-units = 1
+lto = "fat"
 
 [workspace.package]
 license = "GPL-3.0-or-later"
@@ -39,6 +43,7 @@ esp-idf-sys = "0.36"
 rand = "0.9.2"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.22"
+tracing-appender = "0.2.4"
 ctor = "0.6.3"
 dyn-clone = "1.0.20"
 eframe = "0.33.2"
