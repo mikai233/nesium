@@ -140,12 +140,11 @@ impl<'a> CpuBus<'a> {
 
     /// Advances master clock and runs the PPU to catch up.
     fn bump_master_clock(&mut self, delta: u8) {
-        let target = self.master_clock.wrapping_add(delta as u64);
+        *self.master_clock = self.master_clock.wrapping_add(delta as u64);
         let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
         // Apply CPU/PPU phase offset before running the PPU.
-        let ppu_target = target.saturating_sub(self.ppu_offset as u64);
+        let ppu_target = self.master_clock.saturating_sub(self.ppu_offset as u64);
         self.ppu.run_until(ppu_target, &mut pattern);
-        *self.master_clock = target;
     }
 
     fn begin_cycle(&mut self, for_read: bool) {

@@ -300,7 +300,8 @@ pub fn run_rom_zeropage_result(
             let nmi_count = nes.peek_cpu_byte(0x000A);
             let snap = nes.cpu_snapshot();
             bail!(
-                "failed with result code {:#04X} (nmi_count {}, PC {:04X}, S {:02X})",
+                "{} failed with result code {:#04X} (nmi_count {}, PC {:04X}, S {:02X})",
+                rom_rel_path,
                 result,
                 nmi_count,
                 snap.pc,
@@ -318,7 +319,8 @@ pub fn run_rom_zeropage_result(
         let nmi_count = nes.peek_cpu_byte(0x000A);
         let snap = nes.cpu_snapshot();
         bail!(
-            "failed with result code {:#04X} (nmi_count {}, PC {:04X}, S {:02X})",
+            "{} failed with result code {:#04X} (nmi_count {}, PC {:04X}, S {:02X})",
+            rom_rel_path,
             result,
             nmi_count,
             snap.pc,
@@ -327,7 +329,8 @@ pub fn run_rom_zeropage_result(
     }
 
     bail!(
-        "timed out after {} frames with result still {:#04X} (elapsed {:.2?})",
+        "{} timed out after {} frames with result still {:#04X} (elapsed {:.2?})",
+        rom_rel_path,
         frames,
         last_result,
         start.elapsed()

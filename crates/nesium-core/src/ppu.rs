@@ -72,7 +72,6 @@ pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + post + vblank (241..260)
-
 /// Captures the position of the first sprite-0 hit in the current frame (debug).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Sprite0HitPos {
@@ -310,8 +309,10 @@ impl Ppu {
             pending_vram_delay: 0,
             vram: Vram::new(),
             palette_ram: PaletteRam::new(),
-            cycle: 0,
-            scanline: -1,
+            // Initialize to the last dot of the pre-boot frame so the first clock()
+            // rolls over to scanline -1, cycle 0.
+            cycle: CYCLES_PER_SCANLINE - 1,
+            scanline: 260,
             frame: 0,
             master_clock: 0,
             odd_frame: false,
@@ -353,8 +354,9 @@ impl Ppu {
         self.registers.reset();
         self.vram.fill(0);
         self.palette_ram.fill(0);
-        self.cycle = 0;
-        self.scanline = -1;
+        // Reset timing to last dot of the previous frame.
+        self.cycle = CYCLES_PER_SCANLINE - 1;
+        self.scanline = 260;
         self.frame = 0;
         self.master_clock = 0;
         self.odd_frame = false;
@@ -509,6 +511,13 @@ impl Ppu {
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
     pub fn clock(&mut self, pattern: &mut PatternBus<'_>) {
+        // Pre-increment: Advance counters at the START of the clock.
+        // This ensures scanline/cycle reflect the state *after* this cycle is processed
+        // for synchronization purposes, aligning with Mesen's interpretation.
+        self.advance_cycle();
+        // One PPU dot = 4 master cycles.
+        self.master_clock = self.master_clock.wrapping_add(4);
+
         let rendering_enabled = self.registers.mask.rendering_enabled();
         let prev_nmi_output = self.nmi_output;
         self.step_pending_vram_addr();
@@ -708,14 +717,11 @@ impl Ppu {
         }
 
         self.update_nmi_output(prev_nmi_output);
-        self.advance_cycle();
-        // One PPU dot = 4 master cycles.
-        self.master_clock = self.master_clock.wrapping_add(4);
     }
 
     /// Advance the PPU until its master clock reaches `target_master`.
     pub(crate) fn run_until(&mut self, target_master: u64, pattern: &mut PatternBus<'_>) {
-        while self.master_clock < target_master {
+        while self.master_clock <= target_master {
             self.clock(pattern);
         }
     }
@@ -1826,6 +1832,10 @@ mod tests {
         let mut ppu = Ppu::default();
         let mut pattern = PatternBus::default();
         // Run until scanline 241, cycle 1 (accounting for prerender line).
+        // Since we now start at 340, first clock takes us to 0.
+        // We need 1 tick (to wrap to 0) + full frames.
+        // This test might need slight adjustment depending on exact cycle count desired,
+        // but the logic remains:
         let target_cycles = (242i32 * CYCLES_PER_SCANLINE as i32 + 2) as usize;
         for _ in 0..target_cycles {
             ppu.clock(&mut pattern);

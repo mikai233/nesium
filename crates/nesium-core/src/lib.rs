@@ -273,10 +273,6 @@ impl Nes {
         };
 
         self.dot_counter = self.ppu.total_dots();
-        self.master_clock = self
-            .ppu
-            .master_clock()
-            .saturating_add(self.ppu_offset as u64);
 
         // Feed expansion audio into the mixer at the CPU clock edge.
         if apu_clocked {
@@ -402,10 +398,6 @@ impl Nes {
 
         self.last_frame = self.ppu.frame_count();
         self.dot_counter = self.ppu.total_dots();
-        self.master_clock = self
-            .ppu
-            .master_clock()
-            .saturating_add(self.ppu_offset as u64);
         samples
     }
 

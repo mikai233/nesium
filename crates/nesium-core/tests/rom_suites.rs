@@ -939,7 +939,7 @@ fn vbl_nmi_timing_suite() -> Result<()> {
         "vbl_nmi_timing/6.nmi_disable.nes",
         "vbl_nmi_timing/7.nmi_timing.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_zeropage_result(rom, DEFAULT_FRAMES, RESULT_ZP_ADDR, 0x01)?;
     }
     Ok(())
 }
