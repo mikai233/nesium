@@ -1,4 +1,4 @@
-use std::{fs::File, path::Path};
+use std::{path::Path, u64};
 
 use crate::{
     apu::Apu,
@@ -39,7 +39,7 @@ pub struct Nes {
     cartridge: Option<Cartridge>,
     mapper_provider: Option<Box<dyn Provider>>,
     controllers: [Controller; 2],
-    last_frame: u64,
+    last_frame: u32,
     /// Master PPU dot counter used to drive CPU/PPU/APU in lockstep (3 dots per CPU cycle).
     dot_counter: u64,
     /// Master clock in PPU ticks (4 master clocks per PPU dot, 12 per CPU cycle).
@@ -55,7 +55,7 @@ pub struct Nes {
     /// CPU data-bus open-bus latch (mirrors Mesen2's decay model).
     open_bus: OpenBus,
     /// CPU bus access counter (fed into timing-sensitive mappers).
-    cpu_bus_cycle: u64,
+    cycles: u64,
     /// Per-console mixer that produces band-limited PCM at a fixed internal rate.
     mixer: NesSoundMixer,
     /// Global audio bus that resamples from the internal mixer rate to the host sample rate.
@@ -63,12 +63,6 @@ pub struct Nes {
     audio_sample_rate: u32,
     /// Scratch buffer for a single frame of internal-rate audio from the per-console mixer.
     mixer_frame_buffer: Vec<f32>,
-    /// Optional debug dump of the internal 96 kHz mixer output (for waveform comparison).
-    debug_apu_dump: Option<File>,
-    debug_apu_frames_written: u64,
-    /// Optional debug dump of the post-bus PCM (for waveform comparison).
-    debug_bus_dump: Option<File>,
-    debug_bus_frames_written: u64,
 }
 
 /// Internal mixer output sample rate (matches Mesen2's fixed 96 kHz path).
@@ -100,15 +94,11 @@ impl Nes {
             serial_log: controller::SerialLogger::default(),
             oam_dma_request: None,
             open_bus: OpenBus::new(),
-            cpu_bus_cycle: 0,
+            cycles: u64::MAX,
             mixer: NesSoundMixer::new(CPU_CLOCK_NTSC, INTERNAL_MIXER_SAMPLE_RATE),
             sound_bus: SoundMixerBus::new(INTERNAL_MIXER_SAMPLE_RATE, sample_rate),
             audio_sample_rate: sample_rate,
             mixer_frame_buffer: Vec::new(),
-            debug_apu_dump: None,
-            debug_apu_frames_written: 0,
-            debug_bus_dump: None,
-            debug_bus_frames_written: 0,
         };
         nes.ppu.set_palette(PaletteKind::NesdevNtsc.palette());
         // Apply a power-on style reset once at construction time. This matches
@@ -169,7 +159,7 @@ impl Nes {
         }
         self.serial_log.drain();
         self.open_bus.reset();
-        self.cpu_bus_cycle = 0;
+        self.cycles = u64::MAX;
         self.mixer.reset();
         self.sound_bus.reset();
         self.mixer_frame_buffer.clear();
@@ -184,7 +174,7 @@ impl Nes {
             &mut self.oam_dma_request,
             &mut self.open_bus,
             Some(&mut self.mixer),
-            &mut self.cpu_bus_cycle,
+            &mut self.cycles,
             &mut self.master_clock,
             self.ppu_offset,
             self.clock_start_count,
@@ -207,7 +197,7 @@ impl Nes {
         }
         self.serial_log.drain();
         self.open_bus.reset();
-        self.cpu_bus_cycle = 0;
+        self.cycles = u64::MAX;
         self.mixer.reset();
         self.sound_bus.reset();
         self.mixer_frame_buffer.clear();
@@ -222,7 +212,7 @@ impl Nes {
             &mut self.oam_dma_request,
             &mut self.open_bus,
             None,
-            &mut self.cpu_bus_cycle,
+            &mut self.cycles,
             &mut self.master_clock,
             self.ppu_offset,
             self.clock_start_count,
@@ -247,7 +237,7 @@ impl Nes {
                 &mut self.oam_dma_request,
                 &mut self.open_bus,
                 if audio { Some(&mut self.mixer) } else { None },
-                &mut self.cpu_bus_cycle,
+                &mut self.cycles,
                 &mut self.master_clock,
                 self.ppu_offset,
                 self.clock_start_count,
@@ -262,10 +252,11 @@ impl Nes {
                 .and_then(|cart| cart.mapper().as_expansion_audio())
                 .map(|exp| exp.samples());
 
-            if let Some((stall_cycles, dma_addr)) = bus.take_pending_dmc_stall() {
-                if stall_cycles > 0 && self.apply_dmc_stall(stall_cycles, dma_addr) {
-                    // Stall may advance PPU/frame; accounted for below.
-                }
+            if let Some((stall_cycles, dma_addr)) = bus.take_pending_dmc_stall()
+                && stall_cycles > 0
+                && self.apply_dmc_stall(stall_cycles, dma_addr)
+            {
+                // Stall may advance PPU/frame; accounted for below.
             }
 
             let opcode_active = self.cpu_opcode_active();
@@ -275,22 +266,20 @@ impl Nes {
         self.dot_counter = self.ppu.total_dots();
 
         // Feed expansion audio into the mixer at the CPU clock edge.
-        if apu_clocked {
-            if let Some(samples) = expansion_samples {
-                let clock = cpu_cycles as i64;
-                self.mixer
-                    .set_channel_level(AudioChannel::Fds, clock, samples.fds);
-                self.mixer
-                    .set_channel_level(AudioChannel::Mmc5, clock, samples.mmc5);
-                self.mixer
-                    .set_channel_level(AudioChannel::Namco163, clock, samples.namco163);
-                self.mixer
-                    .set_channel_level(AudioChannel::Sunsoft5B, clock, samples.sunsoft5b);
-                self.mixer
-                    .set_channel_level(AudioChannel::Vrc6, clock, samples.vrc6);
-                self.mixer
-                    .set_channel_level(AudioChannel::Vrc7, clock, samples.vrc7);
-            }
+        if apu_clocked && let Some(samples) = expansion_samples {
+            let clock = cpu_cycles as i64;
+            self.mixer
+                .set_channel_level(AudioChannel::Fds, clock, samples.fds);
+            self.mixer
+                .set_channel_level(AudioChannel::Mmc5, clock, samples.mmc5);
+            self.mixer
+                .set_channel_level(AudioChannel::Namco163, clock, samples.namco163);
+            self.mixer
+                .set_channel_level(AudioChannel::Sunsoft5B, clock, samples.sunsoft5b);
+            self.mixer
+                .set_channel_level(AudioChannel::Vrc6, clock, samples.vrc6);
+            self.mixer
+                .set_channel_level(AudioChannel::Vrc7, clock, samples.vrc7);
         }
 
         let frame_after = self.ppu.frame_count();
@@ -496,7 +485,7 @@ impl Nes {
     }
 
     /// Debug-only: override PPU counters for trace alignment.
-    pub fn debug_set_ppu_position(&mut self, scanline: i16, cycle: u16, frame: u64) {
+    pub fn debug_set_ppu_position(&mut self, scanline: i16, cycle: u16, frame: u32) {
         self.ppu.debug_set_position(scanline, cycle, frame);
     }
 
@@ -530,7 +519,7 @@ impl Nes {
             &mut self.oam_dma_request,
             &mut self.open_bus,
             None,
-            &mut self.cpu_bus_cycle,
+            &mut self.cycles,
             &mut self.master_clock,
             self.ppu_offset,
             self.clock_start_count,
@@ -551,7 +540,7 @@ impl Nes {
             &mut self.oam_dma_request,
             &mut self.open_bus,
             None,
-            &mut self.cpu_bus_cycle,
+            &mut self.cycles,
             &mut self.master_clock,
             self.ppu_offset,
             self.clock_start_count,
@@ -596,7 +585,7 @@ impl Nes {
                         &mut nes.oam_dma_request,
                         &mut nes.open_bus,
                         None,
-                        &mut nes.cpu_bus_cycle,
+                        &mut nes.cycles,
                         &mut nes.master_clock,
                         nes.ppu_offset,
                         nes.clock_start_count,
@@ -607,9 +596,9 @@ impl Nes {
                 nes.apu.finish_dma_fetch(byte);
                 nes.open_bus.latch(byte);
             } else {
-                nes.cpu_bus_cycle = nes.cpu_bus_cycle.wrapping_add(1);
+                nes.cycles = nes.cycles.wrapping_add(1);
                 if let Some(cart) = nes.cartridge.as_mut() {
-                    cart.cpu_clock(nes.cpu_bus_cycle);
+                    cart.cpu_clock(nes.cycles);
                 }
                 nes.open_bus.step();
             }
@@ -630,7 +619,7 @@ impl Nes {
                     &mut nes.oam_dma_request,
                     &mut nes.open_bus,
                     None,
-                    &mut nes.cpu_bus_cycle,
+                    &mut nes.cycles,
                     &mut nes.master_clock,
                     nes.ppu_offset,
                     nes.clock_start_count,
@@ -649,7 +638,7 @@ impl Nes {
         // Align to even CPU cycle when requested stall is non-zero. The first
         // cycle is idle when starting on an odd CPU cycle; the PRG read occurs
         // on the following (even) cycle.
-        if (self.cpu_bus_cycle & 1) == 1 {
+        if (self.cycles & 1) == 1 {
             run_cycle(self, None, &mut frame_advanced);
         }
 

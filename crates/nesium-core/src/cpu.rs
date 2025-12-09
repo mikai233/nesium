@@ -20,6 +20,8 @@ mod lookup;
 mod micro_op;
 mod mnemonic;
 
+// pub static CpuPtr: AtomicPtr<Cpu> = AtomicPtr::new(std::ptr::null_mut());
+
 /// Lightweight CPU register snapshot used for tracing/debugging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuSnapshot {
@@ -107,12 +109,12 @@ impl OamDma {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cpu {
     // Registers
-    a: u8,     //Accumulator
-    x: u8,     //X Index Register
-    y: u8,     //Y Index Register
-    s: u8,     //Stack Pointer
-    p: Status, //Processor Status
-    pc: u16,   //Program Counter
+    pub(crate) a: u8,     //Accumulator
+    pub(crate) x: u8,     //X Index Register
+    pub(crate) y: u8,     //Y Index Register
+    pub(crate) s: u8,     //Stack Pointer
+    pub(crate) p: Status, //Processor Status
+    pub(crate) pc: u16,   //Program Counter
 
     opcode_in_flight: Option<u8>,
     /// Effective I flag used for interrupt gating (true = IRQs masked).
@@ -132,12 +134,13 @@ pub struct Cpu {
     branch_taken_defer_irq: bool,
     /// Previous sampled NMI line level (for edge detection).
     prev_nmi_line: bool,
-    /// Latched NMI event set on rising edge, cleared only when NMI is taken.
-    nmi_latch: bool,
+    /// NMI pending flag set on rising edge, consumed when NMI is taken.
+    nmi_pending: bool,
+    /// Previous cycle's pending flag, used to delay NMI by one instruction boundary.
+    prev_nmi_pending: bool,
     index: u8,
     base: u8,
     effective_addr: u16,
-    cycles: u64,
     oam_dma: Option<OamDma>,
 }
 
@@ -159,11 +162,11 @@ impl Cpu {
             allow_irq_once: false,
             branch_taken_defer_irq: false,
             prev_nmi_line: false,
-            nmi_latch: false,
+            nmi_pending: false,
+            prev_nmi_pending: false,
             index: 0,
             base: 0,
             effective_addr: 0,
-            cycles: 0,
             oam_dma: None,
         }
     }
@@ -175,6 +178,7 @@ impl Cpu {
     ///
     /// It also clears internal state used by instruction execution.
     pub(crate) fn reset(&mut self, bus: &mut impl Bus) {
+        // CpuPtr.store(self as *mut _, std::sync::atomic::Ordering::Release);
         // Read the reset vector from memory ($FFFC-$FFFD)
         let lo = bus.peek(RESET_VECTOR_LO);
         let hi = bus.peek(RESET_VECTOR_HI);
@@ -182,7 +186,7 @@ impl Cpu {
 
         // Reset other state
         self.s = 0xFD; // Stack pointer is initialized to $FD
-        self.p = Status::from_bits_truncate(0x34); // IRQ disabled
+        self.p = Status::INTERRUPT;
         self.opcode_in_flight = None;
         self.irq_masked = self.p.i();
         self.pending_irq_mask = None;
@@ -190,10 +194,10 @@ impl Cpu {
         self.allow_irq_once = false;
         self.branch_taken_defer_irq = false;
         self.prev_nmi_line = false;
-        self.nmi_latch = false;
+        self.nmi_pending = false;
+        self.prev_nmi_pending = false;
         self.index = 0;
         self.effective_addr = 0;
-        self.cycles = 0;
         self.oam_dma = None;
         for _ in 0..8 {
             bus.internal_cycle();
@@ -201,10 +205,18 @@ impl Cpu {
     }
 
     pub(crate) fn clock(&mut self, bus: &mut dyn Bus) {
-        // Sample the NMI line every CPU cycle and latch on rising edge.
+        // Propagate the current pending flag to `prev_nmi_pending` so that
+        // NMI is effectively delayed by one instruction boundary, matching
+        // the NES/Mesen behaviour where the interrupt lines are sampled on
+        // the "second-to-last" cycle.
+        self.prev_nmi_pending = self.nmi_pending;
+
+        // Sample the NMI line every CPU cycle and set `nmi_pending` on
+        // a rising edge. The pending flag is only consumed when an NMI
+        // is actually serviced.
         let nmi_line = bus.nmi_line();
         if nmi_line && !self.prev_nmi_line {
-            self.nmi_latch = true;
+            self.nmi_pending = true;
         }
         self.prev_nmi_line = nmi_line;
 
@@ -214,7 +226,6 @@ impl Cpu {
         }
 
         if self.handle_oam_dma(bus) {
-            self.cycles = self.cycles.wrapping_add(1);
             return;
         }
 
@@ -226,9 +237,6 @@ impl Cpu {
                 // micro-op (index 1) so that NMI can "interrupt" BRK and still push
                 // a status byte with the B flag set.
                 if opcode == 0x00 && self.index == 1 && self.sample_interrupts(bus) {
-                    tracing::debug!("sample interrupts");
-                    bus.internal_cycle();
-                    self.cycles = self.cycles.wrapping_add(1);
                     return;
                 }
 
@@ -243,8 +251,6 @@ impl Cpu {
             // No instruction in flight: first service any pending interrupts, then fetch.
             None => {
                 if self.sample_interrupts(bus) {
-                    bus.internal_cycle();
-                    self.cycles = self.cycles.wrapping_add(1);
                     return;
                 }
                 let opcode = self.fetch_opcode(bus);
@@ -253,7 +259,7 @@ impl Cpu {
                 self.pre_exec(instr);
             }
         }
-        self.cycles = self.cycles.wrapping_add(1);
+        // self.cycles = self.cycles.wrapping_add(1);
     }
 
     #[cfg(test)]
@@ -261,7 +267,6 @@ impl Cpu {
         self.opcode_in_flight = Some(instr.opcode());
         self.incr_pc(); // Fetch opcode
         let mut cycles = 1; // Fetch opcode has 1 cycle
-        self.cycles = self.cycles.wrapping_add(1);
         self.pre_exec(instr);
         while self.index() < instr.len() {
             let op = &instr[self.index()];
@@ -282,7 +287,6 @@ impl Cpu {
             );
             self.post_exec(instr);
             cycles += 1;
-            self.cycles = self.cycles.wrapping_add(1);
         }
         cycles
     }
@@ -306,7 +310,6 @@ impl Cpu {
             // regardless of the addressing mode. Then, advance the PC past the data byte.
             Addressing::Immediate => {
                 self.effective_addr = self.pc;
-                self.incr_pc();
             }
 
             // Accumulator Addressing:
@@ -357,8 +360,10 @@ impl Cpu {
         // *already been incremented* by the previous function call's logic.
         // Therefore, index() here represents the total number of cycles executed so far
         // (excluding the Opcode Fetch cycle).
-
         match instr.addressing {
+            Addressing::Immediate => {
+                self.incr_pc();
+            }
             Addressing::Absolute => {
                 // JMP Absolute (3 total cycles, 2 addressing cycles after fetch):
                 // The jump must occur immediately upon fetching the final address byte.
@@ -409,7 +414,7 @@ impl Cpu {
         if let Some(dma) = self.oam_dma.as_mut() {
             dma.stall_cycle();
         }
-        self.cycles = self.cycles.wrapping_add(1);
+        // self.cycles = self.cycles.wrapping_add(1);
     }
 
     fn apply_pending_irq_mask(&mut self) {
@@ -429,7 +434,7 @@ impl Cpu {
         if self.opcode_in_flight.is_none()
             && let Some(page) = bus.take_oam_dma_request()
         {
-            let start_on_odd_cycle = (self.cycles & 1) == 1;
+            let start_on_odd_cycle = (bus.cycles() & 1) == 1;
             let mut dma = OamDma::new(page, start_on_odd_cycle);
             let done = dma.step(bus);
             self.oam_dma = if done { None } else { Some(dma) };
@@ -476,11 +481,16 @@ impl Cpu {
     }
 
     fn service_nmi(&mut self, bus: &mut dyn Bus) -> bool {
-        if !self.nmi_latch {
+        // Only service NMI when the pending flag from the previous cycle is set,
+        // which matches the Mesen/NES behaviour of delaying NMI by one cycle
+        // (effectively one instruction boundary).
+        if !self.prev_nmi_pending {
             return false;
         }
-        // Clear the latch only when we actually take NMI.
-        self.nmi_latch = false;
+        // Clear the current pending flag so we don't immediately retrigger
+        // until a new rising edge is observed.
+        self.nmi_pending = false;
+
         // If an NMI overlaps a BRK instruction, hardware behaviour is that the
         // stacked status byte has the B flag set. Approximate this by using
         // the BRK-style push when BRK is the instruction currently in flight.
@@ -501,6 +511,10 @@ impl Cpu {
         vector_hi: u16,
         set_break: bool,
     ) {
+        // Dummy read
+        bus.mem_read(self.pc);
+        bus.mem_read(self.pc);
+
         let pc_hi = (self.pc >> 8) as u8;
         let pc_lo = self.pc as u8;
 
@@ -601,12 +615,12 @@ impl Cpu {
         self.allow_irq_once = false;
         self.branch_taken_defer_irq = false;
         self.prev_nmi_line = false;
-        self.nmi_latch = false;
+        self.nmi_pending = false;
+        self.prev_nmi_pending = false;
         self.index = 0;
         self.opcode_in_flight = None;
         self.base = 0;
         self.effective_addr = 0;
-        self.cycles = 0;
         self.oam_dma = None;
     }
 

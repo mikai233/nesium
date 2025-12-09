@@ -265,7 +265,7 @@ impl Mnemonic {
 
                     // Set P register (0x20 UNUSED flag must be restored/set)
                     cpu.p = Status::from_bits_truncate(p_bits);
-                    cpu.p.set_u(true); // Always set UNUSED flag (B/0x10 is ignored/removed by from_bits_truncate)
+                    cpu.p.set_u(false);
                     cpu.p.set_b(false);
                     // I flag restored by RTI should also flow through the IRQ
                     // gating pipeline with instruction-boundary latency.

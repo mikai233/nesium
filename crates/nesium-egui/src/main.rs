@@ -1,15 +1,54 @@
 mod app;
 mod trace;
 
-use std::{env, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 use anyhow::{Result, anyhow};
 use app::{AppConfig, NesiumApp};
 use eframe::egui;
 use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use trace::{run_frame_report, run_trace};
+use tracing::Level;
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::FmtSubscriber;
+
+fn init_tracing() -> WorkerGuard {
+    // 确保每次运行都从一个新的日志文件开始（覆盖旧内容）
+    let _ = fs::remove_file("nesium_ppu_boot.log");
+
+    // non-blocking 的文件 appender
+    let file_appender = tracing_appender::rolling::never(".", "nesium_ppu_boot.log");
+    let (non_blocking_writer, guard) =
+        tracing_appender::non_blocking::NonBlockingBuilder::default()
+            .lossy(false) // 关闭丢弃，缓冲区满时阻塞
+            .buffered_lines_limit(1024 * 10) // 增大缓冲区
+            .finish(file_appender);
+
+    // 只要“消息本身”：不要时间、不要 level、不要 target
+    let format = tracing_subscriber::fmt::format()
+        .without_time()
+        .with_level(false)
+        .with_target(false);
+
+    // 只输出到文件，不输出到控制台
+    let subscriber = FmtSubscriber::builder()
+        .event_format(format)
+        .with_max_level(Level::DEBUG)
+        .with_ansi(false) // 禁止颜色
+        .with_file(false) // 不输出文件名
+        .with_line_number(false) // 不输出行号
+        .with_env_filter("nesium_core=debug")
+        .with_thread_ids(false) // 不输出线程 id
+        .with_thread_names(false) // 不输出线程名
+        .with_writer(non_blocking_writer) // 写入文件（non-blocking）
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set subscriber");
+    guard
+}
 
 fn main() -> Result<()> {
+    // let _guard = init_tracing();
     let args = parse_args()?;
 
     if let Some(log_path) = args.trace_log {

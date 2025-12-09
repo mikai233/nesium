@@ -23,7 +23,7 @@ pub struct CpuBus<'a> {
     open_bus: &'a mut OpenBus,
     mixer: Option<&'a mut NesSoundMixer>,
     /// Approximate CPU bus cycle counter (increments per bus access).
-    cpu_cycle_counter: &'a mut u64,
+    cycles: &'a mut u64,
     /// Master clock in master cycles (PPU = 4 mc, CPU = 12 mc).
     master_clock: &'a mut u64,
     /// CPU/PPU phase offset in master cycles.
@@ -47,7 +47,7 @@ impl<'a> CpuBus<'a> {
         oam_dma_request: &'a mut Option<u8>,
         open_bus: &'a mut OpenBus,
         mixer: Option<&'a mut NesSoundMixer>,
-        cpu_cycle_counter: &'a mut u64,
+        cycles: &'a mut u64,
         master_clock: &'a mut u64,
         ppu_offset: u8,
         clock_start_count: u8,
@@ -63,7 +63,7 @@ impl<'a> CpuBus<'a> {
             oam_dma_request,
             open_bus,
             mixer,
-            cpu_cycle_counter,
+            cycles,
             master_clock,
             ppu_offset,
             clock_start_count,
@@ -84,7 +84,7 @@ impl<'a> CpuBus<'a> {
 
     /// Current CPU cycle counter (increments per bus access).
     pub fn cpu_cycles(&self) -> u64 {
-        *self.cpu_cycle_counter
+        *self.cycles
     }
 
     /// CPU-visible read used by the DMC sample fetch path.
@@ -129,19 +129,16 @@ impl<'a> CpuBus<'a> {
 
     /// Tick the PPU once, wiring CHR accesses through the currently inserted cartridge.
     pub fn clock_ppu(&mut self) {
-        let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
+        let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
         self.ppu.clock(&mut pattern);
-        // Keep shared master clock aligned to the PPU's master timeline plus phase offset.
-        *self.master_clock = self
-            .ppu
-            .master_clock()
-            .saturating_add(self.ppu_offset as u64);
     }
 
     /// Advances master clock and runs the PPU to catch up.
     fn bump_master_clock(&mut self, delta: u8) {
         *self.master_clock = self.master_clock.wrapping_add(delta as u64);
-        let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
+        // CPU_MASTER.set(*self.master_clock);
+        // CPU_CYCLE.set(*self.cycles);
+        let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
         // Apply CPU/PPU phase offset before running the PPU.
         let ppu_target = self.master_clock.saturating_sub(self.ppu_offset as u64);
         self.ppu.run_until(ppu_target, &mut pattern);
@@ -153,12 +150,11 @@ impl<'a> CpuBus<'a> {
         } else {
             self.clock_start_count.saturating_add(1)
         };
+        *self.cycles = self.cycles.wrapping_add(1);
         self.bump_master_clock(start_delta);
 
-        // Book-keeping for this CPU cycle (mapper clocks, open-bus decay, APU tick).
-        *self.cpu_cycle_counter = self.cpu_cycle_counter.wrapping_add(1);
         if let Some(cart) = self.cartridge.as_mut() {
-            cart.cpu_clock(*self.cpu_cycle_counter);
+            cart.cpu_clock(*self.cycles);
         }
         self.open_bus.step();
 
@@ -234,7 +230,7 @@ impl<'a> CpuBus<'a> {
 
     fn write_cartridge(&mut self, addr: u16, value: u8) {
         if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.cpu_write(addr, value, *self.cpu_cycle_counter);
+            cart.cpu_write(addr, value, *self.cycles);
         }
     }
 
@@ -285,8 +281,7 @@ impl Bus for CpuBus<'_> {
                 self.read_internal_ram(addr)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
-                let mut pattern =
-                    PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
+                let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
                 self.ppu.cpu_read(addr, &mut pattern)
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
@@ -337,8 +332,7 @@ impl Bus for CpuBus<'_> {
                 self.read_internal_ram(addr)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
-                let mut pattern =
-                    PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
+                let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
                 self.ppu.cpu_read(addr, &mut pattern)
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
@@ -395,18 +389,17 @@ impl Bus for CpuBus<'_> {
                 self.write_internal_ram(addr, data)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
-                let mut pattern =
-                    PatternBus::new(self.cartridge.as_deref_mut(), *self.cpu_cycle_counter);
+                let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
                 self.ppu.cpu_write(addr, data, &mut pattern)
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
-                self.apu.cpu_write(addr, data, *self.cpu_cycle_counter)
+                self.apu.cpu_write(addr, data, *self.cycles)
             }
             ppu_mem::OAM_DMA => self.write_oam_dma(data),
-            cpu_mem::APU_STATUS => self.apu.cpu_write(addr, data, *self.cpu_cycle_counter),
+            cpu_mem::APU_STATUS => self.apu.cpu_write(addr, data, *self.cycles),
             apu_mem::FRAME_COUNTER => {
                 // $4017 doubles as both controller port 2 and the APU frame counter.
-                self.apu.cpu_write(addr, data, *self.cpu_cycle_counter);
+                self.apu.cpu_write(addr, data, *self.cycles);
                 self.log_serial_bit(data);
                 for ctrl in self.controllers.iter_mut() {
                     ctrl.write_strobe(data);
@@ -445,6 +438,10 @@ impl Bus for CpuBus<'_> {
     fn clear_irq(&mut self) {
         self.apu.clear_irq();
         self.clear_cartridge_irq();
+    }
+
+    fn cycles(&self) -> u64 {
+        *self.cycles
     }
 }
 

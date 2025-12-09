@@ -62,4 +62,6 @@ pub trait Bus: Debug {
 
     /// Clears the IRQ sources that have been serviced.
     fn clear_irq(&mut self) {}
+
+    fn cycles(&self) -> u64;
 }

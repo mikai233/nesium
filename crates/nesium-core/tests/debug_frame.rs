@@ -20,8 +20,8 @@ use nesium_core::{
 pub fn dump_instruction_trace<P: AsRef<Path>, Q: AsRef<Path>>(
     rom_path: P,
     out_path: Q,
-    start_frame: u64,
-    end_frame: u64,
+    start_frame: u32,
+    end_frame: u32,
     max_instructions: usize,
 ) {
     let mut nes = Nes::default();

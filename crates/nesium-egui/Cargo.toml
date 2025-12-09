@@ -15,3 +15,5 @@ fontdb.workspace = true
 ttf-parser.workspace = true
 cpal.workspace = true
 tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

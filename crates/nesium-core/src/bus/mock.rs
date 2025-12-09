@@ -19,4 +19,8 @@ impl Bus for MockBus {
     }
 
     fn internal_cycle(&mut self) {}
+
+    fn cycles(&self) -> u64 {
+        0
+    }
 }
