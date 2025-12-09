@@ -431,7 +431,6 @@ fn full_palette_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn instr_misc_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
