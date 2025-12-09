@@ -56,6 +56,106 @@ This emulator’s design and implementation draw heavily from the excellent Mese
 ## Accuracy notes
 - **Open bus (Mesen2-style)**: CPU bus keeps a decaying latch (~1s of CPU cycles) and feeds it back for write-only/unmapped reads ($4000-$4013, $4014 read, $4018-$401F, or no cartridge PRG space). PPU register traffic refreshes the latch so Blargg/Mesen2 open-bus expectations hold.
 
+## Test ROM status
+
+Nesium integrates a large number of NES test ROM suites (via `rom_suites.rs`) to validate CPU, PPU, APU, and mapper behaviour. The tables below summarize which suites currently pass automatically, which are interactive/manual, and which are still marked as failing/ignored and need more work.
+
+Legend:
+
+- ✅: Enabled automated tests (no `#[ignore]`) that currently pass  
+- ❌: Tests marked with `#[ignore = "this test fails and needs investigation"]`  
+- 🔶: Interactive/manual ROMs (e.g., controller/visual tests)  
+- 🛠: Debug-only helper tests, not counted toward pass/fail  
+
+### Automatically passing ROM suites (✅)
+
+These suites run as part of the automated test harness and currently pass using the TV hash / zero-page result protocols.
+
+| Suite name                  | ROM path / directory                                    | Notes                                        |
+| --------------------------- | ------------------------------------------------------- | -------------------------------------------- |
+| `_240pee_suite`             | `240pee/240pee-bnrom.nes`, `240pee/240pee.nes`          | TV colour diversity / timing test            |
+| `mmc1_a12_suite`            | `MMC1_A12/mmc1_a12.nes`                                 | MMC1 A12 line behaviour                      |
+| `apu_mixer_suite`           | `apu_mixer/*.nes`                                       | APU mixer / TASVideos test set               |
+| `apu_reset_suite`           | `apu_reset/*.nes`                                       | APU reset behaviour                          |
+| `branch_timing_tests_suite` | `branch_timing_tests/*.nes`                             | Branch instruction timing (zero-page result) |
+| `cpu_dummy_reads_suite`     | `cpu_dummy_reads/cpu_dummy_reads.nes`                   | CPU dummy read behaviour                     |
+| `cpu_dummy_writes_suite`    | `cpu_dummy_writes/*.nes`                                | CPU dummy write behaviour                    |
+| `cpu_timing_test6_suite`    | `cpu_timing_test6/cpu_timing_test.nes`                  | TASVideos CPU timing (TV SHA1)               |
+| `instr_misc_suite`          | `instr_misc/*.nes`                                      | Misc instruction behaviour                   |
+| `instr_test_v3_suite`       | `instr_test-v3/*.nes`                                   | Blargg instruction test v3                   |
+| `instr_test_v5_suite`       | `instr_test-v5/*.nes`                                   | Blargg instruction test v5                   |
+| `instr_timing_suite`        | `instr_timing/*.nes`                                    | Instruction timing                           |
+| `nes_instr_test_suite`      | `nes_instr_test/*.nes`                                  | Additional instruction behaviour tests       |
+| `ny2011_suite`              | `ny2011/ny2011.nes`                                     | Visual diversity / timing                    |
+| `oam_read_suite`            | `oam_read/oam_read.nes`                                 | OAM read behaviour                           |
+| `oam_stress_suite`          | `oam_stress/oam_stress.nes`                             | OAM stress / overflow conditions             |
+| `spritecans_2011_suite`     | `spritecans-2011/spritecans.nes`                        | Visual diversity / sprite stress             |
+| `stomper_suite`             | `stomper/smwstomp.nes`                                  | Visual diversity / timing                    |
+| `tutor_suite`               | `tutor/tutor.nes`                                       | Visual diversity / reference demo            |
+| `window5_suite`             | `window5/colorwin_ntsc.nes`, `window5/colorwin_pal.nes` | Colour windowing tests (NTSC/PAL)            |
+
+### Interactive / manual ROMs (🔶)
+
+These ROMs are designed for interactive/manual verification and do not expose a simple $6000 state byte or TV hash protocol. They are wired into the test harness but kept under `#[ignore]` and should be checked by hand.
+
+| Suite name             | ROM path / directory         | Notes                                                                               |
+| ---------------------- | ---------------------------- | ----------------------------------------------------------------------------------- |
+| `paddletest3_manual`   | `PaddleTest3/PaddleTest.nes` | Paddle/analog controller test; follow ROM `Info.txt` for instructions               |
+| `tvpassfail_manual`    | `tvpassfail/tv.nes`          | TV characteristics (NTSC chroma/luma, artifacts); verify visually                   |
+| `vaus_test_manual`     | `vaus-test/vaus-test.nes`    | Arkanoid Vaus controller test (interactive)                                         |
+| `vbl_nmi_timing_suite` | `vbl_nmi_timing/*.nes`       | VBL/NMI timing; currently treated as manual, even though a zeropage protocol exists |
+
+### Failing / ignored ROM suites (❌)
+
+The following suites are currently marked with `#[ignore = "this test fails and needs investigation"]`. They highlight areas where Nesium’s behaviour still diverges from reference emulators and hardware.
+
+| Suite name                           | ROM directory / example path                  | Notes                                        |
+| ------------------------------------ | --------------------------------------------- | -------------------------------------------- |
+| `apu_test_suite`                     | `apu_test/*.nes`                              | APU accuracy tests (including `rom_singles`) |
+| `blargg_apu_2005_07_30_suite`        | `blargg_apu_2005.07.30/*.nes`                 | Early Blargg APU tests                       |
+| `blargg_litewall_suite`              | `blargg_litewall/*.nes`                       | Litewall / timing-related tests              |
+| `blargg_nes_cpu_test5_suite`         | `blargg_nes_cpu_test5/*.nes`                  | CPU precision tests                          |
+| `blargg_ppu_tests_2005_09_15b_suite` | `blargg_ppu_tests_2005.09.15b/*.nes`          | PPU palette/VRAM/scrolling behaviour         |
+| `cpu_exec_space_suite`               | `cpu_exec_space/*.nes`                        | CPU exec space tests (APU/PPU I/O)           |
+| `cpu_interrupts_v2_suite`            | `cpu_interrupts_v2/*.nes`                     | NMI/IRQ/BRK/DMA interrupt timing             |
+| `cpu_reset_suite`                    | `cpu_reset/*.nes`                             | Post-reset RAM/register state                |
+| `dmc_dma_during_read4_suite`         | `dmc_dma_during_read4/*.nes`                  | DMC DMA interaction with CPU read cycles     |
+| `dmc_tests_suite`                    | `dmc_tests/*.nes`                             | DMC buffer/delay/IRQ behaviour               |
+| `dpcmletterbox_suite`                | `dpcmletterbox/dpcmletterbox.nes`             | DPCM-related visual/audio test               |
+| `exram_suite`                        | `exram/mmc5exram.nes`                         | MMC5 ExRAM behaviour (currently failing)     |
+| `full_palette_suite`                 | `full_palette/*.nes`                          | Full palette rendering and emphasis tests    |
+| `m22chrbankingtest_suite`            | `m22chrbankingtest/0-127.nes`                 | Mapper 22 CHR banking behaviour              |
+| `mmc3_irq_tests_suite`               | `mmc3_irq_tests/*.nes`                        | MMC3 IRQ behaviour                           |
+| `mmc3_test_suite`                    | `mmc3_test/*.nes`                             | MMC3/MMC6 functional tests                   |
+| `mmc3_test_2_suite`                  | `mmc3_test_2/rom_singles/*.nes`               | Second MMC3 test set                         |
+| `mmc5test_suite`                     | `mmc5test/mmc5test.nes`                       | MMC5 functional tests                        |
+| `mmc5test_v2_suite`                  | `mmc5test_v2/mmc5test.nes`                    | MMC5 test set v2                             |
+| `nes15_1_0_0_suite`                  | `nes15-1.0.0/nes15-NTSC.nes`, `nes15-PAL.nes` | `nes15` series tests (NTSC/PAL)              |
+| `nmi_sync_suite`                     | `nmi_sync/demo_ntsc.nes`, `demo_pal.nes`      | NMI sync behaviour                           |
+| `nrom368_suite`                      | `nrom368/*.nes`                               | NROM-368 mapping tests                       |
+| `other_suite`                        | `other/*.nes`                                 | Misc demos/tests bundled with nes-test-roms  |
+| `pal_apu_tests_suite`                | `pal_apu_tests/*.nes`                         | PAL APU behaviour                            |
+| `ppu_open_bus_suite`                 | `ppu_open_bus/ppu_open_bus.nes`               | PPU open-bus behaviour                       |
+| `ppu_read_buffer_suite`              | `ppu_read_buffer/test_ppu_read_buffer.nes`    | PPU read buffer behaviour                    |
+| `ppu_vbl_nmi_suite`                  | `ppu_vbl_nmi/*.nes`                           | PPU VBL/NMI timing                           |
+| `read_joy3_suite`                    | `read_joy3/*.nes`                             | Controller read timing                       |
+| `scanline_suite`                     | `scanline/scanline.nes`                       | Scanline timing                              |
+| `scanline_a1_suite`                  | `scanline-a1/scanline.nes`                    | Alternate scanline tests                     |
+| `scrolltest_suite`                   | `scrolltest/scroll.nes`                       | Scrolling behaviour                          |
+| `sprdma_and_dmc_dma_suite`           | `sprdma_and_dmc_dma/*.nes`                    | Sprite DMA and DMC DMA interaction           |
+| `sprite_hit_tests_2005_10_05_suite`  | `sprite_hit_tests_2005.10.05/*.nes`           | Sprite 0 hit timing and edge cases           |
+| `sprite_overflow_tests_suite`        | `sprite_overflow_tests/*.nes`                 | Sprite overflow behaviour                    |
+| `volume_tests_suite`                 | `volume_tests/volumes.nes`                    | Volume/mixing behaviour                      |
+
+### Debug helper tests (🛠)
+
+These helpers are wired to specific ROMs and used for local debugging (e.g., logging APU state). They are not treated as pass/fail for emulator accuracy.
+
+| Test name                      | Purpose                                       |
+| ------------------------------ | --------------------------------------------- |
+| `apu_reset_4017_timing_debug`  | Debug helper for `apu_reset/4017_timing.nes`  |
+| `apu_reset_4017_written_debug` | Debug helper for `apu_reset/4017_written.nes` |
+
 ## Disclaimer
 
 This project is a fan-made, non-commercial emulator intended for educational and preservation purposes. It is not affiliated with, endorsed, or sponsored by Nintendo or any other rights holder. You are solely responsible for complying with local laws and for ensuring that any ROMs or other copyrighted content you use with this emulator are obtained and used legally (for example, from cartridges you personally own).
