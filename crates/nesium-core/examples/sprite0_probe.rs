@@ -1,4 +1,4 @@
-use nesium_core::Nes;
+use nesium_core::{Nes, ppu::sprite0_hit_debug::Sprite0HitDebug};
 use std::{env, path::Path};
 
 fn main() -> anyhow::Result<()> {
@@ -13,7 +13,7 @@ fn main() -> anyhow::Result<()> {
     let mut nes = Nes::default();
     nes.load_cartridge_from_file(Path::new(&rom))?;
 
-    let mut last_hit: Option<nesium_core::ppu::Sprite0HitDebug> = None;
+    let mut last_hit: Option<Sprite0HitDebug> = None;
     for _ in 0..frames {
         nes.run_frame(false);
         last_hit = nes.sprite0_hit_pos();

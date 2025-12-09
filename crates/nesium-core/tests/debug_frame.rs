@@ -7,6 +7,7 @@ use std::{
 use nesium_core::{
     CpuSnapshot, Nes,
     cpu::{addressing::Addressing, opcode_meta},
+    ppu::nmi_debug_state::NmiDebugState,
 };
 
 /// Instruction-level trace in a Mesen-like format:
@@ -113,7 +114,7 @@ fn fmt_p_flags(p: u8) -> String {
     format!("{n}{v}--{d}{i}{z}{c}")
 }
 
-fn cpu_cycle_in_frame(nmi_dbg: &nesium_core::ppu::NmiDebugState) -> u64 {
+fn cpu_cycle_in_frame(nmi_dbg: &NmiDebugState) -> u64 {
     // Mesen reports CPU cycles within the current frame; it counts PPU dots from 1.
     const DOTS_PER_SCANLINE: i64 = 341;
     const SCANLINES_PER_FRAME: i64 = 262;

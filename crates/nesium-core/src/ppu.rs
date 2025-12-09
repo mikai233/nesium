@@ -32,8 +32,13 @@ pub mod palette;
 
 mod background_pipeline;
 pub mod buffer;
+pub mod nmi_debug_state;
+mod open_bus;
+pub(crate) mod pattern_bus;
+mod pending_vram_increment;
 mod registers;
 mod sprite;
+pub mod sprite0_hit_debug;
 mod sprite_pipeline;
 mod sprite_state;
 
@@ -45,133 +50,32 @@ use self::{
 
 use core::fmt;
 
-use crate::cartridge::mapper::NametableTarget;
 use crate::{
     cartridge::Cartridge,
     mem_block::ppu::{SecondaryOamRam, Vram},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
         buffer::FrameBuffer,
+        nmi_debug_state::NmiDebugState,
         palette::{Palette, PaletteRam},
+        pattern_bus::PatternBus,
+        pending_vram_increment::PendingVramIncrement,
         registers::{Control, Mask, Registers, Status, VramAddr},
         sprite::SpriteView,
+        sprite0_hit_debug::{Sprite0HitDebug, Sprite0HitPos},
     },
 };
+use crate::{cartridge::mapper::NametableTarget, ppu::open_bus::PpuOpenBus};
 
 // thread_local! {
 //    pub static CPU_MASTER:Cell<u64> = Cell::new(0);
 //    pub static CPU_CYCLE:Cell<u64> =Cell::new(0);
 // }
 
-/// Minimal PPU timing/debug snapshot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NmiDebugState {
-    pub nmi_output: bool,
-    pub nmi_pending: bool,
-    pub scanline: i16,
-    pub cycle: u16,
-    pub frame: u32,
-}
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + post + vblank (241..260)
-/// Captures the position of the first sprite-0 hit in the current frame (debug).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Sprite0HitPos {
-    pub scanline: i16,
-    pub cycle: u16,
-}
-
-/// Debug info captured on the first sprite-0 hit of a frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Sprite0HitDebug {
-    pub pos: Sprite0HitPos,
-    pub oam: [u8; 4],
-}
-
-/// PPU-local open-bus latch with per-bit decay.
-///
-/// Mirrors Mesen2's `_openBus` / `_openBusDecayStamp` behaviour, using the
-/// PPU frame counter as the decay time base. The interface is modeled after
-/// NesPpu::SetOpenBus / NesPpu::ApplyOpenBus.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct PpuOpenBus {
-    value: u8,
-    decay_stamp: [u32; 8],
-}
-
-impl PpuOpenBus {
-    fn new() -> Self {
-        Self {
-            value: 0,
-            decay_stamp: [0; 8],
-        }
-    }
-
-    fn reset(&mut self) {
-        self.value = 0;
-        self.decay_stamp = [0; 8];
-    }
-
-    /// Equivalent to Mesen2's `SetOpenBus(mask, value)`.
-    fn set(&mut self, mut mask: u8, mut value: u8, frame: u32) {
-        // Fast path: full overwrite of the bus.
-        if mask == 0xFF {
-            self.value = value;
-            for stamp in &mut self.decay_stamp {
-                *stamp = frame;
-            }
-            return;
-        }
-
-        // Same rolling 16-bit trick as Mesen: shift the current value into
-        // the high byte and rotate it down as we walk the bits.
-        let mut open_bus: u16 = (self.value as u16) << 8;
-
-        for bit in 0..8 {
-            // Shift one bit down so the new bit enters at bit 7.
-            open_bus >>= 1;
-
-            if (mask & 0x01) != 0 {
-                // This bit is actively driven by `value`.
-                if (value & 0x01) != 0 {
-                    open_bus |= 0x80;
-                } else {
-                    open_bus &= 0xFF7F;
-                }
-                self.decay_stamp[bit] = frame;
-            } else {
-                // This bit is coming from the existing open-bus state; if
-                // it hasn't been refreshed for more than ~3 frames, it
-                // decays to 0.
-                if frame.wrapping_sub(self.decay_stamp[bit]) > 3 {
-                    open_bus &= 0xFF7F;
-                }
-            }
-
-            value >>= 1;
-            mask >>= 1;
-        }
-
-        self.value = open_bus as u8;
-    }
-
-    /// Equivalent to Mesen2's `ApplyOpenBus(mask, value)`.
-    ///
-    /// This updates the decay stamps (via `set(!mask, value)`) and then
-    /// returns a value whose `mask`ed bits are taken from the open-bus
-    /// latch and the rest from `value`.
-    fn apply(&mut self, mask: u8, value: u8, frame: u32) -> u8 {
-        self.set(!mask, value, frame);
-        value | (self.value & mask)
-    }
-
-    /// Returns the latched open-bus value without affecting decay.
-    fn sample(&self) -> u8 {
-        self.value
-    }
-}
 
 /// Entry points for the CPU PPU register mirror.
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -239,97 +143,6 @@ enum ScrollGlitchSource {
     Addr2006,
 }
 
-/// Temporary view that lets the PPU reach the cartridge CHR space without storing a raw pointer.
-///
-/// The bus creates one of these per PPU call, so lifetimes remain explicit and borrow-checked.
-#[derive(Default)]
-pub struct PatternBus<'a> {
-    cartridge: Option<&'a mut Cartridge>,
-    /// Snapshot of the current CPU bus cycle when this view was created.
-    cpu_cycle: u64,
-}
-
-impl<'a> PatternBus<'a> {
-    pub fn new(cartridge: Option<&'a mut Cartridge>, cpu_cycle: u64) -> Self {
-        Self {
-            cartridge,
-            cpu_cycle,
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            cartridge: None,
-            cpu_cycle: 0,
-        }
-    }
-
-    pub fn from_cartridge(cartridge: &'a mut Cartridge, cpu_cycle: u64) -> Self {
-        Self {
-            cartridge: Some(cartridge),
-            cpu_cycle,
-        }
-    }
-
-    fn cpu_cycle(&self) -> u64 {
-        self.cpu_cycle
-    }
-
-    fn read(
-        &mut self,
-        addr: u16,
-        ctx: crate::cartridge::mapper::PpuVramAccessContext,
-    ) -> Option<u8> {
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.ppu_vram_access(addr, ctx);
-            cart.ppu_read(addr)
-        } else {
-            None
-        }
-    }
-
-    fn write(
-        &mut self,
-        addr: u16,
-        value: u8,
-        ctx: crate::cartridge::mapper::PpuVramAccessContext,
-    ) -> bool {
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.ppu_vram_access(addr, ctx);
-            cart.ppu_write(addr, value);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn map_nametable(&self, addr: u16) -> NametableTarget {
-        if let Some(cart) = self.cartridge.as_deref() {
-            cart.map_nametable(addr)
-        } else {
-            // No cartridge: treat nametable area as a simple 2 KiB CIRAM window.
-            let base = addr & 0x0FFF;
-            let offset = base & 0x07FF;
-            NametableTarget::Ciram(offset)
-        }
-    }
-
-    fn mapper_nametable_read(&self, offset: u16) -> Option<u8> {
-        self.cartridge
-            .as_deref()
-            .map(|cart| cart.mapper_nametable_read(offset))
-    }
-
-    fn mapper_nametable_write(&mut self, offset: u16, value: u8) -> bool {
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.mapper_nametable_write(offset, value);
-            true
-        } else {
-            false
-        }
-    }
-}
-
 impl fmt::Debug for Ppu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Ppu")
@@ -344,43 +157,6 @@ impl fmt::Debug for Ppu {
 impl Default for Ppu {
     fn default() -> Self {
         Self::new(FrameBuffer::default())
-    }
-}
-
-/// Delayed VRAM auto-increment kind after a `$2007` access.
-///
-/// Hardware supports only two increments (1 or 32), and in many cases there is
-/// no pending increment at all, so we can encode this in a compact enum instead
-/// of a separate `bool + u16` pair.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-enum PendingVramIncrement {
-    #[default]
-    None,
-    By1,
-    By32,
-}
-
-impl PendingVramIncrement {
-    fn from_control(control: Control) -> Self {
-        match control.vram_increment() {
-            1 => PendingVramIncrement::By1,
-            32 => PendingVramIncrement::By32,
-            _ => PendingVramIncrement::None,
-        }
-    }
-
-    #[inline]
-    fn is_pending(self) -> bool {
-        !matches!(self, PendingVramIncrement::None)
-    }
-
-    #[inline]
-    fn amount(self) -> u16 {
-        match self {
-            PendingVramIncrement::None => 0,
-            PendingVramIncrement::By1 => 1,
-            PendingVramIncrement::By32 => 32,
-        }
     }
 }
 
@@ -1938,6 +1714,8 @@ impl Ppu {
 
 #[cfg(test)]
 mod tests {
+    use crate::ppu::pattern_bus::PatternBus;
+
     use super::*;
 
     #[test]

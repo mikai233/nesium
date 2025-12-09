@@ -6,7 +6,7 @@ use crate::{
     controller::{Controller, SerialLogger},
     mem_block::cpu as cpu_ram,
     memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem},
-    ppu::{PatternBus, Ppu},
+    ppu::{Ppu, pattern_bus::PatternBus},
 };
 
 /// CPU-visible bus that bridges the core to RAM, the PPU, the APU, and the

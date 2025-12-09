@@ -12,7 +12,9 @@ use crate::{
     ppu::{
         Ppu,
         buffer::{ColorFormat, FrameBuffer},
+        nmi_debug_state::NmiDebugState,
         palette::{Palette, PaletteKind},
+        sprite0_hit_debug::Sprite0HitDebug,
     },
 };
 
@@ -485,12 +487,12 @@ impl Nes {
     }
 
     /// Peek first sprite-0 hit position for the current frame (debug).
-    pub fn sprite0_hit_pos(&self) -> Option<crate::ppu::Sprite0HitDebug> {
+    pub fn sprite0_hit_pos(&self) -> Option<Sprite0HitDebug> {
         self.ppu.sprite0_hit_pos()
     }
 
     /// Peek PPU NMI flags and position (tests/debug).
-    pub fn ppu_nmi_debug(&self) -> crate::ppu::NmiDebugState {
+    pub fn ppu_nmi_debug(&self) -> NmiDebugState {
         self.ppu.debug_nmi_state()
     }
 
