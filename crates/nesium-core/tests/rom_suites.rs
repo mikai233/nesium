@@ -3,7 +3,7 @@ mod common;
 use anyhow::{Context, Result};
 use common::{
     RESULT_ZP_ADDR, ROM_ROOT, STATUS_ADDR, STATUS_MESSAGE_ADDR, require_color_diversity,
-    run_rom_frames, run_rom_status, run_rom_zeropage_result,
+    run_rom_frames, run_rom_status, run_rom_tv_sha1, run_rom_zeropage_result,
 };
 use ctor::ctor;
 use nesium_core::Nes;
@@ -355,12 +355,11 @@ fn cpu_reset_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn cpu_timing_test6_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     {
         let rom = "cpu_timing_test6/cpu_timing_test.nes";
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_tv_sha1(rom, Some("No inputs -- official only"))?;
     }
     Ok(())
 }

@@ -77,6 +77,16 @@ impl Nes {
     /// Constructs a powered-on NES instance with a specified audio sample rate.
     pub fn new_with_sample_rate(format: ColorFormat, sample_rate: u32) -> Self {
         let buffer = FrameBuffer::new_color(format);
+        Self::new_with_framebuffer_and_sample_rate(buffer, sample_rate)
+    }
+
+    /// Constructs a powered-on NES instance using an explicit framebuffer configuration.
+    pub fn new_with_framebuffer(buffer: FrameBuffer) -> Self {
+        Self::new_with_framebuffer_and_sample_rate(buffer, 48_000)
+    }
+
+    /// Constructs a powered-on NES instance with a provided framebuffer and sample rate.
+    pub fn new_with_framebuffer_and_sample_rate(buffer: FrameBuffer, sample_rate: u32) -> Self {
         let mut nes = Self {
             cpu: Cpu::new(),
             ppu: Ppu::new(buffer),
