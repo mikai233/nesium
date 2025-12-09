@@ -19,6 +19,8 @@ pub enum Error {
     },
     /// Header advertises a mapper number that this core does not implement yet.
     UnsupportedMapper(u16),
+    /// PPU model id read from state/save data is not recognized.
+    UnsupportedPpuModel(u8),
     /// Palette files must contain either 192 or 256 bytes.
     InvalidPaletteSize { actual: usize },
     /// Wrapper for I/O errors raised while reading ROMs from disk.
@@ -45,6 +47,9 @@ impl fmt::Display for Error {
             ),
             Self::UnsupportedMapper(mapper) => {
                 write!(f, "mapper {mapper} is not implemented")
+            }
+            Self::UnsupportedPpuModel(id) => {
+                write!(f, "unsupported PPU model id {id}")
             }
             Self::InvalidPaletteSize { actual } => {
                 write!(f, "palette blobs must be 192 or 256 bytes (got {actual})")

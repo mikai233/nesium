@@ -36,6 +36,7 @@ pub mod nmi_debug_state;
 mod open_bus;
 pub(crate) mod pattern_bus;
 mod pending_vram_increment;
+mod ppu_model;
 mod registers;
 mod sprite;
 pub mod sprite0_hit_debug;
