@@ -4,9 +4,9 @@ use std::{fs, path::Path, time::Instant};
 
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose};
-use nesium_core::Nes;
 use nesium_core::memory::cpu as cpu_mem;
 use nesium_core::ppu::buffer::FrameBuffer;
+use nesium_core::{Nes, reset_kind::ResetKind};
 use quick_xml::{Reader, events::Event};
 use sha1::{Digest, Sha1};
 
@@ -266,7 +266,7 @@ where
                         nes.peek_cpu_byte(STATUS_ADDR)
                     );
                 }
-                nes.reset();
+                nes.reset(ResetKind::Soft);
                 reset_delay_frames = None;
             } else {
                 *counter -= 1;

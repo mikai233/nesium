@@ -13,6 +13,7 @@ use nesium_core::{
     cartridge::load_cartridge,
     controller::Button,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
+    reset_kind::ResetKind,
 };
 
 use libretro_bridge::raw::{
@@ -150,7 +151,7 @@ impl LibretroCore for DemoCore {
     }
 
     fn reset(&mut self) {
-        self.nes.reset();
+        self.nes.reset(ResetKind::Soft);
     }
 }
 

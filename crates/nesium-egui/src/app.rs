@@ -20,6 +20,7 @@ use nesium_core::{
     CpuSnapshot, Nes,
     audio::bus::AudioBusConfig,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
+    reset_kind::ResetKind,
 };
 
 use self::{
@@ -191,7 +192,7 @@ impl NesiumApp {
     }
 
     fn reset(&mut self) {
-        self.nes.reset();
+        self.nes.reset(ResetKind::Soft);
         self.paused = false;
         self.status_line = Some(self.t(TextId::StatusReset).to_string());
         for ctrl in &mut self.controllers {

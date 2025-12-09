@@ -6,7 +6,7 @@ use common::{
     run_rom_frames, run_rom_status, run_rom_tv_sha1, run_rom_zeropage_result,
 };
 use ctor::ctor;
-use nesium_core::Nes;
+use nesium_core::{Nes, reset_kind::ResetKind};
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
@@ -145,7 +145,7 @@ fn apu_reset_4017_written_debug() -> Result<()> {
         if let Some(counter) = reset_delay_frames.as_mut() {
             if *counter == 0 {
                 eprintln!("-- applying reset at frame {frame}");
-                nes.reset();
+                nes.reset(ResetKind::Soft);
                 reset_delay_frames = None;
             } else {
                 *counter -= 1;
@@ -345,7 +345,6 @@ fn cpu_interrupts_v2_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn cpu_reset_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in ["cpu_reset/ram_after_reset.nes", "cpu_reset/registers.nes"] {

@@ -16,6 +16,7 @@ use crate::{
         palette::{Palette, PaletteKind},
         sprite0_hit_debug::Sprite0HitDebug,
     },
+    reset_kind::ResetKind,
 };
 
 pub mod apu;
@@ -28,6 +29,7 @@ pub mod error;
 pub mod mem_block;
 pub mod memory;
 pub mod ppu;
+pub mod reset_kind;
 pub mod state;
 
 pub use cpu::CpuSnapshot;
@@ -117,7 +119,7 @@ impl Nes {
         // the console being turned on from a cold state (CPU/PPU/APU and RAM
         // cleared) and is distinct from subsequent warm resets triggered by
         // the user pressing the reset button.
-        nes.power_on_reset();
+        nes.reset(ResetKind::PowerOn);
         nes
     }
 
@@ -147,7 +149,7 @@ impl Nes {
         self.cartridge = Some(cartridge);
         // Inserting a new cartridge is effectively a power cycle for the
         // console, so apply a full power-on reset rather than a warm reset.
-        self.power_on_reset();
+        self.reset(ResetKind::PowerOn);
     }
 
     /// Ejects the currently inserted cartridge and resets the system.
@@ -155,20 +157,37 @@ impl Nes {
         self.cartridge = None;
         // Treat cartridge removal as a full power cycle from the core's
         // perspective so all state, including RAM, returns to power-on.
-        self.power_on_reset();
+        self.reset(ResetKind::PowerOn);
     }
 
-    /// Applies a power-on style reset: clears CPU RAM and fully reinitializes
-    /// CPU/PPU/APU, open bus, mixer state, and any attached cartridge.
-    ///
-    /// This corresponds to turning the console off and back on.
-    fn power_on_reset(&mut self) {
-        self.ram.fill(0);
-        self.ppu.reset();
-        self.apu.power_on_reset();
-        if let Some(cart) = self.cartridge.as_mut() {
-            cart.power_on();
+    /// Internal helper that applies either a power-on style reset or a warm reset
+    /// depending on `kind`. This drives CPU/PPU/APU, RAM, mixer, and mapper state
+    /// in a way that mirrors Mesen2's reset sequencing.
+    pub fn reset(&mut self, kind: ResetKind) {
+        match kind {
+            ResetKind::PowerOn => {
+                // Full console power cycle: clear CPU RAM, fully reinitialize APU
+                // and cartridge, and treat this as a cold boot.
+                self.ram.fill(0);
+                self.ppu.reset();
+                self.apu.reset(kind);
+                if let Some(cart) = self.cartridge.as_mut() {
+                    cart.power_on();
+                }
+            }
+            ResetKind::Soft => {
+                // Warm reset: preserve CPU RAM contents but reset PPU/APU and
+                // mapper-visible state. This is what reset-sensitive test ROMs
+                // like blargg's `apu_reset` expect.
+                self.ppu.reset();
+                self.apu.reset(kind);
+                if let Some(cart) = self.cartridge.as_mut() {
+                    cart.reset();
+                }
+            }
         }
+
+        // State that is common to both reset kinds.
         self.serial_log.drain();
         self.open_bus.reset();
         self.cycles = u64::MAX;
@@ -176,6 +195,10 @@ impl Nes {
         self.sound_bus.reset();
         self.mixer_frame_buffer.clear();
         self.master_clock = (self.clock_start_count + self.clock_end_count) as u64;
+
+        // Wire up a temporary CPU bus and run the CPU reset sequence, passing
+        // down the reset kind so the CPU can distinguish power-on vs soft
+        // reset semantics (register init vs preserving A/X/Y and PS).
         let mut bus = CpuBus::new(
             &mut self.ram,
             &mut self.ppu,
@@ -185,52 +208,20 @@ impl Nes {
             Some(&mut self.serial_log),
             &mut self.oam_dma_request,
             &mut self.open_bus,
-            Some(&mut self.mixer),
+            // On power-on we allow the CPU reset sequence to feed the mixer; for
+            // warm resets this is omitted, matching the previous behaviour.
+            if matches!(kind, ResetKind::PowerOn) {
+                Some(&mut self.mixer)
+            } else {
+                None
+            },
             &mut self.cycles,
             &mut self.master_clock,
             self.ppu_offset,
             self.clock_start_count,
             self.clock_end_count,
         );
-        self.cpu.reset(&mut bus);
-        self.last_frame = bus.ppu().frame_count();
-        self.dot_counter = 0;
-    }
-
-    /// Applies a warm console reset: resets CPU/PPU/APU and mapper state while
-    /// preserving CPU RAM contents. This mirrors the behaviour expected by
-    /// reset-sensitive test ROMs (for example, blargg's `apu_reset` suite),
-    /// which store metadata and counters in non-volatile RAM across resets.
-    pub fn reset(&mut self) {
-        self.ppu.reset();
-        self.apu.reset();
-        if let Some(cart) = self.cartridge.as_mut() {
-            cart.reset();
-        }
-        self.serial_log.drain();
-        self.open_bus.reset();
-        self.cycles = u64::MAX;
-        self.mixer.reset();
-        self.sound_bus.reset();
-        self.mixer_frame_buffer.clear();
-        self.master_clock = (self.clock_start_count + self.clock_end_count) as u64;
-        let mut bus = CpuBus::new(
-            &mut self.ram,
-            &mut self.ppu,
-            &mut self.apu,
-            self.cartridge.as_mut(),
-            &mut self.controllers,
-            Some(&mut self.serial_log),
-            &mut self.oam_dma_request,
-            &mut self.open_bus,
-            None,
-            &mut self.cycles,
-            &mut self.master_clock,
-            self.ppu_offset,
-            self.clock_start_count,
-            self.clock_end_count,
-        );
-        self.cpu.reset(&mut bus);
+        self.cpu.reset(&mut bus, kind);
         self.last_frame = bus.ppu().frame_count();
         self.dot_counter = 0;
     }

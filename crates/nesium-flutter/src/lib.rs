@@ -29,6 +29,7 @@ use nesium_core::{
     audio::CPU_CLOCK_NTSC,
     controller::Button as CoreButton,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
+    reset_kind::ResetKind,
 };
 
 pub const FRAME_WIDTH: usize = SCREEN_WIDTH;
@@ -160,7 +161,7 @@ fn nes_thread(rx: std::sync::mpsc::Receiver<ControlMessage>) {
                 },
                 ControlMessage::Reset => {
                     if let Some(n) = nes.as_mut() {
-                        n.reset();
+                        n.reset(ResetKind::Soft);
                     }
                     if let Some(a) = &audio {
                         a.clear();

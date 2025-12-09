@@ -11,6 +11,7 @@ use crate::cpu::status::Status;
 use crate::memory::cpu as cpu_mem;
 use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
 use crate::memory::ppu::{self as ppu_mem, Register as PpuRegister};
+use crate::reset_kind::ResetKind;
 mod status;
 
 pub mod addressing;
@@ -171,22 +172,41 @@ impl Cpu {
         }
     }
 
-    /// Perform a full CPU reset sequence, as the NES hardware does on power-up.
+    /// Perform a CPU reset. The `kind` distinguishes between a true power-on
+    /// reset and a soft reset triggered while the CPU is already running.
     ///
-    /// The CPU reads two bytes from memory addresses `$FFFC` (low) and `$FFFD` (high)
-    /// to determine the starting program counter (reset vector).
+    /// Power-on reset:
+    /// - Clears A/X/Y.
+    /// - Sets S = $FD and P = INTERRUPT (I=1, bit 5 set, etc.).
     ///
-    /// It also clears internal state used by instruction execution.
-    pub(crate) fn reset(&mut self, bus: &mut impl Bus) {
-        // CpuPtr.store(self as *mut _, std::sync::atomic::Ordering::Release);
-        // Read the reset vector from memory ($FFFC-$FFFD)
+    /// Soft reset:
+    /// - Preserves A/X/Y and most status flags.
+    /// - Sets the I flag (disables IRQs).
+    /// - Decrements S by 3 (wrapping), matching 6502/Mesen behaviour.
+    pub(crate) fn reset(&mut self, bus: &mut impl Bus, kind: ResetKind) {
+        // Read the reset vector from memory ($FFFC-$FFFD) without advancing timing.
         let lo = bus.peek(RESET_VECTOR_LO);
         let hi = bus.peek(RESET_VECTOR_HI);
         self.pc = ((hi as u16) << 8) | (lo as u16);
 
-        // Reset other state
-        self.s = 0xFD; // Stack pointer is initialized to $FD
-        self.p = Status::INTERRUPT;
+        match kind {
+            ResetKind::PowerOn => {
+                // Full power-on reset: initialize registers to known values.
+                self.a = 0;
+                self.x = 0;
+                self.y = 0;
+                self.s = 0xFD;
+                self.p = Status::INTERRUPT;
+            }
+            ResetKind::Soft => {
+                // Soft reset: keep A/X/Y and most of P.
+                // Hardware behaviour is: set I and decrement S by 3.
+                self.p.set_i(true);
+                self.s = self.s.wrapping_sub(3);
+            }
+        }
+
+        // Reset internal CPU state used by the execution engine and interrupt logic.
         self.opcode_in_flight = None;
         self.irq_masked = self.p.i();
         self.pending_irq_mask = None;
@@ -197,8 +217,12 @@ impl Cpu {
         self.nmi_pending = false;
         self.prev_nmi_pending = false;
         self.index = 0;
+        self.base = 0;
         self.effective_addr = 0;
         self.oam_dma = None;
+
+        // The CPU takes 8 cycles before it starts executing the ROM's code
+        // after a reset/power-up (Mesen does this via 8 Start/End cycles).
         for _ in 0..8 {
             bus.internal_cycle();
         }

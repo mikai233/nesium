@@ -25,6 +25,7 @@ use crate::{
     audio::{AudioChannel, NesSoundMixer},
     mem_block::apu::RegisterRam,
     memory::apu::{self as apu_mem},
+    reset_kind::ResetKind,
 };
 
 pub use expansion::ExpansionAudio;
@@ -99,52 +100,58 @@ impl Apu {
         }
     }
 
-    /// Applies a power-on style reset to the APU. This matches turning the
-    /// console off and back on: all channel registers are cleared and the
-    /// frame counter behaves as if `$4017` were written with `$00` shortly
-    /// before code execution begins.
-    pub fn power_on_reset(&mut self) {
-        self.registers.fill(0);
-        self.frame_counter = FrameCounter::default();
-        self.status = StatusFlags::default();
-        self.cycles = 0;
-        self.pulse = [
-            Pulse::new(pulse::PulseChannel::Pulse1),
-            Pulse::new(pulse::PulseChannel::Pulse2),
-        ];
-        self.triangle = Triangle::default();
-        self.noise = Noise::default();
-        self.dmc = Dmc::default();
-        self.last_levels.fill(0.0);
-        self.last_frame_counter_value = 0x00;
-        // Hardware behaves as if $4017 were written with $00 shortly before
-        // execution begins; apply that with the reset-style latency (~3 CPU
-        // cycles before the CPU resumes fetching instructions).
-        let reset = self
-            .frame_counter
-            .configure_after_reset(self.last_frame_counter_value);
-        self.apply_frame_reset(reset);
-    }
+    /// Applies either a power-on style reset or a warm reset to the APU.
+    ///
+    /// - `ResetKind::PowerOn` matches turning the console off and back on:
+    ///   all channel registers are cleared and the frame counter behaves as if
+    ///   `$4017` were written with `$00` shortly before code execution begins.
+    ///
+    /// - `ResetKind::Soft` approximates the behaviour described in blargg's
+    ///   `apu_reset` tests and implemented in Mesen2's
+    ///   `ApuFrameCounter::Reset(softReset = true)`: channel registers are
+    ///   preserved, channel state is rebuilt from the cached register RAM, and
+    ///   the frame counter is reconfigured as if the last value written to
+    ///   `$4017` were written again just before execution resumes.
+    pub fn reset(&mut self, kind: ResetKind) {
+        match kind {
+            ResetKind::PowerOn => {
+                self.registers.fill(0);
+                self.frame_counter = FrameCounter::default();
+                self.status = StatusFlags::default();
+                self.cycles = 0;
+                self.pulse = [
+                    Pulse::new(pulse::PulseChannel::Pulse1),
+                    Pulse::new(pulse::PulseChannel::Pulse2),
+                ];
+                self.triangle = Triangle::default();
+                self.noise = Noise::default();
+                self.dmc = Dmc::default();
+                self.last_levels.fill(0.0);
+                self.last_frame_counter_value = 0x00;
 
-    /// Applies a warm reset to the APU. Channel registers are cleared and
-    /// length/Envelope state reset, but the frame counter is reconfigured as
-    /// if the last value written to `$4017` were written again just before
-    /// execution resumes. This approximates the behaviour described in
-    /// blargg's `apu_reset` tests and implemented in Mesen2's
-    /// `ApuFrameCounter::Reset(softReset = true)`.
-    pub fn reset(&mut self) {
-        self.status = StatusFlags::default();
-        self.cycles = 0;
-        self.rebuild_channels_from_registers();
+                // Hardware behaves as if $4017 were written with $00 shortly before
+                // execution begins; apply that with the reset-style latency (~3 CPU
+                // cycles before the CPU resumes fetching instructions).
+                let reset = self
+                    .frame_counter
+                    .configure_after_reset(self.last_frame_counter_value);
+                self.apply_frame_reset(reset);
+            }
+            ResetKind::Soft => {
+                self.status = StatusFlags::default();
+                self.cycles = 0;
+                self.rebuild_channels_from_registers();
 
-        // Hardware reset re-applies the last written frame counter value just
-        // before execution resumes, with the same small latency as the
-        // implicit power-on write.
-        let reset = self
-            .frame_counter
-            .configure_after_reset(self.last_frame_counter_value);
-        self.status.frame_interrupt = false;
-        self.apply_frame_reset(reset);
+                // Hardware reset re-applies the last written frame counter value just
+                // before execution resumes, with the same small latency as the
+                // implicit power-on write.
+                let reset = self
+                    .frame_counter
+                    .configure_after_reset(self.last_frame_counter_value);
+                self.status.frame_interrupt = false;
+                self.apply_frame_reset(reset);
+            }
+        }
     }
 
     pub fn cpu_write(&mut self, addr: u16, value: u8, cpu_cycle: u64) {
