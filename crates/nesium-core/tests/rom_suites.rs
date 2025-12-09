@@ -279,7 +279,6 @@ fn blargg_ppu_tests_2005_09_15b_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn branch_timing_tests_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs (report result via zero-page $00F8)
     const BRANCH_FRAMES: usize = 4000;
