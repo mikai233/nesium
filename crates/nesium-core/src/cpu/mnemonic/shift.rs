@@ -56,12 +56,15 @@ impl Mnemonic {
                         // Update N and Z
                         cpu.p.set_zn(cpu.a);
                     } else {
-                        // Other
-                        cpu.p.set_c(cpu.base & BIT_7 != 0);
+                        // Memory RMW: compute result and flags, then perform final write
+                        let old_bit7 = cpu.base & BIT_7;
                         cpu.base <<= 1;
-                        bus.mem_write(cpu.effective_addr, cpu.base);
-                        // Update N and Z
+                        // C = old bit 7
+                        cpu.p.set_c(old_bit7 != 0);
+                        // Update N and Z based on the new value
                         cpu.p.set_zn(cpu.base);
+                        // Final write with the new value
+                        bus.mem_write(cpu.effective_addr, cpu.base);
                     }
                 },
             },
@@ -122,13 +125,16 @@ impl Mnemonic {
                         cpu.p.remove(Status::NEGATIVE);
                         cpu.p.set_z(cpu.a == 0);
                     } else {
-                        // Other
-                        cpu.p.set_c(cpu.base & BIT_0 != 0);
+                        // Memory RMW: compute result and flags, then perform final write
+                        let old_bit0 = cpu.base & BIT_0;
                         cpu.base >>= 1;
-                        bus.mem_write(cpu.effective_addr, cpu.base);
-                        // Update N and Z
+                        // C = old bit 0
+                        cpu.p.set_c(old_bit0 != 0);
+                        // LSR always shifts in 0 on bit 7, so N is always cleared
                         cpu.p.remove(Status::NEGATIVE);
                         cpu.p.set_z(cpu.base == 0);
+                        // Final write with the new value
+                        bus.mem_write(cpu.effective_addr, cpu.base);
                     }
                 },
             },
@@ -190,11 +196,12 @@ impl Mnemonic {
                         let old_bit7 = cpu.base & BIT_7;
                         let new_a = (cpu.base << 1) | if cpu.p.c() { 1 } else { 0 };
                         cpu.base = new_a;
-                        bus.mem_write(cpu.effective_addr, cpu.base);
                         // C = old bit 7
                         cpu.p.set_c(old_bit7 != 0);
                         // Update N and Z
                         cpu.p.set_zn(cpu.base);
+                        // Final write with the new value
+                        bus.mem_write(cpu.effective_addr, cpu.base);
                     }
                 },
             },
@@ -256,11 +263,12 @@ impl Mnemonic {
                         let old_bit0 = cpu.base & BIT_0;
                         let new_a = (cpu.base >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
                         cpu.base = new_a;
-                        bus.mem_write(cpu.effective_addr, cpu.base);
                         // C = old bit 0
                         cpu.p.set_c(old_bit0 != 0);
                         // Update N and Z (N = bit7 = old C)
                         cpu.p.set_zn(cpu.base);
+                        // Final write with the new value
+                        bus.mem_write(cpu.effective_addr, cpu.base);
                     }
                 },
             },

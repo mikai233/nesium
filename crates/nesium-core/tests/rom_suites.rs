@@ -762,7 +762,6 @@ fn ppu_read_buffer_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn ppu_vbl_nmi_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [

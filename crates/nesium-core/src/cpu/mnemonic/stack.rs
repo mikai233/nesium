@@ -200,7 +200,7 @@ impl Mnemonic {
                     let was_enabled = !cpu.p.i();
                     let mut p = Status::from_bits_truncate(value);
                     p.set_b(false);
-                    p.set_u(true);
+                    p.set_u(false);
                     cpu.p = p;
                     // Like SEI/CLI, PLP updates the I flag with a one-instruction
                     // latency for interrupt gating. When PLP changes I from
@@ -274,9 +274,7 @@ mod stack_tests {
             assert_eq!(verify.cpu.s.wrapping_add(1), cpu.s);
             let m = bus.mem_read(STACK_ADDR | verify.cpu.s as u16);
             let mut p = Status::from_bits_truncate(m);
-            //TODO
             p.remove(Status::BREAK);
-            p.insert(Status::UNUSED);
             assert_eq!(cpu.p, p);
         });
     }

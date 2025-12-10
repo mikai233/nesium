@@ -123,7 +123,7 @@ impl Nes {
         // the console being turned on from a cold state (CPU/PPU/APU and RAM
         // cleared) and is distinct from subsequent warm resets triggered by
         // the user pressing the reset button.
-        nes.reset(ResetKind::PowerOn);
+        nes.reset(ResetKind::PowerOn); // TODO: Should I remove this? Because insert cartridge also reset the console.
         nes
     }
 

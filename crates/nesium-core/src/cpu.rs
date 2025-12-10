@@ -21,7 +21,8 @@ mod lookup;
 mod micro_op;
 mod mnemonic;
 
-// pub static CpuPtr: AtomicPtr<Cpu> = AtomicPtr::new(std::ptr::null_mut());
+// pub static CpuPtr: std::sync::atomic::AtomicPtr<Cpu> =
+// std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 
 /// Lightweight CPU register snapshot used for tracing/debugging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -184,6 +185,7 @@ impl Cpu {
     /// - Sets the I flag (disables IRQs).
     /// - Decrements S by 3 (wrapping), matching 6502/Mesen behaviour.
     pub(crate) fn reset(&mut self, bus: &mut impl Bus, kind: ResetKind) {
+        // CpuPtr.store(self as *mut _, std::sync::atomic::Ordering::Relaxed);
         // Read the reset vector from memory ($FFFC-$FFFD) without advancing timing.
         let lo = bus.peek(RESET_VECTOR_LO);
         let hi = bus.peek(RESET_VECTOR_HI);

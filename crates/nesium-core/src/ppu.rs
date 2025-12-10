@@ -70,8 +70,9 @@ use crate::{
 use crate::{cartridge::mapper::NametableTarget, ppu::open_bus::PpuOpenBus};
 
 // thread_local! {
-//    pub static CPU_MASTER:Cell<u64> = Cell::new(0);
-//    pub static CPU_CYCLE:Cell<u64> =Cell::new(0);
+//    pub static CPU_MASTER: std::cell::Cell<u64> = std::cell::Cell::new(0);
+//    pub static CPU_CYCLE: std::cell::Cell<u64> = std::cell::Cell::new(0);
+//    pub static MEM0F: std::cell::Cell<u8> = std::cell::Cell::new(0);
 // }
 
 pub const SCREEN_WIDTH: usize = 256;
@@ -133,6 +134,15 @@ pub struct Ppu {
     sprite_line_next: SpriteLineBuffers,
     /// Master system palette used to map palette indices to RGB colors.
     palette: Palette,
+    /// Effective rendering enable latch (Mesen-style), true when either
+    /// background or sprites are enabled.
+    render_enabled: bool,
+    /// Previous dot's rendering enable state (for scroll/odd-frame logic and
+    /// trace parity with Mesen's `_prevRenderingEnabled`).
+    prev_render_enabled: bool,
+    /// Pending state update request from $2001/$2006/$2007/VRAM-related
+    /// side effects. Mirrors Mesen's `_needStateUpdate` latch.
+    state_update_pending: bool,
     /// Background + sprite rendering target for the current frame.
     pub framebuffer: FrameBuffer,
 }
@@ -192,6 +202,9 @@ impl Ppu {
             sprite_fetch: SpriteFetchState::default(),
             sprite_line_next: SpriteLineBuffers::new(),
             palette: Palette::default(),
+            render_enabled: false,
+            prev_render_enabled: false,
+            state_update_pending: false,
             framebuffer,
         }
     }
@@ -291,6 +304,13 @@ impl Ppu {
         // Sprite-0 debug info is per-frame; drop it on reset.
         self.sprite0_hit_pos = None;
 
+        // Reset rendering enable latches and mark state as needing an update
+        // on the next clock, mirroring Mesen's `_renderingEnabled` /
+        // `_prevRenderingEnabled` + `_needStateUpdate` behaviour.
+        self.render_enabled = false;
+        self.prev_render_enabled = false;
+        self.state_update_pending = true;
+
         // Only clear the framebuffer on power-on. Soft reset keeps the last
         // rendered frame visible, just like real hardware.
         if matches!(kind, ResetKind::PowerOn) {
@@ -372,9 +392,41 @@ impl Ppu {
             }
             PpuRegister::Mask => {
                 // TODO: Hardware/Mesen2 model subtle mid-frame rendering enable/disable glitches (bus address reset, OAM corruption).
-                // We currently just update the mask bitfield.
-                self.registers.mask = Mask::from_bits_retain(value)
+                // We currently just update the mask bitfield and then update the
+                // Mesen-style rendering-enabled latch on the next `clock()`.
+                self.registers.mask = Mask::from_bits_retain(value);
+
+                let mask = self.registers.mask;
+                let new_render = mask.rendering_enabled();
+                if new_render != self.render_enabled {
+                    // Defer the actual latch update to `update_state_latch` so
+                    // that it is applied in a consistent place in the PPU
+                    // timeline, like Mesen's `_needStateUpdate`.
+                    self.state_update_pending = true;
+                }
+
+                // // Debug trace: mirror Mesen's SetMaskRegister $2001 write log.
+                // let bg_en = if mask.contains(Mask::SHOW_BACKGROUND) {
+                //     1
+                // } else {
+                //     0
+                // };
+                // let sp_en = if mask.contains(Mask::SHOW_SPRITES) {
+                //     1
+                // } else {
+                //     0
+                // };
+                // tracing::debug!(
+                //     "ppu_write_2001: frame={} scanline={} cycle={} value={:02X} bg_en={} sp_en={}",
+                //     self.frame,
+                //     self.scanline,
+                //     self.cycle,
+                //     value,
+                //     bg_en,
+                //     sp_en,
+                // );
             }
+
             PpuRegister::Status => {} // read-only
             PpuRegister::OamAddr => self.registers.oam_addr = value,
             PpuRegister::OamData => self.write_oam_data(value),
@@ -429,7 +481,7 @@ impl Ppu {
         // // Debug trace: CPU/PPU alignment snapshot for this dot, with extra PPU state.
         // let cpu_cycle = CPU_CYCLE.get();
         // if cpu_cycle < 2_000_000 {
-        //     let cpu = CpuPtr.load(std::sync::atomic::Ordering::Acquire);
+        //     let cpu = crate::cpu::CpuPtr.load(std::sync::atomic::Ordering::Acquire);
         //     let cpu = unsafe { &*cpu };
         //     let cpu_master_clock: u64 = CPU_MASTER.get();
         //     let pc: u16 = cpu.pc;
@@ -461,8 +513,56 @@ impl Ppu {
         //     let t_raw = self.registers.vram.t.raw();
         //     let xscroll = self.registers.vram.x;
 
-        //     debug!(
-        //         "cpu_mc={} cpu_cyc={} pc={:04X} a={:02X} x={:02X} y={:02X} sp={:02X} ps={:02X}  ppu_mc={} ppu_scanline={} ppu_cycle={} frame={} prevent_vbl={} status_v={} status_s0={} status_ovf={} v={:04X} t={:04X} xscroll={:02X}",
+        //     // Mask/rendering and VRAM-update debug fields to match Mesen's extended Exec log.
+        //     let mask = self.registers.mask;
+        //     let mask_bg = if mask.contains(Mask::SHOW_BACKGROUND) {
+        //         1
+        //     } else {
+        //         0
+        //     };
+        //     let mask_sp = if mask.contains(Mask::SHOW_SPRITES) {
+        //         1
+        //     } else {
+        //         0
+        //     };
+
+        //     // Mesen-style `_renderingEnabled` latch: effective rendering is
+        //     // only considered on the prerender (-1) and visible (0..=239)
+        //     // scanlines, and is based on the latched `render_enabled` value
+        //     // rather than the raw $2001 bits.
+        //     let debug_rendering_enabled: u8 =
+        //         if (-1..=239).contains(&self.scanline) && self.render_enabled {
+        //             1
+        //         } else {
+        //             0
+        //         };
+
+        //     // Previous dot's latched rendering-enable state, mirroring
+        //     // Mesen's `_prevRenderingEnabled` field.
+        //     let prev_rend: u8 = if self.prev_render_enabled { 1 } else { 0 };
+
+        //     // Approximate Mesen's `_needStateUpdate`: it is raised when either
+        //     // a delayed $2006 VRAM address update is pending, a $2007 VRAM
+        //     // increment is queued, or a recent $2007 read/write is still
+        //     // within the ignore_vram_read window.
+        //     let need_state = if self.pending_vram_delay > 0
+        //         || self.pending_vram_increment.is_pending()
+        //         || self.ignore_vram_read > 0
+        //         || self.state_update_pending
+        //     {
+        //         1
+        //     } else {
+        //         0
+        //     };
+        //     let upd_vram_delay = self.pending_vram_delay;
+        //     let upd_v = self.pending_vram_addr.raw();
+        //     let mem0f = MEM0F.get();
+
+        //     tracing::debug!(
+        //         "cpu_mc={} cpu_cyc={} pc={:04X} a={:02X} x={:02X} y={:02X} sp={:02X} ps={:02X}  \
+        //      ppu_mc={} ppu_scanline={} ppu_cycle={} frame={} prevent_vbl={} status_v={} status_s0={} status_ovf={} \
+        //      v={:04X} t={:04X} xscroll={:02X} mask_bg={} mask_sp={} rend={} prev_rend={} need_state={} updVramDelay={} updV={:04X} \
+        //      mem0F={:02X}",
         //         cpu_master_clock,
         //         cpu_cycle,
         //         pc,
@@ -482,14 +582,37 @@ impl Ppu {
         //         v_raw,
         //         t_raw,
         //         xscroll,
+        //         mask_bg,
+        //         mask_sp,
+        //         debug_rendering_enabled,
+        //         prev_rend,
+        //         need_state,
+        //         upd_vram_delay,
+        //         upd_v,
+        //         mem0f,
         //     );
+
+        //     // Emit a separate render_toggle line when the effective rendering
+        //     // state flips, using the latched previous value.
+        //     if prev_rend != debug_rendering_enabled {
+        //         tracing::debug!(
+        //             "render_toggle: frame={} scanline={} cycle={} old={} new={} mask_bg={} mask_sp={}",
+        //             self.frame,
+        //             self.scanline,
+        //             self.cycle,
+        //             prev_rend,
+        //             debug_rendering_enabled,
+        //             mask_bg,
+        //             mask_sp,
+        //         );
+        //     }
         // }
         // Pre-increment: Advance counters at the START of the clock.
         // This ensures scanline/cycle reflect the state *after* this cycle is processed
         // for synchronization purposes, aligning with Mesen's interpretation.
         self.advance_cycle();
 
-        let rendering_enabled = self.registers.mask.rendering_enabled();
+        let rendering_enabled = self.render_enabled;
         let prev_nmi_output = self.nmi_output;
         self.step_pending_vram_addr();
 
@@ -620,15 +743,10 @@ impl Ppu {
             // the last dot of the scanline when we are on the pre-render
             // scanline, cycle 339 of an odd frame with rendering enabled.
             (-1, 337..=340) => {
-                if self.cycle == 339
-                    && self.frame % 2 == 1
-                    && self.registers.mask.rendering_enabled()
-                {
+                if self.cycle == 339 && self.frame % 2 == 1 && self.render_enabled {
                     // Force the next `advance_cycle()` call to wrap directly
                     // to scanline 0, cycle 0, effectively removing dot 340
-                    // from the timeline. Because we log PPU state at the
-                    // start of `clock()`, the trace will show a jump from
-                    // 338 to 340 on the prerender line, matching Mesen's log.
+                    // from the timeline.
                     self.cycle = CYCLES_PER_SCANLINE - 1; // 340
                 }
             }
@@ -707,6 +825,7 @@ impl Ppu {
         }
 
         self.update_nmi_output(prev_nmi_output);
+        self.update_state_latch();
     }
 
     /// Advance the PPU until its master clock reaches `target_master`.
@@ -1765,6 +1884,42 @@ impl Ppu {
             .vram
             .v
             .set_nametable((nt & 0b01) | (t.nametable() & 0b10));
+    }
+
+    /// Updates Mesen-style internal state latches for this dot.
+    ///
+    /// This mirrors NesPpu::UpdateState in Mesen:
+    /// - `_needStateUpdate` is raised by $2001/$2006/$2007 and VRAM side
+    ///   effects.
+    /// - `_renderingEnabled` is a latched copy of the effective background /
+    ///   sprite enable bits, separate from the raw $2001 mask.
+    /// - `_prevRenderingEnabled` holds the previous dot's value for scroll
+    ///   increments and trace/logging.
+    fn update_state_latch(&mut self) {
+        // Decide whether we need to refresh the latched state for this dot.
+        let need_state = self.state_update_pending
+            || self.pending_vram_delay > 0
+            || self.pending_vram_increment.is_pending()
+            || self.ignore_vram_read > 0;
+
+        if need_state {
+            let mask = self.registers.mask;
+            let new_render = mask.rendering_enabled();
+
+            // Preserve the old value for prev_render_enabled, then latch the
+            // new effective rendering state.
+            self.prev_render_enabled = self.render_enabled;
+            self.render_enabled = new_render;
+
+            // Clear the explicit "dirty" flag; the other conditions
+            // (pending_vram_delay, pending increment, ignore_vram_read) are
+            // transient and will clear themselves over subsequent dots.
+            self.state_update_pending = false;
+        } else {
+            // No explicit state change requested; just propagate the previous
+            // latched state into `prev_render_enabled` for this dot.
+            self.prev_render_enabled = self.render_enabled;
+        }
     }
 }
 
