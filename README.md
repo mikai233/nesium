@@ -109,43 +109,43 @@ These ROMs are designed for interactive/manual verification and do not expose a 
 
 The following suites are currently marked with `#[ignore = "this test fails and needs investigation"]`. They highlight areas where Nesium’s behaviour still diverges from reference emulators and hardware.
 
-| Suite name                           | ROM directory / example path                  | Notes                                        | TASVideos accuracy‑required |
-| ------------------------------------ | --------------------------------------------- | -------------------------------------------- | --------------------------- |
-| `apu_test_suite`                     | `apu_test/*.nes`                              | APU accuracy tests (including `rom_singles`) | Yes                         |
-| `blargg_apu_2005_07_30_suite`        | `blargg_apu_2005.07.30/*.nes`                 | Early Blargg APU tests                       | Yes                         |
-| `blargg_litewall_suite`              | `blargg_litewall/*.nes`                       | Litewall / timing-related tests              | No                          |
-| `blargg_nes_cpu_test5_suite`         | `blargg_nes_cpu_test5/*.nes`                  | CPU precision tests                          | Yes                         |
-| `blargg_ppu_tests_2005_09_15b_suite` | `blargg_ppu_tests_2005.09.15b/*.nes`          | PPU palette/VRAM/scrolling behaviour         | Yes                         |
-| `cpu_exec_space_suite`               | `cpu_exec_space/*.nes`                        | CPU exec space tests (APU/PPU I/O)           | Yes                         |
-| `cpu_interrupts_v2_suite`            | `cpu_interrupts_v2/*.nes`                     | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
-| `cpu_reset_suite`                    | `cpu_reset/*.nes`                             | Post-reset RAM/register state                | Yes                         |
-| `dmc_dma_during_read4_suite`         | `dmc_dma_during_read4/*.nes`                  | DMC DMA interaction with CPU read cycles     | Yes                         |
-| `dmc_tests_suite`                    | `dmc_tests/*.nes`                             | DMC buffer/delay/IRQ behaviour               | Yes                         |
-| `dpcmletterbox_suite`                | `dpcmletterbox/dpcmletterbox.nes`             | DPCM-related visual/audio test               | Yes                         |
-| `exram_suite`                        | `exram/mmc5exram.nes`                         | MMC5 ExRAM behaviour (currently failing)     | No                          |
-| `full_palette_suite`                 | `full_palette/*.nes`                          | Full palette rendering and emphasis tests    | No                          |
-| `m22chrbankingtest_suite`            | `m22chrbankingtest/0-127.nes`                 | Mapper 22 CHR banking behaviour              | No                          |
-| `mmc3_irq_tests_suite`               | `mmc3_irq_tests/*.nes`                        | MMC3 IRQ behaviour                           | Yes                         |
-| `mmc3_test_suite`                    | `mmc3_test/*.nes`                             | MMC3/MMC6 functional tests                   | Yes                         |
-| `mmc3_test_2_suite`                  | `mmc3_test_2/rom_singles/*.nes`               | Second MMC3 test set                         | Yes                         |
-| `mmc5test_suite`                     | `mmc5test/mmc5test.nes`                       | MMC5 functional tests                        | Yes                         |
-| `mmc5test_v2_suite`                  | `mmc5test_v2/mmc5test.nes`                    | MMC5 test set v2                             | Yes                         |
-| `nes15_1_0_0_suite`                  | `nes15-1.0.0/nes15-NTSC.nes`, `nes15-PAL.nes` | `nes15` series tests (NTSC/PAL)              | Yes                         |
-| `nmi_sync_suite`                     | `nmi_sync/demo_ntsc.nes`, `demo_pal.nes`      | NMI sync behaviour                           | Yes                         |
-| `nrom368_suite`                      | `nrom368/*.nes`                               | NROM-368 mapping tests                       | No                          |
-| `other_suite`                        | `other/*.nes`                                 | Misc demos/tests bundled with nes-test-roms  | No                          |
-| `pal_apu_tests_suite`                | `pal_apu_tests/*.nes`                         | PAL APU behaviour                            | Yes                         |
-| `ppu_open_bus_suite`                 | `ppu_open_bus/ppu_open_bus.nes`               | PPU open-bus behaviour                       | Yes                         |
-| `ppu_read_buffer_suite`              | `ppu_read_buffer/test_ppu_read_buffer.nes`    | PPU read buffer behaviour                    | Yes                         |
-| `ppu_vbl_nmi_suite`                  | `ppu_vbl_nmi/*.nes`                           | PPU VBL/NMI timing                           | Yes                         |
-| `read_joy3_suite`                    | `read_joy3/*.nes`                             | Controller read timing                       | Yes                         |
-| `scanline_suite`                     | `scanline/scanline.nes`                       | Scanline timing                              | Yes                         |
-| `scanline_a1_suite`                  | `scanline-a1/scanline.nes`                    | Alternate scanline tests                     | Yes                         |
-| `scrolltest_suite`                   | `scrolltest/scroll.nes`                       | Scrolling behaviour                          | Yes                         |
-| `sprdma_and_dmc_dma_suite`           | `sprdma_and_dmc_dma/*.nes`                    | Sprite DMA and DMC DMA interaction           | Yes                         |
-| `sprite_hit_tests_2005_10_05_suite`  | `sprite_hit_tests_2005.10.05/*.nes`           | Sprite 0 hit timing and edge cases           | Yes                         |
-| `sprite_overflow_tests_suite`        | `sprite_overflow_tests/*.nes`                 | Sprite overflow behaviour                    | Yes                         |
-| `volume_tests_suite`                 | `volume_tests/volumes.nes`                    | Volume/mixing behaviour                      | Yes                         |
+| Suite name                           | ROM directory                              | Notes                                        | TASVideos accuracy‑required |
+| ------------------------------------ | ------------------------------------------ | -------------------------------------------- | --------------------------- |
+| `apu_test_suite`                     | `apu_test/*.nes`                           | APU accuracy tests (including `rom_singles`) | Yes                         |
+| `blargg_apu_2005_07_30_suite`        | `blargg_apu_2005.07.30/*.nes`              | Early Blargg APU tests                       | Yes                         |
+| `blargg_litewall_suite`              | `blargg_litewall/*.nes`                    | Litewall / timing-related tests              | No                          |
+| `blargg_nes_cpu_test5_suite`         | `blargg_nes_cpu_test5/*.nes`               | CPU precision tests                          | Yes                         |
+| `blargg_ppu_tests_2005_09_15b_suite` | `blargg_ppu_tests_2005.09.15b/*.nes`       | PPU palette/VRAM/scrolling behaviour         | Yes                         |
+| `cpu_exec_space_suite`               | `cpu_exec_space/*.nes`                     | CPU exec space tests (APU/PPU I/O)           | Yes                         |
+| `cpu_interrupts_v2_suite`            | `cpu_interrupts_v2/*.nes`                  | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
+| `cpu_reset_suite`                    | `cpu_reset/*.nes`                          | Post-reset RAM/register state                | Yes                         |
+| `dmc_dma_during_read4_suite`         | `dmc_dma_during_read4/*.nes`               | DMC DMA interaction with CPU read cycles     | Yes                         |
+| `dmc_tests_suite`                    | `dmc_tests/*.nes`                          | DMC buffer/delay/IRQ behaviour               | Yes                         |
+| `dpcmletterbox_suite`                | `dpcmletterbox/dpcmletterbox.nes`          | DPCM-related visual/audio test               | Yes                         |
+| `exram_suite`                        | `exram/mmc5exram.nes`                      | MMC5 ExRAM behaviour (currently failing)     | No                          |
+| `full_palette_suite`                 | `full_palette/*.nes`                       | Full palette rendering and emphasis tests    | No                          |
+| `m22chrbankingtest_suite`            | `m22chrbankingtest/0-127.nes`              | Mapper 22 CHR banking behaviour              | No                          |
+| `mmc3_irq_tests_suite`               | `mmc3_irq_tests/*.nes`                     | MMC3 IRQ behaviour                           | Yes                         |
+| `mmc3_test_suite`                    | `mmc3_test/*.nes`                          | MMC3/MMC6 functional tests                   | Yes                         |
+| `mmc3_test_2_suite`                  | `mmc3_test_2/rom_singles/*.nes`            | Second MMC3 test set                         | Yes                         |
+| `mmc5test_suite`                     | `mmc5test/mmc5test.nes`                    | MMC5 functional tests                        | Yes                         |
+| `mmc5test_v2_suite`                  | `mmc5test_v2/mmc5test.nes`                 | MMC5 test set v2                             | Yes                         |
+| `nes15_1_0_0_suite`                  | `nes15-1.0.0/*.nes`                        | `nes15` series tests (NTSC/PAL)              | Yes                         |
+| `nmi_sync_suite`                     | `nmi_sync/*.nes`                           | NMI sync behaviour                           | Yes                         |
+| `nrom368_suite`                      | `nrom368/*.nes`                            | NROM-368 mapping tests                       | No                          |
+| `other_suite`                        | `other/*.nes`                              | Misc demos/tests bundled with nes-test-roms  | No                          |
+| `pal_apu_tests_suite`                | `pal_apu_tests/*.nes`                      | PAL APU behaviour                            | Yes                         |
+| `ppu_open_bus_suite`                 | `ppu_open_bus/ppu_open_bus.nes`            | PPU open-bus behaviour                       | Yes                         |
+| `ppu_read_buffer_suite`              | `ppu_read_buffer/test_ppu_read_buffer.nes` | PPU read buffer behaviour                    | Yes                         |
+| `ppu_vbl_nmi_suite`                  | `ppu_vbl_nmi/*.nes`                        | PPU VBL/NMI timing                           | Yes                         |
+| `read_joy3_suite`                    | `read_joy3/*.nes`                          | Controller read timing                       | Yes                         |
+| `scanline_suite`                     | `scanline/scanline.nes`                    | Scanline timing                              | Yes                         |
+| `scanline_a1_suite`                  | `scanline-a1/scanline.nes`                 | Alternate scanline tests                     | Yes                         |
+| `scrolltest_suite`                   | `scrolltest/scroll.nes`                    | Scrolling behaviour                          | Yes                         |
+| `sprdma_and_dmc_dma_suite`           | `sprdma_and_dmc_dma/*.nes`                 | Sprite DMA and DMC DMA interaction           | Yes                         |
+| `sprite_hit_tests_2005_10_05_suite`  | `sprite_hit_tests_2005.10.05/*.nes`        | Sprite 0 hit timing and edge cases           | Yes                         |
+| `sprite_overflow_tests_suite`        | `sprite_overflow_tests/*.nes`              | Sprite overflow behaviour                    | Yes                         |
+| `volume_tests_suite`                 | `volume_tests/volumes.nes`                 | Volume/mixing behaviour                      | Yes                         |
 
 ### Debug helper tests (🛠)
 
