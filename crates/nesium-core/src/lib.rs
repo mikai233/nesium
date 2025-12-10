@@ -5,6 +5,7 @@ use crate::{
     audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
     bus::{Bus, OpenBus, cpu::CpuBus},
     cartridge::{Cartridge, Provider},
+    config::region::Region,
     controller::{Button, Controller},
     cpu::Cpu,
     error::Error,
@@ -23,6 +24,7 @@ pub mod apu;
 pub mod audio;
 pub mod bus;
 pub mod cartridge;
+pub mod config;
 pub mod controller;
 pub mod cpu;
 pub mod error;
@@ -67,6 +69,7 @@ pub struct Nes {
     audio_sample_rate: u32,
     /// Scratch buffer for a single frame of internal-rate audio from the per-console mixer.
     mixer_frame_buffer: Vec<f32>,
+    region: Region,
 }
 
 /// Internal mixer output sample rate (matches Mesen2's fixed 96 kHz path).
@@ -113,6 +116,7 @@ impl Nes {
             sound_bus: SoundMixerBus::new(INTERNAL_MIXER_SAMPLE_RATE, sample_rate),
             audio_sample_rate: sample_rate,
             mixer_frame_buffer: Vec::new(),
+            region: Region::Auto,
         };
         nes.ppu.set_palette(PaletteKind::NesdevNtsc.palette());
         // Apply a power-on style reset once at construction time. This matches
@@ -169,7 +173,7 @@ impl Nes {
                 // Full console power cycle: clear CPU RAM, fully reinitialize APU
                 // and cartridge, and treat this as a cold boot.
                 self.ram.fill(0);
-                self.ppu.reset();
+                self.ppu.reset(kind);
                 self.apu.reset(kind);
                 if let Some(cart) = self.cartridge.as_mut() {
                     cart.power_on();
@@ -179,7 +183,7 @@ impl Nes {
                 // Warm reset: preserve CPU RAM contents but reset PPU/APU and
                 // mapper-visible state. This is what reset-sensitive test ROMs
                 // like blargg's `apu_reset` expect.
-                self.ppu.reset();
+                self.ppu.reset(kind);
                 self.apu.reset(kind);
                 if let Some(cart) = self.cartridge.as_mut() {
                     cart.reset();

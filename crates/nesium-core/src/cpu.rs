@@ -470,8 +470,8 @@ impl Cpu {
 
     fn push_status(&mut self, bus: &mut dyn Bus, set_break: bool) {
         let mut status = self.p;
-        status.set(Status::UNUSED, true);
-        status.set(Status::BREAK, set_break);
+        status.set_u(true);
+        status.set_b(set_break);
         self.push(bus, status.bits());
     }
 

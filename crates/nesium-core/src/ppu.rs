@@ -65,6 +65,7 @@ use crate::{
         sprite::SpriteView,
         sprite0_hit_debug::{Sprite0HitDebug, Sprite0HitPos},
     },
+    reset_kind::ResetKind,
 };
 use crate::{cartridge::mapper::NametableTarget, ppu::open_bus::PpuOpenBus};
 
@@ -205,42 +206,96 @@ impl Ppu {
         }
     }
 
-    /// Restores the device to its power-on state.
+    /// Restores the PPU to either a power-on or soft-reset state.
     ///
-    /// Wipes VRAM/palette, resets scroll/state latches, and clears pixel
-    /// pipelines so the next frame starts from a clean slate (mirrors hardware
-    /// cold boot).
-    pub fn reset(&mut self) {
-        self.registers.reset();
-        self.vram.fill(0);
-        self.palette_ram.fill(0);
-        // Reset timing to last dot of the previous frame.
+    /// - `ResetKind::PowerOn`:
+    ///   Simulates a cold boot. Clears VRAM / palette RAM / secondary OAM,
+    ///   resets registers, and clears the framebuffer.
+    ///
+    /// - `ResetKind::Soft`:
+    ///   Simulates CPU /RESET. Resets control/scroll/address latches and
+    ///   internal timing, but does not touch PPU RAM contents and preserves
+    ///   the PPU status register ($2002), including the VBlank flag.
+    pub fn reset(&mut self, kind: ResetKind) {
+        // Preserve the current $2002 status so soft reset can restore it.
+        // On real hardware, the VBlank flag (bit 7) is not affected by CPU reset.
+        let prev_status = self.registers.status;
+
+        match kind {
+            ResetKind::PowerOn => {
+                // Full power-on reset: registers and PPU-internal RAM go back
+                // to their initial state.
+                self.registers.reset();
+
+                // On real hardware, VRAM/palette contents are technically
+                // undefined at power-on. We clear them for deterministic
+                // behavior; tests that rely on random RAM can be added later.
+                self.vram.fill(0);
+                self.palette_ram.fill(0);
+                self.secondary_oam.fill(0);
+
+                // At power-on the VBlank flag is effectively random. For
+                // determinism we start with it cleared so the first BIT $2002
+                // loop always waits for a real VBlank edge.
+                self.registers
+                    .status
+                    .remove(registers::Status::VERTICAL_BLANK);
+            }
+            ResetKind::Soft => {
+                // Soft reset: reset control/scroll/address latches, but do not
+                // reset PPU memory, and keep $2002 as-is.
+                self.registers.reset();
+
+                // Restore the full $2002 status byte (including VBlank,
+                // sprite 0 hit and overflow) so soft reset doesn't affect it.
+                self.registers.status = prev_status;
+
+                // Note: VRAM, palette RAM, secondary OAM and the framebuffer
+                // are intentionally left untouched here. They are only
+                // initialized/cleared at power-on.
+            }
+        }
+
+        // --- Common reset logic for both power-on and soft reset ---
+
+        // Reset timing so that the next clock() call starts from
+        // scanline -1, cycle 0 (prerender line).
         self.cycle = CYCLES_PER_SCANLINE - 1;
         self.scanline = -1;
         self.frame = 1;
         self.master_clock = 0;
+
+        // Clear delayed $2006 write and pending VRAM increment.
         self.pending_vram_delay = 0;
         self.pending_vram_addr = VramAddr::default();
+        self.pending_vram_increment = PendingVramIncrement::None;
+
+        // Clear background / sprite pipelines and sprite-eval state so the
+        // next frame starts from a clean pipeline state.
         self.bg_pipeline.clear();
         self.sprite_pipeline.clear();
-        self.nmi_pending = false;
-        self.nmi_output = false;
-        self.sprite0_hit_pos = None;
-        // PPU power-on: clear VBlank flag so the first BIT $2002 loop waits
-        // for the true VBlank edge instead of seeing a stale high.
-        self.registers
-            .status
-            .remove(registers::Status::VERTICAL_BLANK);
-        self.open_bus.reset();
-        self.ignore_vram_read = 0;
-        self.oam_copybuffer = 0;
-        self.pending_vram_increment = PendingVramIncrement::None;
-        self.secondary_oam.fill(0);
         self.sprite_eval = SpriteEvalState::default();
         self.sprite_fetch = SpriteFetchState::default();
         self.sprite_line_next.clear();
-        self.clear_framebuffer();
+
+        // NMI line and per-frame vblank suppression latch.
+        self.nmi_pending = false;
+        self.nmi_output = false;
         self.prevent_vblank_flag = false;
+
+        // Open bus and related counters.
+        self.open_bus.reset();
+        self.ignore_vram_read = 0;
+        self.oam_copybuffer = 0;
+
+        // Sprite-0 debug info is per-frame; drop it on reset.
+        self.sprite0_hit_pos = None;
+
+        // Only clear the framebuffer on power-on. Soft reset keeps the last
+        // rendered frame visible, just like real hardware.
+        if matches!(kind, ResetKind::PowerOn) {
+            self.clear_framebuffer();
+        }
     }
 
     /// Current NMI output level: true when VBLANK is set and NMI is enabled.
