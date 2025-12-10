@@ -29,7 +29,7 @@ impl Mnemonic {
                 let s = cpu.a & cpu.x;
                 cpu.s = s;
                 let m = s & cpu.base.wrapping_add(1);
-                bus.mem_write(cpu.effective_addr, m);
+                bus.mem_write(cpu, cpu.effective_addr, m);
             },
         }]
     }
@@ -212,7 +212,7 @@ mod trans_tests {
             let v = verify.cpu.a & verify.cpu.x;
             assert_eq!(cpu.s, v);
             let v = v & verify.addr_hi.wrapping_add(1);
-            let m = bus.mem_read(verify.addr);
+            let m = bus.mem_read(cpu, verify.addr);
             assert_eq!(v, m);
         });
     }

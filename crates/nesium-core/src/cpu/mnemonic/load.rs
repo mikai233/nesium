@@ -25,7 +25,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "las",
             micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu.effective_addr) & cpu.s;
+                let value = bus.mem_read(cpu, cpu.effective_addr) & cpu.s;
                 cpu.a = value;
                 cpu.x = value;
                 cpu.s = value;
@@ -63,7 +63,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "lax",
             micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu.effective_addr);
+                let value = bus.mem_read(cpu, cpu.effective_addr);
                 cpu.a = value;
                 cpu.x = value;
                 cpu.p.set_zn(value);
@@ -101,7 +101,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "lda",
             micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu.effective_addr);
+                let value = bus.mem_read(cpu, cpu.effective_addr);
                 cpu.a = value;
                 cpu.p.set_zn(value);
             },
@@ -133,7 +133,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "ldx",
             micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu.effective_addr);
+                let value = bus.mem_read(cpu, cpu.effective_addr);
                 cpu.x = value;
                 cpu.p.set_zn(value);
             },
@@ -165,7 +165,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "ldy",
             micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu.effective_addr);
+                let value = bus.mem_read(cpu, cpu.effective_addr);
                 cpu.y = value;
                 cpu.p.set_zn(value);
             },
@@ -198,7 +198,7 @@ impl Mnemonic {
             name: "sax",
             micro_fn: |cpu, bus| {
                 let value = cpu.a & cpu.x;
-                bus.mem_write(cpu.effective_addr, value);
+                bus.mem_write(cpu, cpu.effective_addr, value);
             },
         }]
     }
@@ -237,7 +237,7 @@ impl Mnemonic {
             micro_fn: |cpu, bus| {
                 let hi = cpu.base;
                 let value = cpu.a & cpu.x & hi.wrapping_add(1);
-                bus.mem_write(cpu.effective_addr, value);
+                bus.mem_write(cpu, cpu.effective_addr, value);
             },
         }]
     }
@@ -278,7 +278,7 @@ impl Mnemonic {
 
                 // Stored value: X & (H+1), where H is the original operand high byte.
                 let value = cpu.x & hi.wrapping_add(1);
-                bus.mem_write(addr, value);
+                bus.mem_write(cpu, addr, value);
             },
         }]
     }
@@ -319,7 +319,7 @@ impl Mnemonic {
 
                 // Stored value: Y & (H+1), where H is the original operand high byte.
                 let value = cpu.y & hi.wrapping_add(1);
-                bus.mem_write(addr, value);
+                bus.mem_write(cpu, addr, value);
             },
         }]
     }
@@ -348,7 +348,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "sta",
             micro_fn: |cpu, bus| {
-                bus.mem_write(cpu.effective_addr, cpu.a);
+                bus.mem_write(cpu, cpu.effective_addr, cpu.a);
             },
         }]
     }
@@ -373,7 +373,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "stx",
             micro_fn: |cpu, bus| {
-                bus.mem_write(cpu.effective_addr, cpu.x);
+                bus.mem_write(cpu, cpu.effective_addr, cpu.x);
             },
         }]
     }
@@ -397,7 +397,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "sty",
             micro_fn: |cpu, bus| {
-                bus.mem_write(cpu.effective_addr, cpu.y);
+                bus.mem_write(cpu, cpu.effective_addr, cpu.y);
             },
         }]
     }
@@ -458,25 +458,25 @@ mod load_tests {
 
     #[test]
     fn test_sax() {
-        InstrTest::new(Mnemonic::SAX).test(|verify, _, bus| {
+        InstrTest::new(Mnemonic::SAX).test(|verify, cpu, bus| {
             let v = verify.cpu.a & verify.cpu.x;
-            let m = bus.mem_read(verify.addr);
+            let m = bus.mem_read(cpu, verify.addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_sha() {
-        InstrTest::new(Mnemonic::SHA).test(|verify, _, bus| {
+        InstrTest::new(Mnemonic::SHA).test(|verify, cpu, bus| {
             let v = verify.cpu.a & verify.cpu.x & verify.addr_hi.wrapping_add(1);
-            let m = bus.mem_read(verify.addr);
+            let m = bus.mem_read(cpu, verify.addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_shx() {
-        InstrTest::new(Mnemonic::SHX).test(|verify, _, bus| {
+        InstrTest::new(Mnemonic::SHX).test(|verify, cpu, bus| {
             // Reconstruct base operand address before applying Y index.
             let base = verify.addr.wrapping_sub(verify.cpu.y as u16);
             let lo = base as u8;
@@ -487,14 +487,14 @@ mod load_tests {
             let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
 
             let v = verify.cpu.x & hi.wrapping_add(1);
-            let m = bus.mem_read(addr);
+            let m = bus.mem_read(cpu, addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_shy() {
-        InstrTest::new(Mnemonic::SHY).test(|verify, _, bus| {
+        InstrTest::new(Mnemonic::SHY).test(|verify, cpu, bus| {
             // Reconstruct base operand address before applying X index.
             let base = verify.addr.wrapping_sub(verify.cpu.x as u16);
             let lo = base as u8;
@@ -505,34 +505,34 @@ mod load_tests {
             let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
 
             let v = verify.cpu.y & hi.wrapping_add(1);
-            let m = bus.mem_read(addr);
+            let m = bus.mem_read(cpu, addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_sta() {
-        InstrTest::new(Mnemonic::STA).test(|verify, _, bus| {
+        InstrTest::new(Mnemonic::STA).test(|verify, cpu, bus| {
             let v = verify.cpu.a;
-            let m = bus.mem_read(verify.addr);
+            let m = bus.mem_read(cpu, verify.addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_stx() {
-        InstrTest::new(Mnemonic::STX).test(|verify, _, bus| {
+        InstrTest::new(Mnemonic::STX).test(|verify, cpu, bus| {
             let v = verify.cpu.x;
-            let m = bus.mem_read(verify.addr);
+            let m = bus.mem_read(cpu, verify.addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_sty() {
-        InstrTest::new(Mnemonic::STY).test(|verify, _, bus| {
+        InstrTest::new(Mnemonic::STY).test(|verify, cpu, bus| {
             let v = verify.cpu.y;
-            let m = bus.mem_read(verify.addr);
+            let m = bus.mem_read(cpu, verify.addr);
             assert_eq!(v, m);
         });
     }

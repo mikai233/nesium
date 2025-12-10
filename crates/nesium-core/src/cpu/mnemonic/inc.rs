@@ -32,7 +32,7 @@ impl Mnemonic {
                 micro_fn: |cpu, bus| {
                     cpu.p.remove(Status::NEGATIVE | Status::ZERO);
                     // Read the old value from memory
-                    cpu.base = bus.mem_read(cpu.effective_addr);
+                    cpu.base = bus.mem_read(cpu, cpu.effective_addr);
                 },
             },
             // T6: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
@@ -42,7 +42,7 @@ impl Mnemonic {
                 // Internal: DEC calculation is performed and flags are updated. cpu.base now holds V_new.
                 micro_fn: |cpu, bus| {
                     // Dummy write of the old value (V_old)
-                    bus.mem_write(cpu.effective_addr, cpu.base);
+                    bus.mem_write(cpu, cpu.effective_addr, cpu.base);
 
                     // Internal operation: Calculate the new value (V_new = V_old - 1)
                     cpu.base = cpu.base.wrapping_sub(1);
@@ -58,7 +58,7 @@ impl Mnemonic {
                 micro_fn: |cpu, bus| {
                     // Final Write: The correct, decremented value is written to memory.
                     let new_value = cpu.base;
-                    bus.mem_write(cpu.effective_addr, new_value);
+                    bus.mem_write(cpu, cpu.effective_addr, new_value);
                     // Note: DEC does not affect the Carry flag (C)
                 },
             },
@@ -153,7 +153,7 @@ impl Mnemonic {
                 micro_fn: |cpu, bus| {
                     cpu.p.remove(Status::NEGATIVE | Status::ZERO);
                     // Read the old value from memory
-                    cpu.base = bus.mem_read(cpu.effective_addr);
+                    cpu.base = bus.mem_read(cpu, cpu.effective_addr);
                 },
             },
             // T6: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
@@ -163,7 +163,7 @@ impl Mnemonic {
                 // Internal: INC calculation is performed and flags are updated. cpu.base is updated to V_new.
                 micro_fn: |cpu, bus| {
                     // Dummy write of the old value (V_old) - This is the "extra" RMW cycle.
-                    bus.mem_write(cpu.effective_addr, cpu.base);
+                    bus.mem_write(cpu, cpu.effective_addr, cpu.base);
 
                     // Internal operation: Calculate the new value (V_new = V_old + 1)
                     cpu.base = cpu.base.wrapping_add(1);
@@ -180,7 +180,7 @@ impl Mnemonic {
                 micro_fn: |cpu, bus| {
                     // Final Write: The correct, incremented value is written to memory.
                     let new_value = cpu.base;
-                    bus.mem_write(cpu.effective_addr, new_value);
+                    bus.mem_write(cpu, cpu.effective_addr, new_value);
                 },
             },
         ]
@@ -258,7 +258,7 @@ mod inc_tests {
             let expected_value = verify.m.wrapping_sub(1);
 
             assert_eq!(
-                bus.mem_read(verify.addr),
+                bus.mem_read(cpu, verify.addr),
                 expected_value,
                 "Memory was not decremented correctly"
             );
@@ -314,7 +314,7 @@ mod inc_tests {
             let expected_value = verify.m.wrapping_add(1);
 
             assert_eq!(
-                bus.mem_read(verify.addr),
+                bus.mem_read(cpu, verify.addr),
                 expected_value,
                 "Memory was not incremented correctly"
             );

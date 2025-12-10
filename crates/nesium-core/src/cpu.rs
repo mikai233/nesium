@@ -85,7 +85,7 @@ impl OamDma {
 
     /// Runs one DMA micro-step (one CPU cycle). Returns `true` when the
     /// transfer has finished copying all 256 bytes into OAM.
-    fn step(&mut self, bus: &mut dyn Bus) -> bool {
+    fn step(&mut self, cpu: &mut Cpu, bus: &mut dyn Bus) -> bool {
         if self.dummy_cycles > 0 {
             self.dummy_cycles -= 1;
             return false;
@@ -93,12 +93,12 @@ impl OamDma {
 
         if self.read_phase {
             let addr = ((self.page as u16) << 8) | self.offset;
-            self.data_latch = bus.mem_read(addr);
+            self.data_latch = bus.mem_read(cpu, addr);
             self.read_phase = false;
             return false;
         }
 
-        bus.mem_write(PpuRegister::OamData.addr(), self.data_latch);
+        bus.mem_write(cpu, PpuRegister::OamData.addr(), self.data_latch);
         self.offset += 1;
         if self.offset >= OAM_DMA_TRANSFER_BYTES {
             return true;
@@ -187,8 +187,8 @@ impl Cpu {
     pub(crate) fn reset(&mut self, bus: &mut impl Bus, kind: ResetKind) {
         // CpuPtr.store(self as *mut _, std::sync::atomic::Ordering::Relaxed);
         // Read the reset vector from memory ($FFFC-$FFFD) without advancing timing.
-        let lo = bus.peek(RESET_VECTOR_LO);
-        let hi = bus.peek(RESET_VECTOR_HI);
+        let lo = bus.peek(self, RESET_VECTOR_LO);
+        let hi = bus.peek(self, RESET_VECTOR_HI);
         self.pc = ((hi as u16) << 8) | (lo as u16);
 
         match kind {
@@ -319,7 +319,7 @@ impl Cpu {
 
     #[inline]
     pub(crate) fn fetch_opcode(&mut self, bus: &mut dyn Bus) -> u8 {
-        let opcode = bus.mem_read(self.pc);
+        let opcode = bus.mem_read(self, self.pc);
         self.incr_pc();
         // Starting a new instruction boundary clears any one-instruction IRQ suppression.
         self.irq_inhibit_next = false;
@@ -450,10 +450,9 @@ impl Cpu {
     }
 
     fn handle_oam_dma(&mut self, bus: &mut dyn Bus) -> bool {
-        if let Some(dma) = self.oam_dma.as_mut() {
-            if dma.step(bus) {
-                self.oam_dma = None;
-            }
+        if let Some(mut dma) = self.oam_dma.take() {
+            let done = dma.step(self, bus);
+            self.oam_dma = if done { None } else { Some(dma) };
             return true;
         }
 
@@ -462,7 +461,7 @@ impl Cpu {
         {
             let start_on_odd_cycle = (bus.cycles() & 1) == 1;
             let mut dma = OamDma::new(page, start_on_odd_cycle);
-            let done = dma.step(bus);
+            let done = dma.step(self, bus);
             self.oam_dma = if done { None } else { Some(dma) };
             return true;
         }
@@ -538,8 +537,8 @@ impl Cpu {
         set_break: bool,
     ) {
         // Dummy read
-        bus.mem_read(self.pc);
-        bus.mem_read(self.pc);
+        bus.mem_read(self, self.pc);
+        bus.mem_read(self, self.pc);
 
         let pc_hi = (self.pc >> 8) as u8;
         let pc_lo = self.pc as u8;
@@ -551,8 +550,8 @@ impl Cpu {
         // Mask further IRQs immediately upon entering the handler.
         self.set_i_immediate(true);
 
-        let lo = bus.mem_read(vector_lo);
-        let hi = bus.mem_read(vector_hi);
+        let lo = bus.mem_read(self, vector_lo);
+        let hi = bus.mem_read(self, vector_hi);
         self.pc = ((hi as u16) << 8) | (lo as u16);
 
         self.opcode_in_flight = None;
@@ -606,13 +605,13 @@ impl Cpu {
     }
 
     pub(crate) fn push(&mut self, bus: &mut dyn Bus, data: u8) {
-        bus.mem_write(self.stack_addr(), data);
+        bus.mem_write(self, self.stack_addr(), data);
         self.s = self.s.wrapping_sub(1);
     }
 
     pub(crate) fn pull(&mut self, bus: &mut dyn Bus) -> u8 {
         self.s = self.s.wrapping_add(1);
-        bus.mem_read(self.stack_addr())
+        bus.mem_read(self, self.stack_addr())
     }
 
     /// Captures the current CPU registers for tracing/debugging.

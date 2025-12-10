@@ -58,7 +58,7 @@ impl Mnemonic {
                 name: "pha_dummy_read",
                 micro_fn: |cpu, bus| {
                     // Cycle 1: Dummy read from current PC (internal operation)
-                    let _ = bus.mem_read(cpu.pc);
+                    let _ = bus.mem_read(cpu, cpu.pc);
                 },
             },
             MicroOp {
@@ -92,7 +92,7 @@ impl Mnemonic {
                 name: "php_dummy_read",
                 micro_fn: |cpu, bus| {
                     // Cycle 1: Dummy read from current PC
-                    let _ = bus.mem_read(cpu.pc);
+                    let _ = bus.mem_read(cpu, cpu.pc);
                 },
             },
             MicroOp {
@@ -132,14 +132,14 @@ impl Mnemonic {
                 name: "pla_dummy_read1",
                 micro_fn: |cpu, bus| {
                     // Cycle 1: Dummy read from PC
-                    let _ = bus.mem_read(cpu.pc);
+                    let _ = bus.mem_read(cpu, cpu.pc);
                 },
             },
             MicroOp {
                 name: "pla_dummy_read2",
                 micro_fn: |cpu, bus| {
                     // Cycle 2: Dummy read from current stack location (before increment)
-                    let _ = bus.mem_read(STACK_ADDR | cpu.s as u16);
+                    let _ = bus.mem_read(cpu, STACK_ADDR | cpu.s as u16);
                 },
             },
             MicroOp {
@@ -177,14 +177,14 @@ impl Mnemonic {
                 name: "plp_dummy_read1",
                 micro_fn: |cpu, bus| {
                     // Cycle 1: Dummy read from PC
-                    let _ = bus.mem_read(cpu.pc);
+                    let _ = bus.mem_read(cpu, cpu.pc);
                 },
             },
             MicroOp {
                 name: "plp_dummy_read2",
                 micro_fn: |cpu, bus| {
                     // Cycle 2: Dummy read from current stack location
-                    let _ = bus.mem_read(STACK_ADDR | cpu.s as u16);
+                    let _ = bus.mem_read(cpu, STACK_ADDR | cpu.s as u16);
                 },
             },
             MicroOp {
@@ -242,7 +242,7 @@ mod stack_tests {
         InstrTest::new(Mnemonic::PHA).test(|verify, cpu, bus| {
             let v = verify.cpu.a;
             assert_eq!(verify.cpu.s.wrapping_sub(1), cpu.s);
-            let m = bus.mem_read(STACK_ADDR | verify.cpu.s as u16);
+            let m = bus.mem_read(cpu, STACK_ADDR | verify.cpu.s as u16);
             assert_eq!(v, m);
         });
     }
@@ -252,7 +252,7 @@ mod stack_tests {
         InstrTest::new(Mnemonic::PHP).test(|verify, cpu, bus| {
             let v = verify.cpu.p | Status::BREAK | Status::UNUSED;
             assert_eq!(verify.cpu.s.wrapping_sub(1), cpu.s);
-            let m = bus.mem_read(STACK_ADDR | verify.cpu.s as u16);
+            let m = bus.mem_read(cpu, STACK_ADDR | verify.cpu.s as u16);
             assert_eq!(v.bits(), m);
             assert_eq!(verify.cpu.p, cpu.p);
         });
@@ -262,7 +262,7 @@ mod stack_tests {
     fn test_pla() {
         InstrTest::new(Mnemonic::PLA).test(|verify, cpu, bus| {
             assert_eq!(verify.cpu.s.wrapping_add(1), cpu.s);
-            let m = bus.mem_read(STACK_ADDR | verify.cpu.s as u16);
+            let m = bus.mem_read(cpu, STACK_ADDR | verify.cpu.s as u16);
             assert_eq!(cpu.a, m);
             verify.check_nz(cpu.p, m);
         });
@@ -272,7 +272,7 @@ mod stack_tests {
     fn test_plp() {
         InstrTest::new(Mnemonic::PLP).test(|verify, cpu, bus| {
             assert_eq!(verify.cpu.s.wrapping_add(1), cpu.s);
-            let m = bus.mem_read(STACK_ADDR | verify.cpu.s as u16);
+            let m = bus.mem_read(cpu, STACK_ADDR | verify.cpu.s as u16);
             let mut p = Status::from_bits_truncate(m);
             p.remove(Status::BREAK);
             assert_eq!(cpu.p, p);

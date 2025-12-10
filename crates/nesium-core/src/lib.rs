@@ -532,7 +532,7 @@ impl Nes {
             self.clock_start_count,
             self.clock_end_count,
         );
-        bus.peek(addr)
+        bus.peek(&mut self.cpu, addr)
     }
 
     /// Reads a contiguous range of CPU-visible bytes into `buffer`, starting at `base`.
@@ -554,7 +554,7 @@ impl Nes {
             self.clock_end_count,
         );
         for (offset, byte) in buffer.iter_mut().enumerate() {
-            *byte = bus.peek(base.wrapping_add(offset as u16));
+            *byte = bus.peek(&mut self.cpu, base.wrapping_add(offset as u16));
         }
     }
 
@@ -598,7 +598,7 @@ impl Nes {
                         nes.clock_start_count,
                         nes.clock_end_count,
                     );
-                    bus.mem_read(addr)
+                    bus.mem_read(&mut nes.cpu, addr)
                 };
                 nes.apu.finish_dma_fetch(byte);
                 nes.open_bus.latch(byte);

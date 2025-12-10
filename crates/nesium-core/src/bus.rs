@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::memory;
+use crate::{cpu::Cpu, memory};
 
 pub mod cpu;
 #[cfg(test)]
@@ -18,14 +18,14 @@ pub(crate) const STACK_ADDR: u16 = memory::cpu::STACK_PAGE_START;
 /// [`open_bus::OpenBus`]), returning the last driven value for write-only or
 /// unmapped addresses when no device actively drives the data lines.
 pub trait Bus: Debug {
-    fn mem_read(&mut self, addr: u16) -> u8;
+    fn mem_read(&mut self, cpu: &mut Cpu, addr: u16) -> u8;
 
-    fn mem_write(&mut self, addr: u16, data: u8);
+    fn mem_write(&mut self, cpu: &mut Cpu, addr: u16, data: u8);
 
     /// Side-effect-free read used for reset vector fetches. Defaults to a
     /// regular timed read so existing implementations remain valid.
-    fn peek(&mut self, addr: u16) -> u8 {
-        self.mem_read(addr)
+    fn peek(&mut self, cpu: &mut Cpu, addr: u16) -> u8 {
+        self.mem_read(cpu, addr)
     }
 
     /// Internal CPU cycle that does not perform a bus access but must advance

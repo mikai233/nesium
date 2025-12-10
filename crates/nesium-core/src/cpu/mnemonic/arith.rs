@@ -44,7 +44,7 @@ impl Mnemonic {
             name: "adc_binary",
             micro_fn: |cpu, bus| {
                 // 1. Fetch Operand
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
 
                 // 2. Calculate Sum
                 let carry_in = if cpu.p.c() { 1 } else { 0 };
@@ -102,7 +102,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "anc",
             micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
                 cpu.a &= m;
                 cpu.p.set_zn(cpu.a);
                 cpu.p.set_c(cpu.a & BIT_7 != 0);
@@ -144,7 +144,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "arr_binary",
             micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
 
                 // 1. A = A & M
                 cpu.a &= m;
@@ -194,7 +194,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "asr",
             micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
                 cpu.a &= m;
                 cpu.p.set_c(cpu.a & BIT_0 != 0);
                 cpu.a >>= 1;
@@ -234,7 +234,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "cmp",
             micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
                 let result = cpu.a.wrapping_sub(m);
                 cpu.p.set_c(cpu.a >= m);
                 cpu.p.set_zn(result);
@@ -271,7 +271,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "cpx",
             micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
                 let result = cpu.x.wrapping_sub(m);
                 cpu.p.set_c(cpu.x >= m);
                 cpu.p.set_zn(result);
@@ -306,7 +306,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "cpy",
             micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
                 let result = cpu.y.wrapping_sub(m);
                 cpu.p.set_c(cpu.y >= m);
                 cpu.p.set_zn(result);
@@ -349,7 +349,7 @@ impl Mnemonic {
                 // Bus: READ V_old from M(effective_addr)
                 // Internal: Store V_old in a temporary register (here, cpu.base)
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu.effective_addr);
+                    cpu.base = bus.mem_read(cpu, cpu.effective_addr);
                 },
             },
             // T5: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
@@ -358,7 +358,7 @@ impl Mnemonic {
                 // Bus: WRITE V_old back to M(effective_addr) (The "dummy" cycle to burn time)
                 // Internal: DEC calculation is performed. cpu.base now holds V_new.
                 micro_fn: |cpu, bus| {
-                    bus.mem_write(cpu.effective_addr, cpu.base); // Dummy write of the old value
+                    bus.mem_write(cpu, cpu.effective_addr, cpu.base); // Dummy write of the old value
 
                     // Internal operation: Calculate the new value (V_new = V_old - 1)
                     cpu.base = cpu.base.wrapping_sub(1);
@@ -372,7 +372,7 @@ impl Mnemonic {
                 // Internal: Simultaneously perform CMP (A - V_new) and set flags.
                 micro_fn: |cpu, bus| {
                     // Final Write: The correct, decremented value is written to memory.
-                    bus.mem_write(cpu.effective_addr, cpu.base);
+                    bus.mem_write(cpu, cpu.effective_addr, cpu.base);
 
                     // Internal Operation: Perform CMP (A - M) and update status flags (N, Z, C).
                     let m = cpu.base; // m is the decremented value (V_new)
@@ -423,7 +423,7 @@ impl Mnemonic {
                 name: "isc_read_old",
                 micro_fn: |cpu, bus| {
                     // Read M_old into temporary storage (cpu.base)
-                    cpu.base = bus.mem_read(cpu.effective_addr);
+                    cpu.base = bus.mem_read(cpu, cpu.effective_addr);
                 },
             },
             // T5: Dummy Write Old Value (W_dummy) & Internal Calculation
@@ -431,7 +431,7 @@ impl Mnemonic {
                 name: "isc_dummy_write_inc",
                 micro_fn: |cpu, bus| {
                     // 1. Bus: Dummy write of the old value (M_old) - Must be done for accurate timing
-                    bus.mem_write(cpu.effective_addr, cpu.base);
+                    bus.mem_write(cpu, cpu.effective_addr, cpu.base);
 
                     // 2. Internal: Calculate the new value (M_new = M_old + 1)
                     cpu.base = cpu.base.wrapping_add(1);
@@ -442,7 +442,7 @@ impl Mnemonic {
                 name: "isc_final_write_sbc",
                 micro_fn: |cpu, bus| {
                     // 1. Bus: Write the new, incremented value (M_new) to memory (Completes INC part)
-                    bus.mem_write(cpu.effective_addr, cpu.base);
+                    bus.mem_write(cpu, cpu.effective_addr, cpu.base);
 
                     // 2. Internal: Perform SBC (A - M_new - /C)
                     let m_new = cpu.base;
@@ -497,7 +497,7 @@ impl Mnemonic {
                 name: "rla_read_old",
                 micro_fn: |cpu, bus| {
                     // Read M_old from memory into temporary storage (cpu.base)
-                    cpu.base = bus.mem_read(cpu.effective_addr);
+                    cpu.base = bus.mem_read(cpu, cpu.effective_addr);
                 },
             },
             // T5: Dummy Write Old Value (W_dummy) & Internal Calculation (ROL)
@@ -505,7 +505,7 @@ impl Mnemonic {
                 name: "rla_dummy_write_rol",
                 micro_fn: |cpu, bus| {
                     // 1. Bus: Dummy write of the old value (M_old) - Accurate RMW timing
-                    bus.mem_write(cpu.effective_addr, cpu.base);
+                    bus.mem_write(cpu, cpu.effective_addr, cpu.base);
 
                     // 2. Internal: Perform ROL calculation (Rotate Left) to get M_new
                     let m_old = cpu.base;
@@ -526,7 +526,7 @@ impl Mnemonic {
                 name: "rla_final_write_and",
                 micro_fn: |cpu, bus| {
                     // 1. Bus: Write the new, rotated value (M_new) to memory (Completes ROL part)
-                    bus.mem_write(cpu.effective_addr, cpu.base);
+                    bus.mem_write(cpu, cpu.effective_addr, cpu.base);
 
                     // 2. Internal: Perform AND operation (A = A & M_new)
                     let m_new = cpu.base;
@@ -580,7 +580,7 @@ impl Mnemonic {
                 // Bus: READ V_old from M(effective_addr).
                 // Internal: Store V_old in cpu.base for modification.
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu.effective_addr); // V_old (M)
+                    cpu.base = bus.mem_read(cpu, cpu.effective_addr); // V_old (M)
                 },
             },
             // T6: Dummy Write Old Value (W_dummy) & Internal ROR Calculation
@@ -590,7 +590,7 @@ impl Mnemonic {
                 // Internal: Perform ROR calculation. cpu.base now holds M' (new value).
                 micro_fn: |cpu, bus| {
                     let m_old = cpu.base;
-                    bus.mem_write(cpu.effective_addr, m_old); // Dummy write of V_old
+                    bus.mem_write(cpu, cpu.effective_addr, m_old); // Dummy write of V_old
 
                     // --- ROR Calculation ---
                     let carry_in = if cpu.p.c() {
@@ -615,7 +615,7 @@ impl Mnemonic {
                 // Internal: Perform ADC calculation (A = A + M' + C) and set all flags (Z/N/V/C).
                 micro_fn: |cpu, bus| {
                     let m_prime = cpu.base; // M' (New ROR value)
-                    bus.mem_write(cpu.effective_addr, m_prime); // Final write of M' (RRA's RMW part complete)
+                    bus.mem_write(cpu, cpu.effective_addr, m_prime); // Final write of M' (RRA's RMW part complete)
 
                     // --- ADC Execution ---
                     // ADC operates on M' (the value just written)
@@ -682,7 +682,7 @@ impl Mnemonic {
             // Micro-Op for SBC (Subtract with Carry) - Single cycle for execution, assuming effective_addr is ready.
             micro_fn: |cpu, bus| {
                 // 1. Fetch Operand
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
 
                 // 2. Calculate Sum (using 2's complement addition: A + ~M + C)
                 let carry_in = if cpu.p.c() { 1 } else { 0 };
@@ -747,7 +747,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "sbx",
             micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
                 let value = (cpu.a & cpu.x).wrapping_sub(m);
                 cpu.p.set_c((cpu.a & cpu.x) >= m);
                 cpu.x = value;
@@ -791,7 +791,7 @@ impl Mnemonic {
                 // Bus: READ V_old from M(effective_addr).
                 // Internal: Store V_old in cpu.base for modification.
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu.effective_addr); // V_old (M)
+                    cpu.base = bus.mem_read(cpu, cpu.effective_addr); // V_old (M)
                 },
             },
             // T6: Dummy Write Old Value (W_dummy) & Internal ASL Calculation
@@ -801,7 +801,7 @@ impl Mnemonic {
                 // Internal: Perform ASL (Shift Left) calculation. cpu.base now holds M' (new value).
                 micro_fn: |cpu, bus| {
                     let m_old = cpu.base;
-                    bus.mem_write(cpu.effective_addr, m_old); // Dummy write of V_old
+                    bus.mem_write(cpu, cpu.effective_addr, m_old); // Dummy write of V_old
 
                     // --- ASL Calculation (Shift Left) ---
 
@@ -821,7 +821,7 @@ impl Mnemonic {
                 // Internal: Perform ORA operation (A = A | M') and set N/Z flags.
                 micro_fn: |cpu, bus| {
                     let m_prime = cpu.base; // M' (New ASL value)
-                    bus.mem_write(cpu.effective_addr, m_prime); // Final write of M' (SLO's RMW part complete)
+                    bus.mem_write(cpu, cpu.effective_addr, m_prime); // Final write of M' (SLO's RMW part complete)
 
                     // --- ORA Execution ---
                     // ORA operates on A and M' (the value just written)
@@ -873,7 +873,7 @@ impl Mnemonic {
                 // Bus: READ V_old from M(effective_addr).
                 // Internal: Store V_old in cpu.base for modification.
                 micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu.effective_addr); // V_old (M)
+                    cpu.base = bus.mem_read(cpu, cpu.effective_addr); // V_old (M)
                 },
             },
             // T6: Dummy Write Old Value (W_dummy) & Internal LSR Calculation
@@ -883,7 +883,7 @@ impl Mnemonic {
                 // Internal: Perform LSR (Shift Right) calculation. cpu.base now holds M' (new value).
                 micro_fn: |cpu, bus| {
                     let m_old = cpu.base;
-                    bus.mem_write(cpu.effective_addr, m_old); // Dummy write of V_old
+                    bus.mem_write(cpu, cpu.effective_addr, m_old); // Dummy write of V_old
 
                     // --- LSR Calculation (Logical Shift Right) ---
 
@@ -903,7 +903,7 @@ impl Mnemonic {
                 // Internal: Perform EOR operation (A = A ^ M') and set N/Z flags.
                 micro_fn: |cpu, bus| {
                     let m_prime = cpu.base; // M' (New LSR value)
-                    bus.mem_write(cpu.effective_addr, m_prime); // Final write of M' (SRE's RMW part complete)
+                    bus.mem_write(cpu, cpu.effective_addr, m_prime); // Final write of M' (SRE's RMW part complete)
 
                     // --- EOR Execution ---
                     // EOR operates on A and M' (the value just written)
@@ -955,7 +955,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "xaa",
             micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu.effective_addr);
+                let m = bus.mem_read(cpu, cpu.effective_addr);
                 cpu.a = (cpu.a & cpu.x) & m;
                 cpu.p.set_zn(cpu.a);
             },
@@ -1159,7 +1159,7 @@ mod arith_tests {
 
             // Step 4: Verify memory has been decremented
             assert_eq!(
-                bus.mem_read(verify.addr),
+                bus.mem_read(cpu, verify.addr),
                 new_m,
                 "Memory was not decremented"
             );
@@ -1187,7 +1187,7 @@ mod arith_tests {
 
             // Step 3: Verify memory has been incremented
             assert_eq!(
-                bus.mem_read(verify.addr),
+                bus.mem_read(cpu, verify.addr),
                 new_m,
                 "Memory was not incremented"
             );
@@ -1226,7 +1226,7 @@ mod arith_tests {
 
             // Step 2: Update memory with rotated value
             assert_eq!(
-                bus.mem_read(verify.addr),
+                bus.mem_read(cpu, verify.addr),
                 rotated,
                 "Memory not rotated correctly"
             );
@@ -1265,7 +1265,7 @@ mod arith_tests {
             let rotated = (m >> 1) | carry_in_for_ror;
 
             assert_eq!(
-                bus.mem_read(verify.addr),
+                bus.mem_read(cpu, verify.addr),
                 rotated,
                 "Memory not rotated correctly"
             );
@@ -1353,7 +1353,7 @@ mod arith_tests {
 
             // Step 2: Update memory
             assert_eq!(
-                bus.mem_read(verify.addr),
+                bus.mem_read(cpu, verify.addr),
                 asl_result,
                 "Memory not shifted correctly"
             );
@@ -1383,7 +1383,7 @@ mod arith_tests {
 
             // Step 2: Update memory
             assert_eq!(
-                bus.mem_read(verify.addr),
+                bus.mem_read(cpu, verify.addr),
                 lsr_result,
                 "Memory not shifted correctly"
             );

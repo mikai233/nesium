@@ -4,6 +4,7 @@ use crate::{
     bus::{Bus, OpenBus},
     cartridge::Cartridge,
     controller::{Controller, SerialLogger},
+    cpu::Cpu,
     mem_block::cpu as cpu_ram,
     memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem},
     ppu::{Ppu, pattern_bus::PatternBus},
@@ -275,7 +276,7 @@ impl Bus for CpuBus<'_> {
         self.ppu_pattern_write(addr, value);
     }
 
-    fn peek(&mut self, addr: u16) -> u8 {
+    fn peek(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
         let mut driven = true;
         let value = match addr {
             cpu_mem::INTERNAL_RAM_START..=cpu_mem::INTERNAL_RAM_MIRROR_END => {
@@ -325,7 +326,7 @@ impl Bus for CpuBus<'_> {
         value
     }
 
-    fn mem_read(&mut self, addr: u16) -> u8 {
+    fn mem_read(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
         self.begin_cycle(true);
         let mut driven = true;
         let value = match addr {
@@ -381,7 +382,7 @@ impl Bus for CpuBus<'_> {
         value
     }
 
-    fn mem_write(&mut self, addr: u16, data: u8) {
+    fn mem_write(&mut self, _cpu: &mut Cpu, addr: u16, data: u8) {
         self.begin_cycle(false);
         self.open_bus.latch(data);
 
@@ -453,6 +454,7 @@ mod tests {
         header::{Header, Mirroring, RomFormat, TvSystem},
         mapper::mapper0::Mapper0,
     };
+    use crate::cpu::Cpu;
 
     fn test_header(prg_rom_size: usize, prg_ram_size: usize) -> Header {
         Header {
@@ -487,6 +489,7 @@ mod tests {
 
     #[test]
     fn mirrors_internal_ram() {
+        let mut cpu = Cpu::new();
         let mut ppu = Ppu::default();
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
@@ -511,15 +514,19 @@ mod tests {
             6,
             6,
         );
-        bus.mem_write(cpu_mem::INTERNAL_RAM_START + 0x0002, 0xDE);
-        assert_eq!(bus.mem_read(cpu_mem::INTERNAL_RAM_START + 0x0002), 0xDE);
-        assert_eq!(bus.mem_read(0x0802), 0xDE);
-        assert_eq!(bus.mem_read(0x1002), 0xDE);
-        assert_eq!(bus.mem_read(0x1802), 0xDE);
+        bus.mem_write(&mut cpu, cpu_mem::INTERNAL_RAM_START + 0x0002, 0xDE);
+        assert_eq!(
+            bus.mem_read(&mut cpu, cpu_mem::INTERNAL_RAM_START + 0x0002),
+            0xDE
+        );
+        assert_eq!(bus.mem_read(&mut cpu, 0x0802), 0xDE);
+        assert_eq!(bus.mem_read(&mut cpu, 0x1002), 0xDE);
+        assert_eq!(bus.mem_read(&mut cpu, 0x1802), 0xDE);
     }
 
     #[test]
     fn reads_from_prg_rom_with_mirroring() {
+        let mut cpu = Cpu::new();
         let mut ppu = Ppu::default();
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
@@ -546,13 +553,14 @@ mod tests {
             6,
         );
 
-        let first_bank = bus.mem_read(cpu_mem::PRG_ROM_START);
-        let mirrored_bank = bus.mem_read(cpu_mem::PRG_ROM_START + 0x4000);
+        let first_bank = bus.mem_read(&mut cpu, cpu_mem::PRG_ROM_START);
+        let mirrored_bank = bus.mem_read(&mut cpu, cpu_mem::PRG_ROM_START + 0x4000);
         assert_eq!(first_bank, mirrored_bank);
     }
 
     #[test]
     fn reads_and_writes_prg_ram() {
+        let mut cpu = Cpu::new();
         let mut ppu = Ppu::default();
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
@@ -579,7 +587,7 @@ mod tests {
             6,
         );
 
-        bus.mem_write(cpu_mem::PRG_RAM_START, 0x42);
-        assert_eq!(bus.mem_read(cpu_mem::PRG_RAM_START), 0x42);
+        bus.mem_write(&mut cpu, cpu_mem::PRG_RAM_START, 0x42);
+        assert_eq!(bus.mem_read(&mut cpu, cpu_mem::PRG_RAM_START), 0x42);
     }
 }
