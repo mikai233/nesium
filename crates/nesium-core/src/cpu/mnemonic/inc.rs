@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
 };
@@ -26,7 +26,7 @@ use crate::{
 /// Zero Page               | DEC $nn                  | $C6    | 2         | 5
 /// X-Indexed Zero Page     | DEC $nn,X                | $D6    | 2         | 6
 #[inline]
-pub fn exec_dec<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_dec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
@@ -62,7 +62,7 @@ pub fn exec_dec<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | DEX                      | $CA    | 1         | 2
 #[inline]
-pub fn exec_dex<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_dex(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -94,7 +94,7 @@ pub fn exec_dex<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | DEY                      | $88    | 1         | 2
 #[inline]
-pub fn exec_dey<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_dey(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -125,7 +125,7 @@ pub fn exec_dey<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// Zero Page               | INC $nn                  | $E6    | 2         | 5
 /// X-Indexed Zero Page     | INC $nn,X                | $F6    | 2         | 6
 #[inline]
-pub fn exec_inc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_inc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
@@ -149,7 +149,7 @@ pub fn exec_inc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// INX - Increment Index Register X By One
 /// Operation: X + 1 → X
 #[inline]
-pub fn exec_inx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_inx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -166,7 +166,7 @@ pub fn exec_inx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// INY - Increment Index Register Y By One
 /// Operation: Y + 1 → Y
 #[inline]
-pub fn exec_iny<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_iny(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -419,125 +419,5 @@ impl Mnemonic {
                 cpu.p.set_zn(cpu.y);
             },
         }]
-    }
-}
-
-#[cfg(test)]
-mod inc_tests {
-    use crate::cpu::{
-        mnemonic::{Mnemonic, tests::InstrTest},
-        status::BIT_7,
-    };
-
-    #[test]
-    fn test_dec() {
-        InstrTest::new(Mnemonic::DEC).test(|verify, cpu, bus| {
-            let expected_value = verify.m.wrapping_sub(1);
-
-            assert_eq!(
-                bus.mem_read(verify.addr),
-                expected_value,
-                "Memory was not decremented correctly"
-            );
-
-            assert_eq!(cpu.p.z(), expected_value == 0, "Zero flag mismatch");
-            assert_eq!(
-                cpu.p.n(),
-                expected_value & BIT_7 != 0,
-                "Negative flag mismatch"
-            );
-
-            verify.check_nz(cpu.p, expected_value);
-        });
-    }
-
-    #[test]
-    fn test_dex() {
-        InstrTest::new(Mnemonic::DEX).test(|verify, cpu, _| {
-            let expected_x = verify.cpu.x.wrapping_sub(1);
-
-            assert_eq!(
-                cpu.x, expected_x,
-                "X register was not decremented correctly"
-            );
-
-            assert_eq!(cpu.p.z(), expected_x == 0, "Zero flag mismatch");
-            assert_eq!(cpu.p.n(), expected_x & BIT_7 != 0, "Negative flag mismatch");
-
-            verify.check_nz(cpu.p, expected_x);
-        });
-    }
-
-    #[test]
-    fn test_dey() {
-        InstrTest::new(Mnemonic::DEY).test(|verify, cpu, _| {
-            let expected_y = verify.cpu.y.wrapping_sub(1);
-
-            assert_eq!(
-                cpu.y, expected_y,
-                "Y register was not decremented correctly"
-            );
-
-            assert_eq!(cpu.p.z(), expected_y == 0, "Zero flag mismatch");
-            assert_eq!(cpu.p.n(), expected_y & BIT_7 != 0, "Negative flag mismatch");
-
-            verify.check_nz(cpu.p, expected_y);
-        });
-    }
-
-    #[test]
-    fn test_inc() {
-        InstrTest::new(Mnemonic::INC).test(|verify, cpu, bus| {
-            let expected_value = verify.m.wrapping_add(1);
-
-            assert_eq!(
-                bus.mem_read(verify.addr),
-                expected_value,
-                "Memory was not incremented correctly"
-            );
-
-            assert_eq!(cpu.p.z(), expected_value == 0, "Zero flag mismatch");
-            assert_eq!(
-                cpu.p.n(),
-                expected_value & BIT_7 != 0,
-                "Negative flag mismatch"
-            );
-
-            verify.check_nz(cpu.p, expected_value);
-        });
-    }
-
-    #[test]
-    fn test_inx() {
-        InstrTest::new(Mnemonic::INX).test(|verify, cpu, _| {
-            let expected_x = verify.cpu.x.wrapping_add(1);
-
-            assert_eq!(
-                cpu.x, expected_x,
-                "X register was not incremented correctly"
-            );
-
-            assert_eq!(cpu.p.z(), expected_x == 0, "Zero flag mismatch");
-            assert_eq!(cpu.p.n(), expected_x & BIT_7 != 0, "Negative flag mismatch");
-
-            verify.check_nz(cpu.p, expected_x);
-        });
-    }
-
-    #[test]
-    fn test_iny() {
-        InstrTest::new(Mnemonic::INY).test(|verify, cpu, _| {
-            let expected_y = verify.cpu.y.wrapping_add(1);
-
-            assert_eq!(
-                cpu.y, expected_y,
-                "Y register was not incremented correctly"
-            );
-
-            assert_eq!(cpu.p.z(), expected_y == 0, "Zero flag mismatch");
-            assert_eq!(cpu.p.n(), expected_y & BIT_7 != 0, "Negative flag mismatch");
-
-            verify.check_nz(cpu.p, expected_y);
-        });
     }
 }

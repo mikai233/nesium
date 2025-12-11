@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{
         Cpu,
@@ -35,7 +35,7 @@ use crate::{
 /// Implied         | JAM                    | $F2*   | 1         | X
 /// *Undocumented.
 #[inline]
-pub fn exec_jam<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_jam(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             // Match the legacy empty_micro_fn: burn a cycle and effectively halt.

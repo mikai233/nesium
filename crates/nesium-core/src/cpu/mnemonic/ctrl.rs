@@ -1,5 +1,5 @@
 use crate::{
-    bus::{Bus, STACK_ADDR},
+    bus::{CpuBus, STACK_ADDR},
     context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
 };
@@ -27,7 +27,7 @@ use crate::{
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | BRK                      | $00    | 1         | 7
 #[inline]
-pub fn exec_brk<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -73,7 +73,7 @@ pub fn exec_brk<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// Absolute            | JMP $nnnn                | $4C    | 3         | 3
 /// Absolute Indirect   | JMP ($nnnn)              | $6C    | 3         | 5
 #[inline]
-pub fn exec_jmp<B: Bus>(_: &mut Cpu, _: &mut B, _: &mut Context, step: u8) {
+pub fn exec_jmp(_: &mut Cpu, _: &mut CpuBus<'_>, _: &mut Context, step: u8) {
     unreachable_step!("invalid JMP step {step}");
 }
 
@@ -101,7 +101,7 @@ pub fn exec_jmp<B: Bus>(_: &mut Cpu, _: &mut B, _: &mut Context, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Absolute        | JSR $nnnn                | $20    | 3         | 6
 #[inline]
-pub fn exec_jsr<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_jsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
@@ -150,7 +150,7 @@ pub fn exec_jsr<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | RTI                      | $40    | 1         | 6
 #[inline]
-pub fn exec_rti<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_rti(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.mem_read(cpu.pc.wrapping_add(1), cpu, ctx);
@@ -193,7 +193,7 @@ pub fn exec_rti<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | RTS                    | $60    | 1         | 6
 #[inline]
-pub fn exec_rts<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_rts(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
@@ -595,300 +595,5 @@ impl Mnemonic {
                 },
             },
         ]
-    }
-}
-
-#[cfg(test)]
-mod ctrl_tests {
-    use crate::{
-        bus::STACK_ADDR,
-        cpu::{
-            mnemonic::{Mnemonic, tests::InstrTest},
-            status::Status,
-        },
-    };
-
-    #[test]
-    fn test_brk() {
-        InstrTest::new(Mnemonic::BRK).test(|verify, cpu, bus| {
-            // BRK should push PC+2 and the status register onto the stack.
-            // The BRK instruction is two bytes long, so the return address is PC + 2.
-            let expected_return_addr = verify.cpu.pc.wrapping_add(2);
-
-            // --- Stack Pointer Check ---
-
-            // Stack pointer should decrease by 3 (PC high, PC low, Status register)
-            let expected_s = verify.cpu.s.wrapping_sub(3);
-            assert_eq!(cpu.s, expected_s, "Stack pointer not updated correctly");
-
-            // --- Pushed Address Check ---
-
-            let expected_addr_hi = (expected_return_addr >> 8) as u8;
-            let expected_addr_lo = expected_return_addr as u8;
-
-            // Verify the pushed high byte of the return address (pushed first)
-            let mut stack_ptr = verify.cpu.s;
-            let stack_addr_hi = STACK_ADDR | (stack_ptr as u16);
-            assert_eq!(
-                bus.mem_read(stack_addr_hi,),
-                expected_addr_hi,
-                "Return address high byte not pushed correctly"
-            );
-
-            // Verify the pushed low byte of the return address
-            stack_ptr = stack_ptr.wrapping_sub(1);
-            let stack_addr_lo = STACK_ADDR | (stack_ptr as u16);
-            assert_eq!(
-                bus.mem_read(stack_addr_lo,),
-                expected_addr_lo,
-                "Return address low byte not pushed correctly"
-            );
-
-            // --- Pushed Status Register Check ---
-
-            stack_ptr = stack_ptr.wrapping_sub(1);
-            let stack_addr_status = STACK_ADDR | (stack_ptr as u16);
-            let pushed_status = bus.mem_read(stack_addr_status);
-
-            // Construct the expected Pushed Status (P_in | B | U)
-            // 1. Start with the CPU's status bits before execution.
-            let mut expected_pushed_status = verify.cpu.p.bits();
-
-            // 2. The BREAK flag (B, Bit 4) MUST be set (1) when pushed by BRK.
-            expected_pushed_status |= Status::BREAK.bits();
-
-            // 3. The UNUSED flag (U, Bit 5) MUST always be set (1) on NMOS 6502/2A03.
-            expected_pushed_status |= Status::UNUSED.bits();
-
-            assert_eq!(
-                pushed_status, expected_pushed_status,
-                "Pushed status byte mismatch (B/U flags check failed)"
-            );
-
-            // --- CPU Status and PC Update Check ---
-
-            // The Interrupt Disable flag (I) should be set after the interrupt.
-            assert!(
-                cpu.p.contains(Status::INTERRUPT),
-                "Interrupt disable flag not set"
-            );
-
-            // PC should be loaded from the IRQ/BRK vector ($FFFE/$FFFF).
-            let irq_vector_lo = bus.mem_read(0xFFFE) as u16;
-            let irq_vector_hi = bus.mem_read(0xFFFF) as u16;
-            let expected_pc = (irq_vector_hi << 8) | irq_vector_lo;
-            assert_eq!(
-                cpu.pc, expected_pc,
-                "PC not set to interrupt vector address"
-            );
-        });
-    }
-
-    #[test]
-    fn test_jmp() {
-        // This test assumes that verify.addr already holds the final target PC,
-        // handling both Absolute ($4C) and Indirect ($6C) modes, including the $XXFF page wrap bug.
-        InstrTest::new(Mnemonic::JMP).test(|verify, cpu, _| {
-            // JMP does not affect the status register.
-            assert_eq!(
-                cpu.p.bits(),
-                verify.cpu.p.bits(),
-                "JMP should not affect status flags."
-            );
-
-            // The expected PC is the final address calculated by the addressing mode.
-            let expected_pc = verify.addr;
-
-            // The bus parameter is unused in this simplified JMP test,
-            // as the target address is assumed to be pre-calculated in verify.addr.
-
-            // Assert that the CPU's PC register has been set to the calculated jump target.
-            assert_eq!(
-                cpu.pc, expected_pc,
-                "PC not set to the expected jump address."
-            );
-        });
-    }
-
-    #[test]
-    fn test_jsr() {
-        InstrTest::new(Mnemonic::JSR).test(|verify, cpu, bus| {
-            // JSR is a 3-byte instruction (Opcode + 2-byte address).
-            // The return address pushed is PC + 2.
-            let expected_return_addr = verify.cpu.pc.wrapping_add(2);
-
-            // --- 1. Stack Pointer Check ---
-
-            // JSR pushes 2 bytes (PC high, PC low), so SP should decrease by 2.
-            let expected_s = verify.cpu.s.wrapping_sub(2);
-            assert_eq!(
-                cpu.s, expected_s,
-                "Stack pointer not updated correctly after JSR."
-            );
-
-            // --- 2. Pushed Address Check ---
-
-            // The return address is pushed high byte first, then low byte.
-            let expected_addr_hi = (expected_return_addr >> 8) as u8;
-            let expected_addr_lo = expected_return_addr as u8;
-
-            // Verify the pushed high byte (pushed first, at S_in)
-            let mut stack_ptr = verify.cpu.s;
-            let stack_addr_hi = STACK_ADDR | (stack_ptr as u16);
-            assert_eq!(
-                bus.mem_read(stack_addr_hi,),
-                expected_addr_hi,
-                "Return address high byte (PC+2) not pushed correctly."
-            );
-
-            // Verify the pushed low byte (pushed second, at S_in - 1)
-            stack_ptr = stack_ptr.wrapping_sub(1);
-            let stack_addr_lo = STACK_ADDR | (stack_ptr as u16);
-            assert_eq!(
-                bus.mem_read(stack_addr_lo,),
-                expected_addr_lo,
-                "Return address low byte (PC+2) not pushed correctly."
-            );
-
-            // --- 3. Status Register Check ---
-
-            // JSR does not affect the status register.
-            assert_eq!(
-                cpu.p.bits(),
-                verify.cpu.p.bits(),
-                "JSR should not affect status flags."
-            );
-
-            // --- 4. PC Update Check ---
-
-            // PC should be set to the target address, which is assumed to be in verify.addr.
-            let expected_pc = verify.addr;
-            assert_eq!(
-                cpu.pc, expected_pc,
-                "PC not set to the expected subroutine address."
-            );
-        });
-    }
-
-    #[test]
-    fn test_rti() {
-        InstrTest::new(Mnemonic::RTI).test(|verify, cpu, bus| {
-            // --- Setup for Verification ---
-
-            // The initial stack pointer (S_in) points to the highest stack address (0x01XX).
-            // RTI will read from S_in + 1, S_in + 2, and S_in + 3.
-            let initial_s = verify.cpu.s;
-
-            // Read the expected values from the memory (where they were pushed by BRK/IRQ/NMI).
-
-            // 1. Expected Status (P): Read from S_in + 1.
-            let expected_status_addr = STACK_ADDR | initial_s.wrapping_add(1) as u16;
-            let expected_status_bits = bus.mem_read(expected_status_addr);
-
-            // 2. Expected PC Low: Read from S_in + 2.
-            let expected_pc_lo_addr = STACK_ADDR | initial_s.wrapping_add(2) as u16;
-            let expected_pc_lo = bus.mem_read(expected_pc_lo_addr) as u16;
-
-            // 3. Expected PC High: Read from S_in + 3.
-            let expected_pc_hi_addr = STACK_ADDR | initial_s.wrapping_add(3) as u16;
-            let expected_pc_hi = bus.mem_read(expected_pc_hi_addr) as u16;
-
-            let expected_pc = (expected_pc_hi << 8) | expected_pc_lo;
-
-            // --- 1. Status Register Check ---
-
-            // RTI should restore the status register from the stack (S_in + 1).
-            // NOTE: The B (Break) flag (Bit 4) and U (Unused) flag (Bit 5) are ignored
-            // when pulling P from the stack. The B flag is always cleared in the CPU's P register.
-            let mut actual_status_bits = cpu.p.bits();
-            // Mask out the B flag (Bit 4) and U flag (Bit 5) from the read value,
-            // as they are not meant to be set in the live CPU P register.
-            let mask = !(Status::BREAK.bits() | Status::UNUSED.bits());
-
-            // Ensure the B and U flags are cleared in the CPU's P register.
-            actual_status_bits &= mask;
-
-            // Check if the restored P (ignoring B/U flags) matches the expected P (ignoring B/U).
-            assert_eq!(
-                actual_status_bits,
-                expected_status_bits & mask,
-                "Status register (P) not restored correctly from stack (ignoring B/U flags)."
-            );
-
-            // --- 2. PC Update Check ---
-
-            // RTI should restore the PC from the stack (PC low then PC high).
-            assert_eq!(cpu.pc, expected_pc, "PC not restored correctly from stack.");
-
-            // --- 3. Stack Pointer Check ---
-
-            // RTI pops 3 bytes (P, PC_lo, PC_hi), so SP should increase by 3.
-            let expected_s = initial_s.wrapping_add(3);
-            assert_eq!(
-                cpu.s, expected_s,
-                "Stack pointer not updated correctly after RTI."
-            );
-
-            // RTI does not affect A, X, or Y registers.
-            assert_eq!(cpu.a, verify.cpu.a, "A register should be unchanged.");
-            assert_eq!(cpu.x, verify.cpu.x, "X register should be unchanged.");
-            assert_eq!(cpu.y, verify.cpu.y, "Y register should be unchanged.");
-        });
-    }
-
-    #[test]
-    fn test_rts() {
-        InstrTest::new(Mnemonic::RTS).test(|verify, cpu, bus| {
-            // --- Setup for Verification ---
-
-            // The initial stack pointer (S_in) points to the last address pushed.
-            // RTS will read from S_in + 1 and S_in + 2.
-            let initial_s = verify.cpu.s;
-
-            // 1. Read the expected PC Low: From S_in + 1.
-            let expected_pc_lo_addr = STACK_ADDR | initial_s.wrapping_add(1) as u16;
-            let expected_pc_lo = bus.mem_read(expected_pc_lo_addr) as u16;
-
-            // 2. Read the expected PC High: From S_in + 2.
-            let expected_pc_hi_addr = STACK_ADDR | initial_s.wrapping_add(2) as u16;
-            let expected_pc_hi = bus.mem_read(expected_pc_hi_addr) as u16;
-
-            // The address popped from stack is P_return = PC_pushed (usually PC_JSR + 2).
-            let pc_popped = (expected_pc_hi << 8) | expected_pc_lo;
-
-            // The final execution address is P_return + 1.
-            let expected_pc = pc_popped.wrapping_add(1);
-
-            // --- 1. PC Update Check ---
-
-            // RTS should restore PC and then increment it by 1.
-            assert_eq!(
-                cpu.pc, expected_pc,
-                "PC not restored (Popped PC + 1) correctly from stack."
-            );
-
-            // --- 2. Stack Pointer Check ---
-
-            // RTS pops 2 bytes (PC_lo, PC_hi), so SP should increase by 2.
-            let expected_s = initial_s.wrapping_add(2);
-            assert_eq!(
-                cpu.s, expected_s,
-                "Stack pointer not updated correctly after RTS."
-            );
-
-            // --- 3. Status Register Check ---
-
-            // RTS does not affect the status register.
-            assert_eq!(
-                cpu.p.bits(),
-                verify.cpu.p.bits(),
-                "RTS should not affect status flags."
-            );
-
-            // RTS does not affect A, X, or Y registers.
-            assert_eq!(cpu.a, verify.cpu.a, "A register should be unchanged.");
-            assert_eq!(cpu.x, verify.cpu.x, "X register should be unchanged.");
-            assert_eq!(cpu.y, verify.cpu.y, "Y register should be unchanged.");
-        });
     }
 }

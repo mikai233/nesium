@@ -1,7 +1,7 @@
 use crate::{
     apu::Apu,
     audio::NesSoundMixer,
-    bus::{Bus, BusDevices, BusDevicesMut, OpenBus},
+    bus::{BusDevices, BusDevicesMut, OpenBus},
     cartridge::Cartridge,
     context::Context,
     controller::{ControllerPorts, SerialLogger},
@@ -239,10 +239,8 @@ impl<'a> CpuBus<'a> {
     fn write_oam_dma(&mut self, page: u8) {
         *self.oam_dma_request = Some(page);
     }
-}
 
-impl Bus for CpuBus<'_> {
-    fn devices(&self) -> BusDevices<'_> {
+    pub fn devices(&self) -> BusDevices<'_> {
         BusDevices {
             ram: &*self.ram,
             ppu: &*self.ppu,
@@ -252,7 +250,7 @@ impl Bus for CpuBus<'_> {
         }
     }
 
-    fn devices_mut(&mut self) -> BusDevicesMut<'_> {
+    pub fn devices_mut(&mut self) -> BusDevicesMut<'_> {
         BusDevicesMut {
             ram: &mut *self.ram,
             ppu: &mut *self.ppu,
@@ -262,20 +260,20 @@ impl Bus for CpuBus<'_> {
         }
     }
 
-    fn nmi_line(&mut self) -> bool {
+    pub fn nmi_line(&mut self) -> bool {
         // PPU NMI output is a level: VBLANK && CTRL.NMI_ENABLE.
         self.ppu.nmi_output()
     }
 
-    fn ppu_read(&mut self, addr: u16) -> u8 {
+    pub fn ppu_read(&mut self, addr: u16) -> u8 {
         self.ppu_pattern_read(addr)
     }
 
-    fn ppu_write(&mut self, addr: u16, value: u8) {
+    pub fn ppu_write(&mut self, addr: u16, value: u8) {
         self.ppu_pattern_write(addr, value);
     }
 
-    fn peek(&mut self, addr: u16, _cpu: &mut Cpu, _context: &mut Context) -> u8 {
+    pub fn peek(&mut self, addr: u16, _cpu: &mut Cpu, _context: &mut Context) -> u8 {
         let mut driven = true;
         let value = match addr {
             cpu_mem::INTERNAL_RAM_START..=cpu_mem::INTERNAL_RAM_MIRROR_END => {
@@ -325,7 +323,7 @@ impl Bus for CpuBus<'_> {
         value
     }
 
-    fn mem_read(&mut self, addr: u16, cpu: &mut Cpu, ctx: &mut Context) -> u8 {
+    pub fn mem_read(&mut self, addr: u16, cpu: &mut Cpu, ctx: &mut Context) -> u8 {
         self.begin_cycle(true, cpu, ctx);
         let mut driven = true;
         let value = match addr {
@@ -381,7 +379,7 @@ impl Bus for CpuBus<'_> {
         value
     }
 
-    fn mem_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, ctx: &mut Context) {
+    pub fn mem_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, ctx: &mut Context) {
         self.begin_cycle(false, cpu, ctx);
         self.open_bus.latch(data);
 
@@ -421,27 +419,22 @@ impl Bus for CpuBus<'_> {
         self.end_cycle(false, cpu, ctx);
     }
 
-    fn internal_cycle(&mut self, cpu: &mut Cpu, ctx: &mut Context) {
-        self.begin_cycle(true, cpu, ctx);
-        self.end_cycle(true, cpu, ctx);
-    }
-
-    fn irq_pending(&mut self) -> bool {
+    pub fn irq_pending(&mut self) -> bool {
         let apu_irq = self.apu.irq_pending();
         let cartridge_irq = self.cartridge_irq_pending();
         apu_irq || cartridge_irq
     }
 
-    fn take_oam_dma_request(&mut self) -> Option<u8> {
+    pub fn take_oam_dma_request(&mut self) -> Option<u8> {
         self.oam_dma_request.take()
     }
 
-    fn clear_irq(&mut self) {
+    pub fn clear_irq(&mut self) {
         self.apu.clear_irq();
         self.clear_cartridge_irq();
     }
 
-    fn cycles(&self) -> u64 {
+    pub fn cycles(&self) -> u64 {
         *self.cycles
     }
 }

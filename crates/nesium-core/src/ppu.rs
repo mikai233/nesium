@@ -52,7 +52,7 @@ use self::{
 use core::fmt;
 
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     cartridge::{Cartridge, mapper::PpuVramAccessKind},
     context::Context,
     cpu::Cpu,
@@ -481,9 +481,9 @@ impl Ppu {
     /// This is the main timing entry: it performs background/sprite pipeline
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
-    pub fn step<B: Bus>(bus: &mut B, cpu: &mut Cpu, ctx: &mut Context) {
+    pub fn step(bus: &mut CpuBus<'_>, cpu: &mut Cpu, ctx: &mut Context) {
         if let Context::Some { interceptor } = ctx {
-            interceptor.debug(cpu, bus);
+            // interceptor.debug(cpu, bus);
         }
         // // Debug trace: CPU/PPU alignment snapshot for this dot, with extra PPU state.
         // let cpu_cycle = CPU_CYCLE.get();
@@ -840,8 +840,8 @@ impl Ppu {
     }
 
     /// Advance the PPU until its master clock reaches `target_master`.
-    pub(crate) fn run_until<B: Bus>(
-        bus: &mut B,
+    pub(crate) fn run_until(
+        bus: &mut CpuBus<'_>,
         target_master: u64,
         cpu: &mut Cpu,
         ctx: &mut Context,

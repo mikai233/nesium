@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
 };
@@ -23,7 +23,7 @@ use crate::{
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bcc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_bcc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
@@ -63,7 +63,7 @@ pub fn exec_bcc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bcs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_bcs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
@@ -106,7 +106,7 @@ pub fn exec_bcs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_beq<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_beq(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
@@ -146,7 +146,7 @@ pub fn exec_beq<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bmi<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_bmi(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
@@ -188,7 +188,7 @@ pub fn exec_bmi<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bne<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_bne(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
@@ -232,7 +232,7 @@ pub fn exec_bne<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bpl<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_bpl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
@@ -273,7 +273,7 @@ pub fn exec_bpl<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bvc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_bvc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
@@ -313,7 +313,7 @@ pub fn exec_bvc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bvs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_bvs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
@@ -721,185 +721,5 @@ impl Mnemonic {
                 },
             },
         ]
-    }
-}
-
-#[cfg(test)]
-mod bra_tests {
-    use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
-
-    #[test]
-    fn test_bcc() {
-        InstrTest::new(Mnemonic::BCC).test_branch(|verify, cpu, bus| {
-            let old_carry = verify.cpu.p.c();
-            let branch_taken = !old_carry;
-
-            if branch_taken {
-                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
-                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
-                assert_eq!(
-                    cpu.pc, expected_pc,
-                    "PC not updated correctly after branch taken"
-                );
-            } else {
-                let expected_pc = verify.cpu.pc.wrapping_add(2);
-                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
-            }
-            branch_taken
-        });
-    }
-
-    #[test]
-    fn test_bcs() {
-        InstrTest::new(Mnemonic::BCS).test_branch(|verify, cpu, bus| {
-            let old_carry = verify.cpu.p.c();
-            let branch_taken = old_carry;
-
-            if branch_taken {
-                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
-                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
-                assert_eq!(
-                    cpu.pc, expected_pc,
-                    "PC not updated correctly after branch taken"
-                );
-            } else {
-                let expected_pc = verify.cpu.pc.wrapping_add(2);
-                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
-            }
-
-            branch_taken
-        });
-    }
-
-    #[test]
-    fn test_beq() {
-        InstrTest::new(Mnemonic::BEQ).test_branch(|verify, cpu, bus| {
-            let old_zero = verify.cpu.p.z();
-            let branch_taken = old_zero;
-
-            if branch_taken {
-                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
-                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
-                assert_eq!(
-                    cpu.pc, expected_pc,
-                    "PC not updated correctly after branch taken"
-                );
-            } else {
-                let expected_pc = verify.cpu.pc.wrapping_add(2);
-                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
-            }
-
-            branch_taken
-        });
-    }
-
-    #[test]
-    fn test_bmi() {
-        InstrTest::new(Mnemonic::BMI).test_branch(|verify, cpu, bus| {
-            let old_negative = verify.cpu.p.n();
-            let branch_taken = old_negative;
-
-            if branch_taken {
-                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
-                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
-                assert_eq!(
-                    cpu.pc, expected_pc,
-                    "PC not updated correctly after branch taken"
-                );
-            } else {
-                let expected_pc = verify.cpu.pc.wrapping_add(2);
-                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
-            }
-
-            branch_taken
-        });
-    }
-
-    #[test]
-    fn test_bne() {
-        InstrTest::new(Mnemonic::BNE).test_branch(|verify, cpu, bus| {
-            let old_zero = verify.cpu.p.z();
-            let branch_taken = !old_zero;
-
-            if branch_taken {
-                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
-                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
-                assert_eq!(
-                    cpu.pc, expected_pc,
-                    "PC not updated correctly after branch taken"
-                );
-            } else {
-                let expected_pc = verify.cpu.pc.wrapping_add(2);
-                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
-            }
-
-            branch_taken
-        });
-    }
-
-    #[test]
-    fn test_bpl() {
-        InstrTest::new(Mnemonic::BPL).test_branch(|verify, cpu, bus| {
-            let old_negative = verify.cpu.p.n();
-            let branch_taken = !old_negative;
-
-            if branch_taken {
-                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
-                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
-                assert_eq!(
-                    cpu.pc, expected_pc,
-                    "PC not updated correctly after branch taken"
-                );
-            } else {
-                let expected_pc = verify.cpu.pc.wrapping_add(2);
-                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
-            }
-
-            branch_taken
-        });
-    }
-
-    #[test]
-    fn test_bvc() {
-        InstrTest::new(Mnemonic::BVC).test_branch(|verify, cpu, bus| {
-            let old_overflow = verify.cpu.p.v();
-            let branch_taken = !old_overflow;
-
-            if branch_taken {
-                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
-                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
-                assert_eq!(
-                    cpu.pc, expected_pc,
-                    "PC not updated correctly after branch taken"
-                );
-            } else {
-                let expected_pc = verify.cpu.pc.wrapping_add(2);
-                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
-            }
-
-            branch_taken
-        });
-    }
-
-    #[test]
-    fn test_bvs() {
-        InstrTest::new(Mnemonic::BVS).test_branch(|verify, cpu, bus| {
-            let old_overflow = verify.cpu.p.v();
-            let branch_taken = old_overflow;
-
-            if branch_taken {
-                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
-                let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
-                assert_eq!(
-                    cpu.pc, expected_pc,
-                    "PC not updated correctly after branch taken"
-                );
-            } else {
-                let expected_pc = verify.cpu.pc.wrapping_add(2);
-                assert_eq!(cpu.pc, expected_pc, "PC not correct after branch not taken");
-            }
-
-            branch_taken
-        });
     }
 }

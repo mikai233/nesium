@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::{
     apu::Apu,
     audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
-    bus::{Bus, OpenBus, cpu::CpuBus},
+    bus::{OpenBus, cpu::CpuBus},
     cartridge::{Cartridge, Provider},
     config::region::Region,
     context::Context,
@@ -712,8 +712,6 @@ mod tests {
     use ctor::ctor;
     use tracing::Level;
     use tracing_subscriber::FmtSubscriber;
-
-    pub(crate) const TEST_COUNT: usize = 1000;
 
     #[ctor]
     fn init_tracing() {

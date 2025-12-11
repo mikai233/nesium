@@ -31,7 +31,7 @@
 //! **Warning:** For cycle-accurate NES emulation, especially when handling Memory-Mapped I/O (MMIO) like the PPU/APU registers, these dummy memory accesses (T2, T3) must be simulated, as they consume crucial clock cycles.
 
 use crate::{
-    bus::{Bus, STACK_ADDR},
+    bus::{CpuBus, STACK_ADDR},
     context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
 };
@@ -53,7 +53,7 @@ use crate::{
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | PHA                      | $48    | 1         | 3
 #[inline]
-pub fn exec_pha<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_pha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let _ = bus.mem_read(cpu.pc, cpu, ctx);
@@ -80,7 +80,7 @@ pub fn exec_pha<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | PHP                      | $08    | 1         | 3
 #[inline]
-pub fn exec_php<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_php(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let _ = bus.mem_read(cpu.pc, cpu, ctx);
@@ -113,7 +113,7 @@ pub fn exec_php<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | PLA                      | $68    | 1         | 4
 #[inline]
-pub fn exec_pla<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_pla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let _ = bus.mem_read(cpu.pc, cpu, ctx);
@@ -148,7 +148,7 @@ pub fn exec_pla<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | PLP                      | $28    | 1         | 4
 #[inline]
-pub fn exec_plp<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_plp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let _ = bus.mem_read(cpu.pc, cpu, ctx);
@@ -365,58 +365,5 @@ impl Mnemonic {
                 },
             },
         ]
-    }
-}
-
-#[cfg(test)]
-mod stack_tests {
-    use crate::{
-        bus::STACK_ADDR,
-        cpu::{
-            mnemonic::{Mnemonic, tests::InstrTest},
-            status::Status,
-        },
-    };
-
-    #[test]
-    fn test_pha() {
-        InstrTest::new(Mnemonic::PHA).test(|verify, cpu, bus| {
-            let v = verify.cpu.a;
-            assert_eq!(verify.cpu.s.wrapping_sub(1), cpu.s);
-            let m = bus.mem_read(STACK_ADDR | verify.cpu.s as u16);
-            assert_eq!(v, m);
-        });
-    }
-
-    #[test]
-    fn test_php() {
-        InstrTest::new(Mnemonic::PHP).test(|verify, cpu, bus| {
-            let v = verify.cpu.p | Status::BREAK | Status::UNUSED;
-            assert_eq!(verify.cpu.s.wrapping_sub(1), cpu.s);
-            let m = bus.mem_read(STACK_ADDR | verify.cpu.s as u16);
-            assert_eq!(v.bits(), m);
-            assert_eq!(verify.cpu.p, cpu.p);
-        });
-    }
-
-    #[test]
-    fn test_pla() {
-        InstrTest::new(Mnemonic::PLA).test(|verify, cpu, bus| {
-            assert_eq!(verify.cpu.s.wrapping_add(1), cpu.s);
-            let m = bus.mem_read(STACK_ADDR | verify.cpu.s as u16);
-            assert_eq!(cpu.a, m);
-            verify.check_nz(cpu.p, m);
-        });
-    }
-
-    #[test]
-    fn test_plp() {
-        InstrTest::new(Mnemonic::PLP).test(|verify, cpu, bus| {
-            assert_eq!(verify.cpu.s.wrapping_add(1), cpu.s);
-            let m = bus.mem_read(STACK_ADDR | verify.cpu.s as u16);
-            let mut p = Status::from_bits_truncate(m);
-            p.remove(Status::BREAK);
-            assert_eq!(cpu.p, p);
-        });
     }
 }

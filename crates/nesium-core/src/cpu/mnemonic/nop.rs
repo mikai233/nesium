@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{
         Cpu,
@@ -48,7 +48,7 @@ use crate::{
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_nop<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_nop(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => bus.internal_cycle(cpu, ctx),
         _ => unreachable_step!("invalid NOP step {step}"),

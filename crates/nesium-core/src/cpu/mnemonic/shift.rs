@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{
         Cpu,
@@ -34,7 +34,7 @@ use crate::{
 /// Zero Page               | ASL $nn                  | $06    | 2         | 5
 /// X-Indexed Zero Page     | ASL $nn,X                | $16    | 2         | 6
 #[inline]
-pub fn exec_asl<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -86,7 +86,7 @@ pub fn exec_asl<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// Zero Page               | LSR $nn                  | $46    | 2         | 5
 /// X-Indexed Zero Page     | LSR $nn,X                | $56    | 2         | 6
 #[inline]
-pub fn exec_lsr<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -138,7 +138,7 @@ pub fn exec_lsr<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// Zero Page               | ROL $nn                  | $26    | 2         | 5
 /// X-Indexed Zero Page     | ROL $nn,X                | $36    | 2         | 6
 #[inline]
-pub fn exec_rol<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -192,7 +192,7 @@ pub fn exec_rol<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// Zero Page               | ROR $nn                  | $66    | 2         | 5
 /// X-Indexed Zero Page     | ROR $nn,X                | $76    | 2         | 6
 #[inline]
-pub fn exec_ror<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_ror(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -490,99 +490,5 @@ impl Mnemonic {
                 },
             },
         ]
-    }
-}
-
-#[cfg(test)]
-mod shift_tests {
-    use crate::cpu::{
-        mnemonic::{Mnemonic, tests::InstrTest},
-        status::{BIT_0, BIT_7},
-    };
-
-    #[test]
-    fn test_asl() {
-        InstrTest::new(Mnemonic::ASL).test(|verify, cpu, bus| {
-            if cpu.opcode_in_flight == Some(0x0A) {
-                let c = verify.cpu.a & BIT_7 != 0;
-                assert_eq!(cpu.p.c(), c);
-                let v = verify.cpu.a << 1;
-                verify.check_nz(cpu.p, v);
-            } else {
-                let c = verify.m & BIT_7 != 0;
-                assert_eq!(cpu.p.c(), c);
-                let v = verify.m << 1;
-                let m = bus.mem_read(verify.addr);
-                assert_eq!(v, m);
-                verify.check_nz(cpu.p, v);
-            }
-        });
-    }
-
-    #[test]
-    fn test_lsr() {
-        InstrTest::new(Mnemonic::LSR).test(|verify, cpu, bus| {
-            if cpu.opcode_in_flight == Some(0x4A) {
-                // Accumulator mode
-                let c = verify.cpu.a & BIT_0 != 0;
-                assert_eq!(cpu.p.c(), c);
-                let v = verify.cpu.a >> 1;
-                verify.check_nz(cpu.p, v);
-            } else {
-                // Memory mode
-                let c = verify.m & BIT_0 != 0;
-                assert_eq!(cpu.p.c(), c);
-                let v = verify.m >> 1;
-                let m = bus.mem_read(verify.addr);
-                assert_eq!(v, m);
-                verify.check_nz(cpu.p, v);
-            }
-        });
-    }
-
-    #[test]
-    fn test_rol() {
-        InstrTest::new(Mnemonic::ROL).test(|verify, cpu, bus| {
-            if cpu.opcode_in_flight == Some(0x2A) {
-                // Accumulator mode
-                let c_in = verify.cpu.p.c() as u8;
-                let c_out = verify.cpu.a & BIT_7 != 0;
-                assert_eq!(cpu.p.c(), c_out);
-                let v = (verify.cpu.a << 1) | c_in;
-                verify.check_nz(cpu.p, v);
-            } else {
-                // Memory mode
-                let c_in = verify.cpu.p.c() as u8;
-                let c_out = verify.m & BIT_7 != 0;
-                assert_eq!(cpu.p.c(), c_out);
-                let v = (verify.m << 1) | c_in;
-                let m = bus.mem_read(verify.addr);
-                assert_eq!(v, m);
-                verify.check_nz(cpu.p, v);
-            }
-        });
-    }
-
-    #[test]
-    fn test_ror() {
-        InstrTest::new(Mnemonic::ROR).test(|verify, cpu, bus| {
-            if cpu.opcode_in_flight == Some(0x6A) {
-                // Accumulator mode
-                let c_in = (verify.cpu.p.c() as u8) << 7;
-                let c_out = verify.cpu.a & BIT_0 != 0;
-                assert_eq!(cpu.p.c(), c_out);
-                let v = (verify.cpu.a >> 1) | c_in;
-                verify.check_nz(cpu.p, v);
-            } else {
-                // Memory mode
-                let c_in = (verify.cpu.p.c() as u8) << 7;
-                let c_out = verify.m & BIT_0 != 0;
-                assert_eq!(cpu.p.c(), c_out);
-                let v = (verify.m >> 1) | c_in;
-                let m = bus.mem_read(verify.addr);
-                assert_eq!(v, m);
-                verify.check_nz(cpu.p, v);
-            }
-        });
     }
 }

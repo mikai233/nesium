@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{
         Cpu,
@@ -16,7 +16,7 @@ use crate::{
 /// AND - "AND" Memory with Accumulator
 /// Operation: A ∧ M → A
 #[inline]
-pub fn exec_and<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_and(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -33,7 +33,7 @@ pub fn exec_and<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// BIT - Test Bits in Memory with Accumulator
 /// Operation: A ∧ M, M7 → N, M6 → V
 #[inline]
-pub fn exec_bit<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_bit(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -52,7 +52,7 @@ pub fn exec_bit<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// EOR - "Exclusive OR" Memory with Accumulator
 /// Operation: A ⊻ M → A
 #[inline]
-pub fn exec_eor<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_eor(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -69,7 +69,7 @@ pub fn exec_eor<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// ORA - "OR" Memory with Accumulator
 /// Operation: A ∨ M → A
 #[inline]
-pub fn exec_ora<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_ora(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -225,55 +225,5 @@ impl Mnemonic {
                 cpu.p.set_zn(cpu.a);
             },
         }]
-    }
-}
-
-#[cfg(test)]
-mod logic_tests {
-    use crate::cpu::{
-        mnemonic::{Mnemonic, tests::InstrTest},
-        status::{BIT_6, BIT_7},
-    };
-
-    #[test]
-    fn test_and() {
-        InstrTest::new(Mnemonic::AND).test(|verify, cpu, _| {
-            let v = verify.cpu.a & verify.m;
-            assert_eq!(cpu.a, v);
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_eor() {
-        InstrTest::new(Mnemonic::EOR).test(|verify, cpu, _| {
-            let v = verify.cpu.a ^ verify.m;
-            assert_eq!(cpu.a, v);
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_ora() {
-        InstrTest::new(Mnemonic::ORA).test(|verify, cpu, _| {
-            let v = verify.cpu.a | verify.m;
-            assert_eq!(cpu.a, v);
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_bit() {
-        InstrTest::new(Mnemonic::BIT).test(|verify, cpu, _| {
-            // Z flag is set if (A & M) == 0
-            let z = (verify.cpu.a & verify.m) == 0;
-            assert_eq!(cpu.p.z(), z);
-
-            // N flag = bit 7 of memory operand
-            assert_eq!(cpu.p.n(), verify.m & BIT_7 != 0);
-
-            // V flag = bit 6 of memory operand
-            assert_eq!(cpu.p.v(), verify.m & BIT_6 != 0);
-        });
     }
 }

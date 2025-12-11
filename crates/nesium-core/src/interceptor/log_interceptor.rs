@@ -1,4 +1,4 @@
-use crate::{bus::Bus, interceptor::Interceptor};
+use crate::{bus::CpuBus, cpu::Cpu, interceptor::Interceptor};
 
 #[derive(Debug, Clone, Copy)]
 pub struct LogInterceptor;
@@ -8,7 +8,7 @@ impl Interceptor for LogInterceptor {
         std::borrow::Cow::Borrowed(std::any::type_name::<Self>())
     }
 
-    fn debug(&self, cpu: &mut crate::cpu::Cpu, bus: &mut dyn Bus) {
+    fn debug(&self, cpu: &mut Cpu, _bus: &mut CpuBus<'_>) {
         tracing::debug!("{}", cpu.a);
     }
 }

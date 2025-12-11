@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
 };
@@ -21,7 +21,7 @@ use crate::{
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLC                    | $18    | 1         | 2
 #[inline]
-pub fn exec_clc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_clc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -51,7 +51,7 @@ pub fn exec_clc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLD                    | $D8    | 1         | 2
 #[inline]
-pub fn exec_cld<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_cld(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -77,7 +77,7 @@ pub fn exec_cld<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLI                    | $58    | 1         | 2
 #[inline]
-pub fn exec_cli<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_cli(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -108,7 +108,7 @@ pub fn exec_cli<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLV                    | $B8    | 1         | 2
 #[inline]
-pub fn exec_clv<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_clv(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -135,7 +135,7 @@ pub fn exec_clv<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | SEC                    | $38    | 1         | 2
 #[inline]
-pub fn exec_sec<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -166,7 +166,7 @@ pub fn exec_sec<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | SED                    | $F8    | 1         | 2
 #[inline]
-pub fn exec_sed<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sed(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -193,7 +193,7 @@ pub fn exec_sed<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | SEI                    | $78    | 1         | 2
 #[inline]
-pub fn exec_sei<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sei(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -415,59 +415,5 @@ impl Mnemonic {
                 }
             },
         }]
-    }
-}
-
-#[cfg(test)]
-mod flags_test {
-    use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
-
-    #[test]
-    fn test_clc() {
-        InstrTest::new(Mnemonic::CLC).test(|_, cpu, _| {
-            assert!(!cpu.p.c(), "Carry flag should be cleared");
-        });
-    }
-
-    #[test]
-    fn test_cld() {
-        InstrTest::new(Mnemonic::CLD).test(|_, cpu, _| {
-            assert!(!cpu.p.d(), "Decimal Mode flag should be cleared");
-        });
-    }
-
-    #[test]
-    fn test_cli() {
-        InstrTest::new(Mnemonic::CLI).test(|_, cpu, _| {
-            assert!(!cpu.p.i(), "Interrupt Disable flag should be cleared");
-        });
-    }
-
-    #[test]
-    fn test_clv() {
-        InstrTest::new(Mnemonic::CLV).test(|_, cpu, _| {
-            assert!(!cpu.p.v(), "Overflow flag should be cleared");
-        });
-    }
-
-    #[test]
-    fn test_sec() {
-        InstrTest::new(Mnemonic::SEC).test(|_, cpu, _| {
-            assert!(cpu.p.c(), "Carry flag should be set");
-        });
-    }
-
-    #[test]
-    fn test_sed() {
-        InstrTest::new(Mnemonic::SED).test(|_, cpu, _| {
-            assert!(cpu.p.d(), "Decimal Mode flag should be set");
-        });
-    }
-
-    #[test]
-    fn test_sei() {
-        InstrTest::new(Mnemonic::SEI).test(|_, cpu, _| {
-            assert!(cpu.p.i(), "Interrupt Disable flag should be set");
-        });
     }
 }

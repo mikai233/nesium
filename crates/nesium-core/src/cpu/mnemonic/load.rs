@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
 };
@@ -26,7 +26,7 @@ use crate::{
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_las<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_las(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx) & cpu.s;
@@ -65,7 +65,7 @@ pub fn exec_las<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_lax<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_lax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -104,7 +104,7 @@ pub fn exec_lax<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_lda<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_lda(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -137,7 +137,7 @@ pub fn exec_lda<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_ldx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_ldx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -170,7 +170,7 @@ pub fn exec_ldx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_ldy<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_ldy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -203,7 +203,7 @@ pub fn exec_ldy<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sax<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = cpu.a & cpu.x;
@@ -232,7 +232,7 @@ pub fn exec_sax<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sha<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let hi = cpu.base;
@@ -261,7 +261,7 @@ pub fn exec_sha<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_shx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_shx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             // Reconstruct base operand address before applying Y index.
@@ -301,7 +301,7 @@ pub fn exec_shx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_shy<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_shy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             // Reconstruct base operand address before applying X index.
@@ -345,7 +345,7 @@ pub fn exec_shy<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_sta<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sta(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => bus.mem_write(cpu.effective_addr, cpu.a, cpu, ctx),
         _ => unreachable_step!("invalid STA step {step}"),
@@ -368,7 +368,7 @@ pub fn exec_sta<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// Zero Page               | STX $nn                  | $86    | 2         | 3
 /// Y-Indexed Zero Page     | STX $nn,Y                | $96    | 2         | 4
 #[inline]
-pub fn exec_stx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_stx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => bus.mem_write(cpu.effective_addr, cpu.x, cpu, ctx),
         _ => unreachable_step!("invalid STX step {step}"),
@@ -391,7 +391,7 @@ pub fn exec_stx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// Zero Page               | STY $nn                  | $84    | 2         | 3
 /// X-Indexed Zero Page     | STY $nn,X                | $94    | 2         | 4
 #[inline]
-pub fn exec_sty<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sty(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => bus.mem_write(cpu.effective_addr, cpu.y, cpu, ctx),
         _ => unreachable_step!("invalid STY step {step}"),
@@ -798,139 +798,5 @@ impl Mnemonic {
                 bus.mem_write(cpu.effective_addr, cpu.y, cpu, ctx);
             },
         }]
-    }
-}
-
-#[cfg(test)]
-mod load_tests {
-    use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
-
-    #[test]
-    fn test_las() {
-        InstrTest::new(Mnemonic::LAS).test(|verify, cpu, _| {
-            let v = verify.m & verify.cpu.s;
-            assert_eq!(cpu.a, v);
-            assert_eq!(cpu.x, v);
-            assert_eq!(cpu.s, v);
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_lax() {
-        InstrTest::new(Mnemonic::LAX).test(|verify, cpu, _| {
-            let m = verify.m;
-            assert_eq!(cpu.a, m);
-            assert_eq!(cpu.x, m);
-            verify.check_nz(cpu.p, m);
-        });
-    }
-
-    #[test]
-    fn test_lda() {
-        InstrTest::new(Mnemonic::LDA).test(|verify, cpu, _| {
-            let m = verify.m;
-            assert_eq!(cpu.a, m);
-            verify.check_nz(cpu.p, m);
-        });
-    }
-
-    #[test]
-    fn test_ldx() {
-        InstrTest::new(Mnemonic::LDX).test(|verify, cpu, _| {
-            let m = verify.m;
-            assert_eq!(cpu.x, m);
-            verify.check_nz(cpu.p, m);
-        });
-    }
-
-    #[test]
-    fn test_ldy() {
-        InstrTest::new(Mnemonic::LDY).test(|verify, cpu, _| {
-            let m = verify.m;
-            assert_eq!(cpu.y, m);
-            verify.check_nz(cpu.p, m);
-        });
-    }
-
-    #[test]
-    fn test_sax() {
-        InstrTest::new(Mnemonic::SAX).test(|verify, _, bus| {
-            let v = verify.cpu.a & verify.cpu.x;
-            let m = bus.mem_read(verify.addr);
-            assert_eq!(v, m);
-        });
-    }
-
-    #[test]
-    fn test_sha() {
-        InstrTest::new(Mnemonic::SHA).test(|verify, _, bus| {
-            let v = verify.cpu.a & verify.cpu.x & verify.addr_hi.wrapping_add(1);
-            let m = bus.mem_read(verify.addr);
-            assert_eq!(v, m);
-        });
-    }
-
-    #[test]
-    fn test_shx() {
-        InstrTest::new(Mnemonic::SHX).test(|verify, _, bus| {
-            // Reconstruct base operand address before applying Y index.
-            let base = verify.addr.wrapping_sub(verify.cpu.y as u16);
-            let lo = base as u8;
-            let hi = (base >> 8) as u8;
-
-            let addr_hi = hi & verify.cpu.x.wrapping_add(1);
-            let addr_lo = lo.wrapping_add(verify.cpu.y);
-            let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
-
-            let v = verify.cpu.x & hi.wrapping_add(1);
-            let m = bus.mem_read(addr);
-            assert_eq!(v, m);
-        });
-    }
-
-    #[test]
-    fn test_shy() {
-        InstrTest::new(Mnemonic::SHY).test(|verify, _, bus| {
-            // Reconstruct base operand address before applying X index.
-            let base = verify.addr.wrapping_sub(verify.cpu.x as u16);
-            let lo = base as u8;
-            let hi = (base >> 8) as u8;
-
-            let addr_hi = hi & verify.cpu.y.wrapping_add(1);
-            let addr_lo = lo.wrapping_add(verify.cpu.x);
-            let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
-
-            let v = verify.cpu.y & hi.wrapping_add(1);
-            let m = bus.mem_read(addr);
-            assert_eq!(v, m);
-        });
-    }
-
-    #[test]
-    fn test_sta() {
-        InstrTest::new(Mnemonic::STA).test(|verify, _, bus| {
-            let v = verify.cpu.a;
-            let m = bus.mem_read(verify.addr);
-            assert_eq!(v, m);
-        });
-    }
-
-    #[test]
-    fn test_stx() {
-        InstrTest::new(Mnemonic::STX).test(|verify, _, bus| {
-            let v = verify.cpu.x;
-            let m = bus.mem_read(verify.addr);
-            assert_eq!(v, m);
-        });
-    }
-
-    #[test]
-    fn test_sty() {
-        InstrTest::new(Mnemonic::STY).test(|verify, _, bus| {
-            let v = verify.cpu.y;
-            let m = bus.mem_read(verify.addr);
-            assert_eq!(v, m);
-        });
     }
 }

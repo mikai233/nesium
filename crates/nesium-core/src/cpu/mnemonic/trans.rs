@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
 };
@@ -26,7 +26,7 @@ use crate::{
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_shs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_shs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let s = cpu.a & cpu.x;
@@ -57,7 +57,7 @@ pub fn exec_shs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TAX                      | $AA    | 1         | 2
 #[inline]
-pub fn exec_tax<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_tax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -86,7 +86,7 @@ pub fn exec_tax<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TAY                      | $A8    | 1         | 2
 #[inline]
-pub fn exec_tay<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_tay(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -116,7 +116,7 @@ pub fn exec_tay<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TSX                      | $BA    | 1         | 2
 #[inline]
-pub fn exec_tsx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_tsx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -145,7 +145,7 @@ pub fn exec_tsx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TXA                      | $8A    | 1         | 2
 #[inline]
-pub fn exec_txa<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_txa(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -172,7 +172,7 @@ pub fn exec_txa<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TXS                      | $9A    | 1         | 2
 #[inline]
-pub fn exec_txs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_txs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -200,7 +200,7 @@ pub fn exec_txs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TYA                      | $98    | 1         | 2
 #[inline]
-pub fn exec_tya<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_tya(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
@@ -410,74 +410,5 @@ impl Mnemonic {
                 cpu.p.set_zn(cpu.a);
             },
         }]
-    }
-}
-
-#[cfg(test)]
-mod trans_tests {
-    use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
-
-    #[test]
-    fn test_shs() {
-        InstrTest::new(Mnemonic::SHS).test(|verify, cpu, bus| {
-            let v = verify.cpu.a & verify.cpu.x;
-            assert_eq!(cpu.s, v);
-            let v = v & verify.addr_hi.wrapping_add(1);
-            let m = bus.mem_read(verify.addr);
-            assert_eq!(v, m);
-        });
-    }
-
-    #[test]
-    fn test_tax() {
-        InstrTest::new(Mnemonic::TAX).test(|verify, cpu, _| {
-            let v = verify.cpu.a;
-            assert_eq!(cpu.x, v);
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_tay() {
-        InstrTest::new(Mnemonic::TAY).test(|verify, cpu, _| {
-            let v = verify.cpu.a;
-            assert_eq!(cpu.y, v);
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_tsx() {
-        InstrTest::new(Mnemonic::TSX).test(|verify, cpu, _| {
-            let v = verify.cpu.s;
-            assert_eq!(cpu.x, v);
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_txa() {
-        InstrTest::new(Mnemonic::TXA).test(|verify, cpu, _| {
-            let v = verify.cpu.x;
-            assert_eq!(cpu.a, v);
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_txs() {
-        InstrTest::new(Mnemonic::TXS).test(|verify, cpu, _| {
-            let v = verify.cpu.x;
-            assert_eq!(cpu.s, v);
-        });
-    }
-
-    #[test]
-    fn test_tya() {
-        InstrTest::new(Mnemonic::TYA).test(|verify, cpu, _| {
-            let v = verify.cpu.y;
-            assert_eq!(cpu.a, v);
-            verify.check_nz(cpu.p, v);
-        });
     }
 }

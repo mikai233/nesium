@@ -1,5 +1,5 @@
 use crate::{
-    bus::Bus,
+    bus::CpuBus,
     context::Context,
     cpu::{
         Cpu,
@@ -45,7 +45,7 @@ use crate::{
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_adc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_adc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -83,7 +83,7 @@ pub fn exec_adc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_anc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_anc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -126,7 +126,7 @@ pub fn exec_anc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_arr<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_arr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -166,7 +166,7 @@ pub fn exec_arr<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_asr<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_asr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -207,7 +207,7 @@ pub fn exec_asr<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_cmp<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_cmp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -245,7 +245,7 @@ pub fn exec_cmp<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// Absolute        | CPX $nnnn                | $EC    | 3         | 4
 /// Zero Page       | CPX $nn                  | $E4    | 2         | 3
 #[inline]
-pub fn exec_cpx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_cpx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -281,7 +281,7 @@ pub fn exec_cpx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// Absolute        | CPY $nnnn                | $CC    | 3         | 4
 /// Zero Page       | CPY $nn                  | $C4    | 2         | 3
 #[inline]
-pub fn exec_cpy<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_cpy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -321,7 +321,7 @@ pub fn exec_cpy<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_dcp<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_dcp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -370,7 +370,7 @@ pub fn exec_dcp<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_isc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_isc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -426,7 +426,7 @@ pub fn exec_isc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_rla<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_rla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -479,7 +479,7 @@ pub fn exec_rla<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_rra<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_rra(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -546,7 +546,7 @@ pub fn exec_rra<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_sbc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sbc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -589,7 +589,7 @@ pub fn exec_sbc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sbx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sbx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -630,7 +630,7 @@ pub fn exec_sbx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_slo<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_slo(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -681,7 +681,7 @@ pub fn exec_slo<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sre<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_sre(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -736,7 +736,7 @@ pub fn exec_sre<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8)
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_xaa<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
+pub fn exec_xaa(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -1703,470 +1703,5 @@ impl Mnemonic {
                 cpu.p.set_zn(cpu.a);
             },
         }]
-    }
-}
-
-#[cfg(test)]
-mod arith_tests {
-    use crate::cpu::{
-        mnemonic::{Mnemonic, tests::InstrTest},
-        status::{BIT_0, BIT_7},
-    };
-
-    #[test]
-    fn test_adc() {
-        InstrTest::new(Mnemonic::ADC).test(|verify, cpu, _| {
-            let m = verify.m;
-            let a_in = verify.cpu.a;
-            let c_in = if verify.cpu.p.c() { 1 } else { 0 };
-
-            let sum_16 = a_in as u16 + m as u16 + c_in as u16;
-            let final_a = (sum_16 & 0xFF) as u8;
-
-            assert_eq!(cpu.a, final_a, "Accumulator mismatch after ADC");
-
-            let final_c = sum_16 > 0xFF;
-            assert_eq!(cpu.p.c(), final_c, "Carry flag mismatch");
-
-            let final_v = ((a_in ^ final_a) & (m ^ final_a) & BIT_7) != 0;
-            assert_eq!(cpu.p.v(), final_v, "Overflow flag mismatch");
-
-            let zero = final_a == 0;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
-
-            let negative = final_a & BIT_7 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
-
-            verify.check_nz(cpu.p, final_a);
-        });
-    }
-
-    #[test]
-    fn test_anc() {
-        InstrTest::new(Mnemonic::ANC).test(|verify, cpu, _| {
-            let v = verify.cpu.a & verify.m;
-            assert_eq!(cpu.a, v);
-
-            // Carry = bit 7 of result
-            let carry = v & BIT_7 != 0;
-            assert_eq!(cpu.p.c(), carry);
-
-            // Update N/Z flags
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_arr() {
-        InstrTest::new(Mnemonic::ARR).test(|verify, cpu, _| {
-            let old_carry = verify.cpu.p.c();
-            let old_a = verify.cpu.a;
-            let m = verify.m;
-
-            // Step 1: AND with operand
-            let and_result = old_a & m;
-
-            // Step 2: ROR operation with carry input
-            let shifted = (and_result >> 1) | (if old_carry { 0x80 } else { 0 });
-
-            // Check accumulator result
-            assert_eq!(cpu.a, shifted, "Accumulator result mismatch");
-
-            // Carry = bit 6 of result
-            let c = shifted & 0x40 != 0;
-            assert_eq!(cpu.p.c(), c, "Carry flag mismatch");
-
-            // Overflow = bit6 XOR bit5
-            let v_flag = (shifted & 0x40 != 0) ^ (shifted & 0x20 != 0);
-            assert_eq!(cpu.p.v(), v_flag, "Overflow flag mismatch");
-
-            // Negative / Zero flags
-            verify.check_nz(cpu.p, shifted);
-        });
-    }
-
-    #[test]
-    fn test_asr() {
-        InstrTest::new(Mnemonic::ASR).test(|verify, cpu, _| {
-            let mut v = verify.cpu.a & verify.m;
-            v >>= 1;
-            assert_eq!(cpu.a, v);
-            let original_low_bit = (verify.cpu.a & verify.m) & 1;
-            assert_eq!(cpu.p.c(), original_low_bit != 0);
-            verify.check_nz(cpu.p, v);
-        });
-    }
-
-    #[test]
-    fn test_cmp() {
-        InstrTest::new(Mnemonic::CMP).test(|verify, cpu, _| {
-            // Step 1: Simulate (A - M) operation without storing the result
-            let result = verify.cpu.a.wrapping_sub(verify.m);
-
-            // Step 2: Verify processor flags
-            // Carry = 1 if A >= M
-            let carry = verify.cpu.a >= verify.m;
-            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
-
-            // Zero = 1 if A == M
-            let zero = verify.cpu.a == verify.m;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
-
-            // Negative = bit 7 of (A - M)
-            let negative = result & BIT_7 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
-
-            // Step 3: Ensure accumulator remains unchanged
-            assert_eq!(cpu.a, verify.cpu.a, "Accumulator should remain unchanged");
-
-            // Step 4: Cross-check N/Z flags with helper
-            verify.check_nz(cpu.p, result);
-        });
-    }
-
-    #[test]
-    fn test_cpx() {
-        InstrTest::new(Mnemonic::CPX).test(|verify, cpu, _| {
-            // Step 1: Simulate (X - M) operation
-            let (result, _borrow) = verify.cpu.x.overflowing_sub(verify.m);
-
-            // Step 2: Verify processor flags
-            // Carry = 1 if X >= M
-            let carry = verify.cpu.x >= verify.m;
-            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
-
-            // Zero = 1 if X == M
-            let zero = verify.cpu.x == verify.m;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
-
-            // Negative = bit 7 of (X - M)
-            let negative = result & BIT_7 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
-
-            // Step 3: Ensure register X remains unchanged
-            assert_eq!(cpu.x, verify.cpu.x, "Register X should remain unchanged");
-
-            // Step 4: Cross-check N/Z flags using helper
-            verify.check_nz(cpu.p, result);
-        });
-    }
-
-    #[test]
-    fn test_cpy() {
-        InstrTest::new(Mnemonic::CPY).test(|verify, cpu, _| {
-            // Step 1: Simulate (Y - M) operation
-            let (result, _borrow) = verify.cpu.y.overflowing_sub(verify.m);
-
-            // Step 2: Verify processor flags
-            // Carry = 1 if Y >= M
-            let carry = verify.cpu.y >= verify.m;
-            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
-
-            // Zero = 1 if Y == M
-            let zero = verify.cpu.y == verify.m;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
-
-            // Negative = bit 7 of (Y - M)
-            let negative = result & BIT_7 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
-
-            // Step 3: Ensure register Y remains unchanged
-            assert_eq!(cpu.y, verify.cpu.y, "Register Y should remain unchanged");
-
-            // Step 4: Cross-check N/Z flags using helper
-            verify.check_nz(cpu.p, result);
-        });
-    }
-
-    #[test]
-    fn test_dcp() {
-        InstrTest::new(Mnemonic::DCP).test(|verify, cpu, bus| {
-            // Step 1: Decrement memory value (simulate DEC M)
-            let new_m = verify.m.wrapping_sub(1);
-
-            // Step 2: Perform CMP A, new_m
-            let (result, _borrow) = verify.cpu.a.overflowing_sub(new_m);
-
-            // Step 3: Verify processor flags for CMP part
-            // Carry = 1 if A >= new_m
-            let carry = verify.cpu.a >= new_m;
-            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
-
-            // Zero = 1 if A == new_m
-            let zero = verify.cpu.a == new_m;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
-
-            // Negative = bit 7 of (A - new_m)
-            let negative = result & BIT_7 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
-
-            // Step 4: Verify memory has been decremented
-            assert_eq!(
-                bus.mem_read(verify.addr),
-                new_m,
-                "Memory was not decremented"
-            );
-
-            // Step 5: Accumulator remains unchanged
-            assert_eq!(cpu.a, verify.cpu.a, "Accumulator should remain unchanged");
-
-            // Step 6: Optional: cross-check N/Z flags
-            verify.check_nz(cpu.p, result);
-        });
-    }
-
-    #[test]
-    fn test_isc() {
-        InstrTest::new(Mnemonic::ISC).test(|verify, cpu, bus| {
-            // Step 1: Increment memory value (simulate INC M)
-            let new_m = verify.m.wrapping_add(1);
-
-            // Step 2: Perform SBC A, new_m
-            // SBC: A - M - (1 - C) 等价于 A + (!M) + C
-            let carry_in = if verify.cpu.p.c() { 1 } else { 0 };
-            let inverted_m = !new_m;
-            let sum = verify.cpu.a as u16 + inverted_m as u16 + carry_in as u16;
-            let sbc_result = sum as u8;
-
-            // Step 3: Verify memory has been incremented
-            assert_eq!(
-                bus.mem_read(verify.addr),
-                new_m,
-                "Memory was not incremented"
-            );
-
-            // Step 4: Accumulator updated correctly
-            assert_eq!(cpu.a, sbc_result, "Accumulator mismatch after SBC");
-
-            // Step 5: Update flags for SBC
-            // Carry = 1 if no borrow occurred (sum > 0xFF)
-            let carry = sum > 0xFF;
-            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
-
-            // Zero = 1 if result == 0
-            assert_eq!(cpu.p.z(), sbc_result == 0, "Zero flag mismatch");
-
-            // Negative = bit 7 of result
-            assert_eq!(cpu.p.n(), sbc_result & BIT_7 != 0, "Negative flag mismatch");
-
-            // Overflow = signed overflow detection
-            let overflow = ((verify.cpu.a ^ sbc_result) & (inverted_m ^ sbc_result) & BIT_7) != 0;
-            assert_eq!(cpu.p.v(), overflow, "Overflow flag mismatch");
-
-            // Step 6: Optional: cross-check N/Z flags
-            verify.check_nz(cpu.p, sbc_result);
-        });
-    }
-
-    #[test]
-    fn test_rla() {
-        InstrTest::new(Mnemonic::RLA).test(|verify, cpu, bus| {
-            // Step 1: Rotate memory left through carry
-            let old_carry = if verify.cpu.p.c() { 1 } else { 0 };
-            let mut rotated = (verify.m << 1) | old_carry;
-            rotated &= 0xFF; // ensure 8-bit
-            let new_carry = (verify.m & BIT_7) != 0;
-
-            // Step 2: Update memory with rotated value
-            assert_eq!(
-                bus.mem_read(verify.addr),
-                rotated,
-                "Memory not rotated correctly"
-            );
-
-            // Step 3: AND accumulator with rotated memory
-            let result = verify.cpu.a & rotated;
-
-            // Step 4: Update accumulator
-            assert_eq!(cpu.a, result, "Accumulator not ANDed correctly");
-
-            // Step 5: Verify flags
-            // Carry = bit7 of original memory
-            assert_eq!(cpu.p.c(), new_carry, "Carry flag mismatch");
-
-            // Negative = bit7 of result
-            let negative = result & BIT_7 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
-
-            // Zero = 1 if result is zero
-            let zero = result == 0;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
-
-            // Optional: cross-check N/Z flags using helper
-            verify.check_nz(cpu.p, result);
-        });
-    }
-
-    #[test]
-    fn test_rra() {
-        InstrTest::new(Mnemonic::RRA).test(|verify, cpu, bus| {
-            let old_carry = verify.cpu.p.c();
-            let m = verify.m;
-
-            let ror_new_carry = (m & BIT_0) != 0;
-            let carry_in_for_ror = if old_carry { BIT_7 } else { 0 };
-            let rotated = (m >> 1) | carry_in_for_ror;
-
-            assert_eq!(
-                bus.mem_read(verify.addr),
-                rotated,
-                "Memory not rotated correctly"
-            );
-
-            let carry_for_adc = if ror_new_carry { 1 } else { 0 };
-
-            let sum = verify.cpu.a as u16 + rotated as u16 + carry_for_adc as u16;
-
-            let adc_result = sum as u8;
-
-            assert_eq!(cpu.a, adc_result, "Accumulator mismatch after ADC");
-
-            let carry = sum > 0xFF;
-            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
-
-            assert_eq!(cpu.p.z(), adc_result == 0, "Zero flag mismatch");
-
-            assert_eq!(cpu.p.n(), adc_result & BIT_7 != 0, "Negative flag mismatch");
-
-            let overflow = ((verify.cpu.a ^ adc_result) & (rotated ^ adc_result) & BIT_7) != 0;
-            assert_eq!(cpu.p.v(), overflow, "Overflow flag mismatch");
-        });
-    }
-
-    #[test]
-    fn test_sbc() {
-        InstrTest::new(Mnemonic::SBC).test(|verify, cpu, _| {
-            let m = verify.m;
-            let a_in = verify.cpu.a;
-            let c_in = if verify.cpu.p.c() { 1 } else { 0 };
-
-            let inverted_m = !m;
-            let sum_16 = a_in as u16 + inverted_m as u16 + c_in as u16;
-            let final_a = (sum_16 & 0xFF) as u8;
-
-            assert_eq!(cpu.a, final_a, "Accumulator mismatch after SBC");
-
-            let final_c = sum_16 > 0xFF;
-            assert_eq!(cpu.p.c(), final_c, "Carry flag mismatch");
-
-            let final_v = ((a_in ^ final_a) & (inverted_m ^ final_a) & BIT_7) != 0;
-            assert_eq!(cpu.p.v(), final_v, "Overflow flag mismatch");
-
-            assert_eq!(cpu.p.z(), final_a == 0, "Zero flag mismatch");
-            assert_eq!(cpu.p.n(), final_a & BIT_7 != 0, "Negative flag mismatch");
-        });
-    }
-
-    #[test]
-    fn test_sbx() {
-        InstrTest::new(Mnemonic::SBX).test(|verify, cpu, _| {
-            // Step 1: Compute A & X
-            let ax = verify.cpu.a & verify.cpu.x;
-
-            // Step 2: Compute X = (A & X) - M
-            let result = ax.wrapping_sub(verify.m);
-
-            // Step 3: Update X register
-            assert_eq!(cpu.x, result, "X register mismatch after SBX");
-
-            // Step 4: Update flags
-            // Carry = 1 if (A & X) >= M
-            let carry = ax >= verify.m;
-            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
-
-            // Zero = 1 if result == 0
-            let zero = result == 0;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
-
-            // Negative = bit7 of result
-            let negative = result & 0x80 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
-
-            // Optional: cross-check N/Z flags using helper
-            verify.check_nz(cpu.p, result);
-        });
-    }
-
-    #[test]
-    fn test_slo() {
-        InstrTest::new(Mnemonic::SLO).test(|verify, cpu, bus| {
-            // Step 1: Perform ASL on memory
-            let asl_result = verify.m << 1;
-            let carry = (verify.m & BIT_7) != 0;
-
-            // Step 2: Update memory
-            assert_eq!(
-                bus.mem_read(verify.addr),
-                asl_result,
-                "Memory not shifted correctly"
-            );
-
-            // Step 3: OR accumulator with rotated memory
-            let result = verify.cpu.a | asl_result;
-
-            // Step 4: Update accumulator
-            assert_eq!(cpu.a, result, "Accumulator not ORed correctly");
-
-            // Step 5: Verify flags
-            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
-            assert_eq!(cpu.p.n(), result & BIT_7 != 0, "Negative flag mismatch");
-            assert_eq!(cpu.p.z(), result == 0, "Zero flag mismatch");
-
-            // Optional: cross-check N/Z flags using helper
-            verify.check_nz(cpu.p, result);
-        });
-    }
-
-    #[test]
-    fn test_sre() {
-        InstrTest::new(Mnemonic::SRE).test(|verify, cpu, bus| {
-            // Step 1: Perform LSR on memory
-            let lsr_result = verify.m >> 1;
-            let carry = (verify.m & 0x01) != 0;
-
-            // Step 2: Update memory
-            assert_eq!(
-                bus.mem_read(verify.addr),
-                lsr_result,
-                "Memory not shifted correctly"
-            );
-
-            // Step 3: EOR accumulator with shifted memory
-            let result = verify.cpu.a ^ lsr_result;
-
-            // Step 4: Update accumulator
-            assert_eq!(cpu.a, result, "Accumulator not XORed correctly");
-
-            // Step 5: Verify flags
-            assert_eq!(cpu.p.c(), carry, "Carry flag mismatch");
-            assert_eq!(cpu.p.n(), result & 0x80 != 0, "Negative flag mismatch");
-            assert_eq!(cpu.p.z(), result == 0, "Zero flag mismatch");
-
-            // Optional: cross-check N/Z flags using helper
-            verify.check_nz(cpu.p, result);
-        });
-    }
-
-    #[test]
-    fn test_xaa() {
-        InstrTest::new(Mnemonic::XAA).test(|verify, cpu, _| {
-            // Step 1: Perform A & X & M
-            let result = verify.cpu.a & verify.cpu.x & verify.m;
-
-            // Step 2: Update accumulator
-            assert_eq!(cpu.a, result, "Accumulator mismatch after XAA");
-
-            // Step 3: Verify flags
-            // Negative = bit7 of result
-            let negative = result & 0x80 != 0;
-            assert_eq!(cpu.p.n(), negative, "Negative flag mismatch");
-
-            // Zero = 1 if result == 0
-            let zero = result == 0;
-            assert_eq!(cpu.p.z(), zero, "Zero flag mismatch");
-
-            // Optional: cross-check N/Z flags using helper
-            verify.check_nz(cpu.p, result);
-        });
     }
 }

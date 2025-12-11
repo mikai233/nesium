@@ -3,9 +3,9 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use crate::{bus::Bus, context::Context, cpu::Cpu};
+use crate::{bus::CpuBus, context::Context, cpu::Cpu};
 
-type MicroFn = fn(&mut Cpu, bus: &mut dyn Bus, ctx: &mut Context);
+type MicroFn = fn(&mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context);
 
 #[derive(Clone, Copy, Eq)]
 pub struct MicroOp {
@@ -18,7 +18,7 @@ impl MicroOp {
     //  Execution
     // ─────────────────────────────────────────────────────────────────────────────
     /// Execute this micro operation.
-    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut dyn Bus, ctx: &mut Context) {
+    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context) {
         (self.micro_fn)(cpu, bus, ctx);
     }
 
@@ -273,6 +273,6 @@ impl Hash for MicroOp {
     }
 }
 
-pub(crate) fn empty_micro_fn(cpu: &mut Cpu, bus: &mut dyn Bus, ctx: &mut Context) {
+pub(crate) fn empty_micro_fn(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context) {
     bus.internal_cycle(cpu, ctx);
 }
