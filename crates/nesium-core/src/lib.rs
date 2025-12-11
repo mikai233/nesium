@@ -10,7 +10,7 @@ use crate::{
     controller::{Button, ControllerPorts},
     cpu::Cpu,
     error::Error,
-    interceptor::EmuInterceptor,
+    interceptor::{EmuInterceptor, Interceptor, log_interceptor::LogInterceptor},
     mem_block::cpu as cpu_ram,
     ppu::{
         Ppu,
@@ -122,7 +122,7 @@ impl Nes {
             audio_sample_rate: sample_rate,
             mixer_frame_buffer: Vec::new(),
             region: Region::Auto,
-            interceptor: EmuInterceptor::default(),
+            interceptor: Self::build_interceptor(),
         };
         nes.ppu.set_palette(PaletteKind::NesdevNtsc.palette());
         // Apply a power-on style reset once at construction time. This matches
@@ -685,6 +685,11 @@ impl Nes {
         }
 
         frame_advanced
+    }
+
+    fn build_interceptor() -> EmuInterceptor {
+        let layers: Vec<Box<dyn Interceptor>> = vec![Box::new(LogInterceptor)];
+        EmuInterceptor::from_layers(layers)
     }
 }
 

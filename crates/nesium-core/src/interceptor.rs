@@ -1,7 +1,13 @@
 use std::{borrow::Cow, fmt::Debug};
 
+use crate::{bus::Bus, cpu::Cpu};
+
+pub mod log_interceptor;
+
 pub trait Interceptor: Send + Debug + 'static {
-    fn name(&self) -> Cow<'_, &'static str>;
+    fn name(&self) -> Cow<'static, str>;
+
+    fn debug(&self, cpu: &mut Cpu, bus: &mut dyn Bus);
 }
 
 #[derive(Debug, Default)]
@@ -30,7 +36,7 @@ impl EmuInterceptor {
 
     /// Remove and return the first interceptor whose `name()` matches `name`.
     pub fn remove_first_by_name(&mut self, name: &str) -> Option<Box<dyn Interceptor>> {
-        if let Some(pos) = self.layers.iter().position(|layer| &**layer.name() == name) {
+        if let Some(pos) = self.layers.iter().position(|layer| layer.name() == name) {
             Some(self.layers.remove(pos))
         } else {
             None
@@ -39,7 +45,7 @@ impl EmuInterceptor {
 
     /// Remove all interceptors whose `name()` matches `name`.
     pub fn remove_all_by_name(&mut self, name: &str) {
-        self.layers.retain(|layer| &**layer.name() != name);
+        self.layers.retain(|layer| layer.name() != name);
     }
 
     /// Remove all interceptors from the stack.
@@ -64,7 +70,13 @@ impl EmuInterceptor {
 }
 
 impl Interceptor for EmuInterceptor {
-    fn name(&self) -> Cow<'_, &'static str> {
-        Cow::Borrowed(&"EmuInterceptor")
+    fn name(&self) -> Cow<'static, str> {
+        Cow::Borrowed(std::any::type_name::<Self>())
+    }
+
+    fn debug(&self, cpu: &mut Cpu, bus: &mut dyn Bus) {
+        for interceptor in &self.layers {
+            interceptor.debug(cpu, bus);
+        }
     }
 }
