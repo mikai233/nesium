@@ -4,7 +4,7 @@ use crate::{
     bus::{Bus, BusDevices, BusDevicesMut, OpenBus},
     cartridge::Cartridge,
     context::Context,
-    controller::{Controller, SerialLogger},
+    controller::{ControllerPorts, SerialLogger},
     cpu::Cpu,
     mem_block::cpu as cpu_ram,
     memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem},
@@ -19,7 +19,7 @@ pub struct CpuBus<'a> {
     ppu: &'a mut Ppu,
     apu: &'a mut Apu,
     cartridge: Option<&'a mut Cartridge>,
-    controllers: &'a mut [Controller; 2],
+    controllers: &'a mut ControllerPorts,
     serial_log: Option<&'a mut SerialLogger>,
     oam_dma_request: &'a mut Option<u8>,
     open_bus: &'a mut OpenBus,
@@ -44,7 +44,7 @@ impl<'a> CpuBus<'a> {
         ppu: &'a mut Ppu,
         apu: &'a mut Apu,
         cartridge: Option<&'a mut Cartridge>,
-        controllers: &'a mut [Controller; 2],
+        controllers: &'a mut ControllerPorts,
         serial_log: Option<&'a mut SerialLogger>,
         oam_dma_request: &'a mut Option<u8>,
         open_bus: &'a mut OpenBus,
@@ -110,29 +110,29 @@ impl<'a> CpuBus<'a> {
     }
 
     /// Tick the PPU once, wiring CHR accesses through the currently inserted cartridge.
-    pub fn step_ppu(&mut self, cpu: &mut Cpu) {
-        Ppu::step(self, cpu);
+    pub fn step_ppu(&mut self, cpu: &mut Cpu, ctx: &mut Context) {
+        Ppu::step(self, cpu, ctx);
     }
 
     /// Advances master clock and runs the PPU to catch up.
-    fn bump_master_clock(&mut self, cpu: &mut Cpu, delta: u8) {
+    fn bump_master_clock(&mut self, delta: u8, cpu: &mut Cpu, ctx: &mut Context) {
         *self.master_clock = self.master_clock.wrapping_add(delta as u64);
         // crate::ppu::CPU_MASTER.set(*self.master_clock);
         // crate::ppu::CPU_CYCLE.set(*self.cycles);
         // crate::ppu::MEM0F.set(self.peek(0x000f));
         // Apply CPU/PPU phase offset before running the PPU.
         let ppu_target = self.master_clock.saturating_sub(self.ppu_offset as u64);
-        Ppu::run_until(self, cpu, ppu_target);
+        Ppu::run_until(self, ppu_target, cpu, ctx);
     }
 
-    fn begin_cycle(&mut self, cpu: &mut Cpu, read_phase: bool) {
+    fn begin_cycle(&mut self, read_phase: bool, cpu: &mut Cpu, ctx: &mut Context) {
         let start_delta = if read_phase {
             self.clock_start_count.saturating_sub(1)
         } else {
             self.clock_start_count.saturating_add(1)
         };
         *self.cycles = self.cycles.wrapping_add(1);
-        self.bump_master_clock(cpu, start_delta);
+        self.bump_master_clock(start_delta, cpu, ctx);
 
         if let Some(cart) = self.cartridge.as_mut() {
             cart.cpu_clock(*self.cycles);
@@ -151,18 +151,18 @@ impl<'a> CpuBus<'a> {
         };
     }
 
-    fn end_cycle(&mut self, cpu: &mut Cpu, read_phase: bool) {
+    fn end_cycle(&mut self, read_phase: bool, cpu: &mut Cpu, ctx: &mut Context) {
         let end_delta = if read_phase {
             self.clock_end_count.saturating_add(1)
         } else {
             self.clock_end_count.saturating_sub(1)
         };
-        self.bump_master_clock(cpu, end_delta);
+        self.bump_master_clock(end_delta, cpu, ctx);
     }
 
-    pub fn internal_cycle(&mut self, cpu: &mut Cpu) {
-        self.begin_cycle(cpu, true);
-        self.end_cycle(cpu, true);
+    pub fn internal_cycle(&mut self, cpu: &mut Cpu, ctx: &mut Context) {
+        self.begin_cycle(true, cpu, ctx);
+        self.end_cycle(true, cpu, ctx);
     }
 
     /// Drains and returns any pending DMC DMA stall produced by the last APU tick.
@@ -325,8 +325,8 @@ impl Bus for CpuBus<'_> {
         value
     }
 
-    fn mem_read(&mut self, addr: u16, cpu: &mut Cpu, _context: &mut Context) -> u8 {
-        self.begin_cycle(cpu, true);
+    fn mem_read(&mut self, addr: u16, cpu: &mut Cpu, ctx: &mut Context) -> u8 {
+        self.begin_cycle(true, cpu, ctx);
         let mut driven = true;
         let value = match addr {
             cpu_mem::INTERNAL_RAM_START..=cpu_mem::INTERNAL_RAM_MIRROR_END => {
@@ -377,12 +377,12 @@ impl Bus for CpuBus<'_> {
             self.open_bus.latch(value);
         }
 
-        self.end_cycle(cpu, true);
+        self.end_cycle(true, cpu, ctx);
         value
     }
 
-    fn mem_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, _context: &mut Context) {
-        self.begin_cycle(cpu, false);
+    fn mem_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, ctx: &mut Context) {
+        self.begin_cycle(false, cpu, ctx);
         self.open_bus.latch(data);
 
         match addr {
@@ -418,12 +418,12 @@ impl Bus for CpuBus<'_> {
             }
         }
 
-        self.end_cycle(cpu, false);
+        self.end_cycle(false, cpu, ctx);
     }
 
-    fn internal_cycle(&mut self, cpu: &mut Cpu, _context: &mut Context) {
-        self.begin_cycle(cpu, true);
-        self.end_cycle(cpu, true);
+    fn internal_cycle(&mut self, cpu: &mut Cpu, ctx: &mut Context) {
+        self.begin_cycle(true, cpu, ctx);
+        self.end_cycle(true, cpu, ctx);
     }
 
     fn irq_pending(&mut self) -> bool {
@@ -495,7 +495,7 @@ mod tests {
         let mut ppu = Ppu::default();
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
-        let mut controllers = [Controller::new(), Controller::new()];
+        let mut controllers = ControllerPorts::new();
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
@@ -542,7 +542,7 @@ mod tests {
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
-        let mut controllers = [Controller::new(), Controller::new()];
+        let mut controllers = ControllerPorts::new();
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
@@ -579,7 +579,7 @@ mod tests {
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
-        let mut controllers = [Controller::new(), Controller::new()];
+        let mut controllers = ControllerPorts::new();
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    apu::Apu, cartridge::Cartridge, context::Context, controller::Controller, cpu::Cpu,
+    apu::Apu, cartridge::Cartridge, context::Context, controller::ControllerPorts, cpu::Cpu,
     mem_block::cpu as cpu_ram, memory, ppu::Ppu,
 };
 
@@ -21,7 +21,7 @@ pub struct BusDevices<'a> {
     pub ppu: &'a Ppu,
     pub apu: &'a Apu,
     pub cartridge: Option<&'a Cartridge>,
-    pub controllers: &'a [Controller; 2],
+    pub controllers: &'a ControllerPorts,
 }
 
 /// Mutable view of the hardware attached to the CPU bus.
@@ -30,7 +30,7 @@ pub struct BusDevicesMut<'a> {
     pub ppu: &'a mut Ppu,
     pub apu: &'a mut Apu,
     pub cartridge: Option<&'a mut Cartridge>,
-    pub controllers: &'a mut [Controller; 2],
+    pub controllers: &'a mut ControllerPorts,
 }
 
 /// Core CPU/PPU bus abstraction.

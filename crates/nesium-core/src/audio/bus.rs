@@ -62,7 +62,7 @@ impl Default for AudioBusConfig {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 struct Equalizer {
     bands_db: [f32; 20],
     sample_rate: u32,
@@ -95,7 +95,7 @@ impl Equalizer {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct ReverbFilter {
     left: Vec<f32>,
     right: Vec<f32>,
@@ -176,7 +176,7 @@ impl ReverbFilter {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 struct CrossFeedFilter;
 
 impl CrossFeedFilter {
@@ -196,7 +196,7 @@ impl CrossFeedFilter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SoundMixerBus {
     /// Fixed input sample rate used by the per-console mixer (e.g. 96 kHz).
     input_rate: u32,

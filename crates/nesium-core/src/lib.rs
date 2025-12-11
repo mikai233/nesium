@@ -7,9 +7,10 @@ use crate::{
     cartridge::{Cartridge, Provider},
     config::region::Region,
     context::Context,
-    controller::{Button, Controller},
+    controller::{Button, ControllerPorts},
     cpu::Cpu,
     error::Error,
+    interceptor::EmuInterceptor,
     mem_block::cpu as cpu_ram,
     ppu::{
         Ppu,
@@ -30,6 +31,7 @@ pub mod context;
 pub mod controller;
 pub mod cpu;
 pub mod error;
+pub mod interceptor;
 pub mod mem_block;
 pub mod memory;
 pub mod ppu;
@@ -42,11 +44,11 @@ pub use cpu::CpuSnapshot;
 pub struct Nes {
     pub cpu: Cpu,
     pub ppu: Ppu,
-    apu: Apu,
+    pub apu: Apu,
     ram: cpu_ram::Ram,
     cartridge: Option<Cartridge>,
     mapper_provider: Option<Box<dyn Provider>>,
-    controllers: [Controller; 2],
+    controllers: ControllerPorts,
     last_frame: u32,
     /// Master PPU dot counter used to drive CPU/PPU/APU in lockstep (3 dots per CPU cycle).
     dot_counter: u64,
@@ -71,7 +73,8 @@ pub struct Nes {
     audio_sample_rate: u32,
     /// Scratch buffer for a single frame of internal-rate audio from the per-console mixer.
     mixer_frame_buffer: Vec<f32>,
-    region: Region,
+    pub region: Region,
+    pub interceptor: EmuInterceptor,
 }
 
 /// Internal mixer output sample rate (matches Mesen2's fixed 96 kHz path).
@@ -103,7 +106,7 @@ impl Nes {
             ram: cpu_ram::Ram::new(),
             cartridge: None,
             mapper_provider: None,
-            controllers: [Controller::new(), Controller::new()],
+            controllers: ControllerPorts::new(),
             last_frame: 0,
             dot_counter: 0,
             master_clock: 0,
@@ -119,6 +122,7 @@ impl Nes {
             audio_sample_rate: sample_rate,
             mixer_frame_buffer: Vec::new(),
             region: Region::Auto,
+            interceptor: EmuInterceptor::default(),
         };
         nes.ppu.set_palette(PaletteKind::NesdevNtsc.palette());
         // Apply a power-on style reset once at construction time. This matches
@@ -228,7 +232,7 @@ impl Nes {
             self.clock_end_count,
         );
         let mut ctx = Context::Some {
-            region: &mut self.region,
+            interceptor: &mut self.interceptor,
         };
         self.cpu.reset(&mut bus, kind, &mut ctx);
         self.last_frame = bus.devices().ppu.frame_count();
@@ -260,7 +264,7 @@ impl Nes {
                 self.clock_end_count,
             );
             let mut ctx = Context::Some {
-                region: &mut self.region,
+                interceptor: &mut self.interceptor,
             };
 
             // Advance one CPU cycle (and implicitly PPU/APU).
@@ -545,7 +549,7 @@ impl Nes {
             self.clock_end_count,
         );
         let mut ctx = Context::Some {
-            region: &mut self.region,
+            interceptor: &mut self.interceptor,
         };
         bus.peek(addr, &mut self.cpu, &mut ctx)
     }
@@ -569,7 +573,7 @@ impl Nes {
             self.clock_end_count,
         );
         let mut ctx = Context::Some {
-            region: &mut self.region,
+            interceptor: &mut self.interceptor,
         };
         for (offset, byte) in buffer.iter_mut().enumerate() {
             *byte = bus.peek(base.wrapping_add(offset as u16), &mut self.cpu, &mut ctx);
@@ -617,7 +621,7 @@ impl Nes {
                         nes.clock_end_count,
                     );
                     let mut ctx = Context::Some {
-                        region: &mut nes.region,
+                        interceptor: &mut nes.interceptor,
                     };
                     bus.mem_read(addr, &mut nes.cpu, &mut ctx)
                 };
@@ -636,24 +640,27 @@ impl Nes {
             nes.cpu.account_dma_cycle();
 
             // Advance three PPU dots (one CPU cycle worth) to keep alignment.
+            let mut bus = CpuBus::new(
+                &mut nes.ram,
+                &mut nes.ppu,
+                &mut nes.apu,
+                nes.cartridge.as_mut(),
+                &mut nes.controllers,
+                Some(&mut nes.serial_log),
+                &mut nes.oam_dma_request,
+                &mut nes.open_bus,
+                None,
+                &mut nes.cycles,
+                &mut nes.master_clock,
+                nes.ppu_offset,
+                nes.clock_start_count,
+                nes.clock_end_count,
+            );
+            let mut ctx = Context::Some {
+                interceptor: &mut nes.interceptor,
+            };
             for _ in 0..3 {
-                let mut bus = CpuBus::new(
-                    &mut nes.ram,
-                    &mut nes.ppu,
-                    &mut nes.apu,
-                    nes.cartridge.as_mut(),
-                    &mut nes.controllers,
-                    Some(&mut nes.serial_log),
-                    &mut nes.oam_dma_request,
-                    &mut nes.open_bus,
-                    None,
-                    &mut nes.cycles,
-                    &mut nes.master_clock,
-                    nes.ppu_offset,
-                    nes.clock_start_count,
-                    nes.clock_end_count,
-                );
-                bus.step_ppu(&mut nes.cpu);
+                bus.step_ppu(&mut nes.cpu, &mut ctx);
             }
             nes.dot_counter = nes.ppu.total_dots();
             let frame_count = nes.ppu.frame_count();

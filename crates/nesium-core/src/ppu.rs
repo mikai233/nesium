@@ -54,6 +54,7 @@ use core::fmt;
 use crate::{
     bus::Bus,
     cartridge::{Cartridge, mapper::PpuVramAccessKind},
+    context::Context,
     cpu::Cpu,
     mem_block::ppu::{SecondaryOamRam, Vram},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
@@ -479,7 +480,7 @@ impl Ppu {
     /// This is the main timing entry: it performs background/sprite pipeline
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
-    pub fn step<B: Bus>(bus: &mut B, _cpu: &mut Cpu) {
+    pub fn step<B: Bus>(bus: &mut B, _cpu: &mut Cpu, _ctx: &mut Context) {
         // // Debug trace: CPU/PPU alignment snapshot for this dot, with extra PPU state.
         // let cpu_cycle = CPU_CYCLE.get();
         // if cpu_cycle < 2_000_000 {
@@ -835,9 +836,14 @@ impl Ppu {
     }
 
     /// Advance the PPU until its master clock reaches `target_master`.
-    pub(crate) fn run_until<B: Bus>(bus: &mut B, cpu: &mut Cpu, target_master: u64) {
+    pub(crate) fn run_until<B: Bus>(
+        bus: &mut B,
+        target_master: u64,
+        cpu: &mut Cpu,
+        ctx: &mut Context,
+    ) {
         loop {
-            Self::step(bus, cpu);
+            Self::step(bus, cpu, ctx);
             // One PPU dot = 4 master cycles.
             let reached_target = {
                 let mut devices = bus.devices_mut();
@@ -1931,7 +1937,7 @@ mod tests {
     use crate::{
         apu::Apu,
         bus::{OpenBus, cpu::CpuBus},
-        controller::{Controller, SerialLogger},
+        controller::{ControllerPorts, SerialLogger},
         mem_block::cpu as cpu_ram,
         ppu::pattern_bus::PatternBus,
     };
@@ -2022,7 +2028,7 @@ mod tests {
         let mut ppu = Ppu::default();
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
-        let mut controllers = [Controller::new(), Controller::new()];
+        let mut controllers = ControllerPorts::new();
         let mut serial_log = SerialLogger::default();
         let mut oam_dma_request = None;
         let mut open_bus = OpenBus::new();
@@ -2049,7 +2055,7 @@ mod tests {
         // Run until scanline 241, cycle 1 (accounting for prerender line).
         let target_cycles = (242i32 * CYCLES_PER_SCANLINE as i32 + 2) as usize;
         for _ in 0..target_cycles {
-            Ppu::step(&mut bus, &mut cpu);
+            Ppu::step(&mut bus, &mut cpu, &mut Context::None);
         }
         let status_set = bus
             .devices()
@@ -2068,11 +2074,11 @@ mod tests {
             if pos == (-1, 1) {
                 break;
             }
-            Ppu::step(&mut bus, &mut cpu);
+            Ppu::step(&mut bus, &mut cpu, &mut Context::None);
         }
 
         // Dot 1 of prerender clears VBL/sprite flags (mirrors hardware timing).
-        Ppu::step(&mut bus, &mut cpu);
+        Ppu::step(&mut bus, &mut cpu, &mut Context::None);
         let status_cleared = !bus
             .devices()
             .ppu

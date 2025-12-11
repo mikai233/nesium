@@ -1,7 +1,7 @@
-use crate::config::region::Region;
+use crate::interceptor::EmuInterceptor;
 
 #[derive(Debug)]
 pub enum Context<'a> {
     None,
-    Some { region: &'a mut Region },
+    Some { interceptor: &'a mut EmuInterceptor },
 }

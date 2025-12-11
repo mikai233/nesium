@@ -2,6 +2,8 @@
 //!
 //! Implements the standard 8-button pad readable through `$4016/$4017`.
 
+use crate::mem_block::MemBlock;
+
 /// Button ordering follows the NES shift register bit layout (A first).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
@@ -16,7 +18,7 @@ pub enum Button {
 }
 
 /// Serially-readable controller state with latch/strobe behavior.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Controller {
     strobe: bool,
     latched: u8,
@@ -72,6 +74,10 @@ impl Default for Controller {
         Self::new()
     }
 }
+
+/// Two NES controller ports backed by a `MemBlock`, enabling boxed or stack
+/// allocation depending on the active feature set.
+pub type ControllerPorts = MemBlock<Controller, 2>;
 
 /// Captures the serial stream some blargg test ROMs emit via `$4016` writes.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
