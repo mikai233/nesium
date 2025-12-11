@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
-use crate::cpu::micro_op::MicroOp;
+use crate::bus::Bus;
+use crate::cpu::{Cpu, micro_op::MicroOp};
 
 pub mod arith;
 pub mod bra;
@@ -108,6 +109,97 @@ pub(crate) enum Mnemonic {
 }
 
 impl Mnemonic {
+    /// Longest execution length (in cycles) for static-dispatch exec.
+    pub const fn exec_len(&self) -> u8 {
+        match self {
+            // Load / Store
+            Mnemonic::LAS
+            | Mnemonic::LAX
+            | Mnemonic::LDA
+            | Mnemonic::LDX
+            | Mnemonic::LDY
+            | Mnemonic::SAX
+            | Mnemonic::SHA
+            | Mnemonic::SHX
+            | Mnemonic::SHY
+            | Mnemonic::STA
+            | Mnemonic::STX
+            | Mnemonic::STY => 1,
+
+            // Transfer
+            Mnemonic::SHS
+            | Mnemonic::TAX
+            | Mnemonic::TAY
+            | Mnemonic::TSX
+            | Mnemonic::TXA
+            | Mnemonic::TXS
+            | Mnemonic::TYA => 1,
+
+            // Stack
+            Mnemonic::PHA | Mnemonic::PHP => 2,
+            Mnemonic::PLA | Mnemonic::PLP => 3,
+
+            // Shift / Rotate
+            Mnemonic::ASL | Mnemonic::LSR | Mnemonic::ROL | Mnemonic::ROR => 3,
+
+            // Logical
+            Mnemonic::AND | Mnemonic::BIT | Mnemonic::EOR | Mnemonic::ORA => 1,
+
+            // Arithmetic
+            Mnemonic::ADC
+            | Mnemonic::ANC
+            | Mnemonic::ARR
+            | Mnemonic::ASR
+            | Mnemonic::CMP
+            | Mnemonic::CPX
+            | Mnemonic::CPY
+            | Mnemonic::SBC
+            | Mnemonic::SBX
+            | Mnemonic::XAA => 1,
+            Mnemonic::DCP
+            | Mnemonic::ISC
+            | Mnemonic::RLA
+            | Mnemonic::RRA
+            | Mnemonic::SLO
+            | Mnemonic::SRE => 3,
+
+            // Increment / Decrement
+            Mnemonic::DEC | Mnemonic::INC => 3,
+            Mnemonic::DEX | Mnemonic::DEY | Mnemonic::INX | Mnemonic::INY => 1,
+
+            // Control Flow
+            Mnemonic::BRK => 6,
+            Mnemonic::JMP => 0,
+            Mnemonic::JSR => 5,
+            Mnemonic::RTI => 5,
+            Mnemonic::RTS => 5,
+
+            // Branches
+            Mnemonic::BCC
+            | Mnemonic::BCS
+            | Mnemonic::BEQ
+            | Mnemonic::BMI
+            | Mnemonic::BNE
+            | Mnemonic::BPL
+            | Mnemonic::BVC
+            | Mnemonic::BVS => 3,
+
+            // Status Flags
+            Mnemonic::CLC
+            | Mnemonic::CLD
+            | Mnemonic::CLI
+            | Mnemonic::CLV
+            | Mnemonic::SEC
+            | Mnemonic::SED
+            | Mnemonic::SEI => 1,
+
+            // Halt
+            Mnemonic::JAM => 1,
+            // NOP
+            Mnemonic::NOP => 1,
+        }
+    }
+
     pub(crate) const fn micro_ops(&self) -> &'static [MicroOp] {
         match self {
             // ===============================
@@ -228,6 +320,100 @@ impl Mnemonic {
             // ===============================
             Mnemonic::JAM => Self::jam(),
             Mnemonic::NOP => Self::nop(),
+        }
+    }
+
+    /// Static-dispatch exec entry (prototype; not yet wired into CPU).
+    #[allow(dead_code)]
+    pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, step: u8) {
+        match self {
+            // Load / Store
+            Mnemonic::LAS => load::exec_las(cpu, bus, step),
+            Mnemonic::LAX => load::exec_lax(cpu, bus, step),
+            Mnemonic::LDA => load::exec_lda(cpu, bus, step),
+            Mnemonic::LDX => load::exec_ldx(cpu, bus, step),
+            Mnemonic::LDY => load::exec_ldy(cpu, bus, step),
+            Mnemonic::SAX => load::exec_sax(cpu, bus, step),
+            Mnemonic::SHA => load::exec_sha(cpu, bus, step),
+            Mnemonic::SHX => load::exec_shx(cpu, bus, step),
+            Mnemonic::SHY => load::exec_shy(cpu, bus, step),
+            Mnemonic::STA => load::exec_sta(cpu, bus, step),
+            Mnemonic::STX => load::exec_stx(cpu, bus, step),
+            Mnemonic::STY => load::exec_sty(cpu, bus, step),
+            // Arithmetic / Logic
+            Mnemonic::ADC => arith::exec_adc(cpu, bus, step),
+            Mnemonic::ANC => arith::exec_anc(cpu, bus, step),
+            Mnemonic::ARR => arith::exec_arr(cpu, bus, step),
+            Mnemonic::ASR => arith::exec_asr(cpu, bus, step),
+            Mnemonic::CMP => arith::exec_cmp(cpu, bus, step),
+            Mnemonic::CPX => arith::exec_cpx(cpu, bus, step),
+            Mnemonic::CPY => arith::exec_cpy(cpu, bus, step),
+            Mnemonic::DCP => arith::exec_dcp(cpu, bus, step),
+            Mnemonic::ISC => arith::exec_isc(cpu, bus, step),
+            Mnemonic::RLA => arith::exec_rla(cpu, bus, step),
+            Mnemonic::RRA => arith::exec_rra(cpu, bus, step),
+            Mnemonic::SBC => arith::exec_sbc(cpu, bus, step),
+            Mnemonic::SBX => arith::exec_sbx(cpu, bus, step),
+            Mnemonic::SLO => arith::exec_slo(cpu, bus, step),
+            Mnemonic::SRE => arith::exec_sre(cpu, bus, step),
+            Mnemonic::XAA => arith::exec_xaa(cpu, bus, step),
+            // Logic
+            Mnemonic::AND => logic::exec_and(cpu, bus, step),
+            Mnemonic::BIT => logic::exec_bit(cpu, bus, step),
+            Mnemonic::EOR => logic::exec_eor(cpu, bus, step),
+            Mnemonic::ORA => logic::exec_ora(cpu, bus, step),
+            // Shift / Rotate
+            Mnemonic::ASL => shift::exec_asl(cpu, bus, step),
+            Mnemonic::LSR => shift::exec_lsr(cpu, bus, step),
+            Mnemonic::ROL => shift::exec_rol(cpu, bus, step),
+            Mnemonic::ROR => shift::exec_ror(cpu, bus, step),
+            // Inc/Dec
+            Mnemonic::DEC => inc::exec_dec(cpu, bus, step),
+            Mnemonic::DEX => inc::exec_dex(cpu, bus, step),
+            Mnemonic::DEY => inc::exec_dey(cpu, bus, step),
+            Mnemonic::INC => inc::exec_inc(cpu, bus, step),
+            Mnemonic::INX => inc::exec_inx(cpu, bus, step),
+            Mnemonic::INY => inc::exec_iny(cpu, bus, step),
+            // Branches
+            Mnemonic::BCC => bra::exec_bcc(cpu, bus, step),
+            Mnemonic::BCS => bra::exec_bcs(cpu, bus, step),
+            Mnemonic::BEQ => bra::exec_beq(cpu, bus, step),
+            Mnemonic::BMI => bra::exec_bmi(cpu, bus, step),
+            Mnemonic::BNE => bra::exec_bne(cpu, bus, step),
+            Mnemonic::BPL => bra::exec_bpl(cpu, bus, step),
+            Mnemonic::BVC => bra::exec_bvc(cpu, bus, step),
+            Mnemonic::BVS => bra::exec_bvs(cpu, bus, step),
+            // Control Flow
+            Mnemonic::BRK => ctrl::exec_brk(cpu, bus, step),
+            Mnemonic::JMP => ctrl::exec_jmp(cpu, bus, step),
+            Mnemonic::JSR => ctrl::exec_jsr(cpu, bus, step),
+            Mnemonic::RTI => ctrl::exec_rti(cpu, bus, step),
+            Mnemonic::RTS => ctrl::exec_rts(cpu, bus, step),
+            // Flags
+            Mnemonic::CLC => flags::exec_clc(cpu, bus, step),
+            Mnemonic::CLD => flags::exec_cld(cpu, bus, step),
+            Mnemonic::CLI => flags::exec_cli(cpu, bus, step),
+            Mnemonic::CLV => flags::exec_clv(cpu, bus, step),
+            Mnemonic::SEC => flags::exec_sec(cpu, bus, step),
+            Mnemonic::SED => flags::exec_sed(cpu, bus, step),
+            Mnemonic::SEI => flags::exec_sei(cpu, bus, step),
+            // Stack
+            Mnemonic::PHA => stack::exec_pha(cpu, bus, step),
+            Mnemonic::PHP => stack::exec_php(cpu, bus, step),
+            Mnemonic::PLA => stack::exec_pla(cpu, bus, step),
+            Mnemonic::PLP => stack::exec_plp(cpu, bus, step),
+            // Transfer
+            Mnemonic::SHS => trans::exec_shs(cpu, bus, step),
+            Mnemonic::TAX => trans::exec_tax(cpu, bus, step),
+            Mnemonic::TAY => trans::exec_tay(cpu, bus, step),
+            Mnemonic::TSX => trans::exec_tsx(cpu, bus, step),
+            Mnemonic::TXA => trans::exec_txa(cpu, bus, step),
+            Mnemonic::TXS => trans::exec_txs(cpu, bus, step),
+            Mnemonic::TYA => trans::exec_tya(cpu, bus, step),
+            // Halt
+            Mnemonic::JAM => kil::exec_jam(cpu, bus, step),
+            // NOP
+            Mnemonic::NOP => nop::exec_nop(cpu, bus, step),
         }
     }
 }
@@ -777,6 +963,52 @@ mod tests {
             );
 
             (target, crossed_page)
+        }
+    }
+
+    /// Ensure `exec_len()` stays in sync with the actual `exec` step table for each mnemonic.
+    #[test]
+    fn exec_len_matches_steps() {
+        let mut seen = std::collections::HashSet::new();
+        let mut pairs = Vec::new();
+        for (opcode, instr) in LOOKUP_TABLE.iter().enumerate() {
+            if seen.insert(instr.mnemonic) {
+                pairs.push((instr.mnemonic, opcode as u8));
+            }
+        }
+
+        for (mnemonic, opcode) in pairs {
+            let len = mnemonic.exec_len();
+            if len == 0 {
+                continue;
+            }
+            let mut cpu = Cpu::new();
+            let mut bus = MockBus::default();
+            cpu.reset(&mut bus, crate::reset_kind::ResetKind::PowerOn);
+            cpu.opcode_in_flight = Some(opcode);
+
+            let mut actual_len = 0usize;
+            let max_steps = 8usize; // Longest path is BRK (6 cycles in exec phase)
+
+            for step in 0..max_steps {
+                let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                    mnemonic.exec(&mut cpu, &mut bus, step as u8);
+                }));
+                if result.is_ok() {
+                    actual_len += 1;
+                } else {
+                    break;
+                }
+            }
+
+            assert!(
+                actual_len as u8 == len,
+                "mnemonic {:?} (opcode 0x{:02X}) exec_len mismatch: declared {} but executed {} steps before panic",
+                mnemonic,
+                opcode,
+                len,
+                actual_len
+            );
         }
     }
 }

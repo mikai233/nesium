@@ -1,7 +1,219 @@
 use crate::{
-    bus::STACK_ADDR,
-    cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status},
+    bus::{Bus, STACK_ADDR},
+    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
 };
+
+/// NV-BDIZC
+/// -----1--
+///
+/// BRK - Break Command
+/// Operation: PC + 2↓, [FFFE] → PCL, [FFFF] → PCH
+///
+/// The break command causes the microprocessor to go through an interrupt
+/// sequence under program control. This means that the program counter of the
+/// second byte after the BRK is automatically stored on the stack along with the
+/// processor status at the beginning of the break instruction. The
+/// microprocessor then transfers control to the interrupt vector.
+///
+/// Other than changing the program counter, the break instruction changes no
+/// values in either the registers or the flags.
+///
+/// **Note on the MOS 6502:**
+/// If an IRQ happens at the same time as a BRK instruction, the BRK instruction
+/// is ignored.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | BRK                      | $00    | 1         | 7
+#[inline]
+pub fn exec_brk<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            bus.mem_read(cpu, cpu.pc);
+            cpu.incr_pc();
+        }
+        1 => {
+            let pc_hi = (cpu.pc >> 8) as u8;
+            cpu.push(bus, pc_hi);
+        }
+        2 => {
+            let pc_lo = (cpu.pc & 0xFF) as u8;
+            cpu.push(bus, pc_lo);
+        }
+        3 => {
+            let p_with_b_u = cpu.p | Status::BREAK | Status::UNUSED;
+            cpu.push(bus, p_with_b_u.bits());
+            cpu.p.set_i(true);
+        }
+        4 => {
+            cpu.base = bus.mem_read(cpu, 0xFFFE);
+        }
+        5 => {
+            let high_byte = bus.mem_read(cpu, 0xFFFF);
+            cpu.pc = ((high_byte as u16) << 8) | (cpu.base as u16);
+        }
+        _ => unreachable_step!("invalid BRK step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// --------
+///
+/// JMP - JMP Indirect
+/// Operation: [PC + 1] → PCL, [PC + 2] → PCH
+///
+/// This instruction establishes a new value for the program counter.
+///
+/// It affects only the program counter in the microprocessor and affects no
+/// flags in the status register.
+///
+/// Addressing Mode     | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// ------------------- | ------------------------ | ------ | --------- | ----------
+/// Absolute            | JMP $nnnn                | $4C    | 3         | 3
+/// Absolute Indirect   | JMP ($nnnn)              | $6C    | 3         | 5
+#[inline]
+pub fn exec_jmp<B: Bus>(_cpu: &mut Cpu, _bus: &mut B, step: u8) {
+    unreachable_step!("invalid JMP step {step}");
+}
+
+/// NV-BDIZC
+/// --------
+///
+/// JSR - Jump To Subroutine
+/// Operation: PC + 2↓, [PC + 1] → PCL, [PC + 2] → PCH
+///
+/// This instruction transfers control of the program counter to a subroutine
+/// location but leaves a return pointer on the stack to allow the user to return
+/// to perform the next instruction in the main program after the subroutine is
+/// complete. To accomplish this, JSR instruction stores the program counter
+/// address which points to the last byte of the jump instruction onto the stack
+/// using the stack pointer. The stack byte contains the program count high
+/// first, followed by program count low. The JSR then transfers the addresses
+/// following the jump instruction to the program counter low and the program
+/// counter high, thereby directing the program to begin at that new address.
+///
+/// The JSR instruction affects no flags, causes the stack pointer to be
+/// decremented by 2 and substitutes new values into the program counter low and
+/// the program counter high.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Absolute        | JSR $nnnn                | $20    | 3         | 6
+#[inline]
+pub fn exec_jsr<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.incr_pc();
+        }
+        1 => {
+            let return_pc = cpu.pc;
+            cpu.effective_addr = return_pc;
+            bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+        }
+        2 => {
+            let pc_hi = (cpu.effective_addr >> 8) as u8;
+            cpu.push(bus, pc_hi);
+        }
+        3 => {
+            let pc_lo = cpu.effective_addr as u8;
+            cpu.push(bus, pc_lo);
+        }
+        4 => {
+            let hi_byte = bus.mem_read(cpu, cpu.pc) as u16;
+            let lo_byte = cpu.base as u16;
+            cpu.pc = (hi_byte << 8) | lo_byte;
+        }
+        _ => unreachable_step!("invalid JSR step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓✓--✓✓✓✓
+///
+/// RTI - Return From Interrupt
+/// Operation: P↑ PC↑
+///
+/// This instruction transfers from the stack into the microprocessor the
+/// processor status and the program counter location for the instruction which
+/// was interrupted. By virtue of the interrupt having stored this data before
+/// executing the instruction and the fact that the RTI reinitializes the
+/// microprocessor to the same state as when it was interrupted, the combination
+/// of interrupt plus RTI allows truly reentrant coding.
+///
+/// The RTI instruction reinitializes all flags to the position to the point they
+/// were at the time the interrupt was taken and sets the program counter back to
+/// its pre-interrupt state. It affects no other registers in the microprocessor.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | RTI                      | $40    | 1         | 6
+#[inline]
+pub fn exec_rti<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            bus.mem_read(cpu, cpu.pc.wrapping_add(1));
+        }
+        1 => {
+            bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+        }
+        2 => {
+            let p_bits = cpu.pull(bus);
+            cpu.p = Status::from_bits_truncate(p_bits);
+            cpu.p.set_u(false);
+            cpu.p.set_b(false);
+            cpu.queue_i_update(cpu.p.i());
+        }
+        3 => {
+            cpu.base = cpu.pull(bus);
+        }
+        4 => {
+            let hi_byte = cpu.pull(bus) as u16;
+            cpu.pc = (hi_byte << 8) | (cpu.base as u16);
+        }
+        _ => unreachable_step!("invalid RTI step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// --------
+///
+/// RTS - Return From Subroutine
+/// Operation: PC↑, PC + 1 → PC
+///
+/// This instruction loads the program count low and program count high from the
+/// stack into the program counter and increments the program counter so that it
+/// points to the instruction following the JSR. The stack pointer is adjusted
+/// by incrementing it twice.
+///
+/// The RTS instruction does not affect any flags and affects only PCL and PCH.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ---------------------- | ------ | --------- | ----------
+/// Implied         | RTS                    | $60    | 1         | 6
+#[inline]
+pub fn exec_rts<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+        }
+        1 => {
+            bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+        }
+        2 => {
+            cpu.base = cpu.pull(bus);
+        }
+        3 => {
+            let hi_byte = cpu.pull(bus) as u16;
+            cpu.effective_addr = (hi_byte << 8) | (cpu.base as u16);
+        }
+        4 => {
+            bus.mem_read(cpu, cpu.effective_addr);
+            cpu.pc = cpu.effective_addr.wrapping_add(1);
+        }
+        _ => unreachable_step!("invalid RTS step {step}"),
+    }
+}
 
 impl Mnemonic {
     /// NV-BDIZC

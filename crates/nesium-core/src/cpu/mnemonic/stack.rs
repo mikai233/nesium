@@ -31,9 +31,149 @@
 //! **Warning:** For cycle-accurate NES emulation, especially when handling Memory-Mapped I/O (MMIO) like the PPU/APU registers, these dummy memory accesses (T2, T3) must be simulated, as they consume crucial clock cycles.
 
 use crate::{
-    bus::STACK_ADDR,
-    cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status},
+    bus::{Bus, STACK_ADDR},
+    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
 };
+
+/// NV-BDIZC
+/// --------
+///
+/// PHA - Push Accumulator On Stack
+/// Operation: A↓
+///
+/// This instruction transfers the current value of the accumulator to the next
+/// location on the stack, automatically decrementing the stack to point to the
+/// next empty location.
+///
+/// The Push A instruction only affects the stack pointer register which is
+/// decremented by 1 as a result of the operation. It affects no flags.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | PHA                      | $48    | 1         | 3
+#[inline]
+pub fn exec_pha<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            let _ = bus.mem_read(cpu, cpu.pc);
+        }
+        1 => {
+            cpu.push(bus, cpu.a);
+        }
+        _ => unreachable_step!("invalid PHA step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// --------
+///
+/// PHP - Push Processor Status On Stack
+/// Operation: P↓
+///
+/// This instruction transfers the contents of the processor status register
+/// unchanged to the stack, as governed by the stack pointer.
+///
+/// The PHP instruction affects no registers or flags in the microprocessor.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | PHP                      | $08    | 1         | 3
+#[inline]
+pub fn exec_php<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            let _ = bus.mem_read(cpu, cpu.pc);
+        }
+        1 => {
+            let p = cpu.p | Status::BREAK | Status::UNUSED;
+            cpu.push(bus, p.bits());
+        }
+        _ => unreachable_step!("invalid PHP step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// PLA - Pull Accumulator From Stack
+/// Operation: A↑
+///
+/// This instruction adds 1 to the current value of the stack pointer and uses it
+/// to address the stack and loads the contents of the stack into the A register.
+///
+/// The PLA instruction does not affect the carry or overflow flags. It sets N if
+/// the bit 7 is on in accumulator A as a result of instructions, otherwise it is
+/// reset. If accumulator A is zero as a result of the PLA, then the Z flag is
+/// set, otherwise it is reset. The PLA instruction changes content of the
+/// accumulator A to the contents of the memory location at stack register plus 1
+/// and also increments the stack register.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | PLA                      | $68    | 1         | 4
+#[inline]
+pub fn exec_pla<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            let _ = bus.mem_read(cpu, cpu.pc);
+        }
+        1 => {
+            let _ = bus.mem_read(cpu, STACK_ADDR | cpu.s as u16);
+        }
+        2 => {
+            let value = cpu.pull(bus);
+            cpu.a = value;
+            cpu.p.set_zn(value);
+        }
+        _ => unreachable_step!("invalid PLA step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓✓--✓✓✓✓
+///
+/// PLP - Pull Processor Status From Stack
+/// Operation: P↑
+///
+/// This instruction transfers the next value on the stack to the Processor Status
+/// register, thereby changing all of the flags and setting the mode switches to
+/// the values from the stack.
+///
+/// The PLP instruction affects no registers in the processor other than the
+/// status register. This instruction could affect all flags in the status
+/// register.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | PLP                      | $28    | 1         | 4
+#[inline]
+pub fn exec_plp<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            let _ = bus.mem_read(cpu, cpu.pc);
+        }
+        1 => {
+            let _ = bus.mem_read(cpu, STACK_ADDR | cpu.s as u16);
+        }
+        2 => {
+            let value = cpu.pull(bus);
+            let was_disabled = cpu.p.i();
+            let was_enabled = !cpu.p.i();
+            let mut p = Status::from_bits_truncate(value);
+            p.set_b(false);
+            p.set_u(false);
+            cpu.p = p;
+            if was_enabled && cpu.p.i() {
+                cpu.allow_irq_once = true;
+            }
+            if was_disabled && !cpu.p.i() {
+                cpu.irq_inhibit_next = true;
+            }
+            cpu.queue_i_update(cpu.p.i());
+        }
+        _ => unreachable_step!("invalid PLP step {step}"),
+    }
+}
 
 impl Mnemonic {
     /// NV-BDIZC

@@ -14,6 +14,22 @@ use crate::memory::ppu::{self as ppu_mem, Register as PpuRegister};
 use crate::reset_kind::ResetKind;
 mod status;
 
+// Debug builds keep the standard checks; release uses unchecked hints to avoid
+// the panic path for paths we prove unreachable in the execution tables.
+macro_rules! unreachable_step {
+    ($($arg:tt)*) => {{
+        #[cfg(debug_assertions)]
+        {
+            unreachable!($($arg)*)
+        }
+        #[cfg(not(debug_assertions))]
+        unsafe {
+            std::hint::unreachable_unchecked()
+        }
+    }};
+}
+pub(crate) use unreachable_step;
+
 pub mod addressing;
 mod cycle;
 mod instruction;

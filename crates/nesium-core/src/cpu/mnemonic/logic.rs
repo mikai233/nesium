@@ -1,8 +1,83 @@
-use crate::cpu::{
-    micro_op::MicroOp,
-    mnemonic::Mnemonic,
-    status::{BIT_6, BIT_7},
+use crate::{
+    bus::Bus,
+    cpu::{
+        Cpu,
+        micro_op::MicroOp,
+        mnemonic::Mnemonic,
+        status::{BIT_6, BIT_7},
+        unreachable_step,
+    },
 };
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// AND - "AND" Memory with Accumulator
+/// Operation: A ∧ M → A
+#[inline]
+pub fn exec_and<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            let m = bus.mem_read(cpu, cpu.effective_addr);
+            cpu.a &= m;
+            cpu.p.set_zn(cpu.a);
+        }
+        _ => unreachable_step!("invalid AND step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓✓----✓-
+///
+/// BIT - Test Bits in Memory with Accumulator
+/// Operation: A ∧ M, M7 → N, M6 → V
+#[inline]
+pub fn exec_bit<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            let m = bus.mem_read(cpu, cpu.effective_addr);
+            let and = cpu.a & m;
+            cpu.p.set_z(and == 0);
+            cpu.p.set_n(m & BIT_7 != 0);
+            cpu.p.set_v(m & BIT_6 != 0);
+        }
+        _ => unreachable_step!("invalid BIT step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// EOR - "Exclusive OR" Memory with Accumulator
+/// Operation: A ⊻ M → A
+#[inline]
+pub fn exec_eor<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            let m = bus.mem_read(cpu, cpu.effective_addr);
+            cpu.a ^= m;
+            cpu.p.set_zn(cpu.a);
+        }
+        _ => unreachable_step!("invalid EOR step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// ORA - "OR" Memory with Accumulator
+/// Operation: A ∨ M → A
+#[inline]
+pub fn exec_ora<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            let m = bus.mem_read(cpu, cpu.effective_addr);
+            cpu.a |= m;
+            cpu.p.set_zn(cpu.a);
+        }
+        _ => unreachable_step!("invalid ORA step {step}"),
+    }
+}
 
 impl Mnemonic {
     /// NV-BDIZC

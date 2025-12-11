@@ -1,4 +1,180 @@
-use crate::cpu::{micro_op::MicroOp, mnemonic::Mnemonic, status::Status};
+use crate::{
+    bus::Bus,
+    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
+};
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// DEC - Decrement Memory By One
+/// Operation: M - 1 → M
+///
+/// This instruction subtracts 1, in two's complement, from the contents of the
+/// addressed memory location.
+///
+/// The decrement instruction does not affect any internal register in the
+/// microprocessor. It does not affect the carry or overflow flags. If bit 7 is
+/// on as a result of the decrement, then the N flag is set, otherwise it is
+/// reset. If the result of the decrement is 0, the Z flag is set, otherwise it
+/// is reset.
+///
+/// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// ----------------------- | ------------------------ | ------ | --------- | ----------
+/// Absolute                | DEC $nnnn                | $CE    | 3         | 6
+/// X-Indexed Absolute      | DEC $nnnn,X              | $DE    | 3         | 7
+/// Zero Page               | DEC $nn                  | $C6    | 2         | 5
+/// X-Indexed Zero Page     | DEC $nn,X                | $D6    | 2         | 6
+#[inline]
+pub fn exec_dec<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            cpu.p.remove(Status::NEGATIVE | Status::ZERO);
+            cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+        }
+        1 => {
+            bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+            cpu.base = cpu.base.wrapping_sub(1);
+            cpu.p.set_zn(cpu.base);
+        }
+        2 => {
+            bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+        }
+        _ => unreachable_step!("invalid DEC step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// DEX - Decrement Index Register X By One
+/// Operation: X - 1 → X
+///
+/// This instruction subtracts one from the current value of the index register X
+/// and stores the result in the index register X.
+///
+/// DEX does not affect the carry or overflow flag, it sets the N flag if it has
+/// bit 7 on as a result of the decrement, otherwise it resets the N flag; sets
+/// the Z flag if X is a 0 as a result of the decrement, otherwise it resets the
+/// Z flag.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | DEX                      | $CA    | 1         | 2
+#[inline]
+pub fn exec_dex<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            bus.internal_cycle();
+            cpu.x = cpu.x.wrapping_sub(1);
+            cpu.p.set_zn(cpu.x);
+        }
+        _ => unreachable_step!("invalid DEX step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// DEY - Decrement Index Register Y By One
+/// Operation: Y - 1 → Y
+///
+/// This instruction subtracts one from the current value in the index register Y
+/// and stores the result into the index register Y. The result does not affect
+/// or consider carry so that the value in the index register Y is decremented to
+/// 0 and then through 0 to FF.
+///
+/// Decrement Y does not affect the carry or overflow flags; if the Y register
+/// contains bit 7 on as a result of the decrement the N flag is set, otherwise
+/// the N flag is reset. If the Y register is 0 as a result of the decrement, the
+/// Z flag is set otherwise the Z flag is reset. This instruction only affects
+/// the index register Y.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | DEY                      | $88    | 1         | 2
+#[inline]
+pub fn exec_dey<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            bus.internal_cycle();
+            cpu.y = cpu.y.wrapping_sub(1);
+            cpu.p.set_zn(cpu.y);
+        }
+        _ => unreachable_step!("invalid DEY step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// INC - Increment Memory By One
+/// Operation: M + 1 → M
+///
+/// This instruction adds 1 to the contents of the addressed memory location.
+///
+/// The increment memory instruction does not affect any internal registers and
+/// does not affect the carry or overflow flags. If bit 7 is on as the result of
+/// the increment, N is set, otherwise it is reset; if the increment causes the
+/// result to become 0, the Z flag is set on, otherwise it is reset.
+///
+/// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// ----------------------- | ------------------------ | ------ | --------- | ----------
+/// Absolute                | INC $nnnn                | $EE    | 3         | 6
+/// X-Indexed Absolute      | INC $nnnn,X              | $FE    | 3         | 7
+/// Zero Page               | INC $nn                  | $E6    | 2         | 5
+/// X-Indexed Zero Page     | INC $nn,X                | $F6    | 2         | 6
+#[inline]
+pub fn exec_inc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            cpu.p.remove(Status::NEGATIVE | Status::ZERO);
+            cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+        }
+        1 => {
+            bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+            cpu.base = cpu.base.wrapping_add(1);
+            cpu.p.set_zn(cpu.base);
+        }
+        2 => {
+            bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+        }
+        _ => unreachable_step!("invalid INC step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// INX - Increment Index Register X By One
+/// Operation: X + 1 → X
+#[inline]
+pub fn exec_inx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            bus.internal_cycle();
+            cpu.x = cpu.x.wrapping_add(1);
+            cpu.p.set_zn(cpu.x);
+        }
+        _ => unreachable_step!("invalid INX step {step}"),
+    }
+}
+
+/// NV-BDIZC
+/// ✓-----✓-
+///
+/// INY - Increment Index Register Y By One
+/// Operation: Y + 1 → Y
+#[inline]
+pub fn exec_iny<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+    match step {
+        0 => {
+            bus.internal_cycle();
+            cpu.y = cpu.y.wrapping_add(1);
+            cpu.p.set_zn(cpu.y);
+        }
+        _ => unreachable_step!("invalid INY step {step}"),
+    }
+}
 
 impl Mnemonic {
     /// NV-BDIZC
