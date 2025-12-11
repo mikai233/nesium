@@ -636,7 +636,7 @@ impl Nes {
                     nes.clock_start_count,
                     nes.clock_end_count,
                 );
-                bus.clock_ppu();
+                bus.step_ppu();
             }
             nes.dot_counter = nes.ppu.total_dots();
             let frame_count = nes.ppu.frame_count();

@@ -1,4 +1,4 @@
-use crate::{bus::Bus, cpu::Cpu, mem_block::cpu::AddressSpace};
+use crate::{apu::Apu, bus::Bus, cpu::Cpu, mem_block::cpu::AddressSpace, ppu::Ppu};
 
 #[derive(Debug, Default)]
 pub(crate) struct MockBus {
@@ -18,15 +18,15 @@ impl MockBus {
 }
 
 impl Bus for MockBus {
-    fn peek(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
+    fn peek(&mut self, _: &mut Cpu, addr: u16) -> u8 {
         self.mem[addr as usize]
     }
 
-    fn mem_read(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
+    fn mem_read(&mut self, _: &mut Cpu, addr: u16) -> u8 {
         self.mem[addr as usize] // Safe: addr is 0x0000..=0xFFFF, array is size 0x10000
     }
 
-    fn mem_write(&mut self, _cpu: &mut Cpu, addr: u16, data: u8) {
+    fn mem_write(&mut self, _: &mut Cpu, addr: u16, data: u8) {
         self.mem[addr as usize] = data; // Safe: same reason
     }
 
@@ -34,5 +34,21 @@ impl Bus for MockBus {
 
     fn cycles(&self) -> u64 {
         0
+    }
+
+    fn ppu(&self) -> &Ppu {
+        panic!("MockBus does not expose a PPU");
+    }
+
+    fn ppu_mut(&mut self) -> &mut Ppu {
+        panic!("MockBus does not expose a PPU");
+    }
+
+    fn apu(&self) -> &Apu {
+        panic!("MockBus does not expose an APU");
+    }
+
+    fn apu_mut(&mut self) -> &mut Apu {
+        panic!("MockBus does not expose an APU");
     }
 }

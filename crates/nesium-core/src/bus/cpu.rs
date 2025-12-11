@@ -108,28 +108,8 @@ impl<'a> CpuBus<'a> {
         self.read_cartridge(addr).unwrap_or(0)
     }
 
-    /// Immutable access to the PPU for visualization-heavy systems.
-    pub fn ppu(&self) -> &Ppu {
-        self.ppu
-    }
-
-    /// Mutable access to the PPU for DMA or rendering control.
-    pub fn ppu_mut(&mut self) -> &mut Ppu {
-        self.ppu
-    }
-
-    /// Immutable access to the audio subsystem.
-    pub fn apu(&self) -> &Apu {
-        self.apu
-    }
-
-    /// Mutable access to the audio subsystem.
-    pub fn apu_mut(&mut self) -> &mut Apu {
-        self.apu
-    }
-
     /// Tick the PPU once, wiring CHR accesses through the currently inserted cartridge.
-    pub fn clock_ppu(&mut self) {
+    pub fn step_ppu(&mut self) {
         let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
         self.ppu.step(&mut pattern);
     }
@@ -146,8 +126,8 @@ impl<'a> CpuBus<'a> {
         self.ppu.run_until(ppu_target, &mut pattern);
     }
 
-    fn begin_cycle(&mut self, for_read: bool) {
-        let start_delta = if for_read {
+    fn begin_cycle(&mut self, read_phase: bool) {
+        let start_delta = if read_phase {
             self.clock_start_count.saturating_sub(1)
         } else {
             self.clock_start_count.saturating_add(1)
@@ -172,8 +152,8 @@ impl<'a> CpuBus<'a> {
         };
     }
 
-    fn end_cycle(&mut self, for_read: bool) {
-        let end_delta = if for_read {
+    fn end_cycle(&mut self, read_phase: bool) {
+        let end_delta = if read_phase {
             self.clock_end_count.saturating_add(1)
         } else {
             self.clock_end_count.saturating_sub(1)
@@ -263,6 +243,22 @@ impl<'a> CpuBus<'a> {
 }
 
 impl Bus for CpuBus<'_> {
+    fn ppu(&self) -> &Ppu {
+        self.ppu
+    }
+
+    fn ppu_mut(&mut self) -> &mut Ppu {
+        self.ppu
+    }
+
+    fn apu(&self) -> &Apu {
+        self.apu
+    }
+
+    fn apu_mut(&mut self) -> &mut Apu {
+        self.apu
+    }
+
     fn nmi_line(&mut self) -> bool {
         // PPU NMI output is a level: VBLANK && CTRL.NMI_ENABLE.
         self.ppu.nmi_output()
