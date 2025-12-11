@@ -245,7 +245,7 @@ impl Cpu {
         }
     }
 
-    pub(crate) fn clock<B: Bus>(&mut self, bus: &mut B) {
+    pub(crate) fn step<B: Bus>(&mut self, bus: &mut B) {
         // Propagate the current pending flag to `prev_nmi_pending` so that
         // NMI is effectively delayed by one instruction boundary, matching
         // the NES/Mesen behaviour where the interrupt lines are sampled on
@@ -303,7 +303,7 @@ impl Cpu {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_clock<B: Bus>(&mut self, bus: &mut B, instr: &Instruction) -> usize {
+    pub(crate) fn test_step<B: Bus>(&mut self, bus: &mut B, instr: &Instruction) -> usize {
         self.opcode_in_flight = Some(instr.opcode());
         self.incr_pc(); // Fetch opcode
         let mut cycles = 1; // Fetch opcode has 1 cycle

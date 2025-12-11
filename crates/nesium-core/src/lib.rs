@@ -230,7 +230,7 @@ impl Nes {
         self.dot_counter = 0;
     }
 
-    pub fn clock_cpu_cycle(&mut self, audio: bool) -> ClockResult {
+    pub fn step_cpu_cycle(&mut self, emit_audio: bool) -> ClockResult {
         let frame_before = self.ppu.frame_count();
         let apu_clocked = true;
         let (cpu_cycles, expansion_samples, opcode_active) = {
@@ -243,7 +243,11 @@ impl Nes {
                 Some(&mut self.serial_log),
                 &mut self.oam_dma_request,
                 &mut self.open_bus,
-                if audio { Some(&mut self.mixer) } else { None },
+                if emit_audio {
+                    Some(&mut self.mixer)
+                } else {
+                    None
+                },
                 &mut self.cycles,
                 &mut self.master_clock,
                 self.ppu_offset,
@@ -252,7 +256,7 @@ impl Nes {
             );
 
             // Advance one CPU cycle (and implicitly PPU/APU).
-            self.cpu.clock(&mut bus);
+            self.cpu.step(&mut bus);
             let cycles = bus.cpu_cycles();
             let expansion = bus
                 .cartridge()
@@ -304,7 +308,7 @@ impl Nes {
         let mut samples = vec![];
         let target_frame = self.ppu.frame_count().wrapping_add(1);
         while self.ppu.frame_count() < target_frame {
-            let _ = self.clock_cpu_cycle(audio);
+            let _ = self.step_cpu_cycle(audio);
         }
         let end_clock = self.apu_cycles() as i64;
         self.mixer_frame_buffer.clear();
@@ -500,7 +504,7 @@ impl Nes {
     pub fn step_instruction(&mut self) {
         let mut seen_active = false;
         loop {
-            self.clock_cpu_cycle(false);
+            self.step_cpu_cycle(false);
             if self.cpu.opcode_active() {
                 seen_active = true;
             } else if seen_active {

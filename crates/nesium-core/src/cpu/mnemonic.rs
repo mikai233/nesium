@@ -538,7 +538,7 @@ mod tests {
                     let mut cpu = Self::rand_cpu(&mut rng);
                     let (verification, mut bus, crossed_page) =
                         Self::build_mock(&instr, &cpu, &mut rng);
-                    let executed = cpu.test_clock(&mut bus, &instr);
+                    let executed = cpu.test_step(&mut bus, &instr);
                     let expected = instr.cycle().total_cycle(crossed_page, false);
                     assert_eq!(
                         executed, expected,
@@ -561,7 +561,7 @@ mod tests {
                     let mut cpu = Self::rand_cpu(&mut rng);
                     let (verification, mut bus, crossed_page) =
                         Self::build_mock(&instr, &cpu, &mut rng);
-                    let executed = cpu.test_clock(&mut bus, &instr);
+                    let executed = cpu.test_step(&mut bus, &instr);
                     let branch_taken = verify(&verification, &mut cpu, &mut bus);
                     let expected = instr.cycle().total_cycle(crossed_page, branch_taken);
                     assert_eq!(executed, expected, "instruction cycle not match");

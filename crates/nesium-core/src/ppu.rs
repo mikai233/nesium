@@ -477,7 +477,7 @@ impl Ppu {
     /// This is the main timing entry: it performs background/sprite pipeline
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
-    pub fn clock(&mut self, pattern: &mut PatternBus<'_>) {
+    pub fn step(&mut self, pattern: &mut PatternBus<'_>) {
         // // Debug trace: CPU/PPU alignment snapshot for this dot, with extra PPU state.
         // let cpu_cycle = CPU_CYCLE.get();
         // if cpu_cycle < 2_000_000 {
@@ -831,7 +831,7 @@ impl Ppu {
     /// Advance the PPU until its master clock reaches `target_master`.
     pub(crate) fn run_until(&mut self, target_master: u64, pattern: &mut PatternBus<'_>) {
         loop {
-            self.clock(pattern);
+            self.step(pattern);
             // One PPU dot = 4 master cycles.
             self.master_clock = self.master_clock.wrapping_add(4);
             if self.master_clock + 4 > target_master {
@@ -2018,16 +2018,16 @@ mod tests {
         // but the logic remains:
         let target_cycles = (242i32 * CYCLES_PER_SCANLINE as i32 + 2) as usize;
         for _ in 0..target_cycles {
-            ppu.clock(&mut pattern);
+            ppu.step(&mut pattern);
         }
         assert!(ppu.registers.status.contains(Status::VERTICAL_BLANK));
 
         // Continue to the prerender line, then run dot 1 where VBL is cleared.
         while !(ppu.scanline == -1 && ppu.cycle == 1) {
-            ppu.clock(&mut pattern);
+            ppu.step(&mut pattern);
         }
         // Dot 1 of prerender clears VBL/sprite flags (mirrors hardware timing).
-        ppu.clock(&mut pattern);
+        ppu.step(&mut pattern);
         assert!(!ppu.registers.status.contains(Status::VERTICAL_BLANK));
     }
 }

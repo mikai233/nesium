@@ -44,7 +44,7 @@ pub fn dump_instruction_trace<P: AsRef<Path>, Q: AsRef<Path>>(
             let dbg = nes.ppu_nmi_debug();
             dbg.frame != 1 || dbg.scanline != 0 || dbg.cycle != 27
         } {
-            nes.clock_cpu_cycle(false);
+            nes.step_cpu_cycle(false);
         }
         while nes.cpu_opcode_active() {
             nes.step_instruction();

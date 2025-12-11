@@ -131,7 +131,7 @@ impl<'a> CpuBus<'a> {
     /// Tick the PPU once, wiring CHR accesses through the currently inserted cartridge.
     pub fn clock_ppu(&mut self) {
         let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
-        self.ppu.clock(&mut pattern);
+        self.ppu.step(&mut pattern);
     }
 
     /// Advances master clock and runs the PPU to catch up.
@@ -162,8 +162,8 @@ impl<'a> CpuBus<'a> {
 
         // Run one APU CPU-cycle tick; stash any pending DMC DMA stall.
         let (stall_cycles, dma_addr) = match &mut self.mixer {
-            Some(mixer) => self.apu.clock_with_mixer(mixer),
-            None => self.apu.clock(),
+            Some(mixer) => self.apu.step_with_mixer(mixer),
+            None => self.apu.step(),
         };
         self.pending_dmc_stall = if stall_cycles > 0 {
             Some((stall_cycles, dma_addr))
