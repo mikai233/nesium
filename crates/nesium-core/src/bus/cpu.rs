@@ -1,7 +1,7 @@
 use crate::{
     apu::Apu,
     audio::NesSoundMixer,
-    bus::{Bus, OpenBus},
+    bus::{Bus, BusDevices, BusDevicesMut, OpenBus},
     cartridge::Cartridge,
     controller::{Controller, SerialLogger},
     cpu::Cpu,
@@ -109,31 +109,29 @@ impl<'a> CpuBus<'a> {
     }
 
     /// Tick the PPU once, wiring CHR accesses through the currently inserted cartridge.
-    pub fn step_ppu(&mut self) {
-        let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
-        self.ppu.step(&mut pattern);
+    pub fn step_ppu(&mut self, cpu: &mut Cpu) {
+        Ppu::step(self, cpu);
     }
 
     /// Advances master clock and runs the PPU to catch up.
-    fn bump_master_clock(&mut self, delta: u8) {
+    fn bump_master_clock(&mut self, cpu: &mut Cpu, delta: u8) {
         *self.master_clock = self.master_clock.wrapping_add(delta as u64);
         // crate::ppu::CPU_MASTER.set(*self.master_clock);
         // crate::ppu::CPU_CYCLE.set(*self.cycles);
         // crate::ppu::MEM0F.set(self.peek(0x000f));
-        let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
         // Apply CPU/PPU phase offset before running the PPU.
         let ppu_target = self.master_clock.saturating_sub(self.ppu_offset as u64);
-        self.ppu.run_until(ppu_target, &mut pattern);
+        Ppu::run_until(self, cpu, ppu_target);
     }
 
-    fn begin_cycle(&mut self, read_phase: bool) {
+    fn begin_cycle(&mut self, cpu: &mut Cpu, read_phase: bool) {
         let start_delta = if read_phase {
             self.clock_start_count.saturating_sub(1)
         } else {
             self.clock_start_count.saturating_add(1)
         };
         *self.cycles = self.cycles.wrapping_add(1);
-        self.bump_master_clock(start_delta);
+        self.bump_master_clock(cpu, start_delta);
 
         if let Some(cart) = self.cartridge.as_mut() {
             cart.cpu_clock(*self.cycles);
@@ -152,18 +150,18 @@ impl<'a> CpuBus<'a> {
         };
     }
 
-    fn end_cycle(&mut self, read_phase: bool) {
+    fn end_cycle(&mut self, cpu: &mut Cpu, read_phase: bool) {
         let end_delta = if read_phase {
             self.clock_end_count.saturating_add(1)
         } else {
             self.clock_end_count.saturating_sub(1)
         };
-        self.bump_master_clock(end_delta);
+        self.bump_master_clock(cpu, end_delta);
     }
 
-    pub fn internal_cycle(&mut self) {
-        self.begin_cycle(true);
-        self.end_cycle(true);
+    pub fn internal_cycle(&mut self, cpu: &mut Cpu) {
+        self.begin_cycle(cpu, true);
+        self.end_cycle(cpu, true);
     }
 
     /// Drains and returns any pending DMC DMA stall produced by the last APU tick.
@@ -243,20 +241,24 @@ impl<'a> CpuBus<'a> {
 }
 
 impl Bus for CpuBus<'_> {
-    fn ppu(&self) -> &Ppu {
-        self.ppu
+    fn devices(&self) -> BusDevices<'_> {
+        BusDevices {
+            ram: &*self.ram,
+            ppu: &*self.ppu,
+            apu: &*self.apu,
+            cartridge: self.cartridge.as_deref(),
+            controllers: &*self.controllers,
+        }
     }
 
-    fn ppu_mut(&mut self) -> &mut Ppu {
-        self.ppu
-    }
-
-    fn apu(&self) -> &Apu {
-        self.apu
-    }
-
-    fn apu_mut(&mut self) -> &mut Apu {
-        self.apu
+    fn devices_mut(&mut self) -> BusDevicesMut<'_> {
+        BusDevicesMut {
+            ram: &mut *self.ram,
+            ppu: &mut *self.ppu,
+            apu: &mut *self.apu,
+            cartridge: self.cartridge.as_deref_mut(),
+            controllers: &mut *self.controllers,
+        }
     }
 
     fn nmi_line(&mut self) -> bool {
@@ -322,8 +324,8 @@ impl Bus for CpuBus<'_> {
         value
     }
 
-    fn mem_read(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
-        self.begin_cycle(true);
+    fn mem_read(&mut self, cpu: &mut Cpu, addr: u16) -> u8 {
+        self.begin_cycle(cpu, true);
         let mut driven = true;
         let value = match addr {
             cpu_mem::INTERNAL_RAM_START..=cpu_mem::INTERNAL_RAM_MIRROR_END => {
@@ -374,12 +376,12 @@ impl Bus for CpuBus<'_> {
             self.open_bus.latch(value);
         }
 
-        self.end_cycle(true);
+        self.end_cycle(cpu, true);
         value
     }
 
-    fn mem_write(&mut self, _cpu: &mut Cpu, addr: u16, data: u8) {
-        self.begin_cycle(false);
+    fn mem_write(&mut self, cpu: &mut Cpu, addr: u16, data: u8) {
+        self.begin_cycle(cpu, false);
         self.open_bus.latch(data);
 
         match addr {
@@ -415,12 +417,12 @@ impl Bus for CpuBus<'_> {
             }
         }
 
-        self.end_cycle(false);
+        self.end_cycle(cpu, false);
     }
 
-    fn internal_cycle(&mut self) {
-        self.begin_cycle(true);
-        self.end_cycle(true);
+    fn internal_cycle(&mut self, cpu: &mut Cpu) {
+        self.begin_cycle(cpu, true);
+        self.end_cycle(cpu, true);
     }
 
     fn irq_pending(&mut self) -> bool {

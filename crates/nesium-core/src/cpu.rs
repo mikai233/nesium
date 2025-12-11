@@ -241,7 +241,7 @@ impl Cpu {
         // The CPU takes 8 cycles before it starts executing the ROM's code
         // after a reset/power-up (Mesen does this via 8 Start/End cycles).
         for _ in 0..8 {
-            bus.internal_cycle();
+            bus.internal_cycle(self);
         }
     }
 

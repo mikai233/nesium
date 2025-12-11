@@ -273,6 +273,6 @@ impl Hash for MicroOp {
     }
 }
 
-pub(crate) fn empty_micro_fn(_: &mut Cpu, bus: &mut dyn Bus) {
-    bus.internal_cycle();
+pub(crate) fn empty_micro_fn(cpu: &mut Cpu, bus: &mut dyn Bus) {
+    bus.internal_cycle(cpu);
 }

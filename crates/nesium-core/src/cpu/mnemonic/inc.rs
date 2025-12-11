@@ -64,7 +64,7 @@ pub fn exec_dec<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_dex<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.x = cpu.x.wrapping_sub(1);
             cpu.p.set_zn(cpu.x);
         }
@@ -96,7 +96,7 @@ pub fn exec_dex<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_dey<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.y = cpu.y.wrapping_sub(1);
             cpu.p.set_zn(cpu.y);
         }
@@ -151,7 +151,7 @@ pub fn exec_inc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_inx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.x = cpu.x.wrapping_add(1);
             cpu.p.set_zn(cpu.x);
         }
@@ -168,7 +168,7 @@ pub fn exec_inx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_iny<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.y = cpu.y.wrapping_add(1);
             cpu.p.set_zn(cpu.y);
         }
@@ -262,7 +262,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "dex",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.x = cpu.x.wrapping_sub(1);
                 cpu.p.set_zn(cpu.x);
             },
@@ -293,7 +293,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "dey",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.y = cpu.y.wrapping_sub(1);
                 cpu.p.set_zn(cpu.y);
             },
@@ -385,7 +385,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "inx",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.x = cpu.x.wrapping_add(1);
                 cpu.p.set_zn(cpu.x);
             },
@@ -413,7 +413,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "iny",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.y = cpu.y.wrapping_add(1);
                 cpu.p.set_zn(cpu.y);
             },

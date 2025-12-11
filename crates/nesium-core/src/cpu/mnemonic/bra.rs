@@ -30,7 +30,7 @@ pub fn exec_bcc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.test_branch(!cpu.p.c());
         }
         1 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -70,7 +70,7 @@ pub fn exec_bcs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.test_branch(cpu.p.c());
         }
         1 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -113,7 +113,7 @@ pub fn exec_beq<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.test_branch(cpu.p.z());
         }
         1 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -153,7 +153,7 @@ pub fn exec_bmi<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.test_branch(cpu.p.n());
         }
         1 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -195,7 +195,7 @@ pub fn exec_bne<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.test_branch(!cpu.p.z());
         }
         1 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -239,7 +239,7 @@ pub fn exec_bpl<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.test_branch(!cpu.p.n());
         }
         1 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -280,7 +280,7 @@ pub fn exec_bvc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.test_branch(!cpu.p.v());
         }
         1 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -320,7 +320,7 @@ pub fn exec_bvs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.test_branch(cpu.p.v());
         }
         1 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -366,7 +366,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bcc_add_branch_offset",
                 micro_fn: |cpu, bus| {
-                    bus.internal_cycle();
+                    bus.internal_cycle(cpu);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -413,7 +413,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bcs_add_branch_offset",
                 micro_fn: |cpu, bus| {
-                    bus.internal_cycle();
+                    bus.internal_cycle(cpu);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -463,7 +463,7 @@ impl Mnemonic {
             MicroOp {
                 name: "beq_add_branch_offset",
                 micro_fn: |cpu, bus| {
-                    bus.internal_cycle();
+                    bus.internal_cycle(cpu);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -510,7 +510,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bmi_add_branch_offset",
                 micro_fn: |cpu, bus| {
-                    bus.internal_cycle();
+                    bus.internal_cycle(cpu);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -559,7 +559,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bne_add_branch_offset",
                 micro_fn: |cpu, bus| {
-                    bus.internal_cycle();
+                    bus.internal_cycle(cpu);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -610,7 +610,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bpl_add_branch_offset",
                 micro_fn: |cpu, bus| {
-                    bus.internal_cycle();
+                    bus.internal_cycle(cpu);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -658,7 +658,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bvc_add_branch_offset",
                 micro_fn: |cpu, bus| {
-                    bus.internal_cycle();
+                    bus.internal_cycle(cpu);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -705,7 +705,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bvs_add_branch_offset",
                 micro_fn: |cpu, bus| {
-                    bus.internal_cycle();
+                    bus.internal_cycle(cpu);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);

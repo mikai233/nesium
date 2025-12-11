@@ -34,11 +34,11 @@ use crate::{
 /// Implied         | JAM                    | $F2*   | 1         | X
 /// *Undocumented.
 #[inline]
-pub fn exec_jam<B: Bus>(_cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_jam<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
             // Match the legacy empty_micro_fn: burn a cycle and effectively halt.
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
         }
         _ => unreachable_step!("invalid JAM step {step}"),
     }

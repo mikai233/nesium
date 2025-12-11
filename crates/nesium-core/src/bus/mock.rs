@@ -1,4 +1,8 @@
-use crate::{apu::Apu, bus::Bus, cpu::Cpu, mem_block::cpu::AddressSpace, ppu::Ppu};
+use crate::{
+    bus::{Bus, BusDevices, BusDevicesMut},
+    cpu::Cpu,
+    mem_block::cpu::AddressSpace,
+};
 
 #[derive(Debug, Default)]
 pub(crate) struct MockBus {
@@ -18,6 +22,14 @@ impl MockBus {
 }
 
 impl Bus for MockBus {
+    fn devices(&self) -> BusDevices<'_> {
+        panic!("MockBus does not expose attached devices");
+    }
+
+    fn devices_mut(&mut self) -> BusDevicesMut<'_> {
+        panic!("MockBus does not expose attached devices");
+    }
+
     fn peek(&mut self, _: &mut Cpu, addr: u16) -> u8 {
         self.mem[addr as usize]
     }
@@ -30,25 +42,32 @@ impl Bus for MockBus {
         self.mem[addr as usize] = data; // Safe: same reason
     }
 
-    fn internal_cycle(&mut self) {}
+    fn internal_cycle(&mut self, _: &mut Cpu) {}
 
     fn cycles(&self) -> u64 {
         0
     }
 
-    fn ppu(&self) -> &Ppu {
-        panic!("MockBus does not expose a PPU");
+    fn take_oam_dma_request(&mut self) -> Option<u8> {
+        None
     }
 
-    fn ppu_mut(&mut self) -> &mut Ppu {
-        panic!("MockBus does not expose a PPU");
+    fn ppu_read(&mut self, addr: u16) -> u8 {
+        let _ = addr;
+        0
     }
 
-    fn apu(&self) -> &Apu {
-        panic!("MockBus does not expose an APU");
+    fn ppu_write(&mut self, addr: u16, value: u8) {
+        let _ = (addr, value);
     }
 
-    fn apu_mut(&mut self) -> &mut Apu {
-        panic!("MockBus does not expose an APU");
+    fn nmi_line(&mut self) -> bool {
+        false
     }
+
+    fn irq_pending(&mut self) -> bool {
+        false
+    }
+
+    fn clear_irq(&mut self) {}
 }

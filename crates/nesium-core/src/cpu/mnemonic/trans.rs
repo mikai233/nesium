@@ -59,7 +59,7 @@ pub fn exec_shs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_tax<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.x = cpu.a;
             cpu.p.set_zn(cpu.x);
         }
@@ -88,7 +88,7 @@ pub fn exec_tax<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_tay<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.y = cpu.a;
             cpu.p.set_zn(cpu.y);
         }
@@ -118,7 +118,7 @@ pub fn exec_tay<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_tsx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.x = cpu.s;
             cpu.p.set_zn(cpu.x);
         }
@@ -147,7 +147,7 @@ pub fn exec_tsx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_txa<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.a = cpu.x;
             cpu.p.set_zn(cpu.a);
         }
@@ -174,7 +174,7 @@ pub fn exec_txa<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_txs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.s = cpu.x;
         }
         _ => unreachable_step!("invalid TXS step {step}"),
@@ -202,7 +202,7 @@ pub fn exec_txs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 pub fn exec_tya<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle();
+            bus.internal_cycle(cpu);
             cpu.a = cpu.y;
             cpu.p.set_zn(cpu.a);
         }
@@ -266,7 +266,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "tax",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.x = cpu.a;
                 cpu.p.set_zn(cpu.x);
             },
@@ -294,7 +294,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "tay",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.y = cpu.a;
                 cpu.p.set_zn(cpu.y);
             },
@@ -323,7 +323,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "tsx",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.x = cpu.s;
                 cpu.p.set_zn(cpu.x);
             },
@@ -351,7 +351,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "txa",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.a = cpu.x;
                 cpu.p.set_zn(cpu.a);
             },
@@ -377,7 +377,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "txs",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.s = cpu.x;
             },
         }]
@@ -404,7 +404,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "tya",
             micro_fn: |cpu, bus| {
-                bus.internal_cycle();
+                bus.internal_cycle(cpu);
                 cpu.a = cpu.y;
                 cpu.p.set_zn(cpu.a);
             },

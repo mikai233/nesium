@@ -52,7 +52,9 @@ use self::{
 use core::fmt;
 
 use crate::{
-    cartridge::Cartridge,
+    bus::Bus,
+    cartridge::{Cartridge, mapper::PpuVramAccessKind},
+    cpu::Cpu,
     mem_block::ppu::{SecondaryOamRam, Vram},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
@@ -477,7 +479,7 @@ impl Ppu {
     /// This is the main timing entry: it performs background/sprite pipeline
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
-    pub fn step(&mut self, pattern: &mut PatternBus<'_>) {
+    pub fn step<B: Bus>(bus: &mut B, _cpu: &mut Cpu) {
         // // Debug trace: CPU/PPU alignment snapshot for this dot, with extra PPU state.
         // let cpu_cycle = CPU_CYCLE.get();
         // if cpu_cycle < 2_000_000 {
@@ -610,52 +612,56 @@ impl Ppu {
         // Pre-increment: Advance counters at the START of the clock.
         // This ensures scanline/cycle reflect the state *after* this cycle is processed
         // for synchronization purposes, aligning with Mesen's interpretation.
-        self.advance_cycle();
+        let cpu_cycle = bus.cycles();
+        let mut devices = bus.devices_mut();
+        let mut pattern = PatternBus::new(devices.cartridge.as_deref_mut(), cpu_cycle);
+        let ppu = &mut devices.ppu;
+        ppu.advance_cycle();
 
-        let rendering_enabled = self.render_enabled;
-        let prev_nmi_output = self.nmi_output;
-        self.step_pending_vram_addr();
+        let rendering_enabled = ppu.render_enabled;
+        let prev_nmi_output = ppu.nmi_output;
+        ppu.step_pending_vram_addr();
 
-        if self.ignore_vram_read > 0 {
-            self.ignore_vram_read -= 1;
+        if ppu.ignore_vram_read > 0 {
+            ppu.ignore_vram_read -= 1;
         }
 
-        if self.pending_vram_increment.is_pending() {
+        if ppu.pending_vram_increment.is_pending() {
             // Mesen2 / hardware: the simple "+1 or +32" VRAM increment after
             // a $2007 access only applies when rendering is disabled or during
             // VBlank/post-render scanlines. While rendering is active on the
             // prerender/visible scanlines, VRAM address progression is driven
             // by the scroll increment logic (coarse/fine X/Y) instead.
-            if self.scanline >= 240 || !rendering_enabled {
-                let step = self.pending_vram_increment.amount();
+            if ppu.scanline >= 240 || !rendering_enabled {
+                let step = ppu.pending_vram_increment.amount();
                 if step != 0 {
-                    self.registers.vram.v.increment(step);
+                    ppu.registers.vram.v.increment(step);
                 }
             }
-            self.pending_vram_increment = PendingVramIncrement::None;
+            ppu.pending_vram_increment = PendingVramIncrement::None;
         }
 
         // NOTE: We clear VBlank and drop NMI output at dot 1 of prerender.
         // Dot 0 should NOT clear VBlank on normal frames (avoids early NMI fall).
 
         // Load sprite shifters for the new scanline before rendering begins.
-        if self.cycle == 1 && (0..=239).contains(&self.scanline) {
+        if ppu.cycle == 1 && (0..=239).contains(&ppu.scanline) {
             // Derive the number of sprites for this scanline from how many
             // bytes were actually copied into secondary OAM, mirroring
             // Mesen2's `(_secondaryOamAddr + 3) >> 2` formula so partially
             // copied sprites are still counted.
-            let bytes_copied = self.sprite_eval.sec_idx;
+            let bytes_copied = ppu.sprite_eval.sec_idx;
             let sprite_count = (bytes_copied.saturating_add(3) >> 2).min(8);
 
             // Take slices once so we can both log and pass them to the pipeline.
-            let attrs = self.sprite_line_next.attr_slice();
-            let xs = self.sprite_line_next.x_slice();
-            let pats_lo = self.sprite_line_next.pattern_low_slice();
-            let pats_hi = self.sprite_line_next.pattern_high_slice();
+            let attrs = ppu.sprite_line_next.attr_slice();
+            let xs = ppu.sprite_line_next.x_slice();
+            let pats_lo = ppu.sprite_line_next.pattern_low_slice();
+            let pats_hi = ppu.sprite_line_next.pattern_high_slice();
 
-            self.sprite_pipeline.load_scanline(
+            ppu.sprite_pipeline.load_scanline(
                 sprite_count,
-                self.sprite_eval.sprite0_in_range_next,
+                ppu.sprite_eval.sprite0_in_range_next,
                 attrs,
                 xs,
                 pats_lo,
@@ -665,12 +671,12 @@ impl Ppu {
 
         // If rendering is disabled, keep pipelines idle to avoid stale data.
         if !rendering_enabled {
-            self.bg_pipeline.clear();
-            self.sprite_pipeline.clear();
-            self.sprite_line_next.clear();
+            ppu.bg_pipeline.clear();
+            ppu.sprite_pipeline.clear();
+            ppu.sprite_line_next.clear();
         }
 
-        match (self.scanline, self.cycle) {
+        match (ppu.scanline, ppu.cycle) {
             // ----------------------
             // Pre-render scanline (-1)
             // ----------------------
@@ -679,27 +685,27 @@ impl Ppu {
 
             // Background pipeline ticks during prerender dots 1..=256 when rendering is enabled.
             (-1, 1..=256) => {
-                if self.cycle == 1 {
+                if ppu.cycle == 1 {
                     // Clear vblank/sprite flags at dot 1 of prerender.
-                    self.registers.status.remove(Status::VERTICAL_BLANK);
-                    self.registers
+                    ppu.registers.status.remove(Status::VERTICAL_BLANK);
+                    ppu.registers
                         .status
                         .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
                     // Drop per-frame sprite0 debug info when vblank ends.
-                    self.sprite0_hit_pos = None;
+                    ppu.sprite0_hit_pos = None;
                     // Debug latch is per-VBlank; drop it when VBlank ends.
-                    self.nmi_pending = false;
+                    ppu.nmi_pending = false;
                 }
                 if rendering_enabled {
                     // Shift background shifters each dot.
-                    let _ = self.bg_pipeline.sample_and_shift(self.registers.vram.x);
+                    let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
                     // Fetch/reload background data at tile boundaries.
-                    self.fetch_background_data(pattern);
+                    ppu.fetch_background_data(&mut pattern);
                     // Sprite evaluation for scanline 0 happens on prerender as well.
-                    self.sprite_pipeline_eval_tick();
+                    ppu.sprite_pipeline_eval_tick();
 
-                    if self.cycle == 256 {
-                        self.increment_scroll_y();
+                    if ppu.cycle == 256 {
+                        ppu.increment_scroll_y();
                     }
                 }
             }
@@ -707,11 +713,11 @@ impl Ppu {
             // Dot 257: copy horizontal scroll bits from t -> v.
             (-1, 257) => {
                 if rendering_enabled {
-                    self.copy_horizontal_scroll();
+                    ppu.copy_horizontal_scroll();
                     // NESdev/Mesen2: during sprite tile loading (257..=320) the PPU
                     // forces OAMADDR to 0. This also means OAMADDR is 0 after a
                     // normal rendered frame.
-                    self.registers.oam_addr = 0;
+                    ppu.registers.oam_addr = 0;
                 }
             }
 
@@ -719,18 +725,18 @@ impl Ppu {
             // During dots 280..=304, vertical scroll bits are also copied from t -> v.
             (-1, 258..=320) => {
                 if rendering_enabled {
-                    if (280..=304).contains(&self.cycle) {
-                        self.copy_vertical_scroll();
+                    if (280..=304).contains(&ppu.cycle) {
+                        ppu.copy_vertical_scroll();
                     }
-                    self.sprite_pipeline_fetch_tick(pattern);
+                    ppu.sprite_pipeline_fetch_tick(&mut pattern);
                 }
             }
 
             // Dots 321..=336: prefetch first two background tiles for scanline 0.
             (-1, 321..=336) => {
                 if rendering_enabled {
-                    let _ = self.bg_pipeline.sample_and_shift(self.registers.vram.x);
-                    self.fetch_background_data(pattern);
+                    let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
+                    ppu.fetch_background_data(&mut pattern);
                 }
             }
 
@@ -743,11 +749,11 @@ impl Ppu {
             // the last dot of the scanline when we are on the pre-render
             // scanline, cycle 339 of an odd frame with rendering enabled.
             (-1, 337..=340) => {
-                if self.cycle == 339 && self.frame % 2 == 1 && self.render_enabled {
+                if ppu.cycle == 339 && ppu.frame % 2 == 1 && ppu.render_enabled {
                     // Force the next `advance_cycle()` call to wrap directly
                     // to scanline 0, cycle 0, effectively removing dot 340
                     // from the timeline.
-                    self.cycle = CYCLES_PER_SCANLINE - 1; // 340
+                    ppu.cycle = CYCLES_PER_SCANLINE - 1; // 340
                 }
             }
 
@@ -756,16 +762,16 @@ impl Ppu {
             // ----------------------
             (0..=239, 1..=256) => {
                 // Render current pixel.
-                self.render_pixel();
+                ppu.render_pixel();
 
                 if rendering_enabled {
                     // Fetch background data for this dot.
-                    self.fetch_background_data(pattern);
+                    ppu.fetch_background_data(&mut pattern);
                     // Sprite evaluation for the *next* scanline runs during dots 1..=256.
-                    self.sprite_pipeline_eval_tick();
+                    ppu.sprite_pipeline_eval_tick();
 
-                    if self.cycle == 256 {
-                        self.increment_scroll_y();
+                    if ppu.cycle == 256 {
+                        ppu.increment_scroll_y();
                     }
                 }
             }
@@ -773,16 +779,16 @@ impl Ppu {
             // Dot 257: copy horizontal scroll bits for next scanline.
             (0..=239, 257) => {
                 if rendering_enabled {
-                    self.copy_horizontal_scroll();
+                    ppu.copy_horizontal_scroll();
                     // NESdev/Mesen2: force OAMADDR to 0 for the sprite fetch window.
-                    self.registers.oam_addr = 0;
+                    ppu.registers.oam_addr = 0;
                 }
             }
 
             // Dots 258..=320: sprite pattern fetches for the next scanline.
             (0..=239, 258..=320) => {
                 if rendering_enabled {
-                    self.sprite_pipeline_fetch_tick(pattern);
+                    ppu.sprite_pipeline_fetch_tick(&mut pattern);
                 }
             }
 
@@ -792,8 +798,8 @@ impl Ppu {
                     // Visible scanline prefetch window: keep BG shifters advancing
                     // here as well so that the prefetched tiles for the *next*
                     // scanline are aligned with dots 0 and 8 when rendering resumes.
-                    let _ = self.bg_pipeline.sample_and_shift(self.registers.vram.x);
-                    self.fetch_background_data(pattern);
+                    let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
+                    ppu.fetch_background_data(&mut pattern);
                 }
             }
 
@@ -812,29 +818,34 @@ impl Ppu {
                 // Enter vblank at scanline 241, dot 1.
                 // NESdev/2C02 race: if $2002 was read at scanline 241, dot 0,
                 // the VBlank flag never sets and no NMI edge is generated for this frame.
-                if !self.prevent_vblank_flag {
-                    self.registers.status.insert(Status::VERTICAL_BLANK);
+                if !ppu.prevent_vblank_flag {
+                    ppu.registers.status.insert(Status::VERTICAL_BLANK);
                 }
                 // Consume the race latch each frame.
-                self.prevent_vblank_flag = false;
+                ppu.prevent_vblank_flag = false;
             }
             (241..=260, _) => {}
 
             // Any other scanline value indicates a bug in the timing logic.
-            _ => unreachable!("PPU scanline {} out of range", self.scanline),
+            _ => unreachable!("PPU scanline {} out of range", ppu.scanline),
         }
 
-        self.update_nmi_output(prev_nmi_output);
-        self.update_state_latch();
+        ppu.update_nmi_output(prev_nmi_output);
+        ppu.update_state_latch();
     }
 
     /// Advance the PPU until its master clock reaches `target_master`.
-    pub(crate) fn run_until(&mut self, target_master: u64, pattern: &mut PatternBus<'_>) {
+    pub(crate) fn run_until<B: Bus>(bus: &mut B, cpu: &mut Cpu, target_master: u64) {
         loop {
-            self.step(pattern);
+            Self::step(bus, cpu);
             // One PPU dot = 4 master cycles.
-            self.master_clock = self.master_clock.wrapping_add(4);
-            if self.master_clock + 4 > target_master {
+            let reached_target = {
+                let mut devices = bus.devices_mut();
+                let ppu = &mut devices.ppu;
+                ppu.master_clock = ppu.master_clock.wrapping_add(4);
+                ppu.master_clock + 4 > target_master
+            };
+            if reached_target {
                 break;
             }
         }
@@ -1806,20 +1817,12 @@ impl Ppu {
                 pattern_addr,
                 crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
             ),
-            self.read_vram(
-                pattern,
-                pattern_addr + 8,
-                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
-            ),
+            self.read_vram(pattern, pattern_addr + 8, PpuVramAccessKind::RenderingFetch),
         ];
 
         let attr_addr =
             base_nt + 0x03C0 + (v.coarse_y() as u16 / 4) * 8 + (v.coarse_x() as u16 / 4);
-        let attr_byte = self.read_vram(
-            pattern,
-            attr_addr,
-            crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
-        );
+        let attr_byte = self.read_vram(pattern, attr_addr, PpuVramAccessKind::RenderingFetch);
         let quadrant_shift = ((v.coarse_y() & 0b10) << 1) | (v.coarse_x() & 0b10);
         let palette_index = (attr_byte >> quadrant_shift) & 0b11;
 
@@ -1925,7 +1928,13 @@ impl Ppu {
 
 #[cfg(test)]
 mod tests {
-    use crate::ppu::pattern_bus::PatternBus;
+    use crate::{
+        apu::Apu,
+        bus::{OpenBus, cpu::CpuBus},
+        controller::{Controller, SerialLogger},
+        mem_block::cpu as cpu_ram,
+        ppu::pattern_bus::PatternBus,
+    };
 
     use super::*;
 
@@ -2009,25 +2018,67 @@ mod tests {
 
     #[test]
     fn vblank_flag_is_managed_by_clock() {
+        let mut cpu = Cpu::new();
         let mut ppu = Ppu::default();
-        let mut pattern = PatternBus::default();
+        let mut apu = Apu::new();
+        let mut ram = cpu_ram::Ram::new();
+        let mut controllers = [Controller::new(), Controller::new()];
+        let mut serial_log = SerialLogger::default();
+        let mut oam_dma_request = None;
+        let mut open_bus = OpenBus::new();
+        let mut cpu_bus_cycle = 0;
+        let mut master_clock = 0;
+
+        let mut bus = CpuBus::new(
+            &mut ram,
+            &mut ppu,
+            &mut apu,
+            None,
+            &mut controllers,
+            Some(&mut serial_log),
+            &mut oam_dma_request,
+            &mut open_bus,
+            None,
+            &mut cpu_bus_cycle,
+            &mut master_clock,
+            1,
+            6,
+            6,
+        );
+
         // Run until scanline 241, cycle 1 (accounting for prerender line).
-        // Since we now start at 340, first clock takes us to 0.
-        // We need 1 tick (to wrap to 0) + full frames.
-        // This test might need slight adjustment depending on exact cycle count desired,
-        // but the logic remains:
         let target_cycles = (242i32 * CYCLES_PER_SCANLINE as i32 + 2) as usize;
         for _ in 0..target_cycles {
-            ppu.step(&mut pattern);
+            Ppu::step(&mut bus, &mut cpu);
         }
-        assert!(ppu.registers.status.contains(Status::VERTICAL_BLANK));
+        let status_set = bus
+            .devices()
+            .ppu
+            .registers
+            .status
+            .contains(Status::VERTICAL_BLANK);
+        assert!(status_set);
 
         // Continue to the prerender line, then run dot 1 where VBL is cleared.
-        while !(ppu.scanline == -1 && ppu.cycle == 1) {
-            ppu.step(&mut pattern);
+        loop {
+            let pos = {
+                let devices = bus.devices();
+                (devices.ppu.scanline, devices.ppu.cycle)
+            };
+            if pos == (-1, 1) {
+                break;
+            }
+            Ppu::step(&mut bus, &mut cpu);
         }
+
         // Dot 1 of prerender clears VBL/sprite flags (mirrors hardware timing).
-        ppu.step(&mut pattern);
-        assert!(!ppu.registers.status.contains(Status::VERTICAL_BLANK));
+        Ppu::step(&mut bus, &mut cpu);
+        let status_cleared = !bus
+            .devices()
+            .ppu
+            .registers
+            .status
+            .contains(Status::VERTICAL_BLANK);
+        assert!(status_cleared);
     }
 }

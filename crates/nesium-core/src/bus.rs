@@ -1,6 +1,9 @@
 use std::fmt::Debug;
 
-use crate::{apu::Apu, cpu::Cpu, memory, ppu::Ppu};
+use crate::{
+    apu::Apu, cartridge::Cartridge, controller::Controller, cpu::Cpu, mem_block::cpu as cpu_ram,
+    memory, ppu::Ppu,
+};
 
 pub mod cpu;
 #[cfg(test)]
@@ -11,6 +14,24 @@ pub(crate) use open_bus::OpenBus;
 
 /// Expose the CPU stack page start address for stack helpers.
 pub(crate) const STACK_ADDR: u16 = memory::cpu::STACK_PAGE_START;
+
+/// Immutable view of the hardware attached to the CPU bus.
+pub struct BusDevices<'a> {
+    pub ram: &'a cpu_ram::Ram,
+    pub ppu: &'a Ppu,
+    pub apu: &'a Apu,
+    pub cartridge: Option<&'a Cartridge>,
+    pub controllers: &'a [Controller; 2],
+}
+
+/// Mutable view of the hardware attached to the CPU bus.
+pub struct BusDevicesMut<'a> {
+    pub ram: &'a mut cpu_ram::Ram,
+    pub ppu: &'a mut Ppu,
+    pub apu: &'a mut Apu,
+    pub cartridge: Option<&'a mut Cartridge>,
+    pub controllers: &'a mut [Controller; 2],
+}
 
 /// Core CPU/PPU bus abstraction.
 ///
@@ -30,7 +51,7 @@ pub trait Bus: Debug {
 
     /// Internal CPU cycle that does not perform a bus access but must advance
     /// timing (master clock, PPU/APU, open-bus decay, mapper clocks).
-    fn internal_cycle(&mut self);
+    fn internal_cycle(&mut self, cpu: &mut Cpu);
 
     /// Returns a pending OAM DMA page value (written via `$4014`), if any.
     /// Default implementations have no DMA bridge, so they always return `None`.
@@ -65,17 +86,11 @@ pub trait Bus: Debug {
 
     fn cycles(&self) -> u64;
 
-    /// Immutable access to the attached PPU, when available.
-    fn ppu(&self) -> &Ppu;
+    /// Snapshot of the attached devices for read-only access.
+    fn devices(&self) -> BusDevices<'_>;
 
-    /// Mutable access to the attached PPU, when available.
-    fn ppu_mut(&mut self) -> &mut Ppu;
-
-    /// Immutable access to the attached APU, when available.
-    fn apu(&self) -> &Apu;
-
-    /// Mutable access to the attached APU, when available.
-    fn apu_mut(&mut self) -> &mut Apu;
+    /// Mutable view of all devices on the bus.
+    fn devices_mut(&mut self) -> BusDevicesMut<'_>;
 }
 
 // Allow mutable references to Bus implementors (including trait objects) to be used
@@ -93,12 +108,20 @@ impl<T: Bus + ?Sized> Bus for &mut T {
         (**self).peek(cpu, addr)
     }
 
-    fn internal_cycle(&mut self) {
-        (**self).internal_cycle()
+    fn internal_cycle(&mut self, cpu: &mut Cpu) {
+        (**self).internal_cycle(cpu)
     }
 
     fn take_oam_dma_request(&mut self) -> Option<u8> {
         (**self).take_oam_dma_request()
+    }
+
+    fn devices(&self) -> BusDevices<'_> {
+        (**self).devices()
+    }
+
+    fn devices_mut(&mut self) -> BusDevicesMut<'_> {
+        (**self).devices_mut()
     }
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
@@ -123,21 +146,5 @@ impl<T: Bus + ?Sized> Bus for &mut T {
 
     fn cycles(&self) -> u64 {
         (**self).cycles()
-    }
-
-    fn ppu(&self) -> &Ppu {
-        (**self).ppu()
-    }
-
-    fn ppu_mut(&mut self) -> &mut Ppu {
-        (**self).ppu_mut()
-    }
-
-    fn apu(&self) -> &Apu {
-        (**self).apu()
-    }
-
-    fn apu_mut(&mut self) -> &mut Apu {
-        (**self).apu_mut()
     }
 }

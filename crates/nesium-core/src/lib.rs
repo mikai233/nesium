@@ -226,7 +226,7 @@ impl Nes {
             self.clock_end_count,
         );
         self.cpu.reset(&mut bus, kind);
-        self.last_frame = bus.ppu().frame_count();
+        self.last_frame = bus.devices().ppu.frame_count();
         self.dot_counter = 0;
     }
 
@@ -636,7 +636,7 @@ impl Nes {
                     nes.clock_start_count,
                     nes.clock_end_count,
                 );
-                bus.step_ppu();
+                bus.step_ppu(&mut nes.cpu);
             }
             nes.dot_counter = nes.ppu.total_dots();
             let frame_count = nes.ppu.frame_count();
