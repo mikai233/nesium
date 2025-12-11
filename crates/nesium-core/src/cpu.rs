@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use crate::bus::{Bus, STACK_ADDR};
+use crate::context::Context;
 use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
@@ -100,7 +101,7 @@ impl OamDma {
 
     /// Runs one DMA micro-step (one CPU cycle). Returns `true` when the
     /// transfer has finished copying all 256 bytes into OAM.
-    fn step<B: Bus>(&mut self, cpu: &mut Cpu, bus: &mut B) -> bool {
+    fn step<B: Bus>(&mut self, cpu: &mut Cpu, bus: &mut B, ctx: &mut Context) -> bool {
         if self.dummy_cycles > 0 {
             self.dummy_cycles -= 1;
             return false;
@@ -108,12 +109,12 @@ impl OamDma {
 
         if self.read_phase {
             let addr = ((self.page as u16) << 8) | self.offset;
-            self.data_latch = bus.mem_read(cpu, addr);
+            self.data_latch = bus.mem_read(addr, cpu, ctx);
             self.read_phase = false;
             return false;
         }
 
-        bus.mem_write(cpu, PpuRegister::OamData.addr(), self.data_latch);
+        bus.mem_write(PpuRegister::OamData.addr(), self.data_latch, cpu, ctx);
         self.offset += 1;
         if self.offset >= OAM_DMA_TRANSFER_BYTES {
             return true;
@@ -199,11 +200,11 @@ impl Cpu {
     /// - Preserves A/X/Y and most status flags.
     /// - Sets the I flag (disables IRQs).
     /// - Decrements S by 3 (wrapping), matching 6502/Mesen behaviour.
-    pub(crate) fn reset(&mut self, bus: &mut impl Bus, kind: ResetKind) {
+    pub(crate) fn reset(&mut self, bus: &mut impl Bus, kind: ResetKind, ctx: &mut Context) {
         // CpuPtr.store(self as *mut _, std::sync::atomic::Ordering::Relaxed);
         // Read the reset vector from memory ($FFFC-$FFFD) without advancing timing.
-        let lo = bus.peek(self, RESET_VECTOR_LO);
-        let hi = bus.peek(self, RESET_VECTOR_HI);
+        let lo = bus.peek(RESET_VECTOR_LO, self, ctx);
+        let hi = bus.peek(RESET_VECTOR_HI, self, ctx);
         self.pc = ((hi as u16) << 8) | (lo as u16);
 
         match kind {
@@ -241,11 +242,11 @@ impl Cpu {
         // The CPU takes 8 cycles before it starts executing the ROM's code
         // after a reset/power-up (Mesen does this via 8 Start/End cycles).
         for _ in 0..8 {
-            bus.internal_cycle(self);
+            bus.internal_cycle(self, ctx);
         }
     }
 
-    pub(crate) fn step<B: Bus>(&mut self, bus: &mut B) {
+    pub(crate) fn step<B: Bus>(&mut self, bus: &mut B, ctx: &mut Context) {
         // Propagate the current pending flag to `prev_nmi_pending` so that
         // NMI is effectively delayed by one instruction boundary, matching
         // the NES/Mesen behaviour where the interrupt lines are sampled on
@@ -266,7 +267,7 @@ impl Cpu {
             self.apply_pending_irq_mask();
         }
 
-        if self.handle_oam_dma(bus) {
+        if self.handle_oam_dma(bus, ctx) {
             return;
         }
 
@@ -277,12 +278,12 @@ impl Cpu {
                 // Special-case BRK: allow NMI/IRQ to be serviced after the dummy read
                 // micro-op (index 1) so that NMI can "interrupt" BRK and still push
                 // a status byte with the B flag set.
-                if opcode == 0x00 && self.index == 1 && self.sample_interrupts(bus) {
+                if opcode == 0x00 && self.index == 1 && self.sample_interrupts(bus, ctx) {
                     return;
                 }
 
                 let instr = &LOOKUP_TABLE[opcode as usize];
-                self.exec(bus, instr);
+                self.exec(bus, ctx, instr);
                 self.post_exec(instr);
                 if self.index >= instr.len() {
                     self.clear();
@@ -290,10 +291,10 @@ impl Cpu {
             }
             // No instruction in flight: first service any pending interrupts, then fetch.
             None => {
-                if self.sample_interrupts(bus) {
+                if self.sample_interrupts(bus, ctx) {
                     return;
                 }
-                let opcode = self.fetch_opcode(bus);
+                let opcode = self.fetch_opcode(bus, ctx);
                 self.opcode_in_flight = Some(opcode);
                 let instr = &LOOKUP_TABLE[opcode as usize];
                 self.pre_exec(instr);
@@ -303,7 +304,12 @@ impl Cpu {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_step<B: Bus>(&mut self, bus: &mut B, instr: &Instruction) -> usize {
+    pub(crate) fn test_step<B: Bus>(
+        &mut self,
+        bus: &mut B,
+        ctx: &mut Context,
+        instr: &Instruction,
+    ) -> usize {
         self.opcode_in_flight = Some(instr.opcode());
         self.incr_pc(); // Fetch opcode
         let mut cycles = 1; // Fetch opcode has 1 cycle
@@ -313,7 +319,7 @@ impl Cpu {
                 tracing::span!(tracing::Level::TRACE, "instruction_exec", step = self.index);
             let _enter = _span.enter();
             let before = *self;
-            self.exec(bus, instr);
+            self.exec(bus, ctx, instr);
             tracing::event!(
                 tracing::Level::TRACE,
                 before_cpu = ?before,
@@ -327,8 +333,8 @@ impl Cpu {
     }
 
     #[inline]
-    pub(crate) fn fetch_opcode<B: Bus>(&mut self, bus: &mut B) -> u8 {
-        let opcode = bus.mem_read(self, self.pc);
+    pub(crate) fn fetch_opcode<B: Bus>(&mut self, bus: &mut B, ctx: &mut Context) -> u8 {
+        let opcode = bus.mem_read(self.pc, self, ctx);
         self.incr_pc();
         // Starting a new instruction boundary clears any one-instruction IRQ suppression.
         self.irq_inhibit_next = false;
@@ -364,7 +370,7 @@ impl Cpu {
     }
 
     #[inline]
-    pub(crate) fn exec<B: Bus>(&mut self, bus: &mut B, instr: &Instruction) {
+    pub(crate) fn exec<B: Bus>(&mut self, bus: &mut B, ctx: &mut Context, instr: &Instruction) {
         match instr.mnemonic {
             // JSR, RTI, and RTS have complex, non-standard instruction cycles (micro-ops),
             // especially during stack manipulation. Their addressing phase cycles are often
@@ -376,12 +382,12 @@ impl Cpu {
                 self.index += instr.addr_len();
 
                 // Execute the *first* of the custom, non-addressing micro-ops.
-                instr.exec(self, bus, self.index);
+                instr.exec(self, bus, ctx, self.index);
             }
             _ => {
                 // For all other instructions, or for the remaining cycles of JSR/RTI/RTS,
                 // execute the micro-op corresponding to the current cycle index.
-                instr.exec(self, bus, self.index);
+                instr.exec(self, bus, ctx, self.index);
             }
         }
 
@@ -458,9 +464,9 @@ impl Cpu {
         }
     }
 
-    fn handle_oam_dma<B: Bus>(&mut self, bus: &mut B) -> bool {
+    fn handle_oam_dma<B: Bus>(&mut self, bus: &mut B, ctx: &mut Context) -> bool {
         if let Some(mut dma) = self.oam_dma.take() {
-            let done = dma.step(self, bus);
+            let done = dma.step(self, bus, ctx);
             self.oam_dma = if done { None } else { Some(dma) };
             return true;
         }
@@ -470,7 +476,7 @@ impl Cpu {
         {
             let start_on_odd_cycle = (bus.cycles() & 1) == 1;
             let mut dma = OamDma::new(page, start_on_odd_cycle);
-            let done = dma.step(self, bus);
+            let done = dma.step(self, bus, ctx);
             self.oam_dma = if done { None } else { Some(dma) };
             return true;
         }
@@ -478,11 +484,11 @@ impl Cpu {
         false
     }
 
-    fn push_status<B: Bus + ?Sized>(&mut self, bus: &mut B, set_break: bool) {
+    fn push_status<B: Bus + ?Sized>(&mut self, bus: &mut B, ctx: &mut Context, set_break: bool) {
         let mut status = self.p;
         status.set_u(true);
         status.set_b(set_break);
-        self.push(bus, status.bits());
+        self.push(bus, ctx, status.bits());
     }
 
     /// Queue an update to the I flag that will take effect for IRQ gating
@@ -500,7 +506,7 @@ impl Cpu {
         self.pending_irq_mask = None;
     }
 
-    fn service_irq<B: Bus>(&mut self, bus: &mut B) -> bool {
+    fn service_irq<B: Bus>(&mut self, bus: &mut B, ctx: &mut Context) -> bool {
         // When the effective I flag is set and no override is armed, or when
         // IRQs are explicitly suppressed for this instruction boundary, mask
         // maskable IRQs.
@@ -508,13 +514,19 @@ impl Cpu {
         {
             return false;
         }
-        self.perform_interrupt(bus, cpu_mem::IRQ_VECTOR_LO, cpu_mem::IRQ_VECTOR_HI, false);
+        self.perform_interrupt(
+            bus,
+            ctx,
+            cpu_mem::IRQ_VECTOR_LO,
+            cpu_mem::IRQ_VECTOR_HI,
+            false,
+        );
         bus.clear_irq();
         self.allow_irq_once = false;
         true
     }
 
-    fn service_nmi<B: Bus>(&mut self, bus: &mut B) -> bool {
+    fn service_nmi<B: Bus>(&mut self, bus: &mut B, ctx: &mut Context) -> bool {
         // Only service NMI when the pending flag from the previous cycle is set,
         // which matches the Mesen/NES behaviour of delaying NMI by one cycle
         // (effectively one instruction boundary).
@@ -531,6 +543,7 @@ impl Cpu {
         let set_break = matches!(self.opcode_in_flight, Some(0x00));
         self.perform_interrupt(
             bus,
+            ctx,
             cpu_mem::NMI_VECTOR_LO,
             cpu_mem::NMI_VECTOR_HI,
             set_break,
@@ -541,26 +554,27 @@ impl Cpu {
     fn perform_interrupt<B: Bus + ?Sized>(
         &mut self,
         bus: &mut B,
+        ctx: &mut Context,
         vector_lo: u16,
         vector_hi: u16,
         set_break: bool,
     ) {
         // Dummy read
-        bus.mem_read(self, self.pc);
-        bus.mem_read(self, self.pc);
+        bus.mem_read(self.pc, self, ctx);
+        bus.mem_read(self.pc, self, ctx);
 
         let pc_hi = (self.pc >> 8) as u8;
         let pc_lo = self.pc as u8;
 
-        self.push(bus, pc_hi);
-        self.push(bus, pc_lo);
-        self.push_status(bus, set_break);
+        self.push(bus, ctx, pc_hi);
+        self.push(bus, ctx, pc_lo);
+        self.push_status(bus, ctx, set_break);
 
         // Mask further IRQs immediately upon entering the handler.
         self.set_i_immediate(true);
 
-        let lo = bus.mem_read(self, vector_lo);
-        let hi = bus.mem_read(self, vector_hi);
+        let lo = bus.mem_read(vector_lo, self, ctx);
+        let hi = bus.mem_read(vector_hi, self, ctx);
         self.pc = ((hi as u16) << 8) | (lo as u16);
 
         self.opcode_in_flight = None;
@@ -568,11 +582,11 @@ impl Cpu {
     }
 
     /// Helper that checks for pending NMI/IRQ and services them if allowed.
-    fn sample_interrupts<B: Bus>(&mut self, bus: &mut B) -> bool {
-        if self.service_nmi(bus) {
+    fn sample_interrupts<B: Bus>(&mut self, bus: &mut B, ctx: &mut Context) -> bool {
+        if self.service_nmi(bus, ctx) {
             return true;
         }
-        if self.service_irq(bus) {
+        if self.service_irq(bus, ctx) {
             return true;
         }
         false
@@ -608,14 +622,14 @@ impl Cpu {
         }
     }
 
-    pub(crate) fn push<B: Bus + ?Sized>(&mut self, bus: &mut B, data: u8) {
-        bus.mem_write(self, self.stack_addr(), data);
+    pub(crate) fn push<B: Bus + ?Sized>(&mut self, bus: &mut B, ctx: &mut Context, data: u8) {
+        bus.mem_write(self.stack_addr(), data, self, ctx);
         self.s = self.s.wrapping_sub(1);
     }
 
-    pub(crate) fn pull<B: Bus + ?Sized>(&mut self, bus: &mut B) -> u8 {
+    pub(crate) fn pull<B: Bus + ?Sized>(&mut self, bus: &mut B, ctx: &mut Context) -> u8 {
         self.s = self.s.wrapping_add(1);
-        bus.mem_read(self, self.stack_addr())
+        bus.mem_read(self.stack_addr(), self, ctx)
     }
 
     /// Captures the current CPU registers for tracing/debugging.

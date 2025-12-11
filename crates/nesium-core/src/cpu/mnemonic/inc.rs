@@ -1,5 +1,6 @@
 use crate::{
     bus::Bus,
+    context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
 };
 
@@ -25,19 +26,19 @@ use crate::{
 /// Zero Page               | DEC $nn                  | $C6    | 2         | 5
 /// X-Indexed Zero Page     | DEC $nn,X                | $D6    | 2         | 6
 #[inline]
-pub fn exec_dec<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_dec<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
-            cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         1 => {
-            bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
             cpu.base = cpu.base.wrapping_sub(1);
             cpu.p.set_zn(cpu.base);
         }
         2 => {
-            bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
         }
         _ => unreachable_step!("invalid DEC step {step}"),
     }
@@ -61,10 +62,10 @@ pub fn exec_dec<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | DEX                      | $CA    | 1         | 2
 #[inline]
-pub fn exec_dex<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_dex<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.x = cpu.x.wrapping_sub(1);
             cpu.p.set_zn(cpu.x);
         }
@@ -93,10 +94,10 @@ pub fn exec_dex<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | DEY                      | $88    | 1         | 2
 #[inline]
-pub fn exec_dey<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_dey<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.y = cpu.y.wrapping_sub(1);
             cpu.p.set_zn(cpu.y);
         }
@@ -124,19 +125,19 @@ pub fn exec_dey<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// Zero Page               | INC $nn                  | $E6    | 2         | 5
 /// X-Indexed Zero Page     | INC $nn,X                | $F6    | 2         | 6
 #[inline]
-pub fn exec_inc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_inc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
-            cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         1 => {
-            bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
             cpu.base = cpu.base.wrapping_add(1);
             cpu.p.set_zn(cpu.base);
         }
         2 => {
-            bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
         }
         _ => unreachable_step!("invalid INC step {step}"),
     }
@@ -148,10 +149,10 @@ pub fn exec_inc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// INX - Increment Index Register X By One
 /// Operation: X + 1 → X
 #[inline]
-pub fn exec_inx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_inx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.x = cpu.x.wrapping_add(1);
             cpu.p.set_zn(cpu.x);
         }
@@ -165,10 +166,10 @@ pub fn exec_inx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// INY - Increment Index Register Y By One
 /// Operation: Y + 1 → Y
 #[inline]
-pub fn exec_iny<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_iny<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.y = cpu.y.wrapping_add(1);
             cpu.p.set_zn(cpu.y);
         }
@@ -205,10 +206,10 @@ impl Mnemonic {
                 name: "dec_read_old",
                 // Bus: READ V_old from M(effective_addr). This is the value to be decremented.
                 // Internal: Store V_old in a temporary register (cpu.base).
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     cpu.p.remove(Status::NEGATIVE | Status::ZERO);
                     // Read the old value from memory
-                    cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+                    cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 },
             },
             // T6: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
@@ -216,9 +217,9 @@ impl Mnemonic {
                 name: "dec_dummy_write_calc",
                 // Bus: WRITE V_old back to M(effective_addr). This burns a cycle (Dummy Write).
                 // Internal: DEC calculation is performed and flags are updated. cpu.base now holds V_new.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Dummy write of the old value (V_old)
-                    bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
 
                     // Internal operation: Calculate the new value (V_new = V_old - 1)
                     cpu.base = cpu.base.wrapping_sub(1);
@@ -231,10 +232,10 @@ impl Mnemonic {
                 name: "dec_final_write_flags",
                 // Bus: WRITE V_new to M(effective_addr). This completes the RMW sequence.
                 // Internal: Flags have already been updated in the previous micro-op.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Final Write: The correct, decremented value is written to memory.
                     let new_value = cpu.base;
-                    bus.mem_write(cpu, cpu.effective_addr, new_value);
+                    bus.mem_write(cpu.effective_addr, new_value, cpu, ctx);
                     // Note: DEC does not affect the Carry flag (C)
                 },
             },
@@ -261,8 +262,8 @@ impl Mnemonic {
     pub(crate) const fn dex() -> &'static [MicroOp] {
         &[MicroOp {
             name: "dex",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.x = cpu.x.wrapping_sub(1);
                 cpu.p.set_zn(cpu.x);
             },
@@ -292,8 +293,8 @@ impl Mnemonic {
     pub(crate) const fn dey() -> &'static [MicroOp] {
         &[MicroOp {
             name: "dey",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.y = cpu.y.wrapping_sub(1);
                 cpu.p.set_zn(cpu.y);
             },
@@ -326,10 +327,10 @@ impl Mnemonic {
                 name: "inc_read_old",
                 // Bus: READ V_old from M(effective_addr). This is the value to be incremented.
                 // Internal: Store V_old in a temporary CPU register (cpu.base).
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     cpu.p.remove(Status::NEGATIVE | Status::ZERO);
                     // Read the old value from memory
-                    cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+                    cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 },
             },
             // T6: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
@@ -337,9 +338,9 @@ impl Mnemonic {
                 name: "inc_dummy_write_calc",
                 // Bus: WRITE V_old back to M(effective_addr). This burns a cycle (Dummy Write).
                 // Internal: INC calculation is performed and flags are updated. cpu.base is updated to V_new.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Dummy write of the old value (V_old) - This is the "extra" RMW cycle.
-                    bus.mem_write(cpu, cpu.effective_addr, cpu.base);
+                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
 
                     // Internal operation: Calculate the new value (V_new = V_old + 1)
                     cpu.base = cpu.base.wrapping_add(1);
@@ -353,10 +354,10 @@ impl Mnemonic {
                 name: "inc_final_write_flags",
                 // Bus: WRITE V_new to M(effective_addr). This completes the RMW sequence.
                 // Internal: Flags have already been updated in the previous micro-op.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Final Write: The correct, incremented value is written to memory.
                     let new_value = cpu.base;
-                    bus.mem_write(cpu, cpu.effective_addr, new_value);
+                    bus.mem_write(cpu.effective_addr, new_value, cpu, ctx);
                 },
             },
         ]
@@ -384,8 +385,8 @@ impl Mnemonic {
     pub(crate) const fn inx() -> &'static [MicroOp] {
         &[MicroOp {
             name: "inx",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.x = cpu.x.wrapping_add(1);
                 cpu.p.set_zn(cpu.x);
             },
@@ -412,8 +413,8 @@ impl Mnemonic {
     pub(crate) const fn iny() -> &'static [MicroOp] {
         &[MicroOp {
             name: "iny",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.y = cpu.y.wrapping_add(1);
                 cpu.p.set_zn(cpu.y);
             },
@@ -434,7 +435,7 @@ mod inc_tests {
             let expected_value = verify.m.wrapping_sub(1);
 
             assert_eq!(
-                bus.mem_read(cpu, verify.addr),
+                bus.mem_read(verify.addr),
                 expected_value,
                 "Memory was not decremented correctly"
             );
@@ -490,7 +491,7 @@ mod inc_tests {
             let expected_value = verify.m.wrapping_add(1);
 
             assert_eq!(
-                bus.mem_read(cpu, verify.addr),
+                bus.mem_read(verify.addr),
                 expected_value,
                 "Memory was not incremented correctly"
             );

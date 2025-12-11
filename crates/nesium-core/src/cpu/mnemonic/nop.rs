@@ -1,5 +1,6 @@
 use crate::{
     bus::Bus,
+    context::Context,
     cpu::{
         Cpu,
         micro_op::{MicroOp, empty_micro_fn},
@@ -47,9 +48,9 @@ use crate::{
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_nop<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_nop<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
-        0 => bus.internal_cycle(cpu),
+        0 => bus.internal_cycle(cpu, ctx),
         _ => unreachable_step!("invalid NOP step {step}"),
     }
 }
@@ -96,7 +97,7 @@ impl Mnemonic {
     pub(crate) const fn nop() -> &'static [MicroOp] {
         &[MicroOp {
             name: "nop",
-            micro_fn: empty_micro_fn,
+            micro_fn: |cpu, bus, ctx| empty_micro_fn(cpu, bus, ctx),
         }]
     }
 }

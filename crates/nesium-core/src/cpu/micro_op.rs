@@ -3,9 +3,9 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use crate::{bus::Bus, cpu::Cpu};
+use crate::{bus::Bus, context::Context, cpu::Cpu};
 
-type MicroFn = fn(&mut Cpu, bus: &mut dyn Bus);
+type MicroFn = fn(&mut Cpu, bus: &mut dyn Bus, ctx: &mut Context);
 
 #[derive(Clone, Copy, Eq)]
 pub struct MicroOp {
@@ -18,16 +18,16 @@ impl MicroOp {
     //  Execution
     // ─────────────────────────────────────────────────────────────────────────────
     /// Execute this micro operation.
-    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut dyn Bus) {
-        (self.micro_fn)(cpu, bus);
+    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut dyn Bus, ctx: &mut Context) {
+        (self.micro_fn)(cpu, bus, ctx);
     }
 
     /// Cycle 2: Read zero-page address byte from PC and increment PC.
     pub(crate) const fn fetch_zp_addr_lo() -> Self {
         MicroOp {
             name: "fetch_zp_addr_lo",
-            micro_fn: |cpu, bus| {
-                cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            micro_fn: |cpu, bus, ctx| {
+                cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
                 cpu.incr_pc();
             },
         }
@@ -37,8 +37,8 @@ impl MicroOp {
     pub(crate) const fn fetch_abs_addr_lo() -> Self {
         MicroOp {
             name: "fetch_abs_addr_lo",
-            micro_fn: |cpu, bus| {
-                cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            micro_fn: |cpu, bus, ctx| {
+                cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
                 cpu.incr_pc();
             },
         }
@@ -48,8 +48,8 @@ impl MicroOp {
     pub(crate) const fn fetch_abs_addr_hi() -> Self {
         MicroOp {
             name: "fetch_abs_addr_hi",
-            micro_fn: |cpu, bus| {
-                let hi = bus.mem_read(cpu, cpu.pc);
+            micro_fn: |cpu, bus, ctx| {
+                let hi = bus.mem_read(cpu.pc, cpu, ctx);
                 cpu.effective_addr |= (hi as u16) << 8;
                 cpu.incr_pc();
             },
@@ -60,8 +60,8 @@ impl MicroOp {
     pub(crate) const fn fetch_abs_addr_hi_add_x() -> Self {
         MicroOp {
             name: "fetch_abs_addr_hi_add_x",
-            micro_fn: |cpu, bus| {
-                let hi = bus.mem_read(cpu, cpu.pc);
+            micro_fn: |cpu, bus, ctx| {
+                let hi = bus.mem_read(cpu.pc, cpu, ctx);
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHX
                 if cpu.opcode_in_flight == Some(0x9C) {
@@ -80,8 +80,8 @@ impl MicroOp {
     pub(crate) const fn fetch_abs_addr_hi_add_y() -> Self {
         MicroOp {
             name: "fetch_abs_addr_hi_add_y",
-            micro_fn: |cpu, bus| {
-                let hi = bus.mem_read(cpu, cpu.pc);
+            micro_fn: |cpu, bus, ctx| {
+                let hi = bus.mem_read(cpu.pc, cpu, ctx);
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHA(0x9F) SHX(0x9E) SHS(0x9B)
                 if cpu.opcode_in_flight == Some(0x9F)
@@ -106,8 +106,8 @@ impl MicroOp {
     pub(crate) const fn read_zero_page() -> Self {
         MicroOp {
             name: "read_zero_page",
-            micro_fn: |cpu, bus| {
-                cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
             },
         }
     }
@@ -116,9 +116,9 @@ impl MicroOp {
     pub(crate) const fn read_zero_page_add_x_dummy() -> Self {
         MicroOp {
             name: "read_zero_page_add_x_dummy",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let addr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-                let _ = bus.mem_read(cpu, addr); // dummy read for timing
+                let _ = bus.mem_read(addr, cpu, ctx); // dummy read for timing
                 cpu.effective_addr = addr;
             },
         }
@@ -128,9 +128,9 @@ impl MicroOp {
     pub(crate) const fn read_zero_page_add_y_dummy() -> Self {
         MicroOp {
             name: "read_zero_page_add_y_dummy",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let addr = (cpu.effective_addr + cpu.y as u16) & 0x00FF;
-                let _ = bus.mem_read(cpu, addr); // dummy read for timing
+                let _ = bus.mem_read(addr, cpu, ctx); // dummy read for timing
                 cpu.effective_addr = addr;
             },
         }
@@ -143,9 +143,9 @@ impl MicroOp {
     pub(crate) const fn read_indirect_x_dummy() -> Self {
         MicroOp {
             name: "read_indirect_x_dummy",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-                let _ = bus.mem_read(cpu, ptr); // dummy read for timing
+                let _ = bus.mem_read(ptr, cpu, ctx); // dummy read for timing
             },
         }
     }
@@ -154,9 +154,9 @@ impl MicroOp {
     pub(crate) const fn read_indirect_x_lo() -> Self {
         MicroOp {
             name: "read_indirect_x_lo",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-                cpu.base = bus.mem_read(cpu, ptr);
+                cpu.base = bus.mem_read(ptr, cpu, ctx);
             },
         }
     }
@@ -165,9 +165,9 @@ impl MicroOp {
     pub(crate) const fn read_indirect_x_hi() -> Self {
         MicroOp {
             name: "read_indirect_x_hi",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let ptr = (cpu.effective_addr + cpu.x as u16 + 1) & 0x00FF;
-                let hi = bus.mem_read(cpu, ptr);
+                let hi = bus.mem_read(ptr, cpu, ctx);
                 cpu.effective_addr = ((hi as u16) << 8) | cpu.base as u16;
             },
         }
@@ -180,9 +180,9 @@ impl MicroOp {
     pub(crate) const fn read_indirect_y_hi() -> Self {
         MicroOp {
             name: "read_indirect_y_hi",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let hi_addr = (cpu.effective_addr + 1) & 0x00FF;
-                let hi = bus.mem_read(cpu, hi_addr);
+                let hi = bus.mem_read(hi_addr, cpu, ctx);
                 let base = ((hi as u16) << 8) | (cpu.base as u16);
                 // SHA
                 if cpu.opcode_in_flight == Some(0x93) {
@@ -203,8 +203,8 @@ impl MicroOp {
     pub(crate) const fn read_indirect_lo() -> Self {
         MicroOp {
             name: "read_indirect_lo",
-            micro_fn: |cpu, bus| {
-                cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
             },
         }
     }
@@ -214,13 +214,13 @@ impl MicroOp {
     pub(crate) const fn read_indirect_hi_buggy() -> Self {
         MicroOp {
             name: "read_indirect_hi_buggy",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let hi_addr = if (cpu.effective_addr & 0xFF) == 0xFF {
                     cpu.effective_addr & 0xFF00
                 } else {
                     cpu.effective_addr + 1
                 };
-                let hi = bus.mem_read(cpu, hi_addr);
+                let hi = bus.mem_read(hi_addr, cpu, ctx);
                 cpu.effective_addr = ((hi as u16) << 8) | (cpu.base as u16);
             },
         }
@@ -233,10 +233,10 @@ impl MicroOp {
     pub(crate) const fn dummy_read_cross_x() -> Self {
         MicroOp {
             name: "dummy_read_cross_x",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
                 let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-                let _ = bus.mem_read(cpu, dummy_addr); // dummy read for timing
+                let _ = bus.mem_read(dummy_addr, cpu, ctx); // dummy read for timing
             },
         }
     }
@@ -245,10 +245,10 @@ impl MicroOp {
     pub(crate) const fn dummy_read_cross_y() -> Self {
         MicroOp {
             name: "dummy_read_cross_y",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
                 let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-                let _ = bus.mem_read(cpu, dummy_addr); // dummy read for timing
+                let _ = bus.mem_read(dummy_addr, cpu, ctx); // dummy read for timing
             },
         }
     }
@@ -273,6 +273,6 @@ impl Hash for MicroOp {
     }
 }
 
-pub(crate) fn empty_micro_fn(cpu: &mut Cpu, bus: &mut dyn Bus) {
-    bus.internal_cycle(cpu);
+pub(crate) fn empty_micro_fn(cpu: &mut Cpu, bus: &mut dyn Bus, ctx: &mut Context) {
+    bus.internal_cycle(cpu, ctx);
 }

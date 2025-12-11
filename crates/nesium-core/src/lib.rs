@@ -6,6 +6,7 @@ use crate::{
     bus::{Bus, OpenBus, cpu::CpuBus},
     cartridge::{Cartridge, Provider},
     config::region::Region,
+    context::Context,
     controller::{Button, Controller},
     cpu::Cpu,
     error::Error,
@@ -25,6 +26,7 @@ pub mod audio;
 pub mod bus;
 pub mod cartridge;
 pub mod config;
+pub mod context;
 pub mod controller;
 pub mod cpu;
 pub mod error;
@@ -225,7 +227,10 @@ impl Nes {
             self.clock_start_count,
             self.clock_end_count,
         );
-        self.cpu.reset(&mut bus, kind);
+        let mut ctx = Context::Some {
+            region: &mut self.region,
+        };
+        self.cpu.reset(&mut bus, kind, &mut ctx);
         self.last_frame = bus.devices().ppu.frame_count();
         self.dot_counter = 0;
     }
@@ -254,9 +259,12 @@ impl Nes {
                 self.clock_start_count,
                 self.clock_end_count,
             );
+            let mut ctx = Context::Some {
+                region: &mut self.region,
+            };
 
             // Advance one CPU cycle (and implicitly PPU/APU).
-            self.cpu.step(&mut bus);
+            self.cpu.step(&mut bus, &mut ctx);
             let cycles = bus.cpu_cycles();
             let expansion = bus
                 .cartridge()
@@ -536,7 +544,10 @@ impl Nes {
             self.clock_start_count,
             self.clock_end_count,
         );
-        bus.peek(&mut self.cpu, addr)
+        let mut ctx = Context::Some {
+            region: &mut self.region,
+        };
+        bus.peek(addr, &mut self.cpu, &mut ctx)
     }
 
     /// Reads a contiguous range of CPU-visible bytes into `buffer`, starting at `base`.
@@ -557,8 +568,11 @@ impl Nes {
             self.clock_start_count,
             self.clock_end_count,
         );
+        let mut ctx = Context::Some {
+            region: &mut self.region,
+        };
         for (offset, byte) in buffer.iter_mut().enumerate() {
-            *byte = bus.peek(&mut self.cpu, base.wrapping_add(offset as u16));
+            *byte = bus.peek(base.wrapping_add(offset as u16), &mut self.cpu, &mut ctx);
         }
     }
 
@@ -602,7 +616,10 @@ impl Nes {
                         nes.clock_start_count,
                         nes.clock_end_count,
                     );
-                    bus.mem_read(&mut nes.cpu, addr)
+                    let mut ctx = Context::Some {
+                        region: &mut nes.region,
+                    };
+                    bus.mem_read(addr, &mut nes.cpu, &mut ctx)
                 };
                 nes.apu.finish_dma_fetch(byte);
                 nes.open_bus.latch(byte);

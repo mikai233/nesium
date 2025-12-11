@@ -1,5 +1,6 @@
 use crate::{
     bus::{Bus, BusDevices, BusDevicesMut},
+    context::Context,
     cpu::Cpu,
     mem_block::cpu::AddressSpace,
 };
@@ -30,19 +31,19 @@ impl Bus for MockBus {
         panic!("MockBus does not expose attached devices");
     }
 
-    fn peek(&mut self, _: &mut Cpu, addr: u16) -> u8 {
+    fn peek(&mut self, addr: u16, _: &mut Cpu, _: &mut Context) -> u8 {
         self.mem[addr as usize]
     }
 
-    fn mem_read(&mut self, _: &mut Cpu, addr: u16) -> u8 {
+    fn mem_read(&mut self, addr: u16, _: &mut Cpu, _: &mut Context) -> u8 {
         self.mem[addr as usize] // Safe: addr is 0x0000..=0xFFFF, array is size 0x10000
     }
 
-    fn mem_write(&mut self, _: &mut Cpu, addr: u16, data: u8) {
+    fn mem_write(&mut self, addr: u16, data: u8, _: &mut Cpu, _: &mut Context) {
         self.mem[addr as usize] = data; // Safe: same reason
     }
 
-    fn internal_cycle(&mut self, _: &mut Cpu) {}
+    fn internal_cycle(&mut self, _: &mut Cpu, _: &mut Context) {}
 
     fn cycles(&self) -> u64 {
         0

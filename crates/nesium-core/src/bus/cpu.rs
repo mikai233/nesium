@@ -3,6 +3,7 @@ use crate::{
     audio::NesSoundMixer,
     bus::{Bus, BusDevices, BusDevicesMut, OpenBus},
     cartridge::Cartridge,
+    context::Context,
     controller::{Controller, SerialLogger},
     cpu::Cpu,
     mem_block::cpu as cpu_ram,
@@ -274,7 +275,7 @@ impl Bus for CpuBus<'_> {
         self.ppu_pattern_write(addr, value);
     }
 
-    fn peek(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
+    fn peek(&mut self, addr: u16, _cpu: &mut Cpu, _context: &mut Context) -> u8 {
         let mut driven = true;
         let value = match addr {
             cpu_mem::INTERNAL_RAM_START..=cpu_mem::INTERNAL_RAM_MIRROR_END => {
@@ -324,7 +325,7 @@ impl Bus for CpuBus<'_> {
         value
     }
 
-    fn mem_read(&mut self, cpu: &mut Cpu, addr: u16) -> u8 {
+    fn mem_read(&mut self, addr: u16, cpu: &mut Cpu, _context: &mut Context) -> u8 {
         self.begin_cycle(cpu, true);
         let mut driven = true;
         let value = match addr {
@@ -380,7 +381,7 @@ impl Bus for CpuBus<'_> {
         value
     }
 
-    fn mem_write(&mut self, cpu: &mut Cpu, addr: u16, data: u8) {
+    fn mem_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, _context: &mut Context) {
         self.begin_cycle(cpu, false);
         self.open_bus.latch(data);
 
@@ -420,7 +421,7 @@ impl Bus for CpuBus<'_> {
         self.end_cycle(cpu, false);
     }
 
-    fn internal_cycle(&mut self, cpu: &mut Cpu) {
+    fn internal_cycle(&mut self, cpu: &mut Cpu, _context: &mut Context) {
         self.begin_cycle(cpu, true);
         self.end_cycle(cpu, true);
     }
@@ -448,11 +449,14 @@ impl Bus for CpuBus<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cartridge::{
-        header::{Header, Mirroring, RomFormat, TvSystem},
-        mapper::mapper0::Mapper0,
+    use crate::{
+        cartridge::{
+            header::{Header, Mirroring, RomFormat, TvSystem},
+            mapper::mapper0::Mapper0,
+        },
+        context::Context,
+        cpu::Cpu,
     };
-    use crate::cpu::Cpu;
 
     fn test_header(prg_rom_size: usize, prg_ram_size: usize) -> Header {
         Header {
@@ -512,14 +516,23 @@ mod tests {
             6,
             6,
         );
-        bus.mem_write(&mut cpu, cpu_mem::INTERNAL_RAM_START + 0x0002, 0xDE);
+        bus.mem_write(
+            cpu_mem::INTERNAL_RAM_START + 0x0002,
+            0xDE,
+            &mut cpu,
+            &mut Context::None,
+        );
         assert_eq!(
-            bus.mem_read(&mut cpu, cpu_mem::INTERNAL_RAM_START + 0x0002),
+            bus.mem_read(
+                cpu_mem::INTERNAL_RAM_START + 0x0002,
+                &mut cpu,
+                &mut Context::None
+            ),
             0xDE
         );
-        assert_eq!(bus.mem_read(&mut cpu, 0x0802), 0xDE);
-        assert_eq!(bus.mem_read(&mut cpu, 0x1002), 0xDE);
-        assert_eq!(bus.mem_read(&mut cpu, 0x1802), 0xDE);
+        assert_eq!(bus.mem_read(0x0802, &mut cpu, &mut Context::None), 0xDE);
+        assert_eq!(bus.mem_read(0x1002, &mut cpu, &mut Context::None), 0xDE);
+        assert_eq!(bus.mem_read(0x1802, &mut cpu, &mut Context::None), 0xDE);
     }
 
     #[test]
@@ -550,9 +563,12 @@ mod tests {
             6,
             6,
         );
-
-        let first_bank = bus.mem_read(&mut cpu, cpu_mem::PRG_ROM_START);
-        let mirrored_bank = bus.mem_read(&mut cpu, cpu_mem::PRG_ROM_START + 0x4000);
+        let first_bank = bus.mem_read(cpu_mem::PRG_ROM_START, &mut cpu, &mut Context::None);
+        let mirrored_bank = bus.mem_read(
+            cpu_mem::PRG_ROM_START + 0x4000,
+            &mut cpu,
+            &mut Context::None,
+        );
         assert_eq!(first_bank, mirrored_bank);
     }
 
@@ -584,8 +600,10 @@ mod tests {
             6,
             6,
         );
-
-        bus.mem_write(&mut cpu, cpu_mem::PRG_RAM_START, 0x42);
-        assert_eq!(bus.mem_read(&mut cpu, cpu_mem::PRG_RAM_START), 0x42);
+        bus.mem_write(cpu_mem::PRG_RAM_START, 0x42, &mut cpu, &mut Context::None);
+        assert_eq!(
+            bus.mem_read(cpu_mem::PRG_RAM_START, &mut cpu, &mut Context::None),
+            0x42
+        );
     }
 }

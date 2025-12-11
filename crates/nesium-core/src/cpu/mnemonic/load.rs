@@ -1,5 +1,6 @@
 use crate::{
     bus::Bus,
+    context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
 };
 
@@ -25,10 +26,10 @@ use crate::{
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_las<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_las<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu, cpu.effective_addr) & cpu.s;
+            let value = bus.mem_read(cpu.effective_addr, cpu, ctx) & cpu.s;
             cpu.a = value;
             cpu.x = value;
             cpu.s = value;
@@ -64,10 +65,10 @@ pub fn exec_las<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_lax<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_lax<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu, cpu.effective_addr);
+            let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.a = value;
             cpu.x = value;
             cpu.p.set_zn(value);
@@ -103,10 +104,10 @@ pub fn exec_lax<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_lda<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_lda<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu, cpu.effective_addr);
+            let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.a = value;
             cpu.p.set_zn(value);
         }
@@ -136,10 +137,10 @@ pub fn exec_lda<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_ldx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_ldx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu, cpu.effective_addr);
+            let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.x = value;
             cpu.p.set_zn(value);
         }
@@ -169,10 +170,10 @@ pub fn exec_ldx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_ldy<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_ldy<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu, cpu.effective_addr);
+            let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.y = value;
             cpu.p.set_zn(value);
         }
@@ -202,11 +203,11 @@ pub fn exec_ldy<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sax<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_sax<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = cpu.a & cpu.x;
-            bus.mem_write(cpu, cpu.effective_addr, value);
+            bus.mem_write(cpu.effective_addr, value, cpu, ctx);
         }
         _ => unreachable_step!("invalid SAX step {step}"),
     }
@@ -231,12 +232,12 @@ pub fn exec_sax<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sha<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_sha<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let hi = cpu.base;
             let value = cpu.a & cpu.x & hi.wrapping_add(1);
-            bus.mem_write(cpu, cpu.effective_addr, value);
+            bus.mem_write(cpu.effective_addr, value, cpu, ctx);
         }
         _ => unreachable_step!("invalid SHA step {step}"),
     }
@@ -260,7 +261,7 @@ pub fn exec_sha<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_shx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_shx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             // Reconstruct base operand address before applying Y index.
@@ -276,7 +277,7 @@ pub fn exec_shx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 
             // Stored value: X & (H+1), where H is the original operand high byte.
             let value = cpu.x & hi.wrapping_add(1);
-            bus.mem_write(cpu, addr, value);
+            bus.mem_write(addr, value, cpu, ctx);
         }
         _ => unreachable_step!("invalid SHX step {step}"),
     }
@@ -300,7 +301,7 @@ pub fn exec_shx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_shy<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_shy<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             // Reconstruct base operand address before applying X index.
@@ -316,7 +317,7 @@ pub fn exec_shy<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 
             // Stored value: Y & (H+1), where H is the original operand high byte.
             let value = cpu.y & hi.wrapping_add(1);
-            bus.mem_write(cpu, addr, value);
+            bus.mem_write(addr, value, cpu, ctx);
         }
         _ => unreachable_step!("invalid SHY step {step}"),
     }
@@ -344,9 +345,9 @@ pub fn exec_shy<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_sta<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_sta<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
-        0 => bus.mem_write(cpu, cpu.effective_addr, cpu.a),
+        0 => bus.mem_write(cpu.effective_addr, cpu.a, cpu, ctx),
         _ => unreachable_step!("invalid STA step {step}"),
     }
 }
@@ -367,9 +368,9 @@ pub fn exec_sta<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// Zero Page               | STX $nn                  | $86    | 2         | 3
 /// Y-Indexed Zero Page     | STX $nn,Y                | $96    | 2         | 4
 #[inline]
-pub fn exec_stx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_stx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
-        0 => bus.mem_write(cpu, cpu.effective_addr, cpu.x),
+        0 => bus.mem_write(cpu.effective_addr, cpu.x, cpu, ctx),
         _ => unreachable_step!("invalid STX step {step}"),
     }
 }
@@ -390,9 +391,9 @@ pub fn exec_stx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// Zero Page               | STY $nn                  | $84    | 2         | 3
 /// X-Indexed Zero Page     | STY $nn,X                | $94    | 2         | 4
 #[inline]
-pub fn exec_sty<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_sty<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
-        0 => bus.mem_write(cpu, cpu.effective_addr, cpu.y),
+        0 => bus.mem_write(cpu.effective_addr, cpu.y, cpu, ctx),
         _ => unreachable_step!("invalid STY step {step}"),
     }
 }
@@ -421,8 +422,8 @@ impl Mnemonic {
     pub(crate) const fn las() -> &'static [MicroOp] {
         &[MicroOp {
             name: "las",
-            micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu, cpu.effective_addr) & cpu.s;
+            micro_fn: |cpu, bus, ctx| {
+                let value = bus.mem_read(cpu.effective_addr, cpu, ctx) & cpu.s;
                 cpu.a = value;
                 cpu.x = value;
                 cpu.s = value;
@@ -459,8 +460,8 @@ impl Mnemonic {
     pub(crate) const fn lax() -> &'static [MicroOp] {
         &[MicroOp {
             name: "lax",
-            micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 cpu.a = value;
                 cpu.x = value;
                 cpu.p.set_zn(value);
@@ -497,8 +498,8 @@ impl Mnemonic {
     pub(crate) const fn lda() -> &'static [MicroOp] {
         &[MicroOp {
             name: "lda",
-            micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 cpu.a = value;
                 cpu.p.set_zn(value);
             },
@@ -529,8 +530,8 @@ impl Mnemonic {
     pub(crate) const fn ldx() -> &'static [MicroOp] {
         &[MicroOp {
             name: "ldx",
-            micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 cpu.x = value;
                 cpu.p.set_zn(value);
             },
@@ -561,8 +562,8 @@ impl Mnemonic {
     pub(crate) const fn ldy() -> &'static [MicroOp] {
         &[MicroOp {
             name: "ldy",
-            micro_fn: |cpu, bus| {
-                let value = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 cpu.y = value;
                 cpu.p.set_zn(value);
             },
@@ -593,9 +594,9 @@ impl Mnemonic {
     pub(crate) const fn sax() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sax",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let value = cpu.a & cpu.x;
-                bus.mem_write(cpu, cpu.effective_addr, value);
+                bus.mem_write(cpu.effective_addr, value, cpu, ctx);
             },
         }]
     }
@@ -631,10 +632,10 @@ impl Mnemonic {
     pub(crate) const fn sha() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sha",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let hi = cpu.base;
                 let value = cpu.a & cpu.x & hi.wrapping_add(1);
-                bus.mem_write(cpu, cpu.effective_addr, value);
+                bus.mem_write(cpu.effective_addr, value, cpu, ctx);
             },
         }]
     }
@@ -661,7 +662,7 @@ impl Mnemonic {
     pub(crate) const fn shx() -> &'static [MicroOp] {
         &[MicroOp {
             name: "shx",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 // Reconstruct base operand address before applying Y index.
                 let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
                 let lo = base as u8;
@@ -675,7 +676,7 @@ impl Mnemonic {
 
                 // Stored value: X & (H+1), where H is the original operand high byte.
                 let value = cpu.x & hi.wrapping_add(1);
-                bus.mem_write(cpu, addr, value);
+                bus.mem_write(addr, value, cpu, ctx);
             },
         }]
     }
@@ -702,7 +703,7 @@ impl Mnemonic {
     pub(crate) const fn shy() -> &'static [MicroOp] {
         &[MicroOp {
             name: "shy",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 // Reconstruct base operand address before applying X index.
                 let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
                 let lo = base as u8;
@@ -716,7 +717,7 @@ impl Mnemonic {
 
                 // Stored value: Y & (H+1), where H is the original operand high byte.
                 let value = cpu.y & hi.wrapping_add(1);
-                bus.mem_write(cpu, addr, value);
+                bus.mem_write(addr, value, cpu, ctx);
             },
         }]
     }
@@ -744,8 +745,8 @@ impl Mnemonic {
     pub(crate) const fn sta() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sta",
-            micro_fn: |cpu, bus| {
-                bus.mem_write(cpu, cpu.effective_addr, cpu.a);
+            micro_fn: |cpu, bus, ctx| {
+                bus.mem_write(cpu.effective_addr, cpu.a, cpu, ctx);
             },
         }]
     }
@@ -769,8 +770,8 @@ impl Mnemonic {
     pub(crate) const fn stx() -> &'static [MicroOp] {
         &[MicroOp {
             name: "stx",
-            micro_fn: |cpu, bus| {
-                bus.mem_write(cpu, cpu.effective_addr, cpu.x);
+            micro_fn: |cpu, bus, ctx| {
+                bus.mem_write(cpu.effective_addr, cpu.x, cpu, ctx);
             },
         }]
     }
@@ -793,8 +794,8 @@ impl Mnemonic {
     pub(crate) const fn sty() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sty",
-            micro_fn: |cpu, bus| {
-                bus.mem_write(cpu, cpu.effective_addr, cpu.y);
+            micro_fn: |cpu, bus, ctx| {
+                bus.mem_write(cpu.effective_addr, cpu.y, cpu, ctx);
             },
         }]
     }
@@ -802,7 +803,6 @@ impl Mnemonic {
 
 #[cfg(test)]
 mod load_tests {
-
     use crate::cpu::mnemonic::{Mnemonic, tests::InstrTest};
 
     #[test]
@@ -855,25 +855,25 @@ mod load_tests {
 
     #[test]
     fn test_sax() {
-        InstrTest::new(Mnemonic::SAX).test(|verify, cpu, bus| {
+        InstrTest::new(Mnemonic::SAX).test(|verify, _, bus| {
             let v = verify.cpu.a & verify.cpu.x;
-            let m = bus.mem_read(cpu, verify.addr);
+            let m = bus.mem_read(verify.addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_sha() {
-        InstrTest::new(Mnemonic::SHA).test(|verify, cpu, bus| {
+        InstrTest::new(Mnemonic::SHA).test(|verify, _, bus| {
             let v = verify.cpu.a & verify.cpu.x & verify.addr_hi.wrapping_add(1);
-            let m = bus.mem_read(cpu, verify.addr);
+            let m = bus.mem_read(verify.addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_shx() {
-        InstrTest::new(Mnemonic::SHX).test(|verify, cpu, bus| {
+        InstrTest::new(Mnemonic::SHX).test(|verify, _, bus| {
             // Reconstruct base operand address before applying Y index.
             let base = verify.addr.wrapping_sub(verify.cpu.y as u16);
             let lo = base as u8;
@@ -884,14 +884,14 @@ mod load_tests {
             let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
 
             let v = verify.cpu.x & hi.wrapping_add(1);
-            let m = bus.mem_read(cpu, addr);
+            let m = bus.mem_read(addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_shy() {
-        InstrTest::new(Mnemonic::SHY).test(|verify, cpu, bus| {
+        InstrTest::new(Mnemonic::SHY).test(|verify, _, bus| {
             // Reconstruct base operand address before applying X index.
             let base = verify.addr.wrapping_sub(verify.cpu.x as u16);
             let lo = base as u8;
@@ -902,34 +902,34 @@ mod load_tests {
             let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
 
             let v = verify.cpu.y & hi.wrapping_add(1);
-            let m = bus.mem_read(cpu, addr);
+            let m = bus.mem_read(addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_sta() {
-        InstrTest::new(Mnemonic::STA).test(|verify, cpu, bus| {
+        InstrTest::new(Mnemonic::STA).test(|verify, _, bus| {
             let v = verify.cpu.a;
-            let m = bus.mem_read(cpu, verify.addr);
+            let m = bus.mem_read(verify.addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_stx() {
-        InstrTest::new(Mnemonic::STX).test(|verify, cpu, bus| {
+        InstrTest::new(Mnemonic::STX).test(|verify, _, bus| {
             let v = verify.cpu.x;
-            let m = bus.mem_read(cpu, verify.addr);
+            let m = bus.mem_read(verify.addr);
             assert_eq!(v, m);
         });
     }
 
     #[test]
     fn test_sty() {
-        InstrTest::new(Mnemonic::STY).test(|verify, cpu, bus| {
+        InstrTest::new(Mnemonic::STY).test(|verify, _, bus| {
             let v = verify.cpu.y;
-            let m = bus.mem_read(cpu, verify.addr);
+            let m = bus.mem_read(verify.addr);
             assert_eq!(v, m);
         });
     }

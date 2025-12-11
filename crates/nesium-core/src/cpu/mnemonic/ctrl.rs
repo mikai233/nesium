@@ -1,5 +1,6 @@
 use crate::{
     bus::{Bus, STACK_ADDR},
+    context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
 };
 
@@ -26,30 +27,30 @@ use crate::{
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | BRK                      | $00    | 1         | 7
 #[inline]
-pub fn exec_brk<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_brk<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.mem_read(cpu, cpu.pc);
+            bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
         }
         1 => {
             let pc_hi = (cpu.pc >> 8) as u8;
-            cpu.push(bus, pc_hi);
+            cpu.push(bus, ctx, pc_hi);
         }
         2 => {
             let pc_lo = (cpu.pc & 0xFF) as u8;
-            cpu.push(bus, pc_lo);
+            cpu.push(bus, ctx, pc_lo);
         }
         3 => {
             let p_with_b_u = cpu.p | Status::BREAK | Status::UNUSED;
-            cpu.push(bus, p_with_b_u.bits());
+            cpu.push(bus, ctx, p_with_b_u.bits());
             cpu.p.set_i(true);
         }
         4 => {
-            cpu.base = bus.mem_read(cpu, 0xFFFE);
+            cpu.base = bus.mem_read(0xFFFE, cpu, ctx);
         }
         5 => {
-            let high_byte = bus.mem_read(cpu, 0xFFFF);
+            let high_byte = bus.mem_read(0xFFFF, cpu, ctx);
             cpu.pc = ((high_byte as u16) << 8) | (cpu.base as u16);
         }
         _ => unreachable_step!("invalid BRK step {step}"),
@@ -72,7 +73,7 @@ pub fn exec_brk<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// Absolute            | JMP $nnnn                | $4C    | 3         | 3
 /// Absolute Indirect   | JMP ($nnnn)              | $6C    | 3         | 5
 #[inline]
-pub fn exec_jmp<B: Bus>(_cpu: &mut Cpu, _bus: &mut B, step: u8) {
+pub fn exec_jmp<B: Bus>(_: &mut Cpu, _: &mut B, _: &mut Context, step: u8) {
     unreachable_step!("invalid JMP step {step}");
 }
 
@@ -100,27 +101,27 @@ pub fn exec_jmp<B: Bus>(_cpu: &mut Cpu, _bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Absolute        | JSR $nnnn                | $20    | 3         | 6
 #[inline]
-pub fn exec_jsr<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_jsr<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
         }
         1 => {
             let return_pc = cpu.pc;
             cpu.effective_addr = return_pc;
-            bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+            bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
         }
         2 => {
             let pc_hi = (cpu.effective_addr >> 8) as u8;
-            cpu.push(bus, pc_hi);
+            cpu.push(bus, ctx, pc_hi);
         }
         3 => {
             let pc_lo = cpu.effective_addr as u8;
-            cpu.push(bus, pc_lo);
+            cpu.push(bus, ctx, pc_lo);
         }
         4 => {
-            let hi_byte = bus.mem_read(cpu, cpu.pc) as u16;
+            let hi_byte = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             let lo_byte = cpu.base as u16;
             cpu.pc = (hi_byte << 8) | lo_byte;
         }
@@ -149,26 +150,26 @@ pub fn exec_jsr<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | RTI                      | $40    | 1         | 6
 #[inline]
-pub fn exec_rti<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_rti<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.mem_read(cpu, cpu.pc.wrapping_add(1));
+            bus.mem_read(cpu.pc.wrapping_add(1), cpu, ctx);
         }
         1 => {
-            bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+            bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
         }
         2 => {
-            let p_bits = cpu.pull(bus);
+            let p_bits = cpu.pull(bus, ctx);
             cpu.p = Status::from_bits_truncate(p_bits);
             cpu.p.set_u(false);
             cpu.p.set_b(false);
             cpu.queue_i_update(cpu.p.i());
         }
         3 => {
-            cpu.base = cpu.pull(bus);
+            cpu.base = cpu.pull(bus, ctx);
         }
         4 => {
-            let hi_byte = cpu.pull(bus) as u16;
+            let hi_byte = cpu.pull(bus, ctx) as u16;
             cpu.pc = (hi_byte << 8) | (cpu.base as u16);
         }
         _ => unreachable_step!("invalid RTI step {step}"),
@@ -192,23 +193,23 @@ pub fn exec_rti<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | RTS                    | $60    | 1         | 6
 #[inline]
-pub fn exec_rts<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_rts<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+            bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
         }
         1 => {
-            bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+            bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
         }
         2 => {
-            cpu.base = cpu.pull(bus);
+            cpu.base = cpu.pull(bus, ctx);
         }
         3 => {
-            let hi_byte = cpu.pull(bus) as u16;
+            let hi_byte = cpu.pull(bus, ctx) as u16;
             cpu.effective_addr = (hi_byte << 8) | (cpu.base as u16);
         }
         4 => {
-            bus.mem_read(cpu, cpu.effective_addr);
+            bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.pc = cpu.effective_addr.wrapping_add(1);
         }
         _ => unreachable_step!("invalid RTS step {step}"),
@@ -245,8 +246,8 @@ impl Mnemonic {
                 name: "brk_dummy_read",
                 // Bus: READ PC + 1. The byte immediately following BRK is read and discarded.
                 // Internal: PC is incremented past the padding byte.
-                micro_fn: |cpu, bus| {
-                    bus.mem_read(cpu, cpu.pc); // Read the byte at PC (which is PC + 1 after T1 fetch)
+                micro_fn: |cpu, bus, ctx| {
+                    bus.mem_read(cpu.pc, cpu, ctx); // Read the byte at PC (which is PC + 1 after T1 fetch)
                     cpu.incr_pc(); //TODO check pc
                 },
             },
@@ -255,9 +256,9 @@ impl Mnemonic {
                 name: "brk_push_pc_hi",
                 // Bus: WRITE PC_H to Stack (0x0100 + S).
                 // Internal: Stack Pointer (S) is decremented.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     let pc_hi = (cpu.pc >> 8) as u8;
-                    cpu.push(bus, pc_hi);
+                    cpu.push(bus, ctx, pc_hi);
                 },
             },
             // T4: Push PC Low Byte (W)
@@ -265,9 +266,9 @@ impl Mnemonic {
                 name: "brk_push_pc_lo",
                 // Bus: WRITE PC_L to Stack (0x0100 + S).
                 // Internal: Stack Pointer (S) is decremented.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     let pc_lo = (cpu.pc & 0xFF) as u8;
-                    cpu.push(bus, pc_lo);
+                    cpu.push(bus, ctx, pc_lo);
                 },
             },
             // T5: Push Status Register P (W)
@@ -275,10 +276,10 @@ impl Mnemonic {
                 name: "brk_push_p",
                 // Bus: WRITE Status Register P to Stack. Pushed flags must have BREAK (B) and UNUSED (U) set.
                 // Internal: Stack Pointer (S) is decremented. Status Register's I (Interrupt Disable) flag is set.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Pushed P must have the BREAK (0x10) and UNUSED (0x20) flags set.
                     let p_with_b_u = cpu.p | Status::BREAK | Status::UNUSED;
-                    cpu.push(bus, p_with_b_u.bits());
+                    cpu.push(bus, ctx, p_with_b_u.bits());
 
                     // Set Interrupt Disable flag *after* pushing P
                     cpu.p.set_i(true);
@@ -289,9 +290,9 @@ impl Mnemonic {
                 name: "brk_read_vector_lo",
                 // Bus: READ $FFFE (IRQ/BRK vector low byte).
                 // Internal: Low byte is temporarily stored.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read from IRQ/BRK vector address
-                    cpu.base = bus.mem_read(cpu, 0xFFFE);
+                    cpu.base = bus.mem_read(0xFFFE, cpu, ctx);
                 },
             },
             // T7: Read Interrupt Vector High Byte (R) and Final PC Update
@@ -299,9 +300,9 @@ impl Mnemonic {
                 name: "brk_read_vector_hi",
                 // Bus: READ $FFFF (IRQ/BRK vector high byte).
                 // Internal: Combine bytes and update PC. This is the last cycle.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read high byte from IRQ/BRK vector address
-                    let high_byte = bus.mem_read(cpu, 0xFFFF);
+                    let high_byte = bus.mem_read(0xFFFF, cpu, ctx);
 
                     // Final PC update
                     cpu.pc = ((high_byte as u16) << 8) | (cpu.base as u16);
@@ -359,9 +360,9 @@ impl Mnemonic {
                 name: "jsr_fetch_lo",
                 // Bus: READ target address LSB from PC.
                 // Internal: Store LSB in cpu.base. PC is advanced to point to the HI byte address.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read LSB (target address) and store it in cpu.base
-                    cpu.base = bus.mem_read(cpu, cpu.pc);
+                    cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
                     // PC increments (PC + 1), now pointing to the HI byte address
                     cpu.incr_pc();
                 },
@@ -371,7 +372,7 @@ impl Mnemonic {
                 name: "jsr_dummy_read_pc_prep",
                 // Bus: Dummy READ from the current stack address (0x0100 + S). Value is discarded.
                 // Internal: Store the calculated return address (PC + 2) in effective_addr for pushing.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // The correct value to push is the current PC (which is PC + 2 relative to the opcode address).
                     let return_pc = cpu.pc;
 
@@ -379,7 +380,7 @@ impl Mnemonic {
                     cpu.effective_addr = return_pc;
 
                     // Dummy Read cycle
-                    bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+                    bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
                 },
             },
             // T4: Push PC High Byte (W)
@@ -387,9 +388,9 @@ impl Mnemonic {
                 name: "jsr_push_pc_hi",
                 // Bus: WRITE PC_H (from effective_addr) to Stack.
                 // Internal: Stack Pointer (S) is decremented (Handled by cpu.push).
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     let pc_hi = (cpu.effective_addr >> 8) as u8;
-                    cpu.push(bus, pc_hi);
+                    cpu.push(bus, ctx, pc_hi);
                 },
             },
             // T5: Push PC Low Byte (W)
@@ -397,9 +398,9 @@ impl Mnemonic {
                 name: "jsr_push_pc_lo",
                 // Bus: WRITE PC_L (from effective_addr) to Stack.
                 // Internal: Stack Pointer (S) is decremented (Handled by cpu.push).
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     let pc_lo = cpu.effective_addr as u8;
-                    cpu.push(bus, pc_lo);
+                    cpu.push(bus, ctx, pc_lo);
                 },
             },
             // T6: Fetch Target Address High Byte (R) and Final Jump
@@ -407,9 +408,9 @@ impl Mnemonic {
                 name: "jsr_fetch_hi_jump",
                 // Bus: READ target address HSB from PC.
                 // Internal: Combine HSB with LSB (stored in cpu.base) and update PC.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read HSB of target address from the current PC
-                    let hi_byte = bus.mem_read(cpu, cpu.pc) as u16;
+                    let hi_byte = bus.mem_read(cpu.pc, cpu, ctx) as u16;
 
                     // Get the LSB of the target address (from cpu.base)
                     let lo_byte = cpu.base as u16;
@@ -449,11 +450,11 @@ impl Mnemonic {
                 name: "rti_dummy_read_pc",
                 // Bus: READ from the address AFTER the RTI opcode. Value is discarded.
                 // Internal: S remains unchanged. PC should have been auto-incremented to PC+1.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // NOTE: The address is typically PC+1, where PC is the address of the RTI instruction.
                     // We read the effective address of the next instruction, which is often PC_Start + 1.
                     // In a cycle-accurate model, this T2 read should be PC + 1.
-                    bus.mem_read(cpu, cpu.pc.wrapping_add(1));
+                    bus.mem_read(cpu.pc.wrapping_add(1), cpu, ctx);
                 },
             },
             // T3: Dummy Read (Stack Pointer S)
@@ -461,9 +462,9 @@ impl Mnemonic {
                 name: "rti_dummy_read_stack",
                 // Bus: READ from the current stack address (0x0100 + S). Value is discarded.
                 // Internal: S remains unchanged. This is the empty stack cycle.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read from the current stack pointer location. Value is ignored.
-                    bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+                    bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
                 },
             },
             // T4: Pop Status Register P
@@ -471,9 +472,9 @@ impl Mnemonic {
                 name: "rti_pop_p",
                 // Bus: READ Status Register P from Stack (0x0100 + S + 1).
                 // Internal: Stack Pointer (S) is incremented. Status Register P is updated.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Stack Pop: S increments (Post-Increment), then read.
-                    let p_bits = cpu.pull(bus);
+                    let p_bits = cpu.pull(bus, ctx);
 
                     // Set P register (0x20 UNUSED flag must be restored/set)
                     cpu.p = Status::from_bits_truncate(p_bits);
@@ -489,9 +490,9 @@ impl Mnemonic {
                 name: "rti_pop_pc_lo",
                 // Bus: READ PC_L from Stack (0x0100 + S + 1).
                 // Internal: Stack Pointer (S) is incremented. PC_L stored in cpu.base.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read PC Low byte and store it temporarily in cpu.base
-                    cpu.base = cpu.pull(bus);
+                    cpu.base = cpu.pull(bus, ctx);
                 },
             },
             // T6: Pop PC High Byte (Final Jump)
@@ -499,9 +500,9 @@ impl Mnemonic {
                 name: "rti_pop_pc_hi_jump",
                 // Bus: READ PC_H from Stack (0x0100 + S + 1).
                 // Internal: Stack Pointer (S) is incremented. PC is updated to the restored address.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read PC High byte
-                    let hi_byte = cpu.pull(bus) as u16;
+                    let hi_byte = cpu.pull(bus, ctx) as u16;
 
                     // Combine the popped HI and LO bytes to form the new PC address
                     let new_pc = (hi_byte << 8) | (cpu.base as u16);
@@ -536,9 +537,9 @@ impl Mnemonic {
                 name: "rts_dummy_read_1",
                 // Bus: READ from the current stack address (0x0100 + S). Value is discarded.
                 // Internal: S remains unchanged.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read from the current stack pointer location. Value is always ignored.
-                    bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+                    bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
                 },
             },
             // T3: Dummy Read 2 (Stack Address)
@@ -546,9 +547,9 @@ impl Mnemonic {
                 name: "rts_dummy_read_2",
                 // Bus: READ from the current stack address (0x0100 + S). Value is discarded.
                 // Internal: S remains unchanged. This is a characteristic delay cycle.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read again from the current stack pointer location. Value is ignored.
-                    bus.mem_read(cpu, STACK_ADDR + cpu.s as u16);
+                    bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
                 },
             },
             // T4: Pop PC Low Byte (R)
@@ -556,9 +557,9 @@ impl Mnemonic {
                 name: "rts_pop_pc_lo",
                 // Bus: READ PC_L from Stack (0x0100 + S + 1).
                 // Internal: Stack Pointer (S) is incremented (Post-Increment). PC_L stored in cpu.base.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read PC Low byte and store it temporarily in cpu.base
-                    cpu.base = cpu.pull(bus);
+                    cpu.base = cpu.pull(bus, ctx);
                 },
             },
             // T5: Pop PC High Byte (R)
@@ -566,9 +567,9 @@ impl Mnemonic {
                 name: "rts_pop_pc_hi",
                 // Bus: READ PC_H from Stack (0x0100 + S + 1).
                 // Internal: Stack Pointer (S) is incremented. PC_H stored in cpu.effective_addr.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Read PC High byte and store it in effective_addr's high byte
-                    let hi_byte = cpu.pull(bus) as u16;
+                    let hi_byte = cpu.pull(bus, ctx) as u16;
 
                     // Combine the popped HI and LO bytes to form the saved PC (PC_saved)
                     let saved_pc = (hi_byte << 8) | (cpu.base as u16);
@@ -582,9 +583,9 @@ impl Mnemonic {
                 name: "rts_dummy_read_increment_jump",
                 // Bus: Dummy READ from the calculated effective address (PC_saved). Value is discarded.
                 // Internal: Increment the saved PC (PC_saved + 1) and set it as the new PC.
-                micro_fn: |cpu, bus| {
+                micro_fn: |cpu, bus, ctx| {
                     // Dummy read from the saved PC (PC_saved) address
-                    bus.mem_read(cpu, cpu.effective_addr);
+                    bus.mem_read(cpu.effective_addr, cpu, ctx);
 
                     // Internal calculation: Increment the saved address and update PC
                     cpu.pc = cpu.effective_addr.wrapping_add(1);
@@ -629,7 +630,7 @@ mod ctrl_tests {
             let mut stack_ptr = verify.cpu.s;
             let stack_addr_hi = STACK_ADDR | (stack_ptr as u16);
             assert_eq!(
-                bus.mem_read(cpu, stack_addr_hi),
+                bus.mem_read(stack_addr_hi,),
                 expected_addr_hi,
                 "Return address high byte not pushed correctly"
             );
@@ -638,7 +639,7 @@ mod ctrl_tests {
             stack_ptr = stack_ptr.wrapping_sub(1);
             let stack_addr_lo = STACK_ADDR | (stack_ptr as u16);
             assert_eq!(
-                bus.mem_read(cpu, stack_addr_lo),
+                bus.mem_read(stack_addr_lo,),
                 expected_addr_lo,
                 "Return address low byte not pushed correctly"
             );
@@ -647,7 +648,7 @@ mod ctrl_tests {
 
             stack_ptr = stack_ptr.wrapping_sub(1);
             let stack_addr_status = STACK_ADDR | (stack_ptr as u16);
-            let pushed_status = bus.mem_read(cpu, stack_addr_status);
+            let pushed_status = bus.mem_read(stack_addr_status);
 
             // Construct the expected Pushed Status (P_in | B | U)
             // 1. Start with the CPU's status bits before execution.
@@ -673,8 +674,8 @@ mod ctrl_tests {
             );
 
             // PC should be loaded from the IRQ/BRK vector ($FFFE/$FFFF).
-            let irq_vector_lo = bus.mem_read(cpu, 0xFFFE) as u16;
-            let irq_vector_hi = bus.mem_read(cpu, 0xFFFF) as u16;
+            let irq_vector_lo = bus.mem_read(0xFFFE) as u16;
+            let irq_vector_hi = bus.mem_read(0xFFFF) as u16;
             let expected_pc = (irq_vector_hi << 8) | irq_vector_lo;
             assert_eq!(
                 cpu.pc, expected_pc,
@@ -735,7 +736,7 @@ mod ctrl_tests {
             let mut stack_ptr = verify.cpu.s;
             let stack_addr_hi = STACK_ADDR | (stack_ptr as u16);
             assert_eq!(
-                bus.mem_read(cpu, stack_addr_hi),
+                bus.mem_read(stack_addr_hi,),
                 expected_addr_hi,
                 "Return address high byte (PC+2) not pushed correctly."
             );
@@ -744,7 +745,7 @@ mod ctrl_tests {
             stack_ptr = stack_ptr.wrapping_sub(1);
             let stack_addr_lo = STACK_ADDR | (stack_ptr as u16);
             assert_eq!(
-                bus.mem_read(cpu, stack_addr_lo),
+                bus.mem_read(stack_addr_lo,),
                 expected_addr_lo,
                 "Return address low byte (PC+2) not pushed correctly."
             );
@@ -782,15 +783,15 @@ mod ctrl_tests {
 
             // 1. Expected Status (P): Read from S_in + 1.
             let expected_status_addr = STACK_ADDR | initial_s.wrapping_add(1) as u16;
-            let expected_status_bits = bus.mem_read(cpu, expected_status_addr);
+            let expected_status_bits = bus.mem_read(expected_status_addr);
 
             // 2. Expected PC Low: Read from S_in + 2.
             let expected_pc_lo_addr = STACK_ADDR | initial_s.wrapping_add(2) as u16;
-            let expected_pc_lo = bus.mem_read(cpu, expected_pc_lo_addr) as u16;
+            let expected_pc_lo = bus.mem_read(expected_pc_lo_addr) as u16;
 
             // 3. Expected PC High: Read from S_in + 3.
             let expected_pc_hi_addr = STACK_ADDR | initial_s.wrapping_add(3) as u16;
-            let expected_pc_hi = bus.mem_read(cpu, expected_pc_hi_addr) as u16;
+            let expected_pc_hi = bus.mem_read(expected_pc_hi_addr) as u16;
 
             let expected_pc = (expected_pc_hi << 8) | expected_pc_lo;
 
@@ -846,11 +847,11 @@ mod ctrl_tests {
 
             // 1. Read the expected PC Low: From S_in + 1.
             let expected_pc_lo_addr = STACK_ADDR | initial_s.wrapping_add(1) as u16;
-            let expected_pc_lo = bus.mem_read(cpu, expected_pc_lo_addr) as u16;
+            let expected_pc_lo = bus.mem_read(expected_pc_lo_addr) as u16;
 
             // 2. Read the expected PC High: From S_in + 2.
             let expected_pc_hi_addr = STACK_ADDR | initial_s.wrapping_add(2) as u16;
-            let expected_pc_hi = bus.mem_read(cpu, expected_pc_hi_addr) as u16;
+            let expected_pc_hi = bus.mem_read(expected_pc_hi_addr) as u16;
 
             // The address popped from stack is P_return = PC_pushed (usually PC_JSR + 2).
             let pc_popped = (expected_pc_hi << 8) | expected_pc_lo;

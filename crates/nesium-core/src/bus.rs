@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use crate::{
-    apu::Apu, cartridge::Cartridge, controller::Controller, cpu::Cpu, mem_block::cpu as cpu_ram,
-    memory, ppu::Ppu,
+    apu::Apu, cartridge::Cartridge, context::Context, controller::Controller, cpu::Cpu,
+    mem_block::cpu as cpu_ram, memory, ppu::Ppu,
 };
 
 pub mod cpu;
@@ -39,19 +39,19 @@ pub struct BusDevicesMut<'a> {
 /// [`open_bus::OpenBus`]), returning the last driven value for write-only or
 /// unmapped addresses when no device actively drives the data lines.
 pub trait Bus: Debug {
-    fn mem_read(&mut self, cpu: &mut Cpu, addr: u16) -> u8;
+    fn mem_read(&mut self, addr: u16, cpu: &mut Cpu, context: &mut Context) -> u8;
 
-    fn mem_write(&mut self, cpu: &mut Cpu, addr: u16, data: u8);
+    fn mem_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, context: &mut Context);
 
     /// Side-effect-free read used for reset vector fetches. Defaults to a
     /// regular timed read so existing implementations remain valid.
-    fn peek(&mut self, cpu: &mut Cpu, addr: u16) -> u8 {
-        self.mem_read(cpu, addr)
+    fn peek(&mut self, addr: u16, cpu: &mut Cpu, context: &mut Context) -> u8 {
+        self.mem_read(addr, cpu, context)
     }
 
     /// Internal CPU cycle that does not perform a bus access but must advance
     /// timing (master clock, PPU/APU, open-bus decay, mapper clocks).
-    fn internal_cycle(&mut self, cpu: &mut Cpu);
+    fn internal_cycle(&mut self, cpu: &mut Cpu, context: &mut Context);
 
     /// Returns a pending OAM DMA page value (written via `$4014`), if any.
     /// Default implementations have no DMA bridge, so they always return `None`.
@@ -96,20 +96,20 @@ pub trait Bus: Debug {
 // Allow mutable references to Bus implementors (including trait objects) to be used
 // wherever a Bus is expected, enabling easier static dispatch in CPU helpers.
 impl<T: Bus + ?Sized> Bus for &mut T {
-    fn mem_read(&mut self, cpu: &mut Cpu, addr: u16) -> u8 {
-        (**self).mem_read(cpu, addr)
+    fn mem_read(&mut self, addr: u16, cpu: &mut Cpu, context: &mut Context) -> u8 {
+        (**self).mem_read(addr, cpu, context)
     }
 
-    fn mem_write(&mut self, cpu: &mut Cpu, addr: u16, data: u8) {
-        (**self).mem_write(cpu, addr, data)
+    fn mem_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, context: &mut Context) {
+        (**self).mem_write(addr, data, cpu, context)
     }
 
-    fn peek(&mut self, cpu: &mut Cpu, addr: u16) -> u8 {
-        (**self).peek(cpu, addr)
+    fn peek(&mut self, addr: u16, cpu: &mut Cpu, context: &mut Context) -> u8 {
+        (**self).peek(addr, cpu, context)
     }
 
-    fn internal_cycle(&mut self, cpu: &mut Cpu) {
-        (**self).internal_cycle(cpu)
+    fn internal_cycle(&mut self, cpu: &mut Cpu, context: &mut Context) {
+        (**self).internal_cycle(cpu, context)
     }
 
     fn take_oam_dma_request(&mut self) -> Option<u8> {

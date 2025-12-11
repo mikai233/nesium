@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     bus::Bus,
+    context::Context,
     cpu::{Cpu, micro_op::MicroOp, unreachable_step},
 };
 
@@ -298,20 +299,20 @@ impl Addressing {
     }
 
     /// Static-dispatch addressing executor (prototype; not yet wired into CPU).
-    pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, step: u8) {
+    pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
         match self {
             Addressing::Implied | Addressing::Accumulator | Addressing::Immediate => {
                 unreachable_step!("no addressing cycles for {:?}", self)
             }
-            Addressing::Absolute => exec_absolute(cpu, bus, step),
-            Addressing::AbsoluteX => exec_absolute_x(cpu, bus, step),
-            Addressing::AbsoluteY => exec_absolute_y(cpu, bus, step),
-            Addressing::Indirect => exec_indirect(cpu, bus, step),
-            Addressing::ZeroPage => exec_zero_page(cpu, bus, step),
-            Addressing::ZeroPageX => exec_zero_page_x(cpu, bus, step),
-            Addressing::ZeroPageY => exec_zero_page_y(cpu, bus, step),
-            Addressing::IndirectX => exec_indirect_x(cpu, bus, step),
-            Addressing::IndirectY => exec_indirect_y(cpu, bus, step),
+            Addressing::Absolute => exec_absolute(cpu, bus, ctx, step),
+            Addressing::AbsoluteX => exec_absolute_x(cpu, bus, ctx, step),
+            Addressing::AbsoluteY => exec_absolute_y(cpu, bus, ctx, step),
+            Addressing::Indirect => exec_indirect(cpu, bus, ctx, step),
+            Addressing::ZeroPage => exec_zero_page(cpu, bus, ctx, step),
+            Addressing::ZeroPageX => exec_zero_page_x(cpu, bus, ctx, step),
+            Addressing::ZeroPageY => exec_zero_page_y(cpu, bus, ctx, step),
+            Addressing::IndirectX => exec_indirect_x(cpu, bus, ctx, step),
+            Addressing::IndirectY => exec_indirect_y(cpu, bus, ctx, step),
             Addressing::Relative => unreachable_step!("no addressing cycles for Relative"),
         }
     }
@@ -347,14 +348,14 @@ impl Display for Addressing {
     }
 }
 
-fn exec_absolute<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+fn exec_absolute<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             cpu.incr_pc();
         }
         1 => {
-            let hi = bus.mem_read(cpu, cpu.pc);
+            let hi = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.effective_addr |= (hi as u16) << 8;
             cpu.incr_pc();
         }
@@ -362,14 +363,14 @@ fn exec_absolute<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     }
 }
 
-fn exec_absolute_x<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+fn exec_absolute_x<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             cpu.incr_pc();
         }
         1 => {
-            let hi = bus.mem_read(cpu, cpu.pc);
+            let hi = bus.mem_read(cpu.pc, cpu, ctx);
             let base = ((hi as u16) << 8) | cpu.effective_addr;
             if cpu.opcode_in_flight == Some(0x9C) {
                 cpu.base = hi;
@@ -382,20 +383,20 @@ fn exec_absolute_x<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
         2 => {
             let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
             let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-            let _ = bus.mem_read(cpu, dummy_addr);
+            let _ = bus.mem_read(dummy_addr, cpu, ctx);
         }
         _ => unreachable_step!("invalid AbsoluteX step {step}"),
     }
 }
 
-fn exec_absolute_y<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+fn exec_absolute_y<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             cpu.incr_pc();
         }
         1 => {
-            let hi = bus.mem_read(cpu, cpu.pc);
+            let hi = bus.mem_read(cpu.pc, cpu, ctx);
             let base = ((hi as u16) << 8) | cpu.effective_addr;
             if cpu.opcode_in_flight == Some(0x9F)
                 || cpu.opcode_in_flight == Some(0x9E)
@@ -411,25 +412,25 @@ fn exec_absolute_y<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
         2 => {
             let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
             let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-            let _ = bus.mem_read(cpu, dummy_addr);
+            let _ = bus.mem_read(dummy_addr, cpu, ctx);
         }
         _ => unreachable_step!("invalid AbsoluteY step {step}"),
     }
 }
 
-fn exec_indirect<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+fn exec_indirect<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             cpu.incr_pc();
         }
         1 => {
-            let hi = bus.mem_read(cpu, cpu.pc);
+            let hi = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.effective_addr |= (hi as u16) << 8;
             cpu.incr_pc();
         }
         2 => {
-            cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         3 => {
             let hi_addr = if (cpu.effective_addr & 0xFF) == 0xFF {
@@ -437,88 +438,88 @@ fn exec_indirect<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             } else {
                 cpu.effective_addr + 1
             };
-            let hi = bus.mem_read(cpu, hi_addr);
+            let hi = bus.mem_read(hi_addr, cpu, ctx);
             cpu.effective_addr = ((hi as u16) << 8) | (cpu.base as u16);
         }
         _ => unreachable_step!("invalid Indirect step {step}"),
     }
 }
 
-fn exec_zero_page<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+fn exec_zero_page<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             cpu.incr_pc();
         }
         _ => unreachable_step!("invalid ZeroPage step {step}"),
     }
 }
 
-fn exec_zero_page_x<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+fn exec_zero_page_x<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             cpu.incr_pc();
         }
         1 => {
             let addr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            let _ = bus.mem_read(cpu, addr);
+            let _ = bus.mem_read(addr, cpu, ctx);
             cpu.effective_addr = addr;
         }
         _ => unreachable_step!("invalid ZeroPageX step {step}"),
     }
 }
 
-fn exec_zero_page_y<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+fn exec_zero_page_y<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             cpu.incr_pc();
         }
         1 => {
             let addr = (cpu.effective_addr + cpu.y as u16) & 0x00FF;
-            let _ = bus.mem_read(cpu, addr);
+            let _ = bus.mem_read(addr, cpu, ctx);
             cpu.effective_addr = addr;
         }
         _ => unreachable_step!("invalid ZeroPageY step {step}"),
     }
 }
 
-fn exec_indirect_x<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+fn exec_indirect_x<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             cpu.incr_pc();
         }
         1 => {
             let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            let _ = bus.mem_read(cpu, ptr);
+            let _ = bus.mem_read(ptr, cpu, ctx);
         }
         2 => {
             let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            cpu.base = bus.mem_read(cpu, ptr);
+            cpu.base = bus.mem_read(ptr, cpu, ctx);
         }
         3 => {
             let ptr = (cpu.effective_addr + cpu.x as u16 + 1) & 0x00FF;
-            let hi = bus.mem_read(cpu, ptr);
+            let hi = bus.mem_read(ptr, cpu, ctx);
             cpu.effective_addr = ((hi as u16) << 8) | cpu.base as u16;
         }
         _ => unreachable_step!("invalid IndirectX step {step}"),
     }
 }
 
-fn exec_indirect_y<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+fn exec_indirect_y<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu, cpu.pc) as u16;
+            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
             cpu.incr_pc();
         }
         1 => {
-            cpu.base = bus.mem_read(cpu, cpu.effective_addr);
+            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         2 => {
             let hi_addr = (cpu.effective_addr + 1) & 0x00FF;
-            let hi = bus.mem_read(cpu, hi_addr);
+            let hi = bus.mem_read(hi_addr, cpu, ctx);
             let base = ((hi as u16) << 8) | (cpu.base as u16);
             if cpu.opcode_in_flight == Some(0x93) {
                 cpu.base = hi;
@@ -530,7 +531,7 @@ fn exec_indirect_y<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
         3 => {
             let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
             let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-            let _ = bus.mem_read(cpu, dummy_addr);
+            let _ = bus.mem_read(dummy_addr, cpu, ctx);
         }
         _ => unreachable_step!("invalid IndirectY step {step}"),
     }
@@ -541,6 +542,7 @@ mod tests {
     use super::*;
     use crate::{
         bus::mock::MockBus,
+        context::Context,
         cpu::{Cpu, lookup::LOOKUP_TABLE},
         reset_kind::ResetKind,
     };
@@ -606,7 +608,7 @@ mod tests {
             let mut cpu = Cpu::new();
             let mut bus = MockBus::default();
             seed_bus_for_mode(mode, &mut bus);
-            cpu.reset(&mut bus, ResetKind::PowerOn);
+            cpu.reset(&mut bus, ResetKind::PowerOn, &mut Context::None);
             cpu.opcode_in_flight = Some(opcode);
             cpu.x = 1;
             cpu.y = 1;
@@ -614,7 +616,7 @@ mod tests {
             // Each valid step 0..len should succeed.
             for step in 0..len {
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    mode.exec(&mut cpu, &mut bus, step as u8);
+                    mode.exec(&mut cpu, &mut bus, &mut Context::None, step as u8);
                 }));
                 assert!(
                     result.is_ok(),
@@ -627,7 +629,7 @@ mod tests {
 
             // Stepping past len should hit unreachable in debug (guards regressions if table changes).
             let past = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                mode.exec(&mut cpu, &mut bus, len as u8);
+                mode.exec(&mut cpu, &mut bus, &mut Context::None, len as u8);
             }));
             assert!(
                 past.is_err(),

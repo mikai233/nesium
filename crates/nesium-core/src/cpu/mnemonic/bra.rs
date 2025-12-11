@@ -1,5 +1,6 @@
 use crate::{
     bus::Bus,
+    context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
 };
 
@@ -22,15 +23,15 @@ use crate::{
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bcc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_bcc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
             cpu.test_branch(!cpu.p.c());
         }
         1 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -38,7 +39,7 @@ pub fn exec_bcc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.check_cross_page(old_pc, new_pc);
         }
         2 => {
-            bus.mem_read(cpu, cpu.pc);
+            bus.mem_read(cpu.pc, cpu, ctx);
         }
         _ => unreachable_step!("invalid BCC step {step}"),
     }
@@ -62,15 +63,15 @@ pub fn exec_bcc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bcs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_bcs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
             cpu.test_branch(cpu.p.c());
         }
         1 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -78,7 +79,7 @@ pub fn exec_bcs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.check_cross_page(old_pc, new_pc);
         }
         2 => {
-            bus.mem_read(cpu, cpu.pc);
+            bus.mem_read(cpu.pc, cpu, ctx);
         }
         _ => unreachable_step!("invalid BCS step {step}"),
     }
@@ -105,15 +106,15 @@ pub fn exec_bcs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_beq<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_beq<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
             cpu.test_branch(cpu.p.z());
         }
         1 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -121,7 +122,7 @@ pub fn exec_beq<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.check_cross_page(old_pc, new_pc);
         }
         2 => {
-            bus.mem_read(cpu, cpu.pc);
+            bus.mem_read(cpu.pc, cpu, ctx);
         }
         _ => unreachable_step!("invalid BEQ step {step}"),
     }
@@ -145,15 +146,15 @@ pub fn exec_beq<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bmi<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_bmi<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
             cpu.test_branch(cpu.p.n());
         }
         1 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -161,7 +162,7 @@ pub fn exec_bmi<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.check_cross_page(old_pc, new_pc);
         }
         2 => {
-            bus.mem_read(cpu, cpu.pc);
+            bus.mem_read(cpu.pc, cpu, ctx);
         }
         _ => unreachable_step!("invalid BMI step {step}"),
     }
@@ -187,15 +188,15 @@ pub fn exec_bmi<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bne<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_bne<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
             cpu.test_branch(!cpu.p.z());
         }
         1 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -203,7 +204,7 @@ pub fn exec_bne<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.check_cross_page(old_pc, new_pc);
         }
         2 => {
-            bus.mem_read(cpu, cpu.pc);
+            bus.mem_read(cpu.pc, cpu, ctx);
         }
         _ => unreachable_step!("invalid BNE step {step}"),
     }
@@ -231,15 +232,15 @@ pub fn exec_bne<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bpl<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_bpl<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
             cpu.test_branch(!cpu.p.n());
         }
         1 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -247,7 +248,7 @@ pub fn exec_bpl<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.check_cross_page(old_pc, new_pc);
         }
         2 => {
-            bus.mem_read(cpu, cpu.pc);
+            bus.mem_read(cpu.pc, cpu, ctx);
         }
         _ => unreachable_step!("invalid BPL step {step}"),
     }
@@ -272,15 +273,15 @@ pub fn exec_bpl<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bvc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_bvc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
             cpu.test_branch(!cpu.p.v());
         }
         1 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -288,7 +289,7 @@ pub fn exec_bvc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.check_cross_page(old_pc, new_pc);
         }
         2 => {
-            bus.mem_read(cpu, cpu.pc);
+            bus.mem_read(cpu.pc, cpu, ctx);
         }
         _ => unreachable_step!("invalid BVC step {step}"),
     }
@@ -312,15 +313,15 @@ pub fn exec_bvc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bvs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_bvs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu, cpu.pc);
+            cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
             cpu.incr_pc();
             cpu.test_branch(cpu.p.v());
         }
         1 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let old_pc = cpu.pc;
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
@@ -328,7 +329,7 @@ pub fn exec_bvs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
             cpu.check_cross_page(old_pc, new_pc);
         }
         2 => {
-            bus.mem_read(cpu, cpu.pc);
+            bus.mem_read(cpu.pc, cpu, ctx);
         }
         _ => unreachable_step!("invalid BVS step {step}"),
     }
@@ -357,16 +358,16 @@ impl Mnemonic {
         &[
             MicroOp {
                 name: "bcc_fetch_branch_offset",
-                micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
                     cpu.incr_pc();
                     cpu.test_branch(!cpu.p.c());
                 },
             },
             MicroOp {
                 name: "bcc_add_branch_offset",
-                micro_fn: |cpu, bus| {
-                    bus.internal_cycle(cpu);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.internal_cycle(cpu, ctx);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -376,8 +377,8 @@ impl Mnemonic {
             },
             MicroOp {
                 name: "bcc_add_dummy_read",
-                micro_fn: |cpu, bus| {
-                    bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.mem_read(cpu.pc, cpu, ctx);
                 },
             },
         ]
@@ -404,16 +405,16 @@ impl Mnemonic {
         &[
             MicroOp {
                 name: "bcs_fetch_branch_offset",
-                micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
                     cpu.incr_pc();
                     cpu.test_branch(cpu.p.c());
                 },
             },
             MicroOp {
                 name: "bcs_add_branch_offset",
-                micro_fn: |cpu, bus| {
-                    bus.internal_cycle(cpu);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.internal_cycle(cpu, ctx);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -423,8 +424,8 @@ impl Mnemonic {
             },
             MicroOp {
                 name: "bcs_add_dummy_read",
-                micro_fn: |cpu, bus| {
-                    bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.mem_read(cpu.pc, cpu, ctx);
                 },
             },
         ]
@@ -454,16 +455,16 @@ impl Mnemonic {
         &[
             MicroOp {
                 name: "beq_fetch_branch_offset",
-                micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
                     cpu.incr_pc();
                     cpu.test_branch(cpu.p.z());
                 },
             },
             MicroOp {
                 name: "beq_add_branch_offset",
-                micro_fn: |cpu, bus| {
-                    bus.internal_cycle(cpu);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.internal_cycle(cpu, ctx);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -473,8 +474,8 @@ impl Mnemonic {
             },
             MicroOp {
                 name: "beq_add_dummy_read",
-                micro_fn: |cpu, bus| {
-                    bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.mem_read(cpu.pc, cpu, ctx);
                 },
             },
         ]
@@ -501,16 +502,16 @@ impl Mnemonic {
         &[
             MicroOp {
                 name: "bmi_fetch_branch_offset",
-                micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
                     cpu.incr_pc();
                     cpu.test_branch(cpu.p.n());
                 },
             },
             MicroOp {
                 name: "bmi_add_branch_offset",
-                micro_fn: |cpu, bus| {
-                    bus.internal_cycle(cpu);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.internal_cycle(cpu, ctx);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -520,8 +521,8 @@ impl Mnemonic {
             },
             MicroOp {
                 name: "bmi_add_dummy_read",
-                micro_fn: |cpu, bus| {
-                    bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.mem_read(cpu.pc, cpu, ctx);
                 },
             },
         ]
@@ -550,16 +551,16 @@ impl Mnemonic {
         &[
             MicroOp {
                 name: "bne_fetch_branch_offset",
-                micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
                     cpu.incr_pc();
                     cpu.test_branch(!cpu.p.z());
                 },
             },
             MicroOp {
                 name: "bne_add_branch_offset",
-                micro_fn: |cpu, bus| {
-                    bus.internal_cycle(cpu);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.internal_cycle(cpu, ctx);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -569,8 +570,8 @@ impl Mnemonic {
             },
             MicroOp {
                 name: "bne_add_dummy_read",
-                micro_fn: |cpu, bus| {
-                    bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.mem_read(cpu.pc, cpu, ctx);
                 },
             },
         ]
@@ -601,16 +602,16 @@ impl Mnemonic {
         &[
             MicroOp {
                 name: "bpl_fetch_branch_offset",
-                micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
                     cpu.incr_pc();
                     cpu.test_branch(!cpu.p.n());
                 },
             },
             MicroOp {
                 name: "bpl_add_branch_offset",
-                micro_fn: |cpu, bus| {
-                    bus.internal_cycle(cpu);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.internal_cycle(cpu, ctx);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -620,8 +621,8 @@ impl Mnemonic {
             },
             MicroOp {
                 name: "bpl_add_dummy_read",
-                micro_fn: |cpu, bus| {
-                    bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.mem_read(cpu.pc, cpu, ctx);
                 },
             },
         ]
@@ -649,16 +650,16 @@ impl Mnemonic {
         &[
             MicroOp {
                 name: "bvc_fetch_branch_offset",
-                micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
                     cpu.incr_pc();
                     cpu.test_branch(!cpu.p.v());
                 },
             },
             MicroOp {
                 name: "bvc_add_branch_offset",
-                micro_fn: |cpu, bus| {
-                    bus.internal_cycle(cpu);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.internal_cycle(cpu, ctx);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -668,8 +669,8 @@ impl Mnemonic {
             },
             MicroOp {
                 name: "bvc_add_dummy_read",
-                micro_fn: |cpu, bus| {
-                    bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.mem_read(cpu.pc, cpu, ctx);
                 },
             },
         ]
@@ -696,16 +697,16 @@ impl Mnemonic {
         &[
             MicroOp {
                 name: "bvs_fetch_branch_offset",
-                micro_fn: |cpu, bus| {
-                    cpu.base = bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    cpu.base = bus.mem_read(cpu.pc, cpu, ctx);
                     cpu.incr_pc();
                     cpu.test_branch(cpu.p.v());
                 },
             },
             MicroOp {
                 name: "bvs_add_branch_offset",
-                micro_fn: |cpu, bus| {
-                    bus.internal_cycle(cpu);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.internal_cycle(cpu, ctx);
                     let old_pc = cpu.pc;
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
@@ -715,8 +716,8 @@ impl Mnemonic {
             },
             MicroOp {
                 name: "bvs_add_dummy_read",
-                micro_fn: |cpu, bus| {
-                    bus.mem_read(cpu, cpu.pc);
+                micro_fn: |cpu, bus, ctx| {
+                    bus.mem_read(cpu.pc, cpu, ctx);
                 },
             },
         ]
@@ -734,7 +735,7 @@ mod bra_tests {
             let branch_taken = !old_carry;
 
             if branch_taken {
-                let offset = bus.mem_read(cpu, verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -755,7 +756,7 @@ mod bra_tests {
             let branch_taken = old_carry;
 
             if branch_taken {
-                let offset = bus.mem_read(cpu, verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -777,7 +778,7 @@ mod bra_tests {
             let branch_taken = old_zero;
 
             if branch_taken {
-                let offset = bus.mem_read(cpu, verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -799,7 +800,7 @@ mod bra_tests {
             let branch_taken = old_negative;
 
             if branch_taken {
-                let offset = bus.mem_read(cpu, verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -821,7 +822,7 @@ mod bra_tests {
             let branch_taken = !old_zero;
 
             if branch_taken {
-                let offset = bus.mem_read(cpu, verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -843,7 +844,7 @@ mod bra_tests {
             let branch_taken = !old_negative;
 
             if branch_taken {
-                let offset = bus.mem_read(cpu, verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -865,7 +866,7 @@ mod bra_tests {
             let branch_taken = !old_overflow;
 
             if branch_taken {
-                let offset = bus.mem_read(cpu, verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,
@@ -887,7 +888,7 @@ mod bra_tests {
             let branch_taken = old_overflow;
 
             if branch_taken {
-                let offset = bus.mem_read(cpu, verify.cpu.pc.wrapping_add(1)) as i8;
+                let offset = bus.mem_read(verify.cpu.pc.wrapping_add(1)) as i8;
                 let expected_pc = verify.cpu.pc.wrapping_add(2).wrapping_add(offset as u16);
                 assert_eq!(
                     cpu.pc, expected_pc,

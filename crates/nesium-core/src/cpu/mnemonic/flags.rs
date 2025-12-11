@@ -1,5 +1,6 @@
 use crate::{
     bus::Bus,
+    context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
 };
 
@@ -20,10 +21,10 @@ use crate::{
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLC                    | $18    | 1         | 2
 #[inline]
-pub fn exec_clc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_clc<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.p.set_c(false);
         }
         _ => unreachable_step!("invalid CLC step {step}"),
@@ -50,10 +51,10 @@ pub fn exec_clc<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLD                    | $D8    | 1         | 2
 #[inline]
-pub fn exec_cld<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_cld<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.p.set_d(false);
         }
         _ => unreachable_step!("invalid CLD step {step}"),
@@ -76,10 +77,10 @@ pub fn exec_cld<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLI                    | $58    | 1         | 2
 #[inline]
-pub fn exec_cli<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_cli<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let was_disabled = cpu.p.i();
             cpu.queue_i_update(false);
             if was_disabled {
@@ -107,10 +108,10 @@ pub fn exec_cli<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLV                    | $B8    | 1         | 2
 #[inline]
-pub fn exec_clv<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_clv<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.p.set_v(false);
         }
         _ => unreachable_step!("invalid CLV step {step}"),
@@ -134,10 +135,10 @@ pub fn exec_clv<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | SEC                    | $38    | 1         | 2
 #[inline]
-pub fn exec_sec<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_sec<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.p.set_c(true);
         }
         _ => unreachable_step!("invalid SEC step {step}"),
@@ -165,10 +166,10 @@ pub fn exec_sec<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | SED                    | $F8    | 1         | 2
 #[inline]
-pub fn exec_sed<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_sed<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.p.set_d(true);
         }
         _ => unreachable_step!("invalid SED step {step}"),
@@ -192,10 +193,10 @@ pub fn exec_sed<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | SEI                    | $78    | 1         | 2
 #[inline]
-pub fn exec_sei<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_sei<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             let was_enabled = !cpu.p.i();
             cpu.queue_i_update(true);
             if was_enabled {
@@ -226,8 +227,8 @@ impl Mnemonic {
     pub(crate) const fn clc() -> &'static [MicroOp] {
         &[MicroOp {
             name: "clc_clear_carry",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 // Cycle 2: C = 0
                 cpu.p.set_c(false);
             },
@@ -256,8 +257,8 @@ impl Mnemonic {
     pub(crate) const fn cld() -> &'static [MicroOp] {
         &[MicroOp {
             name: "cld_clear_decimal",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 // Cycle 2: D = 0
                 cpu.p.set_d(false);
             },
@@ -282,8 +283,8 @@ impl Mnemonic {
     pub(crate) const fn cli() -> &'static [MicroOp] {
         &[MicroOp {
             name: "cli_clear_interrupt",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 // Cycle 2: I = 0. When interrupts were previously disabled,
                 // the 6502 delays servicing a pending IRQ until *after* the
                 // next instruction completes. Model this with a one-boundary
@@ -316,8 +317,8 @@ impl Mnemonic {
     pub(crate) const fn clv() -> &'static [MicroOp] {
         &[MicroOp {
             name: "clv_clear_overflow",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 // Cycle 2: V = 0
                 cpu.p.set_v(false);
             },
@@ -343,8 +344,8 @@ impl Mnemonic {
     pub(crate) const fn sec() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sec_set_carry",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 // Cycle 2: C = 1
                 cpu.p.set_c(true);
             },
@@ -374,8 +375,8 @@ impl Mnemonic {
     pub(crate) const fn sed() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sed_set_decimal",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 // Cycle 2: D = 1
                 cpu.p.set_d(true);
             },
@@ -401,8 +402,8 @@ impl Mnemonic {
     pub(crate) const fn sei() -> &'static [MicroOp] {
         &[MicroOp {
             name: "sei_set_interrupt",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 // Cycle 2: I = 1. If interrupts were previously enabled when
                 // SEI executes, a pending IRQ is still allowed to fire "just
                 // after" SEI. Approximate this with a one-shot override that

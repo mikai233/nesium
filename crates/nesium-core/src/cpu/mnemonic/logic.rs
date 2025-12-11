@@ -1,5 +1,6 @@
 use crate::{
     bus::Bus,
+    context::Context,
     cpu::{
         Cpu,
         micro_op::MicroOp,
@@ -15,10 +16,10 @@ use crate::{
 /// AND - "AND" Memory with Accumulator
 /// Operation: A ∧ M → A
 #[inline]
-pub fn exec_and<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_and<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu, cpu.effective_addr);
+            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.a &= m;
             cpu.p.set_zn(cpu.a);
         }
@@ -32,10 +33,10 @@ pub fn exec_and<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// BIT - Test Bits in Memory with Accumulator
 /// Operation: A ∧ M, M7 → N, M6 → V
 #[inline]
-pub fn exec_bit<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_bit<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu, cpu.effective_addr);
+            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
             let and = cpu.a & m;
             cpu.p.set_z(and == 0);
             cpu.p.set_n(m & BIT_7 != 0);
@@ -51,10 +52,10 @@ pub fn exec_bit<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// EOR - "Exclusive OR" Memory with Accumulator
 /// Operation: A ⊻ M → A
 #[inline]
-pub fn exec_eor<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_eor<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu, cpu.effective_addr);
+            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.a ^= m;
             cpu.p.set_zn(cpu.a);
         }
@@ -68,10 +69,10 @@ pub fn exec_eor<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// ORA - "OR" Memory with Accumulator
 /// Operation: A ∨ M → A
 #[inline]
-pub fn exec_ora<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_ora<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu, cpu.effective_addr);
+            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.a |= m;
             cpu.p.set_zn(cpu.a);
         }
@@ -110,8 +111,8 @@ impl Mnemonic {
     pub(crate) const fn and() -> &'static [MicroOp] {
         &[MicroOp {
             name: "and",
-            micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 cpu.a &= m;
                 cpu.p.set_zn(cpu.a);
             },
@@ -140,8 +141,8 @@ impl Mnemonic {
     pub(crate) const fn bit() -> &'static [MicroOp] {
         &[MicroOp {
             name: "bit",
-            micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 let and = cpu.a & m;
                 cpu.p.set_z(and == 0);
                 cpu.p.set_n(m & BIT_7 != 0);
@@ -180,8 +181,8 @@ impl Mnemonic {
     pub(crate) const fn eor() -> &'static [MicroOp] {
         &[MicroOp {
             name: "eor",
-            micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 cpu.a ^= m;
                 cpu.p.set_zn(cpu.a);
             },
@@ -218,8 +219,8 @@ impl Mnemonic {
     pub(crate) const fn ora() -> &'static [MicroOp] {
         &[MicroOp {
             name: "ora",
-            micro_fn: |cpu, bus| {
-                let m = bus.mem_read(cpu, cpu.effective_addr);
+            micro_fn: |cpu, bus, ctx| {
+                let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 cpu.a |= m;
                 cpu.p.set_zn(cpu.a);
             },

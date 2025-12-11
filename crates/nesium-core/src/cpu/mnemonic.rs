@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use crate::bus::Bus;
+use crate::context::Context;
 use crate::cpu::{Cpu, micro_op::MicroOp};
 
 pub mod arith;
@@ -324,95 +325,106 @@ impl Mnemonic {
     }
 
     /// Static-dispatch exec entry (prototype; not yet wired into CPU).
-    pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, step: u8) {
+    pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
         match self {
             // Load / Store
-            Mnemonic::LAS => load::exec_las(cpu, bus, step),
-            Mnemonic::LAX => load::exec_lax(cpu, bus, step),
-            Mnemonic::LDA => load::exec_lda(cpu, bus, step),
-            Mnemonic::LDX => load::exec_ldx(cpu, bus, step),
-            Mnemonic::LDY => load::exec_ldy(cpu, bus, step),
-            Mnemonic::SAX => load::exec_sax(cpu, bus, step),
-            Mnemonic::SHA => load::exec_sha(cpu, bus, step),
-            Mnemonic::SHX => load::exec_shx(cpu, bus, step),
-            Mnemonic::SHY => load::exec_shy(cpu, bus, step),
-            Mnemonic::STA => load::exec_sta(cpu, bus, step),
-            Mnemonic::STX => load::exec_stx(cpu, bus, step),
-            Mnemonic::STY => load::exec_sty(cpu, bus, step),
-            // Arithmetic / Logic
-            Mnemonic::ADC => arith::exec_adc(cpu, bus, step),
-            Mnemonic::ANC => arith::exec_anc(cpu, bus, step),
-            Mnemonic::ARR => arith::exec_arr(cpu, bus, step),
-            Mnemonic::ASR => arith::exec_asr(cpu, bus, step),
-            Mnemonic::CMP => arith::exec_cmp(cpu, bus, step),
-            Mnemonic::CPX => arith::exec_cpx(cpu, bus, step),
-            Mnemonic::CPY => arith::exec_cpy(cpu, bus, step),
-            Mnemonic::DCP => arith::exec_dcp(cpu, bus, step),
-            Mnemonic::ISC => arith::exec_isc(cpu, bus, step),
-            Mnemonic::RLA => arith::exec_rla(cpu, bus, step),
-            Mnemonic::RRA => arith::exec_rra(cpu, bus, step),
-            Mnemonic::SBC => arith::exec_sbc(cpu, bus, step),
-            Mnemonic::SBX => arith::exec_sbx(cpu, bus, step),
-            Mnemonic::SLO => arith::exec_slo(cpu, bus, step),
-            Mnemonic::SRE => arith::exec_sre(cpu, bus, step),
-            Mnemonic::XAA => arith::exec_xaa(cpu, bus, step),
-            // Logic
-            Mnemonic::AND => logic::exec_and(cpu, bus, step),
-            Mnemonic::BIT => logic::exec_bit(cpu, bus, step),
-            Mnemonic::EOR => logic::exec_eor(cpu, bus, step),
-            Mnemonic::ORA => logic::exec_ora(cpu, bus, step),
-            // Shift / Rotate
-            Mnemonic::ASL => shift::exec_asl(cpu, bus, step),
-            Mnemonic::LSR => shift::exec_lsr(cpu, bus, step),
-            Mnemonic::ROL => shift::exec_rol(cpu, bus, step),
-            Mnemonic::ROR => shift::exec_ror(cpu, bus, step),
-            // Inc/Dec
-            Mnemonic::DEC => inc::exec_dec(cpu, bus, step),
-            Mnemonic::DEX => inc::exec_dex(cpu, bus, step),
-            Mnemonic::DEY => inc::exec_dey(cpu, bus, step),
-            Mnemonic::INC => inc::exec_inc(cpu, bus, step),
-            Mnemonic::INX => inc::exec_inx(cpu, bus, step),
-            Mnemonic::INY => inc::exec_iny(cpu, bus, step),
-            // Branches
-            Mnemonic::BCC => bra::exec_bcc(cpu, bus, step),
-            Mnemonic::BCS => bra::exec_bcs(cpu, bus, step),
-            Mnemonic::BEQ => bra::exec_beq(cpu, bus, step),
-            Mnemonic::BMI => bra::exec_bmi(cpu, bus, step),
-            Mnemonic::BNE => bra::exec_bne(cpu, bus, step),
-            Mnemonic::BPL => bra::exec_bpl(cpu, bus, step),
-            Mnemonic::BVC => bra::exec_bvc(cpu, bus, step),
-            Mnemonic::BVS => bra::exec_bvs(cpu, bus, step),
-            // Control Flow
-            Mnemonic::BRK => ctrl::exec_brk(cpu, bus, step),
-            Mnemonic::JMP => ctrl::exec_jmp(cpu, bus, step),
-            Mnemonic::JSR => ctrl::exec_jsr(cpu, bus, step),
-            Mnemonic::RTI => ctrl::exec_rti(cpu, bus, step),
-            Mnemonic::RTS => ctrl::exec_rts(cpu, bus, step),
-            // Flags
-            Mnemonic::CLC => flags::exec_clc(cpu, bus, step),
-            Mnemonic::CLD => flags::exec_cld(cpu, bus, step),
-            Mnemonic::CLI => flags::exec_cli(cpu, bus, step),
-            Mnemonic::CLV => flags::exec_clv(cpu, bus, step),
-            Mnemonic::SEC => flags::exec_sec(cpu, bus, step),
-            Mnemonic::SED => flags::exec_sed(cpu, bus, step),
-            Mnemonic::SEI => flags::exec_sei(cpu, bus, step),
-            // Stack
-            Mnemonic::PHA => stack::exec_pha(cpu, bus, step),
-            Mnemonic::PHP => stack::exec_php(cpu, bus, step),
-            Mnemonic::PLA => stack::exec_pla(cpu, bus, step),
-            Mnemonic::PLP => stack::exec_plp(cpu, bus, step),
+            Mnemonic::LAS => load::exec_las(cpu, bus, ctx, step),
+            Mnemonic::LAX => load::exec_lax(cpu, bus, ctx, step),
+            Mnemonic::LDA => load::exec_lda(cpu, bus, ctx, step),
+            Mnemonic::LDX => load::exec_ldx(cpu, bus, ctx, step),
+            Mnemonic::LDY => load::exec_ldy(cpu, bus, ctx, step),
+            Mnemonic::SAX => load::exec_sax(cpu, bus, ctx, step),
+            Mnemonic::SHA => load::exec_sha(cpu, bus, ctx, step),
+            Mnemonic::SHX => load::exec_shx(cpu, bus, ctx, step),
+            Mnemonic::SHY => load::exec_shy(cpu, bus, ctx, step),
+            Mnemonic::STA => load::exec_sta(cpu, bus, ctx, step),
+            Mnemonic::STX => load::exec_stx(cpu, bus, ctx, step),
+            Mnemonic::STY => load::exec_sty(cpu, bus, ctx, step),
+
             // Transfer
-            Mnemonic::SHS => trans::exec_shs(cpu, bus, step),
-            Mnemonic::TAX => trans::exec_tax(cpu, bus, step),
-            Mnemonic::TAY => trans::exec_tay(cpu, bus, step),
-            Mnemonic::TSX => trans::exec_tsx(cpu, bus, step),
-            Mnemonic::TXA => trans::exec_txa(cpu, bus, step),
-            Mnemonic::TXS => trans::exec_txs(cpu, bus, step),
-            Mnemonic::TYA => trans::exec_tya(cpu, bus, step),
+            Mnemonic::SHS => trans::exec_shs(cpu, bus, ctx, step),
+            Mnemonic::TAX => trans::exec_tax(cpu, bus, ctx, step),
+            Mnemonic::TAY => trans::exec_tay(cpu, bus, ctx, step),
+            Mnemonic::TSX => trans::exec_tsx(cpu, bus, ctx, step),
+            Mnemonic::TXA => trans::exec_txa(cpu, bus, ctx, step),
+            Mnemonic::TXS => trans::exec_txs(cpu, bus, ctx, step),
+            Mnemonic::TYA => trans::exec_tya(cpu, bus, ctx, step),
+
+            // Stack
+            Mnemonic::PHA => stack::exec_pha(cpu, bus, ctx, step),
+            Mnemonic::PHP => stack::exec_php(cpu, bus, ctx, step),
+            Mnemonic::PLA => stack::exec_pla(cpu, bus, ctx, step),
+            Mnemonic::PLP => stack::exec_plp(cpu, bus, ctx, step),
+
+            // Shift / Rotate
+            Mnemonic::ASL => shift::exec_asl(cpu, bus, ctx, step),
+            Mnemonic::LSR => shift::exec_lsr(cpu, bus, ctx, step),
+            Mnemonic::ROL => shift::exec_rol(cpu, bus, ctx, step),
+            Mnemonic::ROR => shift::exec_ror(cpu, bus, ctx, step),
+
+            // Logical
+            Mnemonic::AND => logic::exec_and(cpu, bus, ctx, step),
+            Mnemonic::BIT => logic::exec_bit(cpu, bus, ctx, step),
+            Mnemonic::EOR => logic::exec_eor(cpu, bus, ctx, step),
+            Mnemonic::ORA => logic::exec_ora(cpu, bus, ctx, step),
+
+            // Arithmetic
+            Mnemonic::ADC => arith::exec_adc(cpu, bus, ctx, step),
+            Mnemonic::ANC => arith::exec_anc(cpu, bus, ctx, step),
+            Mnemonic::ARR => arith::exec_arr(cpu, bus, ctx, step),
+            Mnemonic::ASR => arith::exec_asr(cpu, bus, ctx, step),
+            Mnemonic::CMP => arith::exec_cmp(cpu, bus, ctx, step),
+            Mnemonic::CPX => arith::exec_cpx(cpu, bus, ctx, step),
+            Mnemonic::CPY => arith::exec_cpy(cpu, bus, ctx, step),
+            Mnemonic::DCP => arith::exec_dcp(cpu, bus, ctx, step),
+            Mnemonic::ISC => arith::exec_isc(cpu, bus, ctx, step),
+            Mnemonic::RLA => arith::exec_rla(cpu, bus, ctx, step),
+            Mnemonic::RRA => arith::exec_rra(cpu, bus, ctx, step),
+            Mnemonic::SBC => arith::exec_sbc(cpu, bus, ctx, step),
+            Mnemonic::SBX => arith::exec_sbx(cpu, bus, ctx, step),
+            Mnemonic::SLO => arith::exec_slo(cpu, bus, ctx, step),
+            Mnemonic::SRE => arith::exec_sre(cpu, bus, ctx, step),
+            Mnemonic::XAA => arith::exec_xaa(cpu, bus, ctx, step),
+
+            // Increment / Decrement
+            Mnemonic::DEC => inc::exec_dec(cpu, bus, ctx, step),
+            Mnemonic::DEX => inc::exec_dex(cpu, bus, ctx, step),
+            Mnemonic::DEY => inc::exec_dey(cpu, bus, ctx, step),
+            Mnemonic::INC => inc::exec_inc(cpu, bus, ctx, step),
+            Mnemonic::INX => inc::exec_inx(cpu, bus, ctx, step),
+            Mnemonic::INY => inc::exec_iny(cpu, bus, ctx, step),
+
+            // Control Flow
+            Mnemonic::BRK => ctrl::exec_brk(cpu, bus, ctx, step),
+            Mnemonic::JMP => ctrl::exec_jmp(cpu, bus, ctx, step),
+            Mnemonic::JSR => ctrl::exec_jsr(cpu, bus, ctx, step),
+            Mnemonic::RTI => ctrl::exec_rti(cpu, bus, ctx, step),
+            Mnemonic::RTS => ctrl::exec_rts(cpu, bus, ctx, step),
+
+            // Branches
+            Mnemonic::BCC => bra::exec_bcc(cpu, bus, ctx, step),
+            Mnemonic::BCS => bra::exec_bcs(cpu, bus, ctx, step),
+            Mnemonic::BEQ => bra::exec_beq(cpu, bus, ctx, step),
+            Mnemonic::BMI => bra::exec_bmi(cpu, bus, ctx, step),
+            Mnemonic::BNE => bra::exec_bne(cpu, bus, ctx, step),
+            Mnemonic::BPL => bra::exec_bpl(cpu, bus, ctx, step),
+            Mnemonic::BVC => bra::exec_bvc(cpu, bus, ctx, step),
+            Mnemonic::BVS => bra::exec_bvs(cpu, bus, ctx, step),
+
+            // Flags
+            Mnemonic::CLC => flags::exec_clc(cpu, bus, ctx, step),
+            Mnemonic::CLD => flags::exec_cld(cpu, bus, ctx, step),
+            Mnemonic::CLI => flags::exec_cli(cpu, bus, ctx, step),
+            Mnemonic::CLV => flags::exec_clv(cpu, bus, ctx, step),
+            Mnemonic::SEC => flags::exec_sec(cpu, bus, ctx, step),
+            Mnemonic::SED => flags::exec_sed(cpu, bus, ctx, step),
+            Mnemonic::SEI => flags::exec_sei(cpu, bus, ctx, step),
+
             // Halt
-            Mnemonic::JAM => kil::exec_jam(cpu, bus, step),
+            Mnemonic::JAM => kil::exec_jam(cpu, bus, ctx, step),
+
             // NOP
-            Mnemonic::NOP => nop::exec_nop(cpu, bus, step),
+            Mnemonic::NOP => nop::exec_nop(cpu, bus, ctx, step),
         }
     }
 }
@@ -425,18 +437,19 @@ impl Display for Mnemonic {
 
 #[cfg(test)]
 mod tests {
-
     use std::panic::{self, AssertUnwindSafe};
 
     use rand::SeedableRng;
     use tracing::{error, trace};
 
     use crate::{
-        bus::{Bus, mock::MockBus},
+        bus::mock::MockBus,
+        context::Context,
         cpu::{
             Cpu, addressing::Addressing, instruction::Instruction, lookup::LOOKUP_TABLE,
             mnemonic::Mnemonic, status::Status,
         },
+        reset_kind::ResetKind,
         tests::TEST_COUNT,
     };
 
@@ -489,7 +502,7 @@ mod tests {
 
         pub(crate) fn test<F>(&self, verify: F)
         where
-            F: Fn(&Verification, &mut Cpu, &mut dyn Bus),
+            F: Fn(&Verification, &mut Cpu, &mut MockBus),
         {
             for _ in 0..TEST_COUNT {
                 let seed = rand::random();
@@ -509,7 +522,7 @@ mod tests {
 
         pub(crate) fn test_branch<F>(&self, verify: F)
         where
-            F: Fn(&Verification, &mut Cpu, &mut dyn Bus) -> bool,
+            F: Fn(&Verification, &mut Cpu, &mut MockBus) -> bool,
         {
             for _ in 0..TEST_COUNT {
                 let seed = rand::random();
@@ -529,7 +542,7 @@ mod tests {
 
         pub(crate) fn run<F>(&self, seed: u64, verify: &F)
         where
-            F: Fn(&Verification, &mut Cpu, &mut dyn Bus),
+            F: Fn(&Verification, &mut Cpu, &mut MockBus),
         {
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             for instr in LOOKUP_TABLE {
@@ -538,7 +551,7 @@ mod tests {
                     let mut cpu = Self::rand_cpu(&mut rng);
                     let (verification, mut bus, crossed_page) =
                         Self::build_mock(&instr, &cpu, &mut rng);
-                    let executed = cpu.test_step(&mut bus, &instr);
+                    let executed = cpu.test_step(&mut bus, &mut Context::None, &instr);
                     let expected = instr.cycle().total_cycle(crossed_page, false);
                     assert_eq!(
                         executed, expected,
@@ -552,7 +565,7 @@ mod tests {
 
         pub(crate) fn run_branch<F>(&self, seed: u64, verify: F)
         where
-            F: Fn(&Verification, &mut Cpu, &mut dyn Bus) -> bool,
+            F: Fn(&Verification, &mut Cpu, &mut MockBus) -> bool,
         {
             let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
             for instr in LOOKUP_TABLE {
@@ -561,7 +574,7 @@ mod tests {
                     let mut cpu = Self::rand_cpu(&mut rng);
                     let (verification, mut bus, crossed_page) =
                         Self::build_mock(&instr, &cpu, &mut rng);
-                    let executed = cpu.test_step(&mut bus, &instr);
+                    let executed = cpu.test_step(&mut bus, &mut Context::None, &instr);
                     let branch_taken = verify(&verification, &mut cpu, &mut bus);
                     let expected = instr.cycle().total_cycle(crossed_page, branch_taken);
                     assert_eq!(executed, expected, "instruction cycle not match");
@@ -983,7 +996,7 @@ mod tests {
             }
             let mut cpu = Cpu::new();
             let mut bus = MockBus::default();
-            cpu.reset(&mut bus, crate::reset_kind::ResetKind::PowerOn);
+            cpu.reset(&mut bus, ResetKind::PowerOn, &mut Context::None);
             cpu.opcode_in_flight = Some(opcode);
 
             let mut actual_len = 0u8;
@@ -991,7 +1004,7 @@ mod tests {
 
             for step in 0..max_steps {
                 let result = panic::catch_unwind(AssertUnwindSafe(|| {
-                    mnemonic.exec(&mut cpu, &mut bus, step);
+                    mnemonic.exec(&mut cpu, &mut bus, &mut Context::None, step);
                 }));
                 if result.is_ok() {
                     actual_len += 1;

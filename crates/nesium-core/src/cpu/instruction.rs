@@ -2,6 +2,7 @@ use std::{fmt::Display, ops::Index};
 
 use crate::{
     bus::Bus,
+    context::Context,
     cpu::{
         Cpu,
         addressing::Addressing,
@@ -28,13 +29,13 @@ impl Instruction {
     }
 
     /// Execute a single cycle step using static dispatch (addressing then mnemonic).
-    pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, step: u8) {
+    pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
         let addr_len = self.addr_len();
         if step < addr_len {
-            self.addressing.exec(cpu, bus, step);
+            self.addressing.exec(cpu, bus, ctx, step);
         } else {
             let offset = step - addr_len;
-            self.mnemonic.exec(cpu, bus, offset);
+            self.mnemonic.exec(cpu, bus, ctx, offset);
         }
     }
 

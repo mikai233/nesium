@@ -1,5 +1,6 @@
 use crate::{
     bus::Bus,
+    context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
 };
 
@@ -25,13 +26,13 @@ use crate::{
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_shs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_shs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let s = cpu.a & cpu.x;
             cpu.s = s;
             let m = s & cpu.base.wrapping_add(1);
-            bus.mem_write(cpu, cpu.effective_addr, m);
+            bus.mem_write(cpu.effective_addr, m, cpu, ctx);
         }
         _ => unreachable_step!("invalid SHS step {step}"),
     }
@@ -56,10 +57,10 @@ pub fn exec_shs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TAX                      | $AA    | 1         | 2
 #[inline]
-pub fn exec_tax<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_tax<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.x = cpu.a;
             cpu.p.set_zn(cpu.x);
         }
@@ -85,10 +86,10 @@ pub fn exec_tax<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TAY                      | $A8    | 1         | 2
 #[inline]
-pub fn exec_tay<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_tay<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.y = cpu.a;
             cpu.p.set_zn(cpu.y);
         }
@@ -115,10 +116,10 @@ pub fn exec_tay<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TSX                      | $BA    | 1         | 2
 #[inline]
-pub fn exec_tsx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_tsx<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.x = cpu.s;
             cpu.p.set_zn(cpu.x);
         }
@@ -144,10 +145,10 @@ pub fn exec_tsx<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TXA                      | $8A    | 1         | 2
 #[inline]
-pub fn exec_txa<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_txa<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.a = cpu.x;
             cpu.p.set_zn(cpu.a);
         }
@@ -171,10 +172,10 @@ pub fn exec_txa<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TXS                      | $9A    | 1         | 2
 #[inline]
-pub fn exec_txs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_txs<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.s = cpu.x;
         }
         _ => unreachable_step!("invalid TXS step {step}"),
@@ -199,10 +200,10 @@ pub fn exec_txs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TYA                      | $98    | 1         | 2
 #[inline]
-pub fn exec_tya<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
+pub fn exec_tya<B: Bus>(cpu: &mut Cpu, bus: &mut B, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu);
+            bus.internal_cycle(cpu, ctx);
             cpu.a = cpu.y;
             cpu.p.set_zn(cpu.a);
         }
@@ -235,11 +236,11 @@ impl Mnemonic {
     pub(crate) const fn shs() -> &'static [MicroOp] {
         &[MicroOp {
             name: "shs",
-            micro_fn: |cpu, bus| {
+            micro_fn: |cpu, bus, ctx| {
                 let s = cpu.a & cpu.x;
                 cpu.s = s;
                 let m = s & cpu.base.wrapping_add(1);
-                bus.mem_write(cpu, cpu.effective_addr, m);
+                bus.mem_write(cpu.effective_addr, m, cpu, ctx);
             },
         }]
     }
@@ -265,8 +266,8 @@ impl Mnemonic {
     pub(crate) const fn tax() -> &'static [MicroOp] {
         &[MicroOp {
             name: "tax",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.x = cpu.a;
                 cpu.p.set_zn(cpu.x);
             },
@@ -293,8 +294,8 @@ impl Mnemonic {
     pub(crate) const fn tay() -> &'static [MicroOp] {
         &[MicroOp {
             name: "tay",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.y = cpu.a;
                 cpu.p.set_zn(cpu.y);
             },
@@ -322,8 +323,8 @@ impl Mnemonic {
     pub(crate) const fn tsx() -> &'static [MicroOp] {
         &[MicroOp {
             name: "tsx",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.x = cpu.s;
                 cpu.p.set_zn(cpu.x);
             },
@@ -350,8 +351,8 @@ impl Mnemonic {
     pub(crate) const fn txa() -> &'static [MicroOp] {
         &[MicroOp {
             name: "txa",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.a = cpu.x;
                 cpu.p.set_zn(cpu.a);
             },
@@ -376,8 +377,8 @@ impl Mnemonic {
     pub(crate) const fn txs() -> &'static [MicroOp] {
         &[MicroOp {
             name: "txs",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.s = cpu.x;
             },
         }]
@@ -403,8 +404,8 @@ impl Mnemonic {
     pub(crate) const fn tya() -> &'static [MicroOp] {
         &[MicroOp {
             name: "tya",
-            micro_fn: |cpu, bus| {
-                bus.internal_cycle(cpu);
+            micro_fn: |cpu, bus, ctx| {
+                bus.internal_cycle(cpu, ctx);
                 cpu.a = cpu.y;
                 cpu.p.set_zn(cpu.a);
             },
@@ -422,7 +423,7 @@ mod trans_tests {
             let v = verify.cpu.a & verify.cpu.x;
             assert_eq!(cpu.s, v);
             let v = v & verify.addr_hi.wrapping_add(1);
-            let m = bus.mem_read(cpu, verify.addr);
+            let m = bus.mem_read(verify.addr);
             assert_eq!(v, m);
         });
     }
