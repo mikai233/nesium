@@ -298,7 +298,6 @@ impl Addressing {
     }
 
     /// Static-dispatch addressing executor (prototype; not yet wired into CPU).
-    #[allow(dead_code)]
     pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, step: u8) {
         match self {
             Addressing::Implied | Addressing::Accumulator | Addressing::Immediate => {
@@ -615,7 +614,7 @@ mod tests {
             // Each valid step 0..len should succeed.
             for step in 0..len {
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    mode.exec(&mut cpu, &mut bus, step);
+                    mode.exec(&mut cpu, &mut bus, step as u8);
                 }));
                 assert!(
                     result.is_ok(),
@@ -628,7 +627,7 @@ mod tests {
 
             // Stepping past len should hit unreachable in debug (guards regressions if table changes).
             let past = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                mode.exec(&mut cpu, &mut bus, len);
+                mode.exec(&mut cpu, &mut bus, len as u8);
             }));
             assert!(
                 past.is_err(),

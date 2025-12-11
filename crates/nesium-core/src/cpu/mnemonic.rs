@@ -324,7 +324,6 @@ impl Mnemonic {
     }
 
     /// Static-dispatch exec entry (prototype; not yet wired into CPU).
-    #[allow(dead_code)]
     pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, step: u8) {
         match self {
             // Load / Store
@@ -987,12 +986,12 @@ mod tests {
             cpu.reset(&mut bus, crate::reset_kind::ResetKind::PowerOn);
             cpu.opcode_in_flight = Some(opcode);
 
-            let mut actual_len = 0usize;
-            let max_steps = 8usize; // Longest path is BRK (6 cycles in exec phase)
+            let mut actual_len = 0u8;
+            let max_steps = 8u8; // Longest path is BRK (6 cycles in exec phase)
 
             for step in 0..max_steps {
                 let result = panic::catch_unwind(AssertUnwindSafe(|| {
-                    mnemonic.exec(&mut cpu, &mut bus, step as u8);
+                    mnemonic.exec(&mut cpu, &mut bus, step);
                 }));
                 if result.is_ok() {
                     actual_len += 1;
@@ -1002,7 +1001,7 @@ mod tests {
             }
 
             assert!(
-                actual_len as u8 == len,
+                actual_len == len,
                 "mnemonic {:?} (opcode 0x{:02X}) exec_len mismatch: declared {} but executed {} steps before panic",
                 mnemonic,
                 opcode,

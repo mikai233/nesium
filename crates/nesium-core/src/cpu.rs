@@ -5,7 +5,6 @@ use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
 use crate::cpu::lookup::LOOKUP_TABLE;
-use crate::cpu::micro_op::MicroOp;
 use crate::cpu::mnemonic::Mnemonic;
 use crate::cpu::status::Status;
 use crate::memory::cpu as cpu_mem;
@@ -101,7 +100,7 @@ impl OamDma {
 
     /// Runs one DMA micro-step (one CPU cycle). Returns `true` when the
     /// transfer has finished copying all 256 bytes into OAM.
-    fn step(&mut self, cpu: &mut Cpu, bus: &mut dyn Bus) -> bool {
+    fn step<B: Bus>(&mut self, cpu: &mut Cpu, bus: &mut B) -> bool {
         if self.dummy_cycles > 0 {
             self.dummy_cycles -= 1;
             return false;
@@ -246,7 +245,7 @@ impl Cpu {
         }
     }
 
-    pub(crate) fn clock(&mut self, bus: &mut dyn Bus) {
+    pub(crate) fn clock<B: Bus>(&mut self, bus: &mut B) {
         // Propagate the current pending flag to `prev_nmi_pending` so that
         // NMI is effectively delayed by one instruction boundary, matching
         // the NES/Mesen behaviour where the interrupt lines are sampled on
@@ -283,10 +282,9 @@ impl Cpu {
                 }
 
                 let instr = &LOOKUP_TABLE[opcode as usize];
-                let micro_op = &instr[self.index()];
-                self.exec(bus, instr, micro_op);
+                self.exec(bus, instr);
                 self.post_exec(instr);
-                if self.index() >= instr.len() {
+                if self.index >= instr.len() {
                     self.clear();
                 }
             }
@@ -305,22 +303,17 @@ impl Cpu {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_clock(&mut self, bus: &mut dyn Bus, instr: &Instruction) -> usize {
+    pub(crate) fn test_clock<B: Bus>(&mut self, bus: &mut B, instr: &Instruction) -> usize {
         self.opcode_in_flight = Some(instr.opcode());
         self.incr_pc(); // Fetch opcode
         let mut cycles = 1; // Fetch opcode has 1 cycle
         self.pre_exec(instr);
-        while self.index() < instr.len() {
-            let op = &instr[self.index()];
-            let _span = tracing::span!(
-                tracing::Level::TRACE,
-                "instruction_exec",
-                op = ?op,
-                index = self.index()
-            );
+        while self.index < instr.len() {
+            let _span =
+                tracing::span!(tracing::Level::TRACE, "instruction_exec", step = self.index);
             let _enter = _span.enter();
             let before = *self;
-            self.exec(bus, instr, op);
+            self.exec(bus, instr);
             tracing::event!(
                 tracing::Level::TRACE,
                 before_cpu = ?before,
@@ -334,7 +327,7 @@ impl Cpu {
     }
 
     #[inline]
-    pub(crate) fn fetch_opcode(&mut self, bus: &mut dyn Bus) -> u8 {
+    pub(crate) fn fetch_opcode<B: Bus>(&mut self, bus: &mut B) -> u8 {
         let opcode = bus.mem_read(self, self.pc);
         self.incr_pc();
         // Starting a new instruction boundary clears any one-instruction IRQ suppression.
@@ -361,7 +354,7 @@ impl Cpu {
             // To unify the core 'exec' logic, jump the cycle index directly to the final
             // instruction execution phase (usually the last cycle).
             Addressing::Accumulator => {
-                self.index = (instr.len() - 1) as u8;
+                self.index = instr.len() - 1;
             }
 
             // For all other addressing modes (Absolute, Zero Page, etc.),
@@ -371,7 +364,7 @@ impl Cpu {
     }
 
     #[inline]
-    pub(crate) fn exec(&mut self, bus: &mut dyn Bus, instr: &Instruction, micro_op: &MicroOp) {
+    pub(crate) fn exec<B: Bus>(&mut self, bus: &mut B, instr: &Instruction) {
         match instr.mnemonic {
             // JSR, RTI, and RTS have complex, non-standard instruction cycles (micro-ops),
             // especially during stack manipulation. Their addressing phase cycles are often
@@ -380,15 +373,15 @@ impl Cpu {
                 // Skip the cycles normally reserved for general addressing mode processing.
                 // These instructions have their own custom micro-ops defined immediately
                 // following the opcode fetch cycle (index 0).
-                self.index += instr.addr_len() as u8;
+                self.index += instr.addr_len();
 
                 // Execute the *first* of the custom, non-addressing micro-ops.
-                instr[self.index()].exec(self, bus);
+                instr.exec(self, bus, self.index);
             }
             _ => {
                 // For all other instructions, or for the remaining cycles of JSR/RTI/RTS,
                 // execute the micro-op corresponding to the current cycle index.
-                micro_op.exec(self, bus);
+                instr.exec(self, bus, self.index);
             }
         }
 
@@ -411,7 +404,7 @@ impl Cpu {
                 // The jump must occur immediately upon fetching the final address byte.
                 // If addr_len() is 2, the addressing micro-ops are at index 0 and 1.
                 // When index() == 2, the addressing is complete, and the next cycle is skipped.
-                if matches!(instr.mnemonic, Mnemonic::JMP) && self.index() == instr.addr_len() {
+                if matches!(instr.mnemonic, Mnemonic::JMP) && self.index == instr.addr_len() {
                     // JMP is special: it updates the PC right after address calculation,
                     // skipping the final execution phase cycle used by most other instructions.
                     self.pc = self.effective_addr;
@@ -422,7 +415,7 @@ impl Cpu {
                 // JMP Indirect (5 total cycles, 4 addressing cycles after fetch):
                 // Addressing micro-ops run at index 0, 1, 2, 3.
                 // When index() == 4 (addr_len), the address calculation is finished.
-                if matches!(instr.mnemonic, Mnemonic::JMP) && self.index() == instr.addr_len() {
+                if matches!(instr.mnemonic, Mnemonic::JMP) && self.index == instr.addr_len() {
                     // Similarly, JMP Indirect updates PC immediately after the 4th addressing cycle
                     // (the final address byte read, including the $XXFF bug handling).
                     self.pc = self.effective_addr;
@@ -465,7 +458,7 @@ impl Cpu {
         }
     }
 
-    fn handle_oam_dma(&mut self, bus: &mut dyn Bus) -> bool {
+    fn handle_oam_dma<B: Bus>(&mut self, bus: &mut B) -> bool {
         if let Some(mut dma) = self.oam_dma.take() {
             let done = dma.step(self, bus);
             self.oam_dma = if done { None } else { Some(dma) };
@@ -485,7 +478,7 @@ impl Cpu {
         false
     }
 
-    fn push_status(&mut self, bus: &mut dyn Bus, set_break: bool) {
+    fn push_status<B: Bus + ?Sized>(&mut self, bus: &mut B, set_break: bool) {
         let mut status = self.p;
         status.set_u(true);
         status.set_b(set_break);
@@ -507,7 +500,7 @@ impl Cpu {
         self.pending_irq_mask = None;
     }
 
-    fn service_irq(&mut self, bus: &mut dyn Bus) -> bool {
+    fn service_irq<B: Bus>(&mut self, bus: &mut B) -> bool {
         // When the effective I flag is set and no override is armed, or when
         // IRQs are explicitly suppressed for this instruction boundary, mask
         // maskable IRQs.
@@ -521,7 +514,7 @@ impl Cpu {
         true
     }
 
-    fn service_nmi(&mut self, bus: &mut dyn Bus) -> bool {
+    fn service_nmi<B: Bus>(&mut self, bus: &mut B) -> bool {
         // Only service NMI when the pending flag from the previous cycle is set,
         // which matches the Mesen/NES behaviour of delaying NMI by one cycle
         // (effectively one instruction boundary).
@@ -545,9 +538,9 @@ impl Cpu {
         true
     }
 
-    fn perform_interrupt(
+    fn perform_interrupt<B: Bus + ?Sized>(
         &mut self,
-        bus: &mut dyn Bus,
+        bus: &mut B,
         vector_lo: u16,
         vector_hi: u16,
         set_break: bool,
@@ -575,7 +568,7 @@ impl Cpu {
     }
 
     /// Helper that checks for pending NMI/IRQ and services them if allowed.
-    fn sample_interrupts(&mut self, bus: &mut dyn Bus) -> bool {
+    fn sample_interrupts<B: Bus>(&mut self, bus: &mut B) -> bool {
         if self.service_nmi(bus) {
             return true;
         }
@@ -593,11 +586,6 @@ impl Cpu {
             // on page crossing (handled later in check_cross_page).
             self.branch_taken_defer_irq = true;
         }
-    }
-
-    #[inline]
-    pub(crate) fn index(&self) -> usize {
-        self.index as usize
     }
 
     pub(crate) const fn always_cross_page(opcode: u8, instr: &Instruction) -> bool {
@@ -620,12 +608,12 @@ impl Cpu {
         }
     }
 
-    pub(crate) fn push(&mut self, bus: &mut dyn Bus, data: u8) {
+    pub(crate) fn push<B: Bus + ?Sized>(&mut self, bus: &mut B, data: u8) {
         bus.mem_write(self, self.stack_addr(), data);
         self.s = self.s.wrapping_sub(1);
     }
 
-    pub(crate) fn pull(&mut self, bus: &mut dyn Bus) -> u8 {
+    pub(crate) fn pull<B: Bus + ?Sized>(&mut self, bus: &mut B) -> u8 {
         self.s = self.s.wrapping_add(1);
         bus.mem_read(self, self.stack_addr())
     }

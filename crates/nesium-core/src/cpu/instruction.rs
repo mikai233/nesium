@@ -1,11 +1,15 @@
 use std::{fmt::Display, ops::Index};
 
-use crate::cpu::{
-    addressing::Addressing,
-    cycle::{CYCLE_TABLE, Cycle},
-    lookup::LOOKUP_TABLE,
-    micro_op::MicroOp,
-    mnemonic::Mnemonic,
+use crate::{
+    bus::Bus,
+    cpu::{
+        Cpu,
+        addressing::Addressing,
+        cycle::{CYCLE_TABLE, Cycle},
+        lookup::LOOKUP_TABLE,
+        micro_op::MicroOp,
+        mnemonic::Mnemonic,
+    },
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -15,12 +19,23 @@ pub(crate) struct Instruction {
 }
 
 impl Instruction {
-    pub(crate) const fn len(&self) -> usize {
-        self.mnemonic.micro_ops().len() + self.addr_len()
+    pub(crate) const fn len(&self) -> u8 {
+        self.mnemonic.exec_len() + self.addr_len()
     }
 
-    pub(crate) const fn addr_len(&self) -> usize {
-        self.addressing.micro_ops().len()
+    pub(crate) const fn addr_len(&self) -> u8 {
+        self.addressing.exec_len()
+    }
+
+    /// Execute a single cycle step using static dispatch (addressing then mnemonic).
+    pub(crate) fn exec<B: Bus>(&self, cpu: &mut Cpu, bus: &mut B, step: u8) {
+        let addr_len = self.addr_len();
+        if step < addr_len {
+            self.addressing.exec(cpu, bus, step);
+        } else {
+            let offset = step - addr_len;
+            self.mnemonic.exec(cpu, bus, offset);
+        }
     }
 
     // Load/Store
@@ -513,7 +528,7 @@ impl Index<usize> for Instruction {
     type Output = MicroOp;
 
     fn index(&self, index: usize) -> &Self::Output {
-        let len = self.addr_len();
+        let len = self.addr_len() as usize;
         if index < len {
             &self.addressing.micro_ops()[index]
         } else {

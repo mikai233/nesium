@@ -24,7 +24,6 @@ use crate::{
 /// Y-Indexed Absolute  | SHS $nnnn,Y              | $9B*   | 3         | 5
 ///
 /// *Undocumented.
-#[allow(dead_code)]
 #[inline]
 pub fn exec_shs<B: Bus>(cpu: &mut Cpu, bus: &mut B, step: u8) {
     match step {
