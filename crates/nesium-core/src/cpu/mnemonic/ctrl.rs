@@ -2,6 +2,7 @@ use crate::{
     bus::{CpuBus, STACK_ADDR},
     context::Context,
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
+    memory::cpu::{IRQ_VECTOR_HI, IRQ_VECTOR_LO, NMI_VECTOR_HI, NMI_VECTOR_LO},
 };
 
 /// NV-BDIZC
@@ -31,15 +32,20 @@ pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
     match step {
         0 => {
             bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.incr_pc();
         }
         1 => {
-            let pc_hi = (cpu.pc >> 8) as u8;
+            let pc_hi = (cpu.pc + 1 >> 8) as u8;
             cpu.push(bus, ctx, pc_hi);
         }
         2 => {
-            let pc_lo = (cpu.pc & 0xFF) as u8;
+            let pc_lo = (cpu.pc + 1 & 0xFF) as u8;
             cpu.push(bus, ctx, pc_lo);
+            if cpu.nmi_pending {
+                cpu.nmi_pending = false;
+                cpu.effective_addr = NMI_VECTOR_LO;
+            } else {
+                cpu.effective_addr = IRQ_VECTOR_LO;
+            }
         }
         3 => {
             let p_with_b_u = cpu.p | Status::BREAK | Status::UNUSED;
@@ -47,11 +53,17 @@ pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.p.set_i(true);
         }
         4 => {
-            cpu.base = bus.mem_read(0xFFFE, cpu, ctx);
+            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            if cpu.effective_addr == NMI_VECTOR_LO {
+                cpu.effective_addr = NMI_VECTOR_HI;
+            } else {
+                cpu.effective_addr = IRQ_VECTOR_HI;
+            }
         }
         5 => {
-            let high_byte = bus.mem_read(0xFFFF, cpu, ctx);
+            let high_byte = bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.pc = ((high_byte as u16) << 8) | (cpu.base as u16);
+            cpu.prev_nmi_pending = false;
         }
         _ => unreachable_step!("invalid BRK step {step}"),
     }

@@ -56,7 +56,6 @@ use crate::{
     cartridge::{Cartridge, mapper::PpuVramAccessKind},
     context::Context,
     cpu::Cpu,
-    interceptor::Interceptor,
     mem_block::ppu::{SecondaryOamRam, Vram},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
@@ -72,12 +71,6 @@ use crate::{
     reset_kind::ResetKind,
 };
 use crate::{cartridge::mapper::NametableTarget, ppu::open_bus::PpuOpenBus};
-
-// thread_local! {
-//    pub static CPU_MASTER: std::cell::Cell<u64> = std::cell::Cell::new(0);
-//    pub static CPU_CYCLE: std::cell::Cell<u64> = std::cell::Cell::new(0);
-//    pub static MEM0F: std::cell::Cell<u8> = std::cell::Cell::new(0);
-// }
 
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
@@ -482,106 +475,42 @@ impl Ppu {
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
     pub fn step(bus: &mut CpuBus<'_>, cpu: &mut Cpu, ctx: &mut Context) {
-        if let Context::Some { interceptor } = ctx {
-            // interceptor.debug(cpu, bus);
-        }
-        // // Debug trace: CPU/PPU alignment snapshot for this dot, with extra PPU state.
-        // let cpu_cycle = CPU_CYCLE.get();
-        // if cpu_cycle < 2_000_000 {
-        //     let cpu = crate::cpu::CpuPtr.load(std::sync::atomic::Ordering::Acquire);
-        //     let cpu = unsafe { &*cpu };
-        //     let cpu_master_clock: u64 = CPU_MASTER.get();
-        //     let pc: u16 = cpu.pc;
-        //     let a: u8 = cpu.a;
-        //     let x: u8 = cpu.x;
-        //     let y: u8 = cpu.y;
-        //     let sp: u8 = cpu.s;
-        //     let ps: u8 = cpu.p.bits();
-
-        //     // Extra PPU state to mirror Mesen trace format.
-        //     let prevent_vbl = if self.prevent_vblank_flag { 1 } else { 0 };
-        //     let status = self.registers.status;
-        //     let status_v = if status.contains(Status::VERTICAL_BLANK) {
-        //         1
-        //     } else {
-        //         0
-        //     };
-        //     let status_s0 = if status.contains(Status::SPRITE_ZERO_HIT) {
-        //         1
-        //     } else {
-        //         0
-        //     };
-        //     let status_ovf = if status.contains(Status::SPRITE_OVERFLOW) {
-        //         1
-        //     } else {
-        //         0
-        //     };
-        //     let v_raw = self.registers.vram.v.raw();
-        //     let t_raw = self.registers.vram.t.raw();
-        //     let xscroll = self.registers.vram.x;
-
-        //     // Mask/rendering and VRAM-update debug fields to match Mesen's extended Exec log.
-        //     let mask = self.registers.mask;
-        //     let mask_bg = if mask.contains(Mask::SHOW_BACKGROUND) {
-        //         1
-        //     } else {
-        //         0
-        //     };
-        //     let mask_sp = if mask.contains(Mask::SHOW_SPRITES) {
-        //         1
-        //     } else {
-        //         0
-        //     };
-
-        //     // Mesen-style `_renderingEnabled` latch: effective rendering is
-        //     // only considered on the prerender (-1) and visible (0..=239)
-        //     // scanlines, and is based on the latched `render_enabled` value
-        //     // rather than the raw $2001 bits.
-        //     let debug_rendering_enabled: u8 =
-        //         if (-1..=239).contains(&self.scanline) && self.render_enabled {
-        //             1
-        //         } else {
-        //             0
-        //         };
-
-        //     // Previous dot's latched rendering-enable state, mirroring
-        //     // Mesen's `_prevRenderingEnabled` field.
-        //     let prev_rend: u8 = if self.prev_render_enabled { 1 } else { 0 };
-
-        //     // Approximate Mesen's `_needStateUpdate`: it is raised when either
-        //     // a delayed $2006 VRAM address update is pending, a $2007 VRAM
-        //     // increment is queued, or a recent $2007 read/write is still
-        //     // within the ignore_vram_read window.
-        //     let need_state = if self.pending_vram_delay > 0
-        //         || self.pending_vram_increment.is_pending()
-        //         || self.ignore_vram_read > 0
-        //         || self.state_update_pending
-        //     {
-        //         1
-        //     } else {
-        //         0
-        //     };
-        //     let upd_vram_delay = self.pending_vram_delay;
-        //     let upd_v = self.pending_vram_addr.raw();
-        //     let mem0f = MEM0F.get();
+        // let cpu_cycle = bus.cycles();
+        // if cpu_cycle < 6_000_000 {
+        //     let cpu_master_clock = bus.master_clock();
+        //     let ppu = bus.devices().ppu;
+        //     let status = ppu.registers.status;
+        //     let prevent_vbl = u8::from(ppu.prevent_vblank_flag);
+        //     let status_v = u8::from(status.contains(Status::VERTICAL_BLANK));
+        //     let status_s0 = u8::from(status.contains(Status::SPRITE_ZERO_HIT));
+        //     let status_ovf = u8::from(status.contains(Status::SPRITE_OVERFLOW));
+        //     let v_raw = ppu.registers.vram.v.raw();
+        //     let t_raw = ppu.registers.vram.t.raw();
+        //     let xscroll = ppu.registers.vram.x;
+        //     let mask = ppu.registers.mask;
+        //     let mask_bg = u8::from(mask.contains(Mask::SHOW_BACKGROUND));
+        //     let mask_sp = u8::from(mask.contains(Mask::SHOW_SPRITES));
+        //     let need_nmi = u8::from(cpu.nmi_pending);
+        //     let prev_need_nmi = u8::from(cpu.prev_nmi_pending);
+        //     let prev_nmi_flag = u8::from(cpu.prev_nmi_line);
+        //     let nmi_flag = u8::from(ppu.nmi_output);
 
         //     tracing::debug!(
         //         "cpu_mc={} cpu_cyc={} pc={:04X} a={:02X} x={:02X} y={:02X} sp={:02X} ps={:02X}  \
-        //      ppu_mc={} ppu_scanline={} ppu_cycle={} frame={} prevent_vbl={} status_v={} status_s0={} status_ovf={} \
-        //      v={:04X} t={:04X} xscroll={:02X} mask_bg={} mask_sp={} rend={} prev_rend={} need_state={} updVramDelay={} updV={:04X} \
-        //      mem0F={:02X}",
+        //          ppu_mc={} ppu_scanline={} ppu_cycle={} frame={} prevent_vbl={} status_v={} status_s0={} status_ovf={} \
+        //          v={:04X} t={:04X} xscroll={:02X} mask_bg={} mask_sp={} need_nmi={} prev_need_nmi={} prev_nmi_flag={} nmi_flag={}",
         //         cpu_master_clock,
         //         cpu_cycle,
-        //         pc,
-        //         a,
-        //         x,
-        //         y,
-        //         sp,
-        //         ps,
-        //         self.master_clock,
-        //         self.scanline,
-        //         self.cycle,
-        //         self.frame,
+        //         cpu.pc,
+        //         cpu.a,
+        //         cpu.x,
+        //         cpu.y,
+        //         cpu.s,
+        //         cpu.p,
+        //         ppu.master_clock,
+        //         ppu.scanline,
+        //         ppu.cycle,
+        //         ppu.frame,
         //         prevent_vbl,
         //         status_v,
         //         status_s0,
@@ -591,28 +520,11 @@ impl Ppu {
         //         xscroll,
         //         mask_bg,
         //         mask_sp,
-        //         debug_rendering_enabled,
-        //         prev_rend,
-        //         need_state,
-        //         upd_vram_delay,
-        //         upd_v,
-        //         mem0f,
+        //         need_nmi,
+        //         prev_need_nmi,
+        //         prev_nmi_flag,
+        //         nmi_flag,
         //     );
-
-        //     // Emit a separate render_toggle line when the effective rendering
-        //     // state flips, using the latched previous value.
-        //     if prev_rend != debug_rendering_enabled {
-        //         tracing::debug!(
-        //             "render_toggle: frame={} scanline={} cycle={} old={} new={} mask_bg={} mask_sp={}",
-        //             self.frame,
-        //             self.scanline,
-        //             self.cycle,
-        //             prev_rend,
-        //             debug_rendering_enabled,
-        //             mask_bg,
-        //             mask_sp,
-        //         );
-        //     }
         // }
         // Pre-increment: Advance counters at the START of the clock.
         // This ensures scanline/cycle reflect the state *after* this cycle is processed

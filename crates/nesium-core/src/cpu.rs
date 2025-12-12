@@ -37,9 +37,6 @@ mod lookup;
 mod micro_op;
 mod mnemonic;
 
-// pub static CpuPtr: std::sync::atomic::AtomicPtr<Cpu> =
-// std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
-
 /// Lightweight CPU register snapshot used for tracing/debugging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuSnapshot {
@@ -70,7 +67,7 @@ pub fn opcode_meta(opcode: u8) -> OpcodeMeta {
 const OAM_DMA_TRANSFER_BYTES: u16 = ppu_mem::OAM_RAM_SIZE as u16;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct OamDma {
+pub(crate) struct OamDma {
     page: u8,
     offset: u16,
     dummy_cycles: u8,
@@ -134,32 +131,32 @@ pub struct Cpu {
     pub(crate) p: Status, //Processor Status
     pub(crate) pc: u16,   //Program Counter
 
-    opcode_in_flight: Option<u8>,
+    pub(crate) opcode_in_flight: Option<u8>,
     /// Effective I flag used for interrupt gating (true = IRQs masked).
-    irq_masked: bool,
+    pub(crate) irq_masked: bool,
     /// Pending update to the effective IRQ mask (I flag), to be applied at the next
     /// instruction boundary when no opcode is in flight.
-    pending_irq_mask: Option<bool>,
+    pub(crate) pending_irq_mask: Option<bool>,
     /// Suppress servicing maskable IRQs for the next instruction boundary.
     /// Used to model the 6502 behaviour where a pending IRQ is not taken
     /// until one instruction after CLI/PLP clear the I flag.
-    irq_inhibit_next: bool,
+    pub(crate) irq_inhibit_next: bool,
     /// Allow a single IRQ even though the effective I flag is set.
     /// This approximates the behaviour of SEI/PLP where a pending IRQ
     /// is still taken "just after" the instruction that sets I.
-    allow_irq_once: bool,
+    pub(crate) allow_irq_once: bool,
     /// Marks a taken branch so we can defer IRQ if it does not cross a page.
-    branch_taken_defer_irq: bool,
+    pub(crate) branch_taken_defer_irq: bool,
     /// Previous sampled NMI line level (for edge detection).
-    prev_nmi_line: bool,
+    pub(crate) prev_nmi_line: bool,
     /// NMI pending flag set on rising edge, consumed when NMI is taken.
-    nmi_pending: bool,
+    pub(crate) nmi_pending: bool,
     /// Previous cycle's pending flag, used to delay NMI by one instruction boundary.
-    prev_nmi_pending: bool,
-    index: u8,
-    base: u8,
-    effective_addr: u16,
-    oam_dma: Option<OamDma>,
+    pub(crate) prev_nmi_pending: bool,
+    pub(crate) index: u8,
+    pub(crate) base: u8,
+    pub(crate) effective_addr: u16,
+    pub(crate) oam_dma: Option<OamDma>,
 }
 
 impl Cpu {
@@ -201,7 +198,6 @@ impl Cpu {
     /// - Sets the I flag (disables IRQs).
     /// - Decrements S by 3 (wrapping), matching 6502/Mesen behaviour.
     pub(crate) fn reset(&mut self, bus: &mut CpuBus<'_>, kind: ResetKind, ctx: &mut Context) {
-        // CpuPtr.store(self as *mut _, std::sync::atomic::Ordering::Relaxed);
         // Read the reset vector from memory ($FFFC-$FFFD) without advancing timing.
         let lo = bus.peek(RESET_VECTOR_LO, self, ctx);
         let hi = bus.peek(RESET_VECTOR_HI, self, ctx);
@@ -247,21 +243,6 @@ impl Cpu {
     }
 
     pub(crate) fn step(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) {
-        // Propagate the current pending flag to `prev_nmi_pending` so that
-        // NMI is effectively delayed by one instruction boundary, matching
-        // the NES/Mesen behaviour where the interrupt lines are sampled on
-        // the "second-to-last" cycle.
-        self.prev_nmi_pending = self.nmi_pending;
-
-        // Sample the NMI line every CPU cycle and set `nmi_pending` on
-        // a rising edge. The pending flag is only consumed when an NMI
-        // is actually serviced.
-        let nmi_line = bus.nmi_line();
-        if nmi_line && !self.prev_nmi_line {
-            self.nmi_pending = true;
-        }
-        self.prev_nmi_line = nmi_line;
-
         // Deferred I-flag updates take effect at the next instruction boundary.
         if self.opcode_in_flight.is_none() {
             self.apply_pending_irq_mask();
@@ -278,9 +259,9 @@ impl Cpu {
                 // Special-case BRK: allow NMI/IRQ to be serviced after the dummy read
                 // micro-op (index 1) so that NMI can "interrupt" BRK and still push
                 // a status byte with the B flag set.
-                if opcode == 0x00 && self.index == 1 && self.sample_interrupts(bus, ctx) {
-                    return;
-                }
+                // if opcode == 0x00 && self.index == 1 && self.sample_interrupts(bus, ctx) {
+                //     return;
+                // }
 
                 let instr = &LOOKUP_TABLE[opcode as usize];
                 self.exec(bus, ctx, instr);
@@ -303,33 +284,53 @@ impl Cpu {
         // self.cycles = self.cycles.wrapping_add(1);
     }
 
-    #[cfg(test)]
-    pub(crate) fn test_step(
+    pub(crate) fn begin_cycle(
         &mut self,
+        read_phase: bool,
         bus: &mut CpuBus<'_>,
         ctx: &mut Context,
-        instr: &Instruction,
-    ) -> usize {
-        self.opcode_in_flight = Some(instr.opcode());
-        self.incr_pc(); // Fetch opcode
-        let mut cycles = 1; // Fetch opcode has 1 cycle
-        self.pre_exec(instr);
-        while self.index < instr.len() {
-            let _span =
-                tracing::span!(tracing::Level::TRACE, "instruction_exec", step = self.index);
-            let _enter = _span.enter();
-            let before = *self;
-            self.exec(bus, ctx, instr);
-            tracing::event!(
-                tracing::Level::TRACE,
-                before_cpu = ?before,
-                after_cpu = ?self,
-                "Instruction executed"
-            );
-            self.post_exec(instr);
-            cycles += 1;
+    ) {
+        let start_delta = if read_phase {
+            bus.clock_start_count.saturating_sub(1)
+        } else {
+            bus.clock_start_count.saturating_add(1)
+        };
+        *bus.cycles = bus.cycles.wrapping_add(1);
+        if *bus.cycles == 2796996 {
+            println!("");
         }
-        cycles
+        bus.bump_master_clock(start_delta, self, ctx);
+
+        if let Some(cart) = bus.cartridge.as_mut() {
+            cart.cpu_clock(*bus.cycles);
+        }
+        bus.open_bus.step();
+
+        // Run one APU CPU-cycle tick; stash any pending DMC DMA stall.
+        let (stall_cycles, dma_addr) = match &mut bus.mixer {
+            Some(mixer) => bus.apu.step_with_mixer(mixer),
+            None => bus.apu.step(),
+        };
+        bus.pending_dmc_stall = if stall_cycles > 0 {
+            Some((stall_cycles, dma_addr))
+        } else {
+            None
+        };
+    }
+
+    pub(crate) fn end_cycle(&mut self, read_phase: bool, bus: &mut CpuBus<'_>, ctx: &mut Context) {
+        let end_delta = if read_phase {
+            bus.clock_end_count.saturating_add(1)
+        } else {
+            bus.clock_end_count.saturating_sub(1)
+        };
+        bus.bump_master_clock(end_delta, self, ctx);
+        self.prev_nmi_pending = self.nmi_pending;
+        let nmi_line = bus.nmi_line();
+        if nmi_line && !self.prev_nmi_line {
+            self.nmi_pending = true;
+        }
+        self.prev_nmi_line = nmi_line;
     }
 
     #[inline]
@@ -533,9 +534,6 @@ impl Cpu {
         if !self.prev_nmi_pending {
             return false;
         }
-        // Clear the current pending flag so we don't immediately retrigger
-        // until a new rising edge is observed.
-        self.nmi_pending = false;
 
         // If an NMI overlaps a BRK instruction, hardware behaviour is that the
         // stacked status byte has the B flag set. Approximate this by using
@@ -568,6 +566,11 @@ impl Cpu {
 
         self.push(bus, ctx, pc_hi);
         self.push(bus, ctx, pc_lo);
+        if self.nmi_pending {
+            // Clear the current pending flag so we don't immediately retrigger
+            // until a new rising edge is observed.
+            self.nmi_pending = false;
+        }
         self.push_status(bus, ctx, set_break);
 
         // Mask further IRQs immediately upon entering the handler.
