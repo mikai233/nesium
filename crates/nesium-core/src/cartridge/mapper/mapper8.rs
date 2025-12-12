@@ -43,6 +43,7 @@ use crate::{
         mapper::{ChrStorage, allocate_prg_ram_with_trainer},
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 /// Size of a single PRG bank exposed to the CPU (8 KiB).
@@ -247,7 +248,7 @@ impl Mapper8 {
 }
 
 impl Mapper for Mapper8 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         // Power-on defaults:
         // - IRQ counter disabled and cleared.
         // - PRG mapping: first 16 KiB at $8000, last 16 KiB at $C000.
@@ -259,10 +260,6 @@ impl Mapper for Mapper8 {
 
         self.prg_bank_low_2x = 0;
         self.prg_bank_high_2x = self.prg_bank_count_8k.saturating_sub(2);
-    }
-
-    fn reset(&mut self) {
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

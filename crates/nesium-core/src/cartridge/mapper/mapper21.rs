@@ -25,6 +25,7 @@ use crate::{
         mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 use crate::mem_block::ByteBlock;
@@ -388,7 +389,7 @@ impl Mapper21 {
 }
 
 impl Mapper for Mapper21 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         // Basic VRC4 defaults: mirroring from header, PRG mode 0, IRQ disabled.
         self.prg_mode_swap = false;
         self.prg_bank_8000 = 0;
@@ -409,10 +410,6 @@ impl Mapper for Mapper21 {
         // (Some dumps ship with single-screen headers even when they later
         // configure mirroring via $9000.)
         // Mirroring is left unchanged here.
-    }
-
-    fn reset(&mut self) {
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

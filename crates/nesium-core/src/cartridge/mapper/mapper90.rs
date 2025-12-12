@@ -33,6 +33,7 @@ use crate::{
         mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 use crate::mem_block::ByteBlock;
@@ -295,7 +296,7 @@ impl Mapper90 {
 }
 
 impl Mapper for Mapper90 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         self.prg_regs[0] = 0;
         self.prg_regs[1] = 1;
         self.prg_regs[2] = 2;
@@ -307,10 +308,6 @@ impl Mapper for Mapper90 {
         self.irq_prescaler = 0;
         self.irq_enabled = false;
         self.irq_pending = false;
-    }
-
-    fn reset(&mut self) {
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

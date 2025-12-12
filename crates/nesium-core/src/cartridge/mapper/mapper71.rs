@@ -27,6 +27,7 @@ use crate::{
         mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 /// PRG-ROM banking granularity (16 KiB).
@@ -104,13 +105,9 @@ impl Mapper71 {
 }
 
 impl Mapper for Mapper71 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         self.prg_bank = 0;
         // Keep header mirroring until the game writes a mirroring bit.
-    }
-
-    fn reset(&mut self) {
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

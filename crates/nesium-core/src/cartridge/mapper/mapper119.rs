@@ -22,6 +22,7 @@ use crate::{
         mapper::{PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram_with_trainer},
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 use crate::mem_block::ByteBlock;
@@ -337,7 +338,7 @@ impl Mapper119 {
 }
 
 impl Mapper for Mapper119 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         self.bank_select = 0;
         self.bank_regs.fill(0);
         self.prg_ram_enable = false;
@@ -350,10 +351,6 @@ impl Mapper for Mapper119 {
         self.last_a12_high = false;
         self.last_a12_rise_ppu_cycle = 0;
         self.mirroring = self.base_mirroring;
-    }
-
-    fn reset(&mut self) {
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

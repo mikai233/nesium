@@ -40,6 +40,7 @@ use crate::{
         mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 use crate::mem_block::{ByteBlock, MemBlock};
@@ -537,17 +538,13 @@ impl ExpansionAudio for Mapper19 {
 }
 
 impl Mapper for Mapper19 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
         self.prg_bank_c000 = 2.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
         self.chr_banks.fill(0);
         self.irq_counter = 0;
         self.irq_pending = false;
-    }
-
-    fn reset(&mut self) {
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

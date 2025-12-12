@@ -42,6 +42,7 @@ use crate::{
         mapper::{ChrStorage, allocate_prg_ram_with_trainer},
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 /// Size of a single PRG bank exposed to the CPU (8 KiB).
@@ -288,7 +289,7 @@ impl Mapper6 {
 }
 
 impl Mapper for Mapper6 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         // Front Fareast power-on defaults:
         // - IRQ counter disabled and cleared.
         // - Alt mode enabled.
@@ -303,13 +304,6 @@ impl Mapper for Mapper6 {
         self.prg_bank_low_2x = 0;
         // High 16 KiB fixed to the last pair of 8 KiB banks.
         self.prg_bank_high_2x = self.prg_bank_count_8k.saturating_sub(2);
-    }
-
-    fn reset(&mut self) {
-        // Console reset re-applies the same mapping and IRQ defaults as a
-        // cold power-on; commercial Magic Card dumps reinitialise mapper
-        // state explicitly.
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

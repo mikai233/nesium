@@ -10,6 +10,7 @@ use crate::{
         },
     },
     mem_block::ByteBlock,
+    reset_kind::ResetKind,
 };
 
 // Mapper 5 – MMC5 with extended PRG/CHR/nametable features.
@@ -679,7 +680,11 @@ impl Mapper5 {
 }
 
 impl Mapper for Mapper5 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, kind: ResetKind) {
+        if !matches!(kind, ResetKind::PowerOn) {
+            return;
+        }
+
         // Mesen2-style defaults: PRG/CHR 8 KiB/1 KiB modes, ExRAM mode 0, all
         // banks pointing at the start of PRG/CHR.
         self.prg_mode = 3;

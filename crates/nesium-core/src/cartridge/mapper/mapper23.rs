@@ -23,6 +23,7 @@ use crate::{
         mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 use crate::mem_block::ByteBlock;
@@ -353,7 +354,7 @@ impl Mapper23 {
 }
 
 impl Mapper for Mapper23 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1;
         self.prg_mode_swap = false;
@@ -368,10 +369,6 @@ impl Mapper for Mapper23 {
         self.irq_enabled_after_ack = false;
         self.irq_cycle_mode = false;
         self.irq_pending = false;
-    }
-
-    fn reset(&mut self) {
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

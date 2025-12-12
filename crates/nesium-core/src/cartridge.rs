@@ -3,6 +3,7 @@ use std::{borrow::Cow, fs, path::Path};
 use crate::{
     cartridge::header::{Header, Mirroring, NES_HEADER_LEN},
     error::Error,
+    reset_kind::ResetKind,
 };
 
 use self::mapper::{
@@ -153,14 +154,9 @@ impl Cartridge {
         self.mapper.clear_irq();
     }
 
-    /// Applies a power-on reset sequence to the mapper.
-    pub fn power_on(&mut self) {
-        self.mapper.power_on();
-    }
-
-    /// Applies a console reset to the mapper.
-    pub fn reset(&mut self) {
-        self.mapper.reset();
+    /// Applies a mapper reset using the requested reset kind.
+    pub fn reset(&mut self, kind: ResetKind) {
+        self.mapper.reset(kind);
     }
 }
 
@@ -207,7 +203,7 @@ fn build_cartridge_from_sections<'a>(
         let mut mapper = provider
             .get_mapper(header, prg_rom, chr_rom, trainer)
             .ok_or(Error::UnsupportedMapper(header.mapper))?;
-        mapper.power_on();
+        mapper.reset(ResetKind::PowerOn);
         return Ok(Cartridge::new(header, mapper));
     }
 
@@ -247,7 +243,7 @@ fn build_cartridge_from_sections<'a>(
     };
 
     // Apply mapper-specific power-on defaults once after construction.
-    mapper.power_on();
+    mapper.reset(ResetKind::PowerOn);
     Ok(Cartridge::new(header, mapper))
 }
 

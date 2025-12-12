@@ -36,6 +36,7 @@ use crate::{
         },
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 /// PRG-ROM banking granularity (16 KiB).
@@ -354,7 +355,7 @@ impl Mapper10 {
 }
 
 impl Mapper for Mapper10 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         // Power-on defaults:
         // - PRG bank at $8000 defaults to 0.
         // - CHR FD/FE banks default to 0.
@@ -368,10 +369,6 @@ impl Mapper for Mapper10 {
         self.latch0 = ChrLatch::power_on_latch0();
         self.latch1 = ChrLatch::power_on_latch1();
         self.mirroring = self.base_mirroring;
-    }
-
-    fn reset(&mut self) {
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

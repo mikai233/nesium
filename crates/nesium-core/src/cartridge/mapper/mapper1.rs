@@ -34,6 +34,7 @@ use crate::{
         mapper::allocate_prg_ram_with_trainer,
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 const PRG_BANK_SIZE_16K: usize = 16 * 1024;
@@ -336,10 +337,8 @@ impl Mapper1 {
             self.last_serial_cycle = None;
         }
     }
-}
 
-impl Mapper for Mapper1 {
-    fn power_on(&mut self) {
+    fn apply_power_on_reset(&mut self) {
         // Power-on defaults observed in Mesen2 for iNES mapper 1.
         // NOTE: Real hardware power-on state is not strictly defined across MMC1
         // revisions/boards; most games reinitialize MMC1 on reset.
@@ -354,6 +353,14 @@ impl Mapper for Mapper1 {
         self.shift_reg = 0x10;
         self.shift_count = 0;
         self.last_serial_cycle = None;
+    }
+}
+
+impl Mapper for Mapper1 {
+    fn reset(&mut self, kind: ResetKind) {
+        if matches!(kind, ResetKind::PowerOn) {
+            self.apply_power_on_reset();
+        }
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
@@ -502,7 +509,7 @@ mod tests {
             None,
         );
         // Tests expect the same power-on state as a freshly loaded cartridge.
-        mapper.power_on();
+        mapper.reset(ResetKind::PowerOn);
         mapper
     }
 

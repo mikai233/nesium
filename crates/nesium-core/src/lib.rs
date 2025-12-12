@@ -182,7 +182,7 @@ impl Nes {
                 self.ppu.reset(kind);
                 self.apu.reset(kind);
                 if let Some(cart) = self.cartridge.as_mut() {
-                    cart.power_on();
+                    cart.reset(kind);
                 }
             }
             ResetKind::Soft => {
@@ -192,7 +192,7 @@ impl Nes {
                 self.ppu.reset(kind);
                 self.apu.reset(kind);
                 if let Some(cart) = self.cartridge.as_mut() {
-                    cart.reset();
+                    cart.reset(kind);
                 }
             }
         }

@@ -32,6 +32,7 @@ use crate::{
         mapper::{ChrStorage, allocate_prg_ram_with_trainer},
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 /// Fixed PRG window size (32 KiB).
@@ -152,12 +153,8 @@ impl Mapper13 {
 }
 
 impl Mapper for Mapper13 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         self.chr_bank = 0;
-    }
-
-    fn reset(&mut self) {
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

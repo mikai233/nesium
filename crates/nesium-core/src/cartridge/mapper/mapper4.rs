@@ -38,6 +38,7 @@ use crate::{
 };
 
 use crate::mem_block::ByteBlock;
+use crate::reset_kind::ResetKind;
 
 /// PRG-ROM bank size exposed to the CPU (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
@@ -555,7 +556,7 @@ impl Mapper4 {
 }
 
 impl Mapper for Mapper4 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         // Power-on defaults chosen to match common emulator behaviour:
         // - PRG mode = 1 (swap at $C000) so that the last bank appears at
         //   $E000-$FFFF and the second last at $8000-$9FFF.
@@ -573,13 +574,6 @@ impl Mapper for Mapper4 {
         self.last_a12_high = false;
         self.last_a12_rise_ppu_cycle = 0;
         self.mirroring = self.base_mirroring;
-    }
-
-    fn reset(&mut self) {
-        // Many games program the MMC3 fully on reset, but keeping behaviour
-        // roughly consistent with power-on improves compatibility with test
-        // ROMs that probe initial state.
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {

@@ -8,7 +8,7 @@ use std::{any::Any, borrow::Cow, fmt::Debug};
 
 use dyn_clone::DynClone;
 
-use crate::apu::ExpansionAudio;
+use crate::{apu::ExpansionAudio, reset_kind::ResetKind};
 
 pub mod chr_storage;
 pub mod mapper0;
@@ -151,14 +151,9 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
         None
     }
 
-    /// Called once when the mapper is first powered on / constructed.
-    ///
-    /// Implementations can use this to apply power-on default register values.
-    /// The default implementation does nothing.
-    fn power_on(&mut self) {}
-
-    /// Called on console reset. Default implementation does nothing.
-    fn reset(&mut self) {}
+    /// Applies either a power-on style reset (cold boot) or a soft reset,
+    /// depending on `kind`. Default implementation does nothing.
+    fn reset(&mut self, _kind: ResetKind) {}
 
     /// PPU-side read for CHR/VRAM space (`$0000-$1FFF`).
     ///

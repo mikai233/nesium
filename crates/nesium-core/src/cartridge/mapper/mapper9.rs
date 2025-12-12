@@ -38,6 +38,7 @@ use crate::{
         },
     },
     memory::cpu as cpu_mem,
+    reset_kind::ResetKind,
 };
 
 /// PRG-ROM banking granularity (8 KiB).
@@ -365,7 +366,7 @@ impl Mapper9 {
 }
 
 impl Mapper for Mapper9 {
-    fn power_on(&mut self) {
+    fn reset(&mut self, _kind: ResetKind) {
         // Reset state roughly matches the typical behaviour described on
         // Nesdev and implemented by Mesen2:
         // - PRG bank at $8000 defaults to 0.
@@ -380,12 +381,6 @@ impl Mapper for Mapper9 {
         self.latch0 = ChrLatch::power_on_latch0();
         self.latch1 = ChrLatch::power_on_latch1();
         self.mirroring = self.base_mirroring;
-    }
-
-    fn reset(&mut self) {
-        // Treat console reset like a fresh power-on for this mapper; commercial
-        // games reinitialise MMC2 state after reset.
-        self.power_on();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
