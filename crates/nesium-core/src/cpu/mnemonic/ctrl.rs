@@ -34,11 +34,11 @@ pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             bus.mem_read(cpu.pc, cpu, ctx);
         }
         1 => {
-            let pc_hi = (cpu.pc + 1 >> 8) as u8;
+            let pc_hi = ((cpu.pc + 1) >> 8) as u8;
             cpu.push(bus, ctx, pc_hi);
         }
         2 => {
-            let pc_lo = (cpu.pc + 1 & 0xFF) as u8;
+            let pc_lo = ((cpu.pc + 1) & 0xFF) as u8;
             cpu.push(bus, ctx, pc_lo);
             if cpu.nmi_pending {
                 cpu.nmi_pending = false;
@@ -50,7 +50,7 @@ pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         3 => {
             let p_with_b_u = cpu.p | Status::BREAK | Status::UNUSED;
             cpu.push(bus, ctx, p_with_b_u.bits());
-            cpu.p.set_i(true);
+            cpu.p.insert(Status::INTERRUPT);
         }
         4 => {
             cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -173,9 +173,7 @@ pub fn exec_rti(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         2 => {
             let p_bits = cpu.pull(bus, ctx);
             cpu.p = Status::from_bits_truncate(p_bits);
-            cpu.p.set_u(false);
-            cpu.p.set_b(false);
-            cpu.queue_i_update(cpu.p.i());
+            cpu.p.remove(Status::UNUSED | Status::BREAK);
         }
         3 => {
             cpu.base = cpu.pull(bus, ctx);
@@ -294,7 +292,7 @@ impl Mnemonic {
                     cpu.push(bus, ctx, p_with_b_u.bits());
 
                     // Set Interrupt Disable flag *after* pushing P
-                    cpu.p.set_i(true);
+                    cpu.p.insert(Status::INTERRUPT);
                 },
             },
             // T6: Read Interrupt Vector Low Byte (R)
@@ -490,11 +488,7 @@ impl Mnemonic {
 
                     // Set P register (0x20 UNUSED flag must be restored/set)
                     cpu.p = Status::from_bits_truncate(p_bits);
-                    cpu.p.set_u(false);
-                    cpu.p.set_b(false);
-                    // I flag restored by RTI should also flow through the IRQ
-                    // gating pipeline with instruction-boundary latency.
-                    cpu.queue_i_update(cpu.p.i());
+                    cpu.p.remove(Status::UNUSED | Status::BREAK);
                 },
             },
             // T5: Pop PC Low Byte

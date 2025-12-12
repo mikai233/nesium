@@ -174,7 +174,7 @@ impl FrameCounter {
 
     /// Advances the frame counter by one CPU cycle and reports which frame
     /// units should be clocked on this tick.
-    pub(super) fn clock(&mut self) -> FrameTick {
+    pub(super) fn step(&mut self) -> FrameTick {
         // Apply any pending reconfiguration after the latency window.
         if self.reset_delay_half > 0 {
             self.reset_delay_half = self.reset_delay_half.saturating_sub(2);

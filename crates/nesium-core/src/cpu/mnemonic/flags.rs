@@ -1,7 +1,7 @@
 use crate::{
     bus::CpuBus,
     context::Context,
-    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
+    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
 };
 
 /// N V - B D I Z C
@@ -81,11 +81,7 @@ pub fn exec_cli(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
-            let was_disabled = cpu.p.i();
-            cpu.queue_i_update(false);
-            if was_disabled {
-                cpu.irq_inhibit_next = true;
-            }
+            cpu.p.remove(Status::INTERRUPT);
         }
         _ => unreachable_step!("invalid CLI step {step}"),
     }
@@ -197,11 +193,7 @@ pub fn exec_sei(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
     match step {
         0 => {
             bus.internal_cycle(cpu, ctx);
-            let was_enabled = !cpu.p.i();
-            cpu.queue_i_update(true);
-            if was_enabled {
-                cpu.allow_irq_once = true;
-            }
+            cpu.p.insert(Status::INTERRUPT);
         }
         _ => unreachable_step!("invalid SEI step {step}"),
     }
@@ -285,15 +277,7 @@ impl Mnemonic {
             name: "cli_clear_interrupt",
             micro_fn: |cpu, bus, ctx| {
                 bus.internal_cycle(cpu, ctx);
-                // Cycle 2: I = 0. When interrupts were previously disabled,
-                // the 6502 delays servicing a pending IRQ until *after* the
-                // next instruction completes. Model this with a one-boundary
-                // suppression flag plus an I-flag pipeline update.
-                let was_disabled = cpu.p.i();
-                cpu.queue_i_update(false);
-                if was_disabled {
-                    cpu.irq_inhibit_next = true;
-                }
+                cpu.p.remove(Status::INTERRUPT);
             },
         }]
     }
@@ -404,15 +388,7 @@ impl Mnemonic {
             name: "sei_set_interrupt",
             micro_fn: |cpu, bus, ctx| {
                 bus.internal_cycle(cpu, ctx);
-                // Cycle 2: I = 1. If interrupts were previously enabled when
-                // SEI executes, a pending IRQ is still allowed to fire "just
-                // after" SEI. Approximate this with a one-shot override that
-                // permits a single IRQ even though I is now set.
-                let was_enabled = !cpu.p.i();
-                cpu.queue_i_update(true);
-                if was_enabled {
-                    cpu.allow_irq_once = true;
-                }
+                cpu.p.insert(Status::INTERRUPT);
             },
         }]
     }

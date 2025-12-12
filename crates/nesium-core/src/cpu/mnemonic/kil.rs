@@ -40,6 +40,10 @@ pub fn exec_jam(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         0 => {
             // Match the legacy empty_micro_fn: burn a cycle and effectively halt.
             bus.internal_cycle(cpu, ctx);
+            cpu.pc -= 1;
+            // Prevent IRQ/NMI
+            cpu.prev_irq_pending = false;
+            cpu.prev_nmi_pending = false;
         }
         _ => unreachable_step!("invalid JAM step {step}"),
     }

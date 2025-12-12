@@ -286,7 +286,7 @@ impl Apu {
     {
         self.cycles = self.cycles.wrapping_add(1);
 
-        let tick = self.frame_counter.clock();
+        let tick = self.frame_counter.step();
 
         if tick.quarter {
             self.clock_quarter_frame();

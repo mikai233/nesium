@@ -158,19 +158,8 @@ pub fn exec_plp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         }
         2 => {
             let value = cpu.pull(bus, ctx);
-            let was_disabled = cpu.p.i();
-            let was_enabled = !cpu.p.i();
-            let mut p = Status::from_bits_truncate(value);
-            p.set_b(false);
-            p.set_u(false);
-            cpu.p = p;
-            if was_enabled && cpu.p.i() {
-                cpu.allow_irq_once = true;
-            }
-            if was_disabled && !cpu.p.i() {
-                cpu.irq_inhibit_next = true;
-            }
-            cpu.queue_i_update(cpu.p.i());
+            cpu.p = Status::from_bits_truncate(value);
+            cpu.p.remove(Status::UNUSED | Status::BREAK);
         }
         _ => unreachable_step!("invalid PLP step {step}"),
     }
@@ -333,35 +322,8 @@ impl Mnemonic {
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 3: Increment S first
                     let value = cpu.pull(bus, ctx);
-
-                    // Hardware behavior:
-                    // - Clear B flag (bit 4): & 0xEF
-                    // - Force unused bit 5 to 1: | 0x20
-                    let was_disabled = cpu.p.i();
-                    let was_enabled = !cpu.p.i();
-                    let mut p = Status::from_bits_truncate(value);
-                    p.set_b(false);
-                    p.set_u(false);
-                    cpu.p = p;
-                    // Like SEI/CLI, PLP updates the I flag with a one-instruction
-                    // latency for interrupt gating. When PLP changes I from
-                    // enabled (0) to disabled (1) while an IRQ is pending, the
-                    // 6502 still allows one IRQ "just after" PLP. Approximate
-                    // this by permitting a single IRQ even though I is now set.
-                    if was_enabled && cpu.p.i() {
-                        cpu.allow_irq_once = true;
-                    }
-
-                    // When PLP changes I from disabled (1) to enabled (0), the
-                    // first potential IRQ after PLP should be delayed by one
-                    // instruction, just like CLI. Model this by suppressing IRQ
-                    // service for the next instruction boundary.
-                    if was_disabled && !cpu.p.i() {
-                        cpu.irq_inhibit_next = true;
-                    }
-
-                    // Finally, queue the new I value into the IRQ gating pipeline.
-                    cpu.queue_i_update(cpu.p.i());
+                    cpu.p = Status::from_bits_truncate(value);
+                    cpu.p.remove(Status::UNUSED | Status::BREAK);
                 },
             },
         ]

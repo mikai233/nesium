@@ -95,24 +95,6 @@ impl Status {
         self.set(Status::DECIMAL, value);
     }
 
-    /// Update interrupt flag (I) using bitflags API
-    #[inline]
-    pub fn set_i(&mut self, value: bool) {
-        self.set(Status::INTERRUPT, value);
-    }
-
-    /// Update unused flag (U) using bitflags API
-    #[inline]
-    pub fn set_u(&mut self, value: bool) {
-        self.set(Status::UNUSED, value);
-    }
-
-    /// Update break flag (B) using bitflags API
-    #[inline]
-    pub fn set_b(&mut self, value: bool) {
-        self.set(Status::BREAK, value);
-    }
-
     /// Set N flag to a specific bit (bit 7 of memory)
     #[inline]
     pub fn set_n(&mut self, value: bool) {

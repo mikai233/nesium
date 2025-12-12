@@ -5,14 +5,14 @@ use crate::context::Context;
 use crate::cpu::addressing::Addressing;
 use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
+use crate::cpu::irq::{IrqKind, IrqSource};
 use crate::cpu::lookup::LOOKUP_TABLE;
 use crate::cpu::mnemonic::Mnemonic;
 use crate::cpu::status::Status;
-use crate::memory::cpu as cpu_mem;
+use crate::memory::cpu::{IRQ_VECTOR_HI, IRQ_VECTOR_LO, NMI_VECTOR_HI, NMI_VECTOR_LO};
 use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
 use crate::memory::ppu::{self as ppu_mem, Register as PpuRegister};
 use crate::reset_kind::ResetKind;
-mod status;
 
 // Debug builds keep the standard checks; release uses unchecked hints to avoid
 // the panic path for paths we prove unreachable in the execution tables.
@@ -28,14 +28,17 @@ macro_rules! unreachable_step {
         }
     }};
 }
+
 pub(crate) use unreachable_step;
 
 pub mod addressing;
 mod cycle;
 mod instruction;
+mod irq;
 mod lookup;
 mod micro_op;
 mod mnemonic;
+mod status;
 
 /// Lightweight CPU register snapshot used for tracing/debugging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -132,21 +135,10 @@ pub struct Cpu {
     pub(crate) pc: u16,   //Program Counter
 
     pub(crate) opcode_in_flight: Option<u8>,
-    /// Effective I flag used for interrupt gating (true = IRQs masked).
-    pub(crate) irq_masked: bool,
-    /// Pending update to the effective IRQ mask (I flag), to be applied at the next
-    /// instruction boundary when no opcode is in flight.
-    pub(crate) pending_irq_mask: Option<bool>,
-    /// Suppress servicing maskable IRQs for the next instruction boundary.
-    /// Used to model the 6502 behaviour where a pending IRQ is not taken
-    /// until one instruction after CLI/PLP clear the I flag.
-    pub(crate) irq_inhibit_next: bool,
-    /// Allow a single IRQ even though the effective I flag is set.
-    /// This approximates the behaviour of SEI/PLP where a pending IRQ
-    /// is still taken "just after" the instruction that sets I.
-    pub(crate) allow_irq_once: bool,
-    /// Marks a taken branch so we can defer IRQ if it does not cross a page.
-    pub(crate) branch_taken_defer_irq: bool,
+    pub(crate) irq_latch: IrqSource,
+    pub(crate) prev_irq_pending: bool,
+    pub(crate) pending_irq: bool,
+    pub(crate) irq_enable_mask: IrqSource,
     /// Previous sampled NMI line level (for edge detection).
     pub(crate) prev_nmi_line: bool,
     /// NMI pending flag set on rising edge, consumed when NMI is taken.
@@ -171,11 +163,10 @@ impl Cpu {
             p: Status::from_bits_truncate(0x34), // IRQ disabled, bit 5 always set
             pc: 0x0000,                          // Will be set by reset vector
             opcode_in_flight: None,
-            irq_masked: true, // Matches initial I=1 in status (IRQs masked)
-            pending_irq_mask: None,
-            irq_inhibit_next: false,
-            allow_irq_once: false,
-            branch_taken_defer_irq: false,
+            irq_latch: IrqSource::empty(),
+            prev_irq_pending: false,
+            pending_irq: false,
+            irq_enable_mask: IrqSource::empty(),
             prev_nmi_line: false,
             nmi_pending: false,
             prev_nmi_pending: false,
@@ -199,8 +190,8 @@ impl Cpu {
     /// - Decrements S by 3 (wrapping), matching 6502/Mesen behaviour.
     pub(crate) fn reset(&mut self, bus: &mut CpuBus<'_>, kind: ResetKind, ctx: &mut Context) {
         // Read the reset vector from memory ($FFFC-$FFFD) without advancing timing.
-        let lo = bus.peek(RESET_VECTOR_LO, self, ctx);
-        let hi = bus.peek(RESET_VECTOR_HI, self, ctx);
+        let lo = bus.read(RESET_VECTOR_LO, self, ctx);
+        let hi = bus.read(RESET_VECTOR_HI, self, ctx);
         self.pc = ((hi as u16) << 8) | (lo as u16);
 
         match kind {
@@ -211,22 +202,21 @@ impl Cpu {
                 self.y = 0;
                 self.s = 0xFD;
                 self.p = Status::INTERRUPT;
+                self.irq_enable_mask = IrqSource::all();
+                self.pending_irq = false;
             }
             ResetKind::Soft => {
                 // Soft reset: keep A/X/Y and most of P.
                 // Hardware behaviour is: set I and decrement S by 3.
-                self.p.set_i(true);
+                self.p.insert(Status::INTERRUPT);
                 self.s = self.s.wrapping_sub(3);
             }
         }
 
         // Reset internal CPU state used by the execution engine and interrupt logic.
         self.opcode_in_flight = None;
-        self.irq_masked = self.p.i();
-        self.pending_irq_mask = None;
-        self.irq_inhibit_next = false;
-        self.allow_irq_once = false;
-        self.branch_taken_defer_irq = false;
+        self.irq_latch = IrqSource::empty();
+        self.pending_irq = false;
         self.prev_nmi_line = false;
         self.nmi_pending = false;
         self.prev_nmi_pending = false;
@@ -243,26 +233,12 @@ impl Cpu {
     }
 
     pub(crate) fn step(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) {
-        // Deferred I-flag updates take effect at the next instruction boundary.
-        if self.opcode_in_flight.is_none() {
-            self.apply_pending_irq_mask();
-        }
-
         if self.handle_oam_dma(bus, ctx) {
             return;
         }
 
         match self.opcode_in_flight {
-            // Instruction in flight: optionally sample interrupts mid-instruction for
-            // specific opcodes that can be interrupted in the middle of their sequence.
             Some(opcode) => {
-                // Special-case BRK: allow NMI/IRQ to be serviced after the dummy read
-                // micro-op (index 1) so that NMI can "interrupt" BRK and still push
-                // a status byte with the B flag set.
-                // if opcode == 0x00 && self.index == 1 && self.sample_interrupts(bus, ctx) {
-                //     return;
-                // }
-
                 let instr = &LOOKUP_TABLE[opcode as usize];
                 self.exec(bus, ctx, instr);
                 self.post_exec(instr);
@@ -270,18 +246,17 @@ impl Cpu {
                     self.clear();
                 }
             }
-            // No instruction in flight: first service any pending interrupts, then fetch.
             None => {
-                if self.sample_interrupts(bus, ctx) {
-                    return;
+                if self.prev_irq_pending || self.prev_nmi_pending {
+                    self.perform_interrupt(bus, ctx);
+                } else {
+                    let opcode = self.fetch_opcode(bus, ctx);
+                    self.opcode_in_flight = Some(opcode);
+                    let instr = &LOOKUP_TABLE[opcode as usize];
+                    self.pre_exec(instr);
                 }
-                let opcode = self.fetch_opcode(bus, ctx);
-                self.opcode_in_flight = Some(opcode);
-                let instr = &LOOKUP_TABLE[opcode as usize];
-                self.pre_exec(instr);
             }
         }
-        // self.cycles = self.cycles.wrapping_add(1);
     }
 
     pub(crate) fn begin_cycle(
@@ -331,14 +306,17 @@ impl Cpu {
             self.nmi_pending = true;
         }
         self.prev_nmi_line = nmi_line;
+
+        self.prev_irq_pending = self.pending_irq;
+        // self.pending_irq =
+        // self.irq_latch.intersects(self.irq_enable_mask) && !self.p.contains(Status::INTERRUPT);
+        self.pending_irq = bus.irq_pending() && !self.p.contains(Status::INTERRUPT);
     }
 
     #[inline]
     pub(crate) fn fetch_opcode(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) -> u8 {
         let opcode = bus.mem_read(self.pc, self, ctx);
         self.incr_pc();
-        // Starting a new instruction boundary clears any one-instruction IRQ suppression.
-        self.irq_inhibit_next = false;
         opcode
     }
 
@@ -446,7 +424,6 @@ impl Cpu {
         self.opcode_in_flight = None;
         self.base = 0;
         self.effective_addr = 0;
-        self.branch_taken_defer_irq = false;
     }
 
     /// Accounts for a CPU bus cycle consumed externally (e.g., DMC DMA) without
@@ -455,13 +432,6 @@ impl Cpu {
     pub(crate) fn account_dma_cycle(&mut self) {
         if let Some(dma) = self.oam_dma.as_mut() {
             dma.stall_cycle();
-        }
-        // self.cycles = self.cycles.wrapping_add(1);
-    }
-
-    fn apply_pending_irq_mask(&mut self) {
-        if let Some(new_i) = self.pending_irq_mask.take() {
-            self.irq_masked = new_i;
         }
     }
 
@@ -485,78 +455,7 @@ impl Cpu {
         false
     }
 
-    fn push_status(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context, set_break: bool) {
-        let mut status = self.p;
-        status.set_u(true);
-        status.set_b(set_break);
-        self.push(bus, ctx, status.bits());
-    }
-
-    /// Queue an update to the I flag that will take effect for IRQ gating
-    /// at the next instruction boundary.
-    pub(crate) fn queue_i_update(&mut self, new_i: bool) {
-        self.p.set_i(new_i);
-        self.pending_irq_mask = Some(new_i);
-    }
-
-    /// Immediately updates the I flag and effective IRQ mask. Used when
-    /// entering an interrupt so that nested IRQs are masked.
-    pub(crate) fn set_i_immediate(&mut self, new_i: bool) {
-        self.p.set_i(new_i);
-        self.irq_masked = new_i;
-        self.pending_irq_mask = None;
-    }
-
-    fn service_irq(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) -> bool {
-        // When the effective I flag is set and no override is armed, or when
-        // IRQs are explicitly suppressed for this instruction boundary, mask
-        // maskable IRQs.
-        if (self.irq_masked && !self.allow_irq_once) || self.irq_inhibit_next || !bus.irq_pending()
-        {
-            return false;
-        }
-        self.perform_interrupt(
-            bus,
-            ctx,
-            cpu_mem::IRQ_VECTOR_LO,
-            cpu_mem::IRQ_VECTOR_HI,
-            false,
-        );
-        bus.clear_irq();
-        self.allow_irq_once = false;
-        true
-    }
-
-    fn service_nmi(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) -> bool {
-        // Only service NMI when the pending flag from the previous cycle is set,
-        // which matches the Mesen/NES behaviour of delaying NMI by one cycle
-        // (effectively one instruction boundary).
-        if !self.prev_nmi_pending {
-            return false;
-        }
-
-        // If an NMI overlaps a BRK instruction, hardware behaviour is that the
-        // stacked status byte has the B flag set. Approximate this by using
-        // the BRK-style push when BRK is the instruction currently in flight.
-        let set_break = matches!(self.opcode_in_flight, Some(0x00));
-        self.perform_interrupt(
-            bus,
-            ctx,
-            cpu_mem::NMI_VECTOR_LO,
-            cpu_mem::NMI_VECTOR_HI,
-            set_break,
-        );
-        true
-    }
-
-    fn perform_interrupt(
-        &mut self,
-        bus: &mut CpuBus<'_>,
-        ctx: &mut Context,
-        vector_lo: u16,
-        vector_hi: u16,
-        set_break: bool,
-    ) {
+    fn perform_interrupt(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) {
         // Dummy read
         bus.mem_read(self.pc, self, ctx);
         bus.mem_read(self.pc, self, ctx);
@@ -566,42 +465,42 @@ impl Cpu {
 
         self.push(bus, ctx, pc_hi);
         self.push(bus, ctx, pc_lo);
-        if self.nmi_pending {
-            // Clear the current pending flag so we don't immediately retrigger
-            // until a new rising edge is observed.
+        let kind = if self.nmi_pending {
             self.nmi_pending = false;
+            IrqKind::Nmi
+        } else {
+            IrqKind::Irq
+        };
+        let status = self.p | Status::UNUSED;
+        self.push(bus, ctx, status.bits());
+        self.p.insert(Status::INTERRUPT);
+
+        match kind {
+            IrqKind::Nmi => {
+                let lo = bus.mem_read(NMI_VECTOR_LO, self, ctx);
+                let hi = bus.mem_read(NMI_VECTOR_HI, self, ctx);
+                self.pc = ((hi as u16) << 8) | (lo as u16);
+            }
+            IrqKind::Irq => {
+                let lo = bus.mem_read(IRQ_VECTOR_LO, self, ctx);
+                let hi = bus.mem_read(IRQ_VECTOR_HI, self, ctx);
+                self.pc = ((hi as u16) << 8) | (lo as u16);
+                bus.clear_irq(); // TODO
+            }
         }
-        self.push_status(bus, ctx, set_break);
 
-        // Mask further IRQs immediately upon entering the handler.
-        self.set_i_immediate(true);
-
-        let lo = bus.mem_read(vector_lo, self, ctx);
-        let hi = bus.mem_read(vector_hi, self, ctx);
-        self.pc = ((hi as u16) << 8) | (lo as u16);
-
-        self.opcode_in_flight = None;
-        self.index = 0;
-    }
-
-    /// Helper that checks for pending NMI/IRQ and services them if allowed.
-    fn sample_interrupts(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) -> bool {
-        if self.service_nmi(bus, ctx) {
-            return true;
-        }
-        if self.service_irq(bus, ctx) {
-            return true;
-        }
-        false
+        debug_assert!(self.opcode_in_flight.is_none());
+        debug_assert_eq!(self.index, 0);
     }
 
     pub(crate) fn test_branch(&mut self, taken: bool) {
-        if !taken {
-            self.index += 2; // Skip add branch offset and cross page
+        if taken {
+            if self.pending_irq && !self.prev_irq_pending {
+                self.pending_irq = false;
+            }
         } else {
-            // Mark that this branch was taken. Whether we suppress IRQ depends
-            // on page crossing (handled later in check_cross_page).
-            self.branch_taken_defer_irq = true;
+            // Skip add branch offset and cross page
+            self.index += 2;
         }
     }
 
@@ -618,9 +517,6 @@ impl Cpu {
         }
         let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
         if !crossed_page {
-            if self.branch_taken_defer_irq {
-                self.irq_inhibit_next = true;
-            }
             self.index += 1;
         }
     }
@@ -655,11 +551,7 @@ impl Cpu {
         self.y = snapshot.y;
         self.s = snapshot.s;
         self.p = Status::from_bits_truncate(snapshot.p);
-        self.irq_masked = self.p.i();
-        self.pending_irq_mask = None;
-        self.irq_inhibit_next = false;
-        self.allow_irq_once = false;
-        self.branch_taken_defer_irq = false;
+        self.irq_enable_mask = IrqSource::all();
         self.prev_nmi_line = false;
         self.nmi_pending = false;
         self.prev_nmi_pending = false;
