@@ -1,7 +1,7 @@
 use crate::{
     bus::CpuBus,
     context::Context,
-    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, unreachable_step},
+    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic},
 };
 
 /// NV-BDIZC
