@@ -9,7 +9,7 @@ use std::{
     slice,
     sync::{
         Arc,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -91,7 +91,8 @@ pub struct ExternalFrameHandle {
     planes: [NonNull<u8>; 2],
     len: usize,
     front_index: AtomicUsize,
-    frame_id: AtomicU64,
+    /// Which plane the frontend is currently copying from (0/1), or 2 when idle.
+    reading_plane: AtomicUsize,
 }
 
 unsafe impl Send for ExternalFrameHandle {}
@@ -107,12 +108,6 @@ impl ExternalFrameHandle {
     #[inline]
     pub fn front_index(&self) -> usize {
         self.front_index.load(Ordering::Acquire)
-    }
-
-    /// Monotonically increasing frame counter. Useful for detecting new frames.
-    #[inline]
-    pub fn frame_id(&self) -> u64 {
-        self.frame_id.load(Ordering::Acquire)
     }
 
     /// Returns the current **front** plane as an immutable slice.
@@ -134,7 +129,6 @@ impl ExternalFrameHandle {
     pub fn present(&self, index: usize) {
         debug_assert!(index < 2);
         self.front_index.store(index, Ordering::Release);
-        self.frame_id.fetch_add(1, Ordering::Release);
     }
 
     #[inline]
@@ -152,6 +146,48 @@ impl ExternalFrameHandle {
     fn plane_ptr_mut(&self, index: usize) -> *mut u8 {
         debug_assert!(index < 2);
         self.planes[index].as_ptr()
+    }
+
+    const NOT_READING: usize = 2;
+
+    /// Begin a frontend copy of the current front plane.
+    ///
+    /// Returns the stable front index to copy from. The caller must call
+    /// [`end_front_copy`] after the copy completes.
+    #[inline]
+    pub fn begin_front_copy(&self) -> usize {
+        // Ensure we mark the same plane that is currently published as front.
+        loop {
+            let idx = self.front_index();
+            self.reading_plane.store(idx, Ordering::Release);
+            // If front changed concurrently, drop the marker and retry.
+            if self.front_index() == idx {
+                return idx;
+            }
+            self.reading_plane
+                .store(Self::NOT_READING, Ordering::Release);
+        }
+    }
+
+    /// End a frontend copy started with [`begin_front_copy`].
+    #[inline]
+    pub fn end_front_copy(&self) {
+        self.reading_plane
+            .store(Self::NOT_READING, Ordering::Release);
+    }
+
+    #[inline]
+    fn wait_until_not_reading(&self, index: usize) {
+        // This is a short critical window (frontend memcpy). Spin briefly, then yield.
+        let mut spins = 0u32;
+        while self.reading_plane.load(Ordering::Acquire) == index {
+            std::hint::spin_loop();
+            spins += 1;
+            if spins >= 128 {
+                spins = 0;
+                std::thread::yield_now();
+            }
+        }
     }
 }
 
@@ -231,7 +267,7 @@ impl FrameBuffer {
             planes,
             len,
             front_index: AtomicUsize::new(0),
-            frame_id: AtomicU64::new(0),
+            reading_plane: AtomicUsize::new(ExternalFrameHandle::NOT_READING),
         });
 
         let fb = Self {
@@ -352,8 +388,12 @@ impl FrameBuffer {
                 let finished_back = self.active_index;
                 handle.present(finished_back);
 
-                // Switch to the other plane for the next frame and clear it.
+                // Switch to the other plane for the next frame.
                 self.active_index = 1 - self.active_index;
+
+                // The new back plane was previously the front plane. If the frontend is
+                // still copying it, wait for the copy to finish before clearing/writing.
+                handle.wait_until_not_reading(self.active_index);
                 self.write().fill(0);
             }
         }
@@ -371,6 +411,7 @@ impl FrameBuffer {
             }
             FrameBufferStorage::External(handle) => {
                 for i in 0..2 {
+                    handle.wait_until_not_reading(i);
                     unsafe {
                         slice::from_raw_parts_mut(handle.plane_ptr_mut(i), handle.len()).fill(0)
                     };
