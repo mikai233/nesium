@@ -40,8 +40,8 @@ pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         2 => {
             let pc_lo = ((cpu.pc + 1) & 0xFF) as u8;
             cpu.push(bus, ctx, pc_lo);
-            if cpu.nmi_pending {
-                cpu.nmi_pending = false;
+            if cpu.nmi_latch {
+                cpu.nmi_latch = false;
                 cpu.effective_addr = NMI_VECTOR_LO;
             } else {
                 cpu.effective_addr = IRQ_VECTOR_LO;
@@ -63,7 +63,7 @@ pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         5 => {
             let high_byte = bus.mem_read(cpu.effective_addr, cpu, ctx);
             cpu.pc = ((high_byte as u16) << 8) | (cpu.base as u16);
-            cpu.prev_nmi_pending = false;
+            cpu.prev_nmi_latch = false;
         }
         _ => unreachable_step!("invalid BRK step {step}"),
     }

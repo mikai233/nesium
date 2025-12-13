@@ -623,10 +623,6 @@ impl Mapper for Mapper4 {
         self.irq_pending
     }
 
-    fn clear_irq(&mut self) {
-        self.irq_pending = false;
-    }
-
     fn prg_rom(&self) -> Option<&[u8]> {
         Some(self.prg_rom.as_ref())
     }

@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, cell::Cell};
 
 use crate::{
     cartridge::{
@@ -207,7 +207,7 @@ pub struct Mapper5 {
     // IRQ / scanline registers.
     irq_scanline: u8, // $5203
     irq_enabled: bool,
-    irq_pending: bool,
+    irq_pending: Cell<bool>,
 
     // Vertical split registers ($5200-$5202). We currently only latch these;
     // proper split rendering requires richer PPU context (tile X/Y, BG vs
@@ -266,7 +266,7 @@ impl Mapper5 {
             chr_upper_bits: 0,
             irq_scanline: 0,
             irq_enabled: false,
-            irq_pending: false,
+            irq_pending: Cell::new(false),
             split_control: 0,
             split_scroll: 0,
             split_chr_bank: 0,
@@ -521,12 +521,16 @@ impl Mapper5 {
                 self.split_chr_bank = data;
                 // TODO: Use split_chr_bank for BG CHR selection in split area.
             }
-            Some(Mmc5CpuRegister::IrqScanline) => self.irq_scanline = data,
+            Some(Mmc5CpuRegister::IrqScanline) => {
+                self.irq_scanline = data;
+                // Writes that modify the compare value also acknowledge a pending IRQ.
+                self.irq_pending.set(false);
+            }
             Some(Mmc5CpuRegister::IrqStatus) => {
                 // Writing with bit7 set enables IRQ, clearing it disables.
                 self.irq_enabled = data & 0x80 != 0;
                 if !self.irq_enabled {
-                    self.irq_pending = false;
+                    self.irq_pending.set(false);
                 }
             }
             Some(Mmc5CpuRegister::MultiplierA) => {
@@ -704,7 +708,7 @@ impl Mapper for Mapper5 {
         self.chr_upper_bits = 0;
         self.irq_scanline = 0;
         self.irq_enabled = false;
-        self.irq_pending = false;
+        self.irq_pending.set(false);
         self.split_control = 0;
         self.split_scroll = 0;
         self.split_chr_bank = 0;
@@ -726,16 +730,24 @@ impl Mapper for Mapper5 {
         match Mmc5CpuRegister::from_addr(addr) {
             Some(Mmc5CpuRegister::IrqStatus) => {
                 // IRQ status ($5204). We expose the pending and "in frame" bits,
-                // but do not clear irq_pending here because cpu_read() only has
-                // &self; the CPU core is expected to call clear_irq() when it
-                // actually acknowledges the interrupt.
+                // clearing the pending flag on read to match hardware ack
+                // semantics. Bit 7 latches when the scanline IRQ triggers and
+                // stays set until the CPU polls this register or rewrites the
+                // IRQ counter.
                 let mut value = 0u8;
-                if self.irq_pending {
+                if self.irq_pending.get() {
                     value |= 0x80;
                 }
                 if self.in_frame {
                     value |= 0x40;
                 }
+                // Reading $5204 acknowledges a latched IRQ.
+                // (Bit 6 remains as-is to reflect in-frame state.)
+                // In-frame flag is not cleared here; it follows PPU fetch timing.
+                // Source: observed emulator behaviour (Mesen2) and Nesdev docs.
+                // Matches NES hardware by deasserting the IRQ level after the
+                // CPU observes it.
+                self.irq_pending.set(false);
                 Some(value)
             }
             Some(Mmc5CpuRegister::MultiplierA) => Some(self.mul_result as u8),
@@ -844,7 +856,7 @@ impl Mapper for Mapper5 {
             // Per docs, a compare value of $00 suppresses new IRQs.
             let target = self.irq_scanline;
             if self.irq_enabled && target != 0 && self.current_scanline == target {
-                self.irq_pending = true;
+                self.irq_pending.set(true);
             }
         }
 
@@ -923,11 +935,7 @@ impl Mapper for Mapper5 {
     }
 
     fn irq_pending(&self) -> bool {
-        self.irq_pending
-    }
-
-    fn clear_irq(&mut self) {
-        self.irq_pending = false;
+        self.irq_pending.get()
     }
 
     fn prg_rom(&self) -> Option<&[u8]> {

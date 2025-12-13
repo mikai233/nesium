@@ -42,8 +42,8 @@ pub fn exec_jam(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             bus.internal_cycle(cpu, ctx);
             cpu.pc -= 1;
             // Prevent IRQ/NMI
-            cpu.prev_irq_pending = false;
-            cpu.prev_nmi_pending = false;
+            cpu.prev_irq_active = false;
+            cpu.prev_nmi_latch = false;
         }
         _ => unreachable_step!("invalid JAM step {step}"),
     }

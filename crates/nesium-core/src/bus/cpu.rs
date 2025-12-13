@@ -189,13 +189,6 @@ impl<'a> CpuBus<'a> {
             .unwrap_or(false)
     }
 
-    /// Clears any mapper IRQ sources.
-    fn clear_cartridge_irq(&mut self) {
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.clear_irq();
-        }
-    }
-
     fn log_serial_bit(&mut self, data: u8) {
         if let Some(log) = self.serial_log.as_deref_mut() {
             log.push_bit((data & 0x01) != 0);
@@ -226,7 +219,7 @@ impl<'a> CpuBus<'a> {
         }
     }
 
-    pub fn nmi_line(&mut self) -> bool {
+    pub fn nmi_level(&self) -> bool {
         // PPU NMI output is a level: VBLANK && CTRL.NMI_ENABLE.
         self.ppu.nmi_output()
     }
@@ -391,7 +384,7 @@ impl<'a> CpuBus<'a> {
         cpu.end_cycle(false, self, ctx);
     }
 
-    pub fn irq_pending(&mut self) -> bool {
+    pub fn irq_level(&mut self) -> bool {
         let apu_irq = self.apu.irq_pending();
         let cartridge_irq = self.cartridge_irq_pending();
         apu_irq || cartridge_irq
@@ -399,11 +392,6 @@ impl<'a> CpuBus<'a> {
 
     pub fn take_oam_dma_request(&mut self) -> Option<u8> {
         self.oam_dma_request.take()
-    }
-
-    pub fn clear_irq(&mut self) {
-        self.apu.clear_irq();
-        self.clear_cartridge_irq();
     }
 
     pub fn cycles(&self) -> u64 {

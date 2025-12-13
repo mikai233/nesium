@@ -243,15 +243,6 @@ impl Apu {
         self.status.frame_interrupt || self.status.dmc_interrupt
     }
 
-    /// Clears any pending IRQ sources to mimic the CPU ack cycle.
-    ///
-    /// The frame interrupt remains latched until `$4015` is read; DMC IRQs can
-    /// be cleared by either reading `$4015` or by disabling DMC, so we mirror
-    /// the latter here.
-    pub fn clear_irq(&mut self) {
-        self.status.dmc_interrupt = false;
-    }
-
     fn clock_quarter_frame(&mut self) {
         for pulse in &mut self.pulse {
             pulse.clock_envelope();

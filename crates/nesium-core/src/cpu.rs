@@ -136,15 +136,15 @@ pub struct Cpu {
 
     pub(crate) opcode_in_flight: Option<u8>,
     pub(crate) irq_latch: IrqSource,
-    pub(crate) prev_irq_pending: bool,
-    pub(crate) pending_irq: bool,
+    pub(crate) prev_irq_active: bool,
+    pub(crate) irq_active: bool,
     pub(crate) irq_enable_mask: IrqSource,
     /// Previous sampled NMI line level (for edge detection).
-    pub(crate) prev_nmi_line: bool,
+    pub(crate) prev_nmi_level: bool,
     /// NMI pending flag set on rising edge, consumed when NMI is taken.
-    pub(crate) nmi_pending: bool,
+    pub(crate) nmi_latch: bool,
     /// Previous cycle's pending flag, used to delay NMI by one instruction boundary.
-    pub(crate) prev_nmi_pending: bool,
+    pub(crate) prev_nmi_latch: bool,
     pub(crate) index: u8,
     pub(crate) base: u8,
     pub(crate) effective_addr: u16,
@@ -164,12 +164,12 @@ impl Cpu {
             pc: 0x0000,                          // Will be set by reset vector
             opcode_in_flight: None,
             irq_latch: IrqSource::empty(),
-            prev_irq_pending: false,
-            pending_irq: false,
+            prev_irq_active: false,
+            irq_active: false,
             irq_enable_mask: IrqSource::empty(),
-            prev_nmi_line: false,
-            nmi_pending: false,
-            prev_nmi_pending: false,
+            prev_nmi_level: false,
+            nmi_latch: false,
+            prev_nmi_latch: false,
             index: 0,
             base: 0,
             effective_addr: 0,
@@ -203,7 +203,7 @@ impl Cpu {
                 self.s = 0xFD;
                 self.p = Status::INTERRUPT;
                 self.irq_enable_mask = IrqSource::all();
-                self.pending_irq = false;
+                self.irq_active = false;
             }
             ResetKind::Soft => {
                 // Soft reset: keep A/X/Y and most of P.
@@ -216,10 +216,10 @@ impl Cpu {
         // Reset internal CPU state used by the execution engine and interrupt logic.
         self.opcode_in_flight = None;
         self.irq_latch = IrqSource::empty();
-        self.pending_irq = false;
-        self.prev_nmi_line = false;
-        self.nmi_pending = false;
-        self.prev_nmi_pending = false;
+        self.irq_active = false;
+        self.prev_nmi_level = false;
+        self.nmi_latch = false;
+        self.prev_nmi_latch = false;
         self.index = 0;
         self.base = 0;
         self.effective_addr = 0;
@@ -247,7 +247,7 @@ impl Cpu {
                 }
             }
             None => {
-                if self.prev_irq_pending || self.prev_nmi_pending {
+                if self.prev_irq_active || self.prev_nmi_latch {
                     self.perform_interrupt(bus, ctx);
                 } else {
                     let opcode = self.fetch_opcode(bus, ctx);
@@ -271,9 +271,6 @@ impl Cpu {
             bus.clock_start_count.saturating_add(1)
         };
         *bus.cycles = bus.cycles.wrapping_add(1);
-        if *bus.cycles == 2796996 {
-            println!("");
-        }
         bus.bump_master_clock(start_delta, self, ctx);
 
         if let Some(cart) = bus.cartridge.as_mut() {
@@ -300,17 +297,17 @@ impl Cpu {
             bus.clock_end_count.saturating_sub(1)
         };
         bus.bump_master_clock(end_delta, self, ctx);
-        self.prev_nmi_pending = self.nmi_pending;
-        let nmi_line = bus.nmi_line();
-        if nmi_line && !self.prev_nmi_line {
-            self.nmi_pending = true;
+        self.prev_nmi_latch = self.nmi_latch;
+        let nmi_level = bus.nmi_level();
+        if nmi_level && !self.prev_nmi_level {
+            self.nmi_latch = true;
         }
-        self.prev_nmi_line = nmi_line;
+        self.prev_nmi_level = nmi_level;
 
-        self.prev_irq_pending = self.pending_irq;
+        self.prev_irq_active = self.irq_active;
         // self.pending_irq =
         // self.irq_latch.intersects(self.irq_enable_mask) && !self.p.contains(Status::INTERRUPT);
-        self.pending_irq = bus.irq_pending() && !self.p.contains(Status::INTERRUPT);
+        self.irq_active = bus.irq_level() && !self.p.contains(Status::INTERRUPT);
     }
 
     #[inline]
@@ -465,8 +462,8 @@ impl Cpu {
 
         self.push(bus, ctx, pc_hi);
         self.push(bus, ctx, pc_lo);
-        let kind = if self.nmi_pending {
-            self.nmi_pending = false;
+        let kind = if self.nmi_latch {
+            self.nmi_latch = false;
             IrqKind::Nmi
         } else {
             IrqKind::Irq
@@ -485,7 +482,6 @@ impl Cpu {
                 let lo = bus.mem_read(IRQ_VECTOR_LO, self, ctx);
                 let hi = bus.mem_read(IRQ_VECTOR_HI, self, ctx);
                 self.pc = ((hi as u16) << 8) | (lo as u16);
-                bus.clear_irq(); // TODO
             }
         }
 
@@ -495,8 +491,8 @@ impl Cpu {
 
     pub(crate) fn test_branch(&mut self, taken: bool) {
         if taken {
-            if self.pending_irq && !self.prev_irq_pending {
-                self.pending_irq = false;
+            if self.irq_active && !self.prev_irq_active {
+                self.irq_active = false;
             }
         } else {
             // Skip add branch offset and cross page
@@ -552,9 +548,9 @@ impl Cpu {
         self.s = snapshot.s;
         self.p = Status::from_bits_truncate(snapshot.p);
         self.irq_enable_mask = IrqSource::all();
-        self.prev_nmi_line = false;
-        self.nmi_pending = false;
-        self.prev_nmi_pending = false;
+        self.prev_nmi_level = false;
+        self.nmi_latch = false;
+        self.prev_nmi_latch = false;
         self.index = 0;
         self.opcode_in_flight = None;
         self.base = 0;

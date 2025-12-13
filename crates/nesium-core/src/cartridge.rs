@@ -150,10 +150,6 @@ impl Cartridge {
         self.mapper.irq_pending()
     }
 
-    pub fn clear_irq(&mut self) {
-        self.mapper.clear_irq();
-    }
-
     /// Applies a mapper reset using the requested reset kind.
     pub fn reset(&mut self, kind: ResetKind) {
         self.mapper.reset(kind);

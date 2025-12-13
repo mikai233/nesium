@@ -220,9 +220,6 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
         false
     }
 
-    /// Clears any IRQ sources latched by the mapper.
-    fn clear_irq(&mut self) {}
-
     /// Optional introspection hook for PRG ROM contents.
     fn prg_rom(&self) -> Option<&[u8]> {
         None
