@@ -15,9 +15,7 @@ use crate::{
     ppu::{
         Ppu,
         buffer::{ColorFormat, FrameBuffer},
-        nmi_debug_state::NmiDebugState,
         palette::{Palette, PaletteKind},
-        sprite0_hit_debug::Sprite0HitDebug,
     },
     reset_kind::ResetKind,
 };
@@ -497,21 +495,6 @@ impl Nes {
         self.dot_counter
     }
 
-    /// Peek first sprite-0 hit position for the current frame (debug).
-    pub fn sprite0_hit_pos(&self) -> Option<Sprite0HitDebug> {
-        self.ppu.sprite0_hit_pos()
-    }
-
-    /// Peek PPU NMI flags and position (tests/debug).
-    pub fn ppu_nmi_debug(&self) -> NmiDebugState {
-        self.ppu.debug_nmi_state()
-    }
-
-    /// Debug-only: override PPU counters for trace alignment.
-    pub fn debug_set_ppu_position(&mut self, scanline: i16, cycle: u16, frame: u32) {
-        self.ppu.debug_set_position(scanline, cycle, frame);
-    }
-
     /// Executes the next instruction (advancing CPU/PPU/APU as needed).
     pub fn step_instruction(&mut self) {
         let mut seen_active = false;
@@ -523,11 +506,6 @@ impl Nes {
                 break;
             }
         }
-    }
-
-    /// Forces the CPU registers to the provided snapshot (clears in-flight opcode).
-    pub fn set_cpu_snapshot(&mut self, snapshot: CpuSnapshot) {
-        self.cpu.load_snapshot(snapshot);
     }
 
     /// Reads a byte from the CPU address space without mutating CPU state.

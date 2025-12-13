@@ -17,7 +17,7 @@ use eframe::egui;
 use egui::{ColorImage, Context as EguiContext, TextureHandle, TextureOptions, Visuals};
 use nesium_audio::NesAudioPlayer;
 use nesium_core::{
-    CpuSnapshot, Nes,
+    Nes,
     audio::bus::AudioBusConfig,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
     reset_kind::ResetKind,
@@ -34,14 +34,12 @@ const TARGET_FRAME: Duration = Duration::from_nanos(16_683_000); // ~59.94 Hz
 
 pub struct AppConfig {
     pub rom_path: Option<PathBuf>,
-    pub start_pc: Option<u16>,
 }
 
 pub struct NesiumApp {
     nes: Nes,
     frame_texture: Option<TextureHandle>,
     rom_path: Option<PathBuf>,
-    start_pc: Option<u16>,
     audio: Option<NesAudioPlayer>,
     paused: bool,
     status_line: Option<String>,
@@ -92,7 +90,6 @@ impl NesiumApp {
             nes,
             frame_texture: None,
             rom_path: None,
-            start_pc: config.start_pc,
             audio,
             paused: false,
             status_line,
@@ -162,18 +159,6 @@ impl NesiumApp {
         self.nes
             .load_cartridge_from_file(path)
             .with_context(|| format!("loading ROM {}", path.display()))?;
-
-        if let Some(pc) = self.start_pc {
-            let snapshot = CpuSnapshot {
-                pc,
-                a: 0,
-                x: 0,
-                y: 0,
-                s: 0xFD,
-                p: 0x24,
-            };
-            self.nes.set_cpu_snapshot(snapshot);
-        }
 
         self.rom_path = Some(path.to_path_buf());
         self.paused = false;

@@ -32,14 +32,12 @@ pub mod palette;
 
 mod background_pipeline;
 pub mod buffer;
-pub mod nmi_debug_state;
 mod open_bus;
 pub(crate) mod pattern_bus;
 mod pending_vram_increment;
 mod ppu_model;
 mod registers;
 mod sprite;
-pub mod sprite0_hit_debug;
 mod sprite_pipeline;
 mod sprite_state;
 
@@ -60,13 +58,11 @@ use crate::{
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
         buffer::FrameBuffer,
-        nmi_debug_state::NmiDebugState,
         palette::{Palette, PaletteRam},
         pattern_bus::PatternBus,
         pending_vram_increment::PendingVramIncrement,
         registers::{Control, Mask, Registers, Status, VramAddr},
         sprite::SpriteView,
-        sprite0_hit_debug::{Sprite0HitDebug, Sprite0HitPos},
     },
     reset_kind::ResetKind,
 };
@@ -102,15 +98,11 @@ pub struct Ppu {
     bg_pipeline: BgPipeline,
     /// Sprite pixel pipeline for the current scanline.
     sprite_pipeline: SpritePipeline,
-    /// Latched NMI request (true when the PPU wants to fire NMI).
-    nmi_pending: bool,
     /// Current level of the NMI output line (true = asserted).
     nmi_output: bool,
     /// When true, suppresses the upcoming VBlank flag/NMI edge for this frame.
     /// Models the $2002 read-vs-VBlank set race described on NESdev (and used by Mesen2).
     prevent_vblank_flag: bool,
-    /// First sprite-0 hit debug info in the current frame (debug).
-    sprite0_hit_pos: Option<Sprite0HitDebug>,
     /// PPU-side open-bus latch (with decay).
     open_bus: PpuOpenBus,
     /// Countdown (in PPU dots) during which a second `$2007` read is ignored.
@@ -186,10 +178,8 @@ impl Ppu {
             master_clock: 0,
             bg_pipeline: BgPipeline::new(),
             sprite_pipeline: SpritePipeline::new(),
-            nmi_pending: false,
             nmi_output: false,
             prevent_vblank_flag: false,
-            sprite0_hit_pos: None,
             open_bus: PpuOpenBus::new(),
             ignore_vram_read: 0,
             oam_copybuffer: 0,
@@ -288,8 +278,6 @@ impl Ppu {
         self.sprite_fetch = SpriteFetchState::default();
         self.sprite_line_next.clear();
 
-        // NMI line and per-frame vblank suppression latch.
-        self.nmi_pending = false;
         self.nmi_output = false;
         self.prevent_vblank_flag = false;
 
@@ -299,7 +287,6 @@ impl Ppu {
         self.oam_copybuffer = 0;
 
         // Sprite-0 debug info is per-frame; drop it on reset.
-        self.sprite0_hit_pos = None;
 
         // Reset rendering enable latches and mark state as needing an update
         // on the next clock, mirroring Mesen's `_renderingEnabled` /
@@ -334,22 +321,6 @@ impl Ppu {
         self.frame
     }
 
-    /// Debug info about NMI output/pending and position.
-    pub(crate) fn debug_nmi_state(&self) -> NmiDebugState {
-        NmiDebugState {
-            nmi_output: self.nmi_output,
-            nmi_pending: self.nmi_pending,
-            scanline: self.scanline,
-            cycle: self.cycle,
-            frame: self.frame,
-        }
-    }
-
-    /// First sprite-0 hit position for the current frame (if any).
-    pub(crate) fn sprite0_hit_pos(&self) -> Option<Sprite0HitDebug> {
-        self.sprite0_hit_pos
-    }
-
     /// Clears the framebuffer to palette index 0.
     fn clear_framebuffer(&mut self) {
         self.framebuffer.clear();
@@ -382,10 +353,9 @@ impl Ppu {
         self.open_bus.set(0xFF, value, self.frame);
         match PpuRegister::from_cpu_addr(addr) {
             PpuRegister::Control => {
-                let prev_output = self.nmi_output;
                 self.registers.write_control(value);
                 self.maybe_apply_scroll_glitch(ScrollGlitchSource::Control2000);
-                self.update_nmi_output(prev_output);
+                self.update_nmi_output();
             }
             PpuRegister::Mask => {
                 // TODO: Hardware/Mesen2 model subtle mid-frame rendering enable/disable glitches (bus address reset, OAM corruption).
@@ -536,7 +506,6 @@ impl Ppu {
         ppu.advance_cycle();
 
         let rendering_enabled = ppu.render_enabled;
-        let prev_nmi_output = ppu.nmi_output;
         ppu.step_pending_vram_addr();
 
         if ppu.ignore_vram_read > 0 {
@@ -608,10 +577,6 @@ impl Ppu {
                     ppu.registers
                         .status
                         .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
-                    // Drop per-frame sprite0 debug info when vblank ends.
-                    ppu.sprite0_hit_pos = None;
-                    // Debug latch is per-VBlank; drop it when VBlank ends.
-                    ppu.nmi_pending = false;
                 }
                 if rendering_enabled {
                     // Shift background shifters each dot.
@@ -747,7 +712,7 @@ impl Ppu {
             _ => unreachable!("PPU scanline {} out of range", ppu.scanline),
         }
 
-        ppu.update_nmi_output(prev_nmi_output);
+        ppu.update_nmi_output();
         ppu.update_state_latch();
     }
 
@@ -819,15 +784,6 @@ impl Ppu {
         }
     }
 
-    /// Debug helper: overrides PPU position counters (scanline/cycle/frame).
-    /// Intended for trace alignment only.
-    pub(crate) fn debug_set_position(&mut self, scanline: i16, cycle: u16, frame: u32) {
-        self.scanline = scanline;
-        self.cycle = cycle;
-        self.frame = frame;
-        self.master_clock = self.current_ppu_cycle() * 4;
-    }
-
     /// Returns a monotonically increasing PPU dot counter across frames.
     fn current_ppu_cycle(&self) -> u64 {
         // Map scanline -1..=260 to 0..=261 for indexing.
@@ -888,14 +844,10 @@ impl Ppu {
 
     /// Recomputes the NMI output line based on VBlank and control register,
     /// latching a pending NMI on rising edges.
-    fn update_nmi_output(&mut self, prev_output: bool) {
+    fn update_nmi_output(&mut self) {
         let new_output = self.registers.status.contains(Status::VERTICAL_BLANK)
             && self.registers.control.nmi_enabled();
         self.nmi_output = new_output;
-
-        if self.nmi_output && !prev_output {
-            self.nmi_pending = true;
-        }
     }
 
     /// Renders a single pixel into the framebuffer based on the current
@@ -969,21 +921,6 @@ impl Ppu {
             && self.cycle != 256
         {
             self.registers.status.insert(Status::SPRITE_ZERO_HIT);
-            if self.sprite0_hit_pos.is_none() {
-                let oam0 = [
-                    self.registers.oam[0],
-                    self.registers.oam[1],
-                    self.registers.oam[2],
-                    self.registers.oam[3],
-                ];
-                self.sprite0_hit_pos = Some(Sprite0HitDebug {
-                    pos: Sprite0HitPos {
-                        scanline: self.scanline,
-                        cycle: self.cycle,
-                    },
-                    oam: oam0,
-                });
-            }
         }
 
         // Resolve palette RAM address (color 0 always uses universal background).
@@ -1476,7 +1413,7 @@ impl Ppu {
             self.prevent_vblank_flag = true;
         }
 
-        self.update_nmi_output(prev_output);
+        self.update_nmi_output();
         ret
     }
 

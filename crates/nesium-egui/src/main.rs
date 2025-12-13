@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow};
 use app::{AppConfig, NesiumApp};
 use eframe::egui;
 use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
-use trace::{run_frame_report, run_trace};
+use trace::run_frame_report;
 use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::FmtSubscriber;
@@ -51,14 +51,6 @@ fn main() -> Result<()> {
     // let _guard = init_tracing();
     let args = parse_args()?;
 
-    if let Some(log_path) = args.trace_log {
-        let rom_path = args
-            .rom_path
-            .clone()
-            .ok_or_else(|| anyhow!("trace mode requires a ROM path"))?;
-        return run_trace(rom_path, log_path);
-    }
-
     if let Some(frames) = args.check_frames {
         let rom_path = args
             .rom_path
@@ -76,7 +68,6 @@ fn main() -> Result<()> {
 
     let config = AppConfig {
         rom_path: args.rom_path.clone(),
-        start_pc: args.start_pc,
     };
 
     eframe::run_native(
@@ -92,8 +83,6 @@ fn main() -> Result<()> {
 #[derive(Default)]
 struct CliArgs {
     rom_path: Option<PathBuf>,
-    trace_log: Option<PathBuf>,
-    start_pc: Option<u16>,
     check_frames: Option<usize>,
 }
 
@@ -104,20 +93,9 @@ fn parse_args() -> Result<CliArgs> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--trace-log" => {
-                let path = args
-                    .next()
-                    .ok_or_else(|| anyhow!("--trace-log requires a log file path"))?;
-                cli.trace_log = Some(PathBuf::from(path));
-            }
-            "--start-pc" => {
-                let pc_str = args
-                    .next()
-                    .ok_or_else(|| anyhow!("--start-pc requires a hex address (e.g. 0xC000)"))?;
-                let pc = pc_str.trim_start_matches("0x");
-                cli.start_pc = Some(
-                    u16::from_str_radix(pc, 16)
-                        .map_err(|_| anyhow!("--start-pc expects a hex address, got {pc_str}"))?,
-                );
+                // Trace replay no longer supported; keep flag for compatibility.
+                let _ = args.next();
+                return Err(anyhow!("trace replay mode is no longer supported"));
             }
             "--check-frame" => {
                 let frames = args
@@ -130,9 +108,9 @@ fn parse_args() -> Result<CliArgs> {
         }
     }
 
-    if (cli.trace_log.is_some() || cli.check_frames.is_some()) && cli.rom_path.is_none() {
+    if cli.check_frames.is_some() && cli.rom_path.is_none() {
         return Err(anyhow!(
-            "usage: nesium <path-to-rom.nes> [--trace-log <path-to-nestest.log>] [--start-pc <hex>] [--check-frame <n>]"
+            "usage: nesium <path-to-rom.nes> [--check-frame <n>]"
         ));
     }
 
