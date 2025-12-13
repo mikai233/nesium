@@ -143,10 +143,15 @@ impl ExternalFrameHandle {
         unsafe { slice::from_raw_parts(self.planes[index].as_ptr() as *const u8, self.len) }
     }
 
+    /// Returns a raw writable pointer to the given plane.
+    ///
+    /// # Safety
+    /// The caller must ensure there is no concurrent aliasing access to this plane
+    /// (e.g. frontend reading while core writes), otherwise this can cause UB/data races.
     #[inline]
-    fn plane_slice_mut(&self, index: usize) -> &mut [u8] {
+    fn plane_ptr_mut(&self, index: usize) -> *mut u8 {
         debug_assert!(index < 2);
-        unsafe { slice::from_raw_parts_mut(self.planes[index].as_ptr(), self.len) }
+        self.planes[index].as_ptr()
     }
 }
 
@@ -366,7 +371,9 @@ impl FrameBuffer {
             }
             FrameBufferStorage::External(handle) => {
                 for i in 0..2 {
-                    handle.plane_slice_mut(i).fill(0);
+                    unsafe {
+                        slice::from_raw_parts_mut(handle.plane_ptr_mut(i), handle.len()).fill(0)
+                    };
                 }
             }
         }
@@ -472,7 +479,9 @@ impl FrameBuffer {
     fn plane_slice_mut(&mut self, index: usize) -> &mut [u8] {
         match &mut self.storage {
             FrameBufferStorage::Owned(planes) => &mut planes[index],
-            FrameBufferStorage::External(handle) => handle.plane_slice_mut(index),
+            FrameBufferStorage::External(handle) => unsafe {
+                slice::from_raw_parts_mut(handle.plane_ptr_mut(index), handle.len())
+            },
         }
     }
 }
