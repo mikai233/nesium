@@ -67,6 +67,7 @@ impl<'a> From<&'a [u8]> for CartridgeImage {
     }
 }
 
+pub mod a12_watcher;
 pub mod header;
 pub mod mapper;
 pub use mapper::{Mapper, Provider, mapper_downcast_mut, mapper_downcast_ref};
