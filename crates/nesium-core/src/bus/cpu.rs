@@ -220,8 +220,7 @@ impl<'a> CpuBus<'a> {
     }
 
     pub fn nmi_level(&self) -> bool {
-        // PPU NMI output is a level: VBLANK && CTRL.NMI_ENABLE.
-        self.ppu.nmi_output()
+        self.ppu.nmi_level
     }
 
     pub fn ppu_read(&mut self, addr: u16) -> u8 {

@@ -4,6 +4,14 @@
 /// - index mode: stores raw palette indices for debugging or PPU inspection
 /// - color mode: stores packed RGB/RGBA pixels ready to be consumed by a frontend (SDL, libretro, Flutter, etc.)
 use crate::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, palette::Color};
+use std::{
+    ptr::NonNull,
+    slice,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+    },
+};
 
 /// Describes how a logical RGB color is packed into the underlying byte buffer.
 ///
@@ -40,22 +48,113 @@ impl ColorFormat {
 /// A double-buffered framebuffer for the NES PPU.
 ///
 /// Internally this maintains two planes:
-/// - one is actively written to by the PPU
-/// - one is exposed for rendering by the frontend
+/// - the **back** plane is written to by the PPU
+/// - the **front** plane is exposed for rendering by the frontend
 ///
 /// The `mode` controls whether the planes store palette indices or packed colors.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct FrameBuffer {
+    /// Index of the **back/write** plane.
     active_index: usize,
-    planes: [Box<[u8]>; 2],
+    storage: FrameBufferStorage,
     mode: BufferMode,
+}
+
+/// Backing storage for the framebuffer planes.
+///
+/// - `Owned` keeps the planes inside the NES core.
+/// - `External` writes directly into caller-provided memory. This is useful when
+///   the core runs on a dedicated thread and the frontend owns the pixel buffers.
+#[derive(Debug, Clone)]
+enum FrameBufferStorage {
+    Owned([Box<[u8]>; 2]),
+    /// Externally owned double buffers shared with the frontend.
+    ///
+    /// The PPU writes to the **back** plane (`active_index`). At end-of-frame, `swap()`
+    /// publishes the new **front** plane index to the handle.
+    External(Arc<ExternalFrameHandle>),
+}
+
+/// Shared external framebuffer planes + published front index.
+///
+/// This is the **simple** model (no ACK / no waiting):
+/// - Core thread writes into the back plane and calls `swap()` at end-of-frame.
+/// - `swap()` publishes the new front index and flips the back plane.
+/// - Frontend reads the current front plane via `front_ptr()`/`front_slice()`.
+///
+/// # Safety contract
+/// The creator must ensure:
+/// - both planes are valid writable regions of length `len` for the lifetime of all Arc clones
+/// - planes do not overlap
+#[derive(Debug)]
+pub struct ExternalFrameHandle {
+    planes: [NonNull<u8>; 2],
+    len: usize,
+    front_index: AtomicUsize,
+    frame_id: AtomicU64,
+}
+
+unsafe impl Send for ExternalFrameHandle {}
+unsafe impl Sync for ExternalFrameHandle {}
+
+impl ExternalFrameHandle {
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Published **front** plane index.
+    #[inline]
+    pub fn front_index(&self) -> usize {
+        self.front_index.load(Ordering::Acquire)
+    }
+
+    /// Monotonically increasing frame counter. Useful for detecting new frames.
+    #[inline]
+    pub fn frame_id(&self) -> u64 {
+        self.frame_id.load(Ordering::Acquire)
+    }
+
+    /// Returns the current **front** plane as an immutable slice.
+    #[inline]
+    pub fn front_slice(&self) -> &[u8] {
+        let idx = self.front_index();
+        unsafe { slice::from_raw_parts(self.planes[idx].as_ptr() as *const u8, self.len) }
+    }
+
+    /// Returns a raw pointer to the **front** plane and its length.
+    #[inline]
+    pub fn front_ptr(&self) -> (*const u8, usize) {
+        let idx = self.front_index();
+        (self.planes[idx].as_ptr() as *const u8, self.len)
+    }
+
+    /// Publish `index` as the new **front** plane.
+    #[inline]
+    pub fn present(&self, index: usize) {
+        debug_assert!(index < 2);
+        self.front_index.store(index, Ordering::Release);
+        self.frame_id.fetch_add(1, Ordering::Release);
+    }
+
+    #[inline]
+    fn plane_slice(&self, index: usize) -> &[u8] {
+        debug_assert!(index < 2);
+        unsafe { slice::from_raw_parts(self.planes[index].as_ptr() as *const u8, self.len) }
+    }
+
+    #[inline]
+    fn plane_slice_mut(&self, index: usize) -> &mut [u8] {
+        debug_assert!(index < 2);
+        unsafe { slice::from_raw_parts_mut(self.planes[index].as_ptr(), self.len) }
+    }
 }
 
 /// Selects how framebuffer data is stored.
 ///
 /// `Index` mode stores one byte per pixel as a palette index.
 /// `Color` mode stores packed RGB/RGBA pixels according to the chosen `ColorFormat`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum BufferMode {
     /// Palette index buffer (1 byte per pixel).
     #[default]
@@ -81,12 +180,63 @@ impl FrameBuffer {
 
         Self {
             active_index: 0,
-            planes: [
+            storage: FrameBufferStorage::Owned([
                 vec![0; len].into_boxed_slice(),
                 vec![0; len].into_boxed_slice(),
-            ],
+            ]),
             mode,
         }
+    }
+
+    /// Creates a new framebuffer backed by externally provided double buffers.
+    ///
+    /// This allows the PPU to write directly into frontend-owned memory.
+    ///
+    /// Returns both:
+    /// - the `FrameBuffer` intended to live inside the NES thread
+    /// - an `Arc<ExternalFrameHandle>` intended to be held by the frontend thread
+    ///
+    /// # Safety
+    /// - `plane0` and `plane1` must point to writable regions of length `len`
+    /// - both buffers must remain valid for the lifetime of the `FrameBuffer` and any `Arc` clones
+    /// - the two buffers must not overlap
+    pub unsafe fn new_external(
+        mode: BufferMode,
+        len: usize,
+        plane0: *mut u8,
+        plane1: *mut u8,
+    ) -> (Self, Arc<ExternalFrameHandle>) {
+        if let BufferMode::Color { format } = &mode {
+            let expected = SCREEN_WIDTH * SCREEN_HEIGHT * format.bytes_per_pixel();
+            debug_assert!(
+                len == expected,
+                "FrameBuffer len ({len}) does not match expected pixel buffer size ({expected}) for {:?}",
+                format
+            );
+        }
+
+        let planes = [
+            NonNull::new(plane0).expect("plane0 must not be null"),
+            NonNull::new(plane1).expect("plane1 must not be null"),
+        ];
+
+        // Publish plane 0 as the initial front buffer.
+        // The PPU will start writing into plane 1 (back).
+        let handle = Arc::new(ExternalFrameHandle {
+            planes,
+            len,
+            front_index: AtomicUsize::new(0),
+            frame_id: AtomicU64::new(0),
+        });
+
+        let fb = Self {
+            // active_index is the **back** (write) plane
+            active_index: 1,
+            storage: FrameBufferStorage::External(Arc::clone(&handle)),
+            mode,
+        };
+
+        (fb, handle)
     }
 
     /// Creates a new index-mode framebuffer sized to the NES screen.
@@ -133,13 +283,13 @@ impl FrameBuffer {
         Self::new_color(ColorFormat::Argb8888)
     }
 
-    /// Returns a read-only view of the currently active plane for rendering.
+    /// Returns a read-only view of the **front** plane for rendering.
     ///
     /// The returned slice is interpreted according to the current `BufferMode`:
     /// - `Index`: 1 byte per pixel containing a palette index
     /// - `Color`: packed pixels in the selected `ColorFormat`
     pub fn render(&self) -> &[u8] {
-        &self.planes[self.active_index]
+        self.plane_slice(1 - self.active_index)
     }
 
     /// Returns a read-only view of the given plane by index.
@@ -149,7 +299,7 @@ impl FrameBuffer {
     /// normal PPU usage prefer [`render`] and [`write`].
     #[inline]
     pub fn plane(&self, index: usize) -> &[u8] {
-        &self.planes[index]
+        self.plane_slice(index)
     }
 
     /// Returns the number of bytes per scanline (pitch) for the current mode.
@@ -164,39 +314,61 @@ impl FrameBuffer {
         }
     }
 
-    /// Returns the index of the currently active plane.
+    /// Returns the index of the current **back** (write) plane.
     ///
-    /// This can be used by higher-level code to decide which plane should be
-    /// treated as the "front" or "back" buffer when integrating with an
-    /// external renderer.
+    /// For external storage, the published **front** index is managed by the
+    /// [`ExternalFrameHandle`].
     #[inline]
     pub fn active_plane_index(&self) -> usize {
         self.active_index
     }
 
-    /// Returns a mutable view of the currently active plane for PPU writes.
+    /// Returns a mutable view of the **back** plane for PPU writes.
     ///
-    /// Typically the PPU will write into this slice and the frontend will read
-    /// from it on the next frame after a `swap()`.
+    /// The frontend should read from [`render`], which exposes the **front** plane.
+    /// After the PPU finishes a frame, call [`swap`] to present the back plane.
     pub fn write(&mut self) -> &mut [u8] {
-        &mut self.planes[self.active_index]
+        self.plane_slice_mut(self.active_index)
     }
 
-    /// Swaps the front and back planes and clears the new write plane to zero.
+    /// Presents the back plane as the new front plane.
     ///
-    /// After calling this, the previously rendered plane becomes writable and
-    /// the previously written plane becomes the render source.
+    /// After calling this:
+    /// - the previously written (back) plane becomes the render source
+    /// - the previously rendered (front) plane becomes the new back plane and is cleared
     pub fn swap(&mut self) {
-        self.active_index = 1 - self.active_index;
-        self.write().fill(0);
+        match &self.storage {
+            FrameBufferStorage::Owned(_) => {
+                self.active_index = 1 - self.active_index;
+                self.write().fill(0);
+            }
+            FrameBufferStorage::External(handle) => {
+                // Publish the plane we just finished writing as the new front buffer.
+                let finished_back = self.active_index;
+                handle.present(finished_back);
+
+                // Switch to the other plane for the next frame and clear it.
+                self.active_index = 1 - self.active_index;
+                self.write().fill(0);
+            }
+        }
     }
 
     /// Clears both planes to zero.
     ///
     /// This is useful when resetting the PPU or when you need a fully blank frame.
     pub fn clear(&mut self) {
-        for plane in &mut self.planes {
-            plane.fill(0);
+        match &mut self.storage {
+            FrameBufferStorage::Owned(planes) => {
+                for plane in planes {
+                    plane.fill(0);
+                }
+            }
+            FrameBufferStorage::External(handle) => {
+                for i in 0..2 {
+                    handle.plane_slice_mut(i).fill(0);
+                }
+            }
         }
     }
 
@@ -230,12 +402,10 @@ impl FrameBuffer {
     /// encodes the color into the underlying buffer according to the active
     /// `ColorFormat`.
     pub fn write_color(&mut self, x: usize, y: usize, color: Color) {
-        match &mut self.mode {
-            BufferMode::Index => {
-                panic!("write_color called on index framebuffer");
-            }
+        match self.mode {
+            BufferMode::Index => panic!("write_color called on index framebuffer"),
             BufferMode::Color { format } => {
-                let buffer = &mut self.planes[self.active_index];
+                let buffer = self.plane_slice_mut(self.active_index);
                 let bpp = format.bytes_per_pixel();
                 let idx = (y * SCREEN_WIDTH + x) * bpp;
                 debug_assert!(idx + bpp <= buffer.len());
@@ -287,6 +457,22 @@ impl FrameBuffer {
                     }
                 }
             }
+        }
+    }
+
+    #[inline]
+    fn plane_slice(&self, index: usize) -> &[u8] {
+        match &self.storage {
+            FrameBufferStorage::Owned(planes) => &planes[index],
+            FrameBufferStorage::External(handle) => handle.plane_slice(index),
+        }
+    }
+
+    #[inline]
+    fn plane_slice_mut(&mut self, index: usize) -> &mut [u8] {
+        match &mut self.storage {
+            FrameBufferStorage::Owned(planes) => &mut planes[index],
+            FrameBufferStorage::External(handle) => handle.plane_slice_mut(index),
         }
     }
 }

@@ -74,66 +74,66 @@ const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + post + vblank (241..260)
 
 /// Entry points for the CPU PPU register mirror.
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone)]
 pub struct Ppu {
     /// Collection of CPU visible registers and their helper latches.
-    registers: Registers,
+    pub(crate) registers: Registers,
     /// Deferred $2006 VRAM address to apply after the hardware latency window.
-    pending_vram_addr: VramAddr,
+    pub(crate) pending_vram_addr: VramAddr,
     /// Remaining dots before the pending VRAM address commit (0 = no pending write).
-    pending_vram_delay: u8,
+    pub(crate) pending_vram_delay: u8,
     /// Internal VRAM backing store for nametables and pattern tables.
-    vram: Vram,
+    pub(crate) vram: Vram,
     /// Dedicated palette RAM. Addresses between `$3F00` and `$3FFF` map here.
-    palette_ram: PaletteRam,
+    pub(crate) palette_ram: PaletteRam,
     /// Current dot (0..=340) within the active scanline.
-    cycle: u16,
+    pub(crate) cycle: u16,
     /// Current scanline. `-1` is the prerender line, `0..239` are visible.
-    scanline: i16,
+    pub(crate) scanline: i16,
     /// Total number of frames produced so far.
-    frame: u32,
+    pub(crate) frame: u32,
     /// Master clock in PPU master cycles (4 master cycles per dot).
-    master_clock: u64,
+    pub(crate) master_clock: u64,
     /// Background pixel pipeline (pattern and attribute shifters).
-    bg_pipeline: BgPipeline,
+    pub(crate) bg_pipeline: BgPipeline,
     /// Sprite pixel pipeline for the current scanline.
-    sprite_pipeline: SpritePipeline,
+    pub(crate) sprite_pipeline: SpritePipeline,
     /// Current level of the NMI output line (true = asserted).
-    nmi_output: bool,
+    pub(crate) nmi_level: bool,
     /// When true, suppresses the upcoming VBlank flag/NMI edge for this frame.
     /// Models the $2002 read-vs-VBlank set race described on NESdev (and used by Mesen2).
-    prevent_vblank_flag: bool,
+    pub(crate) prevent_vblank_flag: bool,
     /// PPU-side open-bus latch (with decay).
-    open_bus: PpuOpenBus,
+    pub(crate) open_bus: PpuOpenBus,
     /// Countdown (in PPU dots) during which a second `$2007` read is ignored.
     /// Mirrors Mesen2's `_ignoreVramRead` behaviour (two consecutive CPU
     /// cycles -> second read returns open bus and does not increment VRAM).
-    ignore_vram_read: u8,
+    pub(crate) ignore_vram_read: u8,
     /// Internal OAM data bus copy buffer used during rendering for `$2004` reads.
-    oam_copybuffer: u8,
+    pub(crate) oam_copybuffer: u8,
     /// Pending VRAM increment after a `$2007` read/write (applied one dot later).
-    pending_vram_increment: PendingVramIncrement,
+    pub(crate) pending_vram_increment: PendingVramIncrement,
     /// Secondary OAM used during sprite evaluation for the current scanline.
-    secondary_oam: SecondaryOamRam,
+    pub(crate) secondary_oam: SecondaryOamRam,
     /// Sprite evaluation state (cycle-accurate structure).
-    sprite_eval: SpriteEvalState,
+    pub(crate) sprite_eval: SpriteEvalState,
     /// Sprite fetch state for dots 257..=320.
-    sprite_fetch: SpriteFetchState,
+    pub(crate) sprite_fetch: SpriteFetchState,
     /// Buffered secondary-OAM sprite bytes/patterns for the next scanline.
-    sprite_line_next: SpriteLineBuffers,
+    pub(crate) sprite_line_next: SpriteLineBuffers,
     /// Master system palette used to map palette indices to RGB colors.
-    palette: Palette,
+    pub(crate) palette: Palette,
     /// Effective rendering enable latch (Mesen-style), true when either
     /// background or sprites are enabled.
-    render_enabled: bool,
+    pub(crate) render_enabled: bool,
     /// Previous dot's rendering enable state (for scroll/odd-frame logic and
     /// trace parity with Mesen's `_prevRenderingEnabled`).
-    prev_render_enabled: bool,
+    pub(crate) prev_render_enabled: bool,
     /// Pending state update request from $2001/$2006/$2007/VRAM-related
     /// side effects. Mirrors Mesen's `_needStateUpdate` latch.
-    state_update_pending: bool,
+    pub(crate) state_update_pending: bool,
     /// Background + sprite rendering target for the current frame.
-    pub framebuffer: FrameBuffer,
+    pub(crate) framebuffer: FrameBuffer,
 }
 
 /// Source register for scroll-glitch emulation.
@@ -178,7 +178,7 @@ impl Ppu {
             master_clock: 0,
             bg_pipeline: BgPipeline::new(),
             sprite_pipeline: SpritePipeline::new(),
-            nmi_output: false,
+            nmi_level: false,
             prevent_vblank_flag: false,
             open_bus: PpuOpenBus::new(),
             ignore_vram_read: 0,
@@ -278,7 +278,7 @@ impl Ppu {
         self.sprite_fetch = SpriteFetchState::default();
         self.sprite_line_next.clear();
 
-        self.nmi_output = false;
+        self.nmi_level = false;
         self.prevent_vblank_flag = false;
 
         // Open bus and related counters.
@@ -300,11 +300,6 @@ impl Ppu {
         if matches!(kind, ResetKind::PowerOn) {
             self.clear_framebuffer();
         }
-    }
-
-    /// Current NMI output level: true when VBLANK is set and NMI is enabled.
-    pub fn nmi_output(&self) -> bool {
-        self.nmi_output
     }
 
     /// Returns an immutable view of the current framebuffer.
@@ -355,7 +350,7 @@ impl Ppu {
             PpuRegister::Control => {
                 self.registers.write_control(value);
                 self.maybe_apply_scroll_glitch(ScrollGlitchSource::Control2000);
-                self.update_nmi_output();
+                self.update_nmi_level();
             }
             PpuRegister::Mask => {
                 // TODO: Hardware/Mesen2 model subtle mid-frame rendering enable/disable glitches (bus address reset, OAM corruption).
@@ -712,7 +707,7 @@ impl Ppu {
             _ => unreachable!("PPU scanline {} out of range", ppu.scanline),
         }
 
-        ppu.update_nmi_output();
+        ppu.update_nmi_level();
         ppu.update_state_latch();
     }
 
@@ -832,6 +827,13 @@ impl Ppu {
         self.cycle += 1;
         if self.cycle >= CYCLES_PER_SCANLINE {
             self.cycle = 0;
+
+            // Finished processing the last visible scanline for this frame; present the
+            // freshly rendered back buffer before moving into post-render/vblank.
+            if self.scanline == (SCREEN_HEIGHT as i16 - 1) {
+                self.framebuffer.swap();
+            }
+
             self.scanline += 1;
 
             if self.scanline == 240 {
@@ -844,10 +846,10 @@ impl Ppu {
 
     /// Recomputes the NMI output line based on VBlank and control register,
     /// latching a pending NMI on rising edges.
-    fn update_nmi_output(&mut self) {
-        let new_output = self.registers.status.contains(Status::VERTICAL_BLANK)
+    fn update_nmi_level(&mut self) {
+        let new_nmi_level = self.registers.status.contains(Status::VERTICAL_BLANK)
             && self.registers.control.nmi_enabled();
-        self.nmi_output = new_output;
+        self.nmi_level = new_nmi_level;
     }
 
     /// Renders a single pixel into the framebuffer based on the current
@@ -1395,7 +1397,6 @@ impl Ppu {
     }
 
     fn read_status(&mut self) -> u8 {
-        let prev_output = self.nmi_output;
         let status = self.registers.status.bits();
         // Mesen2 / hardware: low 5 bits of $2002 come from open bus.
         // Use PpuOpenBus::apply with a mask covering the low 5 bits so only
@@ -1413,7 +1414,7 @@ impl Ppu {
             self.prevent_vblank_flag = true;
         }
 
-        self.update_nmi_output();
+        self.update_nmi_level();
         ret
     }
 
