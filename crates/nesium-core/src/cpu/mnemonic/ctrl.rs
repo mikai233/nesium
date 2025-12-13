@@ -1,7 +1,7 @@
 use crate::{
     bus::{CpuBus, STACK_ADDR},
     context::Context,
-    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
+    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status},
     memory::cpu::{IRQ_VECTOR_HI, IRQ_VECTOR_LO, NMI_VECTOR_HI, NMI_VECTOR_LO},
 };
 

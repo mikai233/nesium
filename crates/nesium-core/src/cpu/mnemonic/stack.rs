@@ -33,7 +33,7 @@
 use crate::{
     bus::{CpuBus, STACK_ADDR},
     context::Context,
-    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status, unreachable_step},
+    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic, status::Status},
 };
 
 /// NV-BDIZC

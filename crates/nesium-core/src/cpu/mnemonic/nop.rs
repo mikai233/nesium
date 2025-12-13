@@ -5,7 +5,6 @@ use crate::{
         Cpu,
         micro_op::{MicroOp, empty_micro_fn},
         mnemonic::Mnemonic,
-        unreachable_step,
     },
 };
 

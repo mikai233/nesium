@@ -29,8 +29,6 @@ macro_rules! unreachable_step {
     }};
 }
 
-pub(crate) use unreachable_step;
-
 pub mod addressing;
 mod cycle;
 mod instruction;
@@ -537,25 +535,6 @@ impl Cpu {
             s: self.s,
             p: self.p.bits(),
         }
-    }
-
-    /// Overwrites CPU registers from a snapshot (resets in-flight instruction).
-    pub(crate) fn load_snapshot(&mut self, snapshot: CpuSnapshot) {
-        self.pc = snapshot.pc;
-        self.a = snapshot.a;
-        self.x = snapshot.x;
-        self.y = snapshot.y;
-        self.s = snapshot.s;
-        self.p = Status::from_bits_truncate(snapshot.p);
-        self.irq_enable_mask = IrqSource::all();
-        self.prev_nmi_level = false;
-        self.nmi_latch = false;
-        self.prev_nmi_latch = false;
-        self.index = 0;
-        self.opcode_in_flight = None;
-        self.base = 0;
-        self.effective_addr = 0;
-        self.oam_dma = None;
     }
 
     /// Returns `true` when an instruction is currently in flight.

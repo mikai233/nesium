@@ -6,7 +6,6 @@ use crate::{
         micro_op::MicroOp,
         mnemonic::Mnemonic,
         status::{BIT_0, BIT_7, Status},
-        unreachable_step,
     },
 };
 
