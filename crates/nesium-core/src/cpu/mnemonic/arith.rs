@@ -330,10 +330,10 @@ pub fn exec_dcp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.base = cpu.base.wrapping_sub(1);
         }
         2 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
             let m = cpu.base;
             cpu.p.set_c(cpu.a >= m);
             cpu.p.set_zn(cpu.a.wrapping_sub(m));
+            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
         }
         _ => unreachable_step!("invalid DCP step {step}"),
     }
@@ -379,7 +379,6 @@ pub fn exec_isc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.base = cpu.base.wrapping_add(1);
         }
         2 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
             let m_new = cpu.base;
             let m_inv = !m_new;
             let carry = if cpu.p.c() { 1 } else { 0 };
@@ -391,6 +390,8 @@ pub fn exec_isc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
                 .set_v(((cpu.a ^ result) & (m_inv ^ result) & BIT_7) != 0);
             cpu.a = result;
             cpu.p.set_zn(result);
+
+            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
         }
         _ => unreachable_step!("invalid ISC step {step}"),
     }
@@ -438,10 +439,10 @@ pub fn exec_rla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.base = (m_old << 1) | carry_in;
         }
         2 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
             let m_new = cpu.base;
             cpu.a &= m_new;
             cpu.p.set_zn(cpu.a);
+            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
         }
         _ => unreachable_step!("invalid RLA step {step}"),
     }
@@ -492,7 +493,6 @@ pub fn exec_rra(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         }
         2 => {
             let m_prime = cpu.base;
-            bus.mem_write(cpu.effective_addr, m_prime, cpu, ctx);
 
             let carry = if cpu.p.c() { 1 } else { 0 };
             let sum = cpu.a as u16 + m_prime as u16 + carry as u16;
@@ -503,6 +503,8 @@ pub fn exec_rra(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.p.set_c(sum > 0xFF);
             cpu.a = result;
             cpu.p.set_zn(result);
+
+            bus.mem_write(cpu.effective_addr, m_prime, cpu, ctx);
         }
         _ => unreachable_step!("invalid RRA step {step}"),
     }
@@ -642,10 +644,10 @@ pub fn exec_slo(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         }
         2 => {
             let m_prime = cpu.base;
-            bus.mem_write(cpu.effective_addr, m_prime, cpu, ctx);
             let result = cpu.a | m_prime;
             cpu.a = result;
             cpu.p.set_zn(result);
+            bus.mem_write(cpu.effective_addr, m_prime, cpu, ctx);
         }
         _ => unreachable_step!("invalid SLO step {step}"),
     }
@@ -693,10 +695,10 @@ pub fn exec_sre(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         }
         2 => {
             let m_prime = cpu.base;
-            bus.mem_write(cpu.effective_addr, m_prime, cpu, ctx);
             let result = cpu.a ^ m_prime;
             cpu.a = result;
             cpu.p.set_zn(result);
+            bus.mem_write(cpu.effective_addr, m_prime, cpu, ctx);
         }
         _ => unreachable_step!("invalid SRE step {step}"),
     }
@@ -1113,9 +1115,6 @@ impl Mnemonic {
                 // Bus: WRITE V_new to M(effective_addr). This completes the DEC part.
                 // Internal: Simultaneously perform CMP (A - V_new) and set flags.
                 micro_fn: |cpu, bus, ctx| {
-                    // Final Write: The correct, decremented value is written to memory.
-                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
-
                     // Internal Operation: Perform CMP (A - M) and update status flags (N, Z, C).
                     let m = cpu.base; // m is the decremented value (V_new)
 
@@ -1124,6 +1123,9 @@ impl Mnemonic {
 
                     // Negative (N) and Zero (Z) flags: Set based on the result of A - M
                     cpu.p.set_zn(cpu.a.wrapping_sub(m));
+
+                    // Final Write: The correct, decremented value is written to memory.
+                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
                 },
             },
         ]
@@ -1183,22 +1185,22 @@ impl Mnemonic {
             MicroOp {
                 name: "isc_final_write_sbc",
                 micro_fn: |cpu, bus, ctx| {
-                    // 1. Bus: Write the new, incremented value (M_new) to memory (Completes INC part)
-                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
-
-                    // 2. Internal: Perform SBC (A - M_new - /C)
+                    // 1. Internal: Perform SBC (A - M_new - /C)
                     let m_new = cpu.base;
                     let m_inv = !m_new;
                     let carry = if cpu.p.c() { 1 } else { 0 };
                     let sum = cpu.a as u16 + m_inv as u16 + carry as u16;
                     let result = sum as u8;
 
-                    // 3. Update Status Flags and Accumulator
+                    // 2. Update Status Flags and Accumulator
                     cpu.p.set_c(sum > 0xFF);
                     cpu.p
                         .set_v(((cpu.a ^ result) & (m_inv ^ result) & BIT_7) != 0);
                     cpu.a = result;
                     cpu.p.set_zn(result);
+
+                    // 3. Bus: Write the new, incremented value (M_new) to memory (Completes INC part)
+                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
                 },
             },
         ]
@@ -1267,10 +1269,7 @@ impl Mnemonic {
             MicroOp {
                 name: "rla_final_write_and",
                 micro_fn: |cpu, bus, ctx| {
-                    // 1. Bus: Write the new, rotated value (M_new) to memory (Completes ROL part)
-                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
-
-                    // 2. Internal: Perform AND operation (A = A & M_new)
+                    // 1. Internal: Perform AND operation (A = A & M_new)
                     let m_new = cpu.base;
 
                     // The ROL operation has already updated the Carry (C) flag in T5.
@@ -1279,6 +1278,9 @@ impl Mnemonic {
 
                     // Update Negative (N) and Zero (Z) flags based on the new Accumulator value
                     cpu.p.set_zn(cpu.a);
+
+                    // 2. Bus: Write the new, rotated value (M_new) to memory (Completes ROL part)
+                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
                 },
             },
         ]
