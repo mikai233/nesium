@@ -122,7 +122,7 @@ pub fn exec_jsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         1 => {
             let return_pc = cpu.pc;
             cpu.effective_addr = return_pc;
-            bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
+            cpu.dummy_read_at(bus, STACK_ADDR + cpu.s as u16, ctx);
         }
         2 => {
             let pc_hi = (cpu.effective_addr >> 8) as u8;
@@ -168,8 +168,7 @@ pub fn exec_rti(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.dummy_read(bus, ctx);
         }
         1 => {
-            // TODO: dummy read fron stack?
-            bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
+            cpu.dummy_read_at(bus, STACK_ADDR + cpu.s as u16, ctx);
         }
         2 => {
             let p_bits = cpu.pull(bus, ctx);
@@ -207,10 +206,10 @@ pub fn exec_rti(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_rts(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
+            cpu.dummy_read(bus, ctx);
         }
         1 => {
-            bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
+            cpu.dummy_read_at(bus, STACK_ADDR + cpu.s as u16, ctx);
         }
         2 => {
             cpu.base = cpu.pull(bus, ctx);
@@ -220,7 +219,7 @@ pub fn exec_rts(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.effective_addr = (hi_byte << 8) | (cpu.base as u16);
         }
         4 => {
-            bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.dummy_read_at(bus, cpu.effective_addr, ctx);
             cpu.pc = cpu.effective_addr.wrapping_add(1);
         }
         _ => unreachable_step!("invalid RTS step {step}"),

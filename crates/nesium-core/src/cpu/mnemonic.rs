@@ -17,6 +17,7 @@ pub mod shift;
 pub mod stack;
 pub mod trans;
 
+/// TODO:: Not handle dma yet
 #[inline]
 pub(crate) fn hi_byte_store_final(
     cpu: &mut Cpu,

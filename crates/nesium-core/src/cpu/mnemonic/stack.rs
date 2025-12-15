@@ -56,7 +56,7 @@ use crate::{
 pub fn exec_pha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let _ = bus.mem_read(cpu.pc, cpu, ctx);
+            cpu.dummy_read(bus, ctx);
         }
         1 => {
             cpu.push(bus, ctx, cpu.a);
@@ -83,7 +83,7 @@ pub fn exec_pha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_php(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let _ = bus.mem_read(cpu.pc, cpu, ctx);
+            cpu.dummy_read(bus, ctx);
         }
         1 => {
             let p = cpu.p | Status::BREAK | Status::UNUSED;
@@ -116,10 +116,10 @@ pub fn exec_php(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_pla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let _ = bus.mem_read(cpu.pc, cpu, ctx);
+            cpu.dummy_read(bus, ctx);
         }
         1 => {
-            let _ = bus.mem_read(STACK_ADDR | cpu.s as u16, cpu, ctx);
+            cpu.dummy_read_at(bus, STACK_ADDR | cpu.s as u16, ctx);
         }
         2 => {
             let value = cpu.pull(bus, ctx);
@@ -151,10 +151,10 @@ pub fn exec_pla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_plp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let _ = bus.mem_read(cpu.pc, cpu, ctx);
+            cpu.dummy_read(bus, ctx);
         }
         1 => {
-            let _ = bus.mem_read(STACK_ADDR | cpu.s as u16, cpu, ctx);
+            cpu.dummy_read_at(bus, STACK_ADDR | cpu.s as u16, ctx);
         }
         2 => {
             let value = cpu.pull(bus, ctx);
@@ -188,7 +188,7 @@ impl Mnemonic {
                 name: "pha_dummy_read",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 1: Dummy read from current PC (internal operation)
-                    let _ = bus.mem_read(cpu.pc, cpu, ctx);
+                    cpu.dummy_read(bus, ctx);
                 },
             },
             MicroOp {
@@ -222,7 +222,7 @@ impl Mnemonic {
                 name: "php_dummy_read",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 1: Dummy read from current PC
-                    let _ = bus.mem_read(cpu.pc, cpu, ctx);
+                    cpu.dummy_read(bus, ctx);
                 },
             },
             MicroOp {
@@ -262,14 +262,14 @@ impl Mnemonic {
                 name: "pla_dummy_read1",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 1: Dummy read from PC
-                    let _ = bus.mem_read(cpu.pc, cpu, ctx);
+                    cpu.dummy_read(bus, ctx);
                 },
             },
             MicroOp {
                 name: "pla_dummy_read2",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 2: Dummy read from current stack location (before increment)
-                    let _ = bus.mem_read(STACK_ADDR | cpu.s as u16, cpu, ctx);
+                    cpu.dummy_read_at(bus, STACK_ADDR | cpu.s as u16, ctx);
                 },
             },
             MicroOp {
@@ -307,14 +307,14 @@ impl Mnemonic {
                 name: "plp_dummy_read1",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 1: Dummy read from PC
-                    let _ = bus.mem_read(cpu.pc, cpu, ctx);
+                    cpu.dummy_read(bus, ctx);
                 },
             },
             MicroOp {
                 name: "plp_dummy_read2",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 2: Dummy read from current stack location
-                    let _ = bus.mem_read(STACK_ADDR | cpu.s as u16, cpu, ctx);
+                    cpu.dummy_read_at(bus, STACK_ADDR | cpu.s as u16, ctx);
                 },
             },
             MicroOp {
