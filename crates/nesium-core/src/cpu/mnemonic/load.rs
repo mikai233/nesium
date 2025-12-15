@@ -4,9 +4,8 @@ use crate::{
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic},
 };
 
-/// LVVVVVVV
 /// NV-BDIZC
-/// --------
+/// ✓-----✓-
 ///
 /// LAS - "AND" Memory with Stack Pointer
 /// Operation: M & S → A, X, S
@@ -216,19 +215,29 @@ pub fn exec_sax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// NV-BDIZC
 /// --------
 ///
-/// SHA - Store A AND X AND HighByte(ADDR+1) In Memory
-/// Operation: A & X & hb(addr+1) → M
+/// SHA - Store Accumulator "AND" Index Register X "AND" Value
+/// Operation: A ∧ X ∧ V → M
 ///
-/// SHA stores the logical bit-by-bit AND of the accumulator, index register X,
-/// and the high byte of the target address plus one back to memory.
+/// The undocumented SHA instruction performs a bit-by-bit AND operation of the
+/// following three operands: The first two are the accumulator and the index
+/// register X.
+///
+/// The third operand depends on the addressing mode.
+/// - In the zero page indirect Y-indexed case, the third operand is the data in
+///   memory at the given zero page address (ignoring the addressing mode's Y
+///   offset) plus 1.
+/// - In the Y-indexed absolute case, it is the upper 8 bits of the given address
+///   (ignoring the addressing mode's Y offset), plus 1.
+///
+/// It then transfers the result to the addressed memory location.
 ///
 /// No flags or registers in the microprocessor are affected by the store
 /// operation.
 ///
-/// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
-/// ----------------------- | ------------------------ | ------ | --------- | ----------
-/// Absolute,Y              | SHA $nnnn,Y              | $9F*   | 3         | 5
-/// (Indirect),Y            | SHA ($nn),Y              | $93*   | 2         | 6
+/// Addressing Mode                | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// ------------------------------ | ------------------------ | ------ | --------- | ----------
+/// Y-Indexed Absolute             | SHA $nnnn,Y              | $9F*   | 3         | 5
+/// Zero Page Indirect Y-Indexed   | SHA ($nn),Y              | $93*   | 2         | 6
 ///
 /// *Undocumented.
 #[inline]
@@ -246,18 +255,20 @@ pub fn exec_sha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// NV-BDIZC
 /// --------
 ///
-/// SHX - Store X AND HighByte(ADDR+1) In Memory
-/// Operation: X & hb(addr+1) → M
+/// SHX - Store Index Register X "AND" Value
+/// Operation: X ∧ (H + 1) → M
 ///
-/// SHX stores the logical bit-by-bit AND of the index register X and the high
-/// byte of the target address plus one back to memory.
+/// The undocumented SHX instruction performs a bit-by-bit AND operation of the
+/// index register X and the upper 8 bits of the given address (ignoring the
+/// addressing mode's Y offset), plus 1. It then transfers the result to the
+/// addressed memory location.
 ///
 /// No flags or registers in the microprocessor are affected by the store
 /// operation.
 ///
-/// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
-/// ----------------------- | ------------------------ | ------ | --------- | ----------
-/// Absolute,Y              | SHX $nnnn,Y              | $9E*   | 3         | 5
+/// Addressing Mode     | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// ------------------- | ------------------------ | ------ | --------- | ----------
+/// Y-Indexed Absolute  | SHX $nnnn,Y              | $9E*   | 3         | 5
 ///
 /// *Undocumented.
 #[inline]
@@ -286,18 +297,20 @@ pub fn exec_shx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// NV-BDIZC
 /// --------
 ///
-/// SHY - Store Y AND HighByte(ADDR+1) In Memory
-/// Operation: Y & hb(addr+1) → M
+/// SHY - Store Index Register Y "AND" Value
+/// Operation: Y ∧ (H + 1) → M
 ///
-/// SHY stores the logical bit-by-bit AND of the index register Y and the high
-/// byte of the target address plus one back to memory.
+/// The undocumented SHY instruction performs a bit-by-bit AND operation of the
+/// index register Y and the upper 8 bits of the given address (ignoring the
+/// addressing mode's X offset), plus 1. It then transfers the result to the
+/// addressed memory location.
 ///
 /// No flags or registers in the microprocessor are affected by the store
 /// operation.
 ///
-/// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
-/// ----------------------- | ------------------------ | ------ | --------- | ----------
-/// Absolute,X              | SHY $nnnn,X              | $9C*   | 3         | 5
+/// Addressing Mode     | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// ------------------- | ------------------------ | ------ | --------- | ----------
+/// X-Indexed Absolute  | SHY $nnnn,X              | $9C*   | 3         | 5
 ///
 /// *Undocumented.
 #[inline]
@@ -329,9 +342,10 @@ pub fn exec_shy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// STA - Store Accumulator in Memory
 /// Operation: A → M
 ///
-/// Stores the contents of the accumulator into memory.
+/// This instruction transfers the contents of the accumulator to memory.
 ///
-/// Does not affect any flags.
+/// This instruction affects none of the flags in the processor status register
+/// and does not affect the accumulator.
 ///
 /// Addressing Mode                     | Assembly Language Form | Opcode | No. Bytes | No. Cycles
 /// ----------------------------------- | ------------------------ | ------ | --------- | ----------
@@ -342,8 +356,6 @@ pub fn exec_shy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// X-Indexed Zero Page                 | STA $nn,X                | $95    | 2         | 4
 /// X-Indexed Zero Page Indirect        | STA ($nn,X)              | $81    | 2         | 6
 /// Zero Page Indirect Y-Indexed        | STA ($nn),Y              | $91    | 2         | 6
-///
-/// p: =1 if page is crossed.
 #[inline]
 pub fn exec_sta(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
@@ -355,18 +367,19 @@ pub fn exec_sta(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// NV-BDIZC
 /// --------
 ///
-/// STX - Store Index Register X in Memory
+/// STX - Store Index Register X In Memory
 /// Operation: X → M
 ///
-/// Stores the contents of the index register X into memory.
+/// Transfers value of X register to addressed memory location.
 ///
-/// Does not affect any flags.
+/// No flags or registers in the microprocessor are affected by the store
+/// operation.
 ///
-/// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
-/// ----------------------- | ------------------------ | ------ | --------- | ----------
-/// Absolute                | STX $nnnn                | $8E    | 3         | 4
-/// Zero Page               | STX $nn                  | $86    | 2         | 3
-/// Y-Indexed Zero Page     | STX $nn,Y                | $96    | 2         | 4
+/// Addressing Mode     | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// ------------------- | ------------------------ | ------ | --------- | ----------
+/// Absolute            | STX $nnnn                | $8E    | 3         | 4
+/// Zero Page           | STX $nn                  | $86    | 2         | 3
+/// Y-Indexed Zero Page | STX $nn,Y                | $96    | 2         | 4
 #[inline]
 pub fn exec_stx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
@@ -378,18 +391,18 @@ pub fn exec_stx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// NV-BDIZC
 /// --------
 ///
-/// STY - Store Index Register Y in Memory
+/// STY - Store Index Register Y In Memory
 /// Operation: Y → M
 ///
-/// Stores the contents of the index register Y into memory.
+/// Transfer the value of the Y register to the addressed memory location.
 ///
-/// Does not affect any flags.
+/// STY does not affect any flags or registers in the microprocessor.
 ///
-/// Addressing Mode         | Assembly Language Form | Opcode | No. Bytes | No. Cycles
-/// ----------------------- | ------------------------ | ------ | --------- | ----------
-/// Absolute                | STY $nnnn                | $8C    | 3         | 4
-/// Zero Page               | STY $nn                  | $84    | 2         | 3
-/// X-Indexed Zero Page     | STY $nn,X                | $94    | 2         | 4
+/// Addressing Mode     | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// ------------------- | ------------------------ | ------ | --------- | ----------
+/// Absolute            | STY $nnnn                | $8C    | 3         | 4
+/// Zero Page           | STY $nn                  | $84    | 2         | 3
+/// X-Indexed Zero Page | STY $nn,X                | $94    | 2         | 4
 #[inline]
 pub fn exec_sty(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {

@@ -148,6 +148,20 @@ pub fn exec_inc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// INX - Increment Index Register X By One
 /// Operation: X + 1 → X
+///
+/// Increment X adds 1 to the current value of the X register. This is an 8-bit
+/// increment which does not affect the carry operation, therefore, if the value
+/// of X before the increment was FF, the resulting value is 00.
+///
+/// INX does not affect the carry or overflow flags; it sets the N flag if the
+/// result of the increment has a one in bit 7, otherwise resets N; sets the Z
+/// flag if the result of the increment is 0, otherwise it resets the Z flag.
+///
+/// INX does not affect any other register other than the X register.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | INX                      | $E8    | 1         | 2
 #[inline]
 pub fn exec_inx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
@@ -165,6 +179,18 @@ pub fn exec_inx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// INY - Increment Index Register Y By One
 /// Operation: Y + 1 → Y
+///
+/// Increment Y increments or adds one to the current value in the Y register,
+/// storing the result in the Y register. As in the case of INX the primary
+/// application is to step thru a set of values using the Y register.
+///
+/// The INY does not affect the carry or overflow flags, sets the N flag if the
+/// result of the increment has a one in bit 7, otherwise resets N, sets Z if as
+/// a result of the increment the Y register is zero otherwise resets the Z flag.
+///
+/// Addressing Mode | Assembly Language Form | Opcode | No. Bytes | No. Cycles
+/// --------------- | ------------------------ | ------ | --------- | ----------
+/// Implied         | INY                      | $C8    | 1         | 2
 #[inline]
 pub fn exec_iny(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
