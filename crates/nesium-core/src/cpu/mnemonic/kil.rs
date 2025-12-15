@@ -30,7 +30,7 @@ use crate::{
 /// Implied         | JAM                    | $F2*   | 1         | X
 /// *Undocumented.
 #[inline]
-pub fn exec_jam(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_jam(cpu: &mut Cpu, _: &mut CpuBus<'_>, _: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.pc -= 1;
@@ -71,7 +71,7 @@ impl Mnemonic {
     pub(crate) const fn jam() -> &'static [MicroOp] {
         &[MicroOp {
             name: "jam",
-            micro_fn: |cpu, bus, ctx| {
+            micro_fn: |cpu, _, _| {
                 cpu.pc -= 1;
                 // Prevent IRQ/NMI
                 cpu.prev_irq_active = false;

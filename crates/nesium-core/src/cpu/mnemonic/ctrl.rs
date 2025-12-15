@@ -165,9 +165,10 @@ pub fn exec_jsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_rti(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.mem_read(cpu.pc.wrapping_add(1), cpu, ctx);
+            cpu.dummy_read(bus, ctx);
         }
         1 => {
+            // TODO: dummy read fron stack?
             bus.mem_read(STACK_ADDR + cpu.s as u16, cpu, ctx);
         }
         2 => {
@@ -455,16 +456,11 @@ impl Mnemonic {
     /// Implied         | RTI                      | $40    | 1         | 6
     pub(crate) const fn rti() -> &'static [MicroOp] {
         &[
-            // T2: Dummy Read (PC + 1)
+            // T2: Dummy Read PC
             MicroOp {
                 name: "rti_dummy_read_pc",
-                // Bus: READ from the address AFTER the RTI opcode. Value is discarded.
-                // Internal: S remains unchanged. PC should have been auto-incremented to PC+1.
                 micro_fn: |cpu, bus, ctx| {
-                    // NOTE: The address is typically PC+1, where PC is the address of the RTI instruction.
-                    // We read the effective address of the next instruction, which is often PC_Start + 1.
-                    // In a cycle-accurate model, this T2 read should be PC + 1.
-                    bus.mem_read(cpu.pc.wrapping_add(1), cpu, ctx);
+                    cpu.dummy_read(bus, ctx);
                 },
             },
             // T3: Dummy Read (Stack Pointer S)

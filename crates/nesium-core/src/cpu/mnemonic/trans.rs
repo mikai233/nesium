@@ -1,7 +1,11 @@
 use crate::{
     bus::CpuBus,
     context::Context,
-    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic},
+    cpu::{
+        Cpu,
+        micro_op::MicroOp,
+        mnemonic::{Mnemonic, hi_byte_store_final},
+    },
 };
 
 /// NV-BDIZC
@@ -31,8 +35,7 @@ pub fn exec_shs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         0 => {
             let s = cpu.a & cpu.x;
             cpu.s = s;
-            let m = s & cpu.base.wrapping_add(1);
-            bus.mem_write(cpu.effective_addr, m, cpu, ctx);
+            hi_byte_store_final(cpu, bus, ctx, s);
         }
         _ => unreachable_step!("invalid SHS step {step}"),
     }
@@ -234,15 +237,58 @@ impl Mnemonic {
     ///
     /// *Undocumented.
     pub(crate) const fn shs() -> &'static [MicroOp] {
-        &[MicroOp {
-            name: "shs",
-            micro_fn: |cpu, bus, ctx| {
-                let s = cpu.a & cpu.x;
-                cpu.s = s;
-                let m = s & cpu.base.wrapping_add(1);
-                bus.mem_write(cpu.effective_addr, m, cpu, ctx);
+        &[
+            MicroOp {
+                name: "shs_t2_fetch_lo",
+                micro_fn: |cpu, bus, ctx| {
+                    let lo = bus.mem_read(cpu.pc, cpu, ctx);
+                    cpu.incr_pc();
+                    cpu.effective_addr = lo as u16;
+                },
             },
-        }]
+            MicroOp {
+                name: "shs_t3_fetch_hi",
+                micro_fn: |cpu, bus, ctx| {
+                    let hi = bus.mem_read(cpu.pc, cpu, ctx);
+                    cpu.incr_pc();
+                    cpu.base = hi;
+                    cpu.effective_addr |= (hi as u16) << 8;
+                },
+            },
+            MicroOp {
+                name: "shs_t4_dummy_read",
+                micro_fn: |cpu, bus, ctx| {
+                    let base = cpu.effective_addr;
+                    let y = cpu.y;
+                    let operand = base.wrapping_add(y as u16);
+                    let page_crossed = (operand & 0xFF00) != (base & 0xFF00);
+                    let dummy_addr =
+                        operand.wrapping_sub(if page_crossed { 0x0100 } else { 0x0000 });
+                    let _ = bus.mem_read(dummy_addr, cpu, ctx);
+                    cpu.effective_addr = operand;
+                },
+            },
+            MicroOp {
+                name: "shs_t5_store",
+                micro_fn: |cpu, bus, ctx| {
+                    let s = cpu.a & cpu.x;
+                    cpu.s = s;
+                    let value = s & cpu.base.wrapping_add(1);
+
+                    let addr = cpu.effective_addr;
+                    let crossed = ((addr >> 8) as u8) != cpu.base;
+                    let final_addr = if crossed {
+                        let hi = ((addr >> 8) as u8) & s;
+                        let lo = (addr & 0x00FF) as u8;
+                        ((hi as u16) << 8) | (lo as u16)
+                    } else {
+                        addr
+                    };
+
+                    bus.mem_write(final_addr, value, cpu, ctx);
+                },
+            },
+        ]
     }
 
     /// NV-BDIZC

@@ -36,7 +36,7 @@ pub fn exec_bcc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
             cpu.pc = new_pc;
-            cpu.check_cross_page(old_pc, new_pc);
+            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
         }
         2 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -76,7 +76,7 @@ pub fn exec_bcs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
             cpu.pc = new_pc;
-            cpu.check_cross_page(old_pc, new_pc);
+            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
         }
         2 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -119,7 +119,7 @@ pub fn exec_beq(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
             cpu.pc = new_pc;
-            cpu.check_cross_page(old_pc, new_pc);
+            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
         }
         2 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -159,7 +159,7 @@ pub fn exec_bmi(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
             cpu.pc = new_pc;
-            cpu.check_cross_page(old_pc, new_pc);
+            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
         }
         2 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -201,7 +201,7 @@ pub fn exec_bne(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
             cpu.pc = new_pc;
-            cpu.check_cross_page(old_pc, new_pc);
+            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
         }
         2 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -245,7 +245,7 @@ pub fn exec_bpl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
             cpu.pc = new_pc;
-            cpu.check_cross_page(old_pc, new_pc);
+            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
         }
         2 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -286,7 +286,7 @@ pub fn exec_bvc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
             cpu.pc = new_pc;
-            cpu.check_cross_page(old_pc, new_pc);
+            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
         }
         2 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -326,7 +326,7 @@ pub fn exec_bvs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             let offset = cpu.base as i8;
             let new_pc = old_pc.wrapping_add(offset as u16);
             cpu.pc = new_pc;
-            cpu.check_cross_page(old_pc, new_pc);
+            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
         }
         2 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -372,7 +372,7 @@ impl Mnemonic {
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
                     cpu.pc = new_pc;
-                    cpu.check_cross_page(old_pc, new_pc);
+                    cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
                 },
             },
             MicroOp {
@@ -419,7 +419,7 @@ impl Mnemonic {
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
                     cpu.pc = new_pc;
-                    cpu.check_cross_page(old_pc, new_pc);
+                    cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
                 },
             },
             MicroOp {
@@ -469,7 +469,7 @@ impl Mnemonic {
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
                     cpu.pc = new_pc;
-                    cpu.check_cross_page(old_pc, new_pc);
+                    cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
                 },
             },
             MicroOp {
@@ -516,7 +516,7 @@ impl Mnemonic {
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
                     cpu.pc = new_pc;
-                    cpu.check_cross_page(old_pc, new_pc);
+                    cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
                 },
             },
             MicroOp {
@@ -565,7 +565,7 @@ impl Mnemonic {
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
                     cpu.pc = new_pc;
-                    cpu.check_cross_page(old_pc, new_pc);
+                    cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
                 },
             },
             MicroOp {
@@ -616,7 +616,7 @@ impl Mnemonic {
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
                     cpu.pc = new_pc;
-                    cpu.check_cross_page(old_pc, new_pc);
+                    cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
                 },
             },
             MicroOp {
@@ -664,7 +664,7 @@ impl Mnemonic {
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
                     cpu.pc = new_pc;
-                    cpu.check_cross_page(old_pc, new_pc);
+                    cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
                 },
             },
             MicroOp {
@@ -711,7 +711,7 @@ impl Mnemonic {
                     let offset = cpu.base as i8;
                     let new_pc = old_pc.wrapping_add(offset as u16);
                     cpu.pc = new_pc;
-                    cpu.check_cross_page(old_pc, new_pc);
+                    cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
                 },
             },
             MicroOp {

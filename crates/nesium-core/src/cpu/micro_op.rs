@@ -69,7 +69,7 @@ impl MicroOp {
                 }
                 let addr = base.wrapping_add(cpu.x as u16);
 
-                cpu.check_cross_page(base, addr);
+                cpu.skip_optional_dummy_read_cycle(base, addr);
                 cpu.effective_addr = addr;
                 cpu.incr_pc();
             },
@@ -92,7 +92,7 @@ impl MicroOp {
                 }
                 let addr = base.wrapping_add(cpu.y as u16);
 
-                cpu.check_cross_page(base, addr);
+                cpu.skip_optional_dummy_read_cycle(base, addr);
                 cpu.effective_addr = addr;
                 cpu.incr_pc();
             },
@@ -190,7 +190,7 @@ impl MicroOp {
                 }
                 let addr = base.wrapping_add(cpu.y as u16);
 
-                cpu.check_cross_page(base, addr);
+                cpu.skip_optional_dummy_read_cycle(base, addr);
                 cpu.effective_addr = addr;
             },
         }

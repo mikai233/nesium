@@ -17,6 +17,30 @@ pub mod shift;
 pub mod stack;
 pub mod trans;
 
+#[inline]
+pub(crate) fn hi_byte_store_final(
+    cpu: &mut Cpu,
+    bus: &mut CpuBus,
+    ctx: &mut Context,
+    value_reg: u8,
+) {
+    let base_hi = cpu.base;
+    let addr = cpu.effective_addr;
+
+    let crossed = ((addr >> 8) as u8) != base_hi;
+    let mut hi = (addr >> 8) as u8;
+    let lo = (addr & 0x00FF) as u8;
+
+    if crossed {
+        hi &= value_reg;
+    }
+
+    let value = value_reg & base_hi.wrapping_add(1);
+    let final_addr = ((hi as u16) << 8) | (lo as u16);
+
+    bus.mem_write(final_addr, value, cpu, ctx);
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Mnemonic {

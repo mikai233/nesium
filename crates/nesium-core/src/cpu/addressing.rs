@@ -3,7 +3,12 @@ use std::fmt::Display;
 use crate::{
     bus::CpuBus,
     context::Context,
-    cpu::{Cpu, micro_op::MicroOp},
+    cpu::{
+        Cpu,
+        lookup::LOOKUP_TABLE,
+        micro_op::MicroOp,
+        timing::{CYCLE_TABLE, Timing},
+    },
 };
 
 /// Represents the addressing modes supported by the 6502 CPU.
@@ -317,7 +322,7 @@ impl Addressing {
         }
     }
 
-    pub(crate) const fn maybe_cross_page(&self) -> bool {
+    pub(crate) const fn has_page_cross_penalty(&self) -> bool {
         matches!(
             self,
             Addressing::AbsoluteX
@@ -325,6 +330,16 @@ impl Addressing {
                 | Addressing::IndirectY
                 | Addressing::Relative
         )
+    }
+
+    pub(crate) fn page_crossed(base: u16, addr: u16) -> bool {
+        (base & 0xFF00) != (addr & 0xFF00)
+    }
+
+    pub(crate) const fn forces_dummy_read_cycle(opcode: u8) -> bool {
+        let timing = CYCLE_TABLE[opcode as usize];
+        let instr = &LOOKUP_TABLE[opcode as usize];
+        instr.addressing.has_page_cross_penalty() && matches!(timing, Timing::Fixed(_))
     }
 }
 
@@ -372,18 +387,25 @@ fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
         1 => {
             let hi = bus.mem_read(cpu.pc, cpu, ctx);
             let base = ((hi as u16) << 8) | cpu.effective_addr;
-            if cpu.opcode_in_flight == Some(0x9C) {
-                cpu.base = hi;
-            }
+            cpu.base = hi;
+            // if cpu.opcode_in_flight == Some(0x9C) {
+            //     cpu.base = hi;
+            // }
             let addr = base.wrapping_add(cpu.x as u16);
-            cpu.check_cross_page(base, addr);
+            cpu.skip_optional_dummy_read_cycle(base, addr);
             cpu.effective_addr = addr;
             cpu.incr_pc();
         }
         2 => {
             let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
-            let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-            let _ = bus.mem_read(dummy_addr, cpu, ctx);
+            let page_crossed = Addressing::page_crossed(base, cpu.effective_addr);
+            let dummy_addr = if page_crossed {
+                cpu.effective_addr.wrapping_sub(0x100)
+            } else {
+                // Force dummy read cycle
+                cpu.effective_addr
+            };
+            cpu.dummy_read_at(bus, dummy_addr, ctx);
         }
         _ => unreachable_step!("invalid AbsoluteX step {step}"),
     }
@@ -398,21 +420,28 @@ fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
         1 => {
             let hi = bus.mem_read(cpu.pc, cpu, ctx);
             let base = ((hi as u16) << 8) | cpu.effective_addr;
-            if cpu.opcode_in_flight == Some(0x9F)
-                || cpu.opcode_in_flight == Some(0x9E)
-                || cpu.opcode_in_flight == Some(0x9B)
-            {
-                cpu.base = hi;
-            }
+            cpu.base = hi;
+            // if cpu.opcode_in_flight == Some(0x9F)
+            //     || cpu.opcode_in_flight == Some(0x9E)
+            //     || cpu.opcode_in_flight == Some(0x9B)
+            // {
+            //     cpu.base = hi;
+            // }
             let addr = base.wrapping_add(cpu.y as u16);
-            cpu.check_cross_page(base, addr);
+            cpu.skip_optional_dummy_read_cycle(base, addr);
             cpu.effective_addr = addr;
             cpu.incr_pc();
         }
         2 => {
             let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
-            let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-            let _ = bus.mem_read(dummy_addr, cpu, ctx);
+            let page_crossed = Addressing::page_crossed(base, cpu.effective_addr);
+            let dummy_addr = if page_crossed {
+                cpu.effective_addr.wrapping_sub(0x100)
+            } else {
+                // Force dummy read cycle
+                cpu.effective_addr
+            };
+            cpu.dummy_read_at(bus, dummy_addr, ctx);
         }
         _ => unreachable_step!("invalid AbsoluteY step {step}"),
     }
@@ -463,7 +492,7 @@ fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step
         }
         1 => {
             let addr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            let _ = bus.mem_read(addr, cpu, ctx);
+            bus.mem_read(addr, cpu, ctx);
             cpu.effective_addr = addr;
         }
         _ => unreachable_step!("invalid ZeroPageX step {step}"),
@@ -478,7 +507,7 @@ fn exec_zero_page_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step
         }
         1 => {
             let addr = (cpu.effective_addr + cpu.y as u16) & 0x00FF;
-            let _ = bus.mem_read(addr, cpu, ctx);
+            bus.mem_read(addr, cpu, ctx);
             cpu.effective_addr = addr;
         }
         _ => unreachable_step!("invalid ZeroPageY step {step}"),
@@ -493,7 +522,7 @@ fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
         }
         1 => {
             let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            let _ = bus.mem_read(ptr, cpu, ctx);
+            bus.mem_read(ptr, cpu, ctx);
         }
         2 => {
             let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
@@ -521,17 +550,24 @@ fn exec_indirect_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
             let hi_addr = (cpu.effective_addr + 1) & 0x00FF;
             let hi = bus.mem_read(hi_addr, cpu, ctx);
             let base = ((hi as u16) << 8) | (cpu.base as u16);
-            if cpu.opcode_in_flight == Some(0x93) {
-                cpu.base = hi;
-            }
+            cpu.base = hi;
+            // if cpu.opcode_in_flight == Some(0x93) {
+            //     cpu.base = hi;
+            // }
             let addr = base.wrapping_add(cpu.y as u16);
-            cpu.check_cross_page(base, addr);
+            cpu.skip_optional_dummy_read_cycle(base, addr);
             cpu.effective_addr = addr;
         }
         3 => {
             let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
-            let dummy_addr = (base & 0xFF00) | (cpu.effective_addr & 0x00FF);
-            let _ = bus.mem_read(dummy_addr, cpu, ctx);
+            let page_crossed = Addressing::page_crossed(base, cpu.effective_addr);
+            let dummy_addr = if page_crossed {
+                cpu.effective_addr.wrapping_sub(0x100)
+            } else {
+                // Force dummy read cycle
+                cpu.effective_addr
+            };
+            cpu.dummy_read_at(bus, dummy_addr, ctx);
         }
         _ => unreachable_step!("invalid IndirectY step {step}"),
     }

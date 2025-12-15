@@ -6,7 +6,6 @@ use std::sync::{Mutex, OnceLock};
 use crate::bus::{CpuBus, STACK_ADDR};
 use crate::context::Context;
 use crate::cpu::addressing::Addressing;
-use crate::cpu::cycle::{CYCLE_TABLE, Cycle};
 use crate::cpu::instruction::Instruction;
 use crate::cpu::irq::{IrqKind, IrqSource};
 use crate::cpu::lookup::LOOKUP_TABLE;
@@ -33,13 +32,13 @@ macro_rules! unreachable_step {
 }
 
 pub mod addressing;
-mod cycle;
 mod instruction;
 mod irq;
 mod lookup;
 mod micro_op;
 mod mnemonic;
 mod status;
+mod timing;
 
 /// Lightweight CPU register snapshot used for tracing/debugging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -346,8 +345,14 @@ impl Cpu {
         self.irq_active = bus.irq_level() && !self.p.contains(Status::INTERRUPT);
     }
 
+    #[inline]
     pub(crate) fn dummy_read(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
         bus.mem_read(self.pc, self, ctx)
+    }
+
+    #[inline]
+    pub(crate) fn dummy_read_at(&mut self, bus: &mut CpuBus, addr: u16, ctx: &mut Context) {
+        bus.mem_read(addr, self, ctx);
     }
 
     #[inline]
@@ -388,10 +393,10 @@ impl Cpu {
     #[inline]
     pub(crate) fn exec(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context, instr: &Instruction) {
         match instr.mnemonic {
-            // JSR, RTI, and RTS have complex, non-standard instruction cycles (micro-ops),
+            // JSR, SHA, SHS, SHX and SHY have complex, non-standard instruction cycles (micro-ops),
             // especially during stack manipulation. Their addressing phase cycles are often
             // dedicated to setup and are distinct from standard addressing modes.
-            Mnemonic::JSR | Mnemonic::RTI | Mnemonic::RTS if self.index == 0 => {
+            Mnemonic::JSR if self.index == 0 => {
                 // Skip the cycles normally reserved for general addressing mode processing.
                 // These instructions have their own custom micro-ops defined immediately
                 // following the opcode fetch cycle (index 0).
@@ -406,7 +411,6 @@ impl Cpu {
                 instr.exec(self, bus, ctx, self.index);
             }
         }
-
         // Move to the next cycle index for the next execution phase.
         self.index += 1;
     }
@@ -540,19 +544,12 @@ impl Cpu {
         }
     }
 
-    pub(crate) const fn always_cross_page(opcode: u8, instr: &Instruction) -> bool {
-        let cycle = CYCLE_TABLE[opcode as usize];
-        instr.addressing.maybe_cross_page() && matches!(cycle, Cycle::Normal(_))
-    }
-
-    pub(crate) fn check_cross_page(&mut self, base: u16, addr: u16) {
+    pub(crate) fn skip_optional_dummy_read_cycle(&mut self, base: u16, addr: u16) {
         let opcode = self.opcode_in_flight.expect("opcode not set");
-        let instr = &LOOKUP_TABLE[opcode as usize];
-        if Self::always_cross_page(opcode, instr) {
+        if Addressing::forces_dummy_read_cycle(opcode) {
             return;
         }
-        let crossed_page = (base & 0xFF00) != (addr & 0xFF00);
-        if !crossed_page {
+        if !Addressing::page_crossed(base, addr) {
             self.index += 1;
         }
     }

@@ -147,7 +147,7 @@ pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x2A) {
-                let _ = bus.mem_read(cpu.pc, cpu, ctx);
+                bus.mem_read(cpu.pc, cpu, ctx);
                 let old_bit7 = cpu.a & BIT_7;
                 let new_a = (cpu.a << 1) | if cpu.p.c() { 1 } else { 0 };
                 cpu.a = new_a;
@@ -201,7 +201,7 @@ pub fn exec_ror(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x6A) {
-                let _ = bus.mem_read(cpu.pc, cpu, ctx);
+                bus.mem_read(cpu.pc, cpu, ctx);
                 let old_bit0 = cpu.a & BIT_0;
                 let new_a = (cpu.a >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
                 cpu.a = new_a;

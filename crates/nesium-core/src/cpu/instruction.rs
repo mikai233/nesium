@@ -6,10 +6,10 @@ use crate::{
     cpu::{
         Cpu,
         addressing::Addressing,
-        cycle::{CYCLE_TABLE, Cycle},
         lookup::LOOKUP_TABLE,
         micro_op::MicroOp,
         mnemonic::Mnemonic,
+        timing::{CYCLE_TABLE, Timing},
     },
 };
 
@@ -520,7 +520,7 @@ impl Instruction {
             .expect("instruction not found in LOOKUP_TABLE") as u8
     }
 
-    pub(crate) fn cycle(&self) -> Cycle {
+    pub(crate) fn cycle(&self) -> Timing {
         CYCLE_TABLE[self.opcode() as usize]
     }
 }

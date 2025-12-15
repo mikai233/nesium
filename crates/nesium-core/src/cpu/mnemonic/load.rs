@@ -1,7 +1,11 @@
 use crate::{
     bus::CpuBus,
     context::Context,
-    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic},
+    cpu::{
+        Cpu,
+        micro_op::MicroOp,
+        mnemonic::{Mnemonic, hi_byte_store_final},
+    },
 };
 
 /// NV-BDIZC
@@ -244,9 +248,8 @@ pub fn exec_sax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_sha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let hi = cpu.base;
-            let value = cpu.a & cpu.x & hi.wrapping_add(1);
-            bus.mem_write(cpu.effective_addr, value, cpu, ctx);
+            let v = cpu.a & cpu.x;
+            hi_byte_store_final(cpu, bus, ctx, v);
         }
         _ => unreachable_step!("invalid SHA step {step}"),
     }
@@ -274,22 +277,7 @@ pub fn exec_sha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 #[inline]
 pub fn exec_shx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            // Reconstruct base operand address before applying Y index.
-            let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
-            let lo = base as u8;
-            let hi = (base >> 8) as u8;
-
-            // Undocumented behaviour: the high byte of the store address is
-            // masked by X+1, producing the "SXA" addressing quirk.
-            let addr_hi = hi & cpu.x.wrapping_add(1);
-            let addr_lo = lo.wrapping_add(cpu.y);
-            let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
-
-            // Stored value: X & (H+1), where H is the original operand high byte.
-            let value = cpu.x & hi.wrapping_add(1);
-            bus.mem_write(addr, value, cpu, ctx);
-        }
+        0 => hi_byte_store_final(cpu, bus, ctx, cpu.x),
         _ => unreachable_step!("invalid SHX step {step}"),
     }
 }
@@ -316,22 +304,7 @@ pub fn exec_shx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 #[inline]
 pub fn exec_shy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            // Reconstruct base operand address before applying X index.
-            let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
-            let lo = base as u8;
-            let hi = (base >> 8) as u8;
-
-            // Undocumented behaviour: the high byte of the store address is
-            // masked by Y+1, producing the "SYA" addressing quirk.
-            let addr_hi = hi & cpu.y.wrapping_add(1);
-            let addr_lo = lo.wrapping_add(cpu.x);
-            let addr = ((addr_hi as u16) << 8) | addr_lo as u16;
-
-            // Stored value: Y & (H+1), where H is the original operand high byte.
-            let value = cpu.y & hi.wrapping_add(1);
-            bus.mem_write(addr, value, cpu, ctx);
-        }
+        0 => hi_byte_store_final(cpu, bus, ctx, cpu.y),
         _ => unreachable_step!("invalid SHY step {step}"),
     }
 }
