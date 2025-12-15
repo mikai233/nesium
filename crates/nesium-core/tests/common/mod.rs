@@ -476,8 +476,9 @@ pub fn run_rom_zeropage_result(
 
     let mut last_result = 0u8;
     let mut stable_count = 0usize;
+    let mut first_failure: Option<(u8, usize)> = None;
     let start = Instant::now();
-    for _ in 0..frames {
+    for frame_idx in 0..frames {
         let result = nes.peek_cpu_byte(result_addr);
         if result == last_result {
             stable_count += 1;
@@ -486,35 +487,44 @@ pub fn run_rom_zeropage_result(
             stable_count = 1;
         }
 
-        if result != 0 && stable_count >= SETTLE_FRAMES {
-            if result == pass_value {
-                return Ok(result);
-            }
-            let nmi_count = nes.peek_cpu_byte(0x000A);
-            let snap = nes.cpu_snapshot();
-            bail!(
-                "{} failed with result code {:#04X} (nmi_count {}, PC {:04X}, S {:02X})",
-                rom_rel_path,
-                result,
-                nmi_count,
-                snap.pc,
-                snap.s
-            );
+        if result == pass_value && stable_count >= SETTLE_FRAMES {
+            return Ok(result);
+        }
+
+        if result != 0 && result != pass_value && stable_count >= SETTLE_FRAMES {
+            // Some ROMs write intermediate status codes while still making progress.
+            // Remember the first sustained failure but keep running to allow a later pass.
+            first_failure.get_or_insert((result, frame_idx));
         }
         nes.run_frame(false);
     }
 
     let result = nes.peek_cpu_byte(result_addr);
+    if result == pass_value {
+        return Ok(result);
+    }
     if result != 0 {
-        if result == pass_value {
-            return Ok(result);
-        }
         let nmi_count = nes.peek_cpu_byte(0x000A);
         let snap = nes.cpu_snapshot();
         bail!(
             "{} failed with result code {:#04X} (nmi_count {}, PC {:04X}, S {:02X})",
             rom_rel_path,
             result,
+            nmi_count,
+            snap.pc,
+            snap.s
+        );
+    }
+
+    if let Some((code, frame_idx)) = first_failure {
+        let nmi_count = nes.peek_cpu_byte(0x000A);
+        let snap = nes.cpu_snapshot();
+        bail!(
+            "{} reported result code {:#04X} for {} consecutive frames (first seen at frame {}) but never passed (nmi_count {}, PC {:04X}, S {:02X})",
+            rom_rel_path,
+            code,
+            SETTLE_FRAMES,
+            frame_idx,
             nmi_count,
             snap.pc,
             snap.s

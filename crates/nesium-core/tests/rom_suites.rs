@@ -812,7 +812,6 @@ fn vaus_test_manual() -> Result<()> {
 }
 
 #[test]
-#[ignore = "interactive ROM; requires manual verification per vaus-test/README.txt"]
 fn vbl_nmi_timing_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
