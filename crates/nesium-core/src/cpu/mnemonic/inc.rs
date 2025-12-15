@@ -65,7 +65,7 @@ pub fn exec_dec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_dex(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.x = cpu.x.wrapping_sub(1);
             cpu.p.set_zn(cpu.x);
         }
@@ -97,7 +97,7 @@ pub fn exec_dex(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_dey(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.y = cpu.y.wrapping_sub(1);
             cpu.p.set_zn(cpu.y);
         }
@@ -166,7 +166,7 @@ pub fn exec_inc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_inx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.x = cpu.x.wrapping_add(1);
             cpu.p.set_zn(cpu.x);
         }
@@ -195,7 +195,7 @@ pub fn exec_inx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_iny(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.y = cpu.y.wrapping_add(1);
             cpu.p.set_zn(cpu.y);
         }
@@ -289,7 +289,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "dex",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 cpu.x = cpu.x.wrapping_sub(1);
                 cpu.p.set_zn(cpu.x);
             },
@@ -320,7 +320,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "dey",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 cpu.y = cpu.y.wrapping_sub(1);
                 cpu.p.set_zn(cpu.y);
             },
@@ -412,7 +412,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "inx",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 cpu.x = cpu.x.wrapping_add(1);
                 cpu.p.set_zn(cpu.x);
             },
@@ -440,7 +440,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "iny",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 cpu.y = cpu.y.wrapping_add(1);
                 cpu.p.set_zn(cpu.y);
             },

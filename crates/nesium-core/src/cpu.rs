@@ -1,4 +1,7 @@
 use std::fmt::{Debug, Display};
+use std::fs::OpenOptions;
+use std::io::{BufWriter, Write};
+use std::sync::{Mutex, OnceLock};
 
 use crate::bus::{CpuBus, STACK_ADDR};
 use crate::context::Context;
@@ -66,6 +69,33 @@ pub fn opcode_meta(opcode: u8) -> OpcodeMeta {
 }
 
 const OAM_DMA_TRANSFER_BYTES: u16 = ppu_mem::OAM_RAM_SIZE as u16;
+
+static CPU_OPCODE_LOG: OnceLock<Option<Mutex<BufWriter<std::fs::File>>>> = OnceLock::new();
+
+#[inline]
+fn cpu_opcode_log_write(cycle: u64, pc: u16, opcode: u8, addr_val: u8) {
+    let log = CPU_OPCODE_LOG.get_or_init(|| {
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open("/Users/mikai/RustroverProjects/nesium/nesium_cpu_opcode.log")
+            .ok()
+            .map(|f| Mutex::new(BufWriter::with_capacity(256 * 1024, f)))
+    });
+
+    if let Some(writer) = log {
+        if let Ok(mut w) = writer.lock() {
+            // Keep the same format as the C++ logger: "cycle=<u64> opcode=<02X>"
+            let _ = writeln!(
+                w,
+                "cycle={} pc={:04X} opcode={:02X} 0200={:02X}",
+                cycle, pc, opcode, addr_val
+            )
+            .unwrap();
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct OamDma {
@@ -226,7 +256,8 @@ impl Cpu {
         // The CPU takes 8 cycles before it starts executing the ROM's code
         // after a reset/power-up (Mesen does this via 8 Start/End cycles).
         for _ in 0..8 {
-            bus.internal_cycle(self, ctx);
+            self.begin_cycle(true, bus, ctx);
+            self.end_cycle(true, bus, ctx);
         }
     }
 
@@ -248,9 +279,16 @@ impl Cpu {
                 if self.prev_irq_active || self.prev_nmi_latch {
                     self.perform_interrupt(bus, ctx);
                 } else {
+                    // let start_pc = self.pc;
+                    // let start_cycles = bus.cycles();
+                    // let addr_val = bus.ram[0x0200];
                     let opcode = self.fetch_opcode(bus, ctx);
+                    // if start_cycles < 20_000_000 {
+                    //     cpu_opcode_log_write(start_cycles, start_pc, opcode, addr_val);
+                    // }
                     self.opcode_in_flight = Some(opcode);
                     let instr = &LOOKUP_TABLE[opcode as usize];
+                    // self.log_trace_line(bus, ctx, start_pc, start_cycles, instr);
                     self.pre_exec(instr);
                 }
             }
@@ -308,6 +346,10 @@ impl Cpu {
         self.irq_active = bus.irq_level() && !self.p.contains(Status::INTERRUPT);
     }
 
+    pub(crate) fn dummy_read(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
+        bus.mem_read(self.pc, self, ctx)
+    }
+
     #[inline]
     pub(crate) fn fetch_opcode(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) -> u8 {
         let opcode = bus.mem_read(self.pc, self, ctx);
@@ -318,15 +360,6 @@ impl Cpu {
     #[inline]
     pub(crate) fn pre_exec(&mut self, instr: &Instruction) {
         match instr.addressing {
-            // Immediate Addressing:
-            // This mode only has one execution cycle after the opcode fetch.
-            // Set 'effective_addr' now to the current PC (which points to the data byte)
-            // so the main execution logic can fetch the data from a unified source,
-            // regardless of the addressing mode. Then, advance the PC past the data byte.
-            Addressing::Immediate => {
-                self.effective_addr = self.pc;
-            }
-
             // Accumulator Addressing:
             // This mode operates directly on the Accumulator (A) register, not memory.
             // It bypasses all memory read/write micro-ops that other modes might use
@@ -335,6 +368,15 @@ impl Cpu {
             // instruction execution phase (usually the last cycle).
             Addressing::Accumulator => {
                 self.index = instr.len() - 1;
+            }
+
+            // Immediate Addressing:
+            // This mode only has one execution cycle after the opcode fetch.
+            // Set 'effective_addr' now to the current PC (which points to the data byte)
+            // so the main execution logic can fetch the data from a unified source,
+            // regardless of the addressing mode. Then, advance the PC past the data byte.
+            Addressing::Immediate => {
+                self.effective_addr = self.pc;
             }
 
             // For all other addressing modes (Absolute, Zero Page, etc.),
@@ -544,6 +586,106 @@ impl Cpu {
 
     pub(crate) fn stack_addr(&self) -> u16 {
         STACK_ADDR | self.s as u16
+    }
+
+    #[inline]
+    fn log_trace_line(
+        &mut self,
+        bus: &mut CpuBus<'_>,
+        ctx: &mut Context,
+        start_pc: u16,
+        start_cycles: u64,
+        instr: &Instruction,
+    ) {
+        if !tracing::enabled!(tracing::Level::DEBUG) {
+            return;
+        }
+
+        let operand_len = instr.addressing.operand_len();
+        let mut operands = [0u8; 2];
+        for i in 0..operand_len {
+            let addr = start_pc.wrapping_add(1 + i as u16);
+            operands[i] = bus.peek(addr, self, ctx);
+        }
+        let operand_text =
+            Self::format_operand(instr.addressing, &operands[..operand_len], start_pc);
+
+        let mut inst_text = format!("{:?}", instr.mnemonic);
+        if !operand_text.is_empty() {
+            inst_text.push(' ');
+            inst_text.push_str(&operand_text);
+        }
+
+        let log_line = format!(
+            "{:04X}   {:<24} A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:{} Cycle:{}",
+            start_pc,
+            inst_text,
+            self.a,
+            self.x,
+            self.y,
+            self.s,
+            Self::format_status(self.p),
+            start_cycles
+        );
+        tracing::debug!("{log_line}");
+    }
+
+    #[inline]
+    fn format_status(status: Status) -> String {
+        fn letter(set: bool, ch: char) -> char {
+            if set { ch } else { ch.to_ascii_lowercase() }
+        }
+
+        let mut out = String::with_capacity(8);
+        out.push(letter(status.n(), 'N'));
+        out.push(letter(status.v(), 'V'));
+        out.push('-');
+        out.push('-');
+        out.push(letter(status.d(), 'D'));
+        out.push(letter(status.i(), 'I'));
+        out.push(letter(status.z(), 'Z'));
+        out.push(letter(status.c(), 'C'));
+        out
+    }
+
+    #[inline]
+    fn format_operand(addressing: Addressing, operands: &[u8], start_pc: u16) -> String {
+        match addressing {
+            Addressing::Implied => String::new(),
+            Addressing::Accumulator => "A".to_string(),
+            Addressing::Immediate => format!("#${:02X}", operands[0]),
+            Addressing::Absolute => format!(
+                "${:04X}",
+                u16::from(operands[0]) | (u16::from(*operands.get(1).unwrap_or(&0)) << 8)
+            ),
+            Addressing::AbsoluteX => format!(
+                "${:04X},X",
+                u16::from(operands[0]) | (u16::from(*operands.get(1).unwrap_or(&0)) << 8)
+            ),
+            Addressing::AbsoluteY => format!(
+                "${:04X},Y",
+                u16::from(operands[0]) | (u16::from(*operands.get(1).unwrap_or(&0)) << 8)
+            ),
+            Addressing::Indirect => format!(
+                "(${:04X})",
+                u16::from(operands[0]) | (u16::from(*operands.get(1).unwrap_or(&0)) << 8)
+            ),
+            Addressing::ZeroPage => format!("${:02X}", operands[0]),
+            Addressing::ZeroPageX => format!("${:02X},X", operands[0]),
+            Addressing::ZeroPageY => format!("${:02X},Y", operands[0]),
+            Addressing::IndirectX => format!("(${:02X},X)", operands[0]),
+            Addressing::IndirectY => format!("(${:02X}),Y", operands[0]),
+            Addressing::Relative => {
+                let offset = operands[0] as i8 as i16;
+                let base = start_pc.wrapping_add(2);
+                let target = if offset < 0 {
+                    base.wrapping_sub((-offset) as u16)
+                } else {
+                    base.wrapping_add(offset as u16)
+                };
+                format!("${:04X}", target)
+            }
+        }
     }
 }
 

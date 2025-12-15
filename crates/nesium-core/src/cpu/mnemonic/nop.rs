@@ -49,7 +49,9 @@ use crate::{
 #[inline]
 pub fn exec_nop(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
-        0 => bus.internal_cycle(cpu, ctx),
+        0 => {
+            cpu.dummy_read(bus, ctx);
+        }
         _ => unreachable_step!("invalid NOP step {step}"),
     }
 }

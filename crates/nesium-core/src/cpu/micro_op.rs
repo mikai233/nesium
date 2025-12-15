@@ -274,5 +274,5 @@ impl Hash for MicroOp {
 }
 
 pub(crate) fn empty_micro_fn(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context) {
-    bus.internal_cycle(cpu, ctx);
+    cpu.dummy_read(bus, ctx);
 }

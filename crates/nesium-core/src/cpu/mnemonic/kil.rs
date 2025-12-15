@@ -1,11 +1,7 @@
 use crate::{
     bus::CpuBus,
     context::Context,
-    cpu::{
-        Cpu,
-        micro_op::{MicroOp, empty_micro_fn},
-        mnemonic::Mnemonic,
-    },
+    cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic},
 };
 
 /// N V - B D I Z C
@@ -37,8 +33,6 @@ use crate::{
 pub fn exec_jam(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            // Match the legacy empty_micro_fn: burn a cycle and effectively halt.
-            bus.internal_cycle(cpu, ctx);
             cpu.pc -= 1;
             // Prevent IRQ/NMI
             cpu.prev_irq_active = false;
@@ -77,7 +71,12 @@ impl Mnemonic {
     pub(crate) const fn jam() -> &'static [MicroOp] {
         &[MicroOp {
             name: "jam",
-            micro_fn: |cpu, bus, ctx| empty_micro_fn(cpu, bus, ctx),
+            micro_fn: |cpu, bus, ctx| {
+                cpu.pc -= 1;
+                // Prevent IRQ/NMI
+                cpu.prev_irq_active = false;
+                cpu.prev_nmi_latch = false;
+            },
         }]
     }
 }

@@ -441,7 +441,7 @@ impl Ppu {
     /// three times per CPU tick for NTSC timing.
     pub fn step(bus: &mut CpuBus<'_>, cpu: &mut Cpu, ctx: &mut Context) {
         // let cpu_cycle = bus.cycles();
-        // if cpu_cycle < 6_000_000 {
+        // if cpu_cycle > 16_000_000 && cpu_cycle < 20_000_000 {
         //     let cpu_master_clock = bus.master_clock();
         //     let ppu = bus.devices().ppu;
         //     let status = ppu.registers.status;
@@ -455,11 +455,11 @@ impl Ppu {
         //     let mask = ppu.registers.mask;
         //     let mask_bg = u8::from(mask.contains(Mask::SHOW_BACKGROUND));
         //     let mask_sp = u8::from(mask.contains(Mask::SHOW_SPRITES));
-        //     let need_nmi = u8::from(cpu.nmi_pending);
-        //     let prev_need_nmi = u8::from(cpu.prev_nmi_pending);
-        //     let prev_nmi_flag = u8::from(cpu.prev_nmi_line);
-        //     let nmi_flag = u8::from(ppu.nmi_output);
-
+        //     let need_nmi = 0;
+        //     let prev_need_nmi = 0;
+        //     let prev_nmi_flag = 0;
+        //     let nmi_flag = 0;
+        //
         //     tracing::debug!(
         //         "cpu_mc={} cpu_cyc={} pc={:04X} a={:02X} x={:02X} y={:02X} sp={:02X} ps={:02X}  \
         //          ppu_mc={} ppu_scanline={} ppu_cycle={} frame={} prevent_vbl={} status_v={} status_s0={} status_ovf={} \

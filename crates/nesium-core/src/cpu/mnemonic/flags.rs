@@ -24,7 +24,7 @@ use crate::{
 pub fn exec_clc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.p.set_c(false);
         }
         _ => unreachable_step!("invalid CLC step {step}"),
@@ -54,7 +54,7 @@ pub fn exec_clc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_cld(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.p.set_d(false);
         }
         _ => unreachable_step!("invalid CLD step {step}"),
@@ -80,7 +80,7 @@ pub fn exec_cld(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_cli(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.p.remove(Status::INTERRUPT);
         }
         _ => unreachable_step!("invalid CLI step {step}"),
@@ -107,7 +107,7 @@ pub fn exec_cli(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_clv(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.p.set_v(false);
         }
         _ => unreachable_step!("invalid CLV step {step}"),
@@ -134,7 +134,7 @@ pub fn exec_clv(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_sec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.p.set_c(true);
         }
         _ => unreachable_step!("invalid SEC step {step}"),
@@ -165,7 +165,7 @@ pub fn exec_sec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_sed(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.p.set_d(true);
         }
         _ => unreachable_step!("invalid SED step {step}"),
@@ -192,7 +192,7 @@ pub fn exec_sed(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_sei(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            bus.internal_cycle(cpu, ctx);
+            cpu.dummy_read(bus, ctx);
             cpu.p.insert(Status::INTERRUPT);
         }
         _ => unreachable_step!("invalid SEI step {step}"),
@@ -220,7 +220,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "clc_clear_carry",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 // Cycle 2: C = 0
                 cpu.p.set_c(false);
             },
@@ -250,7 +250,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "cld_clear_decimal",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 // Cycle 2: D = 0
                 cpu.p.set_d(false);
             },
@@ -276,7 +276,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "cli_clear_interrupt",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 cpu.p.remove(Status::INTERRUPT);
             },
         }]
@@ -302,7 +302,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "clv_clear_overflow",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 // Cycle 2: V = 0
                 cpu.p.set_v(false);
             },
@@ -329,7 +329,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "sec_set_carry",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 // Cycle 2: C = 1
                 cpu.p.set_c(true);
             },
@@ -360,7 +360,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "sed_set_decimal",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 // Cycle 2: D = 1
                 cpu.p.set_d(true);
             },
@@ -387,7 +387,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "sei_set_interrupt",
             micro_fn: |cpu, bus, ctx| {
-                bus.internal_cycle(cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 cpu.p.insert(Status::INTERRUPT);
             },
         }]

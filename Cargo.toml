@@ -1,23 +1,23 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/nesium-egui",
-    "crates/nesium-core",
-    "crates/nesium-esp32",
-    "crates/libretro-bridge",
-    "crates/nesium-libretro",
-    "crates/nesium-flutter",
-    "crates/nesium-blip",
-    "crates/nesium-audio",
+  "crates/nesium-egui",
+  "crates/nesium-core",
+  "crates/nesium-esp32",
+  "crates/libretro-bridge",
+  "crates/nesium-libretro",
+  "crates/nesium-flutter",
+  "crates/nesium-blip",
+  "crates/nesium-audio",
 ]
 default-members = [
-    "crates/nesium-egui",
-    "crates/nesium-core",
-    "crates/libretro-bridge",
-    "crates/nesium-libretro",
-    "crates/nesium-flutter",
-    "crates/nesium-blip",
-    "crates/nesium-audio",
+  "crates/nesium-egui",
+  "crates/nesium-core",
+  "crates/libretro-bridge",
+  "crates/nesium-libretro",
+  "crates/nesium-flutter",
+  "crates/nesium-blip",
+  "crates/nesium-audio",
 ]
 
 [profile.test]
