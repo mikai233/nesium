@@ -349,14 +349,7 @@ impl<'a> CpuBus<'a> {
             }
             ppu_mem::OAM_DMA => self.write_oam_dma(data),
             cpu_mem::APU_STATUS => self.apu.cpu_write(addr, data, *self.cycles),
-            apu_mem::FRAME_COUNTER => {
-                // $4017 doubles as both controller port 2 and the APU frame counter.
-                self.apu.cpu_write(addr, data, *self.cycles);
-                self.log_serial_bit(data);
-                for ctrl in self.controllers.iter_mut() {
-                    ctrl.write_strobe(data);
-                }
-            }
+            apu_mem::FRAME_COUNTER => self.apu.cpu_write(addr, data, *self.cycles),
             cpu_mem::CONTROLLER_PORT_1 => {
                 self.log_serial_bit(data);
                 for ctrl in self.controllers.iter_mut() {

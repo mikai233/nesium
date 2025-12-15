@@ -629,6 +629,11 @@ fn serial_bytes_to_string(bytes: &[u8]) -> String {
 fn parse_serial_progress(log: &str) -> Option<Progress> {
     let latest_line = log.lines().rev().find(|l| !l.trim().is_empty())?;
     let line = latest_line.trim();
+    let lower = line.to_ascii_lowercase();
+
+    if lower.contains("all tests complete") || lower.contains("all tests passed") {
+        return Some(Progress::Passed(line.to_string()));
+    }
     if line.contains("Passed") {
         return Some(Progress::Passed(line.to_string()));
     }

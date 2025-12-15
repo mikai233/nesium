@@ -140,7 +140,6 @@ fn blargg_litewall_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn blargg_nes_cpu_test5_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
