@@ -57,10 +57,6 @@ This emulator’s design and implementation draw heavily from the excellent Mese
 - **Action 52 / Cheetahmen II (mapper 228)**: Mapper RAM window behaviour is minimal; verify against all carts.
 - **Generic**: Bus conflict handling for certain discrete boards (e.g., some UNROM/CNROM variants) is not fully modelled yet.
 
-## Accuracy notes
-
-- **Open bus (Mesen2-style)**: CPU bus keeps a decaying latch (~1s of CPU cycles) and feeds it back for write-only/unmapped reads ($4000-$4013, $4014 read, $4018-$401F, or no cartridge PRG space). PPU register traffic refreshes the latch so Blargg/Mesen2 open-bus expectations hold.
-
 ## Test ROM status
 
 Nesium integrates a large number of NES test ROM suites (via `rom_suites.rs`) to validate CPU, PPU, APU, and mapper behaviour. The tables below summarize which suites currently pass automatically, which are interactive/manual, and which are still marked as failing/ignored and need more work.
@@ -70,7 +66,6 @@ Legend:
 - ✅: Enabled automated tests (no `#[ignore]`) that currently pass  
 - ❌: Tests marked with `#[ignore = "this test fails and needs investigation"]`  
 - 🔶: Interactive/manual ROMs (e.g., controller/visual tests)  
-- 🛠: Debug-only helper tests, not counted toward pass/fail  
 
 ### Automatically passing ROM suites (✅)
 
@@ -149,15 +144,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `sprite_hit_tests_2005_10_05_suite`  | Sprite 0 hit timing and edge cases           | Yes                         |
 | `sprite_overflow_tests_suite`        | Sprite overflow behaviour                    | Yes                         |
 | `volume_tests_suite`                 | Volume/mixing behaviour                      | Yes                         |
-
-### Debug helper tests (🛠)
-
-These helpers are wired to specific ROMs and used for local debugging (e.g., logging APU state). They are not treated as pass/fail for emulator accuracy.
-
-| Test name                      | Purpose                                       |
-| ------------------------------ | --------------------------------------------- |
-| `apu_reset_4017_timing_debug`  | Debug helper for `apu_reset/4017_timing.nes`  |
-| `apu_reset_4017_written_debug` | Debug helper for `apu_reset/4017_written.nes` |
 
 ## Disclaimer
 
