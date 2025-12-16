@@ -332,8 +332,8 @@ impl Addressing {
         )
     }
 
-    pub(crate) fn page_crossed(base: u16, addr: u16) -> bool {
-        (base & 0xFF00) != (addr & 0xFF00)
+    pub(crate) fn page_crossed(base_addr: u16, effective_addr: u16) -> bool {
+        (base_addr & 0xFF00) != (effective_addr & 0xFF00)
     }
 
     pub(crate) const fn forces_dummy_read_cycle(opcode: u8) -> bool {
