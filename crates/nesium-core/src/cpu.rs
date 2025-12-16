@@ -597,6 +597,44 @@ impl Cpu {
         }
     }
 
+    /// Compute the intermediate branch target used on the first taken-branch cycle (T2*).
+    ///
+    /// 6502 branch timing uses an address where the signed offset is added to the low byte
+    /// of PC (already pointing to the next instruction, i.e. PC+2) *without* carrying into
+    /// the high byte. This matches the datasheet's:
+    ///   PC + 2 + offset (w/o carry)
+    #[inline]
+    pub(crate) fn branch_target_wo_carry(pc_next: u16, offset: i8) -> u16 {
+        let lo = (pc_next as u8).wrapping_add(offset as u8);
+        (pc_next & 0xFF00) | (lo as u16)
+    }
+
+    /// Execute the taken-branch bookkeeping for cycle T2*:
+    ///
+    /// - Perform the required dummy/prefetch read at the "w/o carry" target address.
+    /// - Commit the final branch target PC (full 16-bit add).
+    /// - Optionally skip the extra cycle T3** if the branch does not cross a page boundary
+    ///   (unless this opcode forces the extra cycle).
+    ///
+    /// The caller typically provides the additional T3** cycle as a separate step that reads
+    /// from the final PC when needed.
+    #[inline]
+    pub(crate) fn branch_taken_cycle(&mut self, bus: &mut CpuBus, ctx: &mut Context, offset: i8) {
+        // PC after fetching the offset byte; should point at the next instruction (PC+2).
+        let pc_next = self.pc;
+
+        // T2*: dummy/prefetch read at PC+2+offset (w/o carry).
+        let pc_wo_carry = Self::branch_target_wo_carry(pc_next, offset);
+        self.dummy_read_at(pc_wo_carry, bus, ctx);
+
+        // Commit final branch target using full 16-bit addition (with carry into high byte).
+        let pc_final = pc_next.wrapping_add(offset as u16);
+        self.pc = pc_final;
+
+        // If no page cross, skip T3** (extra cycle). Some opcodes may force it regardless.
+        self.skip_optional_dummy_read_cycle(pc_next, pc_final);
+    }
+
     pub(crate) fn skip_optional_dummy_read_cycle(&mut self, base: u16, addr: u16) {
         let opcode = self.opcode_in_flight.expect("opcode not set");
         if Addressing::forces_dummy_read_cycle(opcode) {

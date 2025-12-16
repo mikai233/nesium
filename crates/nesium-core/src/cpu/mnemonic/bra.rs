@@ -4,6 +4,25 @@ use crate::{
     cpu::{Cpu, micro_op::MicroOp, mnemonic::Mnemonic},
 };
 
+#[inline]
+pub fn branch_step0(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, taken: bool) {
+    // T1: fetch offset and decide taken/not-taken
+    cpu.tmp = cpu.fetch_u8(bus, ctx);
+    cpu.test_branch(taken); // not taken => step += 2
+}
+
+#[inline]
+pub fn branch_step1(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context) {
+    // T2*: taken-branch dummy/prefetch read at wo-carry target, then update PC
+    cpu.branch_taken_cycle(bus, ctx, cpu.tmp as i8);
+}
+
+#[inline]
+pub fn branch_step2(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context) {
+    // T3**: only if page crossed (or forced)
+    cpu.dummy_read(bus, ctx);
+}
+
 /// N V - B D I Z C
 /// - - - - - - - -
 ///
@@ -25,21 +44,9 @@ use crate::{
 #[inline]
 pub fn exec_bcc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            cpu.tmp = cpu.fetch_u8(bus, ctx);
-            cpu.test_branch(!cpu.p.c());
-        }
-        1 => {
-            cpu.dummy_read(bus, ctx);
-            let old_pc = cpu.pc;
-            let offset = cpu.tmp as i8;
-            let new_pc = old_pc.wrapping_add(offset as u16);
-            cpu.pc = new_pc;
-            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
-        }
-        2 => {
-            bus.mem_read(cpu.pc, cpu, ctx);
-        }
+        0 => branch_step0(cpu, bus, ctx, !cpu.p.c()),
+        1 => branch_step1(cpu, bus, ctx),
+        2 => branch_step2(cpu, bus, ctx),
         _ => unreachable_step!("invalid BCC step {step}"),
     }
 }
@@ -64,21 +71,9 @@ pub fn exec_bcc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_bcs(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            cpu.tmp = cpu.fetch_u8(bus, ctx);
-            cpu.test_branch(cpu.p.c());
-        }
-        1 => {
-            cpu.dummy_read(bus, ctx);
-            let old_pc = cpu.pc;
-            let offset = cpu.tmp as i8;
-            let new_pc = old_pc.wrapping_add(offset as u16);
-            cpu.pc = new_pc;
-            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
-        }
-        2 => {
-            bus.mem_read(cpu.pc, cpu, ctx);
-        }
+        0 => branch_step0(cpu, bus, ctx, cpu.p.c()),
+        1 => branch_step1(cpu, bus, ctx),
+        2 => branch_step2(cpu, bus, ctx),
         _ => unreachable_step!("invalid BCS step {step}"),
     }
 }
@@ -106,21 +101,9 @@ pub fn exec_bcs(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_beq(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            cpu.tmp = cpu.fetch_u8(bus, ctx);
-            cpu.test_branch(cpu.p.z());
-        }
-        1 => {
-            cpu.dummy_read(bus, ctx);
-            let old_pc = cpu.pc;
-            let offset = cpu.tmp as i8;
-            let new_pc = old_pc.wrapping_add(offset as u16);
-            cpu.pc = new_pc;
-            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
-        }
-        2 => {
-            bus.mem_read(cpu.pc, cpu, ctx);
-        }
+        0 => branch_step0(cpu, bus, ctx, cpu.p.z()),
+        1 => branch_step1(cpu, bus, ctx),
+        2 => branch_step2(cpu, bus, ctx),
         _ => unreachable_step!("invalid BEQ step {step}"),
     }
 }
@@ -145,21 +128,9 @@ pub fn exec_beq(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_bmi(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            cpu.tmp = cpu.fetch_u8(bus, ctx);
-            cpu.test_branch(cpu.p.n());
-        }
-        1 => {
-            cpu.dummy_read(bus, ctx);
-            let old_pc = cpu.pc;
-            let offset = cpu.tmp as i8;
-            let new_pc = old_pc.wrapping_add(offset as u16);
-            cpu.pc = new_pc;
-            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
-        }
-        2 => {
-            bus.mem_read(cpu.pc, cpu, ctx);
-        }
+        0 => branch_step0(cpu, bus, ctx, cpu.p.n()),
+        1 => branch_step1(cpu, bus, ctx),
+        2 => branch_step2(cpu, bus, ctx),
         _ => unreachable_step!("invalid BMI step {step}"),
     }
 }
@@ -186,21 +157,9 @@ pub fn exec_bmi(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_bne(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            cpu.tmp = cpu.fetch_u8(bus, ctx);
-            cpu.test_branch(!cpu.p.z());
-        }
-        1 => {
-            cpu.dummy_read(bus, ctx);
-            let old_pc = cpu.pc;
-            let offset = cpu.tmp as i8;
-            let new_pc = old_pc.wrapping_add(offset as u16);
-            cpu.pc = new_pc;
-            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
-        }
-        2 => {
-            bus.mem_read(cpu.pc, cpu, ctx);
-        }
+        0 => branch_step0(cpu, bus, ctx, !cpu.p.z()),
+        1 => branch_step1(cpu, bus, ctx),
+        2 => branch_step2(cpu, bus, ctx),
         _ => unreachable_step!("invalid BNE step {step}"),
     }
 }
@@ -229,21 +188,9 @@ pub fn exec_bne(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_bpl(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            cpu.tmp = cpu.fetch_u8(bus, ctx);
-            cpu.test_branch(!cpu.p.n());
-        }
-        1 => {
-            cpu.dummy_read(bus, ctx);
-            let old_pc = cpu.pc;
-            let offset = cpu.tmp as i8;
-            let new_pc = old_pc.wrapping_add(offset as u16);
-            cpu.pc = new_pc;
-            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
-        }
-        2 => {
-            bus.mem_read(cpu.pc, cpu, ctx);
-        }
+        0 => branch_step0(cpu, bus, ctx, !cpu.p.n()),
+        1 => branch_step1(cpu, bus, ctx),
+        2 => branch_step2(cpu, bus, ctx),
         _ => unreachable_step!("invalid BPL step {step}"),
     }
 }
@@ -269,21 +216,9 @@ pub fn exec_bpl(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_bvc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            cpu.tmp = cpu.fetch_u8(bus, ctx);
-            cpu.test_branch(!cpu.p.v());
-        }
-        1 => {
-            cpu.dummy_read(bus, ctx);
-            let old_pc = cpu.pc;
-            let offset = cpu.tmp as i8;
-            let new_pc = old_pc.wrapping_add(offset as u16);
-            cpu.pc = new_pc;
-            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
-        }
-        2 => {
-            bus.mem_read(cpu.pc, cpu, ctx);
-        }
+        0 => branch_step0(cpu, bus, ctx, !cpu.p.v()),
+        1 => branch_step1(cpu, bus, ctx),
+        2 => branch_step2(cpu, bus, ctx),
         _ => unreachable_step!("invalid BVC step {step}"),
     }
 }
@@ -308,21 +243,9 @@ pub fn exec_bvc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_bvs(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => {
-            cpu.tmp = cpu.fetch_u8(bus, ctx);
-            cpu.test_branch(cpu.p.v());
-        }
-        1 => {
-            cpu.dummy_read(bus, ctx);
-            let old_pc = cpu.pc;
-            let offset = cpu.tmp as i8;
-            let new_pc = old_pc.wrapping_add(offset as u16);
-            cpu.pc = new_pc;
-            cpu.skip_optional_dummy_read_cycle(old_pc, new_pc);
-        }
-        2 => {
-            bus.mem_read(cpu.pc, cpu, ctx);
-        }
+        0 => branch_step0(cpu, bus, ctx, cpu.p.v()),
+        1 => branch_step1(cpu, bus, ctx),
+        2 => branch_step2(cpu, bus, ctx),
         _ => unreachable_step!("invalid BVS step {step}"),
     }
 }
