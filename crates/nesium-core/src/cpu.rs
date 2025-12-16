@@ -586,7 +586,7 @@ impl Cpu {
         debug_assert_eq!(self.step, 0);
     }
 
-    pub(crate) fn test_branch(&mut self, taken: bool) {
+    pub(crate) fn apply_branch_decision(&mut self, taken: bool) {
         if taken {
             if self.irq_active && !self.prev_irq_active {
                 self.irq_active = false;

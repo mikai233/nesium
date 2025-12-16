@@ -8,7 +8,7 @@ use crate::{
 pub fn branch_step0(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, taken: bool) {
     // T1: fetch offset and decide taken/not-taken
     cpu.tmp = cpu.fetch_u8(bus, ctx);
-    cpu.test_branch(taken); // not taken => step += 2
+    cpu.apply_branch_decision(taken); // not taken => step += 2
 }
 
 #[inline]
@@ -275,7 +275,7 @@ impl Mnemonic {
                 name: "bcc_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
                     cpu.tmp = cpu.fetch_u8(bus, ctx);
-                    cpu.test_branch(!cpu.p.c());
+                    cpu.apply_branch_decision(!cpu.p.c());
                 },
             },
             MicroOp {
@@ -321,7 +321,7 @@ impl Mnemonic {
                 name: "bcs_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
                     cpu.tmp = cpu.fetch_u8(bus, ctx);
-                    cpu.test_branch(cpu.p.c());
+                    cpu.apply_branch_decision(cpu.p.c());
                 },
             },
             MicroOp {
@@ -370,7 +370,7 @@ impl Mnemonic {
                 name: "beq_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
                     cpu.tmp = cpu.fetch_u8(bus, ctx);
-                    cpu.test_branch(cpu.p.z());
+                    cpu.apply_branch_decision(cpu.p.z());
                 },
             },
             MicroOp {
@@ -416,7 +416,7 @@ impl Mnemonic {
                 name: "bmi_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
                     cpu.tmp = cpu.fetch_u8(bus, ctx);
-                    cpu.test_branch(cpu.p.n());
+                    cpu.apply_branch_decision(cpu.p.n());
                 },
             },
             MicroOp {
@@ -464,7 +464,7 @@ impl Mnemonic {
                 name: "bne_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
                     cpu.tmp = cpu.fetch_u8(bus, ctx);
-                    cpu.test_branch(!cpu.p.z());
+                    cpu.apply_branch_decision(!cpu.p.z());
                 },
             },
             MicroOp {
@@ -514,7 +514,7 @@ impl Mnemonic {
                 name: "bpl_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
                     cpu.tmp = cpu.fetch_u8(bus, ctx);
-                    cpu.test_branch(!cpu.p.n());
+                    cpu.apply_branch_decision(!cpu.p.n());
                 },
             },
             MicroOp {
@@ -561,7 +561,7 @@ impl Mnemonic {
                 name: "bvc_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
                     cpu.tmp = cpu.fetch_u8(bus, ctx);
-                    cpu.test_branch(!cpu.p.v());
+                    cpu.apply_branch_decision(!cpu.p.v());
                 },
             },
             MicroOp {
@@ -607,7 +607,7 @@ impl Mnemonic {
                 name: "bvs_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
                     cpu.tmp = cpu.fetch_u8(bus, ctx);
-                    cpu.test_branch(cpu.p.v());
+                    cpu.apply_branch_decision(cpu.p.v());
                 },
             },
             MicroOp {
