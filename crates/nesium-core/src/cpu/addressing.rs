@@ -493,8 +493,9 @@ fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
+            let base = cpu.effective_addr & 0x00FF;
+            cpu.dummy_read_at(base, bus, ctx);
             let addr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            bus.mem_read(addr, cpu, ctx);
             cpu.effective_addr = addr;
         }
         _ => unreachable_step!("invalid ZeroPageX step {step}"),
@@ -507,8 +508,9 @@ fn exec_zero_page_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
+            let base = cpu.effective_addr & 0x00FF;
+            cpu.dummy_read_at(base, bus, ctx);
             let addr = (cpu.effective_addr + cpu.y as u16) & 0x00FF;
-            bus.mem_read(addr, cpu, ctx);
             cpu.effective_addr = addr;
         }
         _ => unreachable_step!("invalid ZeroPageY step {step}"),
