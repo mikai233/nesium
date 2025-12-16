@@ -30,7 +30,7 @@ use crate::{
 /// Implied         | JAM                    | $F2*   | 1         | X
 /// *Undocumented.
 #[inline]
-pub fn exec_jam(cpu: &mut Cpu, _: &mut CpuBus<'_>, _: &mut Context, step: u8) {
+pub fn exec_jam(cpu: &mut Cpu, _: &mut CpuBus, _: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.pc -= 1;

@@ -26,7 +26,7 @@ use crate::{
 /// Zero Page               | DEC $nn                  | $C6    | 2         | 5
 /// X-Indexed Zero Page     | DEC $nn,X                | $D6    | 2         | 6
 #[inline]
-pub fn exec_dec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_dec(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
@@ -62,7 +62,7 @@ pub fn exec_dec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | DEX                      | $CA    | 1         | 2
 #[inline]
-pub fn exec_dex(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_dex(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -94,7 +94,7 @@ pub fn exec_dex(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | DEY                      | $88    | 1         | 2
 #[inline]
-pub fn exec_dey(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_dey(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -125,7 +125,7 @@ pub fn exec_dey(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Zero Page               | INC $nn                  | $E6    | 2         | 5
 /// X-Indexed Zero Page     | INC $nn,X                | $F6    | 2         | 6
 #[inline]
-pub fn exec_inc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_inc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
@@ -163,7 +163,7 @@ pub fn exec_inc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | INX                      | $E8    | 1         | 2
 #[inline]
-pub fn exec_inx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_inx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -192,7 +192,7 @@ pub fn exec_inx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | INY                      | $C8    | 1         | 2
 #[inline]
-pub fn exec_iny(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_iny(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);

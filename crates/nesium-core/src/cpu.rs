@@ -128,7 +128,7 @@ impl OamDma {
 
     /// Runs one DMA micro-step (one CPU cycle). Returns `true` when the
     /// transfer has finished copying all 256 bytes into OAM.
-    fn step(&mut self, cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context) -> bool {
+    fn step(&mut self, cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context) -> bool {
         if self.dummy_cycles > 0 {
             self.dummy_cycles -= 1;
             return false;
@@ -231,7 +231,7 @@ impl Cpu {
     /// - Preserves A/X/Y and most status flags.
     /// - Sets the I flag (disables IRQs).
     /// - Decrements S by 3 (wrapping), matching 6502/Mesen behaviour.
-    pub(crate) fn reset(&mut self, bus: &mut CpuBus<'_>, kind: ResetKind, ctx: &mut Context) {
+    pub(crate) fn reset(&mut self, bus: &mut CpuBus, kind: ResetKind, ctx: &mut Context) {
         // Read the reset vector from memory ($FFFC-$FFFD) without advancing timing.
         let lo = bus.read(RESET_VECTOR_LO, self, ctx);
         let hi = bus.read(RESET_VECTOR_HI, self, ctx);
@@ -310,12 +310,7 @@ impl Cpu {
         }
     }
 
-    pub(crate) fn begin_cycle(
-        &mut self,
-        read_phase: bool,
-        bus: &mut CpuBus<'_>,
-        ctx: &mut Context,
-    ) {
+    pub(crate) fn begin_cycle(&mut self, read_phase: bool, bus: &mut CpuBus, ctx: &mut Context) {
         let start_delta = if read_phase {
             bus.clock_start_count.saturating_sub(1)
         } else {
@@ -341,7 +336,7 @@ impl Cpu {
         };
     }
 
-    pub(crate) fn end_cycle(&mut self, read_phase: bool, bus: &mut CpuBus<'_>, ctx: &mut Context) {
+    pub(crate) fn end_cycle(&mut self, read_phase: bool, bus: &mut CpuBus, ctx: &mut Context) {
         let end_delta = if read_phase {
             bus.clock_end_count.saturating_add(1)
         } else {
@@ -535,7 +530,7 @@ impl Cpu {
         }
     }
 
-    fn handle_oam_dma(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) -> bool {
+    fn handle_oam_dma(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> bool {
         if let Some(mut dma) = self.oam_dma.take() {
             let done = dma.step(self, bus, ctx);
             self.oam_dma = if done { None } else { Some(dma) };
@@ -665,7 +660,7 @@ impl Cpu {
     #[inline]
     fn log_trace_line(
         &mut self,
-        bus: &mut CpuBus<'_>,
+        bus: &mut CpuBus,
         ctx: &mut Context,
         start_pc: u16,
         start_cycles: u64,

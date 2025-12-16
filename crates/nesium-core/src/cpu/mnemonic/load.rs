@@ -29,7 +29,7 @@ use crate::{
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_las(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_las(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx) & cpu.s;
@@ -68,7 +68,7 @@ pub fn exec_las(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_lax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_lax(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -107,7 +107,7 @@ pub fn exec_lax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_lda(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_lda(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -140,7 +140,7 @@ pub fn exec_lda(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_ldx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_ldx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -173,7 +173,7 @@ pub fn exec_ldx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_ldy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_ldy(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -206,7 +206,7 @@ pub fn exec_ldy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sax(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = cpu.a & cpu.x;
@@ -245,7 +245,7 @@ pub fn exec_sax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sha(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let v = cpu.a & cpu.x;
@@ -275,7 +275,7 @@ pub fn exec_sha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_shx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_shx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => hi_byte_store_final(cpu, bus, ctx, cpu.x),
         _ => unreachable_step!("invalid SHX step {step}"),
@@ -302,7 +302,7 @@ pub fn exec_shx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_shy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_shy(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => hi_byte_store_final(cpu, bus, ctx, cpu.y),
         _ => unreachable_step!("invalid SHY step {step}"),
@@ -330,7 +330,7 @@ pub fn exec_shy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// X-Indexed Zero Page Indirect        | STA ($nn,X)              | $81    | 2         | 6
 /// Zero Page Indirect Y-Indexed        | STA ($nn),Y              | $91    | 2         | 6
 #[inline]
-pub fn exec_sta(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sta(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => bus.mem_write(cpu.effective_addr, cpu.a, cpu, ctx),
         _ => unreachable_step!("invalid STA step {step}"),
@@ -354,7 +354,7 @@ pub fn exec_sta(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Zero Page           | STX $nn                  | $86    | 2         | 3
 /// Y-Indexed Zero Page | STX $nn,Y                | $96    | 2         | 4
 #[inline]
-pub fn exec_stx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_stx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => bus.mem_write(cpu.effective_addr, cpu.x, cpu, ctx),
         _ => unreachable_step!("invalid STX step {step}"),
@@ -377,7 +377,7 @@ pub fn exec_stx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Zero Page           | STY $nn                  | $84    | 2         | 3
 /// X-Indexed Zero Page | STY $nn,X                | $94    | 2         | 4
 #[inline]
-pub fn exec_sty(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sty(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => bus.mem_write(cpu.effective_addr, cpu.y, cpu, ctx),
         _ => unreachable_step!("invalid STY step {step}"),

@@ -439,7 +439,7 @@ impl Ppu {
     /// This is the main timing entry: it performs background/sprite pipeline
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
-    pub fn step(bus: &mut CpuBus<'_>, cpu: &mut Cpu, ctx: &mut Context) {
+    pub fn step(bus: &mut CpuBus, cpu: &mut Cpu, ctx: &mut Context) {
         // let cpu_cycle = bus.cycles();
         // if cpu_cycle > 16_000_000 && cpu_cycle < 20_000_000 {
         //     let cpu_master_clock = bus.master_clock();
@@ -713,7 +713,7 @@ impl Ppu {
 
     /// Advance the PPU until its master clock reaches `target_master`.
     pub(crate) fn run_until(
-        bus: &mut CpuBus<'_>,
+        bus: &mut CpuBus,
         target_master: u64,
         cpu: &mut Cpu,
         ctx: &mut Context,

@@ -37,7 +37,7 @@ use crate::{
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_and(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_and(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -68,7 +68,7 @@ pub fn exec_and(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Absolute        | BIT $nnnn                | $2C    | 3         | 4
 /// Zero Page       | BIT $nn                  | $24    | 2         | 3
 #[inline]
-pub fn exec_bit(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_bit(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -109,7 +109,7 @@ pub fn exec_bit(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_eor(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_eor(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -148,7 +148,7 @@ pub fn exec_eor(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_ora(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_ora(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);

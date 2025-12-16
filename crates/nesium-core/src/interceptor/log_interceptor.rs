@@ -8,7 +8,7 @@ impl Interceptor for LogInterceptor {
         std::borrow::Cow::Borrowed(std::any::type_name::<Self>())
     }
 
-    fn debug(&self, cpu: &mut Cpu, _bus: &mut CpuBus<'_>) {
+    fn debug(&self, cpu: &mut Cpu, _bus: &mut CpuBus) {
         tracing::debug!("{}", cpu.a);
     }
 }

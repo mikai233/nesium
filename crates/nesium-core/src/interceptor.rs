@@ -7,7 +7,7 @@ pub mod log_interceptor;
 pub trait Interceptor: Send + Debug + 'static {
     fn name(&self) -> Cow<'static, str>;
 
-    fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus<'_>);
+    fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus);
 }
 
 #[derive(Debug, Default)]
@@ -74,7 +74,7 @@ impl Interceptor for EmuInterceptor {
         Cow::Borrowed(std::any::type_name::<Self>())
     }
 
-    fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus<'_>) {
+    fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus) {
         for interceptor in &self.layers {
             interceptor.debug(cpu, bus);
         }

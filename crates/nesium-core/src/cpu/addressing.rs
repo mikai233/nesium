@@ -304,7 +304,7 @@ impl Addressing {
     }
 
     /// Static-dispatch addressing executor (prototype; not yet wired into CPU).
-    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
         match self {
             Addressing::Implied | Addressing::Accumulator | Addressing::Immediate => {
                 unreachable_step!("no addressing cycles for {:?}", self)
@@ -363,7 +363,7 @@ impl Display for Addressing {
     }
 }
 
-fn exec_absolute(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+fn exec_absolute(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
@@ -376,7 +376,7 @@ fn exec_absolute(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u
     }
 }
 
-fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
@@ -407,7 +407,7 @@ fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
     }
 }
 
-fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
@@ -441,7 +441,7 @@ fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
     }
 }
 
-fn exec_indirect(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+fn exec_indirect(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
@@ -466,7 +466,7 @@ fn exec_indirect(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u
     }
 }
 
-fn exec_zero_page(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+fn exec_zero_page(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
@@ -475,7 +475,7 @@ fn exec_zero_page(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: 
     }
 }
 
-fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
@@ -489,7 +489,7 @@ fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step
     }
 }
 
-fn exec_zero_page_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+fn exec_zero_page_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
@@ -503,7 +503,7 @@ fn exec_zero_page_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step
     }
 }
 
-fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
@@ -525,7 +525,7 @@ fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
     }
 }
 
-fn exec_indirect_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+fn exec_indirect_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;

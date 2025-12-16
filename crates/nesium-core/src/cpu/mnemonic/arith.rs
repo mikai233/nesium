@@ -44,7 +44,7 @@ use crate::{
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_adc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_adc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -82,7 +82,7 @@ pub fn exec_adc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_anc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_anc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -125,7 +125,7 @@ pub fn exec_anc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_arr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_arr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -165,7 +165,7 @@ pub fn exec_arr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_asr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_asr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -206,7 +206,7 @@ pub fn exec_asr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_cmp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_cmp(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -244,7 +244,7 @@ pub fn exec_cmp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Absolute        | CPX $nnnn                | $EC    | 3         | 4
 /// Zero Page       | CPX $nn                  | $E4    | 2         | 3
 #[inline]
-pub fn exec_cpx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_cpx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -280,7 +280,7 @@ pub fn exec_cpx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Absolute        | CPY $nnnn                | $CC    | 3         | 4
 /// Zero Page       | CPY $nn                  | $C4    | 2         | 3
 #[inline]
-pub fn exec_cpy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_cpy(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -320,7 +320,7 @@ pub fn exec_cpy(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_dcp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_dcp(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -369,7 +369,7 @@ pub fn exec_dcp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_isc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_isc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -426,7 +426,7 @@ pub fn exec_isc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_rla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_rla(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -479,7 +479,7 @@ pub fn exec_rla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_rra(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_rra(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -547,7 +547,7 @@ pub fn exec_rra(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_sbc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sbc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -590,7 +590,7 @@ pub fn exec_sbc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sbx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sbx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -631,7 +631,7 @@ pub fn exec_sbx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_slo(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_slo(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -682,7 +682,7 @@ pub fn exec_slo(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_sre(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sre(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -737,7 +737,7 @@ pub fn exec_sre(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_xaa(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_xaa(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let m = bus.mem_read(cpu.effective_addr, cpu, ctx);

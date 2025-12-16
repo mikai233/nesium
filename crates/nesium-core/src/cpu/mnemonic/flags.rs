@@ -21,7 +21,7 @@ use crate::{
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLC                    | $18    | 1         | 2
 #[inline]
-pub fn exec_clc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_clc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -51,7 +51,7 @@ pub fn exec_clc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLD                    | $D8    | 1         | 2
 #[inline]
-pub fn exec_cld(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_cld(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -77,7 +77,7 @@ pub fn exec_cld(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLI                    | $58    | 1         | 2
 #[inline]
-pub fn exec_cli(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_cli(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -104,7 +104,7 @@ pub fn exec_cli(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | CLV                    | $B8    | 1         | 2
 #[inline]
-pub fn exec_clv(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_clv(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -131,7 +131,7 @@ pub fn exec_clv(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | SEC                    | $38    | 1         | 2
 #[inline]
-pub fn exec_sec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sec(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -162,7 +162,7 @@ pub fn exec_sec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | SED                    | $F8    | 1         | 2
 #[inline]
-pub fn exec_sed(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sed(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -189,7 +189,7 @@ pub fn exec_sed(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | SEI                    | $78    | 1         | 2
 #[inline]
-pub fn exec_sei(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_sei(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);

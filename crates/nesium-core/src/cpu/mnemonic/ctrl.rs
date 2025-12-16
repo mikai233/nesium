@@ -28,7 +28,7 @@ use crate::{
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | BRK                      | $00    | 1         | 7
 #[inline]
-pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             bus.mem_read(cpu.pc, cpu, ctx);
@@ -85,7 +85,7 @@ pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Absolute            | JMP $nnnn                | $4C    | 3         | 3
 /// Absolute Indirect   | JMP ($nnnn)              | $6C    | 3         | 5
 #[inline]
-pub fn exec_jmp(_: &mut Cpu, _: &mut CpuBus<'_>, _: &mut Context, step: u8) {
+pub fn exec_jmp(_: &mut Cpu, _: &mut CpuBus, _: &mut Context, step: u8) {
     unreachable_step!("invalid JMP step {step}");
 }
 
@@ -113,7 +113,7 @@ pub fn exec_jmp(_: &mut Cpu, _: &mut CpuBus<'_>, _: &mut Context, step: u8) {
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Absolute        | JSR $nnnn                | $20    | 3         | 6
 #[inline]
-pub fn exec_jsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_jsr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = cpu.fetch_u8(bus, ctx);
@@ -161,7 +161,7 @@ pub fn exec_jsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | RTI                      | $40    | 1         | 6
 #[inline]
-pub fn exec_rti(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_rti(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -202,7 +202,7 @@ pub fn exec_rti(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ---------------------- | ------ | --------- | ----------
 /// Implied         | RTS                    | $60    | 1         | 6
 #[inline]
-pub fn exec_rts(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_rts(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);

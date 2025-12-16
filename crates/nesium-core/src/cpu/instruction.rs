@@ -29,7 +29,7 @@ impl Instruction {
     }
 
     /// Execute a single cycle step using static dispatch (addressing then mnemonic).
-    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
         let addr_len = self.addr_len();
         if step < addr_len {
             self.addressing.exec(cpu, bus, ctx, step);

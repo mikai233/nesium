@@ -350,7 +350,7 @@ impl Mnemonic {
     }
 
     /// Static-dispatch exec entry (prototype; not yet wired into CPU).
-    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
         match self {
             // Load / Store
             Mnemonic::LAS => load::exec_las(cpu, bus, ctx, step),

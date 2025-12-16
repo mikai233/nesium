@@ -33,7 +33,7 @@ use crate::{
 /// Zero Page               | ASL $nn                  | $06    | 2         | 5
 /// X-Indexed Zero Page     | ASL $nn,X                | $16    | 2         | 6
 #[inline]
-pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -85,7 +85,7 @@ pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Zero Page               | LSR $nn                  | $46    | 2         | 5
 /// X-Indexed Zero Page     | LSR $nn,X                | $56    | 2         | 6
 #[inline]
-pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -137,7 +137,7 @@ pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Zero Page               | ROL $nn                  | $26    | 2         | 5
 /// X-Indexed Zero Page     | ROL $nn,X                | $36    | 2         | 6
 #[inline]
-pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -191,7 +191,7 @@ pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// Zero Page               | ROR $nn                  | $66    | 2         | 5
 /// X-Indexed Zero Page     | ROR $nn,X                | $76    | 2         | 6
 #[inline]
-pub fn exec_ror(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_ror(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);

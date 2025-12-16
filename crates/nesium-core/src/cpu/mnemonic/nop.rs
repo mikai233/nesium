@@ -47,7 +47,7 @@ use crate::{
 /// *Undocumented.
 /// p: =1 if page is crossed.
 #[inline]
-pub fn exec_nop(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_nop(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);

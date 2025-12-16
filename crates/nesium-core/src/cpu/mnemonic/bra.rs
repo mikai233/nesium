@@ -23,7 +23,7 @@ use crate::{
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bcc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_bcc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = cpu.fetch_u8(bus, ctx);
@@ -62,7 +62,7 @@ pub fn exec_bcc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bcs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_bcs(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = cpu.fetch_u8(bus, ctx);
@@ -104,7 +104,7 @@ pub fn exec_bcs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_beq(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_beq(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = cpu.fetch_u8(bus, ctx);
@@ -143,7 +143,7 @@ pub fn exec_beq(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bmi(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_bmi(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = cpu.fetch_u8(bus, ctx);
@@ -184,7 +184,7 @@ pub fn exec_bmi(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bne(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_bne(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = cpu.fetch_u8(bus, ctx);
@@ -227,7 +227,7 @@ pub fn exec_bne(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bpl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_bpl(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = cpu.fetch_u8(bus, ctx);
@@ -267,7 +267,7 @@ pub fn exec_bpl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bvc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_bvc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = cpu.fetch_u8(bus, ctx);
@@ -306,7 +306,7 @@ pub fn exec_bvc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// p: =1 if page is crossed.
 /// t: =1 if branch is taken.
 #[inline]
-pub fn exec_bvs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_bvs(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.tmp = cpu.fetch_u8(bus, ctx);

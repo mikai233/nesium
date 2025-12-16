@@ -5,7 +5,7 @@ use std::{
 
 use crate::{bus::CpuBus, context::Context, cpu::Cpu};
 
-type MicroFn = fn(&mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context);
+type MicroFn = fn(&mut Cpu, bus: &mut CpuBus, ctx: &mut Context);
 
 #[derive(Clone, Copy, Eq)]
 pub struct MicroOp {
@@ -18,7 +18,7 @@ impl MicroOp {
     //  Execution
     // ─────────────────────────────────────────────────────────────────────────────
     /// Execute this micro operation.
-    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context) {
+    pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context) {
         (self.micro_fn)(cpu, bus, ctx);
     }
 
@@ -268,6 +268,6 @@ impl Hash for MicroOp {
     }
 }
 
-pub(crate) fn empty_micro_fn(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context) {
+pub(crate) fn empty_micro_fn(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context) {
     cpu.dummy_read(bus, ctx);
 }

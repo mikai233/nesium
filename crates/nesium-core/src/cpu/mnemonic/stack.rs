@@ -53,7 +53,7 @@ use crate::{
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | PHA                      | $48    | 1         | 3
 #[inline]
-pub fn exec_pha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_pha(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -80,7 +80,7 @@ pub fn exec_pha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | PHP                      | $08    | 1         | 3
 #[inline]
-pub fn exec_php(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_php(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -113,7 +113,7 @@ pub fn exec_php(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | PLA                      | $68    | 1         | 4
 #[inline]
-pub fn exec_pla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_pla(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -148,7 +148,7 @@ pub fn exec_pla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | PLP                      | $28    | 1         | 4
 #[inline]
-pub fn exec_plp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_plp(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);

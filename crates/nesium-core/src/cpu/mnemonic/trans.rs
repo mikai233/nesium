@@ -30,7 +30,7 @@ use crate::{
 ///
 /// *Undocumented.
 #[inline]
-pub fn exec_shs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_shs(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let s = cpu.a & cpu.x;
@@ -60,7 +60,7 @@ pub fn exec_shs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TAX                      | $AA    | 1         | 2
 #[inline]
-pub fn exec_tax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_tax(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -89,7 +89,7 @@ pub fn exec_tax(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TAY                      | $A8    | 1         | 2
 #[inline]
-pub fn exec_tay(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_tay(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -119,7 +119,7 @@ pub fn exec_tay(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TSX                      | $BA    | 1         | 2
 #[inline]
-pub fn exec_tsx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_tsx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -148,7 +148,7 @@ pub fn exec_tsx(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TXA                      | $8A    | 1         | 2
 #[inline]
-pub fn exec_txa(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_txa(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -175,7 +175,7 @@ pub fn exec_txa(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TXS                      | $9A    | 1         | 2
 #[inline]
-pub fn exec_txs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_txs(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
@@ -203,7 +203,7 @@ pub fn exec_txs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 /// --------------- | ------------------------ | ------ | --------- | ----------
 /// Implied         | TYA                      | $98    | 1         | 2
 #[inline]
-pub fn exec_tya(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
+pub fn exec_tya(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.dummy_read(bus, ctx);
