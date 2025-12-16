@@ -489,52 +489,80 @@ fn exec_zero_page(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) 
 
 fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
+        // T1: Fetch zero-page base address (BAL) from the instruction stream.
+        // Operand is an 8-bit address; high byte is implicitly $00.
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
+
+        // T2: Dummy read at $00:BAL (discarded).
+        // The real 6502 performs this extra read while the internal adder
+        // computes (BAL + X) to form the final zero-page effective address.
+        //
+        // After this cycle, `effective_addr` holds the indexed zero-page address
+        // that will be used by the instruction execution micro-ops on the next cycle.
         1 => {
             let base = cpu.effective_addr & 0x00FF;
             cpu.dummy_read_at(base, bus, ctx);
-            let addr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
+
+            let addr = (cpu.effective_addr + cpu.x as u16) & 0x00FF; // wrap within zero page
             cpu.effective_addr = addr;
         }
+
         _ => unreachable_step!("invalid ZeroPageX step {step}"),
     }
 }
 
 fn exec_zero_page_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
+        // T1: Fetch zero-page base address (BAL) from the instruction stream.
         0 => {
             cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
+
+        // T2: Dummy read at $00:BAL (discarded), then compute (BAL + Y).
+        // Same timing behavior as ZeroPage,X, but using the Y index register.
         1 => {
             let base = cpu.effective_addr & 0x00FF;
             cpu.dummy_read_at(base, bus, ctx);
-            let addr = (cpu.effective_addr + cpu.y as u16) & 0x00FF;
+
+            let addr = (cpu.effective_addr + cpu.y as u16) & 0x00FF; // wrap within zero page
             cpu.effective_addr = addr;
         }
+
         _ => unreachable_step!("invalid ZeroPageY step {step}"),
     }
 }
 
 fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
+        // T1: fetch zero-page base address (BAL)
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16; // BAL in low byte
         }
+
+        // T2: dummy read at $00:BAL (discarded), then compute (BAL + X)
         1 => {
-            let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            bus.mem_read(ptr, cpu, ctx);
+            let base = cpu.effective_addr & 0x00FF;
+            cpu.dummy_read_at(base, bus, ctx);
+
+            // reuse effective_addr to hold the indexed zero-page pointer location
+            cpu.effective_addr = (base + cpu.x as u16) & 0x00FF;
         }
+
+        // T3: fetch low byte of effective address from $00:(BAL+X)
         2 => {
-            let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-            cpu.tmp = bus.mem_read(ptr, cpu, ctx);
+            let ptr = cpu.effective_addr & 0x00FF;
+            cpu.tmp = bus.mem_read(ptr, cpu, ctx); // ADL
         }
+
+        // T4: fetch high byte from $00:(BAL+X+1), then form 16-bit effective address
         3 => {
-            let ptr = (cpu.effective_addr + cpu.x as u16 + 1) & 0x00FF;
-            let hi = bus.mem_read(ptr, cpu, ctx);
-            cpu.effective_addr = ((hi as u16) << 8) | cpu.tmp as u16;
+            let ptr = cpu.effective_addr & 0x00FF;
+            let hi = bus.mem_read((ptr + 1) & 0x00FF, cpu, ctx); // ADH (wrap in zero page)
+            cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
         }
+
         _ => unreachable_step!("invalid IndirectX step {step}"),
     }
 }
