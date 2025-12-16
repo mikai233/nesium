@@ -35,7 +35,6 @@ pub mod addressing;
 mod instruction;
 mod irq;
 mod lookup;
-mod micro_op;
 mod mnemonic;
 mod status;
 mod timing;

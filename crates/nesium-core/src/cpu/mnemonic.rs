@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::bus::CpuBus;
 use crate::context::Context;
-use crate::cpu::{Cpu, micro_op::MicroOp};
+use crate::cpu::Cpu;
 
 pub mod arith;
 pub mod bra;
@@ -135,7 +135,6 @@ pub(crate) enum Mnemonic {
 }
 
 impl Mnemonic {
-    /// Longest execution length (in cycles) for static-dispatch exec.
     pub const fn exec_len(&self) -> u8 {
         match self {
             // Load / Store
@@ -226,130 +225,6 @@ impl Mnemonic {
         }
     }
 
-    pub(crate) const fn micro_ops(&self) -> &'static [MicroOp] {
-        match self {
-            // ===============================
-            // Load / Store Instructions
-            // ===============================
-            Mnemonic::LAS => Self::las(),
-            Mnemonic::LAX => Self::lax(),
-            Mnemonic::LDA => Self::lda(),
-            Mnemonic::LDX => Self::ldx(),
-            Mnemonic::LDY => Self::ldy(),
-            Mnemonic::SAX => Self::sax(),
-            Mnemonic::SHA => Self::sha(),
-            Mnemonic::SHX => Self::shx(),
-            Mnemonic::SHY => Self::shy(),
-            Mnemonic::STA => Self::sta(),
-            Mnemonic::STX => Self::stx(),
-            Mnemonic::STY => Self::sty(),
-            Mnemonic::SHS => Self::shs(),
-
-            // ===============================
-            // Transfer Instructions
-            // ===============================
-            Mnemonic::TAX => Self::tax(),
-            Mnemonic::TAY => Self::tay(),
-            Mnemonic::TSX => Self::tsx(),
-            Mnemonic::TXA => Self::txa(),
-            Mnemonic::TXS => Self::txs(),
-            Mnemonic::TYA => Self::tya(),
-
-            // ===============================
-            // Stack Instructions
-            // ===============================
-            Mnemonic::PHA => Self::pha(),
-            Mnemonic::PHP => Self::php(),
-            Mnemonic::PLA => Self::pla(),
-            Mnemonic::PLP => Self::plp(),
-
-            // ===============================
-            // Shift / Rotate
-            // ===============================
-            Mnemonic::ASL => Self::asl(),
-            Mnemonic::LSR => Self::lsr(),
-            Mnemonic::ROL => Self::rol(),
-            Mnemonic::ROR => Self::ror(),
-
-            // ===============================
-            // Logical
-            // ===============================
-            Mnemonic::AND => Self::and(),
-            Mnemonic::BIT => Self::bit(),
-            Mnemonic::EOR => Self::eor(),
-            Mnemonic::ORA => Self::ora(),
-
-            // ===============================
-            // Arithmetic
-            // ===============================
-            Mnemonic::ADC => Self::adc(),
-            Mnemonic::ANC => Self::anc(),
-            Mnemonic::ARR => Self::arr(),
-            Mnemonic::ASR => Self::asr(),
-            Mnemonic::CMP => Self::cmp(),
-            Mnemonic::CPX => Self::cpx(),
-            Mnemonic::CPY => Self::cpy(),
-            Mnemonic::DCP => Self::dcp(),
-            Mnemonic::ISC => Self::isc(),
-            Mnemonic::RLA => Self::rla(),
-            Mnemonic::RRA => Self::rra(),
-            Mnemonic::SBC => Self::sbc(),
-            Mnemonic::SBX => Self::sbx(),
-            Mnemonic::SLO => Self::slo(),
-            Mnemonic::SRE => Self::sre(),
-            Mnemonic::XAA => Self::xaa(),
-
-            // ===============================
-            // Increment / Decrement
-            // ===============================
-            Mnemonic::DEC => Self::dec(),
-            Mnemonic::DEX => Self::dex(),
-            Mnemonic::DEY => Self::dey(),
-            Mnemonic::INC => Self::inc(),
-            Mnemonic::INX => Self::inx(),
-            Mnemonic::INY => Self::iny(),
-
-            // ===============================
-            // Control Flow
-            // ===============================
-            Mnemonic::BRK => Self::brk(),
-            Mnemonic::JMP => Self::jmp(),
-            Mnemonic::JSR => Self::jsr(),
-            Mnemonic::RTI => Self::rti(),
-            Mnemonic::RTS => Self::rts(),
-
-            // ===============================
-            // Branches
-            // ===============================
-            Mnemonic::BCC => Self::bcc(),
-            Mnemonic::BCS => Self::bcs(),
-            Mnemonic::BEQ => Self::beq(),
-            Mnemonic::BMI => Self::bmi(),
-            Mnemonic::BNE => Self::bne(),
-            Mnemonic::BPL => Self::bpl(),
-            Mnemonic::BVC => Self::bvc(),
-            Mnemonic::BVS => Self::bvs(),
-
-            // ===============================
-            // Status Flag Operations
-            // ===============================
-            Mnemonic::CLC => Self::clc(),
-            Mnemonic::CLD => Self::cld(),
-            Mnemonic::CLI => Self::cli(),
-            Mnemonic::CLV => Self::clv(),
-            Mnemonic::SEC => Self::sec(),
-            Mnemonic::SED => Self::sed(),
-            Mnemonic::SEI => Self::sei(),
-
-            // ===============================
-            // Other
-            // ===============================
-            Mnemonic::JAM => Self::jam(),
-            Mnemonic::NOP => Self::nop(),
-        }
-    }
-
-    /// Static-dispatch exec entry (prototype; not yet wired into CPU).
     pub(crate) fn exec(&self, cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
         match self {
             // Load / Store

@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::Index};
+use std::fmt::Display;
 
 use crate::{
     bus::CpuBus,
@@ -7,7 +7,6 @@ use crate::{
         Cpu,
         addressing::Addressing,
         lookup::LOOKUP_TABLE,
-        micro_op::MicroOp,
         mnemonic::Mnemonic,
         timing::{CYCLE_TABLE, Timing},
     },
@@ -21,7 +20,7 @@ pub(crate) struct Instruction {
 
 impl Instruction {
     pub(crate) const fn len(&self) -> u8 {
-        self.mnemonic.exec_len() + self.addr_len()
+        self.addr_len() + self.mnemonic.exec_len()
     }
 
     pub(crate) const fn addr_len(&self) -> u8 {
@@ -522,19 +521,6 @@ impl Instruction {
 
     pub(crate) fn cycle(&self) -> Timing {
         CYCLE_TABLE[self.opcode() as usize]
-    }
-}
-
-impl Index<usize> for Instruction {
-    type Output = MicroOp;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        let len = self.addr_len() as usize;
-        if index < len {
-            &self.addressing.micro_ops()[index]
-        } else {
-            &self.mnemonic.micro_ops()[index - len]
-        }
     }
 }
 
