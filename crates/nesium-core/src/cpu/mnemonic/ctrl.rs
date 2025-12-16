@@ -116,8 +116,7 @@ pub fn exec_jmp(_: &mut Cpu, _: &mut CpuBus<'_>, _: &mut Context, step: u8) {
 pub fn exec_jsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.inc_pc();
+            cpu.tmp = cpu.fetch_u8(bus, ctx);
         }
         1 => {
             let return_pc = cpu.pc;
@@ -257,8 +256,7 @@ impl Mnemonic {
                 // Bus: READ PC + 1. The byte immediately following BRK is read and discarded.
                 // Internal: PC is incremented past the padding byte.
                 micro_fn: |cpu, bus, ctx| {
-                    bus.mem_read(cpu.pc, cpu, ctx); // Read the byte at PC (which is PC + 1 after T1 fetch)
-                    cpu.inc_pc(); //TODO check pc
+                    let _ = cpu.fetch_u8(bus, ctx); // Read the byte at PC (which is PC + 1 after T1 fetch)
                 },
             },
             // T3: Push PC High Byte (W)
@@ -372,9 +370,7 @@ impl Mnemonic {
                 // Internal: Store LSB in cpu.base. PC is advanced to point to the HI byte address.
                 micro_fn: |cpu, bus, ctx| {
                     // Read LSB (target address) and store it in cpu.base
-                    cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-                    // PC increments (PC + 1), now pointing to the HI byte address
-                    cpu.inc_pc();
+                    cpu.tmp = cpu.fetch_u8(bus, ctx);
                 },
             },
             // T3: Dummy Read from Stack Address (R_dummy) & Internal PC Prepare

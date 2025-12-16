@@ -241,16 +241,14 @@ impl Mnemonic {
             MicroOp {
                 name: "shs_t2_fetch_lo",
                 micro_fn: |cpu, bus, ctx| {
-                    let lo = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    let lo = cpu.fetch_u8(bus, ctx);
                     cpu.effective_addr = lo as u16;
                 },
             },
             MicroOp {
                 name: "shs_t3_fetch_hi",
                 micro_fn: |cpu, bus, ctx| {
-                    let hi = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    let hi = cpu.fetch_u8(bus, ctx);
                     cpu.tmp = hi;
                     cpu.effective_addr |= (hi as u16) << 8;
                 },

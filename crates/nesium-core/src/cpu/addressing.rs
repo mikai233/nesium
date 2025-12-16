@@ -366,13 +366,11 @@ impl Display for Addressing {
 fn exec_absolute(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-            cpu.inc_pc();
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
-            let hi = bus.mem_read(cpu.pc, cpu, ctx);
+            let hi = cpu.fetch_u8(bus, ctx);
             cpu.effective_addr |= (hi as u16) << 8;
-            cpu.inc_pc();
         }
         _ => unreachable_step!("invalid Absolute step {step}"),
     }
@@ -381,11 +379,10 @@ fn exec_absolute(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u
 fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-            cpu.inc_pc();
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
-            let hi = bus.mem_read(cpu.pc, cpu, ctx);
+            let hi = cpu.fetch_u8(bus, ctx);
             let base = ((hi as u16) << 8) | cpu.effective_addr;
             cpu.tmp = hi;
             // if cpu.opcode_in_flight == Some(0x9C) {
@@ -394,7 +391,6 @@ fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
             let addr = base.wrapping_add(cpu.x as u16);
             cpu.skip_optional_dummy_read_cycle(base, addr);
             cpu.effective_addr = addr;
-            cpu.inc_pc();
         }
         2 => {
             let base = cpu.effective_addr.wrapping_sub(cpu.x as u16);
@@ -414,11 +410,10 @@ fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
 fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-            cpu.inc_pc();
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
-            let hi = bus.mem_read(cpu.pc, cpu, ctx);
+            let hi = cpu.fetch_u8(bus, ctx);
             let base = ((hi as u16) << 8) | cpu.effective_addr;
             cpu.tmp = hi;
             // if cpu.opcode_in_flight == Some(0x9F)
@@ -430,7 +425,6 @@ fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
             let addr = base.wrapping_add(cpu.y as u16);
             cpu.skip_optional_dummy_read_cycle(base, addr);
             cpu.effective_addr = addr;
-            cpu.inc_pc();
         }
         2 => {
             let base = cpu.effective_addr.wrapping_sub(cpu.y as u16);
@@ -450,13 +444,11 @@ fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
 fn exec_indirect(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-            cpu.inc_pc();
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
-            let hi = bus.mem_read(cpu.pc, cpu, ctx);
+            let hi = cpu.fetch_u8(bus, ctx);
             cpu.effective_addr |= (hi as u16) << 8;
-            cpu.inc_pc();
         }
         2 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
@@ -477,8 +469,7 @@ fn exec_indirect(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u
 fn exec_zero_page(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-            cpu.inc_pc();
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         _ => unreachable_step!("invalid ZeroPage step {step}"),
     }
@@ -487,8 +478,7 @@ fn exec_zero_page(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: 
 fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-            cpu.inc_pc();
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
             let addr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
@@ -502,8 +492,7 @@ fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step
 fn exec_zero_page_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-            cpu.inc_pc();
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
             let addr = (cpu.effective_addr + cpu.y as u16) & 0x00FF;
@@ -517,8 +506,7 @@ fn exec_zero_page_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step
 fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-            cpu.inc_pc();
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
             let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
@@ -540,8 +528,7 @@ fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step:
 fn exec_indirect_y(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-            cpu.inc_pc();
+            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
         }
         1 => {
             cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);

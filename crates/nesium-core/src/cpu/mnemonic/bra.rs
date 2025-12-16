@@ -26,8 +26,7 @@ use crate::{
 pub fn exec_bcc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.inc_pc();
+            cpu.tmp = cpu.fetch_u8(bus, ctx);
             cpu.test_branch(!cpu.p.c());
         }
         1 => {
@@ -66,8 +65,7 @@ pub fn exec_bcc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_bcs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.inc_pc();
+            cpu.tmp = cpu.fetch_u8(bus, ctx);
             cpu.test_branch(cpu.p.c());
         }
         1 => {
@@ -109,8 +107,7 @@ pub fn exec_bcs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_beq(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.inc_pc();
+            cpu.tmp = cpu.fetch_u8(bus, ctx);
             cpu.test_branch(cpu.p.z());
         }
         1 => {
@@ -149,8 +146,7 @@ pub fn exec_beq(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_bmi(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.inc_pc();
+            cpu.tmp = cpu.fetch_u8(bus, ctx);
             cpu.test_branch(cpu.p.n());
         }
         1 => {
@@ -191,8 +187,7 @@ pub fn exec_bmi(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_bne(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.inc_pc();
+            cpu.tmp = cpu.fetch_u8(bus, ctx);
             cpu.test_branch(!cpu.p.z());
         }
         1 => {
@@ -235,8 +230,7 @@ pub fn exec_bne(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_bpl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.inc_pc();
+            cpu.tmp = cpu.fetch_u8(bus, ctx);
             cpu.test_branch(!cpu.p.n());
         }
         1 => {
@@ -276,8 +270,7 @@ pub fn exec_bpl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_bvc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.inc_pc();
+            cpu.tmp = cpu.fetch_u8(bus, ctx);
             cpu.test_branch(!cpu.p.v());
         }
         1 => {
@@ -316,8 +309,7 @@ pub fn exec_bvc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_bvs(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-            cpu.inc_pc();
+            cpu.tmp = cpu.fetch_u8(bus, ctx);
             cpu.test_branch(cpu.p.v());
         }
         1 => {
@@ -359,8 +351,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bcc_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    cpu.tmp = cpu.fetch_u8(bus, ctx);
                     cpu.test_branch(!cpu.p.c());
                 },
             },
@@ -406,8 +397,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bcs_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    cpu.tmp = cpu.fetch_u8(bus, ctx);
                     cpu.test_branch(cpu.p.c());
                 },
             },
@@ -456,8 +446,7 @@ impl Mnemonic {
             MicroOp {
                 name: "beq_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    cpu.tmp = cpu.fetch_u8(bus, ctx);
                     cpu.test_branch(cpu.p.z());
                 },
             },
@@ -503,8 +492,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bmi_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    cpu.tmp = cpu.fetch_u8(bus, ctx);
                     cpu.test_branch(cpu.p.n());
                 },
             },
@@ -552,8 +540,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bne_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    cpu.tmp = cpu.fetch_u8(bus, ctx);
                     cpu.test_branch(!cpu.p.z());
                 },
             },
@@ -603,8 +590,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bpl_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    cpu.tmp = cpu.fetch_u8(bus, ctx);
                     cpu.test_branch(!cpu.p.n());
                 },
             },
@@ -651,8 +637,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bvc_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    cpu.tmp = cpu.fetch_u8(bus, ctx);
                     cpu.test_branch(!cpu.p.v());
                 },
             },
@@ -698,8 +683,7 @@ impl Mnemonic {
             MicroOp {
                 name: "bvs_fetch_branch_offset",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.tmp = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.inc_pc();
+                    cpu.tmp = cpu.fetch_u8(bus, ctx);
                     cpu.test_branch(cpu.p.v());
                 },
             },

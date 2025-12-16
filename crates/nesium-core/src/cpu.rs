@@ -297,7 +297,7 @@ impl Cpu {
                     // let start_pc = self.pc;
                     // let start_cycles = bus.cycles();
                     // let addr_val = bus.ram[0x0200];
-                    let opcode = self.fetch_opcode(bus, ctx);
+                    let opcode = self.fetch_u8(bus, ctx);
                     // if start_cycles < 20_000_000 {
                     //     cpu_opcode_log_write(start_cycles, start_pc, opcode, addr_val);
                     // }
@@ -392,13 +392,6 @@ impl Cpu {
         let lo = self.fetch_u8(bus, ctx) as u16;
         let hi = self.fetch_u8(bus, ctx) as u16;
         (hi << 8) | lo
-    }
-
-    #[inline]
-    pub(crate) fn fetch_opcode(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) -> u8 {
-        let opcode = bus.mem_read(self.pc, self, ctx);
-        self.inc_pc();
-        opcode
     }
 
     #[inline]

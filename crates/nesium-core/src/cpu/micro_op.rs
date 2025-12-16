@@ -27,8 +27,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_zp_addr_lo",
             micro_fn: |cpu, bus, ctx| {
-                cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-                cpu.inc_pc();
+                cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
             },
         }
     }
@@ -38,8 +37,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_abs_addr_lo",
             micro_fn: |cpu, bus, ctx| {
-                cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-                cpu.inc_pc();
+                cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
             },
         }
     }
@@ -49,9 +47,8 @@ impl MicroOp {
         MicroOp {
             name: "fetch_abs_addr_hi",
             micro_fn: |cpu, bus, ctx| {
-                let hi = bus.mem_read(cpu.pc, cpu, ctx);
+                let hi = cpu.fetch_u8(bus, ctx);
                 cpu.effective_addr |= (hi as u16) << 8;
-                cpu.inc_pc();
             },
         }
     }
@@ -61,7 +58,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_abs_addr_hi_add_x",
             micro_fn: |cpu, bus, ctx| {
-                let hi = bus.mem_read(cpu.pc, cpu, ctx);
+                let hi = cpu.fetch_u8(bus, ctx);
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHX
                 if cpu.opcode_in_flight == Some(0x9C) {
@@ -71,7 +68,6 @@ impl MicroOp {
 
                 cpu.skip_optional_dummy_read_cycle(base, addr);
                 cpu.effective_addr = addr;
-                cpu.inc_pc();
             },
         }
     }
@@ -81,7 +77,7 @@ impl MicroOp {
         MicroOp {
             name: "fetch_abs_addr_hi_add_y",
             micro_fn: |cpu, bus, ctx| {
-                let hi = bus.mem_read(cpu.pc, cpu, ctx);
+                let hi = cpu.fetch_u8(bus, ctx);
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHA(0x9F) SHX(0x9E) SHS(0x9B)
                 if cpu.opcode_in_flight == Some(0x9F)
@@ -94,7 +90,6 @@ impl MicroOp {
 
                 cpu.skip_optional_dummy_read_cycle(base, addr);
                 cpu.effective_addr = addr;
-                cpu.inc_pc();
             },
         }
     }
