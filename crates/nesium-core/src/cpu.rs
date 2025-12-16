@@ -153,28 +153,44 @@ impl OamDma {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cpu {
-    // Registers
-    pub(crate) a: u8,     //Accumulator
-    pub(crate) x: u8,     //X Index Register
-    pub(crate) y: u8,     //Y Index Register
-    pub(crate) s: u8,     //Stack Pointer
-    pub(crate) p: Status, //Processor Status
-    pub(crate) pc: u16,   //Program Counter
+    // ===== Architectural registers (6502 visible state) =====
+    pub(crate) a: u8,     // Accumulator (A)
+    pub(crate) x: u8,     // Index register X
+    pub(crate) y: u8,     // Index register Y
+    pub(crate) s: u8,     // Stack pointer (offset in page $01xx)
+    pub(crate) p: Status, // Processor status flags (NV-BDIZC)
+    pub(crate) pc: u16,   // Program counter
 
+    // ===== Current instruction / microcycle state =====
+    /// Opcode currently being executed (set once fetched; cleared when instruction completes).
     pub(crate) opcode_in_flight: Option<u8>,
+
+    /// Micro-cycle / step index for the current instruction.
+    /// e.g. 0 = first cycle after opcode fetch, 1 = next cycle, ...
+    /// This drives your per-cycle state machine.
+    pub(crate) step: u8,
+
+    // ===== Addressing / bus temporaries (per-instruction scratch) =====
+    /// Scratch byte used across micro-ops (often holds low byte, zp addr, fetched operand, etc.).
+    pub(crate) tmp: u8,
+
+    /// Effective address resolved for the current bus operation / micro-op.
+    pub(crate) effective_addr: u16,
+
+    // ===== Interrupt state (IRQ/NMI) =====
     pub(crate) irq_latch: IrqSource,
     pub(crate) prev_irq_active: bool,
     pub(crate) irq_active: bool,
     pub(crate) irq_enable_mask: IrqSource,
-    /// Previous sampled NMI line level (for edge detection).
+
+    /// Previous sampled NMI line level (for rising-edge detection).
     pub(crate) prev_nmi_level: bool,
     /// NMI pending flag set on rising edge, consumed when NMI is taken.
     pub(crate) nmi_latch: bool,
-    /// Previous cycle's pending flag, used to delay NMI by one instruction boundary.
+    /// Previous cycle's pending flag (used to align NMI timing with instruction boundary).
     pub(crate) prev_nmi_latch: bool,
-    pub(crate) index: u8,
-    pub(crate) base: u8,
-    pub(crate) effective_addr: u16,
+
+    // ===== DMA =====
     pub(crate) oam_dma: Option<OamDma>,
 }
 
@@ -183,12 +199,12 @@ impl Cpu {
     /// Does not automatically fetch the reset vector — call `reset()` for that.
     pub(crate) fn new() -> Self {
         Self {
-            a: 0x00,                             // Accumulator
-            x: 0x00,                             // X register
-            y: 0x00,                             // Y register
-            s: 0xFD,                             // Stack pointer after reset
-            p: Status::from_bits_truncate(0x34), // IRQ disabled, bit 5 always set
-            pc: 0x0000,                          // Will be set by reset vector
+            a: 0x00,              // Accumulator
+            x: 0x00,              // X register
+            y: 0x00,              // Y register
+            s: 0xFD,              // Stack pointer after reset
+            p: Status::INTERRUPT, // IRQ disabled
+            pc: 0x0000,           // Will be set by reset vector
             opcode_in_flight: None,
             irq_latch: IrqSource::empty(),
             prev_irq_active: false,
@@ -197,8 +213,8 @@ impl Cpu {
             prev_nmi_level: false,
             nmi_latch: false,
             prev_nmi_latch: false,
-            index: 0,
-            base: 0,
+            step: 0,
+            tmp: 0,
             effective_addr: 0,
             oam_dma: None,
         }
@@ -247,8 +263,8 @@ impl Cpu {
         self.prev_nmi_level = false;
         self.nmi_latch = false;
         self.prev_nmi_latch = false;
-        self.index = 0;
-        self.base = 0;
+        self.step = 0;
+        self.tmp = 0;
         self.effective_addr = 0;
         self.oam_dma = None;
 
@@ -260,7 +276,7 @@ impl Cpu {
         }
     }
 
-    pub(crate) fn step(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) {
+    pub(crate) fn step(&mut self, bus: &mut CpuBus, ctx: &mut Context) {
         if self.handle_oam_dma(bus, ctx) {
             return;
         }
@@ -268,10 +284,10 @@ impl Cpu {
         match self.opcode_in_flight {
             Some(opcode) => {
                 let instr = &LOOKUP_TABLE[opcode as usize];
-                self.exec(bus, ctx, instr);
-                self.post_exec(instr);
-                if self.index >= instr.len() {
-                    self.clear();
+                self.execute_step(bus, ctx, instr);
+                self.finalize_step(instr);
+                if self.step >= instr.len() {
+                    self.clear_instruction_state();
                 }
             }
             None => {
@@ -288,7 +304,7 @@ impl Cpu {
                     self.opcode_in_flight = Some(opcode);
                     let instr = &LOOKUP_TABLE[opcode as usize];
                     // self.log_trace_line(bus, ctx, start_pc, start_cycles, instr);
-                    self.pre_exec(instr);
+                    self.prepare_step(instr);
                 }
             }
         }
@@ -351,119 +367,169 @@ impl Cpu {
     }
 
     #[inline]
-    pub(crate) fn dummy_read_at(&mut self, bus: &mut CpuBus, addr: u16, ctx: &mut Context) {
+    pub(crate) fn dummy_read_at(&mut self, addr: u16, bus: &mut CpuBus, ctx: &mut Context) {
         bus.mem_read(addr, self, ctx);
+    }
+
+    #[inline]
+    pub(crate) fn dummy_write_at(
+        &mut self,
+        addr: u16,
+        data: u8,
+        bus: &mut CpuBus,
+        ctx: &mut Context,
+    ) {
+        bus.mem_write(addr, data, self, ctx);
+    }
+
+    pub(crate) fn fetch_u8(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
+        let v = bus.mem_read(self.pc, self, ctx);
+        self.inc_pc();
+        v
+    }
+
+    pub(crate) fn fetch_u16(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u16 {
+        let lo = self.fetch_u8(bus, ctx) as u16;
+        let hi = self.fetch_u8(bus, ctx) as u16;
+        (hi << 8) | lo
     }
 
     #[inline]
     pub(crate) fn fetch_opcode(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) -> u8 {
         let opcode = bus.mem_read(self.pc, self, ctx);
-        self.incr_pc();
+        self.inc_pc();
         opcode
     }
 
     #[inline]
-    pub(crate) fn pre_exec(&mut self, instr: &Instruction) {
+    pub(crate) fn prepare_step(&mut self, instr: &Instruction) {
         match instr.addressing {
-            // Accumulator Addressing:
-            // This mode operates directly on the Accumulator (A) register, not memory.
-            // It bypasses all memory read/write micro-ops that other modes might use
-            // (often involving 'dummy reads').
-            // To unify the core 'exec' logic, jump the cycle index directly to the final
-            // instruction execution phase (usually the last cycle).
             Addressing::Accumulator => {
-                self.index = instr.len() - 1;
+                // Accumulator addressing operates on register A directly and does not
+                // perform any operand fetch/address calculation micro-cycles.
+                //
+                // To reuse the normal per-step execution dispatch, jump `step` straight
+                // to the final execution micro-op for this instruction.
+                self.step = instr.len() - 1;
             }
 
-            // Immediate Addressing:
-            // This mode only has one execution cycle after the opcode fetch.
-            // Set 'effective_addr' now to the current PC (which points to the data byte)
-            // so the main execution logic can fetch the data from a unified source,
-            // regardless of the addressing mode. Then, advance the PC past the data byte.
             Addressing::Immediate => {
+                // Immediate addressing reads the operand byte at the current PC.
+                //
+                // We precompute `effective_addr` as the location of the immediate value
+                // so later micro-ops can fetch the operand through a unified path
+                // (`effective_addr`), regardless of addressing mode.
+                //
+                // Note: PC is advanced in `finalize_step` after the immediate byte is consumed.
                 self.effective_addr = self.pc;
             }
 
-            // For all other addressing modes (Absolute, Zero Page, etc.),
-            // the effective_addr is calculated during the subsequent micro-ops.
-            _ => {}
-        }
-    }
-
-    #[inline]
-    pub(crate) fn exec(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context, instr: &Instruction) {
-        match instr.mnemonic {
-            // JSR, SHA, SHS, SHX and SHY have complex, non-standard instruction cycles (micro-ops),
-            // especially during stack manipulation. Their addressing phase cycles are often
-            // dedicated to setup and are distinct from standard addressing modes.
-            Mnemonic::JSR if self.index == 0 => {
-                // Skip the cycles normally reserved for general addressing mode processing.
-                // These instructions have their own custom micro-ops defined immediately
-                // following the opcode fetch cycle (index 0).
-                self.index += instr.addr_len();
-
-                // Execute the *first* of the custom, non-addressing micro-ops.
-                instr.exec(self, bus, ctx, self.index);
-            }
             _ => {
-                // For all other instructions, or for the remaining cycles of JSR/RTI/RTS,
-                // execute the micro-op corresponding to the current cycle index.
-                instr.exec(self, bus, ctx, self.index);
+                // All other addressing modes compute `effective_addr` through their
+                // dedicated addressing micro-ops over subsequent steps.
             }
         }
-        // Move to the next cycle index for the next execution phase.
-        self.index += 1;
     }
 
     #[inline]
-    pub(crate) fn post_exec(&mut self, instr: &Instruction) {
-        // Context: This function runs *after* a micro-op is executed, and self.index has
-        // *already been incremented* by the previous function call's logic.
-        // Therefore, index() here represents the total number of cycles executed so far
-        // (excluding the Opcode Fetch cycle).
+    pub(crate) fn execute_step(
+        &mut self,
+        bus: &mut CpuBus,
+        ctx: &mut Context,
+        instr: &Instruction,
+    ) {
+        match instr.mnemonic {
+            // JSR has a non-standard micro-cycle layout.
+            //
+            // Unlike most instructions, JSR does not use the generic addressing
+            // micro-ops to compute its target address. Instead, its early cycles
+            // are dedicated to stack manipulation and control-flow setup.
+            //
+            // At step == 0 (immediately after opcode fetch), skip the generic
+            // addressing phase and jump directly to JSR's first custom micro-op.
+            Mnemonic::JSR if self.step == 0 => {
+                // Skip over the cycles that would normally be used for address calculation.
+                self.step += instr.addr_len();
+
+                // Execute the first JSR-specific micro-op.
+                instr.exec(self, bus, ctx, self.step);
+            }
+
+            _ => {
+                // Default path:
+                // Execute the micro-op corresponding to the current step index.
+                // This applies to all non-JSR instructions, as well as subsequent
+                // JSR cycles after the initial special-case handling.
+                instr.exec(self, bus, ctx, self.step);
+            }
+        }
+
+        // Advance to the next micro-cycle for the following tick.
+        self.step += 1;
+    }
+
+    #[inline]
+    pub(crate) fn finalize_step(&mut self, instr: &Instruction) {
+        // This hook runs after a micro-op has completed and the step counter
+        // has advanced. At this point, `self.step` represents the number of
+        // micro-cycles executed so far since the opcode fetch.
+        //
+        // Most instructions either update the PC as part of their execution
+        // micro-ops or let it advance naturally. JMP is a special case: the
+        // program counter is updated immediately after address resolution,
+        // without executing a final "execute" cycle.
+
         match instr.addressing {
             Addressing::Immediate => {
-                self.incr_pc();
+                // Immediate addressing consumes the operand byte directly.
+                // Advance PC past the immediate value once the micro-op completes.
+                self.inc_pc();
             }
+
             Addressing::Absolute => {
-                // JMP Absolute (3 total cycles, 2 addressing cycles after fetch):
-                // The jump must occur immediately upon fetching the final address byte.
-                // If addr_len() is 2, the addressing micro-ops are at index 0 and 1.
-                // When index() == 2, the addressing is complete, and the next cycle is skipped.
-                if matches!(instr.mnemonic, Mnemonic::JMP) && self.index == instr.addr_len() {
-                    // JMP is special: it updates the PC right after address calculation,
-                    // skipping the final execution phase cycle used by most other instructions.
+                // JMP Absolute timing:
+                // - Opcode fetch
+                // - Address low byte
+                // - Address high byte
+                //
+                // After the final address byte is fetched (addr_len micro-cycles),
+                // the effective address is complete and the jump is taken immediately.
+                if matches!(instr.mnemonic, Mnemonic::JMP) && self.step == instr.addr_len() {
                     self.pc = self.effective_addr;
                 }
             }
 
             Addressing::Indirect => {
-                // JMP Indirect (5 total cycles, 4 addressing cycles after fetch):
-                // Addressing micro-ops run at index 0, 1, 2, 3.
-                // When index() == 4 (addr_len), the address calculation is finished.
-                if matches!(instr.mnemonic, Mnemonic::JMP) && self.index == instr.addr_len() {
-                    // Similarly, JMP Indirect updates PC immediately after the 4th addressing cycle
-                    // (the final address byte read, including the $XXFF bug handling).
+                // JMP Indirect timing:
+                // - Opcode fetch
+                // - Pointer low byte
+                // - Pointer high byte
+                // - Read target low byte
+                // - Read target high byte (with $xxFF wraparound behavior)
+                //
+                // As with absolute JMP, the PC is updated immediately after the
+                // final address resolution cycle.
+                if matches!(instr.mnemonic, Mnemonic::JMP) && self.step == instr.addr_len() {
                     self.pc = self.effective_addr;
                 }
             }
 
-            // For all other instructions, the PC is either updated later by a dedicated
-            // execution micro-op, or the flow continues normally.
+            // For all other addressing modes and instructions, no finalization
+            // is required here.
             _ => {}
         }
     }
 
     #[inline]
-    pub(crate) fn incr_pc(&mut self) {
+    pub(crate) fn inc_pc(&mut self) {
         self.pc = self.pc.wrapping_add(1);
     }
 
     #[inline]
-    pub(crate) fn clear(&mut self) {
-        self.index = 0;
+    pub(crate) fn clear_instruction_state(&mut self) {
+        self.step = 0;
         self.opcode_in_flight = None;
-        self.base = 0;
+        self.tmp = 0;
         self.effective_addr = 0;
     }
 
@@ -496,16 +562,15 @@ impl Cpu {
         false
     }
 
-    fn perform_interrupt(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) {
-        // Dummy read
-        bus.mem_read(self.pc, self, ctx);
-        bus.mem_read(self.pc, self, ctx);
+    fn perform_interrupt(&mut self, bus: &mut CpuBus, ctx: &mut Context) {
+        self.dummy_read(bus, ctx);
+        self.dummy_read(bus, ctx);
 
         let pc_hi = (self.pc >> 8) as u8;
         let pc_lo = self.pc as u8;
 
-        self.push(bus, ctx, pc_hi);
-        self.push(bus, ctx, pc_lo);
+        self.push_stack(bus, ctx, pc_hi);
+        self.push_stack(bus, ctx, pc_lo);
         let kind = if self.nmi_latch {
             self.nmi_latch = false;
             IrqKind::Nmi
@@ -513,7 +578,7 @@ impl Cpu {
             IrqKind::Irq
         };
         let status = self.p | Status::UNUSED;
-        self.push(bus, ctx, status.bits());
+        self.push_stack(bus, ctx, status.bits());
         self.p.insert(Status::INTERRUPT);
 
         match kind {
@@ -530,7 +595,7 @@ impl Cpu {
         }
 
         debug_assert!(self.opcode_in_flight.is_none());
-        debug_assert_eq!(self.index, 0);
+        debug_assert_eq!(self.step, 0);
     }
 
     pub(crate) fn test_branch(&mut self, taken: bool) {
@@ -540,7 +605,7 @@ impl Cpu {
             }
         } else {
             // Skip add branch offset and cross page
-            self.index += 2;
+            self.step += 2;
         }
     }
 
@@ -550,18 +615,37 @@ impl Cpu {
             return;
         }
         if !Addressing::page_crossed(base, addr) {
-            self.index += 1;
+            self.step += 1;
         }
     }
 
-    pub(crate) fn push(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context, data: u8) {
+    #[inline]
+    pub(crate) fn push_stack(&mut self, bus: &mut CpuBus, ctx: &mut Context, data: u8) {
         bus.mem_write(self.stack_addr(), data, self, ctx);
         self.s = self.s.wrapping_sub(1);
     }
 
-    pub(crate) fn pull(&mut self, bus: &mut CpuBus<'_>, ctx: &mut Context) -> u8 {
+    #[inline]
+    pub(crate) fn pop_stack(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
         self.s = self.s.wrapping_add(1);
         bus.mem_read(self.stack_addr(), self, ctx)
+    }
+
+    #[inline]
+    pub(crate) fn push_stack_u16(&mut self, bus: &mut CpuBus, ctx: &mut Context, data: u16) {
+        // 6502 pushes high byte first, then low byte
+        let hi = (data >> 8) as u8;
+        let lo = (data & 0x00FF) as u8;
+        self.push_stack(bus, ctx, hi);
+        self.push_stack(bus, ctx, lo);
+    }
+
+    #[inline]
+    pub(crate) fn pop_stack_u16(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u16 {
+        // 6502 pops low byte first, then high byte
+        let lo = self.pop_stack(bus, ctx) as u16;
+        let hi = self.pop_stack(bus, ctx) as u16;
+        (hi << 8) | lo
     }
 
     /// Captures the current CPU registers for tracing/debugging.
@@ -698,8 +782,8 @@ impl Debug for Cpu {
             self.p,
             self.pc,
             self.opcode_in_flight,
-            self.index,
-            self.base,
+            self.step,
+            self.tmp,
             self.effective_addr
         )
     }
@@ -735,7 +819,7 @@ impl Display for Cpu {
         writeln!(
             f,
             "║ base: {:02X}|effective_addr: {:04X}│index: {:02X} ║",
-            self.base, self.effective_addr, self.index
+            self.tmp, self.effective_addr, self.step
         )?;
         writeln!(f, "╚═════════════════════════════════════════╝")?;
 

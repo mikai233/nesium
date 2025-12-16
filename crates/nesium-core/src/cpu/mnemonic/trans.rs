@@ -242,7 +242,7 @@ impl Mnemonic {
                 name: "shs_t2_fetch_lo",
                 micro_fn: |cpu, bus, ctx| {
                     let lo = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.incr_pc();
+                    cpu.inc_pc();
                     cpu.effective_addr = lo as u16;
                 },
             },
@@ -250,8 +250,8 @@ impl Mnemonic {
                 name: "shs_t3_fetch_hi",
                 micro_fn: |cpu, bus, ctx| {
                     let hi = bus.mem_read(cpu.pc, cpu, ctx);
-                    cpu.incr_pc();
-                    cpu.base = hi;
+                    cpu.inc_pc();
+                    cpu.tmp = hi;
                     cpu.effective_addr |= (hi as u16) << 8;
                 },
             },
@@ -273,10 +273,10 @@ impl Mnemonic {
                 micro_fn: |cpu, bus, ctx| {
                     let s = cpu.a & cpu.x;
                     cpu.s = s;
-                    let value = s & cpu.base.wrapping_add(1);
+                    let value = s & cpu.tmp.wrapping_add(1);
 
                     let addr = cpu.effective_addr;
-                    let crossed = ((addr >> 8) as u8) != cpu.base;
+                    let crossed = ((addr >> 8) as u8) != cpu.tmp;
                     let final_addr = if crossed {
                         let hi = ((addr >> 8) as u8) & s;
                         let lo = (addr & 0x00FF) as u8;

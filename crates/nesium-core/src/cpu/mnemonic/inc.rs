@@ -30,15 +30,15 @@ pub fn exec_dec(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
-            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
-            cpu.base = cpu.base.wrapping_sub(1);
-            cpu.p.set_zn(cpu.base);
+            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.tmp = cpu.tmp.wrapping_sub(1);
+            cpu.p.set_zn(cpu.tmp);
         }
         2 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
         }
         _ => unreachable_step!("invalid DEC step {step}"),
     }
@@ -129,15 +129,15 @@ pub fn exec_inc(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
-            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
-            cpu.base = cpu.base.wrapping_add(1);
-            cpu.p.set_zn(cpu.base);
+            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.tmp = cpu.tmp.wrapping_add(1);
+            cpu.p.set_zn(cpu.tmp);
         }
         2 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
         }
         _ => unreachable_step!("invalid INC step {step}"),
     }
@@ -235,7 +235,7 @@ impl Mnemonic {
                 micro_fn: |cpu, bus, ctx| {
                     cpu.p.remove(Status::NEGATIVE | Status::ZERO);
                     // Read the old value from memory
-                    cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+                    cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 },
             },
             // T6: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
@@ -245,12 +245,12 @@ impl Mnemonic {
                 // Internal: DEC calculation is performed and flags are updated. cpu.base now holds V_new.
                 micro_fn: |cpu, bus, ctx| {
                     // Dummy write of the old value (V_old)
-                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                    bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
 
                     // Internal operation: Calculate the new value (V_new = V_old - 1)
-                    cpu.base = cpu.base.wrapping_sub(1);
+                    cpu.tmp = cpu.tmp.wrapping_sub(1);
                     // Update Negative (N) and Zero (Z) flags based on V_new, matching Mesen/6502 timing.
-                    cpu.p.set_zn(cpu.base);
+                    cpu.p.set_zn(cpu.tmp);
                 },
             },
             // T7: Final Write New Value (W_new) & Internal Flag Update
@@ -260,7 +260,7 @@ impl Mnemonic {
                 // Internal: Flags have already been updated in the previous micro-op.
                 micro_fn: |cpu, bus, ctx| {
                     // Final Write: The correct, decremented value is written to memory.
-                    let new_value = cpu.base;
+                    let new_value = cpu.tmp;
                     bus.mem_write(cpu.effective_addr, new_value, cpu, ctx);
                     // Note: DEC does not affect the Carry flag (C)
                 },
@@ -356,7 +356,7 @@ impl Mnemonic {
                 micro_fn: |cpu, bus, ctx| {
                     cpu.p.remove(Status::NEGATIVE | Status::ZERO);
                     // Read the old value from memory
-                    cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+                    cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 },
             },
             // T6: Dummy Write Old Value (W_dummy) & Internal Calculation (Modify)
@@ -366,13 +366,13 @@ impl Mnemonic {
                 // Internal: INC calculation is performed and flags are updated. cpu.base is updated to V_new.
                 micro_fn: |cpu, bus, ctx| {
                     // Dummy write of the old value (V_old) - This is the "extra" RMW cycle.
-                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                    bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
 
                     // Internal operation: Calculate the new value (V_new = V_old + 1)
-                    cpu.base = cpu.base.wrapping_add(1);
+                    cpu.tmp = cpu.tmp.wrapping_add(1);
                     // The INC result (V_new) is temporarily held in cpu.base
                     // Internal Operation: Update Negative (N) and Zero (Z) flags.
-                    cpu.p.set_zn(cpu.base);
+                    cpu.p.set_zn(cpu.tmp);
                 },
             },
             // T7: Final Write New Value (W_new) & Internal Flag Update
@@ -382,7 +382,7 @@ impl Mnemonic {
                 // Internal: Flags have already been updated in the previous micro-op.
                 micro_fn: |cpu, bus, ctx| {
                     // Final Write: The correct, incremented value is written to memory.
-                    let new_value = cpu.base;
+                    let new_value = cpu.tmp;
                     bus.mem_write(cpu.effective_addr, new_value, cpu, ctx);
                 },
             },

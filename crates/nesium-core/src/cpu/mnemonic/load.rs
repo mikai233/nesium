@@ -619,7 +619,7 @@ impl Mnemonic {
         &[MicroOp {
             name: "sha",
             micro_fn: |cpu, bus, ctx| {
-                let hi = cpu.base;
+                let hi = cpu.tmp;
                 let value = cpu.a & cpu.x & hi.wrapping_add(1);
                 bus.mem_write(cpu.effective_addr, value, cpu, ctx);
             },

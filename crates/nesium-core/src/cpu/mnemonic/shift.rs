@@ -36,10 +36,10 @@ use crate::{
 pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x0A) {
@@ -48,11 +48,11 @@ pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
                 cpu.a <<= 1;
                 cpu.p.set_zn(cpu.a);
             } else {
-                let old_bit7 = cpu.base & BIT_7;
-                cpu.base <<= 1;
+                let old_bit7 = cpu.tmp & BIT_7;
+                cpu.tmp <<= 1;
                 cpu.p.set_c(old_bit7 != 0);
-                cpu.p.set_zn(cpu.base);
-                bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                cpu.p.set_zn(cpu.tmp);
+                bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
             }
         }
         _ => unreachable_step!("invalid ASL step {step}"),
@@ -88,10 +88,10 @@ pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x4A) {
@@ -101,12 +101,12 @@ pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
                 cpu.p.remove(Status::NEGATIVE);
                 cpu.p.set_z(cpu.a == 0);
             } else {
-                let old_bit0 = cpu.base & BIT_0;
-                cpu.base >>= 1;
+                let old_bit0 = cpu.tmp & BIT_0;
+                cpu.tmp >>= 1;
                 cpu.p.set_c(old_bit0 != 0);
                 cpu.p.remove(Status::NEGATIVE);
-                cpu.p.set_z(cpu.base == 0);
-                bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                cpu.p.set_z(cpu.tmp == 0);
+                bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
             }
         }
         _ => unreachable_step!("invalid LSR step {step}"),
@@ -140,10 +140,10 @@ pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x2A) {
@@ -154,12 +154,12 @@ pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
                 cpu.p.set_c(old_bit7 != 0);
                 cpu.p.set_zn(cpu.a);
             } else {
-                let old_bit7 = cpu.base & BIT_7;
-                let new_a = (cpu.base << 1) | if cpu.p.c() { 1 } else { 0 };
-                cpu.base = new_a;
+                let old_bit7 = cpu.tmp & BIT_7;
+                let new_a = (cpu.tmp << 1) | if cpu.p.c() { 1 } else { 0 };
+                cpu.tmp = new_a;
                 cpu.p.set_c(old_bit7 != 0);
-                cpu.p.set_zn(cpu.base);
-                bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                cpu.p.set_zn(cpu.tmp);
+                bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
             }
         }
         _ => unreachable_step!("invalid ROL step {step}"),
@@ -194,10 +194,10 @@ pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
 pub fn exec_ror(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x6A) {
@@ -208,12 +208,12 @@ pub fn exec_ror(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
                 cpu.p.set_c(old_bit0 != 0);
                 cpu.p.set_zn(cpu.a);
             } else {
-                let old_bit0 = cpu.base & BIT_0;
-                let new_a = (cpu.base >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
-                cpu.base = new_a;
+                let old_bit0 = cpu.tmp & BIT_0;
+                let new_a = (cpu.tmp >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
+                cpu.tmp = new_a;
                 cpu.p.set_c(old_bit0 != 0);
-                cpu.p.set_zn(cpu.base);
-                bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                cpu.p.set_zn(cpu.tmp);
+                bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
             }
         }
         _ => unreachable_step!("invalid ROR step {step}"),
@@ -249,13 +249,13 @@ impl Mnemonic {
             MicroOp {
                 name: "asl_read",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+                    cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 },
             },
             MicroOp {
                 name: "asl_dummy_write",
                 micro_fn: |cpu, bus, ctx| {
-                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                    bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
                 },
             },
             MicroOp {
@@ -273,14 +273,14 @@ impl Mnemonic {
                         cpu.p.set_zn(cpu.a);
                     } else {
                         // Memory RMW: compute result and flags, then perform final write
-                        let old_bit7 = cpu.base & BIT_7;
-                        cpu.base <<= 1;
+                        let old_bit7 = cpu.tmp & BIT_7;
+                        cpu.tmp <<= 1;
                         // C = old bit 7
                         cpu.p.set_c(old_bit7 != 0);
                         // Update N and Z based on the new value
-                        cpu.p.set_zn(cpu.base);
+                        cpu.p.set_zn(cpu.tmp);
                         // Final write with the new value
-                        bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                        bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
                     }
                 },
             },
@@ -317,13 +317,13 @@ impl Mnemonic {
             MicroOp {
                 name: "lsr_read",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+                    cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 },
             },
             MicroOp {
                 name: "lsr_dummy_write",
                 micro_fn: |cpu, bus, ctx| {
-                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                    bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
                 },
             },
             MicroOp {
@@ -342,15 +342,15 @@ impl Mnemonic {
                         cpu.p.set_z(cpu.a == 0);
                     } else {
                         // Memory RMW: compute result and flags, then perform final write
-                        let old_bit0 = cpu.base & BIT_0;
-                        cpu.base >>= 1;
+                        let old_bit0 = cpu.tmp & BIT_0;
+                        cpu.tmp >>= 1;
                         // C = old bit 0
                         cpu.p.set_c(old_bit0 != 0);
                         // LSR always shifts in 0 on bit 7, so N is always cleared
                         cpu.p.remove(Status::NEGATIVE);
-                        cpu.p.set_z(cpu.base == 0);
+                        cpu.p.set_z(cpu.tmp == 0);
                         // Final write with the new value
-                        bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                        bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
                     }
                 },
             },
@@ -385,13 +385,13 @@ impl Mnemonic {
             MicroOp {
                 name: "rol_read",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+                    cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 },
             },
             MicroOp {
                 name: "rol_dummy_write",
                 micro_fn: |cpu, bus, ctx| {
-                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                    bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
                 },
             },
             MicroOp {
@@ -409,15 +409,15 @@ impl Mnemonic {
                         // Update N and Z
                         cpu.p.set_zn(cpu.a);
                     } else {
-                        let old_bit7 = cpu.base & BIT_7;
-                        let new_a = (cpu.base << 1) | if cpu.p.c() { 1 } else { 0 };
-                        cpu.base = new_a;
+                        let old_bit7 = cpu.tmp & BIT_7;
+                        let new_a = (cpu.tmp << 1) | if cpu.p.c() { 1 } else { 0 };
+                        cpu.tmp = new_a;
                         // C = old bit 7
                         cpu.p.set_c(old_bit7 != 0);
                         // Update N and Z
-                        cpu.p.set_zn(cpu.base);
+                        cpu.p.set_zn(cpu.tmp);
                         // Final write with the new value
-                        bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                        bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
                     }
                 },
             },
@@ -453,13 +453,13 @@ impl Mnemonic {
             MicroOp {
                 name: "ror_read",
                 micro_fn: |cpu, bus, ctx| {
-                    cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+                    cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
                 },
             },
             MicroOp {
                 name: "ror_dummy_write",
                 micro_fn: |cpu, bus, ctx| {
-                    bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                    bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
                 },
             },
             MicroOp {
@@ -476,15 +476,15 @@ impl Mnemonic {
                         // Update N and Z (N = bit7 = old C)
                         cpu.p.set_zn(cpu.a);
                     } else {
-                        let old_bit0 = cpu.base & BIT_0;
-                        let new_a = (cpu.base >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
-                        cpu.base = new_a;
+                        let old_bit0 = cpu.tmp & BIT_0;
+                        let new_a = (cpu.tmp >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
+                        cpu.tmp = new_a;
                         // C = old bit 0
                         cpu.p.set_c(old_bit0 != 0);
                         // Update N and Z (N = bit7 = old C)
-                        cpu.p.set_zn(cpu.base);
+                        cpu.p.set_zn(cpu.tmp);
                         // Final write with the new value
-                        bus.mem_write(cpu.effective_addr, cpu.base, cpu, ctx);
+                        bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
                     }
                 },
             },

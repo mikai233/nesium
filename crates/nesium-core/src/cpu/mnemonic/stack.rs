@@ -59,7 +59,7 @@ pub fn exec_pha(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.dummy_read(bus, ctx);
         }
         1 => {
-            cpu.push(bus, ctx, cpu.a);
+            cpu.push_stack(bus, ctx, cpu.a);
         }
         _ => unreachable_step!("invalid PHA step {step}"),
     }
@@ -87,7 +87,7 @@ pub fn exec_php(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
         }
         1 => {
             let p = cpu.p | Status::BREAK | Status::UNUSED;
-            cpu.push(bus, ctx, p.bits());
+            cpu.push_stack(bus, ctx, p.bits());
         }
         _ => unreachable_step!("invalid PHP step {step}"),
     }
@@ -119,10 +119,10 @@ pub fn exec_pla(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.dummy_read(bus, ctx);
         }
         1 => {
-            cpu.dummy_read_at(bus, STACK_ADDR | cpu.s as u16, ctx);
+            cpu.dummy_read_at(STACK_ADDR | cpu.s as u16, bus, ctx);
         }
         2 => {
-            let value = cpu.pull(bus, ctx);
+            let value = cpu.pop_stack(bus, ctx);
             cpu.a = value;
             cpu.p.set_zn(value);
         }
@@ -154,10 +154,10 @@ pub fn exec_plp(cpu: &mut Cpu, bus: &mut CpuBus<'_>, ctx: &mut Context, step: u8
             cpu.dummy_read(bus, ctx);
         }
         1 => {
-            cpu.dummy_read_at(bus, STACK_ADDR | cpu.s as u16, ctx);
+            cpu.dummy_read_at(STACK_ADDR | cpu.s as u16, bus, ctx);
         }
         2 => {
-            let value = cpu.pull(bus, ctx);
+            let value = cpu.pop_stack(bus, ctx);
             cpu.p = Status::from_bits_truncate(value);
             cpu.p.remove(Status::UNUSED | Status::BREAK);
         }
@@ -196,7 +196,7 @@ impl Mnemonic {
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 2: Write accumulator to stack, then decrement S
                     // Hardware writes to [0x0100 + S] using current S, then S--
-                    cpu.push(bus, ctx, cpu.a);
+                    cpu.push_stack(bus, ctx, cpu.a);
                 },
             },
         ]
@@ -231,7 +231,7 @@ impl Mnemonic {
                     // Cycle 2: Hardware forces B flag (bit4) and unused bit5 when pushing
                     let p = cpu.p | Status::BREAK | Status::UNUSED;
                     let p = p.bits();
-                    cpu.push(bus, ctx, p);
+                    cpu.push_stack(bus, ctx, p);
                 },
             },
         ]
@@ -269,14 +269,14 @@ impl Mnemonic {
                 name: "pla_dummy_read2",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 2: Dummy read from current stack location (before increment)
-                    cpu.dummy_read_at(bus, STACK_ADDR | cpu.s as u16, ctx);
+                    cpu.dummy_read_at(STACK_ADDR | cpu.s as u16, bus, ctx);
                 },
             },
             MicroOp {
                 name: "pla_pull_value",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 3: Increment S first, then read from new stack pointer
-                    let value = cpu.pull(bus, ctx);
+                    let value = cpu.pop_stack(bus, ctx);
                     cpu.a = value;
                     cpu.p.set_zn(value); // Update N and Z flags based on pulled value
                 },
@@ -314,14 +314,14 @@ impl Mnemonic {
                 name: "plp_dummy_read2",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 2: Dummy read from current stack location
-                    cpu.dummy_read_at(bus, STACK_ADDR | cpu.s as u16, ctx);
+                    cpu.dummy_read_at(STACK_ADDR | cpu.s as u16, bus, ctx);
                 },
             },
             MicroOp {
                 name: "plp_pull_status",
                 micro_fn: |cpu, bus, ctx| {
                     // Cycle 3: Increment S first
-                    let value = cpu.pull(bus, ctx);
+                    let value = cpu.pop_stack(bus, ctx);
                     cpu.p = Status::from_bits_truncate(value);
                     cpu.p.remove(Status::UNUSED | Status::BREAK);
                 },

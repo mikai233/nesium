@@ -28,7 +28,7 @@ impl MicroOp {
             name: "fetch_zp_addr_lo",
             micro_fn: |cpu, bus, ctx| {
                 cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-                cpu.incr_pc();
+                cpu.inc_pc();
             },
         }
     }
@@ -39,7 +39,7 @@ impl MicroOp {
             name: "fetch_abs_addr_lo",
             micro_fn: |cpu, bus, ctx| {
                 cpu.effective_addr = bus.mem_read(cpu.pc, cpu, ctx) as u16;
-                cpu.incr_pc();
+                cpu.inc_pc();
             },
         }
     }
@@ -51,7 +51,7 @@ impl MicroOp {
             micro_fn: |cpu, bus, ctx| {
                 let hi = bus.mem_read(cpu.pc, cpu, ctx);
                 cpu.effective_addr |= (hi as u16) << 8;
-                cpu.incr_pc();
+                cpu.inc_pc();
             },
         }
     }
@@ -65,13 +65,13 @@ impl MicroOp {
                 let base = ((hi as u16) << 8) | cpu.effective_addr;
                 // SHX
                 if cpu.opcode_in_flight == Some(0x9C) {
-                    cpu.base = hi;
+                    cpu.tmp = hi;
                 }
                 let addr = base.wrapping_add(cpu.x as u16);
 
                 cpu.skip_optional_dummy_read_cycle(base, addr);
                 cpu.effective_addr = addr;
-                cpu.incr_pc();
+                cpu.inc_pc();
             },
         }
     }
@@ -88,13 +88,13 @@ impl MicroOp {
                     || cpu.opcode_in_flight == Some(0x9E)
                     || cpu.opcode_in_flight == Some(0x9B)
                 {
-                    cpu.base = hi;
+                    cpu.tmp = hi;
                 }
                 let addr = base.wrapping_add(cpu.y as u16);
 
                 cpu.skip_optional_dummy_read_cycle(base, addr);
                 cpu.effective_addr = addr;
-                cpu.incr_pc();
+                cpu.inc_pc();
             },
         }
     }
@@ -107,7 +107,7 @@ impl MicroOp {
         MicroOp {
             name: "read_zero_page",
             micro_fn: |cpu, bus, ctx| {
-                cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+                cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
             },
         }
     }
@@ -156,7 +156,7 @@ impl MicroOp {
             name: "read_indirect_x_lo",
             micro_fn: |cpu, bus, ctx| {
                 let ptr = (cpu.effective_addr + cpu.x as u16) & 0x00FF;
-                cpu.base = bus.mem_read(ptr, cpu, ctx);
+                cpu.tmp = bus.mem_read(ptr, cpu, ctx);
             },
         }
     }
@@ -168,7 +168,7 @@ impl MicroOp {
             micro_fn: |cpu, bus, ctx| {
                 let ptr = (cpu.effective_addr + cpu.x as u16 + 1) & 0x00FF;
                 let hi = bus.mem_read(ptr, cpu, ctx);
-                cpu.effective_addr = ((hi as u16) << 8) | cpu.base as u16;
+                cpu.effective_addr = ((hi as u16) << 8) | cpu.tmp as u16;
             },
         }
     }
@@ -183,10 +183,10 @@ impl MicroOp {
             micro_fn: |cpu, bus, ctx| {
                 let hi_addr = (cpu.effective_addr + 1) & 0x00FF;
                 let hi = bus.mem_read(hi_addr, cpu, ctx);
-                let base = ((hi as u16) << 8) | (cpu.base as u16);
+                let base = ((hi as u16) << 8) | (cpu.tmp as u16);
                 // SHA
                 if cpu.opcode_in_flight == Some(0x93) {
-                    cpu.base = hi;
+                    cpu.tmp = hi;
                 }
                 let addr = base.wrapping_add(cpu.y as u16);
 
@@ -204,7 +204,7 @@ impl MicroOp {
         MicroOp {
             name: "read_indirect_lo",
             micro_fn: |cpu, bus, ctx| {
-                cpu.base = bus.mem_read(cpu.effective_addr, cpu, ctx);
+                cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
             },
         }
     }
@@ -221,7 +221,7 @@ impl MicroOp {
                     cpu.effective_addr + 1
                 };
                 let hi = bus.mem_read(hi_addr, cpu, ctx);
-                cpu.effective_addr = ((hi as u16) << 8) | (cpu.base as u16);
+                cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
             },
         }
     }

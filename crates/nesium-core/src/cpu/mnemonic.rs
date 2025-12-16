@@ -25,7 +25,7 @@ pub(crate) fn hi_byte_store_final(
     ctx: &mut Context,
     value_reg: u8,
 ) {
-    let base_hi = cpu.base;
+    let base_hi = cpu.tmp;
     let addr = cpu.effective_addr;
 
     let crossed = ((addr >> 8) as u8) != base_hi;
