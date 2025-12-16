@@ -345,21 +345,33 @@ impl Addressing {
 
 impl Display for Addressing {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Addressing::Implied => "implied".fmt(f),
-            Addressing::Accumulator => "accumulator".fmt(f),
-            Addressing::Immediate => "immediate".fmt(f),
-            Addressing::Absolute => "absolute".fmt(f),
-            Addressing::AbsoluteX => "absolute_x".fmt(f),
-            Addressing::AbsoluteY => "absolute_y".fmt(f),
-            Addressing::Indirect => "indirect".fmt(f),
-            Addressing::ZeroPage => "zero_page".fmt(f),
-            Addressing::ZeroPageX => "zero_page_x".fmt(f),
-            Addressing::ZeroPageY => "zero_page_y".fmt(f),
-            Addressing::IndirectX => "indirect_x".fmt(f),
-            Addressing::IndirectY => "indirect_y".fmt(f),
-            Addressing::Relative => "relative".fmt(f),
-        }
+        let s = match self {
+            // 6502 manuals/disassemblers often treat implied as no operand.
+            Addressing::Implied => "impl",
+
+            // Accumulator addressing is written as operand "A".
+            Addressing::Accumulator => "A",
+
+            // Immediate is typically shown with a leading '#'.
+            Addressing::Immediate => "#",
+
+            // Generic names used in many 6502 disassemblers.
+            Addressing::Absolute => "abs",
+            Addressing::AbsoluteX => "abs,X",
+            Addressing::AbsoluteY => "abs,Y",
+            Addressing::Indirect => "(abs)",
+
+            Addressing::ZeroPage => "zp",
+            Addressing::ZeroPageX => "zp,X",
+            Addressing::ZeroPageY => "zp,Y",
+
+            Addressing::IndirectX => "(zp,X)",
+            Addressing::IndirectY => "(zp),Y",
+
+            Addressing::Relative => "rel",
+        };
+
+        f.write_str(s)
     }
 }
 
