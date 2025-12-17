@@ -9,6 +9,7 @@ members = [
   "crates/nesium-flutter",
   "crates/nesium-blip",
   "crates/nesium-audio",
+  "crates/nesium-icon",
 ]
 default-members = [
   "crates/nesium-egui",
@@ -64,3 +65,4 @@ ringbuf = "0.4.8"
 base64 = "0.22"
 quick-xml = "0.38"
 sha1 = "0.10"
+skia-safe = "0.91"
