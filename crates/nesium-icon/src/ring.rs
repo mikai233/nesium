@@ -69,12 +69,25 @@ fn draw_ring_ticks(canvas: &Canvas, center: Point, radius: f32) {
         ((af + (bf - af) * t).round() as i32).clamp(0, 255) as u8
     };
 
+    let color_for_y = |y: f32| {
+        let t = if (y1 - y0).abs() < f32::EPSILON {
+            0.0
+        } else {
+            ((y - y0) / (y1 - y0)).clamp(0.0, 1.0)
+        };
+        let a = lerp_u8(top.0, bot.0, t);
+        let r = lerp_u8(top.1, bot.1, t);
+        let g = lerp_u8(top.2, bot.2, t);
+        let b = lerp_u8(top.3, bot.3, t);
+        Color::from_argb(a, r, g, b)
+    };
+
     // Global tick controls
     let small_len = 44.0; // small tick length (every 45°)
     let big_len = 70.0; // big tick length (every 90°)
     let small_thickness = 15.;
     let big_thickness = 26.;
-    let corner = 6.0; // tick corner radius
+    let corner = 3.0; // tick corner radius
     let outset = 5.0; // push ticks outward from the ring radius
 
     // 0..8 => 0°,45°,...,315°
@@ -94,17 +107,7 @@ fn draw_ring_ticks(canvas: &Canvas, center: Point, radius: f32) {
         let x = center.x + rad.cos() * dist;
         let y = center.y + rad.sin() * dist;
 
-        // Lerp tick color by its center Y (0=top, 1=bottom).
-        let t = if (y1 - y0).abs() < f32::EPSILON {
-            0.0
-        } else {
-            ((y - y0) / (y1 - y0)).clamp(0.0, 1.0)
-        };
-        let a = lerp_u8(top.0, bot.0, t);
-        let r = lerp_u8(top.1, bot.1, t);
-        let g = lerp_u8(top.2, bot.2, t);
-        let b = lerp_u8(top.3, bot.3, t);
-        tick_paint.set_color(Color::from_argb(a, r, g, b));
+        tick_paint.set_color(color_for_y(y));
 
         // Local transform at the tick center, rotate so the long axis points outward.
         canvas.save();
@@ -113,6 +116,42 @@ fn draw_ring_ticks(canvas: &Canvas, center: Point, radius: f32) {
 
         let rect = Rect::from_xywh(-len / 2.0, -thickness / 2.0, len, thickness);
         canvas.draw_round_rect(rect, corner, corner, &tick_paint);
+
+        canvas.restore();
+    }
+
+    // Inner ticks: 6 total, aligned at top (big) and +/-30° plus mirrored bottom.
+    let inner_angles: [f32; 6] = [270.0, 240.0, 300.0, 90.0, 60.0, 120.0];
+    let inner_big = 48.0;
+    let inner_small = 32.0;
+    let inner_thick_big = 18.0;
+    let inner_thick_small = 16.0;
+    let inner_corner = 6.0;
+    let inset = 80.0; // pull ticks inside the ring arc
+
+    for angle_deg in inner_angles {
+        let is_big = (angle_deg - 270.0_f32).abs() < f32::EPSILON
+            || (angle_deg - 90.0_f32).abs() < f32::EPSILON;
+        let len = if is_big { inner_big } else { inner_small };
+        let thickness = if is_big {
+            inner_thick_big
+        } else {
+            inner_thick_small
+        };
+
+        let rad = angle_deg.to_radians();
+        let dist = radius - inset;
+        let x = center.x + rad.cos() * dist;
+        let y = center.y + rad.sin() * dist;
+
+        tick_paint.set_color(color_for_y(y));
+
+        canvas.save();
+        canvas.translate((x, y));
+        canvas.rotate(angle_deg, None);
+
+        let rect = Rect::from_xywh(-len / 2.0, -thickness / 2.0, len, thickness);
+        canvas.draw_round_rect(rect, inner_corner, inner_corner, &tick_paint);
 
         canvas.restore();
     }
