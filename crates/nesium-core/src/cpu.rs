@@ -3,6 +3,7 @@ use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::sync::{Mutex, OnceLock};
 
+use crate::apu::Apu;
 use crate::bus::{CpuBus, DmcDmaEvent, STACK_ADDR};
 use crate::context::Context;
 use crate::cpu::addressing::Addressing;
@@ -331,12 +332,7 @@ impl Cpu {
         bus.open_bus.step();
 
         // Run one APU CPU-cycle tick; DMA requests are queued on the bus.
-        let (stall_cycles, dma_addr) = bus.apu.step(bus.mixer.as_deref_mut());
-        if stall_cycles > 0 {
-            if let Some(addr) = dma_addr {
-                bus.request_dmc_dma(addr);
-            }
-        }
+        Apu::step(bus, self, ctx);
     }
 
     pub(crate) fn end_cycle(&mut self, read_phase: bool, bus: &mut CpuBus, ctx: &mut Context) {

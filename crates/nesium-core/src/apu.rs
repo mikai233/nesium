@@ -23,6 +23,9 @@ use core::fmt;
 
 use crate::{
     audio::{AudioChannel, NesSoundMixer},
+    bus::CpuBus,
+    context::Context,
+    cpu::Cpu,
     mem_block::apu::RegisterRam,
     memory::apu::{self as apu_mem},
     reset_kind::ResetKind,
@@ -203,10 +206,10 @@ impl Apu {
 
     fn apply_frame_reset(&mut self, reset: FrameResetAction) {
         if reset.immediate_quarter {
-            self.clock_quarter_frame();
+            self.step_quarter_frame();
         }
         if reset.immediate_half {
-            self.clock_half_frame();
+            self.step_half_frame();
         }
     }
 
@@ -243,7 +246,7 @@ impl Apu {
         self.status.frame_interrupt || self.status.dmc_interrupt
     }
 
-    fn clock_quarter_frame(&mut self) {
+    fn step_quarter_frame(&mut self) {
         for pulse in &mut self.pulse {
             pulse.clock_envelope();
         }
@@ -251,7 +254,7 @@ impl Apu {
         self.triangle.clock_linear_counter();
     }
 
-    fn clock_half_frame(&mut self) {
+    fn step_half_frame(&mut self) {
         for pulse in &mut self.pulse {
             pulse.clock_length();
             pulse.clock_sweep();
@@ -260,36 +263,36 @@ impl Apu {
         self.noise.clock_length();
     }
 
-    /// Per-CPU-cycle APU tick. DMC sample fetches are surfaced as
-    /// `(stall_cycles, dma_addr)` so the caller can decide how to handle CPU
-    /// stalls and DMA timing; when a mixer is provided, the channel deltas are
-    /// also pushed into it.
-    pub fn step(&mut self, mixer: Option<&mut NesSoundMixer>) -> (u8, Option<u16>) {
-        self.cycles = self.cycles.wrapping_add(1);
+    /// Bus-attached per-CPU-cycle tick, mirroring the `Ppu::step` entrypoint shape.
+    ///
+    /// DMC DMA requests are queued on the bus directly so callers no longer
+    /// need to handle stall hints or DMA addresses themselves.
+    pub fn step(bus: &mut CpuBus, _cpu: &mut Cpu, _ctx: &mut Context) {
+        let apu = &mut bus.apu;
+        apu.cycles = apu.cycles.wrapping_add(1);
 
-        let tick = self.frame_counter.step();
+        let tick = apu.frame_counter.step();
 
         if tick.quarter {
-            self.clock_quarter_frame();
+            apu.step_quarter_frame();
         }
         if tick.half {
-            self.clock_half_frame();
+            apu.step_half_frame();
         }
         if tick.frame_irq {
-            self.status.frame_interrupt = true;
+            apu.status.frame_interrupt = true;
         }
 
-        for pulse in &mut self.pulse {
-            pulse.clock_timer();
+        for pulse in &mut apu.pulse {
+            pulse.step_timer();
         }
-        self.triangle.clock_timer();
-        self.noise.clock_timer();
-        let (stall, dma_addr) = self.dmc.step(&mut self.status);
+        apu.triangle.step_timer();
+        apu.noise.step_timer();
+        apu.dmc.step(&mut apu.status, bus.pending_dma);
 
-        if let Some(mixer) = mixer {
-            self.push_audio_levels(mixer);
+        if let Some(mixer) = bus.mixer.as_deref_mut() {
+            apu.push_audio_levels(mixer);
         }
-        (stall, dma_addr)
     }
 
     /// Mixed audio sample using the NES non-linear mixer approximation.
@@ -464,16 +467,42 @@ mod tests {
     fn frame_irq_flag_set_and_cleared() {
         let mut apu = Apu::new();
         apu.cpu_write(apu_mem::FRAME_COUNTER, 0, 0); // 4-step, IRQs enabled
+        let mut ram = crate::mem_block::cpu::Ram::new();
+        let mut ppu = crate::ppu::Ppu::default();
+        let mut controllers = crate::controller::ControllerPorts::new();
+        let mut pending_dma = crate::bus::PendingDma::default();
+        let mut open_bus = crate::bus::OpenBus::new();
+        let mut cpu_cycles = 0u64;
+        let mut master_clock = 0u64;
+
+        let mut bus = CpuBus::new(
+            &mut ram,
+            &mut ppu,
+            &mut apu,
+            None,
+            &mut controllers,
+            None,
+            &mut pending_dma,
+            &mut open_bus,
+            None,
+            &mut cpu_cycles,
+            &mut master_clock,
+            0,
+            0,
+            0,
+        );
+        let mut cpu = Cpu::new();
+        let mut ctx = Context::None;
 
         for _ in 0..=frame_counter::FRAME_STEP_4_PERIOD as u64 {
-            apu.step(None);
+            Apu::step(&mut bus, &mut cpu, &mut ctx);
         }
-        assert!(apu.status.frame_interrupt);
+        assert!(bus.apu.status.frame_interrupt);
 
-        let first = apu.cpu_read(apu_mem::STATUS);
+        let first = bus.apu.cpu_read(apu_mem::STATUS);
         assert_eq!(first & 0b0100_0000, 0b0100_0000);
 
-        let second = apu.cpu_read(apu_mem::STATUS);
+        let second = bus.apu.cpu_read(apu_mem::STATUS);
         assert_eq!(second & 0b0100_0000, 0);
     }
 

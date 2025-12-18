@@ -4,6 +4,7 @@ use super::{
     StatusFlags,
     tables::{DMC_RATE_TABLE, DMC_SAMPLE_ADDR_STRIDE, DMC_SAMPLE_BASE, DMC_SAMPLE_LEN_STRIDE},
 };
+use crate::bus::{DmcDmaEvent, PendingDma};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct Dmc {
@@ -108,21 +109,14 @@ impl Dmc {
         self.bytes_remaining > 0
     }
 
-    /// Returns (stall_cycles, dma_address_to_read)
-    pub(super) fn step(&mut self, status: &mut StatusFlags) -> (u8, Option<u16>) {
-        let mut stall_cycles = 0;
-        let mut dma_addr = None;
-
+    pub(super) fn step(&mut self, status: &mut StatusFlags, pending_dma: &mut PendingDma) {
         if self.enabled && self.tick_timer() {
             self.shift_output();
         }
 
         if self.enabled {
-            let (stall, addr) = self.fetch_sample(status);
-            stall_cycles = stall;
-            dma_addr = addr;
+            self.fetch_sample(status, pending_dma);
         }
-        (stall_cycles, dma_addr)
     }
 
     pub(super) fn output(&self) -> u8 {
@@ -190,11 +184,10 @@ impl Dmc {
         }
     }
 
-    /// Returns (stall_cycles, dma_address_to_read)
-    fn fetch_sample(&mut self, status: &mut StatusFlags) -> (u8, Option<u16>) {
+    fn fetch_sample(&mut self, status: &mut StatusFlags, pending_dma: &mut PendingDma) {
         if self.sample_buffer.is_some() || self.bytes_remaining == 0 || self.pending_fetch.is_some()
         {
-            return (0, None);
+            return;
         }
 
         self.last_fetch_addr = self.current_address;
@@ -209,10 +202,11 @@ impl Dmc {
                 status.dmc_interrupt = true;
             }
         }
-        // Each sample fetch steals 4 CPU cycles on hardware; surface that as
-        // a stall hint so the caller can account for it, and return the DMA
-        // address to let the caller perform the bus read once.
-        (4, self.pending_fetch)
+        // Each sample fetch steals 4 CPU cycles on hardware; queue the DMA
+        // request immediately so the bus can model the stolen cycles.
+        pending_dma.dmc = Some(DmcDmaEvent::Request {
+            addr: self.pending_fetch.expect("pending fetch address"),
+        });
     }
 
     pub(super) fn last_fetch_addr(&self) -> u16 {

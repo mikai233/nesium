@@ -143,7 +143,7 @@ impl Pulse {
         }
     }
 
-    pub(super) fn clock_timer(&mut self) {
+    pub(super) fn step_timer(&mut self) {
         if self.timer == 0 {
             self.timer = self.timer_period;
             // Pulse timer output advances the sequencer every other timer reload.

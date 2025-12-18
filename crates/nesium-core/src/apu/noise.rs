@@ -51,7 +51,7 @@ impl Noise {
         }
     }
 
-    pub(super) fn clock_timer(&mut self) {
+    pub(super) fn step_timer(&mut self) {
         if self.timer == 0 {
             self.timer = self.timer_period;
             self.step_lfsr();

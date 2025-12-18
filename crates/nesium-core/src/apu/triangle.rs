@@ -52,7 +52,7 @@ impl Triangle {
         }
     }
 
-    pub(super) fn clock_timer(&mut self) {
+    pub(super) fn step_timer(&mut self) {
         if self.timer == 0 {
             self.timer = self.timer_period;
             if self.length.active() && self.linear_counter > 0 {
