@@ -152,9 +152,12 @@ fn blargg_nes_cpu_test5_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn blargg_ppu_tests_2005_09_15b_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // These ROMs report their result via on-screen text + beeps and don't expose
+    // the blargg $6000 status byte protocol. They do keep the current/final
+    // result code in zero-page $00F0 (used to drive the beeps), so validate
+    // pass/fail via that byte instead of hashing video output.
+    const RESULT_ZP: u16 = 0x00F0;
     for rom in [
         "blargg_ppu_tests_2005.09.15b/palette_ram.nes",
         "blargg_ppu_tests_2005.09.15b/power_up_palette.nes",
@@ -162,7 +165,7 @@ fn blargg_ppu_tests_2005_09_15b_suite() -> Result<()> {
         "blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes",
         "blargg_ppu_tests_2005.09.15b/vram_access.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_zeropage_result(rom, DEFAULT_FRAMES, RESULT_ZP, 0x01)?;
     }
     Ok(())
 }

@@ -171,9 +171,23 @@ impl core::fmt::Display for PaletteIndex {
 pub struct PaletteRam(PaletteStorage);
 
 impl PaletteRam {
+    /// 32-byte palette RAM contents commonly observed at power-on on RP2C02 NTSC PPUs.
+    ///
+    /// Matches the table used by blargg's `power_up_palette` test ROM.
+    pub const RP2C02_POWER_ON_TABLE: [u8; ppu_mem::PALETTE_RAM_SIZE] = [
+        0x09, 0x01, 0x00, 0x01, 0x00, 0x02, 0x02, 0x0D, 0x08, 0x10, 0x08, 0x24, 0x00, 0x00, 0x04,
+        0x2C, 0x09, 0x01, 0x34, 0x03, 0x00, 0x04, 0x00, 0x14, 0x08, 0x3A, 0x00, 0x02, 0x00, 0x20,
+        0x2C, 0x08,
+    ];
+
     /// Creates a cleared palette RAM instance backed by the shared [`crate::ram::Ram`] helper.
     pub fn new() -> Self {
         Self(PaletteStorage::new())
+    }
+
+    /// Initializes palette RAM to a deterministic power-on state.
+    pub fn fill_power_on(&mut self) {
+        self.0.copy_from_slice(&Self::RP2C02_POWER_ON_TABLE);
     }
 
     /// Returns the palette byte for a VRAM address in `$3F00-$3FFF`.

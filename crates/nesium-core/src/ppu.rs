@@ -228,10 +228,11 @@ impl Ppu {
                 self.registers.reset();
 
                 // On real hardware, VRAM/palette contents are technically
-                // undefined at power-on. We clear them for deterministic
-                // behavior; tests that rely on random RAM can be added later.
+                // undefined at power-on. For determinism (and compatibility
+                // with common test ROM expectations) we initialize VRAM to 0
+                // and palette RAM to a commonly observed RP2C02 power-up table.
                 self.vram.fill(0);
-                self.palette_ram.fill(0);
+                self.palette_ram.fill_power_on();
                 self.secondary_oam.fill(0);
 
                 // At power-on the VBlank flag is effectively random. For
@@ -1506,6 +1507,14 @@ impl Ppu {
 
         // Normal $2007 read path.
         let result = if addr >= ppu_mem::PALETTE_BASE {
+            // Even though palette reads bypass the buffer (they return immediately),
+            // the PPU still performs a "shadow" VRAM read to refresh the internal
+            // read buffer. This shadow read targets $2F00-$2FFF (i.e. addr & $2FFF)
+            // and is *not* affected by the palette's $3F10/$14/$18/$1C mirroring.
+            let shadow_addr = addr & 0x2FFF;
+            self.registers.vram_buffer =
+                self.read_vram(pattern, shadow_addr, PpuVramAccessKind::CpuRead);
+
             // Palette area ($3F00-$3FFF) read.
             //
             // The low 6 bits come from palette RAM, optionally masked by the
@@ -1613,7 +1622,7 @@ impl Ppu {
         &mut self,
         pattern: &mut PatternBus<'_>,
         addr: u16,
-        kind: crate::cartridge::mapper::PpuVramAccessKind,
+        kind: PpuVramAccessKind,
     ) -> u8 {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
 
