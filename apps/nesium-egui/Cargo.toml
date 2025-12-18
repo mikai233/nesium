@@ -4,6 +4,16 @@ version = "0.1.0"
 edition = "2024"
 license.workspace = true
 
+[package.metadata.bundle]
+name = "Nesium"
+identifier = "com.mikai233.nesium"
+icon = [
+    "../../target/generated/nesium.icns",
+    "../../target/generated/nesium.ico",
+]
+version = "0.1.0"
+copyright = "Copyright (c) 2025 mikai233"
+
 [dependencies]
 nesium-core.path = "../../crates/nesium-core"
 nesium-audio.path = "../../crates/nesium-audio"
