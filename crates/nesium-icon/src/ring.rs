@@ -18,7 +18,7 @@ pub fn draw_dashed_ring(canvas: &Canvas) {
 }
 
 fn draw_ring_arcs(canvas: &Canvas, oval: Rect) {
-    // Vertical gradient for arcs (top -> bottom).
+    // Vertical gradient for arcs (top -> bottom), darker for contrast on bright background.
     let mut arc_paint = Paint::default();
     arc_paint.set_anti_alias(true);
     arc_paint.set_style(PaintStyle::Stroke);
@@ -27,10 +27,8 @@ fn draw_ring_arcs(canvas: &Canvas, oval: Rect) {
     let p1 = Point::new(0.0, oval.top());
     let p2 = Point::new(0.0, oval.bottom());
     let colors = [
-        // top
-        Color::from_argb(215, 254, 253, 231),
-        // bottom
-        Color::from_argb(170, 195, 252, 201),
+        Color::from_rgb(31, 52, 71),  // top: deep blue-gray
+        Color::from_rgb(58, 83, 104), // bottom: slightly brighter steel blue
     ];
     arc_paint.set_shader(gradient_shader::linear(
         (p1, p2),
@@ -57,9 +55,9 @@ fn draw_ring_ticks(canvas: &Canvas, center: Point, radius: f32) {
     tick_paint.set_anti_alias(true);
     tick_paint.set_style(PaintStyle::Fill);
 
-    // Interpolate color by device-space Y so ticks actually vary top-to-bottom.
-    let top = (215u8, 254u8, 253u8, 231u8); // (a,r,g,b)
-    let bot = (170u8, 195u8, 252u8, 201u8);
+    // Interpolate color by device-space Y so ticks vary top-to-bottom (darker palette).
+    let top = (255u8, 75u8, 106u8, 130u8); // (a,r,g,b) ~#4B6A82
+    let bot = (255u8, 86u8, 120u8, 146u8); // ~#567892
     let y0 = center.y - radius;
     let y1 = center.y + radius;
 

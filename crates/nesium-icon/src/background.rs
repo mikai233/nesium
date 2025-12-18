@@ -6,15 +6,12 @@ pub fn draw_background(canvas: &Canvas) {
     let mut paint = Paint::default();
     paint.set_anti_alias(true);
 
-    // Reference: rich warm yellow (top) -> light yellow -> mint -> teal (bottom), top-to-bottom.
+    // Option 1: clean blue-green vertical gradient.
     let colors = [
-        Color::from_rgb(255, 214, 140), // rich warm yellow (top)
-        Color::from_rgb(255, 236, 198), // light warm yellow
-        Color::from_rgb(175, 248, 220), // mint green
-        Color::from_rgb(110, 230, 225), // cyan/teal (bottom)
+        Color::from_rgb(183, 227, 255), // top: soft sky blue
+        Color::from_rgb(92, 192, 243),  // bottom: brighter cyan-blue
     ];
-    // Keep the warm yellow more concentrated near the top.
-    let pos = [0.0, 0.18, 0.55, 1.0];
+    let pos = [0.0, 1.0];
 
     let p1 = Point::new(0.0, 0.0);
     let p2 = Point::new(0.0, HEIGHT as f32);

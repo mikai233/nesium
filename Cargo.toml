@@ -19,6 +19,7 @@ default-members = [
   "crates/nesium-flutter",
   "crates/nesium-blip",
   "crates/nesium-audio",
+  "crates/nesium-icon",
 ]
 
 [profile.test]

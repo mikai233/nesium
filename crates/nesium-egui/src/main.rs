@@ -12,6 +12,10 @@ use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::FmtSubscriber;
 
+const APP_ID: &str = env!("NESIUM_APP_ID");
+
+include!(concat!(env!("OUT_DIR"), "/egui_icon.rs"));
+
 fn init_tracing() -> WorkerGuard {
     // 确保每次运行都从一个新的日志文件开始（覆盖旧内容）
     let _ = fs::remove_file("nesium_ppu_boot.log");
@@ -59,9 +63,17 @@ fn main() -> Result<()> {
         return run_frame_report(rom_path, frames);
     }
 
+    let icon = egui::IconData {
+        rgba: ICON_RGBA.to_vec(),
+        width: ICON_WIDTH,
+        height: ICON_HEIGHT,
+    };
+
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Nesium")
+            .with_app_id(APP_ID)
+            .with_icon(icon)
             .with_inner_size([SCREEN_WIDTH as f32 * 3.0, SCREEN_HEIGHT as f32 * 3.0]),
         ..Default::default()
     };

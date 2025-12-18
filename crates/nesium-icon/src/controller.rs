@@ -31,7 +31,7 @@ impl ControllerGeom {
         let r = 60.0;
 
         let rect = Rect::from_xywh(center.x - w / 2.0, center.y - h / 2.0, w, h);
-        let rrect = RRect::new_rect_xy(&rect, r, r);
+        let rrect = RRect::new_rect_xy(rect, r, r);
 
         // Inner border geometry
         let inset = 18.0;
@@ -42,7 +42,7 @@ impl ControllerGeom {
             h - inset * 2.0,
         );
         let inner_r = (r - inset).max(0.0);
-        let inner_rrect = RRect::new_rect_xy(&inner_rect, inner_r, inner_r);
+        let inner_rrect = RRect::new_rect_xy(inner_rect, inner_r, inner_r);
 
         Self {
             center,
@@ -73,7 +73,7 @@ fn draw_controller_shell(canvas: &Canvas, geom: &ControllerGeom) {
         None,
         None,
     ));
-    canvas.draw_rrect(&geom.rrect, &fill_paint);
+    canvas.draw_rrect(geom.rrect, &fill_paint);
 
     // B) Inner white border
     let mut inner_stroke = Paint::default();
@@ -81,7 +81,7 @@ fn draw_controller_shell(canvas: &Canvas, geom: &ControllerGeom) {
     inner_stroke.set_color(Color::from_argb(180, 255, 255, 255));
     inner_stroke.set_style(PaintStyle::Stroke);
     inner_stroke.set_stroke_width(10.0);
-    canvas.draw_rrect(&geom.inner_rrect, &inner_stroke);
+    canvas.draw_rrect(geom.inner_rrect, &inner_stroke);
 
     // C) Top highlight (upper half only)
     let mut top_hi = Paint::default();
@@ -98,7 +98,7 @@ fn draw_controller_shell(canvas: &Canvas, geom: &ControllerGeom) {
         geom.rect.height() * 0.55,
     );
     canvas.clip_rect(clip, None, true);
-    canvas.draw_rrect(&geom.inner_rrect, &top_hi);
+    canvas.draw_rrect(geom.inner_rrect, &top_hi);
     canvas.restore();
 
     // D) Dark outer stroke with variable thickness (thicker bottom, thinner top)
@@ -352,8 +352,8 @@ impl DPadGeom {
 
 fn build_dpad_path(geom: &DPadGeom) -> Path {
     // Union the two rounded-rect arms into a single plus outline.
-    let vr = RRect::new_rect_xy(&geom.main.v_rect, geom.radius, geom.radius);
-    let hr = RRect::new_rect_xy(&geom.main.h_rect, geom.radius, geom.radius);
+    let vr = RRect::new_rect_xy(geom.main.v_rect, geom.radius, geom.radius);
+    let hr = RRect::new_rect_xy(geom.main.h_rect, geom.radius, geom.radius);
 
     let v_path = Path::rrect(vr, Some(PathDirection::CW));
     let h_path = Path::rrect(hr, Some(PathDirection::CW));
@@ -504,7 +504,7 @@ fn draw_face_pad(canvas: &Canvas, center: Point) {
     let with = 300.;
     let height = 220.;
     let pad_rect = Rect::from_xywh(center.x + 40.0, center.y - height / 2., with, height);
-    let pad_rrect = RRect::new_rect_xy(&pad_rect, 120.0, 120.0);
+    let pad_rrect = RRect::new_rect_xy(pad_rect, 120.0, 120.0);
 
     draw_face_pad_base(canvas, &pad_rrect);
     draw_face_buttons(canvas, pad_rect, center.y);
