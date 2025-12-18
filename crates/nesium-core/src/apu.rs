@@ -260,21 +260,11 @@ impl Apu {
         self.noise.clock_length();
     }
 
-    /// Core per-CPU-cycle APU tick. DMC sample fetches are surfaced as
-    /// `(stall_cycles, dma_addr)` to let the caller decide how to service the
-    /// DMA (for bus-accurate mappers/open-bus timing). The provided reader is
-    /// *not* used for DMC fetches in this path; use
-    /// [`step_with_reader_inline_dma`](Self::step_with_reader_inline_dma) if
-    /// you want the APU to perform the read immediately and populate the DMC
-    /// buffer without mapper-visible side effects.
-    fn step_core<F>(
-        &mut self,
-        reader: &mut F,
-        mixer: Option<&mut NesSoundMixer>,
-    ) -> (u8, Option<u16>)
-    where
-        F: FnMut(u16) -> u8,
-    {
+    /// Per-CPU-cycle APU tick. DMC sample fetches are surfaced as
+    /// `(stall_cycles, dma_addr)` so the caller can decide how to handle CPU
+    /// stalls and DMA timing; when a mixer is provided, the channel deltas are
+    /// also pushed into it.
+    pub fn step(&mut self, mixer: Option<&mut NesSoundMixer>) -> (u8, Option<u16>) {
         self.cycles = self.cycles.wrapping_add(1);
 
         let tick = self.frame_counter.step();
@@ -294,62 +284,12 @@ impl Apu {
         }
         self.triangle.clock_timer();
         self.noise.clock_timer();
-        let (stall, dma_addr) = self.dmc.clock(reader, &mut self.status);
+        let (stall, dma_addr) = self.dmc.step(&mut self.status);
 
         if let Some(mixer) = mixer {
             self.push_audio_levels(mixer);
         }
         (stall, dma_addr)
-    }
-
-    /// Per-CPU-cycle APU tick using a provided CPU memory reader for timing
-    /// (but with DMC DMA surfaced to the caller for bus-accurate handling).
-    ///
-    /// The default [`step`](Self::step) uses a zeroed reader so sound output
-    /// remains deterministic even when the caller does not wire up CPU reads.
-    pub fn step_with_reader<F>(
-        &mut self,
-        mut reader: F,
-        mixer: Option<&mut NesSoundMixer>,
-    ) -> (u8, Option<u16>)
-    where
-        F: FnMut(u16) -> u8,
-    {
-        self.step_core(&mut reader, mixer)
-    }
-
-    /// Per-CPU-cycle APU tick that *immediately* performs any pending DMC DMA
-    /// read via the supplied reader, populating the DMC sample buffer without
-    /// mapper/open-bus side effects. This is useful for standalone APU usage
-    /// where bus-level accuracy is not required.
-    pub fn step_with_reader_inline_dma<F>(
-        &mut self,
-        mut reader: F,
-        mixer: Option<&mut NesSoundMixer>,
-    ) -> (u8, Option<u16>)
-    where
-        F: FnMut(u16) -> u8,
-    {
-        let (stall, dma_addr) = self.step_core(&mut reader, mixer);
-        if let Some(addr) = dma_addr {
-            let byte = reader(addr);
-            self.finish_dma_fetch(byte);
-            (stall, None)
-        } else {
-            (stall, None)
-        }
-    }
-
-    /// Per-CPU-cycle APU tick. DMC memory fetches return zero bytes unless the
-    /// caller uses [`step_with_reader`](Self::step_with_reader) or
-    /// [`step_with_reader_inline_dma`](Self::step_with_reader_inline_dma).
-    pub fn step(&mut self) -> (u8, Option<u16>) {
-        self.step_with_reader(|_| 0, None)
-    }
-
-    /// Per-CPU-cycle APU tick that also feeds the shared mixer.
-    pub fn step_with_mixer(&mut self, mixer: &mut NesSoundMixer) -> (u8, Option<u16>) {
-        self.step_with_reader(|_| 0, Some(mixer))
     }
 
     /// Mixed audio sample using the NES non-linear mixer approximation.
@@ -526,7 +466,7 @@ mod tests {
         apu.cpu_write(apu_mem::FRAME_COUNTER, 0, 0); // 4-step, IRQs enabled
 
         for _ in 0..=frame_counter::FRAME_STEP_4_PERIOD as u64 {
-            apu.step();
+            apu.step(None);
         }
         assert!(apu.status.frame_interrupt);
 

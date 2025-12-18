@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::{
     apu::Apu,
     audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
-    bus::{OpenBus, cpu::CpuBus},
+    bus::{OpenBus, PendingDma, cpu::CpuBus},
     cartridge::{Cartridge, Provider},
     config::region::Region,
     context::Context,
@@ -59,8 +59,7 @@ pub struct Nes {
     clock_start_count: u8,
     clock_end_count: u8,
     serial_log: controller::SerialLogger,
-    /// Pending OAM DMA page written via `$4014` (latched until CPU picks it up).
-    oam_dma_request: Option<u8>,
+    pending_dma: PendingDma,
     /// CPU data-bus open-bus latch (mirrors Mesen2's decay model).
     open_bus: OpenBus,
     /// CPU bus access counter (fed into timing-sensitive mappers).
@@ -113,7 +112,7 @@ impl Nes {
             clock_start_count: 6,
             clock_end_count: 6,
             serial_log: controller::SerialLogger::default(),
-            oam_dma_request: None,
+            pending_dma: PendingDma::default(),
             open_bus: OpenBus::new(),
             cycles: u64::MAX,
             mixer: NesSoundMixer::new(CPU_CLOCK_NTSC, INTERNAL_MIXER_SAMPLE_RATE),
@@ -215,7 +214,7 @@ impl Nes {
             self.cartridge.as_mut(),
             &mut self.controllers,
             Some(&mut self.serial_log),
-            &mut self.oam_dma_request,
+            &mut self.pending_dma,
             &mut self.open_bus,
             // On power-on we allow the CPU reset sequence to feed the mixer; for
             // warm resets this is omitted, matching the previous behaviour.
@@ -249,7 +248,7 @@ impl Nes {
                 self.cartridge.as_mut(),
                 &mut self.controllers,
                 Some(&mut self.serial_log),
-                &mut self.oam_dma_request,
+                &mut self.pending_dma,
                 &mut self.open_bus,
                 if emit_audio {
                     Some(&mut self.mixer)
@@ -273,13 +272,6 @@ impl Nes {
                 .cartridge()
                 .and_then(|cart| cart.mapper().as_expansion_audio())
                 .map(|exp| exp.samples());
-
-            if let Some((stall_cycles, dma_addr)) = bus.take_pending_dmc_stall()
-                && stall_cycles > 0
-                && self.apply_dmc_stall(stall_cycles, dma_addr)
-            {
-                // Stall may advance PPU/frame; accounted for below.
-            }
 
             let opcode_active = self.cpu_opcode_active();
             (cycles, expansion, opcode_active)
@@ -518,7 +510,7 @@ impl Nes {
             self.cartridge.as_mut(),
             &mut self.controllers,
             Some(&mut self.serial_log),
-            &mut self.oam_dma_request,
+            &mut self.pending_dma,
             &mut self.open_bus,
             None,
             &mut self.cycles,
@@ -542,7 +534,7 @@ impl Nes {
             self.cartridge.as_mut(),
             &mut self.controllers,
             Some(&mut self.serial_log),
-            &mut self.oam_dma_request,
+            &mut self.pending_dma,
             &mut self.open_bus,
             None,
             &mut self.cycles,
@@ -562,108 +554,6 @@ impl Nes {
     /// Drains any bytes emitted on controller port 1 via the blargg serial protocol.
     pub fn take_serial_output(&mut self) -> Vec<u8> {
         self.serial_log.drain()
-    }
-
-    /// DMC DMA stall: freeze CPU for the specified cycles and perform a single
-    /// PRG read so mappers can observe the DMA.
-    ///
-    /// Each DMC DMA is 4 CPU cycles; if initiated on an odd cycle an extra
-    /// cycle precedes the DMA to align to even. Only one PRG read occurs per
-    /// DMA (not per stall cycle).
-    fn apply_dmc_stall(&mut self, stall_cycles: u8, dma_addr: Option<u16>) -> bool {
-        if stall_cycles == 0 {
-            return false;
-        }
-
-        // Helper to advance one CPU cycle (with optional PRG read) and keep the
-        // PPU in lockstep. The bus read path increments `cpu_bus_cycle`
-        // internally; idle cycles advance it explicitly and still clock the
-        // mapper/open-bus decay to match hardware.
-        let mut frame_advanced = false;
-        let run_cycle = |nes: &mut Nes, read_addr: Option<u16>, frame_advanced: &mut bool| {
-            if let Some(addr) = read_addr {
-                let byte = {
-                    let mut bus = CpuBus::new(
-                        &mut nes.ram,
-                        &mut nes.ppu,
-                        &mut nes.apu,
-                        nes.cartridge.as_mut(),
-                        &mut nes.controllers,
-                        Some(&mut nes.serial_log),
-                        &mut nes.oam_dma_request,
-                        &mut nes.open_bus,
-                        None,
-                        &mut nes.cycles,
-                        &mut nes.master_clock,
-                        nes.ppu_offset,
-                        nes.clock_start_count,
-                        nes.clock_end_count,
-                    );
-                    let mut ctx = Context::Some {
-                        interceptor: &mut nes.interceptor,
-                    };
-                    bus.mem_read(addr, &mut nes.cpu, &mut ctx)
-                };
-                nes.apu.finish_dma_fetch(byte);
-                nes.open_bus.latch(byte);
-            } else {
-                nes.cycles = nes.cycles.wrapping_add(1);
-                if let Some(cart) = nes.cartridge.as_mut() {
-                    cart.cpu_clock(nes.cycles);
-                }
-                nes.open_bus.step();
-            }
-            // Even though the CPU core is stalled, advance its cycle
-            // counter (and pause any in-progress OAM DMA) so alignment/parity
-            // stays correct.
-            nes.cpu.account_dma_cycle();
-
-            // Advance three PPU dots (one CPU cycle worth) to keep alignment.
-            let mut bus = CpuBus::new(
-                &mut nes.ram,
-                &mut nes.ppu,
-                &mut nes.apu,
-                nes.cartridge.as_mut(),
-                &mut nes.controllers,
-                Some(&mut nes.serial_log),
-                &mut nes.oam_dma_request,
-                &mut nes.open_bus,
-                None,
-                &mut nes.cycles,
-                &mut nes.master_clock,
-                nes.ppu_offset,
-                nes.clock_start_count,
-                nes.clock_end_count,
-            );
-            let mut ctx = Context::Some {
-                interceptor: &mut nes.interceptor,
-            };
-            for _ in 0..3 {
-                bus.step_ppu(&mut nes.cpu, &mut ctx);
-            }
-            nes.dot_counter = nes.ppu.total_dots();
-            let frame_count = nes.ppu.frame_count();
-            if frame_count != nes.last_frame {
-                nes.last_frame = frame_count;
-                *frame_advanced = true;
-            }
-        };
-
-        // Align to even CPU cycle when requested stall is non-zero. The first
-        // cycle is idle when starting on an odd CPU cycle; the PRG read occurs
-        // on the following (even) cycle.
-        if (self.cycles & 1) == 1 {
-            run_cycle(self, None, &mut frame_advanced);
-        }
-
-        // Apply the DMA cycles; the PRG read is performed on the first DMA
-        // cycle only.
-        for i in 0..stall_cycles {
-            let read_addr = if i == 0 { dma_addr } else { None };
-            run_cycle(self, read_addr, &mut frame_advanced);
-        }
-
-        frame_advanced
     }
 
     fn build_interceptor() -> EmuInterceptor {

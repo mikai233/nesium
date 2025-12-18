@@ -3,7 +3,7 @@ use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::sync::{Mutex, OnceLock};
 
-use crate::bus::{CpuBus, STACK_ADDR};
+use crate::bus::{CpuBus, DmcDmaEvent, STACK_ADDR};
 use crate::context::Context;
 use crate::cpu::addressing::Addressing;
 use crate::cpu::instruction::Instruction;
@@ -95,58 +95,69 @@ fn cpu_opcode_log_write(cycle: u64, pc: u16, opcode: u8, addr_val: u8) {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct OamDma {
-    page: u8,
-    offset: u16,
-    dummy_cycles: u8,
-    read_phase: bool,
-    data_latch: u8,
+/// Unified DMA controller state to match Mesen's implementation.
+/// Handles the interleaving of OAM and DMC DMA, including the specific "Halt" and "Dummy Read" cycle stealing behavior.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub(crate) struct DmaController {
+    // === Control Flags (Mesen: _needHalt, _needDummyRead) ===
+    pub(crate) halt_needed: bool,
+    pub(crate) dummy_read_needed: bool, // Specific to DMC start-up alignment
+
+    // === DMC DMA State (Mesen: _dmcDmaRunning, _abortDmcDma) ===
+    pub(crate) dmc_active: bool,
+    pub(crate) dmc_abort_pending: bool,
+    pub(crate) dmc_addr: u16,
+    pub(crate) is_dmc_read: bool, // Mesen: _isDmcDmaRead
+
+    // === OAM DMA State (Mesen: _spriteDmaTransfer) ===
+    pub(crate) oam_active: bool,
+    pub(crate) oam_page: u8,
+    pub(crate) oam_cycle_counter: u16, // Mesen: spriteDmaCounter (0-511)
+    pub(crate) oam_latch: u8,          // Temporary storage between read and write cycles
 }
 
-impl OamDma {
-    fn new(page: u8, start_on_odd_cycle: bool) -> Self {
-        // DMA always incurs one dummy cycle; starting on an odd CPU cycle
-        // adds a second to align the following read/write alternation.
-        let dummy_cycles = 1 + u8::from(start_on_odd_cycle);
-        Self {
-            page,
-            offset: 0,
-            dummy_cycles,
-            read_phase: true,
-            data_latch: 0,
-        }
+impl DmaController {
+    // Mesen: StartDmcTransfer
+    #[inline]
+    fn request_dmc(&mut self, addr: u16) {
+        self.dmc_active = true;
+        self.dmc_abort_pending = false;
+        self.dummy_read_needed = true;
+        self.halt_needed = true;
+        self.dmc_addr = addr;
     }
 
-    /// Marks that an external DMA (e.g., DMC) stole this CPU bus cycle while
-    /// OAM DMA was in progress. The transfer pauses for this cycle, preserving
-    /// read/write phase and remaining bytes.
-    fn stall_cycle(&mut self) {
-        // No state changes; the DMA simply does not advance this cycle.
+    // Mesen: RunDMATransfer
+    #[inline]
+    fn request_oam(&mut self, page: u8) {
+        self.oam_active = true;
+        self.oam_page = page;
+        self.oam_cycle_counter = 0;
+        self.halt_needed = true;
     }
 
-    /// Runs one DMA micro-step (one CPU cycle). Returns `true` when the
-    /// transfer has finished copying all 256 bytes into OAM.
-    fn step(&mut self, cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context) -> bool {
-        if self.dummy_cycles > 0 {
-            self.dummy_cycles -= 1;
-            return false;
+    #[inline]
+    fn is_active(&self) -> bool {
+        self.dmc_active || self.oam_active || self.halt_needed
+    }
+
+    // Mesen: StopDmcTransfer
+    #[inline]
+    fn stop_dmc(&mut self) {
+        if !self.dmc_active {
+            return;
         }
 
-        if self.read_phase {
-            let addr = ((self.page as u16) << 8) | self.offset;
-            self.data_latch = bus.mem_read(addr, cpu, ctx);
-            self.read_phase = false;
-            return false;
+        if self.halt_needed {
+            // If interrupted before the halt cycle starts, cancel DMA completely
+            self.dmc_active = false;
+            self.dmc_abort_pending = false;
+            self.dummy_read_needed = false;
+            self.halt_needed = false;
+        } else {
+            // Abort DMA if possible (only appears possible within the first cycle of DMA)
+            self.dmc_abort_pending = true;
         }
-
-        bus.mem_write(PpuRegister::OamData.addr(), self.data_latch, cpu, ctx);
-        self.offset += 1;
-        if self.offset >= OAM_DMA_TRANSFER_BYTES {
-            return true;
-        }
-        self.read_phase = true;
-        false
     }
 }
 
@@ -190,7 +201,7 @@ pub struct Cpu {
     pub(crate) prev_nmi_latch: bool,
 
     // ===== DMA =====
-    pub(crate) oam_dma: Option<OamDma>,
+    pub(crate) dma: DmaController,
 }
 
 impl Cpu {
@@ -215,7 +226,7 @@ impl Cpu {
             step: 0,
             tmp: 0,
             effective_addr: 0,
-            oam_dma: None,
+            dma: DmaController::default(),
         }
     }
 
@@ -265,7 +276,7 @@ impl Cpu {
         self.step = 0;
         self.tmp = 0;
         self.effective_addr = 0;
-        self.oam_dma = None;
+        self.dma = DmaController::default();
 
         // The CPU takes 8 cycles before it starts executing the ROM's code
         // after a reset/power-up (Mesen does this via 8 Start/End cycles).
@@ -276,10 +287,6 @@ impl Cpu {
     }
 
     pub(crate) fn step(&mut self, bus: &mut CpuBus, ctx: &mut Context) {
-        if self.handle_oam_dma(bus, ctx) {
-            return;
-        }
-
         match self.opcode_in_flight {
             Some(opcode) => {
                 let instr = &LOOKUP_TABLE[opcode as usize];
@@ -323,16 +330,13 @@ impl Cpu {
         }
         bus.open_bus.step();
 
-        // Run one APU CPU-cycle tick; stash any pending DMC DMA stall.
-        let (stall_cycles, dma_addr) = match &mut bus.mixer {
-            Some(mixer) => bus.apu.step_with_mixer(mixer),
-            None => bus.apu.step(),
-        };
-        bus.pending_dmc_stall = if stall_cycles > 0 {
-            Some((stall_cycles, dma_addr))
-        } else {
-            None
-        };
+        // Run one APU CPU-cycle tick; DMA requests are queued on the bus.
+        let (stall_cycles, dma_addr) = bus.apu.step(bus.mixer.as_deref_mut());
+        if stall_cycles > 0 {
+            if let Some(addr) = dma_addr {
+                bus.request_dmc_dma(addr);
+            }
+        }
     }
 
     pub(crate) fn end_cycle(&mut self, read_phase: bool, bus: &mut CpuBus, ctx: &mut Context) {
@@ -524,29 +528,306 @@ impl Cpu {
     /// advancing any instruction micro-ops. This keeps cycle parity and DMA
     /// alignment consistent with hardware timing.
     pub(crate) fn account_dma_cycle(&mut self) {
-        if let Some(dma) = self.oam_dma.as_mut() {
-            dma.stall_cycle();
+        // No-op: DMA stolen cycles are executed explicitly through `handle_dma`.
+        // This hook remains for compatibility with older code paths.
+    }
+
+    /// Handles pending DMA transfers based on Mesen's `ProcessPendingDma` logic.
+    ///
+    /// IMPORTANT architectural notes (matching Mesen):
+    /// - This is called from `CpuBus::mem_read()` *before* the CPU read cycle starts.
+    /// - If DMA is pending/active, this function will clock **all** DMA cycles until DMA is no
+    ///   longer stealing cycles. Only then may the CPU's requested read proceed.
+    /// - DMA bus accesses MUST bypass `mem_read/mem_write` (otherwise we'd recurse back into DMA).
+    ///   Use `bus.dma_read/dma_write`.
+    ///
+    /// TODO parity with Mesen:
+    /// - PAL gating: DMA can only start on opcode fetch (`ExecOpCode`) on PAL.
+    /// - 4016/4017 input timing quirks: `skipFirstInputClock`, `skipDummyReads`, and HVC001 behavior.
+    /// - Internal-reg conflict glitch: open bus masks + merging for 4016/4017, and 4015 side effects.
+    /// - Exact address used for dummy reads (should be the CPU's pending read address / opType-specific).
+    /// - DMC buffer delivery: feed the DMC read byte into APU (SetDmcReadBuffer).
+    pub(crate) fn handle_dma(&mut self, addr: u16, bus: &mut CpuBus, ctx: &mut Context) {
+        // Drain bus mailbox once at entry.
+        if let Some(evt) = bus.take_dmc_dma_event() {
+            match evt {
+                DmcDmaEvent::Request { addr } => self.dma.request_dmc(addr),
+                DmcDmaEvent::Abort => self.dma.stop_dmc(),
+            }
+        }
+
+        // Start OAM DMA only at instruction boundary (before opcode fetch), mirroring Mesen.
+        if self.opcode_in_flight.is_none() && !self.dma.oam_active {
+            if let Some(page) = bus.take_oam_dma() {
+                self.dma.request_oam(page);
+            }
+        }
+
+        // Fast exit if DMA isn't active.
+        if !self.dma.is_active() {
+            return;
+        }
+
+        // Mesen local state.
+        let mut prev_read_address: u16 = addr;
+        let enable_internal_reg_reads: bool = (addr & 0xFFE0) == 0x4000;
+
+        // Helper: clock a stolen DMA cycle without performing a bus read.
+        // This is required to model Mesen's behavior where certain dummy reads to $4016/$4017
+        // are skipped to avoid extra controller side effects, while still consuming time.
+        #[inline(always)]
+        fn dma_idle(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context) {
+            cpu.begin_cycle(true, bus, ctx);
+            cpu.end_cycle(true, bus, ctx);
+        }
+
+        // TODO: plumb console type + region via bus/config. This controls Famicom vs NES behavior.
+        // Mesen: `isNesBehavior = ConsoleType != Hvc001`.
+        let is_nes_behavior: bool = true;
+
+        // Mesen: skipFirstInputClock
+        // If the CPU is halted while reading $4016/$4017 and DMC DMA reads the same *internal* input reg,
+        // the controller won't see the first dummy read because /OE stays active.
+        let skip_first_input_clock: bool = enable_internal_reg_reads
+            && self.dma.dmc_active
+            && (addr == 0x4016 || addr == 0x4017)
+            && ((self.dma.dmc_addr & 0x1F) == (addr & 0x1F));
+
+        // Mesen: skipDummyReads
+        // On NES/AV Famicom, only the first dummy/idle read to $4016/$4017 causes side effects;
+        // further dummy reads during DMA are effectively hidden.
+        let skip_dummy_reads: bool = is_nes_behavior && (addr == 0x4016 || addr == 0x4017);
+
+        // === Halt cycle (Mesen: initial StartCpuCycle(true) + optional read + EndCpuCycle(true)) ===
+        // Mesen: ProcessPendingDma exits early when !_needHalt.
+        // In our model, `halt_needed` is the shared entry latch for both OAM and DMC DMA.
+        if self.dma.halt_needed {
+            self.dma.halt_needed = false;
+
+            // Mesen performs the halt-cycle dummy read on the address the CPU was about to read.
+            // NOTE: must bypass `mem_read` to avoid recursion.
+            // Mesen special-case: when aborting DMC and the CPU will read $4016/$4017 next (NES behavior),
+            // skip the memory access to avoid creating two visible reads for the controllers.
+            let skip_halt_mem_access = (self.dma.dmc_abort_pending
+                && is_nes_behavior
+                && (addr == 0x4016 || addr == 0x4017))
+                || skip_first_input_clock;
+
+            if skip_halt_mem_access {
+                dma_idle(self, bus, ctx);
+            } else {
+                bus.dma_read(addr, self, ctx);
+            }
+
+            // If DMC was aborted during/just before the halt cycle, clear it now.
+            // Mesen clears `_needDummyRead` and may return early if OAM isn't about to start.
+            if self.dma.dmc_abort_pending {
+                self.dma.dmc_active = false;
+                self.dma.dmc_abort_pending = false;
+
+                if !self.dma.oam_active {
+                    self.dma.dummy_read_needed = false;
+                    return;
+                }
+            }
+        }
+
+        while self.dma.dmc_active || self.dma.oam_active {
+            // Allow late aborts to be consumed while DMA is running (closer to Mesen).
+            if let Some(evt) = bus.take_dmc_dma_event() {
+                if let DmcDmaEvent::Abort = evt {
+                    self.dma.stop_dmc();
+                } else {
+                    // Request while running is unusual, but keep last-wins for now.
+                    if let DmcDmaEvent::Request { addr } = evt {
+                        self.dma.request_dmc(addr);
+                    }
+                }
+            }
+
+            // Mesen decides GET/PUT based on the cycle count before starting the cycle.
+            // Our `begin_cycle` increments cycles, so use the *next* cycle to classify.
+            let next_cycle = bus.cycles().wrapping_add(1);
+            let get_cycle = (next_cycle & 1) == 0;
+
+            // Snapshot DMC readiness BEFORE we clear `dummy_read_needed` this cycle.
+            let dmc_ready_pre = self.dma.dmc_active
+                && !self.dma.halt_needed
+                && !self.dma.dummy_read_needed
+                && !self.dma.dmc_abort_pending;
+
+            // Mesen's `processCycle` clears abort/halt/dummy flags and then starts the timed cycle.
+            // Here we model the flag clears first; the timed cycle is performed by `dma_read/dma_write`.
+            if self.dma.dmc_abort_pending {
+                // Abort window: stop DMC and clear setup flags.
+                self.dma.dmc_active = false;
+                self.dma.dmc_abort_pending = false;
+                self.dma.dummy_read_needed = false;
+                self.dma.halt_needed = false;
+            } else if self.dma.halt_needed {
+                self.dma.halt_needed = false;
+            } else if self.dma.dummy_read_needed {
+                self.dma.dummy_read_needed = false;
+            }
+
+            if get_cycle {
+                // === GET cycle (read phase) ===
+                if dmc_ready_pre {
+                    // DMC DMA read takes priority over OAM read.
+                    self.dma.is_dmc_read = true;
+                    let dmc_addr = self.dma.dmc_addr;
+                    let val = self.process_dma_read(
+                        bus,
+                        ctx,
+                        dmc_addr,
+                        &mut prev_read_address,
+                        enable_internal_reg_reads,
+                        is_nes_behavior,
+                    );
+                    self.dma.is_dmc_read = false;
+
+                    self.dma.dmc_active = false;
+                    self.dma.dmc_abort_pending = false;
+
+                    bus.apu.finish_dma_fetch(val);
+
+                    // This cycle was fully consumed by DMA; continue the while-loop.
+                    continue;
+                }
+
+                if self.dma.oam_active {
+                    // OAM DMA alternates read/write. Even counter => read.
+                    if (self.dma.oam_cycle_counter & 1) == 0 {
+                        // Derive the low byte of the OAM DMA read address from the DMA cycle counter.
+                        // Even counter values are the read phase. Completed reads so far = (counter + 1) / 2.
+                        let sprite_read_addr: u8 = ((self.dma.oam_cycle_counter + 1) / 2) as u8;
+                        let src_addr =
+                            ((self.dma.oam_page as u16) << 8) | (sprite_read_addr as u16);
+
+                        let v = self.process_dma_read(
+                            bus,
+                            ctx,
+                            src_addr,
+                            &mut prev_read_address,
+                            enable_internal_reg_reads,
+                            is_nes_behavior,
+                        );
+
+                        self.dma.oam_latch = v;
+                        self.dma.oam_cycle_counter += 1;
+                        continue;
+                    }
+
+                    // Alignment: waiting for the write phase, burn a dummy/idle DMA read.
+                    if skip_dummy_reads {
+                        dma_idle(self, bus, ctx);
+                    } else {
+                        bus.dma_read(addr, self, ctx);
+                    }
+                    continue;
+                }
+
+                // DMC running but not ready and no OAM: dummy/idle cycle.
+                if skip_dummy_reads {
+                    dma_idle(self, bus, ctx);
+                } else {
+                    bus.dma_read(addr, self, ctx);
+                }
+                continue;
+            } else {
+                // === PUT cycle (write/alignment phase) ===
+                if self.dma.oam_active && (self.dma.oam_cycle_counter & 1) != 0 {
+                    // OAM write cycle.
+                    // NOTE: must bypass `mem_write` to avoid recursion/ordering differences.
+                    bus.dma_write(PpuRegister::OamData.addr(), self.dma.oam_latch, self, ctx);
+
+                    self.dma.oam_cycle_counter += 1;
+                    if self.dma.oam_cycle_counter >= 512 {
+                        self.dma.oam_active = false;
+                    }
+                    continue;
+                }
+
+                // Alignment: burn a dummy/idle cycle.
+                if skip_dummy_reads {
+                    dma_idle(self, bus, ctx);
+                } else {
+                    bus.dma_read(addr, self, ctx);
+                }
+                continue;
+            }
         }
     }
 
-    fn handle_oam_dma(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> bool {
-        if let Some(mut dma) = self.oam_dma.take() {
-            let done = dma.step(self, bus, ctx);
-            self.oam_dma = if done { None } else { Some(dma) };
-            return true;
+    // Mesen: ProcessDmaRead
+    #[inline]
+    fn process_dma_read(
+        &mut self,
+        bus: &mut CpuBus,
+        ctx: &mut Context,
+        dma_addr: u16,
+        prev_read_address: &mut u16,
+        enable_internal_reg_reads: bool,
+        is_nes_behavior: bool,
+    ) -> u8 {
+        // This models Mesen's "CPU internal register conflict" glitch during DMA.
+        //
+        // TODO parity with Mesen:
+        // - When `!enable_internal_reg_reads`, reads to $4000-$401F should return open bus (no external responder).
+        // - For internal-reg reads (4015/4016/4017), the *internal* read may be performed regardless of `dma_addr`.
+        // - 4015: internal read can clear frame IRQ flag without program knowledge.
+        // - 4016/4017: bit deletions + open bus masks + external bus merge are not yet implemented.
+        // - PAL vs NTSC behavior differences.
+
+        if !enable_internal_reg_reads {
+            // TODO: $4000-$401F should read open bus on the external bus.
+            let v = bus.dma_read(dma_addr, self, ctx);
+            *prev_read_address = dma_addr;
+            return v;
         }
 
-        if self.opcode_in_flight.is_none()
-            && let Some(page) = bus.take_oam_dma_request()
-        {
-            let start_on_odd_cycle = (bus.cycles() & 1) == 1;
-            let mut dma = OamDma::new(page, start_on_odd_cycle);
-            let done = dma.step(self, bus, ctx);
-            self.oam_dma = if done { None } else { Some(dma) };
-            return true;
-        }
+        // Internal-reg glitch path: CPU reads from internal APU/Input regs regardless of DMA address.
+        let internal_addr = 0x4000 | (dma_addr & 0x1F);
+        let is_same_address = internal_addr == dma_addr;
 
-        false
+        let val = match internal_addr {
+            0x4015 => {
+                // TODO: side effect: reading 4015 clears the frame counter IRQ flag.
+                let v = bus.dma_read(internal_addr, self, ctx);
+                if !is_same_address {
+                    // Also trigger external bus read (DMA's intended address).
+                    bus.dma_read(dma_addr, self, ctx);
+                }
+                v
+            }
+            0x4016 | 0x4017 => {
+                // TODO: PAL behavior unknown; on NES, consecutive reads may be hidden/skipped.
+                let consecutive_same = is_nes_behavior && *prev_read_address == internal_addr;
+                let mut v = if consecutive_same {
+                    // TODO: should return open bus (and avoid bit deletion).
+                    // Using an internal read here is not accurate but keeps timing consistent.
+                    bus.dma_read(internal_addr, self, ctx)
+                } else {
+                    bus.dma_read(internal_addr, self, ctx)
+                };
+
+                if !is_same_address {
+                    // DMA unit is reading from a different external address too.
+                    // TODO: implement open bus mask + merge/bus-conflict behavior.
+                    let external_value = bus.dma_read(dma_addr, self, ctx);
+                    // Placeholder: prefer external value for now.
+                    v = external_value;
+                }
+
+                v
+            }
+            _ => bus.dma_read(dma_addr, self, ctx),
+        };
+
+        // Mesen updates prevReadAddress with the internal address (0x4000|(addr&0x1F)).
+        *prev_read_address = internal_addr;
+
+        val
     }
 
     fn perform_interrupt(&mut self, bus: &mut CpuBus, ctx: &mut Context) {

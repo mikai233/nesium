@@ -1790,7 +1790,7 @@ impl Ppu {
 mod tests {
     use crate::{
         apu::Apu,
-        bus::{OpenBus, cpu::CpuBus},
+        bus::{OpenBus, PendingDma, cpu::CpuBus},
         controller::{ControllerPorts, SerialLogger},
         mem_block::cpu as cpu_ram,
         ppu::pattern_bus::PatternBus,
@@ -1884,7 +1884,7 @@ mod tests {
         let mut ram = cpu_ram::Ram::new();
         let mut controllers = ControllerPorts::new();
         let mut serial_log = SerialLogger::default();
-        let mut oam_dma_request = None;
+        let mut pending_dma = PendingDma::default();
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
         let mut master_clock = 0;
@@ -1896,7 +1896,7 @@ mod tests {
             None,
             &mut controllers,
             Some(&mut serial_log),
-            &mut oam_dma_request,
+            &mut pending_dma,
             &mut open_bus,
             None,
             &mut cpu_bus_cycle,

@@ -24,7 +24,7 @@ Goal: bring the internal APU timing model (especially DMC) much closer to Mesen2
   1. Introduce a thin “range mode” behind a feature flag or internal helper while keeping the existing per-cycle `clock_with_reader` path for compatibility.
   2. Start by using `run_until` only from `Nes::run_frame_with_audio` / `step_dot_with_audio`:
      - For each dot where `(dot_counter + 2) % 3 == 0`, compute the corresponding CPU/APU cycle and call `apu.run_until(cycle, reader, Some(&mut mixer))`.
- 3. Once stable, deprecate the per-cycle `step_with_mixer` path in favour of the range-based one.
+ 3. Once stable, deprecate the per-cycle `Apu::step` path in favour of the range-based one.
 
 ### 0.2 – Per-channel timers and Run(targetCycle) (Square/Triangle/Noise)
 

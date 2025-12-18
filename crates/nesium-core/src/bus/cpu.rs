@@ -1,7 +1,7 @@
 use crate::{
     apu::Apu,
     audio::NesSoundMixer,
-    bus::{BusDevices, BusDevicesMut, OpenBus},
+    bus::{BusDevices, BusDevicesMut, DmcDmaEvent, OpenBus, PendingDma},
     cartridge::Cartridge,
     context::Context,
     controller::{ControllerPorts, SerialLogger},
@@ -21,7 +21,6 @@ pub struct CpuBus<'a> {
     pub(crate) cartridge: Option<&'a mut Cartridge>,
     pub(crate) controllers: &'a mut ControllerPorts,
     pub(crate) serial_log: Option<&'a mut SerialLogger>,
-    pub(crate) oam_dma_request: &'a mut Option<u8>,
     pub(crate) open_bus: &'a mut OpenBus,
     pub(crate) mixer: Option<&'a mut NesSoundMixer>,
     /// Approximate CPU bus cycle counter (increments per bus access).
@@ -33,8 +32,7 @@ pub struct CpuBus<'a> {
     /// Master clock half-cycle lengths (start/end) in master cycles.
     pub(crate) clock_start_count: u8,
     pub(crate) clock_end_count: u8,
-    /// Pending DMC stall cycles surfaced by the APU tick.
-    pub(crate) pending_dmc_stall: Option<(u8, Option<u16>)>,
+    pub(crate) pending_dma: &'a mut PendingDma,
 }
 
 impl<'a> CpuBus<'a> {
@@ -46,7 +44,7 @@ impl<'a> CpuBus<'a> {
         cartridge: Option<&'a mut Cartridge>,
         controllers: &'a mut ControllerPorts,
         serial_log: Option<&'a mut SerialLogger>,
-        oam_dma_request: &'a mut Option<u8>,
+        pending_dma: &'a mut PendingDma,
         open_bus: &'a mut OpenBus,
         mixer: Option<&'a mut NesSoundMixer>,
         cycles: &'a mut u64,
@@ -62,7 +60,6 @@ impl<'a> CpuBus<'a> {
             cartridge,
             controllers,
             serial_log,
-            oam_dma_request,
             open_bus,
             mixer,
             cycles,
@@ -70,26 +67,30 @@ impl<'a> CpuBus<'a> {
             ppu_offset,
             clock_start_count,
             clock_end_count,
-            pending_dmc_stall: None,
+            pending_dma,
         }
     }
 
     /// Returns `true` when a cartridge is loaded.
+    #[inline]
     pub fn has_cartridge(&self) -> bool {
         self.cartridge.is_some()
     }
 
     /// Returns the cartridge currently inserted on the bus, when present.
+    #[inline]
     pub fn cartridge(&self) -> Option<&Cartridge> {
         self.cartridge.as_deref()
     }
 
     /// Current CPU cycle counter (increments per bus access).
+    #[inline]
     pub fn cpu_cycles(&self) -> u64 {
         *self.cycles
     }
 
     /// Current CPU master clock in master cycles (12 per CPU cycle).
+    #[inline]
     pub fn master_clock(&self) -> u64 {
         *self.master_clock
     }
@@ -101,6 +102,7 @@ impl<'a> CpuBus<'a> {
     /// for audio parity we still need to feed real PRG data into the DMC.
     /// This helper mirrors the cartridge space mapping without mutating any
     /// CPU-visible timing state.
+    #[inline]
     pub fn dmc_read(&self, addr: u16) -> u8 {
         use crate::memory::cpu as cpu_mem;
 
@@ -115,38 +117,33 @@ impl<'a> CpuBus<'a> {
     }
 
     /// Tick the PPU once, wiring CHR accesses through the currently inserted cartridge.
+    #[inline]
     pub fn step_ppu(&mut self, cpu: &mut Cpu, ctx: &mut Context) {
         Ppu::step(self, cpu, ctx);
     }
 
     /// Advances master clock and runs the PPU to catch up.
+    #[inline]
     pub(crate) fn bump_master_clock(&mut self, delta: u8, cpu: &mut Cpu, ctx: &mut Context) {
         *self.master_clock = self.master_clock.wrapping_add(delta as u64);
         let ppu_target = self.master_clock.saturating_sub(self.ppu_offset as u64);
         Ppu::run_until(self, ppu_target, cpu, ctx);
     }
 
-    pub fn internal_cycle(&mut self, cpu: &mut Cpu, ctx: &mut Context) {
-        cpu.begin_cycle(true, self, ctx);
-        cpu.end_cycle(true, self, ctx);
-    }
-
-    /// Drains and returns any pending DMC DMA stall produced by the last APU tick.
-    pub fn take_pending_dmc_stall(&mut self) -> Option<(u8, Option<u16>)> {
-        self.pending_dmc_stall.take()
-    }
-
     /// Returns a read-only view of CPU RAM.
+    #[inline]
     pub fn ram(&self) -> &[u8] {
         self.ram.as_slice()
     }
 
     /// Returns a mutable view of CPU RAM.
+    #[inline]
     pub fn ram_mut(&mut self) -> &mut [u8] {
         self.ram.as_mut_slice()
     }
 
     /// PPU-facing mapper read for pattern table space.
+    #[inline]
     pub fn ppu_pattern_read(&mut self, addr: u16) -> u8 {
         self.cartridge
             .as_ref()
@@ -155,26 +152,31 @@ impl<'a> CpuBus<'a> {
     }
 
     /// PPU-facing mapper write for pattern table space.
+    #[inline]
     pub fn ppu_pattern_write(&mut self, addr: u16, value: u8) {
         if let Some(cart) = self.cartridge.as_deref_mut() {
             cart.ppu_write(addr, value);
         }
     }
 
+    #[inline]
     fn read_internal_ram(&self, addr: u16) -> u8 {
         let idx = (addr & cpu_mem::INTERNAL_RAM_MASK) as usize;
         self.ram[idx]
     }
 
+    #[inline]
     fn write_internal_ram(&mut self, addr: u16, value: u8) {
         let idx = (addr & cpu_mem::INTERNAL_RAM_MASK) as usize;
         self.ram[idx] = value;
     }
 
+    #[inline]
     fn read_cartridge(&self, addr: u16) -> Option<u8> {
         self.cartridge.as_ref().and_then(|cart| cart.cpu_read(addr))
     }
 
+    #[inline]
     fn write_cartridge(&mut self, addr: u16, value: u8) {
         if let Some(cart) = self.cartridge.as_deref_mut() {
             cart.cpu_write(addr, value, *self.cycles);
@@ -195,8 +197,9 @@ impl<'a> CpuBus<'a> {
         }
     }
 
+    #[inline]
     fn write_oam_dma(&mut self, page: u8) {
-        *self.oam_dma_request = Some(page);
+        self.pending_dma.oam_page = Some(page);
     }
 
     pub fn devices(&self) -> BusDevices<'_> {
@@ -219,14 +222,17 @@ impl<'a> CpuBus<'a> {
         }
     }
 
+    #[inline]
     pub fn nmi_level(&self) -> bool {
         self.ppu.nmi_level
     }
 
+    #[inline]
     pub fn ppu_read(&mut self, addr: u16) -> u8 {
         self.ppu_pattern_read(addr)
     }
 
+    #[inline]
     pub fn ppu_write(&mut self, addr: u16, value: u8) {
         self.ppu_pattern_write(addr, value);
     }
@@ -363,31 +369,71 @@ impl<'a> CpuBus<'a> {
         }
     }
 
+    #[inline]
     pub fn mem_read(&mut self, addr: u16, cpu: &mut Cpu, ctx: &mut Context) -> u8 {
+        cpu.handle_dma(addr, self, ctx);
         cpu.begin_cycle(true, self, ctx);
         let value = self.read(addr, cpu, ctx);
         cpu.end_cycle(true, self, ctx);
         value
     }
 
+    #[inline]
     pub fn mem_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, ctx: &mut Context) {
         cpu.begin_cycle(false, self, ctx);
         self.write(addr, data, cpu, ctx);
         cpu.end_cycle(false, self, ctx);
     }
 
+    #[inline]
+    pub fn dma_read(&mut self, addr: u16, cpu: &mut Cpu, ctx: &mut Context) -> u8 {
+        cpu.begin_cycle(true, self, ctx);
+        let v = self.read(addr, cpu, ctx);
+        cpu.end_cycle(true, self, ctx);
+        v
+    }
+
+    #[inline]
+    pub fn dma_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, ctx: &mut Context) {
+        cpu.begin_cycle(true, self, ctx);
+        self.write(addr, data, cpu, ctx);
+        cpu.end_cycle(true, self, ctx);
+    }
+
+    #[inline]
     pub fn irq_level(&mut self) -> bool {
         let apu_irq = self.apu.irq_pending();
         let cartridge_irq = self.cartridge_irq_pending();
         apu_irq || cartridge_irq
     }
 
-    pub fn take_oam_dma_request(&mut self) -> Option<u8> {
-        self.oam_dma_request.take()
-    }
-
+    #[inline]
     pub fn cycles(&self) -> u64 {
         *self.cycles
+    }
+
+    /// Drain a pending OAM DMA request (page number) if present.
+    #[inline]
+    pub fn take_oam_dma(&mut self) -> Option<u8> {
+        self.pending_dma.oam_page.take()
+    }
+
+    /// Drain a pending DMC DMA event (request/abort) if present.
+    #[inline]
+    pub fn take_dmc_dma_event(&mut self) -> Option<DmcDmaEvent> {
+        self.pending_dma.dmc.take()
+    }
+
+    /// Queue a DMC DMA request.
+    #[inline]
+    pub(crate) fn request_dmc_dma(&mut self, addr: u16) {
+        self.pending_dma.dmc = Some(DmcDmaEvent::Request { addr });
+    }
+
+    /// Queue a DMC DMA abort.
+    #[inline]
+    pub(crate) fn abort_dmc_dma(&mut self) {
+        self.pending_dma.dmc = Some(DmcDmaEvent::Abort);
     }
 }
 
@@ -441,7 +487,7 @@ mod tests {
         let mut apu = Apu::new();
         let mut ram = cpu_ram::Ram::new();
         let mut controllers = ControllerPorts::new();
-        let mut oam_dma_request = None;
+        let mut pending_dma = PendingDma::default();
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
         let mut master_clock = 0;
@@ -452,7 +498,7 @@ mod tests {
             None,
             &mut controllers,
             None,
-            &mut oam_dma_request,
+            &mut pending_dma,
             &mut open_bus,
             None,
             &mut cpu_bus_cycle,
@@ -488,7 +534,7 @@ mod tests {
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
         let mut controllers = ControllerPorts::new();
-        let mut oam_dma_request = None;
+        let mut pending_dma = PendingDma::default();
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
         let mut master_clock = 0;
@@ -499,7 +545,7 @@ mod tests {
             Some(&mut cartridge),
             &mut controllers,
             None,
-            &mut oam_dma_request,
+            &mut pending_dma,
             &mut open_bus,
             None,
             &mut cpu_bus_cycle,
@@ -525,7 +571,7 @@ mod tests {
         let mut ram = cpu_ram::Ram::new();
         let mut cartridge = cartridge_with_pattern(0x4000, 0x2000);
         let mut controllers = ControllerPorts::new();
-        let mut oam_dma_request = None;
+        let mut pending_dma = PendingDma::default();
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
         let mut master_clock = 0;
@@ -536,7 +582,7 @@ mod tests {
             Some(&mut cartridge),
             &mut controllers,
             None,
-            &mut oam_dma_request,
+            &mut pending_dma,
             &mut open_bus,
             None,
             &mut cpu_bus_cycle,

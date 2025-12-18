@@ -29,3 +29,15 @@ pub struct BusDevicesMut<'a> {
     pub cartridge: Option<&'a mut Cartridge>,
     pub controllers: &'a mut ControllerPorts,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DmcDmaEvent {
+    Request { addr: u16 },
+    Abort,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct PendingDma {
+    pub oam_page: Option<u8>,
+    pub dmc: Option<DmcDmaEvent>,
+}

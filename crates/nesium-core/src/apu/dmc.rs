@@ -109,10 +109,7 @@ impl Dmc {
     }
 
     /// Returns (stall_cycles, dma_address_to_read)
-    pub(super) fn clock<F>(&mut self, mut reader: F, status: &mut StatusFlags) -> (u8, Option<u16>)
-    where
-        F: FnMut(u16) -> u8,
-    {
+    pub(super) fn step(&mut self, status: &mut StatusFlags) -> (u8, Option<u16>) {
         let mut stall_cycles = 0;
         let mut dma_addr = None;
 
@@ -121,7 +118,7 @@ impl Dmc {
         }
 
         if self.enabled {
-            let (stall, addr) = self.fetch_sample(&mut reader, status);
+            let (stall, addr) = self.fetch_sample(status);
             stall_cycles = stall;
             dma_addr = addr;
         }
@@ -194,10 +191,7 @@ impl Dmc {
     }
 
     /// Returns (stall_cycles, dma_address_to_read)
-    fn fetch_sample<F>(&mut self, _reader: &mut F, status: &mut StatusFlags) -> (u8, Option<u16>)
-    where
-        F: FnMut(u16) -> u8,
-    {
+    fn fetch_sample(&mut self, status: &mut StatusFlags) -> (u8, Option<u16>) {
         if self.sample_buffer.is_some() || self.bytes_remaining == 0 || self.pending_fetch.is_some()
         {
             return (0, None);
