@@ -76,6 +76,7 @@ Legend:
 | `apu_mixer_suite`           | APU mixer / TASVideos test set               | Yes                         |
 | `apu_reset_suite`           | APU reset behaviour                          | Yes                         |
 | `blargg_nes_cpu_test5_suite`| CPU precision tests                          | Yes                         |
+| `blargg_ppu_tests_2005_09_15b_suite` | PPU palette/VRAM/scrolling behaviour         | Yes                         |
 | `branch_timing_tests_suite` | Branch instruction timing (zero-page result) | Yes                         |
 | `cpu_dummy_reads_suite`     | CPU dummy read behaviour                     | Yes                         |
 | `cpu_dummy_writes_suite`    | CPU dummy write behaviour                    | Yes                         |
@@ -115,7 +116,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `apu_test_suite`                     | APU accuracy tests (including `rom_singles`) | Yes                         |
 | `blargg_apu_2005_07_30_suite`        | Early Blargg APU tests                       | Yes                         |
 | `blargg_litewall_suite`              | Litewall / timing-related tests              | No                          |
-| `blargg_ppu_tests_2005_09_15b_suite` | PPU palette/VRAM/scrolling behaviour         | Yes                         |
 | `cpu_exec_space_suite`               | CPU exec space tests (APU/PPU I/O)           | Yes                         |
 | `cpu_interrupts_v2_suite`            | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
 | `dmc_dma_during_read4_suite`         | DMC DMA interaction with CPU read cycles     | Yes                         |
