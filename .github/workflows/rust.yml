@@ -44,10 +44,15 @@ jobs:
         with:
           key: ${{ matrix.rust }}
 
-      - name: Install audio and udev development libraries
+      - name: Install system development libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev
+          sudo apt-get install -y \
+            pkg-config \
+            libasound2-dev \
+            libudev-dev \
+            libfreetype6-dev \
+            libfontconfig1-dev
 
       - name: Build
         run: cargo build ${{ env.WORKSPACE_FLAGS }} --all-targets --verbose
