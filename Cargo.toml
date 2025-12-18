@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/nesium-egui",
+  "apps/nesium-egui",
   "crates/nesium-core",
   "crates/nesium-esp32",
   "crates/libretro-bridge",
@@ -12,7 +12,7 @@ members = [
   "crates/nesium-icon",
 ]
 default-members = [
-  "crates/nesium-egui",
+  "apps/nesium-egui",
   "crates/nesium-core",
   "crates/libretro-bridge",
   "crates/nesium-libretro",
