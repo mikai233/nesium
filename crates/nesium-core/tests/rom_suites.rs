@@ -758,7 +758,6 @@ fn sprite_hit_tests_2005_10_05_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn sprite_overflow_tests_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
@@ -768,7 +767,9 @@ fn sprite_overflow_tests_suite() -> Result<()> {
         "sprite_overflow_tests/4.Obscure.nes",
         "sprite_overflow_tests/5.Emulator.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        // These ROMs don't use the Blargg $6000/$6004 protocol; they store their final
+        // pass/fail code in zero-page `result = $00F8` (see `source/validation.a`).
+        run_rom_zeropage_result(rom, DEFAULT_FRAMES, RESULT_ZP_ADDR, 0x01)?;
     }
     Ok(())
 }
