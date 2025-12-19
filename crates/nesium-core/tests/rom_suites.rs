@@ -734,9 +734,11 @@ fn sprdma_and_dmc_dma_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn sprite_hit_tests_2005_10_05_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
+    //
+    // These ROMs do not use the blargg $6000 status protocol. They store the
+    // final result code in zero-page $00F8 (see `source/runtime/validation.a`).
     for rom in [
         "sprite_hit_tests_2005.10.05/01.basics.nes",
         "sprite_hit_tests_2005.10.05/02.alignment.nes",
@@ -750,7 +752,7 @@ fn sprite_hit_tests_2005_10_05_suite() -> Result<()> {
         "sprite_hit_tests_2005.10.05/10.timing_order.nes",
         "sprite_hit_tests_2005.10.05/11.edge_timing.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_zeropage_result(rom, DEFAULT_FRAMES, RESULT_ZP_ADDR, 0x01)?;
     }
     Ok(())
 }

@@ -93,6 +93,7 @@ Legend:
 | `ppu_open_bus_suite`        | PPU open-bus behaviour                       | Yes                         |
 | `ppu_read_buffer_suite`     | PPU read buffer behaviour                    | Yes                         |
 | `ppu_vbl_nmi_suite`         | PPU VBL/NMI timing                           | Yes                         |
+| `sprite_hit_tests_2005_10_05_suite` | Sprite 0 hit timing and edge cases           | Yes                         |
 | `spritecans_2011_suite`     | Visual diversity / sprite stress             | No                          |
 | `stomper_suite`             | Visual diversity / timing                    | No                          |
 | `tutor_suite`               | Visual diversity / reference demo            | No                          |
@@ -141,7 +142,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `scanline_a1_suite`                  | Alternate scanline tests                     | Yes                         |
 | `scrolltest_suite`                   | Scrolling behaviour                          | Yes                         |
 | `sprdma_and_dmc_dma_suite`           | Sprite DMA and DMC DMA interaction           | Yes                         |
-| `sprite_hit_tests_2005_10_05_suite`  | Sprite 0 hit timing and edge cases           | Yes                         |
 | `sprite_overflow_tests_suite`        | Sprite overflow behaviour                    | Yes                         |
 | `volume_tests_suite`                 | Volume/mixing behaviour                      | Yes                         |
 
