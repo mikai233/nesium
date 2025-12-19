@@ -30,6 +30,6 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [build-dependencies]
 nesium-icon = { path = "../../crates/nesium-icon" }
-ico = "0.4"
+ico = "0.5"
 winres = "0.1"
 png = "0.17"
