@@ -199,9 +199,9 @@ impl PaletteRam {
     /// Writes a palette byte applying the NES mirroring rules.
     pub fn write(&mut self, addr: u16, value: u8) {
         let index = Self::decode_index(addr);
-        // Store the full byte; higher bits are merged with the PPU open-bus
-        // latch when read via $2007, so PaletteRam itself keeps all 8 bits.
-        self.0[index] = value;
+        // Hardware palette RAM is effectively 6-bit; the upper 2 bits of a
+        // $2007 read are sourced from the PPU open bus instead.
+        self.0[index] = value & 0x3F;
     }
 
     /// Fills the entire palette RAM with the provided byte.
@@ -566,7 +566,7 @@ mod tests {
         let base = ppu_mem::PALETTE_BASE;
         let mirror = base + ppu_mem::PALETTE_STRIDE;
         ram.write(base + 0x1F, 0x77);
-        assert_eq!(ram.read(mirror + 0x1F), 0x77);
+        assert_eq!(ram.read(mirror + 0x1F), 0x77 & 0x3F);
     }
 
     #[test]
@@ -574,7 +574,7 @@ mod tests {
         let mut ram = PaletteRam::new();
         // Provide an offset instead of a full VRAM address.
         ram.write(0x0004, 0xAB);
-        assert_eq!(ram.read(ppu_mem::PALETTE_BASE + 0x04), 0xAB);
+        assert_eq!(ram.read(ppu_mem::PALETTE_BASE + 0x04), 0xAB & 0x3F);
     }
 
     #[test]

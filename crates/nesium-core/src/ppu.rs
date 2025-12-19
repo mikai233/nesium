@@ -431,7 +431,8 @@ impl Ppu {
                 self.open_bus.apply(0x00, v, self.frame)
             }
             PpuRegister::Data => self.read_vram_data(pattern),
-            _ => self.open_bus.sample(),
+            // Write-only / unimplemented reads: floating bus. Still apply decay.
+            _ => self.open_bus.apply(0xFF, 0, self.frame),
         }
     }
 
@@ -1529,15 +1530,9 @@ impl Ppu {
                 low &= 0x30;
             }
 
-            // Update the PPU-side open bus using the same mask as Mesen2:
-            // only the upper 2 bits participate in the open-bus mix, while
-            // the lower 6 bits are driven directly by the palette entry.
-            let _ = self.open_bus.apply(0xC0, low, self.frame);
-
-            // Return value keeps the palette's original high 2 bits and the
-            // masked low 6 bits. This matches common expectations for palette
-            // reads and your previous implementation.
-            (palette_value & 0xC0) | low
+            // Mesen2 / hardware: palette reads drive the low 6 bits from
+            // palette RAM, while the upper 2 bits come from the open bus.
+            self.open_bus.apply(0xC0, low, self.frame)
         } else {
             // Nametable / CHR / general VRAM area read.
             //
@@ -1854,6 +1849,43 @@ mod tests {
 
         let value = ppu.cpu_read(PpuRegister::Data.addr(), &mut pattern);
         assert_eq!(value, 0x99);
+    }
+
+    #[test]
+    fn palette_reads_mix_high_bits_from_open_bus() {
+        let mut ppu = Ppu::default();
+        let mut pattern = PatternBus::default();
+
+        // Force the PPU VRAM pointer into palette space without going through
+        // $2006 (which would overwrite open bus).
+        ppu.registers.vram.v.set_raw(0x3F00);
+        ppu.ignore_vram_read = 0;
+
+        // Palette RAM is 6-bit; store a low 6-bit value.
+        ppu.palette_ram.write(0x3F00, 0x15);
+
+        // Set open bus to a value with non-zero high bits; palette reads should
+        // return those high bits even though palette RAM does not store them.
+        ppu.open_bus.set(0xFF, 0xC0, ppu.frame);
+
+        let value = ppu.cpu_read(PpuRegister::Data.addr(), &mut pattern);
+        assert_eq!(value, 0xD5);
+    }
+
+    #[test]
+    fn open_bus_decays_on_floating_register_reads() {
+        let mut ppu = Ppu::default();
+        let mut pattern = PatternBus::default();
+
+        // Drive a 1 bit onto the open bus at an earlier frame.
+        ppu.open_bus.set(0xFF, 0x80, 1);
+
+        // Advance enough frames for the bit to decay (Mesen2-style: > 3 frames).
+        ppu.frame = 5;
+
+        // Reading a write-only register should return open bus (with decay applied).
+        let value = ppu.cpu_read(PpuRegister::Control.addr(), &mut pattern);
+        assert_eq!(value, 0x00);
     }
 
     #[test]
