@@ -126,6 +126,10 @@ pub struct Ppu {
     /// Previous dot's rendering enable state (for scroll/odd-frame logic and
     /// trace parity with Mesen's `_prevRenderingEnabled`).
     pub(crate) prev_render_enabled: bool,
+    /// Pending OAMADDR increment glitch when rendering is disabled during sprite evaluation.
+    pub(crate) oam_addr_disable_glitch_pending: bool,
+    /// OAM row corruption flags (Mesen2 `SetOamCorruptionFlags` / `ProcessOamCorruption`).
+    pub(crate) corrupt_oam_row: [bool; 32],
     /// Pending state update request from $2001/$2006/$2007/VRAM-related
     /// side effects. Mirrors Mesen's `_needStateUpdate` latch.
     pub(crate) state_update_pending: bool,
@@ -188,6 +192,8 @@ impl Ppu {
             palette: Palette::default(),
             render_enabled: false,
             prev_render_enabled: false,
+            oam_addr_disable_glitch_pending: false,
+            corrupt_oam_row: [false; 32],
             state_update_pending: false,
             framebuffer,
         }
@@ -283,6 +289,8 @@ impl Ppu {
         self.open_bus.reset();
         self.ignore_vram_read = 0;
         self.oam_copybuffer = 0;
+        self.oam_addr_disable_glitch_pending = false;
+        self.corrupt_oam_row = [false; 32];
 
         // Sprite-0 debug info is per-frame; drop it on reset.
 
@@ -499,6 +507,11 @@ impl Ppu {
         let ppu = &mut devices.ppu;
         ppu.advance_cycle();
 
+        if ppu.oam_addr_disable_glitch_pending {
+            ppu.registers.oam_addr = ppu.registers.oam_addr.wrapping_add(1);
+            ppu.oam_addr_disable_glitch_pending = false;
+        }
+
         let rendering_enabled = ppu.render_enabled;
         ppu.step_pending_vram_addr();
 
@@ -572,6 +585,16 @@ impl Ppu {
                     ppu.sprite_eval.sprite0_in_range_next = false;
                 }
                 if rendering_enabled {
+                    // Mesen2: OAMADDR bug on prerender, cycles 1..=8.
+                    // If OAMADDR >= 8 when rendering starts, the 8 bytes starting at
+                    // OAMADDR & 0xF8 are copied to the first 8 bytes of OAM.
+                    if ppu.cycle < 9 && ppu.registers.oam_addr >= 0x08 {
+                        let src_base = ppu.registers.oam_addr & 0xF8;
+                        let dst = (ppu.cycle - 1) as u8;
+                        let src = src_base.wrapping_add(dst);
+                        ppu.registers.oam[dst as usize] = ppu.registers.oam[src as usize];
+                    }
+
                     // Shift background shifters each dot.
                     let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
                     // Fetch/reload background data at tile boundaries.
@@ -591,6 +614,8 @@ impl Ppu {
                     // forces OAMADDR to 0. This also means OAMADDR is 0 after a
                     // normal rendered frame.
                     ppu.registers.oam_addr = 0;
+                    // Mesen2: sprite tile loading also performs a garbage NT fetch on dot 257.
+                    ppu.sprite_pipeline_fetch_tick(&mut pattern);
                 }
             }
 
@@ -608,6 +633,10 @@ impl Ppu {
             // Dots 321..=336: prefetch first two background tiles for scanline 0.
             (-1, 321..=336) => {
                 if rendering_enabled {
+                    if ppu.cycle == 321 {
+                        // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
+                        ppu.oam_copybuffer = ppu.secondary_oam[0];
+                    }
                     let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
                     ppu.fetch_background_data(&mut pattern);
                 }
@@ -655,6 +684,8 @@ impl Ppu {
                     ppu.copy_horizontal_scroll();
                     // NESdev/Mesen2: force OAMADDR to 0 for the sprite fetch window.
                     ppu.registers.oam_addr = 0;
+                    // Mesen2: sprite tile loading also performs a garbage NT fetch on dot 257.
+                    ppu.sprite_pipeline_fetch_tick(&mut pattern);
                 }
             }
 
@@ -668,6 +699,10 @@ impl Ppu {
             // Dots 321..=336: prefetch first two background tiles for next scanline.
             (0..=239, 321..=336) => {
                 if rendering_enabled {
+                    if ppu.cycle == 321 {
+                        // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
+                        ppu.oam_copybuffer = ppu.secondary_oam[0];
+                    }
                     // Visible scanline prefetch window: keep BG shifters advancing
                     // here as well so that the prefetched tiles for the *next*
                     // scanline are aligned with dots 0 and 8 when rendering resumes.
@@ -1205,23 +1240,22 @@ impl Ppu {
 
     /// Per-dot sprite fetch step (257..=320).
     fn fetch_sprites_for_dot(&mut self, pattern: &mut PatternBus<'_>) {
-        // First fetch dot for the window is cycle 258 (clock arm starts at 258).
-        if self.cycle == 258 {
+        if self.cycle == 257 {
             self.sprite_fetch = SpriteFetchState::default();
         }
 
-        if !(258..=320).contains(&self.cycle) {
+        if !(257..=320).contains(&self.cycle) {
             return;
         }
 
-        let i = self.sprite_fetch.i as usize;
+        let rel = self.cycle - 257;
+        let i = (rel / 8) as usize;
         if i >= 8 {
             return;
         }
 
-        // Each sprite gets 8 dots in this region.
-        // sub = 0..7 within a sprite slot.
-        let sub = self.sprite_fetch.sub;
+        // Each sprite gets 8 dots in this region; `sub` is 0..7 within a slot.
+        let sub = (rel % 8) as u8;
 
         // Mesen2 / hardware: during sprite fetch window, the PPU performs
         // "garbage" nametable and attribute reads on sub-cycles 0 and 2.
@@ -1257,44 +1291,47 @@ impl Ppu {
         }
 
         // Compute which row of the sprite to fetch for the next scanline.
-        let next_scanline = self.scanline.wrapping_add(1);
+        // Mesen2 relies on the NES sprite Y-off-by-one behavior: sprites are drawn at Y+1,
+        // so using the current scanline here produces the correct row for the upcoming scanline.
         let sprite_height: i16 = if (self.registers.control.bits() & 0x20) != 0 {
             16
         } else {
             8
         }; // PPUCTRL bit 5
-        // On hardware, the sprite Y coordinate is one less than the topmost
-        // visible scanline (Y+1). Keep fetch logic consistent with the
-        // evaluation range check by subtracting 1 here as well.
-        let mut row = next_scanline - 1 - (y as i16);
         let active_sprites = self.sprite_eval.count.min(8);
-        if (i as u8) < active_sprites {
+        let fetch_last_sprite = (i as u8) >= active_sprites || y >= 240;
+
+        let (effective_tile, row): (u8, i16) = if fetch_last_sprite {
+            // Mesen2: when there are fewer than 8 sprites, the PPU still performs
+            // dummy pattern fetches to sprite tile $FF, row 0 (used by MMC3 IRQ counters).
+            (0xFF, 0)
+        } else {
+            let mut r = (self.scanline - (y as i16)) as i16;
             debug_assert!(
-                row >= 0 && row < sprite_height,
-                "PPU sprite row out of range: scanline={} next_scanline={} sprite_y={} sprite_height={} row={}",
+                r >= 0 && r < sprite_height,
+                "PPU sprite row out of range: scanline={} sprite_y={} sprite_height={} row={}",
                 self.scanline,
-                next_scanline,
                 y,
                 sprite_height,
-                row,
+                r,
             );
-        }
 
-        // Vertical flip affects row selection.
-        let flip_v = (attr & 0x80) != 0;
-        if flip_v {
-            row = (sprite_height - 1) - row;
-        }
+            // Vertical flip affects row selection.
+            if (attr & 0x80) != 0 {
+                r = (sprite_height - 1) - r;
+            }
+            (tile, r)
+        };
 
         // Determine pattern table base and tile index for 8x8 vs 8x16.
         let (pattern_base, tile_index) = if sprite_height == 16 {
             // For 8x16, bit 0 selects table, and tile index is even.
-            let base = if (tile & 0x01) != 0 {
+            let base = if (effective_tile & 0x01) != 0 {
                 ppu_mem::PATTERN_TABLE_1
             } else {
                 ppu_mem::PATTERN_TABLE_0
             };
-            let top_tile = tile & 0xFE;
+            let top_tile = effective_tile & 0xFE;
             let tile_idx = if row < 8 {
                 top_tile
             } else {
@@ -1310,35 +1347,27 @@ impl Ppu {
                 ppu_mem::PATTERN_TABLE_0
             };
             let r = (row & 7) as u16;
-            (base, (tile, r))
+            (base, (effective_tile, r))
         };
 
         let (tile_idx, fine_y) = tile_index;
         let addr = pattern_base + (tile_idx as u16) * 16 + fine_y;
 
-        // sub 4/6 are the low/high plane fetches in a classic 8-dot slot.
+        // Mesen2: perform both pattern reads during the same sub-step (case 4),
+        // as an approximation of the 8-step internal fetch pipeline.
         if sub == 4 {
             let pattern_low = self.read_vram(
                 pattern,
                 addr,
                 crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
             );
-            self.sprite_line_next.set_pattern_low(i, pattern_low);
-        }
-        if sub == 6 {
             let pattern_high = self.read_vram(
                 pattern,
-                addr + 8,
+                addr.wrapping_add(8),
                 crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
             );
+            self.sprite_line_next.set_pattern_low(i, pattern_low);
             self.sprite_line_next.set_pattern_high(i, pattern_high);
-        }
-
-        // Advance within the 8-dot sprite slot.
-        self.sprite_fetch.sub += 1;
-        if self.sprite_fetch.sub >= 8 {
-            self.sprite_fetch.sub = 0;
-            self.sprite_fetch.i += 1;
         }
     }
 
@@ -1733,8 +1762,24 @@ impl Ppu {
 
             // Preserve the old value for prev_render_enabled, then latch the
             // new effective rendering state.
-            self.prev_render_enabled = self.render_enabled;
+            let old_render = self.render_enabled;
+            self.prev_render_enabled = old_render;
             self.render_enabled = new_render;
+
+            if old_render != new_render && self.scanline < 240 {
+                if new_render {
+                    // Rendering was just enabled: perform any pending OAM corruption.
+                    self.process_oam_corruption();
+                } else {
+                    // Rendering was just disabled: flag potential OAM corruption.
+                    self.set_oam_corruption_flags();
+
+                    // Disabling rendering during sprite evaluation triggers an OAMADDR glitch.
+                    if (65..=256).contains(&self.cycle) {
+                        self.oam_addr_disable_glitch_pending = true;
+                    }
+                }
+            }
 
             // Clear the explicit "dirty" flag; the other conditions
             // (pending_vram_delay, pending increment, ignore_vram_read) are
@@ -1744,6 +1789,48 @@ impl Ppu {
             // No explicit state change requested; just propagate the previous
             // latched state into `prev_render_enabled` for this dot.
             self.prev_render_enabled = self.render_enabled;
+        }
+    }
+
+    fn set_oam_corruption_flags(&mut self) {
+        // Mirrors Mesen2's `SetOamCorruptionFlags` logic.
+        //
+        // When rendering is disabled mid-screen during either:
+        // A) Secondary OAM clear (cycles 0..63)
+        // B) Sprite tile fetching (cycles 256..319)
+        // hardware can corrupt primary OAM; Mesen tracks that via row flags.
+        let cycle = self.cycle;
+        if cycle < 64 {
+            let idx = (cycle >> 1) as usize;
+            if idx < self.corrupt_oam_row.len() {
+                self.corrupt_oam_row[idx] = true;
+            }
+        } else if (256..320).contains(&cycle) {
+            let rel = cycle - 256;
+            let base = rel >> 3;
+            let offset = (rel & 0x07).min(3);
+            let idx = (base * 4 + offset) as usize;
+            if idx < self.corrupt_oam_row.len() {
+                self.corrupt_oam_row[idx] = true;
+            }
+        }
+    }
+
+    fn process_oam_corruption(&mut self) {
+        // Mirrors Mesen2's `ProcessOamCorruption` logic: copy the first OAM row
+        // over flagged rows.
+        let mut row0 = [0u8; 8];
+        row0.copy_from_slice(&self.registers.oam[0..8]);
+
+        for (row, flagged) in self.corrupt_oam_row.iter_mut().enumerate() {
+            if *flagged {
+                if row > 0 {
+                    let start = row * 8;
+                    let end = start + 8;
+                    self.registers.oam[start..end].copy_from_slice(&row0);
+                }
+                *flagged = false;
+            }
         }
     }
 }
