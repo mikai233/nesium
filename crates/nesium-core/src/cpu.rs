@@ -83,16 +83,16 @@ fn cpu_opcode_log_write(cycle: u64, pc: u16, opcode: u8, addr_val: u8) {
             .map(|f| Mutex::new(BufWriter::with_capacity(256 * 1024, f)))
     });
 
-    if let Some(writer) = log {
-        if let Ok(mut w) = writer.lock() {
-            // Keep the same format as the C++ logger: "cycle=<u64> opcode=<02X>"
-            let _ = writeln!(
-                w,
-                "cycle={} pc={:04X} opcode={:02X} 0200={:02X}",
-                cycle, pc, opcode, addr_val
-            )
-            .unwrap();
-        }
+    if let Some(writer) = log
+        && let Ok(mut w) = writer.lock()
+    {
+        // Keep the same format as the C++ logger: "cycle=<u64> opcode=<02X>"
+        writeln!(
+            w,
+            "cycle={} pc={:04X} opcode={:02X} 0200={:02X}",
+            cycle, pc, opcode, addr_val
+        )
+        .unwrap();
     }
 }
 
@@ -553,10 +553,11 @@ impl Cpu {
         }
 
         // Start OAM DMA only at instruction boundary (before opcode fetch), mirroring Mesen.
-        if self.opcode_in_flight.is_none() && !self.dma.oam_active {
-            if let Some(page) = bus.take_oam_dma() {
-                self.dma.request_oam(page);
-            }
+        if self.opcode_in_flight.is_none()
+            && !self.dma.oam_active
+            && let Some(page) = bus.take_oam_dma()
+        {
+            self.dma.request_oam(page);
         }
 
         // Fast exit if DMA isn't active.
@@ -696,7 +697,7 @@ impl Cpu {
                     if (self.dma.oam_cycle_counter & 1) == 0 {
                         // Derive the low byte of the OAM DMA read address from the DMA cycle counter.
                         // Even counter values are the read phase. Completed reads so far = (counter + 1) / 2.
-                        let sprite_read_addr: u8 = ((self.dma.oam_cycle_counter + 1) / 2) as u8;
+                        let sprite_read_addr: u8 = self.dma.oam_cycle_counter.div_ceil(2) as u8;
                         let src_addr =
                             ((self.dma.oam_page as u16) << 8) | (sprite_read_addr as u16);
 

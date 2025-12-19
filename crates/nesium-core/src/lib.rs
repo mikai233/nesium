@@ -78,6 +78,39 @@ pub struct Nes {
 /// Internal mixer output sample rate (matches Mesen2's fixed 96 kHz path).
 const INTERNAL_MIXER_SAMPLE_RATE: u32 = 96_000;
 
+macro_rules! nes_cpu_bus {
+    ($nes:ident, mixer: $with_mixer:expr, serial: $with_serial:expr) => {{
+        let __with_mixer = $with_mixer;
+        let __with_serial = $with_serial;
+        let __serial_log = if __with_serial {
+            Some(&mut $nes.serial_log)
+        } else {
+            None
+        };
+        let __mixer = if __with_mixer {
+            Some(&mut $nes.mixer)
+        } else {
+            None
+        };
+        CpuBus {
+            ram: &mut $nes.ram,
+            ppu: &mut $nes.ppu,
+            apu: &mut $nes.apu,
+            cartridge: $nes.cartridge.as_mut(),
+            controllers: &mut $nes.controllers,
+            serial_log: __serial_log,
+            open_bus: &mut $nes.open_bus,
+            mixer: __mixer,
+            cycles: &mut $nes.cycles,
+            master_clock: &mut $nes.master_clock,
+            ppu_offset: $nes.ppu_offset,
+            clock_start_count: $nes.clock_start_count,
+            clock_end_count: $nes.clock_end_count,
+            pending_dma: &mut $nes.pending_dma,
+        }
+    }};
+}
+
 impl Nes {
     /// Constructs a powered-on NES instance with cleared RAM and default palette.
     pub fn new(format: ColorFormat) -> Self {
@@ -207,27 +240,10 @@ impl Nes {
         // Wire up a temporary CPU bus and run the CPU reset sequence, passing
         // down the reset kind so the CPU can distinguish power-on vs soft
         // reset semantics (register init vs preserving A/X/Y and PS).
-        let mut bus = CpuBus::new(
-            &mut self.ram,
-            &mut self.ppu,
-            &mut self.apu,
-            self.cartridge.as_mut(),
-            &mut self.controllers,
-            Some(&mut self.serial_log),
-            &mut self.pending_dma,
-            &mut self.open_bus,
-            // On power-on we allow the CPU reset sequence to feed the mixer; for
-            // warm resets this is omitted, matching the previous behaviour.
-            if matches!(kind, ResetKind::PowerOn) {
-                Some(&mut self.mixer)
-            } else {
-                None
-            },
-            &mut self.cycles,
-            &mut self.master_clock,
-            self.ppu_offset,
-            self.clock_start_count,
-            self.clock_end_count,
+        let mut bus = nes_cpu_bus!(
+            self,
+            mixer: matches!(kind, ResetKind::PowerOn),
+            serial: true
         );
         let mut ctx = Context::Some {
             interceptor: &mut self.interceptor,
@@ -241,26 +257,7 @@ impl Nes {
         let frame_before = self.ppu.frame_count();
         let apu_clocked = true;
         let (cpu_cycles, expansion_samples, opcode_active) = {
-            let mut bus = CpuBus::new(
-                &mut self.ram,
-                &mut self.ppu,
-                &mut self.apu,
-                self.cartridge.as_mut(),
-                &mut self.controllers,
-                Some(&mut self.serial_log),
-                &mut self.pending_dma,
-                &mut self.open_bus,
-                if emit_audio {
-                    Some(&mut self.mixer)
-                } else {
-                    None
-                },
-                &mut self.cycles,
-                &mut self.master_clock,
-                self.ppu_offset,
-                self.clock_start_count,
-                self.clock_end_count,
-            );
+            let mut bus = nes_cpu_bus!(self, mixer: emit_audio, serial: true);
             let mut ctx = Context::Some {
                 interceptor: &mut self.interceptor,
             };
@@ -503,22 +500,7 @@ impl Nes {
 
     /// Reads a byte from the CPU address space without mutating CPU state.
     pub fn peek_cpu_byte(&mut self, addr: u16) -> u8 {
-        let mut bus = CpuBus::new(
-            &mut self.ram,
-            &mut self.ppu,
-            &mut self.apu,
-            self.cartridge.as_mut(),
-            &mut self.controllers,
-            Some(&mut self.serial_log),
-            &mut self.pending_dma,
-            &mut self.open_bus,
-            None,
-            &mut self.cycles,
-            &mut self.master_clock,
-            self.ppu_offset,
-            self.clock_start_count,
-            self.clock_end_count,
-        );
+        let mut bus = nes_cpu_bus!(self, mixer: false, serial: true);
         let mut ctx = Context::Some {
             interceptor: &mut self.interceptor,
         };
@@ -527,22 +509,7 @@ impl Nes {
 
     /// Reads a contiguous range of CPU-visible bytes into `buffer`, starting at `base`.
     pub fn peek_cpu_slice(&mut self, base: u16, buffer: &mut [u8]) {
-        let mut bus = CpuBus::new(
-            &mut self.ram,
-            &mut self.ppu,
-            &mut self.apu,
-            self.cartridge.as_mut(),
-            &mut self.controllers,
-            Some(&mut self.serial_log),
-            &mut self.pending_dma,
-            &mut self.open_bus,
-            None,
-            &mut self.cycles,
-            &mut self.master_clock,
-            self.ppu_offset,
-            self.clock_start_count,
-            self.clock_end_count,
-        );
+        let mut bus = nes_cpu_bus!(self, mixer: false, serial: true);
         let mut ctx = Context::Some {
             interceptor: &mut self.interceptor,
         };

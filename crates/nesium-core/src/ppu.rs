@@ -440,7 +440,7 @@ impl Ppu {
     /// This is the main timing entry: it performs background/sprite pipeline
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
-    pub fn step(bus: &mut CpuBus, cpu: &mut Cpu, ctx: &mut Context) {
+    pub fn step(bus: &mut CpuBus, _cpu: &mut Cpu, _ctx: &mut Context) {
         // let cpu_cycle = bus.cycles();
         // if cpu_cycle > 16_000_000 && cpu_cycle < 20_000_000 {
         //     let cpu_master_clock = bus.master_clock();
@@ -1898,22 +1898,22 @@ mod tests {
         let mut cpu_bus_cycle = 0;
         let mut master_clock = 0;
 
-        let mut bus = CpuBus::new(
-            &mut ram,
-            &mut ppu,
-            &mut apu,
-            None,
-            &mut controllers,
-            Some(&mut serial_log),
-            &mut pending_dma,
-            &mut open_bus,
-            None,
-            &mut cpu_bus_cycle,
-            &mut master_clock,
-            1,
-            6,
-            6,
-        );
+        let mut bus = CpuBus {
+            ram: &mut ram,
+            ppu: &mut ppu,
+            apu: &mut apu,
+            cartridge: None,
+            controllers: &mut controllers,
+            serial_log: Some(&mut serial_log),
+            open_bus: &mut open_bus,
+            mixer: None,
+            cycles: &mut cpu_bus_cycle,
+            master_clock: &mut master_clock,
+            ppu_offset: 1,
+            clock_start_count: 6,
+            clock_end_count: 6,
+            pending_dma: &mut pending_dma,
+        };
 
         // Run until scanline 241, cycle 1 (accounting for prerender line).
         let target_cycles = (242i32 * CYCLES_PER_SCANLINE as i32 + 2) as usize;

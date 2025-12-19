@@ -475,22 +475,22 @@ mod tests {
         let mut cpu_cycles = 0u64;
         let mut master_clock = 0u64;
 
-        let mut bus = CpuBus::new(
-            &mut ram,
-            &mut ppu,
-            &mut apu,
-            None,
-            &mut controllers,
-            None,
-            &mut pending_dma,
-            &mut open_bus,
-            None,
-            &mut cpu_cycles,
-            &mut master_clock,
-            0,
-            0,
-            0,
-        );
+        let mut bus = CpuBus {
+            ram: &mut ram,
+            ppu: &mut ppu,
+            apu: &mut apu,
+            cartridge: None,
+            controllers: &mut controllers,
+            serial_log: None,
+            open_bus: &mut open_bus,
+            mixer: None,
+            cycles: &mut cpu_cycles,
+            master_clock: &mut master_clock,
+            ppu_offset: 0,
+            clock_start_count: 0,
+            clock_end_count: 0,
+            pending_dma: &mut pending_dma,
+        };
         let mut cpu = Cpu::new();
         let mut ctx = Context::None;
 

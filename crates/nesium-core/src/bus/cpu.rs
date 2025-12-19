@@ -36,41 +36,6 @@ pub struct CpuBus<'a> {
 }
 
 impl<'a> CpuBus<'a> {
-    /// Creates a new bus by borrowing the attached hardware.
-    pub(crate) fn new(
-        ram: &'a mut cpu_ram::Ram,
-        ppu: &'a mut Ppu,
-        apu: &'a mut Apu,
-        cartridge: Option<&'a mut Cartridge>,
-        controllers: &'a mut ControllerPorts,
-        serial_log: Option<&'a mut SerialLogger>,
-        pending_dma: &'a mut PendingDma,
-        open_bus: &'a mut OpenBus,
-        mixer: Option<&'a mut NesSoundMixer>,
-        cycles: &'a mut u64,
-        master_clock: &'a mut u64,
-        ppu_offset: u8,
-        clock_start_count: u8,
-        clock_end_count: u8,
-    ) -> Self {
-        Self {
-            ram,
-            ppu,
-            apu,
-            cartridge,
-            controllers,
-            serial_log,
-            open_bus,
-            mixer,
-            cycles,
-            master_clock,
-            ppu_offset,
-            clock_start_count,
-            clock_end_count,
-            pending_dma,
-        }
-    }
-
     /// Returns `true` when a cartridge is loaded.
     #[inline]
     pub fn has_cartridge(&self) -> bool {
@@ -498,22 +463,22 @@ mod tests {
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
         let mut master_clock = 0;
-        let mut bus = CpuBus::new(
-            &mut ram,
-            &mut ppu,
-            &mut apu,
-            None,
-            &mut controllers,
-            None,
-            &mut pending_dma,
-            &mut open_bus,
-            None,
-            &mut cpu_bus_cycle,
-            &mut master_clock,
-            1,
-            6,
-            6,
-        );
+        let mut bus = CpuBus {
+            ram: &mut ram,
+            ppu: &mut ppu,
+            apu: &mut apu,
+            cartridge: None,
+            controllers: &mut controllers,
+            serial_log: None,
+            open_bus: &mut open_bus,
+            mixer: None,
+            cycles: &mut cpu_bus_cycle,
+            master_clock: &mut master_clock,
+            ppu_offset: 1,
+            clock_start_count: 6,
+            clock_end_count: 6,
+            pending_dma: &mut pending_dma,
+        };
         bus.mem_write(
             cpu_mem::INTERNAL_RAM_START + 0x0002,
             0xDE,
@@ -545,22 +510,22 @@ mod tests {
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
         let mut master_clock = 0;
-        let mut bus = CpuBus::new(
-            &mut ram,
-            &mut ppu,
-            &mut apu,
-            Some(&mut cartridge),
-            &mut controllers,
-            None,
-            &mut pending_dma,
-            &mut open_bus,
-            None,
-            &mut cpu_bus_cycle,
-            &mut master_clock,
-            1,
-            6,
-            6,
-        );
+        let mut bus = CpuBus {
+            ram: &mut ram,
+            ppu: &mut ppu,
+            apu: &mut apu,
+            cartridge: Some(&mut cartridge),
+            controllers: &mut controllers,
+            serial_log: None,
+            open_bus: &mut open_bus,
+            mixer: None,
+            cycles: &mut cpu_bus_cycle,
+            master_clock: &mut master_clock,
+            ppu_offset: 1,
+            clock_start_count: 6,
+            clock_end_count: 6,
+            pending_dma: &mut pending_dma,
+        };
         let first_bank = bus.mem_read(cpu_mem::PRG_ROM_START, &mut cpu, &mut Context::None);
         let mirrored_bank = bus.mem_read(
             cpu_mem::PRG_ROM_START + 0x4000,
@@ -582,22 +547,22 @@ mod tests {
         let mut open_bus = OpenBus::new();
         let mut cpu_bus_cycle = 0;
         let mut master_clock = 0;
-        let mut bus = CpuBus::new(
-            &mut ram,
-            &mut ppu,
-            &mut apu,
-            Some(&mut cartridge),
-            &mut controllers,
-            None,
-            &mut pending_dma,
-            &mut open_bus,
-            None,
-            &mut cpu_bus_cycle,
-            &mut master_clock,
-            1,
-            6,
-            6,
-        );
+        let mut bus = CpuBus {
+            ram: &mut ram,
+            ppu: &mut ppu,
+            apu: &mut apu,
+            cartridge: Some(&mut cartridge),
+            controllers: &mut controllers,
+            serial_log: None,
+            open_bus: &mut open_bus,
+            mixer: None,
+            cycles: &mut cpu_bus_cycle,
+            master_clock: &mut master_clock,
+            ppu_offset: 1,
+            clock_start_count: 6,
+            clock_end_count: 6,
+            pending_dma: &mut pending_dma,
+        };
         bus.mem_write(cpu_mem::PRG_RAM_START, 0x42, &mut cpu, &mut Context::None);
         assert_eq!(
             bus.mem_read(cpu_mem::PRG_RAM_START, &mut cpu, &mut Context::None),
