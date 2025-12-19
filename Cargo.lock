@@ -2835,7 +2835,7 @@ dependencies = [
  "nesium-audio",
  "nesium-core",
  "nesium-icon",
- "png 0.17.16",
+ "png 0.18.0",
  "rfd",
  "tracing",
  "tracing-appender",

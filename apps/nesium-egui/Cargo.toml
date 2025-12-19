@@ -32,4 +32,4 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 nesium-icon = { path = "../../crates/nesium-icon" }
 ico = "0.5"
 winres = "0.1"
-png = "0.17"
+png = "0.18"
