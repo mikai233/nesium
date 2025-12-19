@@ -124,7 +124,7 @@ impl Mapper8 {
             irq_counter: 0,
             irq_enabled: false,
             irq_pending: false,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 

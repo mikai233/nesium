@@ -54,7 +54,7 @@ impl Mapper34 {
             chr,
             prg_bank_count_32k,
             prg_bank: 0,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 

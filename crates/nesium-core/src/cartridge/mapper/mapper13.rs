@@ -75,7 +75,7 @@ impl Mapper13 {
             prg_ram,
             chr,
             chr_bank: 0,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 

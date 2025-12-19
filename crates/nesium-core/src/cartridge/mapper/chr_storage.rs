@@ -136,10 +136,10 @@ impl ChrStorage {
 ///   and battery‑backed CHR sizes, if any.
 /// - When neither ROM nor RAM is present, [`ChrStorage::None`] is used.
 pub fn select_chr_storage(header: &Header, chr_rom: ChrRom) -> ChrStorage {
-    if header.chr_rom_size > 0 {
+    if header.chr_rom_size() > 0 {
         ChrStorage::Rom(chr_rom)
     } else {
-        let chr_ram_size = header.chr_ram_size.max(header.chr_nvram_size);
+        let chr_ram_size = header.chr_ram_size().max(header.chr_nvram_size());
         if chr_ram_size == 0 {
             ChrStorage::None
         } else {

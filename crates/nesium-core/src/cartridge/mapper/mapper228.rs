@@ -98,7 +98,7 @@ impl Mapper228 {
             prg_bank_c000: prg_bank_count_16k.saturating_sub(1),
             chr_bank_8k: 0,
             mram: Mapper228Mram::new(),
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 

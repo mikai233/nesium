@@ -141,7 +141,7 @@ impl Mapper6 {
             irq_enabled: false,
             irq_pending: false,
             ffe_alt_mode: true,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 

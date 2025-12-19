@@ -47,7 +47,7 @@ use crate::cartridge::{ChrRom, Mapper, PrgRom, TrainerBytes, header::Header};
 ///         trainer: TrainerBytes<'_>,
 ///     ) -> Option<Box<dyn Mapper>> {
 ///         let _ = (prg_rom, chr_rom, trainer);
-///         (header.mapper == 1234).then(|| Box::new(CustomMapper) as Box<dyn Mapper>)
+///         (header.mapper() == 1234).then(|| Box::new(CustomMapper) as Box<dyn Mapper>)
 ///     }
 /// }
 ///

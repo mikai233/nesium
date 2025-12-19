@@ -441,32 +441,39 @@ impl<'a> CpuBus<'a> {
 mod tests {
     use super::*;
     use crate::{
-        cartridge::{
-            header::{Header, Mirroring, RomFormat, TvSystem},
-            mapper::mapper0::Mapper0,
-        },
+        cartridge::{header::Header, mapper::mapper0::Mapper0},
         context::Context,
         cpu::Cpu,
     };
 
     fn test_header(prg_rom_size: usize, prg_ram_size: usize) -> Header {
-        Header {
-            format: RomFormat::INes,
-            mapper: 0,
-            submapper: 0,
-            mirroring: Mirroring::Horizontal,
-            battery_backed_ram: false,
-            trainer_present: false,
-            prg_rom_size,
-            chr_rom_size: 0,
-            prg_ram_size,
-            prg_nvram_size: 0,
-            chr_ram_size: 0,
-            chr_nvram_size: 0,
-            vs_unisystem: false,
-            playchoice_10: false,
-            tv_system: TvSystem::Ntsc,
-        }
+        let prg_rom_units = (prg_rom_size / (16 * 1024)) as u8;
+        let prg_ram_units = if prg_ram_size == 0 {
+            0
+        } else {
+            (prg_ram_size / (8 * 1024)) as u8
+        };
+
+        let header_bytes = [
+            b'N',
+            b'E',
+            b'S',
+            0x1A,
+            prg_rom_units,
+            0,
+            0,
+            0,
+            prg_ram_units,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+
+        Header::parse(&header_bytes).expect("header parses")
     }
 
     fn cartridge_with_pattern(prg_rom_size: usize, prg_ram_size: usize) -> Cartridge {
@@ -475,7 +482,7 @@ mod tests {
             .map(|value| (value & 0xFF) as u8)
             .collect::<Vec<_>>()
             .into();
-        let chr_rom = vec![0; header.chr_rom_size].into();
+        let chr_rom = vec![0; header.chr_rom_size()].into();
         let mapper = Mapper0::new(header, prg_rom, chr_rom, None);
         Cartridge::new(header, Box::new(mapper))
     }

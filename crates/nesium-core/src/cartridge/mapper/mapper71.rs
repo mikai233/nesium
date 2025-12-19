@@ -60,7 +60,7 @@ impl Mapper71 {
             chr,
             prg_bank_count_16k,
             prg_bank: 0,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 

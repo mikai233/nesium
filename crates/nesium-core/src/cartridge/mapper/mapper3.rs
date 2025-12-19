@@ -48,7 +48,7 @@ impl Mapper3 {
             chr_ram: allocate_chr_ram(&header),
             chr_bank: 0,
             chr_bank_count,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 
@@ -208,7 +208,7 @@ impl Mapper for Mapper3 {
 }
 
 fn allocate_chr_ram(header: &Header) -> Box<[u8]> {
-    let size = header.chr_ram_size.max(header.chr_nvram_size);
+    let size = header.chr_ram_size().max(header.chr_nvram_size());
     if size == 0 {
         Vec::new().into_boxed_slice()
     } else {
@@ -219,26 +219,36 @@ fn allocate_chr_ram(header: &Header) -> Box<[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cartridge::header::{Header, Mirroring, RomFormat, TvSystem};
+    use crate::cartridge::header::Header;
 
     fn header(prg_rom_size: usize, chr_rom_size: usize, chr_ram_size: usize) -> Header {
-        Header {
-            format: RomFormat::INes,
-            mapper: 3,
-            submapper: 0,
-            mirroring: Mirroring::Horizontal,
-            battery_backed_ram: false,
-            trainer_present: false,
-            prg_rom_size,
-            chr_rom_size,
-            prg_ram_size: 8 * 1024,
-            prg_nvram_size: 0,
-            chr_ram_size,
-            chr_nvram_size: 0,
-            vs_unisystem: false,
-            playchoice_10: false,
-            tv_system: TvSystem::Ntsc,
-        }
+        let _ = chr_ram_size; // iNES 1.0 does not encode CHR RAM size beyond "present/absent".
+
+        let prg_rom_units = (prg_rom_size / (16 * 1024)) as u8;
+        let chr_rom_units = (chr_rom_size / (8 * 1024)) as u8;
+
+        let flags6 = 0x30; // mapper 3 + horizontal mirroring
+        let prg_ram_units = 1; // 8 KiB
+        let header_bytes = [
+            b'N',
+            b'E',
+            b'S',
+            0x1A,
+            prg_rom_units,
+            chr_rom_units,
+            flags6,
+            0,
+            prg_ram_units,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+
+        Header::parse(&header_bytes).expect("header parses")
     }
 
     fn rom_cart(prg_banks: usize, chr_banks: usize) -> Mapper3 {

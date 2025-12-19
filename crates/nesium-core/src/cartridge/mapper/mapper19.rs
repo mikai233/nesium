@@ -352,7 +352,7 @@ impl Mapper19 {
         // Submapper 2 corresponds to boards without expansion sound; other
         // submappers include the N163 audio generator. Treat unknown/legacy
         // values as having audio to remain compatible with older dumps.
-        let audio = if header.submapper == 2 {
+        let audio = if header.submapper() == 2 {
             None
         } else {
             Some(Namco163AudioState::new())
@@ -370,7 +370,7 @@ impl Mapper19 {
             audio,
             irq_counter: 0,
             irq_pending: false,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 

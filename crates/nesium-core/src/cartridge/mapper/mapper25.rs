@@ -137,12 +137,12 @@ impl Mapper25 {
         let chr = select_chr_storage(&header, chr_rom);
         let prg_bank_count_8k = (prg_rom.len() / PRG_BANK_SIZE_8K).max(1);
 
-        let variant = match header.submapper {
+        let variant = match header.submapper() {
             3 => Variant::Vrc2c,
             2 => Variant::Vrc4d,
             _ => Variant::Vrc4b,
         };
-        let use_heuristics = header.submapper == 0;
+        let use_heuristics = header.submapper() == 0;
 
         Self {
             prg_rom,
@@ -154,8 +154,8 @@ impl Mapper25 {
             prg_mode_swap: false,
             chr_low_regs: Mapper25ChrLowRegs::new(),
             chr_high_regs: Mapper25ChrHighRegs::new(),
-            mirroring: header.mirroring,
-            base_mirroring: header.mirroring,
+            mirroring: header.mirroring(),
+            base_mirroring: header.mirroring(),
             irq_reload: 0,
             irq_counter: 0,
             irq_prescaler: 0,

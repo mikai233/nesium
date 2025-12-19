@@ -170,7 +170,7 @@ impl Mapper85 {
             prg_banks: Mapper85PrgBanks::new(),
             chr_banks: Mapper85ChrBanks::new(),
             control: 0,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
             irq_reload: 0,
             irq_counter: 0,
             irq_prescaler: 0,

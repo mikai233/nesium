@@ -195,17 +195,17 @@ fn build_cartridge_from_sections<'a>(
     // 1) Give the external provider first chance when it explicitly
     //    declares support for this mapper ID.
     if let Some(provider) = provider
-        && provider.supports_mapper(header.mapper)
+        && provider.supports_mapper(header.mapper())
     {
         let mut mapper = provider
             .get_mapper(header, prg_rom, chr_rom, trainer)
-            .ok_or(Error::UnsupportedMapper(header.mapper))?;
+            .ok_or(Error::UnsupportedMapper(header.mapper()))?;
         mapper.reset(ResetKind::PowerOn);
         return Ok(Cartridge::new(header, mapper));
     }
 
     // 2) Fall back to the built-in mapper registry for known IDs.
-    let mut mapper: Box<dyn Mapper> = match header.mapper {
+    let mut mapper: Box<dyn Mapper> = match header.mapper() {
         0 => Box::new(Mapper0::new(header, prg_rom, chr_rom, trainer)),
         1 => Box::new(Mapper1::new(header, prg_rom, chr_rom, trainer)),
         2 => Box::new(Mapper2::new(header, prg_rom, chr_rom, trainer)),
@@ -295,7 +295,7 @@ fn slice_trainer<'a>(
     cursor: &mut usize,
     header: &Header,
 ) -> Result<TrainerBytes<'a>, Error> {
-    if !header.trainer_present {
+    if !header.trainer_present() {
         return Ok(None);
     }
 
@@ -349,8 +349,8 @@ fn slice_sections_static(
     let mut cursor = NES_HEADER_LEN;
     let trainer = slice_trainer(bytes, &mut cursor, header)?;
 
-    let prg_slice = slice_section(bytes, &mut cursor, header.prg_rom_size, "PRG ROM")?;
-    let chr_slice = slice_section(bytes, &mut cursor, header.chr_rom_size, "CHR ROM")?;
+    let prg_slice = slice_section(bytes, &mut cursor, header.prg_rom_size(), "PRG ROM")?;
+    let chr_slice = slice_section(bytes, &mut cursor, header.chr_rom_size(), "CHR ROM")?;
 
     Ok((
         trainer,
@@ -366,8 +366,8 @@ fn slice_sections<'a>(
     let mut cursor = NES_HEADER_LEN;
     let trainer = slice_trainer(bytes, &mut cursor, header)?;
 
-    let prg_rom = slice_section(bytes, &mut cursor, header.prg_rom_size, "PRG ROM")?;
-    let chr_rom = slice_section(bytes, &mut cursor, header.chr_rom_size, "CHR ROM")?;
+    let prg_rom = slice_section(bytes, &mut cursor, header.prg_rom_size(), "PRG ROM")?;
+    let chr_rom = slice_section(bytes, &mut cursor, header.chr_rom_size(), "CHR ROM")?;
 
     Ok((
         trainer,
@@ -395,8 +395,8 @@ mod tests {
 
         let cartridge = load_cartridge(rom).expect("parse cartridge");
 
-        assert_eq!(cartridge.header().prg_rom_size, 16 * 1024);
-        assert_eq!(cartridge.header().chr_rom_size, 8 * 1024);
+        assert_eq!(cartridge.header().prg_rom_size(), 16 * 1024);
+        assert_eq!(cartridge.header().chr_rom_size(), 8 * 1024);
         assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), Some(0xAA));
         assert_eq!(cartridge.ppu_read(0x0000), Some(0x55));
     }
@@ -409,8 +409,8 @@ mod tests {
 
         let cartridge = load_cartridge(rom).expect("parse cartridge");
 
-        assert!(cartridge.header().trainer_present);
-        assert_eq!(cartridge.header().prg_rom_size, 16 * 1024);
+        assert!(cartridge.header().trainer_present());
+        assert_eq!(cartridge.header().prg_rom_size(), 16 * 1024);
         assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), Some(0xAA));
     }
 

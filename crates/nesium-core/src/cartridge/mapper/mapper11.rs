@@ -79,7 +79,7 @@ impl Mapper11 {
             chr,
             prg_bank: 0,
             chr_bank: 0,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 

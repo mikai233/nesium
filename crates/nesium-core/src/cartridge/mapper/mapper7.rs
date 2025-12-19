@@ -41,7 +41,7 @@ impl Mapper7 {
             prg_ram,
             chr: select_chr_storage(&header, chr_rom),
             selected_bank: 0,
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
             bank_count,
         }
     }
@@ -174,26 +174,33 @@ impl Mapper for Mapper7 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cartridge::header::{Header, RomFormat, TvSystem};
+    use crate::cartridge::header::Header;
 
     fn header(prg_rom_size: usize) -> Header {
-        Header {
-            format: RomFormat::INes,
-            mapper: 7,
-            submapper: 0,
-            mirroring: Mirroring::Horizontal,
-            battery_backed_ram: false,
-            trainer_present: false,
-            prg_rom_size,
-            chr_rom_size: 0,
-            prg_ram_size: 8 * 1024,
-            prg_nvram_size: 0,
-            chr_ram_size: 8 * 1024,
-            chr_nvram_size: 0,
-            vs_unisystem: false,
-            playchoice_10: false,
-            tv_system: TvSystem::Ntsc,
-        }
+        let prg_rom_units = (prg_rom_size / (16 * 1024)) as u8;
+
+        let flags6 = 0x70; // mapper 7 + horizontal mirroring
+        let prg_ram_units = 1; // 8 KiB
+        let header_bytes = [
+            b'N',
+            b'E',
+            b'S',
+            0x1A,
+            prg_rom_units,
+            0,
+            flags6,
+            0,
+            prg_ram_units,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+
+        Header::parse(&header_bytes).expect("header parses")
     }
 
     fn cart(prg_banks: usize) -> Mapper7 {

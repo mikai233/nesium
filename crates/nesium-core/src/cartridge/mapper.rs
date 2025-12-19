@@ -323,13 +323,13 @@ pub fn mapper_downcast_mut<T: Mapper + 'static>(mapper: &mut dyn Mapper) -> Opti
 /// For NES 2.0 headers this picks the larger of volatile and battery‑backed
 /// PRG RAM sizes. Legacy iNES headers with `0` fall back to an empty slice.
 pub fn allocate_prg_ram(header: &Header) -> Box<[u8]> {
-    let mut size = header.prg_ram_size.max(header.prg_nvram_size);
+    let mut size = header.prg_ram_size().max(header.prg_nvram_size());
 
     // Some iNES 1.0 ROMs specify 0 PRG RAM, but were designed for systems
     // that provided 8 KiB by default. Mesen2 provides 8 KiB for such ROMs
     // (except for specific board types like Action 52), so we do the same
     // here.
-    if header.format == RomFormat::INes && size == 0 {
+    if header.format() == RomFormat::INes && size == 0 {
         size = 8192; // 8 KiB
     }
 

@@ -61,7 +61,7 @@ impl Mapper0 {
             prg_rom,
             prg_ram,
             chr: select_chr_storage(&header, chr_rom),
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
         }
     }
 
@@ -184,26 +184,38 @@ impl Mapper for Mapper0 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cartridge::header::{Header, Mirroring, RomFormat, TvSystem};
+    use crate::cartridge::header::Header;
 
     fn header(prg_rom_size: usize, prg_ram_size: usize, chr_rom_size: usize) -> Header {
-        Header {
-            format: RomFormat::INes,
-            mapper: 0,
-            submapper: 0,
-            mirroring: Mirroring::Horizontal,
-            battery_backed_ram: false,
-            trainer_present: false,
-            prg_rom_size,
-            chr_rom_size,
-            prg_ram_size,
-            prg_nvram_size: 0,
-            chr_ram_size: if chr_rom_size == 0 { 8 * 1024 } else { 0 },
-            chr_nvram_size: 0,
-            vs_unisystem: false,
-            playchoice_10: false,
-            tv_system: TvSystem::Ntsc,
-        }
+        let prg_rom_units = (prg_rom_size / (16 * 1024)) as u8;
+        let chr_rom_units = (chr_rom_size / (8 * 1024)) as u8;
+        let prg_ram_units = if prg_ram_size == 0 {
+            0
+        } else {
+            (prg_ram_size / (8 * 1024)) as u8
+        };
+
+        let flags6 = 0; // mapper 0 + horizontal mirroring
+        let header_bytes = [
+            b'N',
+            b'E',
+            b'S',
+            0x1A,
+            prg_rom_units,
+            chr_rom_units,
+            flags6,
+            0,
+            prg_ram_units,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+
+        Header::parse(&header_bytes).expect("header parses")
     }
 
     fn new_mapper0(prg_rom_size: usize, prg_ram_size: usize, chr_rom_size: usize) -> Mapper0 {

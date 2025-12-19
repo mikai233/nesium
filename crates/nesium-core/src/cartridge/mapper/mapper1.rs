@@ -81,7 +81,7 @@ impl Mapper1 {
     pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
 
-        let chr_rom_present = header.chr_rom_size > 0;
+        let chr_rom_present = header.chr_rom_size() > 0;
         let chr_ram = if chr_rom_present {
             Vec::new().into_boxed_slice()
         } else {
@@ -461,7 +461,7 @@ impl Mapper for Mapper1 {
 }
 
 fn allocate_chr_ram(header: &Header) -> Box<[u8]> {
-    let size = header.chr_ram_size.max(header.chr_nvram_size);
+    let size = header.chr_ram_size().max(header.chr_nvram_size());
     if size == 0 {
         Vec::new().into_boxed_slice()
     } else {
@@ -472,26 +472,34 @@ fn allocate_chr_ram(header: &Header) -> Box<[u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cartridge::header::{Header, Mirroring, RomFormat, TvSystem};
+    use crate::cartridge::header::Header;
 
-    fn header(prg_rom_size: usize, chr_rom_size: usize, chr_ram_size: usize) -> Header {
-        Header {
-            format: RomFormat::INes,
-            mapper: 1,
-            submapper: 0,
-            mirroring: Mirroring::Horizontal,
-            battery_backed_ram: false,
-            trainer_present: false,
-            prg_rom_size,
-            chr_rom_size,
-            prg_ram_size: 8 * 1024,
-            prg_nvram_size: 0,
-            chr_ram_size,
-            chr_nvram_size: 0,
-            vs_unisystem: false,
-            playchoice_10: false,
-            tv_system: TvSystem::Ntsc,
-        }
+    fn header(prg_rom_size: usize, chr_rom_size: usize) -> Header {
+        let prg_rom_units = (prg_rom_size / (16 * 1024)) as u8;
+        let chr_rom_units = (chr_rom_size / (8 * 1024)) as u8;
+
+        let flags6 = 0x10; // mapper 1 + horizontal mirroring
+        let prg_ram_units = 1; // 8 KiB
+        let header_bytes = [
+            b'N',
+            b'E',
+            b'S',
+            0x1A,
+            prg_rom_units,
+            chr_rom_units,
+            flags6,
+            0,
+            prg_ram_units,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+
+        Header::parse(&header_bytes).expect("header parses")
     }
 
     fn cart_with_prg_banks(banks_16k: usize) -> Mapper1 {
@@ -502,12 +510,7 @@ mod tests {
             prg[start..end].fill(bank as u8);
         }
 
-        let mut mapper = Mapper1::new(
-            header(prg.len(), 0, 8 * 1024),
-            prg.into(),
-            vec![].into(),
-            None,
-        );
+        let mut mapper = Mapper1::new(header(prg.len(), 0), prg.into(), vec![].into(), None);
         // Tests expect the same power-on state as a freshly loaded cartridge.
         mapper.reset(ResetKind::PowerOn);
         mapper

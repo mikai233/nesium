@@ -150,7 +150,7 @@ impl Mapper90 {
             prg_regs: Mapper90PrgRegs::new(),
             chr_low: Mapper90ChrLowRegs::new(),
             chr_high: Mapper90ChrHighRegs::new(),
-            mirroring: header.mirroring,
+            mirroring: header.mirroring(),
             irq_reload: 0,
             irq_counter: 0,
             irq_prescaler: 0,
