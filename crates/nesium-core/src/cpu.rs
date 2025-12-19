@@ -329,8 +329,6 @@ impl Cpu {
         if let Some(cart) = bus.cartridge.as_mut() {
             cart.cpu_clock(*bus.cycles);
         }
-        bus.open_bus.step();
-
         // Run one APU CPU-cycle tick; DMA requests are queued on the bus.
         Apu::step(bus, self, ctx);
     }

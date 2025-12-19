@@ -81,30 +81,12 @@ impl<'a> CpuBus<'a> {
         self.read_cartridge(addr).unwrap_or(0)
     }
 
-    /// Tick the PPU once, wiring CHR accesses through the currently inserted cartridge.
-    #[inline]
-    pub fn step_ppu(&mut self, cpu: &mut Cpu, ctx: &mut Context) {
-        Ppu::step(self, cpu, ctx);
-    }
-
     /// Advances master clock and runs the PPU to catch up.
     #[inline]
     pub(crate) fn bump_master_clock(&mut self, delta: u8, cpu: &mut Cpu, ctx: &mut Context) {
         *self.master_clock = self.master_clock.wrapping_add(delta as u64);
         let ppu_target = self.master_clock.saturating_sub(self.ppu_offset as u64);
         Ppu::run_until(self, ppu_target, cpu, ctx);
-    }
-
-    /// Returns a read-only view of CPU RAM.
-    #[inline]
-    pub fn ram(&self) -> &[u8] {
-        self.ram.as_slice()
-    }
-
-    /// Returns a mutable view of CPU RAM.
-    #[inline]
-    pub fn ram_mut(&mut self) -> &mut [u8] {
-        self.ram.as_mut_slice()
     }
 
     /// PPU-facing mapper read for pattern table space.
@@ -203,8 +185,7 @@ impl<'a> CpuBus<'a> {
     }
 
     pub fn peek(&mut self, addr: u16, _cpu: &mut Cpu, _context: &mut Context) -> u8 {
-        let mut driven = true;
-        let value = match addr {
+        match addr {
             cpu_mem::INTERNAL_RAM_START..=cpu_mem::INTERNAL_RAM_MIRROR_END => {
                 self.read_internal_ram(addr)
             }
@@ -212,44 +193,23 @@ impl<'a> CpuBus<'a> {
                 let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
                 self.ppu.cpu_read(addr, &mut pattern)
             }
-            cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
-                driven = false;
-                self.open_bus.sample()
-            }
-            ppu_mem::OAM_DMA => {
-                driven = false;
-                self.open_bus.sample()
-            }
+            cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => OpenBus::peek(addr),
+            ppu_mem::OAM_DMA => OpenBus::peek(addr),
             cpu_mem::APU_STATUS => {
-                driven = false;
                 let internal = self.open_bus.internal_sample();
                 let status = self.apu.cpu_read(addr);
-                let value = status | (internal & 0x20);
-                self.open_bus.set_internal_only(value);
-                value
+                status | (internal & 0x20)
             }
             cpu_mem::CONTROLLER_PORT_1 => self.controllers[0].read(),
             cpu_mem::CONTROLLER_PORT_2 => self.controllers[1].read(),
-            cpu_mem::TEST_MODE_BASE..=cpu_mem::TEST_MODE_END => {
-                driven = false;
-                self.open_bus.sample()
-            }
+            cpu_mem::TEST_MODE_BASE..=cpu_mem::TEST_MODE_END => OpenBus::peek(addr),
             cpu_mem::CARTRIDGE_SPACE_BASE..=cpu_mem::CPU_ADDR_END => {
                 match self.read_cartridge(addr) {
                     Some(value) => value,
-                    None => {
-                        driven = false;
-                        self.open_bus.sample()
-                    }
+                    None => OpenBus::peek(addr),
                 }
             }
-        };
-
-        if driven {
-            self.open_bus.latch(value);
         }
-
-        value
     }
 
     pub fn read(&mut self, addr: u16, _cpu: &mut Cpu, _ctx: &mut Context) -> u8 {

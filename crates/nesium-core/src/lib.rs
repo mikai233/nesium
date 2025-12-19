@@ -60,7 +60,7 @@ pub struct Nes {
     clock_end_count: u8,
     serial_log: controller::SerialLogger,
     pending_dma: PendingDma,
-    /// CPU data-bus open-bus latch (mirrors Mesen2's decay model).
+    /// CPU data-bus open-bus latch (external/internal, Mesen2-style).
     open_bus: OpenBus,
     /// CPU bus access counter (fed into timing-sensitive mappers).
     cycles: u64,
