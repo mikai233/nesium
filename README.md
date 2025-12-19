@@ -91,6 +91,7 @@ Legend:
 | `oam_read_suite`            | OAM read behaviour                           | Yes                         |
 | `oam_stress_suite`          | OAM stress / overflow conditions             | Yes                         |
 | `ppu_open_bus_suite`        | PPU open-bus behaviour                       | Yes                         |
+| `ppu_read_buffer_suite`     | PPU read buffer behaviour                    | Yes                         |
 | `ppu_vbl_nmi_suite`         | PPU VBL/NMI timing                           | Yes                         |
 | `spritecans_2011_suite`     | Visual diversity / sprite stress             | No                          |
 | `stomper_suite`             | Visual diversity / timing                    | No                          |
@@ -135,7 +136,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `nrom368_suite`                      | NROM-368 mapping tests                       | No                          |
 | `other_suite`                        | Misc demos/tests bundled with nes-test-roms  | No                          |
 | `pal_apu_tests_suite`                | PAL APU behaviour                            | Yes                         |
-| `ppu_read_buffer_suite`              | PPU read buffer behaviour                    | Yes                         |
 | `read_joy3_suite`                    | Controller read timing                       | Yes                         |
 | `scanline_suite`                     | Scanline timing                              | Yes                         |
 | `scanline_a1_suite`                  | Alternate scanline tests                     | Yes                         |

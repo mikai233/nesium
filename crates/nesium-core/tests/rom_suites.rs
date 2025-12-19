@@ -642,7 +642,6 @@ fn ppu_open_bus_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn ppu_read_buffer_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     {
