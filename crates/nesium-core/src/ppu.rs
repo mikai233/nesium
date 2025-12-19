@@ -22,9 +22,6 @@
 //!   latch (with decay) so untouched register reads see the last driven value.
 //! - OAM reads during rendering: hardware doesn’t expose live primary OAM then;
 //!   we return a constant `0xFF` to approximate the internal bus noise.
-//! - Sprite overflow is still an approximation; the hardware bug relies on
-//!   suppressed secondary-OAM writes in a specific pattern (see TODO in
-//!   `SpriteEvalPhase::OverflowScan`).
 //! - Palette RAM has mirroring quirks ($3F10 mirrors $3F00, etc.). Those rules
 //!   are handled in `palette::PaletteIndex::mirrored_addr` and `PaletteRam`.
 
@@ -44,7 +41,7 @@ mod sprite_state;
 use self::{
     background_pipeline::BgPipeline,
     sprite_pipeline::SpritePipeline,
-    sprite_state::{SpriteEvalPhase, SpriteEvalState, SpriteFetchState, SpriteLineBuffers},
+    sprite_state::{SpriteEvalState, SpriteFetchState, SpriteLineBuffers},
 };
 
 use core::fmt;
@@ -529,12 +526,7 @@ impl Ppu {
 
         // Load sprite shifters for the new scanline before rendering begins.
         if ppu.cycle == 1 && (0..=239).contains(&ppu.scanline) {
-            // Derive the number of sprites for this scanline from how many
-            // bytes were actually copied into secondary OAM, mirroring
-            // Mesen2's `(_secondaryOamAddr + 3) >> 2` formula so partially
-            // copied sprites are still counted.
-            let bytes_copied = ppu.sprite_eval.sec_idx;
-            let sprite_count = (bytes_copied.saturating_add(3) >> 2).min(8);
+            let sprite_count = ppu.sprite_eval.count.min(8);
 
             // Take slices once so we can both log and pass them to the pipeline.
             let attrs = ppu.sprite_line_next.attr_slice();
@@ -574,14 +566,16 @@ impl Ppu {
                     ppu.registers
                         .status
                         .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+                    // Mesen2: sprite evaluation does not run on the pre-render line,
+                    // so ensure scanline 0 starts with 0 active sprites.
+                    ppu.sprite_eval.count = 0;
+                    ppu.sprite_eval.sprite0_in_range_next = false;
                 }
                 if rendering_enabled {
                     // Shift background shifters each dot.
                     let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
                     // Fetch/reload background data at tile boundaries.
                     ppu.fetch_background_data(&mut pattern);
-                    // Sprite evaluation for scanline 0 happens on prerender as well.
-                    ppu.sprite_pipeline_eval_tick();
 
                     if ppu.cycle == 256 {
                         ppu.increment_scroll_y();
@@ -1015,25 +1009,26 @@ impl Ppu {
     /// Dots 1..=64 clear secondary OAM; dots 65..=256 scan primary OAM to
     /// select up to 8 sprites for the *next* scanline.
     fn sprite_pipeline_eval_tick(&mut self) {
-        // Mesen2 / hardware: sprite evaluation runs whenever rendering is enabled
-        // (background OR sprites). This preserves correct overflow timing even if
-        // sprites are masked off mid-frame.
-        if !self.registers.mask.rendering_enabled() {
+        // Mesen2 / hardware: sprite evaluation runs whenever the latched
+        // rendering state is enabled (background OR sprites), with a 1-dot
+        // delay relative to $2001 writes.
+        if !self.render_enabled {
+            return;
+        }
+        // Mesen2: secondary OAM clear + sprite evaluation do not occur on the
+        // pre-render line (scanline -1) for NTSC timing.
+        if self.scanline < 0 {
             return;
         }
 
         match self.cycle {
             // Dots 1..=64: clear secondary OAM (32 bytes, 2 dots per byte).
             1..=64 => {
-                if self.cycle % 2 == 1 {
-                    let byte_index = ((self.cycle - 1) / 2) as usize;
-                    if byte_index < 32 {
-                        self.secondary_oam[byte_index] = 0xFF;
-                        // When clearing secondary OAM, the bus effectively
-                        // sees $FF writes.
-                        self.oam_copybuffer = 0xFF;
-                    }
+                let byte_index = ((self.cycle - 1) >> 1) as usize;
+                if byte_index < 32 {
+                    self.secondary_oam[byte_index] = 0xFF;
                 }
+                self.oam_copybuffer = 0xFF;
             }
 
             // Dots 65..=256: sprite evaluation for next scanline.
@@ -1053,7 +1048,7 @@ impl Ppu {
         // Mesen2 / hardware: sprite fetches run whenever rendering is enabled
         // (background OR sprites). Pixel visibility is still controlled later
         // by SHOW_SPRITES in `render_pixel`.
-        if !self.registers.mask.rendering_enabled() {
+        if !self.render_enabled {
             return;
         }
 
@@ -1067,182 +1062,145 @@ impl Ppu {
 
     /// Per-dot sprite evaluation step (65..=256).
     fn evaluate_sprites_for_dot(&mut self) {
-        // Dot 65 is the first evaluation dot: reset per-scanline latches/state.
-        if self.cycle == 65 {
-            self.sprite_eval = SpriteEvalState::default();
-            self.sprite_eval.phase = SpriteEvalPhase::ScanY;
-            // Align the starting sprite index with OAMADDR like Mesen2's
-            // `_spriteRamAddr` high bits. We keep `m` at 0 so that the simpler
-            // per-sprite copy logic still sees well-formed 4-byte entries.
-            let oam_addr = self.registers.oam_addr;
-            self.sprite_eval.n = (oam_addr >> 2) & 0x3F;
-            self.sprite_eval.m = 0;
-        }
+        debug_assert!(
+            (65..=256).contains(&self.cycle) && self.scanline >= 0,
+            "evaluate_sprites_for_dot called outside eval window"
+        );
 
-        // Hardware evaluation runs at ~2 dots per byte. Only advance state on the second dot.
-        if ((self.cycle - 65) & 1) == 0 {
-            return;
-        }
-
-        if !(65..=256).contains(&self.cycle) {
-            return;
-        }
-
-        let next_scanline = self.scanline.wrapping_add(1);
-        let sprite_height: i16 = if self.registers.control.contains(Control::SPRITE_SIZE_16) {
+        let sprite_height: u8 = if self.registers.control.contains(Control::SPRITE_SIZE_16) {
             16
         } else {
             8
         };
 
-        // Hardware sprite index is 6 bits (0..=63) and wraps when it reaches
-        // the end of primary OAM. Mirror that here so we can emulate the
-        // wrap-back-to-OAM-start behaviour used by the overflow bug.
-        let sprite_index = (self.sprite_eval.n & 0x3F) as usize;
-        let base = sprite_index * 4;
-        let y_byte = self.registers.oam[base];
-        let y = y_byte as i16;
-        // Internal OAM bus sees the last byte read from primary OAM.
-        self.oam_copybuffer = y_byte;
-
-        match self.sprite_eval.phase {
-            SpriteEvalPhase::ScanY => {
-                // Read byte 0 (Y) and test range.
-                let in_range = next_scanline > y && next_scanline <= y + sprite_height;
-
-                if in_range {
-                    if self.sprite_eval.count < 8 {
-                        // Start copying this sprite into secondary OAM.
-                        self.sprite_eval.copying = true;
-                        self.sprite_eval.phase = SpriteEvalPhase::CopyRest;
-
-                        // Copy Y.
-                        if self.sprite_eval.sec_idx < 32 {
-                            self.secondary_oam[self.sprite_eval.sec_idx as usize] =
-                                self.registers.oam[base];
-                            self.sprite_eval.sec_idx += 1;
-                        }
-
-                        if sprite_index == 0 {
-                            self.sprite_eval.sprite0_in_range_next = true;
-                        }
-
-                        self.sprite_eval.m = 1; // next byte to copy
-                    } else {
-                        // Enter overflow scan phase after 8 sprites.
-                        self.sprite_eval.phase = SpriteEvalPhase::OverflowScan;
-                        self.sprite_eval.m = 0;
-                        self.sprite_eval.copying = false;
-                        self.sprite_eval.overflow_in_range = false;
-                        self.sprite_eval.overflow_bug_counter = 0;
-                        // In real HW, overflow is set only if another in-range sprite is found later.
-                    }
-                } else {
-                    // Not in range; advance to next sprite.
-                    self.sprite_eval.n = (self.sprite_eval.n.wrapping_add(1)) & 0x3F;
-                    self.sprite_eval.m = 0;
-                }
+        // Odd dots: read a byte from primary OAM at the current internal address.
+        if (self.cycle & 1) == 1 {
+            if self.cycle == 65 {
+                self.sprite_eval.start(self.registers.oam_addr);
             }
+            let addr = self.registers.oam_addr as usize;
+            self.oam_copybuffer = self.registers.oam[addr];
+            return;
+        }
 
-            SpriteEvalPhase::CopyRest => {
-                // Copy bytes 1..=3 (tile, attr, x).
-                if self.sprite_eval.copying {
-                    if self.sprite_eval.sec_idx < 32 {
-                        let byte = self.registers.oam[base + self.sprite_eval.m as usize];
-                        self.secondary_oam[self.sprite_eval.sec_idx as usize] = byte;
-                        self.sprite_eval.sec_idx += 1;
-                        // Keep internal OAM bus in sync with the last byte read.
-                        self.oam_copybuffer = byte;
-                    }
+        // Even dots: write/advance based on the byte read on the previous dot.
+        if self.cycle == 256 {
+            self.sprite_eval.latch_end_of_evaluation(
+                self.scanline,
+                self.oam_copybuffer,
+                sprite_height,
+            );
+            // `sprite0_in_range_next` is the "sprite 0 visible" latch for the
+            // upcoming scanline; it is set when the first in-range Y is found.
+            // (Mesen2 sets this at cycle 66.)
+            // Note: `start()` resets it to false each scanline.
+        }
 
-                    self.sprite_eval.m += 1;
-
-                    if self.sprite_eval.m >= 4 {
-                        // Finished copying one sprite.
-                        self.sprite_eval.copying = false;
-                        self.sprite_eval.m = 0;
-                        self.sprite_eval.count += 1;
-                        self.sprite_eval.n = (self.sprite_eval.n.wrapping_add(1)) & 0x3F;
-                        self.sprite_eval.phase = SpriteEvalPhase::ScanY;
-                    }
-                } else {
-                    // Safety fallback.
-                    self.sprite_eval.phase = SpriteEvalPhase::ScanY;
-                    self.sprite_eval.m = 0;
-                    self.sprite_eval.n = (self.sprite_eval.n.wrapping_add(1)) & 0x3F;
-                }
+        // Range check uses the current scanline (`_scanline` in Mesen2) and the
+        // byte currently on the OAM bus (`_oamCopybuffer`).
+        if !self.sprite_eval.sprite_in_range {
+            let y = self.oam_copybuffer as i16;
+            let end = y + sprite_height as i16;
+            if self.scanline >= y && self.scanline < end {
+                self.sprite_eval.sprite_in_range = !self.sprite_eval.oam_copy_done;
             }
+        }
 
-            SpriteEvalPhase::OverflowScan => {
-                // Overflow scan after 8 sprites have been selected for this scanline.
-                // Mirrors Mesen2's `ProcessSpriteEvaluation` overflow path:
-                // - Search for an additional in-range sprite using the same address
-                //   pattern (n/m as high/low OAM address bits).
-                // - When one is found, set SPRITE_OVERFLOW and walk the remaining
-                //   bytes of that sprite with a +1 address pattern.
-                // - If no in-range sprite is found, both n and m increment together,
-                //   producing the characteristic 5,5,5,1 address sequence.
-                // - After a few bytes, the PPU "realigns" and further writes to
-                //   secondary OAM are effectively disabled (`oam_copy_done`).
-                let oam_raw = self.registers.oam[base + self.sprite_eval.m as usize];
-                let oam_byte = oam_raw as i16;
-                self.oam_copybuffer = oam_raw;
+        if self.sprite_eval.secondary_oam_addr < 0x20 {
+            // Copy 1 byte into secondary OAM (even if the sprite is not in range).
+            let idx = self.sprite_eval.secondary_oam_addr as usize;
+            self.secondary_oam[idx] = self.oam_copybuffer;
 
-                if !self.sprite_eval.overflow_in_range && !self.sprite_eval.oam_copy_done {
-                    let in_range =
-                        next_scanline > oam_byte && next_scanline <= oam_byte + sprite_height;
-                    if in_range {
-                        self.sprite_eval.overflow_in_range = true;
-                    }
+            if self.sprite_eval.sprite_in_range {
+                if self.cycle == 66 {
+                    // If the first Y coordinate we load is in range, set the sprite 0 flag.
+                    // (Happens even if evaluation started on a non-zero OAMADDR.)
+                    self.sprite_eval.sprite0_in_range_next = true;
                 }
 
-                if self.sprite_eval.oam_copy_done {
-                    // After the bugged realignment, hardware continues scanning
-                    // Y bytes but treats writes to secondary OAM as disabled.
-                    // Approximate this by stepping n (sprite index) while
-                    // keeping m pinned to the Y byte.
-                    self.sprite_eval.m = 0;
-                    self.sprite_eval.n = (self.sprite_eval.n.wrapping_add(1)) & 0x3F;
-                } else if self.sprite_eval.overflow_in_range {
-                    self.sprite_eval.overflow_next = true;
-                    self.registers.status.insert(Status::SPRITE_OVERFLOW);
+                self.sprite_eval.sprite_addr_l = self.sprite_eval.sprite_addr_l.wrapping_add(1);
+                self.sprite_eval.secondary_oam_addr =
+                    self.sprite_eval.secondary_oam_addr.wrapping_add(1);
 
-                    // When an in-range sprite is found past the first 8, the PPU
-                    // walks the remaining bytes of that sprite byte-by-byte.
-                    self.sprite_eval.m = (self.sprite_eval.m + 1) & 0b11;
-                    if self.sprite_eval.m == 0 {
-                        self.sprite_eval.n = (self.sprite_eval.n.wrapping_add(1)) & 0x3F;
-                    }
-
-                    if self.sprite_eval.overflow_bug_counter == 0 {
-                        // First time we trigger overflow on this sprite: count
-                        // down a few bytes before realigning, mirroring Mesen2's
-                        // `_overflowBugCounter` behaviour.
-                        self.sprite_eval.overflow_bug_counter = 3;
-                    } else {
-                        self.sprite_eval.overflow_bug_counter -= 1;
-                        if self.sprite_eval.overflow_bug_counter == 0 {
-                            // "Realign" back to the start of the scanline for
-                            // subsequent evaluation. Writes to secondary OAM are
-                            // effectively disabled after this point.
-                            self.sprite_eval.oam_copy_done = true;
-                            self.sprite_eval.m = 0;
-                        }
-                    }
-                } else {
-                    self.sprite_eval.m = (self.sprite_eval.m + 1) & 0b11;
-                    self.sprite_eval.n = (self.sprite_eval.n.wrapping_add(1)) & 0x3F;
-
-                    // When the high address bits wrap, we've scanned all 64 entries
-                    // and wrapped back to the start of OAM. On early 2C02 revisions
-                    // this causes further sprites to be treated as "out of range".
-                    // We approximate that by latching `oam_copy_done` here.
-                    if self.sprite_eval.n == 0 {
+                if self.sprite_eval.sprite_addr_l >= 4 {
+                    self.sprite_eval.sprite_addr_h =
+                        (self.sprite_eval.sprite_addr_h.wrapping_add(1)) & 0x3F;
+                    self.sprite_eval.sprite_addr_l = 0;
+                    if self.sprite_eval.sprite_addr_h == 0 {
                         self.sprite_eval.oam_copy_done = true;
                     }
                 }
+
+                // Using `secondary_oam_addr & 3` matches Mesen2 and is required
+                // to reproduce mid-frame enable/disable glitches.
+                if (self.sprite_eval.secondary_oam_addr & 0x03) == 0 {
+                    self.sprite_eval.sprite_in_range = false;
+
+                    // If eval started on a misaligned address, resync normally,
+                    // unless the last copied byte (interpreted as a Y coordinate)
+                    // is itself in range.
+                    if self.sprite_eval.sprite_addr_l != 0 {
+                        let y = self.oam_copybuffer as i16;
+                        let end = y + sprite_height as i16;
+                        let in_range = self.scanline >= y && self.scanline < end;
+                        if !in_range {
+                            self.sprite_eval.sprite_addr_l = 0;
+                        }
+                    }
+                }
+            } else {
+                // Nothing to copy: skip to next sprite.
+                self.sprite_eval.sprite_addr_h =
+                    (self.sprite_eval.sprite_addr_h.wrapping_add(1)) & 0x3F;
+                self.sprite_eval.sprite_addr_l = 0;
+                if self.sprite_eval.sprite_addr_h == 0 {
+                    self.sprite_eval.oam_copy_done = true;
+                }
+            }
+        } else {
+            // Secondary OAM writes are disabled: writes turn into reads.
+            self.oam_copybuffer =
+                self.secondary_oam[(self.sprite_eval.secondary_oam_addr & 0x1F) as usize];
+
+            // 8 sprites have been found; check next sprites for overflow + emulate the bugged address pattern.
+            if self.sprite_eval.oam_copy_done {
+                self.sprite_eval.sprite_addr_h =
+                    (self.sprite_eval.sprite_addr_h.wrapping_add(1)) & 0x3F;
+                self.sprite_eval.sprite_addr_l = 0;
+            } else if self.sprite_eval.sprite_in_range {
+                self.registers.status.insert(Status::SPRITE_OVERFLOW);
+
+                self.sprite_eval.sprite_addr_l = self.sprite_eval.sprite_addr_l.wrapping_add(1);
+                if self.sprite_eval.sprite_addr_l == 4 {
+                    self.sprite_eval.sprite_addr_h =
+                        (self.sprite_eval.sprite_addr_h.wrapping_add(1)) & 0x3F;
+                    self.sprite_eval.sprite_addr_l = 0;
+                }
+
+                if self.sprite_eval.overflow_bug_counter == 0 {
+                    self.sprite_eval.overflow_bug_counter = 3;
+                } else {
+                    self.sprite_eval.overflow_bug_counter =
+                        self.sprite_eval.overflow_bug_counter.saturating_sub(1);
+                    if self.sprite_eval.overflow_bug_counter == 0 {
+                        // After a few bytes, realign and stop matching further sprites.
+                        self.sprite_eval.oam_copy_done = true;
+                        self.sprite_eval.sprite_addr_l = 0;
+                    }
+                }
+            } else {
+                // Sprite isn't on this scanline: increment both H & L.
+                self.sprite_eval.sprite_addr_h =
+                    (self.sprite_eval.sprite_addr_h.wrapping_add(1)) & 0x3F;
+                self.sprite_eval.sprite_addr_l =
+                    (self.sprite_eval.sprite_addr_l.wrapping_add(1)) & 0x03;
+                if self.sprite_eval.sprite_addr_h == 0 {
+                    self.sprite_eval.oam_copy_done = true;
+                }
             }
         }
+
+        self.registers.oam_addr = self.sprite_eval.primary_oam_addr();
     }
 
     /// Per-dot sprite fetch step (257..=320).
@@ -1421,7 +1379,7 @@ impl Ppu {
     }
 
     fn write_oam_data(&mut self, value: u8) {
-        let rendering = self.registers.mask.rendering_enabled();
+        let rendering = self.render_enabled;
         let during_render =
             rendering && ((0..=239).contains(&self.scanline) || self.scanline == -1);
 
@@ -1441,7 +1399,7 @@ impl Ppu {
     }
 
     fn read_oam_data(&mut self) -> u8 {
-        let rendering = self.registers.mask.rendering_enabled();
+        let rendering = self.render_enabled;
         let during_render = rendering && (0..=239).contains(&self.scanline);
 
         if during_render {
@@ -1981,5 +1939,130 @@ mod tests {
             .status
             .contains(Status::VERTICAL_BLANK);
         assert!(status_cleared);
+    }
+
+    fn run_sprite_evaluation_scanline(ppu: &mut Ppu, scanline: i16) {
+        ppu.scanline = scanline;
+        ppu.render_enabled = true;
+        ppu.registers
+            .status
+            .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+        ppu.registers.oam_addr = 0;
+
+        for cycle in 1..=256 {
+            ppu.cycle = cycle;
+            ppu.sprite_pipeline_eval_tick();
+        }
+    }
+
+    #[test]
+    fn sprite_overflow_includes_y_239() {
+        let mut ppu = Ppu::default();
+        // 9 sprites with Y=239 should still be considered "in range" during
+        // evaluation on scanline 239, even though they won't be drawn.
+        for i in 0..9 {
+            let base = i * 4;
+            ppu.registers.oam[base] = 239;
+            ppu.registers.oam[base + 1] = 0xFF;
+            ppu.registers.oam[base + 2] = 0xFF;
+            ppu.registers.oam[base + 3] = 0xFF;
+        }
+
+        run_sprite_evaluation_scanline(&mut ppu, 239);
+        assert!(ppu.registers.status.contains(Status::SPRITE_OVERFLOW));
+    }
+
+    #[test]
+    fn sprite_overflow_excludes_y_240() {
+        let mut ppu = Ppu::default();
+        // Y=240 is off-screen; should not contribute to sprite overflow.
+        for i in 0..9 {
+            let base = i * 4;
+            ppu.registers.oam[base] = 240;
+            ppu.registers.oam[base + 1] = 0xFF;
+            ppu.registers.oam[base + 2] = 0xFF;
+            ppu.registers.oam[base + 3] = 0xFF;
+        }
+
+        run_sprite_evaluation_scanline(&mut ppu, 239);
+        assert!(!ppu.registers.status.contains(Status::SPRITE_OVERFLOW));
+    }
+
+    #[test]
+    fn sprite_overflow_obscure_byte_shift_matches_mesen() {
+        let mut ppu = Ppu::default();
+        ppu.registers.oam.fill(200);
+
+        // Scanline 0 evaluation selects sprites for scanline 1; the range check
+        // uses the current scanline (0) against the OAM "Y" byte.
+        //
+        // Make the first 8 sprites in range (Y=0), then make the 9th sprite
+        // out of range (Y=200). The overflow bug then increments both the high
+        // and low address bits, causing the *second byte* of sprite #10 to be
+        // treated as the Y coordinate. Set that second byte to 0 to trigger
+        // overflow, and keep other bytes out of range.
+        for i in 0..8 {
+            let base = i * 4;
+            ppu.registers.oam[base] = 0;
+            ppu.registers.oam[base + 1] = 0xFF;
+            ppu.registers.oam[base + 2] = 0xFF;
+            ppu.registers.oam[base + 3] = 0xFF;
+        }
+
+        // Sprite #9 (index 8): out of range.
+        {
+            let base = 8 * 4;
+            ppu.registers.oam[base] = 200;
+            ppu.registers.oam[base + 1] = 0xFF;
+            ppu.registers.oam[base + 2] = 0xFF;
+            ppu.registers.oam[base + 3] = 0xFF;
+        }
+
+        // Sprite #10 (index 9): Y out of range, but tile byte (byte 1) in range.
+        {
+            let base = 9 * 4;
+            ppu.registers.oam[base] = 200;
+            ppu.registers.oam[base + 1] = 0;
+            ppu.registers.oam[base + 2] = 200;
+            ppu.registers.oam[base + 3] = 200;
+        }
+
+        run_sprite_evaluation_scanline(&mut ppu, 0);
+        assert!(ppu.registers.status.contains(Status::SPRITE_OVERFLOW));
+    }
+
+    #[test]
+    fn sprite_overflow_obscure_byte_shift_can_skip_overflow() {
+        let mut ppu = Ppu::default();
+        ppu.registers.oam.fill(200);
+
+        for i in 0..8 {
+            let base = i * 4;
+            ppu.registers.oam[base] = 0;
+            ppu.registers.oam[base + 1] = 0xFF;
+            ppu.registers.oam[base + 2] = 0xFF;
+            ppu.registers.oam[base + 3] = 0xFF;
+        }
+
+        // Sprite #9 (index 8): out of range.
+        {
+            let base = 8 * 4;
+            ppu.registers.oam[base] = 200;
+            ppu.registers.oam[base + 1] = 0xFF;
+            ppu.registers.oam[base + 2] = 0xFF;
+            ppu.registers.oam[base + 3] = 0xFF;
+        }
+
+        // Sprite #10 (index 9): all bytes out of range (no overflow should occur).
+        {
+            let base = 9 * 4;
+            ppu.registers.oam[base] = 200;
+            ppu.registers.oam[base + 1] = 200;
+            ppu.registers.oam[base + 2] = 200;
+            ppu.registers.oam[base + 3] = 200;
+        }
+
+        run_sprite_evaluation_scanline(&mut ppu, 0);
+        assert!(!ppu.registers.status.contains(Status::SPRITE_OVERFLOW));
     }
 }

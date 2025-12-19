@@ -1,44 +1,69 @@
 use crate::mem_block::ppu::SpriteLineRam;
 
-/// Phases of the hardware sprite evaluation state machine.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub(crate) enum SpriteEvalPhase {
-    /// Scanning primary OAM for an in-range sprite (reading byte 0 / Y first).
-    #[default]
-    ScanY,
-    /// Copying the remaining 3 bytes of an in-range sprite into secondary OAM.
-    CopyRest,
-    /// Overflow scan phase after 8 sprites are found.
-    /// Hardware continues scanning with a buggy n/m increment pattern.
-    OverflowScan,
-}
-
-/// Cycle-accurate sprite evaluation state for secondary OAM selection.
+/// Cycle-accurate sprite evaluation state, modeled after Mesen2.
+///
+/// This state tracks the internal address counters (high/low), secondary OAM
+/// write address, and the sprite overflow bug state machine.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub(crate) struct SpriteEvalState {
-    /// Current evaluation phase.
-    pub(crate) phase: SpriteEvalPhase,
-    /// Primary OAM sprite index being scanned (0..=63).
-    pub(crate) n: u8,
-    /// Byte index within the current sprite (0..=3).
-    pub(crate) m: u8,
-    /// Next write position in secondary OAM (0..=32 bytes).
-    pub(crate) sec_idx: u8,
+    /// High 6 bits of the internal OAM address (`_spriteAddrH`, 0..=63).
+    pub(crate) sprite_addr_h: u8,
+    /// Low 2 bits of the internal OAM address (`_spriteAddrL`, 0..=3).
+    pub(crate) sprite_addr_l: u8,
+    /// Secondary OAM address (`_secondaryOamAddr`, counts bytes copied).
+    pub(crate) secondary_oam_addr: u8,
+    /// Latched: currently copying a sprite that matched the range check.
+    pub(crate) sprite_in_range: bool,
+    /// Latched: OAM copy has wrapped/realigned and further matching is suppressed.
+    pub(crate) oam_copy_done: bool,
+    /// Countdown used for the sprite overflow address realignment glitch.
+    pub(crate) overflow_bug_counter: u8,
+    /// Latched: sprite 0 is considered visible for the next scanline.
+    pub(crate) sprite0_in_range_next: bool,
     /// Number of sprites selected for the next scanline (0..=8).
     pub(crate) count: u8,
-    /// Whether we are currently copying this sprite into secondary OAM.
-    pub(crate) copying: bool,
-    /// Latched during overflow scan: a byte has matched the scanline range.
-    pub(crate) overflow_in_range: bool,
-    /// Countdown used to emulate the overflow address realignment glitch.
-    pub(crate) overflow_bug_counter: u8,
-    /// Latched: sprite evaluation has wrapped / realigned and further
-    /// writes to secondary OAM are effectively disabled (Mesen2 `_oamCopyDone`).
-    pub(crate) oam_copy_done: bool,
-    /// Latched: sprite 0 will be in range on the *next* scanline.
-    pub(crate) sprite0_in_range_next: bool,
-    /// Latched: sprite overflow has been observed for the next scanline.
-    pub(crate) overflow_next: bool,
+}
+
+impl SpriteEvalState {
+    #[inline]
+    pub(crate) fn start(&mut self, oam_addr: u8) {
+        // Mirrors `ProcessSpriteEvaluationStart`.
+        self.sprite0_in_range_next = false;
+        self.sprite_in_range = false;
+        self.secondary_oam_addr = 0;
+        self.overflow_bug_counter = 0;
+        self.oam_copy_done = false;
+        self.sprite_addr_h = (oam_addr >> 2) & 0x3F;
+        self.sprite_addr_l = oam_addr & 0x03;
+        self.count = 0;
+    }
+
+    #[inline]
+    pub(crate) fn latch_end_of_evaluation(
+        &mut self,
+        scanline: i16,
+        last_oam_byte: u8,
+        sprite_height: u8,
+    ) {
+        // Mirrors `ProcessSpriteEvaluationEnd` (for the default "bug enabled" path).
+        let bytes = self.secondary_oam_addr;
+        self.count = ((bytes.saturating_add(3)) >> 2).min(8);
+
+        // Early 2C02 behavior: if sprite eval wrapped and the last copied byte,
+        // interpreted as a Y coordinate, is in range, count it as an extra sprite.
+        // (Mesen guards this behind EnablePpuSpriteEvalBug; keep it enabled.)
+        let y = last_oam_byte as i16;
+        let end = y + sprite_height as i16;
+        let in_range = scanline >= y && scanline < end;
+        if in_range && self.count < 8 {
+            self.count += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn primary_oam_addr(&self) -> u8 {
+        (self.sprite_addr_l & 0x03) | (self.sprite_addr_h << 2)
+    }
 }
 
 /// Cycle-accurate sprite pattern fetch state (dots 257..=320).
