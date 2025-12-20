@@ -80,7 +80,7 @@ pub struct NesiumApp {
 impl NesiumApp {
     pub fn new(cc: &eframe::CreationContext<'_>, config: AppConfig) -> Self {
         cc.egui_ctx.set_visuals(Visuals::light());
-        install_cjk_font(&cc.egui_ctx);
+        let has_cjk_font = install_cjk_font(&cc.egui_ctx);
 
         let len = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
         let plane0 = vec![0u8; len].into_boxed_slice();
@@ -108,7 +108,11 @@ impl NesiumApp {
         let gamepad_snapshot = gamepads.as_ref().map(|m| m.gamepads()).unwrap_or_default();
 
         let ui_state = Arc::new(Mutex::new(UiState {
-            i18n: I18n::new(Language::ChineseSimplified),
+            i18n: if has_cjk_font {
+                I18n::new(Language::ChineseSimplified)
+            } else {
+                I18n::new(Language::English)
+            },
             audio_cfg: AudioBusConfig::default(),
             controllers: std::array::from_fn(|_| ControllerInput::new_with_defaults()),
             controller_devices: [
