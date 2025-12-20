@@ -133,6 +133,14 @@ pub struct Ppu {
     /// Pending state update request from $2001/$2006/$2007/VRAM-related
     /// side effects. Mirrors Mesen's `_needStateUpdate` latch.
     pub(crate) state_update_pending: bool,
+    /// Latch for the tile address (Nametable byte << 4) | fine_y.
+    pub(crate) bg_tile_addr_latch: u16,
+    /// Latch for the 2-bit palette index extracted from the attribute byte.
+    pub(crate) bg_palette_latch: u8,
+    /// Latch for the low pattern byte.
+    pub(crate) bg_pattern_low_latch: u8,
+    /// Latch for the high pattern byte.
+    pub(crate) bg_pattern_high_latch: u8,
     /// Background + sprite rendering target for the current frame.
     pub(crate) framebuffer: FrameBuffer,
 }
@@ -195,6 +203,10 @@ impl Ppu {
             oam_addr_disable_glitch_pending: false,
             corrupt_oam_row: [false; 32],
             state_update_pending: false,
+            bg_tile_addr_latch: 0,
+            bg_palette_latch: 0,
+            bg_pattern_low_latch: 0,
+            bg_pattern_high_latch: 0,
             framebuffer,
         }
     }
@@ -291,6 +303,10 @@ impl Ppu {
         self.oam_copybuffer = 0;
         self.oam_addr_disable_glitch_pending = false;
         self.corrupt_oam_row = [false; 32];
+        self.bg_tile_addr_latch = 0;
+        self.bg_palette_latch = 0;
+        self.bg_pattern_low_latch = 0;
+        self.bg_pattern_high_latch = 0;
 
         // Sprite-0 debug info is per-frame; drop it on reset.
 
@@ -522,14 +538,19 @@ impl Ppu {
         if ppu.pending_vram_increment.is_pending() {
             // Mesen2 / hardware: the simple "+1 or +32" VRAM increment after
             // a $2007 access only applies when rendering is disabled or during
-            // VBlank/post-render scanlines. While rendering is active on the
-            // prerender/visible scanlines, VRAM address progression is driven
-            // by the scroll increment logic (coarse/fine X/Y) instead.
+            // VBlank/post-render scanlines.
+            //
+            // While rendering is active on the prerender/visible scanlines,
+            // the hardware does a "glitchy" increment where it clocks both
+            // coarse X and Y scrolls simultaneously.
             if ppu.scanline >= 240 || !rendering_enabled {
                 let step = ppu.pending_vram_increment.amount();
                 if step != 0 {
                     ppu.registers.vram.v.increment(step);
                 }
+            } else {
+                ppu.increment_scroll_x();
+                ppu.increment_scroll_y();
             }
             ppu.pending_vram_increment = PendingVramIncrement::None;
         }
@@ -651,6 +672,18 @@ impl Ppu {
             // the last dot of the scanline when we are on the pre-render
             // scanline, cycle 339 of an odd frame with rendering enabled.
             (-1, 337..=340) => {
+                if rendering_enabled {
+                    if ppu.cycle == 337 || ppu.cycle == 339 {
+                        // Mesen2 / hardware: dummy nametable fetches at end of line.
+                        // These drive the mapper PPU address bus (A12) for IRQ clocking.
+                        let _ = ppu.read_vram(
+                            &mut pattern,
+                            ppu.nametable_addr(),
+                            crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                        );
+                    }
+                }
+
                 if ppu.cycle == 339 && ppu.frame % 2 == 1 && ppu.render_enabled {
                     // Force the next `advance_cycle()` call to wrap directly
                     // to scanline 0, cycle 0, effectively removing dot 340
@@ -712,7 +745,15 @@ impl Ppu {
             }
 
             // Dots 337..=340: dummy nametable fetches (no visible effect).
-            (0..=239, 337..=340) => {}
+            (0..=239, 337..=340) => {
+                if rendering_enabled && (ppu.cycle == 337 || ppu.cycle == 339) {
+                    let _ = ppu.read_vram(
+                        &mut pattern,
+                        ppu.nametable_addr(),
+                        crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                    );
+                }
+            }
 
             // ----------------------
             // Post-render scanline (240)
@@ -1032,10 +1073,62 @@ impl Ppu {
             self.cycle,
         );
 
-        // Fetch and reload shifters every 8 dots (tile boundary) during fetch windows.
-        if self.cycle.is_multiple_of(8) {
-            self.load_background_tile(pattern);
-            self.increment_scroll_x();
+        match self.cycle & 0x07 {
+            1 => {
+                // Reload shifters with the data fetched during the *previous* 8 cycles.
+                let tile_pattern = [self.bg_pattern_low_latch, self.bg_pattern_high_latch];
+                self.bg_pipeline.reload(tile_pattern, self.bg_palette_latch);
+
+                // Fetch Nametable byte.
+                let tile_index = self.read_vram(
+                    pattern,
+                    self.nametable_addr(),
+                    crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                );
+
+                // Calculate the tile address for the upcoming pattern fetches.
+                let fine_y = self.registers.vram.v.fine_y() as u16;
+                let pattern_base = if self.registers.control.contains(Control::BACKGROUND_TABLE) {
+                    ppu_mem::PATTERN_TABLE_1
+                } else {
+                    ppu_mem::PATTERN_TABLE_0
+                };
+                self.bg_tile_addr_latch = pattern_base + (tile_index as u16 * 16) + fine_y;
+            }
+            3 => {
+                // Fetch Attribute byte.
+                let attr_byte = self.read_vram(
+                    pattern,
+                    self.attribute_addr(),
+                    crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                );
+
+                // Extract the 2-bit palette index for the current quadrant.
+                let v = self.registers.vram.v;
+                let quadrant_shift = ((v.coarse_y() & 0b10) << 1) | (v.coarse_x() & 0b10);
+                self.bg_palette_latch = (attr_byte >> quadrant_shift) & 0b11;
+            }
+            5 => {
+                // Fetch Pattern Table (Low).
+                self.bg_pattern_low_latch = self.read_vram(
+                    pattern,
+                    self.bg_tile_addr_latch,
+                    crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                );
+            }
+            7 => {
+                // Fetch Pattern Table (High).
+                self.bg_pattern_high_latch = self.read_vram(
+                    pattern,
+                    self.bg_tile_addr_latch + 8,
+                    crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                );
+            }
+            0 => {
+                // Cycle 8, 16, 24...: Increment coarse X to prepare for the next tile.
+                self.increment_scroll_x();
+            }
+            _ => {}
         }
     }
 
@@ -1642,42 +1735,6 @@ impl Ppu {
                 0
             }
         }
-    }
-
-    /// Loads the current tile/attribute data into the background shifters.
-    fn load_background_tile(&mut self, pattern: &mut PatternBus<'_>) {
-        let v = self.registers.vram.v;
-        let base_nt = ppu_mem::NAMETABLE_BASE + (v.nametable() as u16 * ppu_mem::NAMETABLE_SIZE);
-        let tile_index_addr = base_nt + (v.coarse_y() as u16 * 32) + (v.coarse_x() as u16);
-        let tile_index = self.read_vram(
-            pattern,
-            tile_index_addr,
-            crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
-        );
-
-        let fine_y = v.fine_y() as u16;
-        let pattern_base = if self.registers.control.contains(Control::BACKGROUND_TABLE) {
-            ppu_mem::PATTERN_TABLE_1
-        } else {
-            ppu_mem::PATTERN_TABLE_0
-        };
-        let pattern_addr = pattern_base + (tile_index as u16 * 16) + fine_y;
-        let tile_pattern = [
-            self.read_vram(
-                pattern,
-                pattern_addr,
-                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
-            ),
-            self.read_vram(pattern, pattern_addr + 8, PpuVramAccessKind::RenderingFetch),
-        ];
-
-        let attr_addr =
-            base_nt + 0x03C0 + (v.coarse_y() as u16 / 4) * 8 + (v.coarse_x() as u16 / 4);
-        let attr_byte = self.read_vram(pattern, attr_addr, PpuVramAccessKind::RenderingFetch);
-        let quadrant_shift = ((v.coarse_y() & 0b10) << 1) | (v.coarse_x() & 0b10);
-        let palette_index = (attr_byte >> quadrant_shift) & 0b11;
-
-        self.bg_pipeline.reload(tile_pattern, palette_index);
     }
 
     /// Increments the coarse X scroll component in `v`, wrapping nametable horizontally.

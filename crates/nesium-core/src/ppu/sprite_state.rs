@@ -51,7 +51,23 @@ impl SpriteEvalState {
 
         // Early 2C02 behavior: if sprite eval wrapped and the last copied byte,
         // interpreted as a Y coordinate, is in range, count it as an extra sprite.
-        // (Mesen guards this behind EnablePpuSpriteEvalBug; keep it enabled.)
+        // This is known as the "Phantom Sprite Bug".
+        //
+        // TODO: Make this configurable (Mesen: EnablePpuSpriteEvalBug).
+        // It is currently disabled by default to prevent visual artifacts (dots at X=255)
+        // in games like Shadow of the Ninja, effectively emulating a later PPU revision.
+        // self.apply_phantom_sprite_bug(scanline, last_oam_byte, sprite_height);
+    }
+
+    /// Simulates the "Phantom Sprite" hardware bug found in early PPU revisions (e.g., RP2C02B).
+    ///
+    /// If the sprite evaluation logic is halted abruptly at cycle 256 while in a misaligned state,
+    /// the last byte read from OAM can be erroneously interpreted as the Y-coordinate of a new sprite.
+    /// If this "Y-coordinate" falls within the current scanline range, a "phantom" sprite is added.
+    /// Since the remaining sprite data (tile, attr, x) is not fetched, this typically results in
+    /// a sprite drawn with tile $FF at X=255.
+    #[allow(dead_code)]
+    fn apply_phantom_sprite_bug(&mut self, scanline: i16, last_oam_byte: u8, sprite_height: u8) {
         let y = last_oam_byte as i16;
         let end = y + sprite_height as i16;
         let in_range = scanline >= y && scanline < end;
