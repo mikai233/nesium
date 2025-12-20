@@ -164,8 +164,10 @@ jobs:
           vol="Nesium"
 
           hdiutil create -volname "$vol" -srcfolder dmg-src -ov -format UDRW "$dmg_rw"
-          mount_dir="$(hdiutil attach -readwrite -noverify -noautoopen "$dmg_rw" | awk '/\\/Volumes\\// {print $3; exit}')"
-          open "$mount_dir"
+          mount_dir="$(pwd)/dist/mnt"
+          rm -rf "$mount_dir"
+          mkdir -p "$mount_dir"
+          hdiutil attach -readwrite -noverify -noautoopen -mountpoint "$mount_dir" "$dmg_rw"
 
           # Make the "drag to Applications" window look nicer (white background, fixed layout).
           osascript \
