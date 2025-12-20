@@ -201,10 +201,15 @@ impl NesiumApp {
                 .with_inner_size([280.0, 240.0]);
             let ui_state = Arc::clone(&self.ui_state);
             ctx.show_viewport_deferred(palette_id, builder, move |ctx, class| {
-                let ui_state = ui_state.lock().unwrap();
-                let title = ui_state.i18n.text(TextId::MenuWindowPalette);
+                let (title, heading) = {
+                    let ui_state = ui_state.lock().unwrap();
+                    (
+                        ui_state.i18n.text(TextId::MenuWindowPalette),
+                        ui_state.i18n.text(TextId::PaletteHeading),
+                    )
+                };
                 show_viewport_content(ctx, class, title, |ui| {
-                    ui.heading(ui_state.i18n.text(TextId::PaletteHeading));
+                    ui.heading(heading);
                     ui.label("Palette viewer is currently unavailable.");
                 });
             });
@@ -608,33 +613,55 @@ impl NesiumApp {
             let ui_state = Arc::clone(&self.ui_state);
             let runtime_handle = self.runtime_handle.clone();
             ctx.show_viewport_deferred(audio_id, builder, move |ctx, class| {
-                let mut ui_state = ui_state.lock().unwrap();
+                let (
+                    title,
+                    heading,
+                    master_label,
+                    bg_label,
+                    mute_bg_label,
+                    reduce_bg_label,
+                    reduce_ff_label,
+                    reduce_amount_label,
+                    reverb_section_label,
+                    reverb_enable_label,
+                    reverb_strength_label,
+                    reverb_delay_label,
+                    crossfeed_section_label,
+                    crossfeed_enable_label,
+                    crossfeed_ratio_label,
+                    eq_section_label,
+                    eq_enable_label,
+                    eq_gain_label,
+                    mut cfg,
+                ) = {
+                    let ui_state = ui_state.lock().unwrap();
+                    (
+                        ui_state.i18n.text(TextId::MenuWindowAudio),
+                        ui_state.i18n.text(TextId::AudioHeading),
+                        ui_state.i18n.text(TextId::AudioMasterVolumeLabel),
+                        ui_state.i18n.text(TextId::AudioBgFastBehaviorLabel),
+                        ui_state.i18n.text(TextId::AudioMuteInBackground),
+                        ui_state.i18n.text(TextId::AudioReduceInBackground),
+                        ui_state.i18n.text(TextId::AudioReduceInFastForward),
+                        ui_state.i18n.text(TextId::AudioReduceAmount),
+                        ui_state.i18n.text(TextId::AudioReverbSection),
+                        ui_state.i18n.text(TextId::AudioEnableReverb),
+                        ui_state.i18n.text(TextId::AudioReverbStrength),
+                        ui_state.i18n.text(TextId::AudioReverbDelayMs),
+                        ui_state.i18n.text(TextId::AudioCrossfeedSection),
+                        ui_state.i18n.text(TextId::AudioEnableCrossfeed),
+                        ui_state.i18n.text(TextId::AudioCrossfeedRatio),
+                        ui_state.i18n.text(TextId::AudioEqSection),
+                        ui_state.i18n.text(TextId::AudioEnableEq),
+                        ui_state.i18n.text(TextId::AudioEqGlobalGain),
+                        ui_state.audio_cfg,
+                    )
+                };
 
-                let title = ui_state.i18n.text(TextId::MenuWindowAudio);
-                let heading = ui_state.i18n.text(TextId::AudioHeading);
-                let master_label = ui_state.i18n.text(TextId::AudioMasterVolumeLabel);
-                let bg_label = ui_state.i18n.text(TextId::AudioBgFastBehaviorLabel);
-                let mute_bg_label = ui_state.i18n.text(TextId::AudioMuteInBackground);
-                let reduce_bg_label = ui_state.i18n.text(TextId::AudioReduceInBackground);
-                let reduce_ff_label = ui_state.i18n.text(TextId::AudioReduceInFastForward);
-                let reduce_amount_label = ui_state.i18n.text(TextId::AudioReduceAmount);
-                let reverb_section_label = ui_state.i18n.text(TextId::AudioReverbSection);
-                let reverb_enable_label = ui_state.i18n.text(TextId::AudioEnableReverb);
-                let reverb_strength_label = ui_state.i18n.text(TextId::AudioReverbStrength);
-                let reverb_delay_label = ui_state.i18n.text(TextId::AudioReverbDelayMs);
-                let crossfeed_section_label = ui_state.i18n.text(TextId::AudioCrossfeedSection);
-                let crossfeed_enable_label = ui_state.i18n.text(TextId::AudioEnableCrossfeed);
-                let crossfeed_ratio_label = ui_state.i18n.text(TextId::AudioCrossfeedRatio);
-                let eq_section_label = ui_state.i18n.text(TextId::AudioEqSection);
-                let eq_enable_label = ui_state.i18n.text(TextId::AudioEnableEq);
-                let eq_gain_label = ui_state.i18n.text(TextId::AudioEqGlobalGain);
-
+                let mut changed = false;
                 show_viewport_content(ctx, class, title, |ui| {
                     ui.heading(heading);
                     ui.separator();
-
-                    let cfg = &mut ui_state.audio_cfg;
-                    let mut changed = false;
 
                     // Master volume
                     let mut vol_percent = (cfg.master_volume * 100.0).clamp(0.0, 100.0);
@@ -757,9 +784,15 @@ impl NesiumApp {
                     });
 
                     if changed {
-                        let _ = runtime_handle.set_audio_config(*cfg);
+                        let _ = runtime_handle.set_audio_config(cfg);
                     }
                 });
+
+                if changed {
+                    if let Ok(mut ui_state) = ui_state.lock() {
+                        ui_state.audio_cfg = cfg;
+                    }
+                }
             });
         }
     }

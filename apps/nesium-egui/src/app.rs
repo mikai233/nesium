@@ -60,6 +60,7 @@ pub struct NesiumApp {
     frame_texture: Option<TextureHandle>,
     frame_image: Option<Arc<ColorImage>>,
     last_frame_seq: u64,
+    last_pad_masks: [u8; 4],
     rom_path: Option<PathBuf>,
     paused: bool,
     status_line: Option<String>,
@@ -130,6 +131,7 @@ impl NesiumApp {
             frame_texture: None,
             frame_image: None,
             last_frame_seq: 0,
+            last_pad_masks: [0u8; 4],
             rom_path: None,
             paused: false,
             status_line: None,
@@ -183,6 +185,7 @@ impl NesiumApp {
         self.paused = false;
         self.runtime_handle.set_paused(false);
         self.last_frame_seq = self.runtime_handle.frame_seq();
+        self.last_pad_masks = [0u8; 4];
         // Reset local input state
         if let Ok(mut ui_state) = self.ui_state.lock() {
             for ctrl in &mut ui_state.controllers {
@@ -195,6 +198,7 @@ impl NesiumApp {
         let _ = self.runtime_handle.eject();
         self.rom_path = None;
         self.last_frame_seq = self.runtime_handle.frame_seq();
+        self.last_pad_masks = [0u8; 4];
         if let Ok(mut ui_state) = self.ui_state.lock() {
             for ctrl in &mut ui_state.controllers {
                 ctrl.release_all();
@@ -311,7 +315,7 @@ impl eframe::App for NesiumApp {
         } else {
             Vec::new()
         };
-        if let Ok(mut ui_state) = self.ui_state.lock() {
+        if let Ok(mut ui_state) = self.ui_state.try_lock() {
             ui_state.gamepads_available = self.gamepads.is_some();
             ui_state.gamepads = gamepad_snapshot;
         }
@@ -319,7 +323,7 @@ impl eframe::App for NesiumApp {
         // 3. Process Input
         let keyboard_busy = ctx.wants_keyboard_input();
         let mut pad_masks = [0u8; 4];
-        if let Ok(mut ui_state) = self.ui_state.lock() {
+        if let Ok(mut ui_state) = self.ui_state.try_lock() {
             for port in 0..4 {
                 let device = ui_state.controller_devices[port];
                 let ctrl = &mut ui_state.controllers[port];
@@ -341,6 +345,9 @@ impl eframe::App for NesiumApp {
                 }
                 pad_masks[port] = ctrl.pressed_mask();
             }
+            self.last_pad_masks = pad_masks;
+        } else {
+            pad_masks = self.last_pad_masks;
         }
 
         // Always publish input state via atomics (no control channel, low latency).
