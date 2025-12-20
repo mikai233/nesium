@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use eframe::egui;
-use egui::{Color32, Context as EguiContext, Vec2, ViewportBuilder, ViewportId};
+use egui::{Color32, Context as EguiContext, ViewportBuilder, ViewportClass, ViewportId};
 use gilrs::Button as GilrsButton;
 use nesium_core::controller::Button;
 
@@ -8,18 +10,60 @@ use super::{
     controller::{ControllerDevice, InputPreset},
 };
 
+fn show_viewport_content(
+    ctx: &EguiContext,
+    class: ViewportClass,
+    title: &str,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) {
+    match class {
+        ViewportClass::Embedded => {
+            egui::Window::new(title).show(ctx, add_contents);
+        }
+        _ => {
+            egui::CentralPanel::default().show(ctx, add_contents);
+        }
+    }
+}
+
 impl NesiumApp {
     pub(super) fn show_viewports(&mut self, ctx: &EguiContext) {
+        let debugger_id = ViewportId::from_hash_of("debugger");
+        let tools_id = ViewportId::from_hash_of("tools");
+        let about_id = ViewportId::from_hash_of("about");
+        let palette_id = ViewportId::from_hash_of("palette");
+        let input_id = ViewportId::from_hash_of("input");
+        let audio_id = ViewportId::from_hash_of("audio");
+
+        if self.show_debugger
+            && ctx.viewport_for(debugger_id, |v| v.input.viewport().close_requested())
+        {
+            self.show_debugger = false;
+        }
+        if self.show_tools && ctx.viewport_for(tools_id, |v| v.input.viewport().close_requested()) {
+            self.show_tools = false;
+        }
+        if self.show_about && ctx.viewport_for(about_id, |v| v.input.viewport().close_requested()) {
+            self.show_about = false;
+        }
+        if self.show_palette
+            && ctx.viewport_for(palette_id, |v| v.input.viewport().close_requested())
+        {
+            self.show_palette = false;
+        }
+        if self.show_input && ctx.viewport_for(input_id, |v| v.input.viewport().close_requested()) {
+            self.show_input = false;
+        }
+        if self.show_audio && ctx.viewport_for(audio_id, |v| v.input.viewport().close_requested()) {
+            self.show_audio = false;
+        }
+
         if self.show_debugger {
             let builder = ViewportBuilder::default()
                 .with_title("Debugger")
                 .with_inner_size([420.0, 320.0]);
-            ctx.show_viewport_immediate(ViewportId::from_hash_of("debugger"), builder, |ctx, _| {
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    self.show_debugger = false;
-                    return;
-                }
-                egui::CentralPanel::default().show(ctx, |ui| {
+            ctx.show_viewport_deferred(debugger_id, builder, move |ctx, class| {
+                show_viewport_content(ctx, class, "Debugger", |ui| {
                     ui.heading("CPU Snapshot");
                     ui.label("Debugger is currently unavailable in multi-threaded mode.");
                     ui.label("Full debugger implementation via state snapshots is coming soon.");
@@ -31,21 +75,37 @@ impl NesiumApp {
             let builder = ViewportBuilder::default()
                 .with_title(self.t(TextId::MenuWindowTools))
                 .with_inner_size([360.0, 260.0]);
-            ctx.show_viewport_immediate(ViewportId::from_hash_of("tools"), builder, |ctx, _| {
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    self.show_tools = false;
-                    return;
-                }
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.heading(self.t(TextId::ToolsHeading));
-                    let label = match self.language() {
-                        super::Language::English => "Pixel-perfect scaling (integer)",
-                        super::Language::ChineseSimplified => "像素完美缩放（整数倍）",
-                    };
-                    ui.checkbox(&mut self.pixel_perfect_scaling, label);
+            let ui_state_arc = Arc::clone(&self.ui_state);
+            ctx.show_viewport_deferred(tools_id, builder, move |ctx, class| {
+                // Snapshot state
+                let (mut pixel_perfect, title, label, heading, placeholder) = {
+                    let state = ui_state_arc.lock().unwrap();
+                    let lang = state.i18n.language();
+                    (
+                        state.pixel_perfect_scaling,
+                        state.i18n.text(TextId::MenuWindowTools),
+                        match lang {
+                            super::Language::English => "Pixel-perfect scaling (integer)",
+                            super::Language::ChineseSimplified => "像素完美缩放（整数倍）",
+                        },
+                        state.i18n.text(TextId::ToolsHeading),
+                        state.i18n.text(TextId::ToolsPlaceholder),
+                    )
+                };
+
+                let mut changed = false;
+                show_viewport_content(ctx, class, title, |ui| {
+                    ui.heading(heading);
+                    if ui.checkbox(&mut pixel_perfect, label).changed() {
+                        changed = true;
+                    }
                     ui.add_space(6.0);
-                    ui.label(self.t(TextId::ToolsPlaceholder));
+                    ui.label(placeholder);
                 });
+
+                if changed {
+                    ui_state_arc.lock().unwrap().pixel_perfect_scaling = pixel_perfect;
+                }
             });
         }
 
@@ -53,22 +113,32 @@ impl NesiumApp {
             let builder = ViewportBuilder::default()
                 .with_title(self.t(TextId::AboutWindowTitle))
                 .with_inner_size([520.0, 420.0]);
-            ctx.show_viewport_immediate(ViewportId::from_hash_of("about"), builder, |ctx, _| {
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    self.show_about = false;
-                    return;
-                }
-                egui::CentralPanel::default().show(ctx, |ui| {
+            let ui_state = Arc::clone(&self.ui_state);
+            ctx.show_viewport_deferred(about_id, builder, move |ctx, class| {
+                // Snapshot state
+                let (title, lang, lead, intro, comp_heading, comp_hint) = {
+                    let state = ui_state.lock().unwrap();
+                    (
+                        state.i18n.text(TextId::AboutWindowTitle),
+                        state.i18n.language(),
+                        state.i18n.text(TextId::AboutLead),
+                        state.i18n.text(TextId::AboutIntro),
+                        state.i18n.text(TextId::AboutComponentsHeading),
+                        state.i18n.text(TextId::AboutComponentsHint),
+                    )
+                };
+
+                show_viewport_content(ctx, class, title, |ui| {
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            ui.heading(self.t(TextId::AboutWindowTitle));
-                            ui.label(self.t(TextId::AboutLead));
+                            ui.heading(title);
+                            ui.label(lead);
                             ui.add_space(4.0);
-                            ui.label(self.t(TextId::AboutIntro));
+                            ui.label(intro);
                             ui.separator();
-                            ui.heading(self.t(TextId::AboutComponentsHeading));
-                            ui.label(self.t(TextId::AboutComponentsHint));
+                            ui.heading(comp_heading);
+                            ui.label(comp_hint);
                             ui.add_space(6.0);
 
                             struct ComponentInfo {
@@ -100,12 +170,11 @@ impl NesiumApp {
                                 ComponentInfo {
                                     name: "rfd",
                                     desc_en: "Native file dialogs",
-                                    desc_zh: "原生文件选择对话框",
+                                    desc_zh: "原生文件对话框",
                                     url: "https://crates.io/crates/rfd",
                                 },
                             ];
 
-                            let lang = self.language();
                             egui::Grid::new("about_components_grid")
                                 .num_columns(2)
                                 .spacing([12.0, 8.0])
@@ -130,13 +199,12 @@ impl NesiumApp {
             let builder = ViewportBuilder::default()
                 .with_title(self.t(TextId::MenuWindowPalette))
                 .with_inner_size([280.0, 240.0]);
-            ctx.show_viewport_immediate(ViewportId::from_hash_of("palette"), builder, |ctx, _| {
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    self.show_palette = false;
-                    return;
-                }
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.heading(self.t(TextId::PaletteHeading));
+            let ui_state = Arc::clone(&self.ui_state);
+            ctx.show_viewport_deferred(palette_id, builder, move |ctx, class| {
+                let ui_state = ui_state.lock().unwrap();
+                let title = ui_state.i18n.text(TextId::MenuWindowPalette);
+                show_viewport_content(ctx, class, title, |ui| {
+                    ui.heading(ui_state.i18n.text(TextId::PaletteHeading));
                     ui.label("Palette viewer is currently unavailable.");
                 });
             });
@@ -146,21 +214,35 @@ impl NesiumApp {
             let builder = ViewportBuilder::default()
                 .with_title(self.t(TextId::MenuWindowInput))
                 .with_inner_size([420.0, 300.0]);
-            ctx.show_viewport_immediate(ViewportId::from_hash_of("input"), builder, |ctx, _| {
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    self.show_input = false;
-                    return;
+            let ui_state = Arc::clone(&self.ui_state);
+            ctx.show_viewport_deferred(input_id, builder, move |ctx, class| {
+                let mut ui_state = ui_state.lock().unwrap();
+                let title = ui_state.i18n.text(TextId::MenuWindowInput);
+
+                // Update key-capture in this viewport too, otherwise key events won't be seen
+                // when the Input window is focused.
+                let port_for_capture = ui_state.active_input_port.min(3);
+                if matches!(
+                    ui_state.controller_devices[port_for_capture],
+                    ControllerDevice::Keyboard
+                ) {
+                    ui_state.controllers[port_for_capture].sync_from_input(
+                        ctx,
+                        port_for_capture,
+                        true,
+                    );
                 }
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.heading(self.t(TextId::InputHeading));
+
+                show_viewport_content(ctx, class, title, |ui| {
+                    ui.heading(ui_state.i18n.text(TextId::InputHeading));
 
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(self.t(TextId::InputControllerPortsLabel));
+                                ui.label(ui_state.i18n.text(TextId::InputControllerPortsLabel));
                                 for port in 0..4 {
-                                    let label = match self.language() {
+                                    let label = match ui_state.i18n.language() {
                                         super::Language::English => {
                                             format!("Port {}", port + 1)
                                         }
@@ -168,15 +250,19 @@ impl NesiumApp {
                                             format!("端口 {}", port + 1)
                                         }
                                     };
-                                    ui.selectable_value(&mut self.active_input_port, port, label);
+                                    ui.selectable_value(
+                                        &mut ui_state.active_input_port,
+                                        port,
+                                        label,
+                                    );
                                 }
                             });
 
                             ui.separator();
-                            let port = self.active_input_port.min(3);
+                            let port = ui_state.active_input_port.min(3);
 
                             ui.horizontal(|ui| {
-                                let language = self.language();
+                                let language = ui_state.i18n.language();
                                 let device_label = match language {
                                     super::Language::English => {
                                         format!("Port {} device:", port + 1)
@@ -185,21 +271,26 @@ impl NesiumApp {
                                         format!("端口 {} 设备:", port + 1)
                                     }
                                 };
-                                let keyboard_label = self.t(TextId::InputDeviceKeyboard);
-                                let disabled_label = self.t(TextId::InputDeviceDisabled);
-                                let no_gamepads_label = self.t(TextId::InputNoGamepads);
+                                let keyboard_label =
+                                    ui_state.i18n.text(TextId::InputDeviceKeyboard);
+                                let disabled_label =
+                                    ui_state.i18n.text(TextId::InputDeviceDisabled);
+                                let no_gamepads_label = ui_state.i18n.text(TextId::InputNoGamepads);
                                 let gamepad_unavailable_label =
-                                    self.t(TextId::InputGamepadUnavailable);
+                                    ui_state.i18n.text(TextId::InputGamepadUnavailable);
 
                                 ui.label(device_label);
-                                let dev = &mut self.controller_devices[port];
+
+                                let gamepads_available = ui_state.gamepads_available;
+                                let gamepads = ui_state.gamepads.clone();
+
                                 ui.selectable_value(
-                                    dev,
+                                    &mut ui_state.controller_devices[port],
                                     ControllerDevice::Keyboard,
                                     keyboard_label,
                                 );
-                                if let Some(manager) = &self.gamepads {
-                                    let gamepads = manager.gamepads();
+
+                                if gamepads_available {
                                     for (id, name) in &gamepads {
                                         let label = match language {
                                             super::Language::English => {
@@ -210,7 +301,7 @@ impl NesiumApp {
                                             }
                                         };
                                         ui.selectable_value(
-                                            dev,
+                                            &mut ui_state.controller_devices[port],
                                             ControllerDevice::Gamepad(*id),
                                             label,
                                         );
@@ -221,8 +312,9 @@ impl NesiumApp {
                                 } else {
                                     ui.label(gamepad_unavailable_label);
                                 }
+
                                 ui.selectable_value(
-                                    dev,
+                                    &mut ui_state.controller_devices[port],
                                     ControllerDevice::Disabled,
                                     disabled_label,
                                 );
@@ -231,19 +323,20 @@ impl NesiumApp {
                             if port >= 2 {
                                 ui.colored_label(
                                     Color32::DARK_GRAY,
-                                    self.t(TextId::InputPort34Notice),
+                                    ui_state.i18n.text(TextId::InputPort34Notice),
                                 );
                             }
 
                             ui.separator();
                             ui.horizontal(|ui| {
-                                let preset_label = self.t(TextId::InputPresetLabel);
-                                let nes_label = self.t(TextId::InputPresetNesStandard);
-                                let fight_label = self.t(TextId::InputPresetFightStick);
-                                let arcade_label = self.t(TextId::InputPresetArcadeLayout);
+                                let preset_label = ui_state.i18n.text(TextId::InputPresetLabel);
+                                let nes_label = ui_state.i18n.text(TextId::InputPresetNesStandard);
+                                let fight_label = ui_state.i18n.text(TextId::InputPresetFightStick);
+                                let arcade_label =
+                                    ui_state.i18n.text(TextId::InputPresetArcadeLayout);
 
                                 ui.label(preset_label);
-                                let mut preset_value = self.controller_presets[port];
+                                let mut preset_value = ui_state.controller_presets[port];
                                 egui::ComboBox::from_id_salt(format!("input_preset_combo_{port}"))
                                     .selected_text(match preset_value {
                                         InputPreset::NesStandard => nes_label,
@@ -259,7 +352,7 @@ impl NesiumApp {
                                             )
                                             .clicked()
                                         {
-                                            self.controllers[port]
+                                            ui_state.controllers[port]
                                                 .apply_preset(InputPreset::NesStandard);
                                         }
                                         if ui
@@ -270,7 +363,7 @@ impl NesiumApp {
                                             )
                                             .clicked()
                                         {
-                                            self.controllers[port]
+                                            ui_state.controllers[port]
                                                 .apply_preset(InputPreset::FightStick);
                                         }
                                         if ui
@@ -281,16 +374,16 @@ impl NesiumApp {
                                             )
                                             .clicked()
                                         {
-                                            self.controllers[port]
+                                            ui_state.controllers[port]
                                                 .apply_preset(InputPreset::ArcadeLayout);
                                         }
                                     });
-                                self.controller_presets[port] = preset_value;
+                                ui_state.controller_presets[port] = preset_value;
                             });
 
                             ui.separator();
-                            ui.label(self.t(TextId::InputKeyboardMappingTitle));
-                            ui.small(self.t(TextId::InputKeyboardMappingHelp));
+                            ui.label(ui_state.i18n.text(TextId::InputKeyboardMappingTitle));
+                            ui.small(ui_state.i18n.text(TextId::InputKeyboardMappingHelp));
 
                             ui.separator();
                             egui::Grid::new("input_mapping_grid")
@@ -298,14 +391,20 @@ impl NesiumApp {
                                 .spacing([12.0, 4.0])
                                 .striped(true)
                                 .show(ui, |ui| {
-                                    let header_category = self.t(TextId::InputGridHeaderCategory);
-                                    let header_button = self.t(TextId::InputGridHeaderButton);
-                                    let header_current = self.t(TextId::InputGridHeaderCurrentKey);
-                                    let header_action = self.t(TextId::InputGridHeaderAction);
-                                    let prompt_label = self.t(TextId::InputPromptPressAnyKey);
-                                    let not_bound_label = self.t(TextId::InputNotBound);
-                                    let cancel_label = self.t(TextId::InputCancelButton);
-                                    let bind_label = self.t(TextId::InputBindButton);
+                                    let header_category =
+                                        ui_state.i18n.text(TextId::InputGridHeaderCategory);
+                                    let header_button =
+                                        ui_state.i18n.text(TextId::InputGridHeaderButton);
+                                    let header_current =
+                                        ui_state.i18n.text(TextId::InputGridHeaderCurrentKey);
+                                    let header_action =
+                                        ui_state.i18n.text(TextId::InputGridHeaderAction);
+                                    let prompt_label =
+                                        ui_state.i18n.text(TextId::InputPromptPressAnyKey);
+                                    let not_bound_label = ui_state.i18n.text(TextId::InputNotBound);
+                                    let cancel_label =
+                                        ui_state.i18n.text(TextId::InputCancelButton);
+                                    let bind_label = ui_state.i18n.text(TextId::InputBindButton);
 
                                     ui.strong(header_category);
                                     ui.strong(header_button);
@@ -325,18 +424,18 @@ impl NesiumApp {
                                     ];
 
                                     for (category_id, button) in mapping_rows {
-                                        let category_label = self.t(*category_id);
+                                        let category_label = ui_state.i18n.text(*category_id);
                                         let name = controller::format_button_name(*button);
-                                        let ctrl = &mut self.controllers[port];
-                                        let bound = ctrl.binding_for(*button);
-                                        let is_capturing = ctrl.capture_target() == Some(*button);
+                                        let ctrl = &mut ui_state.controllers[port];
 
                                         ui.label(category_label);
                                         ui.label(name);
 
+                                        let capture_target = ctrl.capture_target();
+                                        let is_capturing = capture_target == Some(*button);
                                         if is_capturing {
-                                            ui.colored_label(Color32::LIGHT_YELLOW, prompt_label);
-                                        } else if let Some(key) = bound {
+                                            ui.colored_label(Color32::LIGHT_BLUE, prompt_label);
+                                        } else if let Some(key) = ctrl.binding_for(*button) {
                                             ui.monospace(format!("{key:?}"));
                                         } else {
                                             ui.colored_label(Color32::DARK_GRAY, not_bound_label);
@@ -360,9 +459,9 @@ impl NesiumApp {
                                 });
 
                             ui.horizontal(|ui| {
-                                ui.label(self.t(TextId::InputCurrentlyPressedLabel));
+                                ui.label(ui_state.i18n.text(TextId::InputCurrentlyPressedLabel));
                                 ui.horizontal_wrapped(|ui| {
-                                    let ctrl = &self.controllers[port];
+                                    let ctrl = &ui_state.controllers[port];
                                     for button in [
                                         Button::Up,
                                         Button::Down,
@@ -384,74 +483,79 @@ impl NesiumApp {
                             });
 
                             ui.separator();
-                            ui.collapsing(self.t(TextId::InputGamepadMappingSection), |ui| {
-                                ui.label(self.t(TextId::InputGamepadMappingTitle));
-                                let all_buttons: &[GilrsButton] = &[
-                                    GilrsButton::South,
-                                    GilrsButton::East,
-                                    GilrsButton::West,
-                                    GilrsButton::North,
-                                    GilrsButton::LeftTrigger,
-                                    GilrsButton::RightTrigger,
-                                    GilrsButton::LeftTrigger2,
-                                    GilrsButton::RightTrigger2,
-                                    GilrsButton::DPadUp,
-                                    GilrsButton::DPadDown,
-                                    GilrsButton::DPadLeft,
-                                    GilrsButton::DPadRight,
-                                    GilrsButton::Start,
-                                    GilrsButton::Select,
-                                ];
+                            ui.collapsing(
+                                ui_state.i18n.text(TextId::InputGamepadMappingSection),
+                                |ui| {
+                                    ui.label(ui_state.i18n.text(TextId::InputGamepadMappingTitle));
+                                    let all_buttons: &[GilrsButton] = &[
+                                        GilrsButton::South,
+                                        GilrsButton::East,
+                                        GilrsButton::West,
+                                        GilrsButton::North,
+                                        GilrsButton::LeftTrigger,
+                                        GilrsButton::RightTrigger,
+                                        GilrsButton::LeftTrigger2,
+                                        GilrsButton::RightTrigger2,
+                                        GilrsButton::DPadUp,
+                                        GilrsButton::DPadDown,
+                                        GilrsButton::DPadLeft,
+                                        GilrsButton::DPadRight,
+                                        GilrsButton::Start,
+                                        GilrsButton::Select,
+                                    ];
 
-                                egui::Grid::new("gamepad_mapping_grid")
-                                    .num_columns(3)
-                                    .spacing([12.0, 4.0])
-                                    .striped(true)
-                                    .show(ui, |ui| {
-                                        let header_category =
-                                            self.t(TextId::InputGamepadGridHeaderCategory);
-                                        let header_button =
-                                            self.t(TextId::InputGamepadGridHeaderButton);
-                                        let header_gamepad_button =
-                                            self.t(TextId::InputGamepadGridHeaderGamepadButton);
-                                        let not_bound_label = self.t(TextId::InputNotBound);
+                                    egui::Grid::new("gamepad_mapping_grid")
+                                        .num_columns(3)
+                                        .spacing([12.0, 4.0])
+                                        .striped(true)
+                                        .show(ui, |ui| {
+                                            let header_category = ui_state
+                                                .i18n
+                                                .text(TextId::InputGamepadGridHeaderCategory);
+                                            let header_button = ui_state
+                                                .i18n
+                                                .text(TextId::InputGamepadGridHeaderButton);
+                                            let header_gamepad_button = ui_state
+                                                .i18n
+                                                .text(TextId::InputGamepadGridHeaderGamepadButton);
+                                            let not_bound_label =
+                                                ui_state.i18n.text(TextId::InputNotBound);
 
-                                        ui.strong(header_category);
-                                        ui.strong(header_button);
-                                        ui.strong(header_gamepad_button);
-                                        ui.end_row();
+                                            ui.strong(header_category);
+                                            ui.strong(header_button);
+                                            ui.strong(header_gamepad_button);
+                                            ui.end_row();
 
-                                        let mapping_rows: &[(TextId, Button)] = &[
-                                            (TextId::InputCategoryDirection, Button::Up),
-                                            (TextId::InputCategoryDirection, Button::Down),
-                                            (TextId::InputCategoryDirection, Button::Left),
-                                            (TextId::InputCategoryDirection, Button::Right),
-                                            (TextId::InputCategoryAction, Button::A),
-                                            (TextId::InputCategoryAction, Button::B),
-                                            (TextId::InputCategorySystem, Button::Select),
-                                            (TextId::InputCategorySystem, Button::Start),
-                                        ];
+                                            let mapping_rows: &[(TextId, Button)] = &[
+                                                (TextId::InputCategoryDirection, Button::Up),
+                                                (TextId::InputCategoryDirection, Button::Down),
+                                                (TextId::InputCategoryDirection, Button::Left),
+                                                (TextId::InputCategoryDirection, Button::Right),
+                                                (TextId::InputCategoryAction, Button::A),
+                                                (TextId::InputCategoryAction, Button::B),
+                                                (TextId::InputCategorySystem, Button::Select),
+                                                (TextId::InputCategorySystem, Button::Start),
+                                            ];
 
-                                        for (category_id, button) in mapping_rows {
-                                            let category_label = self.t(*category_id);
-                                            let name = controller::format_button_name(*button);
-                                            let ctrl = &mut self.controllers[port];
-                                            let mut binding = ctrl.gamepad_binding_for(*button);
+                                            for (category_id, button) in mapping_rows {
+                                                let category_label =
+                                                    ui_state.i18n.text(*category_id);
+                                                let name = controller::format_button_name(*button);
+                                                let ctrl = &mut ui_state.controllers[port];
+                                                let mut binding = ctrl.gamepad_binding_for(*button);
 
-                                            ui.label(category_label);
-                                            ui.label(name);
+                                                ui.label(category_label);
+                                                ui.label(name);
 
-                                            let current_label = binding
-                                                .map(|b| format!("{b:?}"))
-                                                .unwrap_or_else(|| not_bound_label.to_string());
+                                                let current_label = binding
+                                                    .map(|b| format!("{b:?}"))
+                                                    .unwrap_or_else(|| not_bound_label.to_string());
 
-                                            egui::ComboBox::from_id_salt(format!(
-                                                "gp_map_{port}_{name}"
-                                            ))
-                                            .selected_text(current_label)
-                                            .show_ui(
-                                                ui,
-                                                |ui| {
+                                                egui::ComboBox::from_id_salt(format!(
+                                                    "gp_map_{port}_{name}"
+                                                ))
+                                                .selected_text(current_label)
+                                                .show_ui(ui, |ui| {
                                                     if ui
                                                         .selectable_label(
                                                             binding.is_none(),
@@ -471,25 +575,27 @@ impl NesiumApp {
                                                             binding = Some(*btn);
                                                         }
                                                     }
-                                                },
-                                            );
+                                                });
 
-                                            ctrl.set_gamepad_binding(*button, binding);
-                                            ui.end_row();
-                                        }
-                                    });
+                                                ctrl.set_gamepad_binding(*button, binding);
+                                                ui.end_row();
+                                            }
+                                        });
 
-                                let restore_label = self.t(TextId::InputRestoreDefaults);
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        if ui.button(restore_label).clicked() {
-                                            self.controllers[port] =
-                                                controller::ControllerInput::new_with_defaults();
-                                        }
-                                    },
-                                );
-                            });
+                                    let restore_label =
+                                        ui_state.i18n.text(TextId::InputRestoreDefaults);
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if ui.button(restore_label).clicked() {
+                                                ui_state.controllers[port] =
+                                                    controller::ControllerInput::new_with_defaults(
+                                                    );
+                                            }
+                                        },
+                                    );
+                                },
+                            );
                         });
                 });
             });
@@ -499,34 +605,35 @@ impl NesiumApp {
             let builder = ViewportBuilder::default()
                 .with_title(self.t(TextId::MenuWindowAudio))
                 .with_inner_size([320.0, 320.0]);
-            ctx.show_viewport_immediate(ViewportId::from_hash_of("audio"), builder, |ctx, _| {
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    self.show_audio = false;
-                    return;
-                }
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    let heading = self.t(TextId::AudioHeading);
-                    let master_label = self.t(TextId::AudioMasterVolumeLabel);
-                    let bg_label = self.t(TextId::AudioBgFastBehaviorLabel);
-                    let mute_bg_label = self.t(TextId::AudioMuteInBackground);
-                    let reduce_bg_label = self.t(TextId::AudioReduceInBackground);
-                    let reduce_ff_label = self.t(TextId::AudioReduceInFastForward);
-                    let reduce_amount_label = self.t(TextId::AudioReduceAmount);
-                    let reverb_section_label = self.t(TextId::AudioReverbSection);
-                    let reverb_enable_label = self.t(TextId::AudioEnableReverb);
-                    let reverb_strength_label = self.t(TextId::AudioReverbStrength);
-                    let reverb_delay_label = self.t(TextId::AudioReverbDelayMs);
-                    let crossfeed_section_label = self.t(TextId::AudioCrossfeedSection);
-                    let crossfeed_enable_label = self.t(TextId::AudioEnableCrossfeed);
-                    let crossfeed_ratio_label = self.t(TextId::AudioCrossfeedRatio);
-                    let eq_section_label = self.t(TextId::AudioEqSection);
-                    let eq_enable_label = self.t(TextId::AudioEnableEq);
-                    let eq_gain_label = self.t(TextId::AudioEqGlobalGain);
+            let ui_state = Arc::clone(&self.ui_state);
+            let runtime_handle = self.runtime_handle.clone();
+            ctx.show_viewport_deferred(audio_id, builder, move |ctx, class| {
+                let mut ui_state = ui_state.lock().unwrap();
 
+                let title = ui_state.i18n.text(TextId::MenuWindowAudio);
+                let heading = ui_state.i18n.text(TextId::AudioHeading);
+                let master_label = ui_state.i18n.text(TextId::AudioMasterVolumeLabel);
+                let bg_label = ui_state.i18n.text(TextId::AudioBgFastBehaviorLabel);
+                let mute_bg_label = ui_state.i18n.text(TextId::AudioMuteInBackground);
+                let reduce_bg_label = ui_state.i18n.text(TextId::AudioReduceInBackground);
+                let reduce_ff_label = ui_state.i18n.text(TextId::AudioReduceInFastForward);
+                let reduce_amount_label = ui_state.i18n.text(TextId::AudioReduceAmount);
+                let reverb_section_label = ui_state.i18n.text(TextId::AudioReverbSection);
+                let reverb_enable_label = ui_state.i18n.text(TextId::AudioEnableReverb);
+                let reverb_strength_label = ui_state.i18n.text(TextId::AudioReverbStrength);
+                let reverb_delay_label = ui_state.i18n.text(TextId::AudioReverbDelayMs);
+                let crossfeed_section_label = ui_state.i18n.text(TextId::AudioCrossfeedSection);
+                let crossfeed_enable_label = ui_state.i18n.text(TextId::AudioEnableCrossfeed);
+                let crossfeed_ratio_label = ui_state.i18n.text(TextId::AudioCrossfeedRatio);
+                let eq_section_label = ui_state.i18n.text(TextId::AudioEqSection);
+                let eq_enable_label = ui_state.i18n.text(TextId::AudioEnableEq);
+                let eq_gain_label = ui_state.i18n.text(TextId::AudioEqGlobalGain);
+
+                show_viewport_content(ctx, class, title, |ui| {
                     ui.heading(heading);
                     ui.separator();
 
-                    let cfg = &mut self.audio_cfg;
+                    let cfg = &mut ui_state.audio_cfg;
                     let mut changed = false;
 
                     // Master volume
@@ -612,16 +719,15 @@ impl NesiumApp {
                         {
                             changed = true;
                         }
-                        if cfg.crossfeed_enabled {
-                            if ui
+                        if cfg.crossfeed_enabled
+                            && ui
                                 .add(
                                     egui::Slider::new(&mut cfg.crossfeed_ratio, 0.0..=1.0)
                                         .text(crossfeed_ratio_label),
                                 )
                                 .changed()
-                            {
-                                changed = true;
-                            }
+                        {
+                            changed = true;
                         }
                     });
 
@@ -633,7 +739,7 @@ impl NesiumApp {
                             changed = true;
                         }
                         if cfg.enable_equalizer {
-                            // 统一使用单一增益控制 20 个频段。
+                            // Use a single gain slider for all bands.
                             let mut gain_db = cfg.eq_band_gains[0];
                             if ui
                                 .add(
@@ -651,7 +757,7 @@ impl NesiumApp {
                     });
 
                     if changed {
-                        let _ = self.runtime_handle.set_audio_config(*cfg);
+                        let _ = runtime_handle.set_audio_config(*cfg);
                     }
                 });
             });

@@ -672,16 +672,14 @@ impl Ppu {
             // the last dot of the scanline when we are on the pre-render
             // scanline, cycle 339 of an odd frame with rendering enabled.
             (-1, 337..=340) => {
-                if rendering_enabled {
-                    if ppu.cycle == 337 || ppu.cycle == 339 {
-                        // Mesen2 / hardware: dummy nametable fetches at end of line.
-                        // These drive the mapper PPU address bus (A12) for IRQ clocking.
-                        let _ = ppu.read_vram(
-                            &mut pattern,
-                            ppu.nametable_addr(),
-                            crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
-                        );
-                    }
+                if rendering_enabled && (ppu.cycle == 337 || ppu.cycle == 339) {
+                    // Mesen2 / hardware: dummy nametable fetches at end of line.
+                    // These drive the mapper PPU address bus (A12) for IRQ clocking.
+                    let _ = ppu.read_vram(
+                        &mut pattern,
+                        ppu.nametable_addr(),
+                        crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                    );
                 }
 
                 if ppu.cycle == 339 && ppu.frame % 2 == 1 && ppu.render_enabled {
@@ -1399,7 +1397,7 @@ impl Ppu {
             // dummy pattern fetches to sprite tile $FF, row 0 (used by MMC3 IRQ counters).
             (0xFF, 0)
         } else {
-            let mut r = (self.scanline - (y as i16)) as i16;
+            let mut r = self.scanline - (y as i16);
             debug_assert!(
                 r >= 0 && r < sprite_height,
                 "PPU sprite row out of range: scanline={} sprite_y={} sprite_height={} row={}",

@@ -41,9 +41,9 @@ impl SpriteEvalState {
     #[inline]
     pub(crate) fn latch_end_of_evaluation(
         &mut self,
-        scanline: i16,
-        last_oam_byte: u8,
-        sprite_height: u8,
+        _scanline: i16,
+        _last_oam_byte: u8,
+        _sprite_height: u8,
     ) {
         // Mirrors `ProcessSpriteEvaluationEnd` (for the default "bug enabled" path).
         let bytes = self.secondary_oam_addr;
