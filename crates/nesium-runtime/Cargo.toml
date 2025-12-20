@@ -1,0 +1,11 @@
+[package]
+name = "nesium-runtime"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+nesium-core.path = "../nesium-core"
+anyhow.workspace = true
+cpal.workspace = true
+ringbuf.workspace = true
