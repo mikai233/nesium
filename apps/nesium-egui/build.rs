@@ -7,6 +7,8 @@ const ICON_SIZE: u32 = 256;
 const BASE_RENDER_SIZE: u32 = DEFAULT_ICON_SIZE;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 const APP_ID: &str = "com.mikai233.nesium";
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+const BIN_NAME: &str = "nesium_egui";
 
 #[derive(Clone, Copy)]
 struct LayoutParams {
@@ -329,15 +331,16 @@ Type=Application
 Version=1.0
 Name=Nesium
 Comment=NES emulator
-Exec=nesium-egui %f
-TryExec=nesium-egui
+Exec={bin} %f
+TryExec={bin}
 Icon={app_id}
 Terminal=false
 Categories=Game;
 StartupNotify=true
 StartupWMClass={app_id}
 "#,
-        app_id = APP_ID
+        app_id = APP_ID,
+        bin = BIN_NAME
     )
 }
 

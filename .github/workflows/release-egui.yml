@@ -115,7 +115,7 @@ jobs:
 
           cp "$found" "dist/$installer"
 
-          exe="target/${{ matrix.target }}/release-dist/nesium-egui"
+          exe="target/${{ matrix.target }}/release-dist/nesium_egui"
           if [ ! -f "$exe" ]; then
             echo "Expected binary not found at $exe"
             ls -la "target/${{ matrix.target }}/release-dist" || true
@@ -216,12 +216,12 @@ jobs:
           }
           Copy-Item $msi.FullName "dist\\$installer" -Force
 
-          $exe = "target\\${{ matrix.target }}\\release-dist\\nesium-egui.exe"
+          $exe = "target\\${{ matrix.target }}\\release-dist\\nesium_egui.exe"
           if (-not (Test-Path $exe)) {
-            $exe = "target\\release-dist\\nesium-egui.exe"
+            $exe = "target\\release-dist\\nesium_egui.exe"
           }
           if (-not (Test-Path $exe)) {
-            Write-Error "Expected binary not found at target\\${{ matrix.target }}\\release-dist\\nesium-egui.exe"
+            Write-Error "Expected binary not found at target\\${{ matrix.target }}\\release-dist\\nesium_egui.exe"
             exit 1
           }
 
