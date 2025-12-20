@@ -56,7 +56,6 @@ pub enum TextId {
 
     // Main view
     MainNoRom,
-    MainWaitingFirstFrame,
 
     // Tools viewport
     ToolsHeading,

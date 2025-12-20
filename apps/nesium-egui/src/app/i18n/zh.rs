@@ -48,7 +48,6 @@ impl LanguagePack for Zh {
 
             // Main view
             MainNoRom => "未加载 ROM",
-            MainWaitingFirstFrame => "等待首帧…",
 
             // Tools viewport
             ToolsHeading => "工具箱",

@@ -48,7 +48,6 @@ impl LanguagePack for En {
 
             // Main view
             MainNoRom => "No ROM loaded",
-            MainWaitingFirstFrame => "Waiting for first frame…",
 
             // Tools viewport
             ToolsHeading => "Tools",

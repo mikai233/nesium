@@ -43,11 +43,6 @@ impl NesiumApp {
                             let scale = scale.max(1.0);
                             let desired = base * scale;
                             ui.add(egui::Image::from_texture(tex).fit_to_exact_size(desired));
-                        } else {
-                            ui.colored_label(
-                                Color32::DARK_GRAY,
-                                self.t(TextId::MainWaitingFirstFrame),
-                            );
                         }
                     });
                 });
