@@ -5,7 +5,7 @@ pub fn install_cjk_font(ctx: &EguiContext) {
     db.load_system_fonts();
 
     let target_chars = ['你', '汉', '测', '试'];
-    let mut picked: Option<Vec<u8>> = None;
+    let mut picked: Option<(Vec<u8>, u32)> = None;
 
     for face in db.faces() {
         let has_all = db.with_face_data(face.id, |data, idx| {
@@ -17,19 +17,22 @@ pub fn install_cjk_font(ctx: &EguiContext) {
                 .iter()
                 .all(|ch| face.glyph_index(*ch).is_some())
         });
-        if has_all == Some(true)
-            && let Some(bytes) = db.with_face_data(face.id, |data, _| data.to_vec())
-        {
-            picked = Some(bytes);
-            break;
+        if has_all == Some(true) {
+            let bytes_and_index = db.with_face_data(face.id, |data, idx| (data.to_vec(), idx));
+            if let Some((bytes, idx)) = bytes_and_index {
+                picked = Some((bytes, idx as u32));
+                break;
+            }
         }
     }
 
-    if let Some(data) = picked {
+    if let Some((data, index)) = picked {
         let mut fonts = FontDefinitions::default();
+        let mut font_data = FontData::from_owned(data);
+        font_data.index = index;
         fonts
             .font_data
-            .insert("ui_cjk".to_string(), FontData::from_owned(data).into());
+            .insert("ui_cjk".to_string(), font_data.into());
         fonts
             .families
             .entry(FontFamily::Proportional)
