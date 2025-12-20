@@ -54,9 +54,9 @@ pub(super) struct UiState {
 }
 
 pub struct NesiumApp {
-    video_backing: VideoBackingStore,
+    _video_backing: VideoBackingStore,
     runtime_handle: RuntimeHandle,
-    runtime: Runtime,
+    _runtime: Runtime,
     frame_texture: Option<TextureHandle>,
     frame_image: Option<Arc<ColorImage>>,
     last_frame_seq: u64,
@@ -125,9 +125,9 @@ impl NesiumApp {
         }));
 
         let mut app = Self {
-            video_backing,
+            _video_backing: video_backing,
             runtime_handle,
-            runtime,
+            _runtime: runtime,
             frame_texture: None,
             frame_image: None,
             last_frame_seq: 0,
