@@ -10,6 +10,7 @@ identifier = "com.mikai233.nesium"
 icon = [
     "../../target/generated/nesium.icns",
     "../../target/generated/nesium.ico",
+    "../../target/generated/nesium.png",
 ]
 version = "0.1.0"
 copyright = "Copyright (c) 2025 mikai233"

@@ -36,6 +36,7 @@ fn main() {
 
     write_icon_bin(&out_dir, &icon_rgba).expect("failed to write icon_rgba.bin");
     write_icon_rs(&out_dir).expect("failed to write egui_icon.rs");
+    generate_bundle_icons(&layers);
 
     #[cfg(target_os = "windows")]
     generate_windows_resources(&out_dir, &layers);
@@ -63,6 +64,40 @@ pub static ICON_RGBA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_rgb
     fs::write(out_dir.join("egui_icon.rs"), content)
 }
 
+fn generate_bundle_icons(layers: &IconLayers) {
+    use ico::{IconDir, IconDirEntry, IconImage, ResourceType};
+
+    let generated_dir = target_root().join("generated");
+    fs::create_dir_all(&generated_dir).expect("create target/generated");
+
+    // PNG (used by Linux packaging and as a general-purpose fallback)
+    let rgba_256 = compose_icon(layers, ICON_SIZE, layout());
+    let png_path = generated_dir.join("nesium.png");
+    write_png_file(&png_path, ICON_SIZE, ICON_SIZE, &rgba_256)
+        .expect("write target/generated/nesium.png");
+
+    // ICO (used by Windows packaging)
+    let ico_path = generated_dir.join("nesium.ico");
+    let sizes = [16u32, 32, 48, 64, 128, ICON_SIZE];
+    let mut icon_dir = IconDir::new(ResourceType::Icon);
+    for size in sizes {
+        let rgba = compose_icon(layers, size, layout());
+        let image = IconImage::from_rgba_data(size, size, rgba);
+        let entry = IconDirEntry::encode(&image).expect("encode ICO entry");
+        icon_dir.add_entry(entry);
+    }
+    let mut file = File::create(&ico_path).expect("create target/generated/nesium.ico");
+    icon_dir
+        .write(&mut file)
+        .expect("write target/generated/nesium.ico");
+
+    // ICNS (used by macOS packaging)
+    let png_bytes =
+        encode_png_to_vec(ICON_SIZE, ICON_SIZE, &rgba_256).expect("encode PNG for icns");
+    let icns_path = generated_dir.join("nesium.icns");
+    write_icns_from_png(&icns_path, &png_bytes).expect("write target/generated/nesium.icns");
+}
+
 #[cfg(target_os = "windows")]
 fn generate_windows_resources(out_dir: &Path, layers: &IconLayers) {
     use ico::{IconDir, IconDirEntry, IconImage, ResourceType};
@@ -74,15 +109,14 @@ fn generate_windows_resources(out_dir: &Path, layers: &IconLayers) {
     for size in sizes {
         let rgba = compose_icon(layers, size, layout());
         let image = IconImage::from_rgba_data(size, size, rgba);
-        icon_dir
-            .add_entry(IconDirEntry::encode(&image).expect("encode ICO entry"))
-            .expect("add ICO entry");
+        let entry = IconDirEntry::encode(&image).expect("encode ICO entry");
+        icon_dir.add_entry(entry);
     }
 
     let ico_path = out_dir.join("app.ico");
     let mut file = File::create(&ico_path).expect("create app.ico");
     icon_dir
-        .write_to(&mut file)
+        .write(&mut file)
         .expect("write ICO to OUT_DIR/app.ico");
 
     let mut res = WindowsResource::new();
