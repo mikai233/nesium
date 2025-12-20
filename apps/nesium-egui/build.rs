@@ -17,11 +17,55 @@ struct LayoutParams {
     fg_scale: f32,     // foreground scale relative to background box
 }
 
-fn layout() -> LayoutParams {
+fn layout_default() -> LayoutParams {
     LayoutParams {
         pad_ratio: 0.11,
         radius_ratio: 0.20,
         fg_scale: 1.,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn layout_for_window_icon() -> LayoutParams {
+    // Windows will scale the window icon down to small sizes (titlebar/taskbar).
+    // Use less padding to keep the glyph readable.
+    LayoutParams {
+        pad_ratio: 0.07,
+        radius_ratio: 0.12,
+        fg_scale: 1.0,
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn layout_for_window_icon() -> LayoutParams {
+    layout_default()
+}
+
+fn layout_for_ico_size(size: u32) -> LayoutParams {
+    // Small ICO entries need less padding and often no rounding,
+    // otherwise the icon looks tiny in the titlebar/taskbar.
+    match size {
+        0..=24 => LayoutParams {
+            pad_ratio: 0.02,
+            radius_ratio: 0.0,
+            fg_scale: 1.0,
+        },
+        25..=32 => LayoutParams {
+            pad_ratio: 0.04,
+            radius_ratio: 0.0,
+            fg_scale: 1.0,
+        },
+        33..=48 => LayoutParams {
+            pad_ratio: 0.06,
+            radius_ratio: 0.08,
+            fg_scale: 1.0,
+        },
+        49..=64 => LayoutParams {
+            pad_ratio: 0.08,
+            radius_ratio: 0.14,
+            fg_scale: 1.0,
+        },
+        _ => layout_default(),
     }
 }
 
@@ -34,7 +78,7 @@ fn main() {
     println!("cargo:rustc-env=NESIUM_APP_ID={}", APP_ID);
 
     let layers = nesium_icon::render_layers(BASE_RENDER_SIZE);
-    let icon_rgba = compose_icon(&layers, ICON_SIZE, layout());
+    let icon_rgba = compose_icon(&layers, ICON_SIZE, layout_for_window_icon());
 
     write_icon_bin(&out_dir, &icon_rgba).expect("failed to write icon_rgba.bin");
     write_icon_rs(&out_dir).expect("failed to write egui_icon.rs");
@@ -73,17 +117,17 @@ fn generate_bundle_icons(layers: &IconLayers) {
     fs::create_dir_all(&generated_dir).expect("create target/generated");
 
     // PNG (used by Linux packaging and as a general-purpose fallback)
-    let rgba_256 = compose_icon(layers, ICON_SIZE, layout());
+    let rgba_256 = compose_icon(layers, ICON_SIZE, layout_default());
     let png_path = generated_dir.join("nesium.png");
     write_png_file(&png_path, ICON_SIZE, ICON_SIZE, &rgba_256)
         .expect("write target/generated/nesium.png");
 
     // ICO (used by Windows packaging)
     let ico_path = generated_dir.join("nesium.ico");
-    let sizes = [16u32, 32, 48, 64, 128, ICON_SIZE];
+    let sizes = [16u32, 20, 24, 32, 40, 48, 64, 96, 128, ICON_SIZE];
     let mut icon_dir = IconDir::new(ResourceType::Icon);
     for size in sizes {
-        let rgba = compose_icon(layers, size, layout());
+        let rgba = compose_icon(layers, size, layout_for_ico_size(size));
         let image = IconImage::from_rgba_data(size, size, rgba);
         let entry = IconDirEntry::encode(&image).expect("encode ICO entry");
         icon_dir.add_entry(entry);
@@ -105,11 +149,11 @@ fn generate_windows_resources(out_dir: &Path, layers: &IconLayers) {
     use ico::{IconDir, IconDirEntry, IconImage, ResourceType};
     use winres::WindowsResource;
 
-    let sizes = [16u32, 32, 48, 64, 128, ICON_SIZE];
+    let sizes = [16u32, 20, 24, 32, 40, 48, 64, 96, 128, ICON_SIZE];
     let mut icon_dir = IconDir::new(ResourceType::Icon);
 
     for size in sizes {
-        let rgba = compose_icon(layers, size, layout());
+        let rgba = compose_icon(layers, size, layout_for_ico_size(size));
         let image = IconImage::from_rgba_data(size, size, rgba);
         let entry = IconDirEntry::encode(&image).expect("encode ICO entry");
         icon_dir.add_entry(entry);
@@ -136,7 +180,7 @@ fn generate_linux_assets(layers: &IconLayers) {
     let icon_dir = generated_dir.join("icons");
     fs::create_dir_all(&icon_dir).expect("create target/generated/icons");
 
-    let rgba = compose_icon(layers, ICON_SIZE, layout());
+    let rgba = compose_icon(layers, ICON_SIZE, layout_default());
     let icon_path = icon_dir.join(format!("{APP_ID}.png"));
     write_png_file(&icon_path, ICON_SIZE, ICON_SIZE, &rgba)
         .expect("write target/generated/icons/com.yourorg.nesium.png");
@@ -151,7 +195,7 @@ fn generate_macos_assets(layers: &IconLayers) {
     let generated_dir = target_root().join("generated");
     fs::create_dir_all(&generated_dir).expect("create target/generated");
 
-    let rgba = compose_icon(layers, ICON_SIZE, layout());
+    let rgba = compose_icon(layers, ICON_SIZE, layout_default());
     let png_bytes =
         encode_png_to_vec(ICON_SIZE, ICON_SIZE, &rgba).expect("encode PNG for macOS icns");
     let icns_path = generated_dir.join("nesium.icns");
