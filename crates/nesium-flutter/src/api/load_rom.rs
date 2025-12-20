@@ -2,20 +2,24 @@ use std::path::PathBuf;
 
 use flutter_rust_bridge::frb;
 
-use crate::{ControlMessage, send_command};
+use nesium_core::reset_kind::ResetKind;
 
 #[frb]
 pub fn start_nes_runtime() -> Result<(), String> {
-    let _ = crate::start_thread_if_needed();
+    let _ = crate::runtime_handle();
     Ok(())
 }
 
 #[frb]
 pub fn load_rom(path: String) -> Result<(), String> {
-    send_command(ControlMessage::LoadRom(PathBuf::from(path)))
+    crate::runtime_handle()
+        .load_rom(PathBuf::from(path))
+        .map_err(|e| e.to_string())
 }
 
 #[frb]
 pub fn reset_console() -> Result<(), String> {
-    send_command(ControlMessage::Reset)
+    crate::runtime_handle()
+        .reset(ResetKind::Soft)
+        .map_err(|e| e.to_string())
 }

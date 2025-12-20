@@ -1,5 +1,4 @@
 mod app;
-mod emulator_thread;
 mod trace;
 
 use std::{env, fs, path::PathBuf};

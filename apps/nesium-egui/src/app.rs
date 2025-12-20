@@ -13,16 +13,21 @@ mod main_view;
 mod menu;
 mod viewports;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use eframe::egui;
 use egui::{ColorImage, Context as EguiContext, TextureHandle, TextureOptions, Visuals};
 use nesium_core::{
     audio::bus::AudioBusConfig,
+    ppu::buffer::ColorFormat,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH},
     reset_kind::ResetKind,
 };
+use nesium_runtime::{AudioMode, Runtime, RuntimeConfig, RuntimeEvent, RuntimeHandle, VideoConfig};
 
-use crate::emulator_thread::{Command, EmulatorThread, Event};
+struct VideoBackingStore {
+    _plane0: Box<[u8]>,
+    _plane1: Box<[u8]>,
+}
 
 use self::{
     controller::{ControllerDevice, ControllerInput, InputPreset},
@@ -36,7 +41,9 @@ pub struct AppConfig {
 }
 
 pub struct NesiumApp {
-    emulator: EmulatorThread,
+    video_backing: VideoBackingStore,
+    runtime_handle: RuntimeHandle,
+    runtime: Runtime,
     frame_texture: Option<TextureHandle>,
     frame_image: Option<Arc<ColorImage>>,
     rom_path: Option<PathBuf>,
@@ -66,10 +73,32 @@ impl NesiumApp {
         cc.egui_ctx.set_visuals(Visuals::light());
         install_cjk_font(&cc.egui_ctx);
 
-        let emulator = EmulatorThread::new();
+        let len = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
+        let plane0 = vec![0u8; len].into_boxed_slice();
+        let plane1 = vec![0u8; len].into_boxed_slice();
+
+        let mut video_backing = VideoBackingStore {
+            _plane0: plane0,
+            _plane1: plane1,
+        };
+
+        // SAFETY: `video_backing` keeps the two planes alive for the lifetime of the app.
+        // The planes do not overlap and are sized to the NES framebuffer.
+        let runtime = Runtime::start(RuntimeConfig {
+            video: VideoConfig {
+                color_format: ColorFormat::Rgba8888,
+                plane0: video_backing._plane0.as_mut_ptr(),
+                plane1: video_backing._plane1.as_mut_ptr(),
+            },
+            audio: AudioMode::Auto,
+        })
+        .expect("failed to start nesium runtime");
+        let runtime_handle = runtime.handle();
 
         let mut app = Self {
-            emulator,
+            video_backing,
+            runtime_handle,
+            runtime,
             frame_texture: None,
             frame_image: None,
             rom_path: None,
@@ -116,20 +145,24 @@ impl NesiumApp {
     }
 
     fn load_rom(&mut self, path: &Path) -> Result<()> {
-        self.emulator.send(Command::LoadRom(path.to_path_buf()));
+        self.runtime_handle
+            .load_rom(path.to_path_buf())
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
         self.rom_path = Some(path.to_path_buf());
         self.paused = false;
+        self.runtime_handle.set_paused(false);
         self.fps = 0.0;
         self.fps_accum_frames = 0;
         self.fps_last_update = Instant::now();
 
-        // Note: Status line will be updated by Event::StatusInfo from thread
+        // Note: Status line will be updated by RuntimeEvent::StatusInfo from thread
         Ok(())
     }
 
     fn reset(&mut self) {
-        self.emulator.send(Command::Reset(ResetKind::Soft));
+        let _ = self.runtime_handle.reset(ResetKind::Soft);
         self.paused = false;
+        self.runtime_handle.set_paused(false);
         // Reset local input state
         for ctrl in &mut self.controllers {
             ctrl.release_all();
@@ -137,7 +170,7 @@ impl NesiumApp {
     }
 
     fn eject(&mut self) {
-        self.emulator.send(Command::Eject);
+        let _ = self.runtime_handle.eject();
         self.rom_path = None;
         for ctrl in &mut self.controllers {
             ctrl.release_all();
@@ -147,7 +180,7 @@ impl NesiumApp {
     }
 
     fn update_frame_texture(&mut self, ctx: &EguiContext) {
-        let handle = &self.emulator.frame_handle;
+        let handle = self.runtime_handle.frame_handle();
 
         let idx = handle.begin_front_copy();
         let slice = handle.plane_slice(idx);
@@ -200,20 +233,20 @@ impl eframe::App for NesiumApp {
             ctx.request_repaint_after(Duration::from_micros(16_666));
         }
 
-        // 1. Process Events from Emulator Thread
+        // 1. Process Events from Runtime thread
         let mut frames_received = 0;
-        while let Some(event) = self.emulator.try_recv() {
+        while let Some(event) = self.runtime_handle.try_recv_event() {
             match event {
-                Event::FrameReady => {
+                RuntimeEvent::FrameReady => {
                     // We only need to update the texture once per UI frame, even if multiple
                     // emu frames arrived (we just take the latest state from shared memory).
                     // But we count them for FPS.
                     frames_received += 1;
                 }
-                Event::StatusInfo(msg) => {
+                RuntimeEvent::StatusInfo(msg) => {
                     self.status_line = Some(msg);
                 }
-                Event::Error(msg) => {
+                RuntimeEvent::Error(msg) => {
                     self.status_line = Some(format!("Error: {}", msg));
                 }
             }
@@ -230,11 +263,9 @@ impl eframe::App for NesiumApp {
 
         // 3. Process Input
         let keyboard_busy = ctx.wants_keyboard_input();
-        let mut input_changed = false;
         for (port, ctrl) in self.controllers.iter_mut().enumerate() {
             // Check previous state logic if needed, but for now we just resend.
             // Optimization: compare hash or dirty flag?
-            // Actually, sending every frame is fine for local channel.
             match self.controller_devices[port] {
                 ControllerDevice::Keyboard => {
                     let blocked = keyboard_busy;
@@ -253,10 +284,10 @@ impl eframe::App for NesiumApp {
             }
         }
 
-        // Always send input state to emulator
-        // Cloning 4 ControllerInputs is cheap (Vec<Button> is small)
-        self.emulator
-            .send(Command::UpdateInput(self.controllers.clone()));
+        // Always publish input state via atomics (no control channel, low latency).
+        for (port, ctrl) in self.controllers.iter().enumerate() {
+            self.runtime_handle.set_pad_mask(port, ctrl.pressed_mask());
+        }
 
         // 4. Handle Drag & Drop
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());

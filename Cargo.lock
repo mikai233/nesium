@@ -2787,15 +2787,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nesium-audio"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cpal",
- "ringbuf",
-]
-
-[[package]]
 name = "nesium-blip"
 version = "0.1.0"
 dependencies = [
@@ -2827,14 +2818,13 @@ name = "nesium-egui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cpal",
  "eframe",
  "fontdb",
  "gilrs",
  "ico",
- "nesium-audio",
  "nesium-core",
  "nesium-icon",
+ "nesium-runtime",
  "png 0.18.0",
  "rfd",
  "tracing",
@@ -2859,8 +2849,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "flutter_rust_bridge",
- "nesium-audio",
  "nesium-core",
+ "nesium-runtime",
 ]
 
 [[package]]
@@ -2878,6 +2868,16 @@ dependencies = [
  "libretro-bridge",
  "nesium-core",
  "once_cell",
+]
+
+[[package]]
+name = "nesium-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cpal",
+ "nesium-core",
+ "ringbuf",
 ]
 
 [[package]]

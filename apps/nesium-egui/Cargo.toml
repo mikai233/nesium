@@ -16,14 +16,13 @@ copyright = "Copyright (c) 2025 mikai233"
 
 [dependencies]
 nesium-core.path = "../../crates/nesium-core"
-nesium-audio.path = "../../crates/nesium-audio"
+nesium-runtime.path = "../../crates/nesium-runtime"
 eframe.workspace = true
 gilrs.workspace = true
 anyhow.workspace = true
 rfd.workspace = true
 fontdb.workspace = true
 ttf-parser.workspace = true
-cpal.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

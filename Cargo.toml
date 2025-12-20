@@ -8,8 +8,8 @@ members = [
   "crates/nesium-libretro",
   "crates/nesium-flutter",
   "crates/nesium-blip",
-  "crates/nesium-audio",
   "crates/nesium-icon",
+  "crates/nesium-runtime",
 ]
 default-members = [
   "apps/nesium-egui",
@@ -18,8 +18,8 @@ default-members = [
   "crates/nesium-libretro",
   "crates/nesium-flutter",
   "crates/nesium-blip",
-  "crates/nesium-audio",
   "crates/nesium-icon",
+  "crates/nesium-runtime",
 ]
 
 [profile.test]

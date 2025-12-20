@@ -3,8 +3,6 @@ use std::path::PathBuf;
 use eframe::egui;
 use egui::{Context as EguiContext, MenuBar, TextWrapMode};
 
-use crate::emulator_thread::Command;
-
 use super::{Language, NesiumApp, TextId, dialogs::pick_file_dialog};
 
 #[derive(Default)]
@@ -176,7 +174,7 @@ impl NesiumApp {
         }
         if cmd.toggle_pause {
             self.paused = !self.paused;
-            self.emulator.send(Command::SetPaused(self.paused));
+            self.runtime_handle.set_paused(self.paused);
             self.status_line = Some(if self.paused {
                 self.t(TextId::StatusPaused).to_string()
             } else {

@@ -1,4 +1,3 @@
-use crate::emulator_thread::Command;
 use eframe::egui;
 use egui::{Color32, Context as EguiContext, Vec2, ViewportBuilder, ViewportId};
 use gilrs::Button as GilrsButton;
@@ -652,7 +651,7 @@ impl NesiumApp {
                     });
 
                     if changed {
-                        self.emulator.send(Command::SetAudioConfig(*cfg));
+                        let _ = self.runtime_handle.set_audio_config(*cfg);
                     }
                 });
             });
