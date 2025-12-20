@@ -132,7 +132,7 @@ impl ExternalFrameHandle {
     }
 
     #[inline]
-    fn plane_slice(&self, index: usize) -> &[u8] {
+    pub fn plane_slice(&self, index: usize) -> &[u8] {
         debug_assert!(index < 2);
         unsafe { slice::from_raw_parts(self.planes[index].as_ptr() as *const u8, self.len) }
     }

@@ -15,7 +15,7 @@ pub enum ControllerDevice {
     Gamepad(GamepadId),
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ControllerInput {
     pressed: Vec<Button>,
     /// Per-NES-button key bindings.
@@ -38,11 +38,40 @@ impl ControllerInput {
         input
     }
 
+    /// Applies the current internal pressed state to the NES core.
+    ///
+    /// This is used by the emulator thread to sync inputs that were resolved
+    /// on the UI thread.
+    pub fn apply_to_nes(&self, nes: &mut Nes, pad_index: usize) {
+        // We can't efficiently "diff" against the NES state here without reading it back,
+        // so we just clear all likely buttons and set the pressed ones.
+        // Or simpler: The NES core `set_button` is cheap.
+        // Ideally we would iterate all standard buttons and set them.
+        // But `pressed` only contains the pressed ones.
+        // We need to ensure *released* buttons are also updated.
+        // The previous `sync_from_input` logic was:
+        // "Release all previous buttons for this pad (from `self.pressed`), then apply desired."
+        //
+        // But here `self` IS the desired state (sent from UI).
+        // The issue is `nes` might have old state.
+        //
+        // Approach: Reset ALL buttons for this port, then apply pressed.
+        // `nes.set_button` usually just updates a bitmask.
+        //
+        // Standard NES buttons: A, B, Select, Start, Up, Down, Left, Right.
+        use nesium_core::controller::Button::*;
+        let all_buttons = [A, B, Select, Start, Up, Down, Left, Right];
+
+        for btn in all_buttons {
+            let is_pressed = self.pressed.contains(&btn);
+            nes.set_button(pad_index, btn, is_pressed);
+        }
+    }
+
     pub fn sync_from_input(
         &mut self,
         ctx: &EguiContext,
-        nes: &mut Nes,
-        pad_index: usize,
+        _pad_index: usize, // Kept for API compatibility/logging if needed, but unused for now
         keyboard_blocked: bool,
     ) {
         // When in capture mode, listen for the next key press and update the
@@ -82,20 +111,12 @@ impl ControllerInput {
             }
         }
 
-        // Release all, then re-apply desired. Simple and keeps in sync.
-        for button in self.pressed.drain(..) {
-            nes.set_button(pad_index, button, false);
-        }
-        for &button in &desired {
-            nes.set_button(pad_index, button, true);
-        }
         self.pressed = desired;
     }
 
     pub fn sync_from_gamepad(
         &mut self,
-        nes: &mut Nes,
-        pad_index: usize,
+        _pad_index: usize,
         gamepads: &GamepadManager,
         gamepad_id: GamepadId,
     ) {
@@ -109,20 +130,11 @@ impl ControllerInput {
             }
         }
 
-        // Release all previous buttons for this pad, then apply desired.
-        for button in self.pressed.drain(..) {
-            nes.set_button(pad_index, button, false);
-        }
-        for &button in &desired {
-            nes.set_button(pad_index, button, true);
-        }
         self.pressed = desired;
     }
 
-    pub fn release_all(&mut self, nes: &mut Nes) {
-        for button in self.pressed.drain(..) {
-            nes.set_button(0, button, false);
-        }
+    pub fn release_all(&mut self) {
+        self.pressed.clear();
     }
 
     pub fn is_pressed(&self, button: Button) -> bool {

@@ -35,7 +35,12 @@ impl NesiumApp {
                         if let Some(tex) = &self.frame_texture {
                             let available = ui.available_size();
                             let base = Vec2::new(SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32);
-                            let scale = (available.x / base.x).min(available.y / base.y).max(1.0);
+                            let mut scale = (available.x / base.x).min(available.y / base.y);
+                            if self.pixel_perfect_scaling {
+                                // Nearest + non-integer scaling makes 1px scroll steps look uneven.
+                                scale = scale.floor();
+                            }
+                            let scale = scale.max(1.0);
                             let desired = base * scale;
                             ui.add(egui::Image::from_texture(tex).fit_to_exact_size(desired));
                         } else {

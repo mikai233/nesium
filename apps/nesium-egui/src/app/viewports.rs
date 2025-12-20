@@ -1,3 +1,4 @@
+use crate::emulator_thread::Command;
 use eframe::egui;
 use egui::{Color32, Context as EguiContext, Vec2, ViewportBuilder, ViewportId};
 use gilrs::Button as GilrsButton;
@@ -20,15 +21,9 @@ impl NesiumApp {
                     return;
                 }
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    let snapshot = self.nes.cpu_snapshot();
                     ui.heading("CPU Snapshot");
-                    ui.monospace(format!(
-                        "PC:{:04X}  A:{:02X}  X:{:02X}  Y:{:02X}  P:{:02X}  S:{:02X}",
-                        snapshot.pc, snapshot.a, snapshot.x, snapshot.y, snapshot.p, snapshot.s
-                    ));
-                    ui.separator();
-                    ui.label(format!("PPU Frame: {}", self.nes.ppu.frame_count()));
-                    ui.label(format!("Dot Counter: {}", self.nes.dot_counter()));
+                    ui.label("Debugger is currently unavailable in multi-threaded mode.");
+                    ui.label("Full debugger implementation via state snapshots is coming soon.");
                 });
             });
         }
@@ -44,6 +39,12 @@ impl NesiumApp {
                 }
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.heading(self.t(TextId::ToolsHeading));
+                    let label = match self.language() {
+                        super::Language::English => "Pixel-perfect scaling (integer)",
+                        super::Language::ChineseSimplified => "像素完美缩放（整数倍）",
+                    };
+                    ui.checkbox(&mut self.pixel_perfect_scaling, label);
+                    ui.add_space(6.0);
                     ui.label(self.t(TextId::ToolsPlaceholder));
                 });
             });
@@ -137,19 +138,7 @@ impl NesiumApp {
                 }
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.heading(self.t(TextId::PaletteHeading));
-                    let palette = self.nes.palette().as_colors();
-                    for (idx, color) in palette.iter().take(16).enumerate() {
-                        let swatch = egui::Color32::from_rgb(color.r, color.g, color.b);
-                        ui.horizontal(|ui| {
-                            let (rect, _) =
-                                ui.allocate_exact_size(Vec2::splat(18.0), egui::Sense::hover());
-                            ui.painter().rect_filled(rect, 2.0, swatch);
-                            ui.label(format!(
-                                "{idx:02}: #{:02X}{:02X}{:02X}",
-                                color.r, color.g, color.b
-                            ));
-                        });
-                    }
+                    ui.label("Palette viewer is currently unavailable.");
                 });
             });
         }
@@ -539,6 +528,7 @@ impl NesiumApp {
                     ui.separator();
 
                     let cfg = &mut self.audio_cfg;
+                    let mut changed = false;
 
                     // Master volume
                     let mut vol_percent = (cfg.master_volume * 100.0).clamp(0.0, 100.0);
@@ -549,14 +539,30 @@ impl NesiumApp {
                             .changed()
                         {
                             cfg.master_volume = (vol_percent / 100.0).clamp(0.0, 1.0);
+                            changed = true;
                         }
                     });
 
                     ui.separator();
                     ui.label(bg_label);
-                    ui.checkbox(&mut cfg.mute_in_background, mute_bg_label);
-                    ui.checkbox(&mut cfg.reduce_in_background, reduce_bg_label);
-                    ui.checkbox(&mut cfg.reduce_in_fast_forward, reduce_ff_label);
+                    if ui
+                        .checkbox(&mut cfg.mute_in_background, mute_bg_label)
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                    if ui
+                        .checkbox(&mut cfg.reduce_in_background, reduce_bg_label)
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                    if ui
+                        .checkbox(&mut cfg.reduce_in_fast_forward, reduce_ff_label)
+                        .changed()
+                    {
+                        changed = true;
+                    }
                     let mut red_percent = (cfg.volume_reduction * 100.0).clamp(0.0, 100.0);
                     if ui
                         .add(
@@ -567,35 +573,66 @@ impl NesiumApp {
                         .changed()
                     {
                         cfg.volume_reduction = (red_percent / 100.0).clamp(0.0, 1.0);
+                        changed = true;
                     }
 
                     ui.separator();
                     ui.collapsing(reverb_section_label, |ui| {
-                        ui.checkbox(&mut cfg.reverb_enabled, reverb_enable_label);
+                        if ui
+                            .checkbox(&mut cfg.reverb_enabled, reverb_enable_label)
+                            .changed()
+                        {
+                            changed = true;
+                        }
                         if cfg.reverb_enabled {
-                            ui.add(
-                                egui::Slider::new(&mut cfg.reverb_strength, 0.0..=1.0)
-                                    .text(reverb_strength_label),
-                            );
-                            ui.add(
-                                egui::Slider::new(&mut cfg.reverb_delay_ms, 1.0..=250.0)
-                                    .text(reverb_delay_label),
-                            );
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut cfg.reverb_strength, 0.0..=1.0)
+                                        .text(reverb_strength_label),
+                                )
+                                .changed()
+                            {
+                                changed = true;
+                            }
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut cfg.reverb_delay_ms, 1.0..=250.0)
+                                        .text(reverb_delay_label),
+                                )
+                                .changed()
+                            {
+                                changed = true;
+                            }
                         }
                     });
 
                     ui.collapsing(crossfeed_section_label, |ui| {
-                        ui.checkbox(&mut cfg.crossfeed_enabled, crossfeed_enable_label);
+                        if ui
+                            .checkbox(&mut cfg.crossfeed_enabled, crossfeed_enable_label)
+                            .changed()
+                        {
+                            changed = true;
+                        }
                         if cfg.crossfeed_enabled {
-                            ui.add(
-                                egui::Slider::new(&mut cfg.crossfeed_ratio, 0.0..=1.0)
-                                    .text(crossfeed_ratio_label),
-                            );
+                            if ui
+                                .add(
+                                    egui::Slider::new(&mut cfg.crossfeed_ratio, 0.0..=1.0)
+                                        .text(crossfeed_ratio_label),
+                                )
+                                .changed()
+                            {
+                                changed = true;
+                            }
                         }
                     });
 
                     ui.collapsing(eq_section_label, |ui| {
-                        ui.checkbox(&mut cfg.enable_equalizer, eq_enable_label);
+                        if ui
+                            .checkbox(&mut cfg.enable_equalizer, eq_enable_label)
+                            .changed()
+                        {
+                            changed = true;
+                        }
                         if cfg.enable_equalizer {
                             // 统一使用单一增益控制 20 个频段。
                             let mut gain_db = cfg.eq_band_gains[0];
@@ -609,12 +646,14 @@ impl NesiumApp {
                                 for g in cfg.eq_band_gains.iter_mut() {
                                     *g = gain_db;
                                 }
+                                changed = true;
                             }
                         }
                     });
 
-                    // Apply configuration to the core each frame where it might change.
-                    self.nes.set_audio_bus_config(*cfg);
+                    if changed {
+                        self.emulator.send(Command::SetAudioConfig(*cfg));
+                    }
                 });
             });
         }

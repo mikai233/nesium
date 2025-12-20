@@ -3,10 +3,9 @@ use std::path::PathBuf;
 use eframe::egui;
 use egui::{Context as EguiContext, MenuBar, TextWrapMode};
 
-use super::{
-    Language, NesiumApp, TextId,
-    dialogs::{pick_file_dialog, save_wav_dialog, write_wav},
-};
+use crate::emulator_thread::Command;
+
+use super::{Language, NesiumApp, TextId, dialogs::pick_file_dialog};
 
 #[derive(Default)]
 pub(super) struct AppCommand {
@@ -14,8 +13,6 @@ pub(super) struct AppCommand {
     pub reset: bool,
     pub eject: bool,
     pub toggle_pause: bool,
-    pub start_record: bool,
-    pub stop_record: bool,
     pub quit: bool,
 }
 
@@ -51,23 +48,6 @@ impl NesiumApp {
                         .clicked()
                     {
                         cmd.eject = true;
-                        ui.close();
-                    }
-                    ui.separator();
-                    let rec_label = if self.recording {
-                        self.t(TextId::MenuFileStopRecording)
-                    } else {
-                        self.t(TextId::MenuFileStartRecording)
-                    };
-                    if ui
-                        .add_enabled(self.rom_path.is_some(), egui::Button::new(rec_label))
-                        .clicked()
-                    {
-                        if self.recording {
-                            cmd.stop_record = true;
-                        } else {
-                            cmd.start_record = true;
-                        }
                         ui.close();
                     }
                     ui.separator();
@@ -196,57 +176,12 @@ impl NesiumApp {
         }
         if cmd.toggle_pause {
             self.paused = !self.paused;
+            self.emulator.send(Command::SetPaused(self.paused));
             self.status_line = Some(if self.paused {
                 self.t(TextId::StatusPaused).to_string()
             } else {
                 self.t(TextId::StatusResumed).to_string()
             });
-        }
-        if cmd.start_record
-            && let Some(path) = save_wav_dialog()
-        {
-            self.record_buffer.clear();
-            self.record_sample_rate = self
-                .audio
-                .as_ref()
-                .map(|a| a.sample_rate())
-                .unwrap_or_else(|| self.nes.audio_sample_rate());
-            self.record_path = Some(path.clone());
-            self.recording = true;
-            self.status_line = Some(match self.language() {
-                Language::English => format!("Started recording audio to {}", path.display()),
-                Language::ChineseSimplified => {
-                    format!("开始录制音频到 {}", path.display())
-                }
-            });
-        }
-        if cmd.stop_record && self.recording {
-            self.recording = false;
-            if let Some(path) = self.record_path.take() {
-                match write_wav(&path, self.record_sample_rate, &self.record_buffer) {
-                    Ok(()) => {
-                        self.status_line = Some(match self.language() {
-                            Language::English => {
-                                format!("Saved recording to {}", path.display())
-                            }
-                            Language::ChineseSimplified => {
-                                format!("已保存录音到 {}", path.display())
-                            }
-                        });
-                    }
-                    Err(err) => {
-                        self.status_line = Some(match self.language() {
-                            Language::English => {
-                                format!("Failed to save recording: {err}")
-                            }
-                            Language::ChineseSimplified => {
-                                format!("保存录音失败: {err}")
-                            }
-                        });
-                    }
-                }
-                self.record_buffer.clear();
-            }
         }
         if cmd.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
