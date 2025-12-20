@@ -196,9 +196,15 @@ impl NesiumApp {
             let image = Arc::make_mut(image);
             debug_assert_eq!(image.size, [SCREEN_WIDTH, SCREEN_HEIGHT]);
             debug_assert_eq!(slice.len(), SCREEN_WIDTH * SCREEN_HEIGHT * 4);
-            for (dst, src) in image.pixels.iter_mut().zip(slice.chunks_exact(4)) {
-                *dst = egui::Color32::from_rgb(src[0], src[1], src[2]);
-            }
+            // `Color32` is `[r, g, b, a]` in memory; our runtime outputs RGBA8888 with a=255.
+            // Copying raw bytes avoids per-pixel conversion overhead and improves frame pacing.
+            let dst_bytes = unsafe {
+                std::slice::from_raw_parts_mut(
+                    image.pixels.as_mut_ptr() as *mut u8,
+                    image.pixels.len() * 4,
+                )
+            };
+            dst_bytes.copy_from_slice(slice);
         }
 
         match &mut self.frame_texture {

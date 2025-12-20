@@ -17,7 +17,7 @@ copyright = "Copyright (c) 2025 mikai233"
 [dependencies]
 nesium-core.path = "../../crates/nesium-core"
 nesium-runtime.path = "../../crates/nesium-runtime"
-eframe.workspace = true
+eframe = { workspace = true, features = ["wgpu"] }
 gilrs.workspace = true
 anyhow.workspace = true
 rfd.workspace = true

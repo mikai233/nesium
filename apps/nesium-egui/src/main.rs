@@ -75,6 +75,12 @@ fn main() -> Result<()> {
             .with_app_id(APP_ID)
             .with_icon(icon)
             .with_inner_size([SCREEN_WIDTH as f32 * 3.0, SCREEN_HEIGHT as f32 * 3.0]),
+        // On macOS, the default glow/OpenGL backend can have worse frame pacing than wgpu/Metal.
+        renderer: eframe::Renderer::Wgpu,
+        wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
+            desired_maximum_frame_latency: Some(1),
+            ..Default::default()
+        },
         ..Default::default()
     };
 
