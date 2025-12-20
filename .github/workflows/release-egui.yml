@@ -164,15 +164,20 @@ jobs:
           vol="Nesium"
 
           hdiutil create -volname "$vol" -srcfolder dmg-src -ov -format UDRW "$dmg_rw"
-          mount_dir="$(pwd)/dist/mnt"
-          rm -rf "$mount_dir"
-          mkdir -p "$mount_dir"
-          hdiutil attach -readwrite -noverify -noautoopen -mountpoint "$mount_dir" "$dmg_rw"
+          attach_out="$(hdiutil attach -readwrite -noverify -noautoopen "$dmg_rw")"
+          mount_dir="$(echo "$attach_out" | grep -Eo '/Volumes/[^ ]+' | head -n 1)"
+          if [ -z "$mount_dir" ]; then
+            echo "Failed to detect mount directory from hdiutil output:"
+            echo "$attach_out"
+            exit 1
+          fi
+          vol_name="$(basename "$mount_dir")"
+          open "$mount_dir" || true
 
           # Make the "drag to Applications" window look nicer (white background, fixed layout).
           osascript \
             -e 'tell application "Finder"' \
-            -e "tell disk \"$vol\"" \
+            -e "tell disk \"$vol_name\"" \
             -e 'open' \
             -e 'set current view of container window to icon view' \
             -e 'set toolbar visible of container window to false' \
