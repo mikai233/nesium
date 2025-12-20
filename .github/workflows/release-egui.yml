@@ -157,8 +157,48 @@ jobs:
             "$app_x86/Contents/MacOS/$exe_x86" \
             -output "$app_dst/Contents/MacOS/$exe_dst"
 
+          ln -s /Applications dmg-src/Applications
+
+          dmg_rw="dist/nesium-egui-${RELEASE_TAG}-macos-universal-rw.dmg"
           dmg="dist/nesium-egui-${RELEASE_TAG}-macos-universal.dmg"
-          hdiutil create -volname "Nesium" -srcfolder dmg-src -ov -format UDZO "$dmg"
+          vol="Nesium"
+
+          hdiutil create -volname "$vol" -srcfolder dmg-src -ov -format UDRW "$dmg_rw"
+          mount_dir="$(hdiutil attach -readwrite -noverify -noautoopen "$dmg_rw" | awk '/\\/Volumes\\// {print $3; exit}')"
+          open "$mount_dir"
+
+          # Make the "drag to Applications" window look nicer (white background, fixed layout).
+          osascript \
+            -e 'tell application "Finder"' \
+            -e "tell disk \"$vol\"" \
+            -e 'open' \
+            -e 'set current view of container window to icon view' \
+            -e 'set toolbar visible of container window to false' \
+            -e 'set statusbar visible of container window to false' \
+            -e 'set the bounds of container window to {100, 100, 740, 500}' \
+            -e 'set viewOptions to the icon view options of container window' \
+            -e 'set arrangement of viewOptions to not arranged' \
+            -e 'set icon size of viewOptions to 128' \
+            -e 'set text size of viewOptions to 12' \
+            -e "set position of item \"$app_name\" of container window to {190, 250}" \
+            -e 'set position of item "Applications" of container window to {550, 250}' \
+            -e 'close' \
+            -e 'open' \
+            -e 'update without registering applications' \
+            -e 'delay 1' \
+            -e 'end tell' \
+            -e 'end tell'
+
+          sync
+          hdiutil detach "$mount_dir"
+          hdiutil convert "$dmg_rw" -format UDZO -o "$dmg"
+          rm -f "$dmg_rw"
+
+          mkdir -p dist/portable
+          cp -R "$app_dst" dist/portable/
+          cp README.md LICENSE.md dist/portable/ 2>/dev/null || true
+          (cd dist/portable && zip -r "../nesium-egui-${RELEASE_TAG}-macos-universal-portable.zip" .)
+
           ls -la dist
 
       - name: Bundle installer + portable (Windows)
