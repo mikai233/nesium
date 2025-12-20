@@ -267,6 +267,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           files: |
             artifacts/**/nesium-egui-${{ env.RELEASE_TAG }}-*.deb
             artifacts/**/nesium-egui-${{ env.RELEASE_TAG }}-*.msi
