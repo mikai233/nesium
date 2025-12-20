@@ -17,133 +17,42 @@ pub(super) struct AppCommand {
 impl NesiumApp {
     pub(super) fn draw_menu(&mut self, ctx: &EguiContext) -> Option<AppCommand> {
         let mut cmd = AppCommand::default();
-        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            MenuBar::new().ui(ui, |ui| {
-                ui.menu_button(self.t(TextId::MenuFile), |ui| {
-                    ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+        let fullscreen = ctx.input(|i| i.viewport().fullscreen).unwrap_or(false);
+        if fullscreen {
+            let any_popup_open = egui::Popup::is_any_open(ctx);
+            let base_height = ctx.style().spacing.interact_size.y
+                + 2.0 * ctx.style().spacing.item_spacing.y
+                + 2.0;
+            let reveal_height = base_height + 24.0;
+            let hover_at_top = ctx
+                .input(|i| i.pointer.hover_pos())
+                .is_some_and(|p| p.y <= reveal_height);
 
-                    if ui.button(self.t(TextId::MenuFileLoadRom)).clicked() {
-                        if let Some(path) = pick_file_dialog() {
-                            cmd.load_rom = Some(path);
-                        }
-                        ui.close();
-                    }
-                    if ui
-                        .add_enabled(
-                            self.rom_path.is_some(),
-                            egui::Button::new(self.t(TextId::MenuFileReset)),
-                        )
-                        .clicked()
-                    {
-                        cmd.reset = true;
-                        ui.close();
-                    }
-                    if ui
-                        .add_enabled(
-                            self.rom_path.is_some(),
-                            egui::Button::new(self.t(TextId::MenuFileEject)),
-                        )
-                        .clicked()
-                    {
-                        cmd.eject = true;
-                        ui.close();
-                    }
-                    ui.separator();
-                    if ui.button(self.t(TextId::MenuFileQuit)).clicked() {
-                        cmd.quit = true;
-                        ui.close();
-                    }
+            if !hover_at_top && !any_popup_open {
+                return None;
+            }
+
+            let content_rect = ctx.content_rect();
+            egui::Area::new(egui::Id::new("menu_bar_overlay"))
+                .order(egui::Order::Foreground)
+                .movable(false)
+                .interactable(true)
+                .fixed_pos(content_rect.left_top())
+                .show(ctx, |ui| {
+                    ui.set_min_width(content_rect.width());
+                    egui::Frame::NONE
+                        .fill(ui.visuals().panel_fill)
+                        .shadow(ui.visuals().popup_shadow)
+                        .inner_margin(egui::Margin::symmetric(8, 4))
+                        .show(ui, |ui| {
+                            MenuBar::new().ui(ui, |ui| self.menu_contents(ui, &mut cmd));
+                        });
                 });
-
-                ui.menu_button(self.t(TextId::MenuEmulation), |ui| {
-                    ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
-
-                    if ui
-                        .add_enabled(
-                            self.rom_path.is_some(),
-                            egui::Button::new(if self.paused {
-                                self.t(TextId::MenuEmulationResume)
-                            } else {
-                                self.t(TextId::MenuEmulationPause)
-                            }),
-                        )
-                        .clicked()
-                    {
-                        cmd.toggle_pause = true;
-                        ui.close();
-                    }
-                    if ui
-                        .add_enabled(
-                            self.rom_path.is_some(),
-                            egui::Button::new(self.t(TextId::MenuFileReset)),
-                        )
-                        .clicked()
-                    {
-                        cmd.reset = true;
-                        ui.close();
-                    }
-                    if ui
-                        .add_enabled(
-                            self.rom_path.is_some(),
-                            egui::Button::new(self.t(TextId::MenuFileEject)),
-                        )
-                        .clicked()
-                    {
-                        cmd.eject = true;
-                        ui.close();
-                    }
-                });
-
-                ui.menu_button(self.t(TextId::MenuWindow), |ui| {
-                    ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
-
-                    let dbg_label = self.t(TextId::MenuWindowDebugger);
-                    let tools_label = self.t(TextId::MenuWindowTools);
-                    let palette_label = self.t(TextId::MenuWindowPalette);
-                    let input_label = self.t(TextId::MenuWindowInput);
-                    let audio_label = self.t(TextId::MenuWindowAudio);
-
-                    ui.toggle_value(&mut self.show_debugger, dbg_label);
-                    ui.toggle_value(&mut self.show_tools, tools_label);
-                    ui.toggle_value(&mut self.show_palette, palette_label);
-                    ui.toggle_value(&mut self.show_input, input_label);
-                    ui.toggle_value(&mut self.show_audio, audio_label);
-                });
-
-                ui.menu_button(self.t(TextId::MenuLanguage), |ui| {
-                    ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
-
-                    for language in Language::ALL {
-                        let selected = self.language() == language;
-                        let label = language.label();
-                        if ui.selectable_label(selected, label).clicked() {
-                            self.set_language(language);
-                            ui.close();
-                        }
-                    }
-                });
-
-                ui.menu_button(self.t(TextId::MenuHelp), |ui| {
-                    ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
-
-                    if ui.button(self.t(TextId::MenuHelpAbout)).clicked() {
-                        self.show_about = true;
-                        ui.close();
-                    }
-                    ui.separator();
-                    ui.label(self.t(TextId::MenuHelpLine1));
-                    ui.label(self.t(TextId::MenuHelpLine2));
-                });
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self.has_rom() && !self.paused && self.fps > 0.0 {
-                        ui.label(format!("FPS: {:.1}", self.fps));
-                    } else {
-                        ui.label("FPS: --");
-                    }
-                });
+        } else {
+            egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+                MenuBar::new().ui(ui, |ui| self.menu_contents(ui, &mut cmd));
             });
-        });
+        }
 
         if let Some(mut command) = cmd.load_rom.take() {
             return Some(AppCommand {
@@ -152,6 +61,132 @@ impl NesiumApp {
             });
         }
         Some(cmd)
+    }
+
+    fn menu_contents(&mut self, ui: &mut egui::Ui, cmd: &mut AppCommand) {
+        ui.menu_button(self.t(TextId::MenuFile), |ui| {
+            ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+
+            if ui.button(self.t(TextId::MenuFileLoadRom)).clicked() {
+                if let Some(path) = pick_file_dialog() {
+                    cmd.load_rom = Some(path);
+                }
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    self.rom_path.is_some(),
+                    egui::Button::new(self.t(TextId::MenuFileReset)),
+                )
+                .clicked()
+            {
+                cmd.reset = true;
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    self.rom_path.is_some(),
+                    egui::Button::new(self.t(TextId::MenuFileEject)),
+                )
+                .clicked()
+            {
+                cmd.eject = true;
+                ui.close();
+            }
+            ui.separator();
+            if ui.button(self.t(TextId::MenuFileQuit)).clicked() {
+                cmd.quit = true;
+                ui.close();
+            }
+        });
+
+        ui.menu_button(self.t(TextId::MenuEmulation), |ui| {
+            ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+
+            if ui
+                .add_enabled(
+                    self.rom_path.is_some(),
+                    egui::Button::new(if self.paused {
+                        self.t(TextId::MenuEmulationResume)
+                    } else {
+                        self.t(TextId::MenuEmulationPause)
+                    }),
+                )
+                .clicked()
+            {
+                cmd.toggle_pause = true;
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    self.rom_path.is_some(),
+                    egui::Button::new(self.t(TextId::MenuFileReset)),
+                )
+                .clicked()
+            {
+                cmd.reset = true;
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    self.rom_path.is_some(),
+                    egui::Button::new(self.t(TextId::MenuFileEject)),
+                )
+                .clicked()
+            {
+                cmd.eject = true;
+                ui.close();
+            }
+        });
+
+        ui.menu_button(self.t(TextId::MenuWindow), |ui| {
+            ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+
+            let dbg_label = self.t(TextId::MenuWindowDebugger);
+            let tools_label = self.t(TextId::MenuWindowTools);
+            let palette_label = self.t(TextId::MenuWindowPalette);
+            let input_label = self.t(TextId::MenuWindowInput);
+            let audio_label = self.t(TextId::MenuWindowAudio);
+
+            ui.toggle_value(&mut self.show_debugger, dbg_label);
+            ui.toggle_value(&mut self.show_tools, tools_label);
+            ui.toggle_value(&mut self.show_palette, palette_label);
+            ui.toggle_value(&mut self.show_input, input_label);
+            ui.toggle_value(&mut self.show_audio, audio_label);
+        });
+
+        ui.menu_button(self.t(TextId::MenuLanguage), |ui| {
+            ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+
+            for language in Language::ALL {
+                let selected = self.language() == language;
+                let label = language.label();
+                if ui.selectable_label(selected, label).clicked() {
+                    self.set_language(language);
+                    ui.close();
+                }
+            }
+        });
+
+        ui.menu_button(self.t(TextId::MenuHelp), |ui| {
+            ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+
+            if ui.button(self.t(TextId::MenuHelpAbout)).clicked() {
+                self.show_about = true;
+                ui.close();
+            }
+            ui.separator();
+            ui.label(self.t(TextId::MenuHelpLine1));
+            ui.label(self.t(TextId::MenuHelpLine2));
+        });
+
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if self.has_rom() && !self.paused && self.fps > 0.0 {
+                ui.label(format!("FPS: {:.1}", self.fps));
+            } else {
+                ui.label("FPS: --");
+            }
+        });
     }
 
     pub(super) fn handle_app_command(&mut self, ctx: &EguiContext, cmd: AppCommand) {

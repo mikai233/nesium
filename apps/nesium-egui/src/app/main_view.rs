@@ -6,26 +6,32 @@ use super::{NesiumApp, TextId};
 
 impl NesiumApp {
     pub(super) fn draw_main_view(&mut self, ctx: &EguiContext) {
+        let fullscreen = ctx.input(|i| i.viewport().fullscreen).unwrap_or(false);
+
         egui::CentralPanel::default()
             .frame(egui::Frame::central_panel(ctx.style().as_ref()).inner_margin(0))
             .show(ctx, |ui| {
-                egui::Frame::NONE.inner_margin(8).show(ui, |ui| {
-                    if let Some(status) = &self.status_line {
-                        ui.label(status);
-                    } else if let Some(path) = &self.rom_path {
-                        let text = match self.language() {
-                            super::Language::English => format!("Loaded: {}", path.display()),
-                            super::Language::ChineseSimplified => {
-                                format!("已加载：{}", path.display())
-                            }
-                        };
-                        ui.label(text);
-                    } else {
-                        ui.label(self.t(TextId::MainNoRom));
-                    }
+                if !fullscreen {
+                    egui::Frame::NONE.inner_margin(8).show(ui, |ui| {
+                        if let Some(status) = &self.status_line {
+                            ui.label(status);
+                        } else if let Some(path) = &self.rom_path {
+                            let text = match self.language() {
+                                super::Language::English => {
+                                    format!("Loaded: {}", path.display())
+                                }
+                                super::Language::ChineseSimplified => {
+                                    format!("已加载：{}", path.display())
+                                }
+                            };
+                            ui.label(text);
+                        } else {
+                            ui.label(self.t(TextId::MainNoRom));
+                        }
 
-                    ui.separator();
-                });
+                        ui.separator();
+                    });
+                }
 
                 let canvas_size = ui.available_size();
                 let (rect, _) = ui.allocate_exact_size(canvas_size, egui::Sense::hover());
