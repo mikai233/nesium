@@ -1,0 +1,229 @@
+name: Release (nesium-egui)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64-deb
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bundle_format: deb
+            asset_ext: deb
+            asset_suffix: linux-x86_64
+
+          - name: linux-aarch64-deb
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            bundle_format: deb
+            asset_ext: deb
+            asset_suffix: linux-aarch64
+
+          - name: windows-x86_64-msi
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundle_format: msi
+            asset_ext: msi
+            asset_suffix: windows-x86_64
+
+          - name: windows-aarch64-msi
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bundle_format: msi
+            asset_ext: msi
+            asset_suffix: windows-arm64
+
+          - name: macos-universal-dmg
+            os: macos-latest
+            asset_ext: dmg
+            asset_suffix: macos-universal
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install system development libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libasound2-dev \
+            libudev-dev \
+            libfreetype6-dev \
+            libfontconfig1-dev \
+            fakeroot \
+            dpkg-dev
+
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle --locked
+
+      - name: Install WiX Toolset (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install wixtoolset -y
+
+      - name: Create dist directory
+        shell: bash
+        run: mkdir -p dist
+
+      - name: Bundle installer + portable (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          rustup target add "${{ matrix.target }}"
+          cargo bundle -p nesium-egui --profile release-dist --target "${{ matrix.target }}" --format "${{ matrix.bundle_format }}"
+
+          installer="nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          found="$(find target -path '*/bundle/*' -type f -name "*.${{ matrix.asset_ext }}" | head -n 1)"
+          if [ -z "$found" ]; then
+            echo "No bundle output found under target/**/bundle/**"
+            find target -maxdepth 6 -type d -name bundle -print || true
+            exit 1
+          fi
+
+          cp "$found" "dist/$installer"
+
+          exe="target/${{ matrix.target }}/release-dist/nesium-egui"
+          if [ ! -f "$exe" ]; then
+            echo "Expected binary not found at $exe"
+            ls -la "target/${{ matrix.target }}/release-dist" || true
+            exit 1
+          fi
+
+          mkdir -p dist/portable
+          cp "$exe" dist/portable/
+          cp README.md LICENSE.md dist/portable/ 2>/dev/null || true
+          tar -czf "dist/nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" -C dist/portable .
+
+          ls -la dist
+
+      - name: Bundle app + create dmg (macOS universal)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+          cargo bundle -p nesium-egui --profile release-dist --target aarch64-apple-darwin --format osx
+          cargo bundle -p nesium-egui --profile release-dist --target x86_64-apple-darwin --format osx
+
+          app_arm="$(ls -d target/aarch64-apple-darwin/release-dist/bundle/osx/*.app | head -n 1)"
+          app_x86="$(ls -d target/x86_64-apple-darwin/release-dist/bundle/osx/*.app | head -n 1)"
+
+          rm -rf dmg-src dist/portable
+          mkdir -p dmg-src
+          cp -R "$app_arm" dmg-src/
+
+          app_name="$(basename "$app_arm")"
+          app_dst="dmg-src/$app_name"
+
+          exe_arm="$(ls "$app_arm/Contents/MacOS" | head -n 1)"
+          exe_x86="$(ls "$app_x86/Contents/MacOS" | head -n 1)"
+          exe_dst="$(ls "$app_dst/Contents/MacOS" | head -n 1)"
+
+          lipo -create \
+            "$app_arm/Contents/MacOS/$exe_arm" \
+            "$app_x86/Contents/MacOS/$exe_x86" \
+            -output "$app_dst/Contents/MacOS/$exe_dst"
+
+          dmg="dist/nesium-egui-${RELEASE_TAG}-macos-universal.dmg"
+          hdiutil create -volname "Nesium" -srcfolder dmg-src -ov -format UDZO "$dmg"
+          ls -la dist
+
+      - name: Bundle installer + portable (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          rustup target add "${{ matrix.target }}"
+          cargo bundle -p nesium-egui --profile release-dist --target "${{ matrix.target }}" --format "${{ matrix.bundle_format }}"
+
+          $installer = "nesium-egui-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          $msi = Get-ChildItem -Path "target" -Recurse -Filter "*.msi" | Select-Object -First 1
+          if (-not $msi) {
+            Write-Error "No .msi found under target/**/bundle/**"
+            exit 1
+          }
+          Copy-Item $msi.FullName "dist\\$installer" -Force
+
+          $exe = "target\\${{ matrix.target }}\\release-dist\\nesium-egui.exe"
+          if (-not (Test-Path $exe)) {
+            $exe = "target\\release-dist\\nesium-egui.exe"
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Error "Expected binary not found at target\\${{ matrix.target }}\\release-dist\\nesium-egui.exe"
+            exit 1
+          }
+
+          New-Item -ItemType Directory -Force -Path "dist\\portable" | Out-Null
+          Copy-Item $exe "dist\\portable\\" -Force
+          if (Test-Path "README.md") { Copy-Item "README.md" "dist\\portable\\" -Force }
+          if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" "dist\\portable\\" -Force }
+
+          $portable = "nesium-egui-$env:RELEASE_TAG-${{ matrix.asset_suffix }}-portable.zip"
+          Compress-Archive -Path "dist\\portable\\*" -DestinationPath "dist\\$portable" -Force
+
+          Get-ChildItem -Path dist | Format-Table -AutoSize
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nesium-egui-${{ matrix.name }}
+          path: |
+            dist/*
+          if-no-files-found: ignore
+
+  release:
+    name: Upload assets to GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            artifacts/**/nesium-egui-${{ env.RELEASE_TAG }}-*.deb
+            artifacts/**/nesium-egui-${{ env.RELEASE_TAG }}-*.msi
+            artifacts/**/nesium-egui-${{ env.RELEASE_TAG }}-*.dmg
+            artifacts/**/nesium-egui-${{ env.RELEASE_TAG }}-*-portable.*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
