@@ -27,11 +27,11 @@ const HEIGHT: u32 = SCREEN_HEIGHT as u32;
 const SAMPLE_RATE: f64 = 44_100.0;
 const COLOR_FORMAT: ColorFormat = ColorFormat::Rgb555;
 
-struct DemoCore {
+struct NesiumCore {
     nes: Nes,
 }
 
-impl DemoCore {
+impl NesiumCore {
     fn new() -> Self {
         Self {
             nes: Nes::new_with_sample_rate(COLOR_FORMAT, SAMPLE_RATE as u32),
@@ -86,7 +86,7 @@ impl DemoCore {
     }
 }
 
-impl LibretroCore for DemoCore {
+impl LibretroCore for NesiumCore {
     fn construct() -> Self
     where
         Self: Sized,
@@ -155,4 +155,4 @@ impl LibretroCore for DemoCore {
     }
 }
 
-export_libretro_core!(DemoCore);
+export_libretro_core!(NesiumCore);

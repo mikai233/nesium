@@ -147,6 +147,25 @@ jobs:
           tar -czf "dist/nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" -C dist/portable .
           (cd dist && sha256sum "nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" > "nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz.sha256")
 
+          # Libretro core package (dynamic library + .info + README + LICENSE)
+          cargo build -p nesium-libretro --profile release-dist --target "${{ matrix.target }}"
+          core_src="target/${{ matrix.target }}/release-dist/libnesium_libretro.so"
+          if [ ! -f "$core_src" ]; then
+            echo "Expected libretro core not found at $core_src"
+            ls -la "target/${{ matrix.target }}/release-dist" || true
+            exit 1
+          fi
+
+          rm -rf dist/libretro
+          mkdir -p dist/libretro
+          cp "$core_src" dist/libretro/nesium_libretro.so
+          cp "crates/nesium-libretro/nesium_libretro.info" dist/libretro/
+          cp "crates/nesium-libretro/README.md" dist/libretro/README.md
+          cp "LICENSE.md" dist/libretro/ 2>/dev/null || true
+
+          tar -czf "dist/nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz" -C dist/libretro .
+          (cd dist && sha256sum "nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz" > "nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz.sha256")
+
           ls -la dist
 
       - name: Build AppImage (Linux)
@@ -302,6 +321,27 @@ jobs:
           cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DIST/portable/" 2>/dev/null || true
           (cd "$DIST/portable" && zip -r "../nesium-egui-${RELEASE_TAG}-macos-universal-portable.zip" .)
 
+          # Libretro core package (universal dylib + .info + README + LICENSE)
+          cargo build --manifest-path "$ROOT/Cargo.toml" -p nesium-libretro --profile release-dist --target aarch64-apple-darwin
+          cargo build --manifest-path "$ROOT/Cargo.toml" -p nesium-libretro --profile release-dist --target x86_64-apple-darwin
+
+          core_arm="$TARGET_DIR/aarch64-apple-darwin/release-dist/libnesium_libretro.dylib"
+          core_x86="$TARGET_DIR/x86_64-apple-darwin/release-dist/libnesium_libretro.dylib"
+          if [ ! -f "$core_arm" ] || [ ! -f "$core_x86" ]; then
+            echo "Expected libretro dylibs not found:"
+            ls -la "$TARGET_DIR/aarch64-apple-darwin/release-dist" || true
+            ls -la "$TARGET_DIR/x86_64-apple-darwin/release-dist" || true
+            exit 1
+          fi
+
+          rm -rf "$DIST/libretro"
+          mkdir -p "$DIST/libretro"
+          lipo -create "$core_arm" "$core_x86" -output "$DIST/libretro/nesium_libretro.dylib"
+          cp "$ROOT/crates/nesium-libretro/nesium_libretro.info" "$DIST/libretro/"
+          cp "$ROOT/crates/nesium-libretro/README.md" "$DIST/libretro/README.md"
+          cp "$ROOT/LICENSE.md" "$DIST/libretro/" 2>/dev/null || true
+          (cd "$DIST/libretro" && zip -r "../nesium-libretro-${RELEASE_TAG}-macos-universal.zip" .)
+
           ls -la "$DIST"
 
       - name: Bundle installer + portable (Windows)
@@ -335,6 +375,26 @@ jobs:
 
           $portable = "nesium-egui-$env:RELEASE_TAG-${{ matrix.asset_suffix }}-portable.zip"
           Compress-Archive -Path "dist\\portable\\*" -DestinationPath "dist\\$portable" -Force
+
+          # Libretro core package (dynamic library + .info + README + LICENSE)
+          cargo build -p nesium-libretro --profile release-dist --target "${{ matrix.target }}"
+          $core = "target\\${{ matrix.target }}\\release-dist\\nesium_libretro.dll"
+          if (-not (Test-Path $core)) {
+            $core = "target\\release-dist\\nesium_libretro.dll"
+          }
+          if (-not (Test-Path $core)) {
+            Write-Error "Expected libretro core not found at target\\${{ matrix.target }}\\release-dist\\nesium_libretro.dll"
+            exit 1
+          }
+
+          New-Item -ItemType Directory -Force -Path "dist\\libretro" | Out-Null
+          Copy-Item $core "dist\\libretro\\nesium_libretro.dll" -Force
+          Copy-Item "crates\\nesium-libretro\\nesium_libretro.info" "dist\\libretro\\" -Force
+          Copy-Item "crates\\nesium-libretro\\README.md" "dist\\libretro\\README.md" -Force
+          if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" "dist\\libretro\\" -Force }
+
+          $coreZip = "nesium-libretro-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.zip"
+          Compress-Archive -Path "dist\\libretro\\*" -DestinationPath "dist\\$coreZip" -Force
 
           Get-ChildItem -Path dist | Format-Table -AutoSize
 
@@ -371,5 +431,8 @@ jobs:
             artifacts/**/nesium-egui-${{ env.RELEASE_TAG }}-*.AppImage
             artifacts/**/nesium-egui-${{ env.RELEASE_TAG }}-*.AppImage.sha256
             artifacts/**/nesium-egui-${{ env.RELEASE_TAG }}-*-portable.*
+            artifacts/**/nesium-libretro-${{ env.RELEASE_TAG }}-*.zip
+            artifacts/**/nesium-libretro-${{ env.RELEASE_TAG }}-*.tar.gz
+            artifacts/**/nesium-libretro-${{ env.RELEASE_TAG }}-*.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

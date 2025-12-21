@@ -1,0 +1,12 @@
+display_name = "Nesium"
+corename = "nesium_libretro"
+
+systemname = "Nintendo - NES / Famicom"
+systemid = "nes"
+manufacturer = "Nintendo"
+
+supported_extensions = "nes|bin|rom"
+
+categories = "Emulator"
+license = "GPL-3.0-or-later"
+description = "High-accuracy Nintendo Entertainment System emulator core for the libretro API."

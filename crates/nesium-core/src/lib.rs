@@ -304,11 +304,11 @@ impl Nes {
     }
 
     /// Runs CPU/PPU/APU ticks until the PPU completes the next frame.
-    pub fn run_frame(&mut self, audio: bool) -> Vec<f32> {
+    pub fn run_frame(&mut self, emit_audio: bool) -> Vec<f32> {
         let mut samples = vec![];
         let target_frame = self.ppu.frame_count().wrapping_add(1);
         while self.ppu.frame_count() < target_frame {
-            let _ = self.step_cpu_cycle(audio);
+            let _ = self.step_cpu_cycle(emit_audio);
         }
         let end_clock = self.apu_cycles() as i64;
         self.mixer_frame_buffer.clear();
