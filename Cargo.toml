@@ -35,6 +35,7 @@ debug = false
 inherits = "release"
 codegen-units = 1
 lto = "fat"
+strip = "symbols"
 
 [workspace.package]
 license = "GPL-3.0-or-later"
