@@ -84,32 +84,39 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     /// CVPixelBuffer backing the Flutter texture and then notifying Flutter.
     func nesiumOnFrameReady(bufferIndex: UInt32, width: Int, height: Int, pitch: Int) {
         guard let texture = self.texture,
-              let textureId = self.textureId,
-              let pixelBuffer = texture.pixelBuffer
+              let textureId = self.textureId
         else {
             return
         }
 
-        CVPixelBufferLockBaseAddress(pixelBuffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+        texture.withWritablePixelBuffer { pixelBuffer, _ in
+            CVPixelBufferLockBaseAddress(pixelBuffer, [])
+            defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
 
-        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
-            return
+            guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+                return
+            }
+
+            let dstBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+            let dstHeight = CVPixelBufferGetHeight(pixelBuffer)
+
+            // Ask Rust to copy the contents of the selected frame buffer into the
+            // CVPixelBuffer's backing memory.
+            nesium_copy_frame(
+                bufferIndex,
+                baseAddress.assumingMemoryBound(to: UInt8.self),
+                UInt32(dstBytesPerRow),
+                UInt32(dstHeight)
+            )
         }
 
-        let dstBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-        let dstHeight = CVPixelBufferGetHeight(pixelBuffer)
-
-        // Ask Rust to copy the contents of the selected frame buffer into the
-        // CVPixelBuffer's backing memory.
-        nesium_copy_frame(
-            bufferIndex,
-            baseAddress.assumingMemoryBound(to: UInt8.self),
-            UInt32(dstBytesPerRow),
-            UInt32(dstHeight)
-        )
-
         // Notify Flutter that the external texture has been updated.
-        textureRegistry.textureFrameAvailable(textureId)
+        if Thread.isMainThread {
+            textureRegistry.textureFrameAvailable(textureId)
+        } else {
+            DispatchQueue.main.async { [textureRegistry] in
+                textureRegistry.textureFrameAvailable(textureId)
+            }
+        }
     }
 }

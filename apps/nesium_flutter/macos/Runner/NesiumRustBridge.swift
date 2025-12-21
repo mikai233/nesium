@@ -60,6 +60,9 @@ protocol NesiumFrameConsumer: AnyObject {
 /// `nesium_set_frame_ready_callback`. We treat it as an `AnyObject` that
 /// conforms to `NesiumFrameConsumer`, then bounce the event back to the main
 /// thread for actual UI / texture updates.
+///
+/// The callback is invoked on a background render thread. The consumer is responsible
+/// for dispatching UI / Flutter calls to the main queue.
 private let globalFrameReadyCallback: NesiumFrameReadyCallback = { bufferIndex, width, height, pitch, userData in
     guard let userData = userData else { return }
     
@@ -71,16 +74,12 @@ private let globalFrameReadyCallback: NesiumFrameReadyCallback = { bufferIndex, 
         return
     }
     
-    // The Rust callback is likely invoked on a background render thread.
-    // Always hop back to the main queue before touching AppKit / Flutter.
-    DispatchQueue.main.async {
-        consumer.nesiumOnFrameReady(
-            bufferIndex: bufferIndex,
-            width: Int(width),
-            height: Int(height),
-            pitch: Int(pitch)
-        )
-    }
+    consumer.nesiumOnFrameReady(
+        bufferIndex: bufferIndex,
+        width: Int(width),
+        height: Int(height),
+        pitch: Int(pitch)
+    )
 }
 
 /// Registers the global frame-ready callback for a given consumer.
