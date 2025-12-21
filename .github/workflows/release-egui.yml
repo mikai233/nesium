@@ -140,27 +140,26 @@ jobs:
       - name: Bundle app + create dmg (macOS universal)
         if: runner.os == 'macOS'
         shell: bash
+        working-directory: apps/nesium-egui
         run: |
-          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          ROOT="${GITHUB_WORKSPACE}"
+          DIST="$ROOT/dist"
+          TARGET_DIR="$ROOT/target"
 
-          # cargo-bundle reads the icon paths before it triggers a build.
-          # Pre-build once so `target/generated/nesium.icns` exists for bundling.
-          cargo build -p nesium-egui --profile release-dist --target aarch64-apple-darwin
-          cargo build -p nesium-egui --profile release-dist --target x86_64-apple-darwin
-          ls -la target/generated || true
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
           cargo bundle -p nesium-egui --profile release-dist --target aarch64-apple-darwin --format osx
           cargo bundle -p nesium-egui --profile release-dist --target x86_64-apple-darwin --format osx
 
-          app_arm="$(ls -d target/aarch64-apple-darwin/release-dist/bundle/osx/*.app | head -n 1)"
-          app_x86="$(ls -d target/x86_64-apple-darwin/release-dist/bundle/osx/*.app | head -n 1)"
+          app_arm="$(ls -d "$TARGET_DIR/aarch64-apple-darwin/release-dist/bundle/osx"/*.app | head -n 1)"
+          app_x86="$(ls -d "$TARGET_DIR/x86_64-apple-darwin/release-dist/bundle/osx"/*.app | head -n 1)"
 
-          rm -rf dmg-src dist/portable
-          mkdir -p dmg-src
-          cp -R "$app_arm" dmg-src/
+          rm -rf "$ROOT/dmg-src" "$DIST/portable"
+          mkdir -p "$ROOT/dmg-src"
+          cp -R "$app_arm" "$ROOT/dmg-src/"
 
           app_name="$(basename "$app_arm")"
-          app_dst="dmg-src/$app_name"
+          app_dst="$ROOT/dmg-src/$app_name"
 
           exe_arm="$(ls "$app_arm/Contents/MacOS" | head -n 1)"
           exe_x86="$(ls "$app_x86/Contents/MacOS" | head -n 1)"
@@ -171,13 +170,13 @@ jobs:
             "$app_x86/Contents/MacOS/$exe_x86" \
             -output "$app_dst/Contents/MacOS/$exe_dst"
 
-          ln -s /Applications dmg-src/Applications
+          ln -s /Applications "$ROOT/dmg-src/Applications"
 
-          dmg_rw="dist/nesium-egui-${RELEASE_TAG}-macos-universal-rw.dmg"
-          dmg="dist/nesium-egui-${RELEASE_TAG}-macos-universal.dmg"
+          dmg_rw="$DIST/nesium-egui-${RELEASE_TAG}-macos-universal-rw.dmg"
+          dmg="$DIST/nesium-egui-${RELEASE_TAG}-macos-universal.dmg"
           vol="Nesium"
 
-          hdiutil create -volname "$vol" -srcfolder dmg-src -ov -format UDRW "$dmg_rw"
+          hdiutil create -volname "$vol" -srcfolder "$ROOT/dmg-src" -ov -format UDRW "$dmg_rw"
           attach_out="$(hdiutil attach -readwrite -noverify -noautoopen "$dmg_rw")"
           mount_dir="$(echo "$attach_out" | grep -Eo '/Volumes/[^ ]+' | head -n 1)"
           if [ -z "$mount_dir" ]; then
@@ -188,16 +187,6 @@ jobs:
           vol_name="$(basename "$mount_dir")"
           open "$mount_dir" || true
 
-          # Optional: set DMG volume icon (the app icon is inside the .app bundle).
-          if command -v SetFile >/dev/null 2>&1; then
-            cp target/generated/nesium.icns "$mount_dir/.VolumeIcon.icns"
-            SetFile -a V "$mount_dir/.VolumeIcon.icns" || true
-            SetFile -a C "$mount_dir" || true
-          else
-            echo "SetFile not available; skip setting DMG volume icon"
-          fi
-
-          # Make the "drag to Applications" window look nicer (white background, fixed layout).
           osascript \
             -e 'tell application "Finder"' \
             -e "tell disk \"$vol_name\"" \
@@ -224,12 +213,12 @@ jobs:
           hdiutil convert "$dmg_rw" -format UDZO -o "$dmg"
           rm -f "$dmg_rw"
 
-          mkdir -p dist/portable
-          cp -R "$app_dst" dist/portable/
-          cp README.md LICENSE.md dist/portable/ 2>/dev/null || true
-          (cd dist/portable && zip -r "../nesium-egui-${RELEASE_TAG}-macos-universal-portable.zip" .)
+          mkdir -p "$DIST/portable"
+          cp -R "$app_dst" "$DIST/portable/"
+          cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DIST/portable/" 2>/dev/null || true
+          (cd "$DIST/portable" && zip -r "../nesium-egui-${RELEASE_TAG}-macos-universal-portable.zip" .)
 
-          ls -la dist
+          ls -la "$DIST"
 
       - name: Bundle installer + portable (Windows)
         if: runner.os == 'Windows'
