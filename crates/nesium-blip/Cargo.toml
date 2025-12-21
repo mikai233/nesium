@@ -16,7 +16,7 @@ default = ["rust-impl"]
 
 [build-dependencies]
 bindgen = { workspace = true, optional = true }
-cc = { version = "1", optional = true }
+cc = { workspace = true, optional = true }
 
 [dev-dependencies]
-proptest = "1"
+proptest.workspace = true

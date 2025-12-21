@@ -21,9 +21,9 @@ version = "0.1.0"
 copyright = "Copyright (c) 2025 mikai233"
 
 [dependencies]
-nesium-core.path = "../../crates/nesium-core"
-nesium-runtime.path = "../../crates/nesium-runtime"
-eframe = { workspace = true, features = ["wgpu", "glow"] }
+nesium-core.workspace = true
+nesium-runtime.workspace = true
+eframe = { workspace = true, features = ["wgpu"] }
 gilrs.workspace = true
 anyhow.workspace = true
 rfd.workspace = true
@@ -34,7 +34,7 @@ tracing-appender.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [build-dependencies]
-nesium-icon = { path = "../../crates/nesium-icon" }
-ico = "0.5"
-winres = "0.1"
-png = "0.18"
+nesium-icon.workspace = true
+ico.workspace = true
+winres.workspace = true
+png.workspace = true

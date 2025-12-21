@@ -5,6 +5,6 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-nesium-core.path = "../nesium-core"
+nesium-core.workspace = true
 anyhow.workspace = true
 esp-idf-sys = { workspace = true, features = ["binstart"] }

@@ -12,7 +12,7 @@ boxed-memblock = []
 bitflags.workspace = true
 dyn-clone.workspace = true
 tracing.workspace = true
-nesium-blip = { path = "../nesium-blip" }
+nesium-blip.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

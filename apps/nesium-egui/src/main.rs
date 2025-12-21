@@ -74,41 +74,14 @@ fn main() -> Result<()> {
         height: ICON_HEIGHT,
     };
 
-    let renderer = choose_renderer();
-
-    let wgpu_options = {
-        #[allow(unused_mut)]
-        let mut options = eframe::egui_wgpu::WgpuConfiguration {
-            desired_maximum_frame_latency: Some(1),
-            ..Default::default()
-        };
-
-        // On Windows ARM, the default DX12 backend can have driver/toolchain issues that
-        // manifest as "everything except text renders" (text uses a textured pipeline).
-        // Prefer Vulkan/OpenGL there, while still allowing `WGPU_BACKEND` to override.
-        #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
-        {
-            let mut setup = eframe::egui_wgpu::WgpuSetupCreateNew::default();
-            setup.instance_descriptor.backends = eframe::egui_wgpu::wgpu::Backends::from_env()
-                .unwrap_or(
-                    eframe::egui_wgpu::wgpu::Backends::VULKAN
-                        | eframe::egui_wgpu::wgpu::Backends::GL,
-                );
-            options.wgpu_setup = eframe::egui_wgpu::WgpuSetup::CreateNew(setup);
-        }
-
-        options
-    };
-
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Nesium")
             .with_app_id(APP_ID)
             .with_icon(icon)
             .with_inner_size([SCREEN_WIDTH as f32 * 3.0, SCREEN_HEIGHT as f32 * 3.0]),
-        // On macOS, the default glow/OpenGL backend can have worse frame pacing than wgpu/Metal.
-        renderer,
-        wgpu_options,
+        renderer: preferred_renderer(),
+        wgpu_options: wgpu_options(),
         ..Default::default()
     };
 
@@ -126,19 +99,16 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn choose_renderer() -> eframe::Renderer {
-    // Allow forcing renderer for troubleshooting:
-    // - `NESIUM_EGUI_RENDERER=glow` (OpenGL)
-    // - `NESIUM_EGUI_RENDERER=wgpu` (wgpu)
-    if let Ok(v) = env::var("NESIUM_EGUI_RENDERER") {
-        match v.to_ascii_lowercase().as_str() {
-            "glow" | "gl" | "opengl" => return eframe::Renderer::Glow,
-            "wgpu" => return eframe::Renderer::Wgpu,
-            _ => {}
-        }
+fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
+    eframe::egui_wgpu::WgpuConfiguration {
+        desired_maximum_frame_latency: Some(1),
+        ..Default::default()
     }
+}
 
-    // Default to Glow on Windows ARM to avoid known wgpu/DX12 driver issues impacting text.
+fn preferred_renderer() -> eframe::Renderer {
+    // Windows ARM defaults to OpenGL (Glow) to avoid wgpu backend issues that can
+    // manifest as "everything except text renders".
     #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
     return eframe::Renderer::Glow;
 

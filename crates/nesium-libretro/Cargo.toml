@@ -9,6 +9,6 @@ name = "nesium_libretro"
 crate-type = ["cdylib"]
 
 [dependencies]
-libretro-bridge.path = "../libretro-bridge"
-nesium-core.path = "../nesium-core"
+libretro-bridge.workspace = true
+nesium-core.workspace = true
 once_cell.workspace = true

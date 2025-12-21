@@ -5,7 +5,7 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-nesium-core.path = "../nesium-core"
+nesium-core.workspace = true
 anyhow.workspace = true
 cpal.workspace = true
 ringbuf.workspace = true
