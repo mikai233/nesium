@@ -162,6 +162,19 @@ pub unsafe extern "C" fn nesium_copy_frame(
         )
     };
 
+    // Fast path when destination is tightly packed.
+    if dst_pitch == src_pitch {
+        let bytes = src_pitch * height;
+        let src_len = src_slice.len();
+        let dst_len = dst_slice.len();
+        let bytes = bytes.min(src_len).min(dst_len);
+        let src = &src_slice[..bytes];
+        let dst = &mut dst_slice[..bytes];
+        dst.copy_from_slice(src);
+        frame_handle.end_front_copy();
+        return;
+    }
+
     for y in 0..height {
         let src_off = y * src_pitch;
         let dst_off = y * dst_pitch;
