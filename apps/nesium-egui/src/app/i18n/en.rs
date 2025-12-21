@@ -72,6 +72,13 @@ impl LanguagePack for En {
             InputCategoryDirection => "Direction",
             InputCategoryAction => "Action",
             InputCategorySystem => "System",
+            InputButtonTurboA => "Turbo A",
+            InputButtonTurboB => "Turbo B",
+            InputTurboSection => "Turbo",
+            InputTurboRateLabel => "Frames per toggle",
+            InputTurboHelp => {
+                "Lower is faster. Turbo alternates ON/OFF every N frames (e.g. 1≈30Hz, 2≈15Hz on NTSC)."
+            }
             InputPromptPressAnyKey => "Press any key...",
             InputNotBound => "Unbound",
             InputBindButton => "Bind",

@@ -70,6 +70,13 @@ impl LanguagePack for Zh {
             InputCategoryDirection => "方向",
             InputCategoryAction => "动作",
             InputCategorySystem => "系统",
+            InputButtonTurboA => "连发 A",
+            InputButtonTurboB => "连发 B",
+            InputTurboSection => "连发 (Turbo)",
+            InputTurboRateLabel => "切换帧数",
+            InputTurboHelp => {
+                "数值越小越快。连发会每 N 帧在“按下/松开”之间切换（例如 N=1≈30Hz，N=2≈15Hz）。"
+            }
             InputPromptPressAnyKey => "按任意键...",
             InputNotBound => "未绑定",
             InputBindButton => "绑定",

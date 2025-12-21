@@ -54,6 +54,7 @@ pub(super) struct UiState {
     controller_presets: [InputPreset; 4],
     active_input_port: usize,
     pixel_perfect_scaling: bool,
+    turbo_frames_per_toggle: u8,
     gamepads_available: bool,
     gamepads: Vec<(GamepadId, String)>,
 }
@@ -136,6 +137,7 @@ pub struct NesiumApp {
     frame_image: Option<Arc<ColorImage>>,
     last_frame_seq: u64,
     last_pad_masks: [u8; 4],
+    last_turbo_masks: [u8; 4],
     rom_path: Option<PathBuf>,
     paused: bool,
     error_dialog: Option<String>,
@@ -178,6 +180,8 @@ impl NesiumApp {
         let gamepads = GamepadManager::new();
         let gamepad_snapshot = gamepads.as_ref().map(|m| m.gamepads()).unwrap_or_default();
 
+        runtime_handle.set_turbo_frames_per_toggle(2);
+
         let ui_state = Arc::new(Mutex::new(UiState {
             i18n: if has_cjk_font {
                 I18n::new(Language::ChineseSimplified)
@@ -195,6 +199,7 @@ impl NesiumApp {
             controller_presets: [InputPreset::NesStandard; 4],
             active_input_port: 0,
             pixel_perfect_scaling: false,
+            turbo_frames_per_toggle: 2,
             gamepads_available: gamepads.is_some(),
             gamepads: gamepad_snapshot,
         }));
@@ -207,6 +212,7 @@ impl NesiumApp {
             frame_image: None,
             last_frame_seq: 0,
             last_pad_masks: [0u8; 4],
+            last_turbo_masks: [0u8; 4],
             rom_path: None,
             paused: false,
             error_dialog: None,
@@ -256,6 +262,7 @@ impl NesiumApp {
         self.runtime_handle.set_paused(false);
         self.last_frame_seq = self.runtime_handle.frame_seq();
         self.last_pad_masks = [0u8; 4];
+        self.last_turbo_masks = [0u8; 4];
         // Reset local input state
         if let Ok(mut ui_state) = self.ui_state.lock() {
             for ctrl in &mut ui_state.controllers {
@@ -269,6 +276,7 @@ impl NesiumApp {
         self.rom_path = None;
         self.last_frame_seq = self.runtime_handle.frame_seq();
         self.last_pad_masks = [0u8; 4];
+        self.last_turbo_masks = [0u8; 4];
         if let Ok(mut ui_state) = self.ui_state.lock() {
             for ctrl in &mut ui_state.controllers {
                 ctrl.release_all();
@@ -544,6 +552,7 @@ impl eframe::App for NesiumApp {
         // 3. Process Input
         let keyboard_busy = ctx.wants_keyboard_input();
         let mut pad_masks = [0u8; 4];
+        let mut turbo_masks = [0u8; 4];
         if let Ok(mut ui_state) = self.ui_state.try_lock() {
             for port in 0..4 {
                 let device = ui_state.controller_devices[port];
@@ -565,15 +574,19 @@ impl eframe::App for NesiumApp {
                     }
                 }
                 pad_masks[port] = ctrl.pressed_mask();
+                turbo_masks[port] = ctrl.turbo_mask();
             }
             self.last_pad_masks = pad_masks;
+            self.last_turbo_masks = turbo_masks;
         } else {
             pad_masks = self.last_pad_masks;
+            turbo_masks = self.last_turbo_masks;
         }
 
         // Always publish input state via atomics (no control channel, low latency).
         for port in 0..4 {
             self.runtime_handle.set_pad_mask(port, pad_masks[port]);
+            self.runtime_handle.set_turbo_mask(port, turbo_masks[port]);
         }
 
         // 4. Handle Drag & Drop

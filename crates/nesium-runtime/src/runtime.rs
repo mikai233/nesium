@@ -90,6 +90,8 @@ impl std::error::Error for RuntimeError {}
 struct RuntimeState {
     paused: AtomicBool,
     pad_masks: [AtomicU8; 4],
+    turbo_masks: [AtomicU8; 4],
+    turbo_frames_per_toggle: AtomicU8,
     frame_seq: std::sync::atomic::AtomicU64,
 }
 
@@ -98,6 +100,8 @@ impl RuntimeState {
         Self {
             paused: AtomicBool::new(false),
             pad_masks: std::array::from_fn(|_| AtomicU8::new(0)),
+            turbo_masks: std::array::from_fn(|_| AtomicU8::new(0)),
+            turbo_frames_per_toggle: AtomicU8::new(TURBO_FRAMES_PER_TOGGLE_DEFAULT),
             frame_seq: std::sync::atomic::AtomicU64::new(0),
         }
     }
@@ -223,6 +227,23 @@ impl RuntimeHandle {
         }
     }
 
+    pub fn set_turbo_mask(&self, pad: usize, mask: u8) {
+        if let Some(slot) = self.inner.state.turbo_masks.get(pad) {
+            slot.store(mask, Ordering::Release);
+        }
+    }
+
+    /// Set how many frames each turbo phase lasts (ON then OFF).
+    ///
+    /// - `1` toggles every frame (~30Hz on NTSC)
+    /// - `2` toggles every 2 frames (~15Hz on NTSC)
+    pub fn set_turbo_frames_per_toggle(&self, frames: u8) {
+        self.inner
+            .state
+            .turbo_frames_per_toggle
+            .store(frames.max(1), Ordering::Release);
+    }
+
     pub fn set_button(&self, pad: usize, button: Button, pressed: bool) {
         let Some(slot) = self.inner.state.pad_masks.get(pad) else {
             return;
@@ -292,6 +313,7 @@ fn button_bit(button: Button) -> u8 {
 
 // NTSC: ~60.0988 Hz
 const FRAME_DURATION: Duration = Duration::from_nanos(16_639_263);
+const TURBO_FRAMES_PER_TOGGLE_DEFAULT: u8 = 2;
 
 #[derive(Debug, Clone, Copy)]
 struct RunnerConfig {
@@ -447,6 +469,9 @@ impl Runner {
                     for mask in &self.state.pad_masks {
                         mask.store(0, Ordering::Release);
                     }
+                    for mask in &self.state.turbo_masks {
+                        mask.store(0, Ordering::Release);
+                    }
                     if let Some(audio) = &self.audio {
                         audio.clear();
                     }
@@ -461,6 +486,9 @@ impl Runner {
                 self.nes.eject_cartridge();
                 self.has_cartridge = false;
                 for mask in &self.state.pad_masks {
+                    mask.store(0, Ordering::Release);
+                }
+                for mask in &self.state.turbo_masks {
                     mask.store(0, Ordering::Release);
                 }
                 if let Some(audio) = &self.audio {
@@ -482,40 +510,36 @@ impl Runner {
     }
 
     fn step_frame(&mut self) {
+        let frame = self.state.frame_seq.load(Ordering::Relaxed);
+        let turbo_frames_per_toggle = self
+            .state
+            .turbo_frames_per_toggle
+            .load(Ordering::Acquire)
+            .max(1) as u64;
+        let turbo_on = (frame / turbo_frames_per_toggle) % 2 == 0;
+        let buttons = [
+            Button::A,
+            Button::B,
+            Button::Select,
+            Button::Start,
+            Button::Up,
+            Button::Down,
+            Button::Left,
+            Button::Right,
+        ];
+
         // Sync Inputs (atomic bitmasks, no channel).
         for pad in 0..4 {
             let mask = self.state.pad_masks[pad].load(Ordering::Acquire);
-            self.nes
-                .set_button(pad, Button::A, (mask & (1 << button_bit(Button::A))) != 0);
-            self.nes
-                .set_button(pad, Button::B, (mask & (1 << button_bit(Button::B))) != 0);
-            self.nes.set_button(
-                pad,
-                Button::Select,
-                (mask & (1 << button_bit(Button::Select))) != 0,
-            );
-            self.nes.set_button(
-                pad,
-                Button::Start,
-                (mask & (1 << button_bit(Button::Start))) != 0,
-            );
-            self.nes
-                .set_button(pad, Button::Up, (mask & (1 << button_bit(Button::Up))) != 0);
-            self.nes.set_button(
-                pad,
-                Button::Down,
-                (mask & (1 << button_bit(Button::Down))) != 0,
-            );
-            self.nes.set_button(
-                pad,
-                Button::Left,
-                (mask & (1 << button_bit(Button::Left))) != 0,
-            );
-            self.nes.set_button(
-                pad,
-                Button::Right,
-                (mask & (1 << button_bit(Button::Right))) != 0,
-            );
+            let turbo_mask = self.state.turbo_masks[pad].load(Ordering::Acquire);
+
+            for button in buttons {
+                let bit = 1u8 << button_bit(button);
+                let normal_pressed = (mask & bit) != 0;
+                let turbo_pressed = (turbo_mask & bit) != 0;
+                let pressed = normal_pressed || (turbo_pressed && turbo_on);
+                self.nes.set_button(pad, button, pressed);
+            }
         }
 
         let samples = self.nes.run_frame(self.audio.is_some());

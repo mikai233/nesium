@@ -10,7 +10,7 @@ use nesium_core::controller::Button;
 
 use super::{
     AppViewport, NesiumApp, TextId, controller,
-    controller::{ControllerDevice, InputPreset},
+    controller::{ControllerDevice, InputAction, InputPreset},
 };
 
 fn consume_close_requests(
@@ -304,6 +304,7 @@ impl NesiumApp {
                 .with_title(self.t(TextId::MenuWindowInput))
                 .with_inner_size([420.0, 300.0]);
             let ui_state = Arc::clone(&self.ui_state);
+            let runtime_handle = self.runtime_handle.clone();
             let close_flag = self.viewports.close_flag(AppViewport::Input);
             show_viewport_with_close(
                 ctx,
@@ -334,6 +335,25 @@ impl NesiumApp {
                         egui::ScrollArea::vertical()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
+                                ui.collapsing(
+                                    ui_state.i18n.text(TextId::InputTurboSection),
+                                    |ui| {
+                                        let mut frames = ui_state.turbo_frames_per_toggle.max(1);
+                                        let label = ui_state.i18n.text(TextId::InputTurboRateLabel);
+                                        if ui
+                                            .add(
+                                                egui::Slider::new(&mut frames, 1u8..=10u8)
+                                                    .text(label),
+                                            )
+                                            .changed()
+                                        {
+                                            ui_state.turbo_frames_per_toggle = frames;
+                                            runtime_handle.set_turbo_frames_per_toggle(frames);
+                                        }
+                                        ui.small(ui_state.i18n.text(TextId::InputTurboHelp));
+                                    },
+                                );
+
                                 ui.horizontal(|ui| {
                                     ui.label(ui_state.i18n.text(TextId::InputControllerPortsLabel));
                                     for port in 0..4 {
@@ -514,36 +534,97 @@ impl NesiumApp {
                                         ui.strong(header_action);
                                         ui.end_row();
 
-                                        let mapping_rows: &[(TextId, Button)] = &[
-                                            (TextId::InputCategoryDirection, Button::Up),
-                                            (TextId::InputCategoryDirection, Button::Down),
-                                            (TextId::InputCategoryDirection, Button::Left),
-                                            (TextId::InputCategoryDirection, Button::Right),
-                                            (TextId::InputCategoryAction, Button::A),
-                                            (TextId::InputCategoryAction, Button::B),
-                                            (TextId::InputCategorySystem, Button::Select),
-                                            (TextId::InputCategorySystem, Button::Start),
+                                        let mapping_rows: &[(TextId, InputAction)] = &[
+                                            (
+                                                TextId::InputCategoryDirection,
+                                                InputAction::Button(Button::Up),
+                                            ),
+                                            (
+                                                TextId::InputCategoryDirection,
+                                                InputAction::Button(Button::Down),
+                                            ),
+                                            (
+                                                TextId::InputCategoryDirection,
+                                                InputAction::Button(Button::Left),
+                                            ),
+                                            (
+                                                TextId::InputCategoryDirection,
+                                                InputAction::Button(Button::Right),
+                                            ),
+                                            (
+                                                TextId::InputCategoryAction,
+                                                InputAction::Button(Button::A),
+                                            ),
+                                            (
+                                                TextId::InputCategoryAction,
+                                                InputAction::Button(Button::B),
+                                            ),
+                                            (
+                                                TextId::InputCategoryAction,
+                                                InputAction::Turbo(Button::A),
+                                            ),
+                                            (
+                                                TextId::InputCategoryAction,
+                                                InputAction::Turbo(Button::B),
+                                            ),
+                                            (
+                                                TextId::InputCategorySystem,
+                                                InputAction::Button(Button::Select),
+                                            ),
+                                            (
+                                                TextId::InputCategorySystem,
+                                                InputAction::Button(Button::Start),
+                                            ),
                                         ];
 
-                                        for (category_id, button) in mapping_rows {
+                                        for (category_id, action) in mapping_rows {
                                             let category_label = ui_state.i18n.text(*category_id);
-                                            let name = controller::format_button_name(*button);
+                                            let name = match action {
+                                                InputAction::Button(button) => {
+                                                    controller::format_button_name(*button)
+                                                        .to_string()
+                                                }
+                                                InputAction::Turbo(button) => match button {
+                                                    Button::A => ui_state
+                                                        .i18n
+                                                        .text(TextId::InputButtonTurboA)
+                                                        .to_string(),
+                                                    Button::B => ui_state
+                                                        .i18n
+                                                        .text(TextId::InputButtonTurboB)
+                                                        .to_string(),
+                                                    _ => format!(
+                                                        "Turbo {}",
+                                                        controller::format_button_name(*button)
+                                                    ),
+                                                },
+                                            };
                                             let ctrl = &mut ui_state.controllers[port];
 
                                             ui.label(category_label);
                                             ui.label(name);
 
                                             let capture_target = ctrl.capture_target();
-                                            let is_capturing = capture_target == Some(*button);
+                                            let is_capturing = capture_target == Some(*action);
                                             if is_capturing {
                                                 ui.colored_label(Color32::LIGHT_BLUE, prompt_label);
-                                            } else if let Some(key) = ctrl.binding_for(*button) {
-                                                ui.monospace(format!("{key:?}"));
                                             } else {
-                                                ui.colored_label(
-                                                    Color32::DARK_GRAY,
-                                                    not_bound_label,
-                                                );
+                                                let bound = match action {
+                                                    InputAction::Button(button) => {
+                                                        ctrl.binding_for(*button)
+                                                    }
+                                                    InputAction::Turbo(button) => {
+                                                        ctrl.turbo_binding_for(*button)
+                                                    }
+                                                };
+                                                if let Some(key) = bound {
+                                                    ui.monospace(format!("{key:?}"));
+                                                } else {
+                                                    ui.colored_label(
+                                                        Color32::DARK_GRAY,
+                                                        not_bound_label,
+                                                    );
+                                                }
                                             }
 
                                             let button_label = if is_capturing {
@@ -555,7 +636,7 @@ impl NesiumApp {
                                                 if is_capturing {
                                                     ctrl.clear_capture();
                                                 } else {
-                                                    ctrl.begin_capture(*button);
+                                                    ctrl.begin_capture(*action);
                                                 }
                                             }
 
@@ -635,28 +716,88 @@ impl NesiumApp {
                                                 ui.strong(header_gamepad_button);
                                                 ui.end_row();
 
-                                                let mapping_rows: &[(TextId, Button)] = &[
-                                                    (TextId::InputCategoryDirection, Button::Up),
-                                                    (TextId::InputCategoryDirection, Button::Down),
-                                                    (TextId::InputCategoryDirection, Button::Left),
-                                                    (TextId::InputCategoryDirection, Button::Right),
-                                                    (TextId::InputCategoryAction, Button::A),
-                                                    (TextId::InputCategoryAction, Button::B),
-                                                    (TextId::InputCategorySystem, Button::Select),
-                                                    (TextId::InputCategorySystem, Button::Start),
+                                                let mapping_rows: &[(TextId, InputAction)] = &[
+                                                    (
+                                                        TextId::InputCategoryDirection,
+                                                        InputAction::Button(Button::Up),
+                                                    ),
+                                                    (
+                                                        TextId::InputCategoryDirection,
+                                                        InputAction::Button(Button::Down),
+                                                    ),
+                                                    (
+                                                        TextId::InputCategoryDirection,
+                                                        InputAction::Button(Button::Left),
+                                                    ),
+                                                    (
+                                                        TextId::InputCategoryDirection,
+                                                        InputAction::Button(Button::Right),
+                                                    ),
+                                                    (
+                                                        TextId::InputCategoryAction,
+                                                        InputAction::Button(Button::A),
+                                                    ),
+                                                    (
+                                                        TextId::InputCategoryAction,
+                                                        InputAction::Button(Button::B),
+                                                    ),
+                                                    (
+                                                        TextId::InputCategoryAction,
+                                                        InputAction::Turbo(Button::A),
+                                                    ),
+                                                    (
+                                                        TextId::InputCategoryAction,
+                                                        InputAction::Turbo(Button::B),
+                                                    ),
+                                                    (
+                                                        TextId::InputCategorySystem,
+                                                        InputAction::Button(Button::Select),
+                                                    ),
+                                                    (
+                                                        TextId::InputCategorySystem,
+                                                        InputAction::Button(Button::Start),
+                                                    ),
                                                 ];
 
-                                                for (category_id, button) in mapping_rows {
+                                                for (category_id, action) in mapping_rows {
                                                     let category_label =
                                                         ui_state.i18n.text(*category_id);
-                                                    let name =
-                                                        controller::format_button_name(*button);
+                                                    let name = match action {
+                                                        InputAction::Button(button) => {
+                                                            controller::format_button_name(*button)
+                                                                .to_string()
+                                                        }
+                                                        InputAction::Turbo(button) => {
+                                                            match button {
+                                                                Button::A => ui_state
+                                                                    .i18n
+                                                                    .text(TextId::InputButtonTurboA)
+                                                                    .to_string(),
+                                                                Button::B => ui_state
+                                                                    .i18n
+                                                                    .text(TextId::InputButtonTurboB)
+                                                                    .to_string(),
+                                                                _ => format!(
+                                                                    "Turbo {}",
+                                                                    controller::format_button_name(
+                                                                        *button
+                                                                    )
+                                                                ),
+                                                            }
+                                                        }
+                                                    };
                                                     let ctrl = &mut ui_state.controllers[port];
-                                                    let mut binding =
-                                                        ctrl.gamepad_binding_for(*button);
+                                                    let mut binding = match action {
+                                                        InputAction::Button(button) => {
+                                                            ctrl.gamepad_binding_for(*button)
+                                                        }
+                                                        InputAction::Turbo(button) => {
+                                                            ctrl.turbo_gamepad_binding_for(*button)
+                                                        }
+                                                    };
 
                                                     ui.label(category_label);
-                                                    ui.label(name);
+                                                    ui.label(&name);
 
                                                     let current_label = binding
                                                         .map(|b| format!("{b:?}"))
@@ -690,7 +831,14 @@ impl NesiumApp {
                                                         }
                                                     });
 
-                                                    ctrl.set_gamepad_binding(*button, binding);
+                                                    match action {
+                                                        InputAction::Button(button) => ctrl
+                                                            .set_gamepad_binding(*button, binding),
+                                                        InputAction::Turbo(button) => ctrl
+                                                            .set_turbo_gamepad_binding(
+                                                                *button, binding,
+                                                            ),
+                                                    }
                                                     ui.end_row();
                                                 }
                                             });

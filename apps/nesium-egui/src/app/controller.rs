@@ -18,20 +18,28 @@ pub enum ControllerDevice {
 #[derive(Default, Clone)]
 pub struct ControllerInput {
     pressed: Vec<Button>,
+    turbo_pressed: Vec<Button>,
     /// Per-NES-button key bindings.
     bindings: Vec<(Button, Option<Key>)>,
+    /// Per-NES-button turbo key bindings (hold to enable turbo for that button).
+    turbo_bindings: Vec<(Button, Option<Key>)>,
     /// Per-NES-button gamepad bindings.
     gamepad_bindings: Vec<(Button, Option<GilrsButton>)>,
+    /// Per-NES-button turbo gamepad bindings (hold to enable turbo for that button).
+    turbo_gamepad_bindings: Vec<(Button, Option<GilrsButton>)>,
     /// If set, the next key press will be bound to this NES button.
-    capture_target: Option<Button>,
+    capture_target: Option<InputAction>,
 }
 
 impl ControllerInput {
     pub fn new_with_defaults() -> Self {
         let mut input = Self {
             pressed: Vec::new(),
+            turbo_pressed: Vec::new(),
             bindings: Vec::new(),
+            turbo_bindings: Vec::new(),
             gamepad_bindings: Vec::new(),
+            turbo_gamepad_bindings: Vec::new(),
             capture_target: None,
         };
         input.apply_preset(InputPreset::NesStandard);
@@ -90,8 +98,23 @@ impl ControllerInput {
 
             if let Some(key) = captured {
                 let new_binding = if key == Key::Escape { None } else { Some(key) };
-                if let Some((_, slot)) = self.bindings.iter_mut().find(|(btn, _)| *btn == target) {
-                    *slot = new_binding;
+                match target {
+                    InputAction::Button(button) => {
+                        if let Some((_, slot)) =
+                            self.bindings.iter_mut().find(|(btn, _)| *btn == button)
+                        {
+                            *slot = new_binding;
+                        }
+                    }
+                    InputAction::Turbo(button) => {
+                        if let Some((_, slot)) = self
+                            .turbo_bindings
+                            .iter_mut()
+                            .find(|(btn, _)| *btn == button)
+                        {
+                            *slot = new_binding;
+                        }
+                    }
                 }
                 self.capture_target = None;
             }
@@ -99,6 +122,7 @@ impl ControllerInput {
 
         let keys = ctx.input(|i| i.keys_down.clone());
         let mut desired: Vec<Button> = Vec::new();
+        let mut turbo_desired: Vec<Button> = Vec::new();
 
         if !keyboard_blocked {
             for (button, key_opt) in &self.bindings {
@@ -109,9 +133,19 @@ impl ControllerInput {
                     desired.push(*button);
                 }
             }
+
+            for (button, key_opt) in &self.turbo_bindings {
+                if let Some(key) = key_opt
+                    && keys.contains(key)
+                    && !turbo_desired.contains(button)
+                {
+                    turbo_desired.push(*button);
+                }
+            }
         }
 
         self.pressed = desired;
+        self.turbo_pressed = turbo_desired;
     }
 
     pub fn sync_from_gamepad(
@@ -121,6 +155,7 @@ impl ControllerInput {
         gamepad_id: GamepadId,
     ) {
         let mut desired: Vec<Button> = Vec::new();
+        let mut turbo_desired: Vec<Button> = Vec::new();
 
         for (button, binding) in &self.gamepad_bindings {
             if let Some(gb) = binding
@@ -130,11 +165,21 @@ impl ControllerInput {
             }
         }
 
+        for (button, binding) in &self.turbo_gamepad_bindings {
+            if let Some(gb) = binding
+                && gamepads.is_pressed(gamepad_id, *gb)
+            {
+                turbo_desired.push(*button);
+            }
+        }
+
         self.pressed = desired;
+        self.turbo_pressed = turbo_desired;
     }
 
     pub fn release_all(&mut self) {
         self.pressed.clear();
+        self.turbo_pressed.clear();
     }
 
     pub fn is_pressed(&self, button: Button) -> bool {
@@ -149,6 +194,14 @@ impl ControllerInput {
         mask
     }
 
+    pub fn turbo_mask(&self) -> u8 {
+        let mut mask: u8 = 0;
+        for &button in &self.turbo_pressed {
+            mask |= 1u8 << button_bit(button);
+        }
+        mask
+    }
+
     /// Current key binding for a given NES button.
     pub fn binding_for(&self, button: Button) -> Option<Key> {
         self.bindings
@@ -156,13 +209,19 @@ impl ControllerInput {
             .find_map(|(b, key)| if *b == button { *key } else { None })
     }
 
+    pub fn turbo_binding_for(&self, button: Button) -> Option<Key> {
+        self.turbo_bindings
+            .iter()
+            .find_map(|(b, key)| if *b == button { *key } else { None })
+    }
+
     /// Start capturing the next key press to bind to `button`.
-    pub fn begin_capture(&mut self, button: Button) {
-        self.capture_target = Some(button);
+    pub fn begin_capture(&mut self, action: InputAction) {
+        self.capture_target = Some(action);
     }
 
     /// NES button currently waiting for a new binding, if any.
-    pub fn capture_target(&self) -> Option<Button> {
+    pub fn capture_target(&self) -> Option<InputAction> {
         self.capture_target
     }
 
@@ -174,6 +233,12 @@ impl ControllerInput {
     /// Current gamepad binding for a given NES button.
     pub fn gamepad_binding_for(&self, button: Button) -> Option<GilrsButton> {
         self.gamepad_bindings
+            .iter()
+            .find_map(|(b, btn)| if *b == button { *btn } else { None })
+    }
+
+    pub fn turbo_gamepad_binding_for(&self, button: Button) -> Option<GilrsButton> {
+        self.turbo_gamepad_bindings
             .iter()
             .find_map(|(b, btn)| if *b == button { *btn } else { None })
     }
@@ -190,6 +255,24 @@ impl ControllerInput {
             self.gamepad_bindings.push((button, binding));
         }
     }
+
+    pub fn set_turbo_gamepad_binding(&mut self, button: Button, binding: Option<GilrsButton>) {
+        if let Some((_, b)) = self
+            .turbo_gamepad_bindings
+            .iter_mut()
+            .find(|(btn, _)| *btn == button)
+        {
+            *b = binding;
+        } else {
+            self.turbo_gamepad_bindings.push((button, binding));
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputAction {
+    Button(Button),
+    Turbo(Button),
 }
 
 fn button_bit(button: Button) -> u8 {
@@ -232,6 +315,7 @@ impl ControllerInput {
 
         // Keyboard defaults.
         self.bindings.clear();
+        self.turbo_bindings.clear();
         match preset {
             InputPreset::NesStandard => {
                 self.bindings.extend_from_slice(&[
@@ -244,6 +328,8 @@ impl ControllerInput {
                     (Start, Some(Key::Enter)),
                     (Select, Some(Key::Space)),
                 ]);
+                self.turbo_bindings
+                    .extend_from_slice(&[(A, Some(Key::C)), (B, Some(Key::V))]);
             }
             InputPreset::FightStick => {
                 // WASD for directions, J/K for punches (A/B), Enter/RightShift for Start/Select.
@@ -257,6 +343,8 @@ impl ControllerInput {
                     (Start, Some(Key::Enter)),
                     (Select, Some(Key::Space)),
                 ]);
+                self.turbo_bindings
+                    .extend_from_slice(&[(A, Some(Key::U)), (B, Some(Key::I))]);
             }
             InputPreset::ArcadeLayout => {
                 // Arrow keys + H/J for A/B, Enter/Space for Start/Select.
@@ -270,11 +358,14 @@ impl ControllerInput {
                     (Start, Some(Key::Enter)),
                     (Select, Some(Key::Space)),
                 ]);
+                self.turbo_bindings
+                    .extend_from_slice(&[(A, Some(Key::K)), (B, Some(Key::L))]);
             }
         }
 
         // Gamepad defaults.
         self.gamepad_bindings.clear();
+        self.turbo_gamepad_bindings.clear();
         self.gamepad_bindings.extend_from_slice(&[
             (Up, Some(GilrsButton::DPadUp)),
             (Down, Some(GilrsButton::DPadDown)),
@@ -285,6 +376,10 @@ impl ControllerInput {
             (B, Some(GilrsButton::East)),
             (Start, Some(GilrsButton::Start)),
             (Select, Some(GilrsButton::Select)),
+        ]);
+        self.turbo_gamepad_bindings.extend_from_slice(&[
+            (A, Some(GilrsButton::RightTrigger)),
+            (B, Some(GilrsButton::LeftTrigger)),
         ]);
     }
 }
