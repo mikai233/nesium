@@ -25,20 +25,22 @@ fn layout_default() -> LayoutParams {
     }
 }
 
-#[cfg(target_os = "windows")]
-fn layout_for_window_icon() -> LayoutParams {
+fn layout_for_window_icon(target_os: &str) -> LayoutParams {
     // Windows will scale the window icon down to small sizes (titlebar/taskbar).
     // Use less padding to keep the glyph readable.
-    LayoutParams {
-        pad_ratio: 0.07,
-        radius_ratio: 0.12,
-        fg_scale: 1.0,
+    if target_os == "windows" {
+        LayoutParams {
+            pad_ratio: 0.07,
+            radius_ratio: 0.12,
+            fg_scale: 1.0,
+        }
+    } else {
+        layout_default()
     }
 }
 
-#[cfg(not(target_os = "windows"))]
-fn layout_for_window_icon() -> LayoutParams {
-    layout_default()
+fn cargo_target_os() -> String {
+    env::var("CARGO_CFG_TARGET_OS").unwrap_or_else(|_| env::consts::OS.to_string())
 }
 
 fn layout_for_ico_size(size: u32) -> LayoutParams {
@@ -71,6 +73,7 @@ fn layout_for_ico_size(size: u32) -> LayoutParams {
 
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is set by Cargo"));
+    let target_os = cargo_target_os();
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=../nesium-icon/src");
@@ -78,20 +81,23 @@ fn main() {
     println!("cargo:rustc-env=NESIUM_APP_ID={}", APP_ID);
 
     let layers = nesium_icon::render_layers(BASE_RENDER_SIZE);
-    let icon_rgba = compose_icon(&layers, ICON_SIZE, layout_for_window_icon());
+    let icon_rgba = compose_icon(&layers, ICON_SIZE, layout_for_window_icon(&target_os));
 
     write_icon_bin(&out_dir, &icon_rgba).expect("failed to write icon_rgba.bin");
     write_icon_rs(&out_dir).expect("failed to write egui_icon.rs");
     generate_bundle_icons(&layers);
 
-    #[cfg(target_os = "windows")]
-    generate_windows_resources(&out_dir, &layers);
+    if target_os == "windows" {
+        generate_windows_resources(&out_dir, &layers);
+    }
 
-    #[cfg(target_os = "linux")]
-    generate_linux_assets(&layers);
+    if target_os == "linux" {
+        generate_linux_assets(&layers);
+    }
 
-    #[cfg(target_os = "macos")]
-    generate_macos_assets(&layers);
+    if target_os == "macos" {
+        generate_macos_assets(&layers);
+    }
 }
 
 fn write_icon_bin(out_dir: &Path, rgba: &[u8]) -> std::io::Result<()> {
@@ -144,7 +150,6 @@ fn generate_bundle_icons(layers: &IconLayers) {
     write_icns_from_png(&icns_path, &png_bytes).expect("write target/generated/nesium.icns");
 }
 
-#[cfg(target_os = "windows")]
 fn generate_windows_resources(out_dir: &Path, layers: &IconLayers) {
     use ico::{IconDir, IconDirEntry, IconImage, ResourceType};
     use winres::WindowsResource;
@@ -171,10 +176,11 @@ fn generate_windows_resources(out_dir: &Path, layers: &IconLayers) {
             .to_str()
             .expect("Windows resource path should be valid UTF-8"),
     );
-    res.compile().expect("embed Windows icon resource");
+    if let Err(err) = res.compile() {
+        println!("cargo:warning=Failed to embed Windows icon resource: {err}");
+    }
 }
 
-#[cfg(target_os = "linux")]
 fn generate_linux_assets(layers: &IconLayers) {
     let generated_dir = target_root().join("generated");
     let icon_dir = generated_dir.join("icons");
@@ -190,7 +196,6 @@ fn generate_linux_assets(layers: &IconLayers) {
     fs::write(&desktop_path, desktop_entry()).expect("write .desktop sample");
 }
 
-#[cfg(target_os = "macos")]
 fn generate_macos_assets(layers: &IconLayers) {
     let generated_dir = target_root().join("generated");
     fs::create_dir_all(&generated_dir).expect("create target/generated");
