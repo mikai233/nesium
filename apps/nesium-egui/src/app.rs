@@ -110,6 +110,7 @@ impl Viewports {
         self.open[viewport as usize]
     }
 
+    #[cfg(windows)]
     pub(super) fn any_open(&self) -> bool {
         self.open.iter().any(|&open| open)
     }
@@ -494,10 +495,14 @@ impl eframe::App for NesiumApp {
     fn update(&mut self, ctx: &EguiContext, _: &mut eframe::Frame) {
         // Avoid an unbounded repaint loop: throttle to ~60Hz while the emulator runs.
         // This reduces CPU contention and improves frame pacing on some platforms.
-        //
-        // Also keep the UI responsive while auxiliary viewports are open (some platforms
-        // won't repaint the root viewport on secondary-window events like close).
-        if (self.has_rom() && !self.paused) || self.viewports.any_open() {
+        if self.has_rom() && !self.paused {
+            ctx.request_repaint_after(Duration::from_micros(16_666));
+        }
+
+        // Windows: keep the root viewport responsive while auxiliary viewports are open.
+        // This also helps `show_viewport_immediate` (which couples parent/child repaint).
+        #[cfg(windows)]
+        if self.viewports.any_open() {
             ctx.request_repaint_after(Duration::from_micros(16_666));
         }
 

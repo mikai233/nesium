@@ -28,11 +28,29 @@ fn consume_close_requests(
     if close_requested {
         *open = false;
         ctx.send_viewport_cmd_to(id, egui::ViewportCommand::Close);
-        ctx.request_repaint_of(ViewportId::ROOT);
     }
 }
 
-fn show_viewport_deferred_with_close(
+#[cfg(windows)]
+fn show_viewport_with_close(
+    ctx: &EguiContext,
+    id: ViewportId,
+    builder: ViewportBuilder,
+    close_flag: Arc<AtomicBool>,
+    mut draw: impl FnMut(&EguiContext, ViewportClass) -> bool,
+) {
+    ctx.show_viewport_immediate(id, builder, |ctx, class| {
+        let mut close_requested = ctx.input(|i| i.viewport().close_requested());
+        close_requested |= draw(ctx, class);
+        if close_requested {
+            close_flag.store(true, Ordering::Relaxed);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    });
+}
+
+#[cfg(not(windows))]
+fn show_viewport_with_close(
     ctx: &EguiContext,
     id: ViewportId,
     builder: ViewportBuilder,
@@ -45,10 +63,6 @@ fn show_viewport_deferred_with_close(
         if close_requested {
             close_flag.store(true, Ordering::Relaxed);
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            // On some platforms, the close request doesn't trigger an immediate repaint,
-            // so force a repaint of both this viewport and the root to apply the close.
-            ctx.request_repaint();
-            ctx.request_repaint_of(ViewportId::ROOT);
         }
     });
 }
@@ -86,7 +100,7 @@ impl NesiumApp {
             let builder = ViewportBuilder::default()
                 .with_title("Debugger")
                 .with_inner_size([420.0, 320.0]);
-            show_viewport_deferred_with_close(
+            show_viewport_with_close(
                 ctx,
                 AppViewport::Debugger.id(),
                 builder,
@@ -109,7 +123,7 @@ impl NesiumApp {
                 .with_inner_size([360.0, 260.0]);
             let ui_state_arc = Arc::clone(&self.ui_state);
             let close_flag = self.viewports.close_flag(AppViewport::Tools);
-            show_viewport_deferred_with_close(
+            show_viewport_with_close(
                 ctx,
                 AppViewport::Tools.id(),
                 builder,
@@ -155,7 +169,7 @@ impl NesiumApp {
                 .with_inner_size([520.0, 420.0]);
             let ui_state = Arc::clone(&self.ui_state);
             let close_flag = self.viewports.close_flag(AppViewport::About);
-            show_viewport_deferred_with_close(
+            show_viewport_with_close(
                 ctx,
                 AppViewport::About.id(),
                 builder,
@@ -263,7 +277,7 @@ impl NesiumApp {
                 .with_inner_size([280.0, 240.0]);
             let ui_state = Arc::clone(&self.ui_state);
             let close_flag = self.viewports.close_flag(AppViewport::Palette);
-            show_viewport_deferred_with_close(
+            show_viewport_with_close(
                 ctx,
                 AppViewport::Palette.id(),
                 builder,
@@ -291,7 +305,7 @@ impl NesiumApp {
                 .with_inner_size([420.0, 300.0]);
             let ui_state = Arc::clone(&self.ui_state);
             let close_flag = self.viewports.close_flag(AppViewport::Input);
-            show_viewport_deferred_with_close(
+            show_viewport_with_close(
                 ctx,
                 AppViewport::Input.id(),
                 builder,
@@ -709,7 +723,7 @@ impl NesiumApp {
             let ui_state = Arc::clone(&self.ui_state);
             let runtime_handle = self.runtime_handle.clone();
             let close_flag = self.viewports.close_flag(AppViewport::Audio);
-            show_viewport_deferred_with_close(
+            show_viewport_with_close(
                 ctx,
                 AppViewport::Audio.id(),
                 builder,
