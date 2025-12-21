@@ -95,7 +95,9 @@ jobs:
             dpkg-dev
 
       - name: Install cargo-bundle
-        run: cargo install cargo-bundle --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-bundle
 
       - name: Install WiX Toolset (Windows)
         if: runner.os == 'Windows'
@@ -185,7 +187,18 @@ jobs:
             exit 1
           fi
           vol_name="$(basename "$mount_dir")"
-          open "$mount_dir" || true
+
+          if command -v SetFile >/dev/null 2>&1; then
+            if [ -f "$TARGET_DIR/generated/nesium.icns" ]; then
+              cp "$TARGET_DIR/generated/nesium.icns" "$mount_dir/.VolumeIcon.icns"
+              SetFile -a V "$mount_dir/.VolumeIcon.icns" || true
+              SetFile -a C "$mount_dir" || true
+            else
+              echo "Missing $TARGET_DIR/generated/nesium.icns; skip setting DMG volume icon"
+            fi
+          else
+            echo "SetFile not available; skip setting DMG volume icon"
+          fi
 
           osascript \
             -e 'tell application "Finder"' \
