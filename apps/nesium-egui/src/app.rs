@@ -1,6 +1,9 @@
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -63,7 +66,8 @@ pub struct NesiumApp {
     last_pad_masks: [u8; 4],
     rom_path: Option<PathBuf>,
     paused: bool,
-    status_line: Option<String>,
+    error_dialog: Option<String>,
+    error_dialog_close_requested: Arc<AtomicBool>,
     ui_state: Arc<Mutex<UiState>>,
     fps: f32,
     fps_accum_frames: u32,
@@ -138,7 +142,8 @@ impl NesiumApp {
             last_pad_masks: [0u8; 4],
             rom_path: None,
             paused: false,
-            status_line: None,
+            error_dialog: None,
+            error_dialog_close_requested: Arc::new(AtomicBool::new(false)),
             ui_state,
             fps: 0.0,
             fps_accum_frames: 0,
@@ -155,9 +160,9 @@ impl NesiumApp {
         if let Some(path) = config.rom_path
             && let Err(err) = app.load_rom(&path)
         {
-            app.status_line = Some(match app.language() {
-                Language::English => format!("Failed to load ROM: {err}"),
-                Language::ChineseSimplified => format!("加载 ROM 失败: {err}"),
+            app.error_dialog = Some(match app.language() {
+                Language::English => format!("Failed to load ROM:\n{err}"),
+                Language::ChineseSimplified => format!("加载 ROM 失败：\n{err}"),
             });
         }
 
@@ -180,7 +185,6 @@ impl NesiumApp {
         self.fps_accum_frames = 0;
         self.fps_last_update = Instant::now();
 
-        // Note: Status line will be updated by RuntimeEvent::StatusInfo from thread
         Ok(())
     }
 
@@ -280,6 +284,149 @@ impl NesiumApp {
             .map(|s| s.pixel_perfect_scaling)
             .unwrap_or(false)
     }
+
+    fn show_error_dialog(&mut self, ctx: &EguiContext) {
+        let error_viewport_id = egui::ViewportId::from_hash_of("error_dialog");
+
+        if self
+            .error_dialog_close_requested
+            .swap(false, Ordering::Relaxed)
+            || ctx.viewport_for(error_viewport_id, |v| v.input.viewport().close_requested())
+        {
+            self.error_dialog = None;
+            return;
+        }
+
+        let Some(message) = self.error_dialog.as_ref() else {
+            return;
+        };
+
+        let title = match self.language() {
+            Language::English => "Error",
+            Language::ChineseSimplified => "错误",
+        };
+        let ok_label = match self.language() {
+            Language::English => "OK",
+            Language::ChineseSimplified => "确定",
+        };
+        let copy_label = match self.language() {
+            Language::English => "Copy",
+            Language::ChineseSimplified => "复制",
+        };
+
+        let builder = egui::ViewportBuilder::default()
+            .with_title(title)
+            .with_inner_size([420.0, 160.0])
+            .with_resizable(false)
+            .with_minimize_button(false)
+            .with_maximize_button(false)
+            .with_taskbar(false)
+            .with_always_on_top();
+
+        let message = message.clone();
+        let close_flag = Arc::clone(&self.error_dialog_close_requested);
+        ctx.show_viewport_deferred(error_viewport_id, builder, move |ctx, class| {
+            // Keep the dialog visuals consistent with the main window.
+            ctx.set_visuals(Visuals::light());
+
+            let mut close_requested =
+                ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+
+            match class {
+                egui::ViewportClass::Embedded => {
+                    egui::Window::new(title)
+                        .collapsible(false)
+                        .resizable(false)
+                        .show(ctx, |ui| {
+                            ui.label(message.as_str());
+                            ui.add_space(10.0);
+                            ui.horizontal(|ui| {
+                                if ui.button(copy_label).clicked() {
+                                    ui.output_mut(|o| {
+                                        o.commands.push(eframe::egui::OutputCommand::CopyText(
+                                            message.clone(),
+                                        ));
+                                    });
+                                }
+                                ui.with_layout(
+                                    eframe::egui::Layout::right_to_left(
+                                        eframe::egui::Align::Center,
+                                    ),
+                                    |ui| {
+                                        if ui.button(ok_label).clicked() {
+                                            close_requested = true;
+                                        }
+                                    },
+                                );
+                            });
+                        });
+                }
+                _ => {
+                    let content_margin_lr = 18;
+                    let content_margin_top = 12;
+                    let buttons_margin_bottom = 10;
+                    let panel_fill = ctx.style().visuals.panel_fill;
+
+                    egui::TopBottomPanel::bottom("error_dialog_buttons")
+                        .frame(
+                            egui::Frame::NONE
+                                .fill(panel_fill)
+                                .inner_margin(egui::Margin {
+                                    left: content_margin_lr,
+                                    right: content_margin_lr,
+                                    top: 6,
+                                    bottom: buttons_margin_bottom,
+                                }),
+                        )
+                        .show(ctx, |ui| {
+                            ui.horizontal(|ui| {
+                                if ui.button(copy_label).clicked() {
+                                    ui.output_mut(|o| {
+                                        o.commands.push(eframe::egui::OutputCommand::CopyText(
+                                            message.clone(),
+                                        ));
+                                    });
+                                }
+                                ui.with_layout(
+                                    eframe::egui::Layout::right_to_left(
+                                        eframe::egui::Align::Center,
+                                    ),
+                                    |ui| {
+                                        if ui.button(ok_label).clicked() {
+                                            close_requested = true;
+                                        }
+                                    },
+                                );
+                            });
+                        });
+
+                    egui::CentralPanel::default()
+                        .frame(
+                            egui::Frame::NONE
+                                .fill(panel_fill)
+                                .inner_margin(egui::Margin {
+                                    left: content_margin_lr,
+                                    right: content_margin_lr,
+                                    top: content_margin_top,
+                                    bottom: 0,
+                                }),
+                        )
+                        .show(ctx, |ui| {
+                            egui::ScrollArea::vertical()
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    ui.label(message.as_str());
+                                });
+                        });
+                }
+            }
+
+            if close_requested {
+                close_flag.store(true, Ordering::Relaxed);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        });
+    }
 }
 
 impl eframe::App for NesiumApp {
@@ -294,10 +441,11 @@ impl eframe::App for NesiumApp {
         while let Some(event) = self.runtime_handle.try_recv_event() {
             match event {
                 RuntimeEvent::StatusInfo(msg) => {
-                    self.status_line = Some(msg);
+                    tracing::info!("{msg}");
                 }
                 RuntimeEvent::Error(msg) => {
-                    self.status_line = Some(format!("Error: {}", msg));
+                    tracing::error!("{msg}");
+                    self.error_dialog = Some(msg);
                 }
             }
         }
@@ -362,7 +510,12 @@ impl eframe::App for NesiumApp {
         // 4. Handle Drag & Drop
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         if let Some(path) = dropped.iter().filter_map(|f| f.path.clone()).next_back() {
-            let _ = self.load_rom(&path);
+            if let Err(err) = self.load_rom(&path) {
+                self.error_dialog = Some(match self.language() {
+                    Language::English => format!("Load failed:\n{err}"),
+                    Language::ChineseSimplified => format!("加载失败：\n{err}"),
+                });
+            }
         }
 
         // 5. Update FPS
@@ -385,5 +538,6 @@ impl eframe::App for NesiumApp {
 
         self.draw_main_view(ctx);
         self.show_viewports(ctx);
+        self.show_error_dialog(ctx);
     }
 }

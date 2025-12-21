@@ -40,15 +40,6 @@ impl LanguagePack for En {
             AboutComponentsHeading => "Open-source components",
             AboutComponentsHint => "Click a component to open GitHub or crates.io.",
 
-            // Status line / notifications
-            StatusReset => "Console reset",
-            StatusEject => "Cartridge ejected",
-            StatusPaused => "Paused",
-            StatusResumed => "Resumed",
-
-            // Main view
-            MainNoRom => "No ROM loaded",
-
             // Tools viewport
             ToolsHeading => "Tools",
             ToolsPlaceholder => "Add save states, breakpoints and helpers here.",

@@ -194,9 +194,9 @@ impl NesiumApp {
             match self.load_rom(&path) {
                 Ok(_) => {}
                 Err(err) => {
-                    self.status_line = Some(match self.language() {
-                        Language::English => format!("Load failed: {err}"),
-                        Language::ChineseSimplified => format!("加载失败: {err}"),
+                    self.error_dialog = Some(match self.language() {
+                        Language::English => format!("Load failed:\n{err}"),
+                        Language::ChineseSimplified => format!("加载失败：\n{err}"),
                     });
                 }
             }
@@ -210,11 +210,6 @@ impl NesiumApp {
         if cmd.toggle_pause {
             self.paused = !self.paused;
             self.runtime_handle.set_paused(self.paused);
-            self.status_line = Some(if self.paused {
-                self.t(TextId::StatusPaused).to_string()
-            } else {
-                self.t(TextId::StatusResumed).to_string()
-            });
         }
         if cmd.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);

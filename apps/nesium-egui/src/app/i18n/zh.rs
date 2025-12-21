@@ -40,15 +40,6 @@ impl LanguagePack for Zh {
             AboutComponentsHeading => "开源组件",
             AboutComponentsHint => "点击名称跳转到 GitHub 或 crates.io。",
 
-            // Status line / notifications
-            StatusReset => "已重置主机",
-            StatusEject => "已弹出卡带",
-            StatusPaused => "已暂停",
-            StatusResumed => "已继续",
-
-            // Main view
-            MainNoRom => "未加载 ROM",
-
             // Tools viewport
             ToolsHeading => "工具箱",
             ToolsPlaceholder => "在此添加保存状态、断点等工具逻辑。",

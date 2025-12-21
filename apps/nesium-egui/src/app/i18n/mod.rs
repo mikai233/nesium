@@ -48,15 +48,6 @@ pub enum TextId {
     AboutComponentsHeading,
     AboutComponentsHint,
 
-    // Status line / notifications
-    StatusReset,
-    StatusEject,
-    StatusPaused,
-    StatusResumed,
-
-    // Main view
-    MainNoRom,
-
     // Tools viewport
     ToolsHeading,
     ToolsPlaceholder,
