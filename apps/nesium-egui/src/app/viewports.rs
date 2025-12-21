@@ -136,6 +136,18 @@ impl NesiumApp {
                             ui.label(lead);
                             ui.add_space(4.0);
                             ui.label(intro);
+                            ui.add_space(8.0);
+                            let repo_label = match lang {
+                                super::Language::English => "GitHub:",
+                                super::Language::ChineseSimplified => "GitHub：",
+                            };
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(repo_label);
+                                ui.hyperlink_to(
+                                    "mikai233/nesium",
+                                    "https://github.com/mikai233/nesium",
+                                );
+                            });
                             ui.separator();
                             ui.heading(comp_heading);
                             ui.label(comp_hint);

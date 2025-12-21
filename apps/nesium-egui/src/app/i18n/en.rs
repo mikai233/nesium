@@ -29,8 +29,8 @@ impl LanguagePack for En {
 
             MenuHelp => "Help",
             MenuHelpAbout => "About",
-            MenuHelpLine1 => "Mesen2-style frontend built with eframe + egui",
-            MenuHelpLine2 => "Drag .nes/.fds here or use File → Load ROM",
+            MenuHelpLine1 => "Desktop frontend built with eframe + egui",
+            MenuHelpLine2 => "Drag a .nes/.fds file here, or use File → Load ROM",
             MenuLanguage => "Language",
             AboutWindowTitle => "About Nesium",
             AboutLead => "Nesium: Rust NES/FC emulator frontend built on nesium-core.",

@@ -29,8 +29,8 @@ impl LanguagePack for Zh {
 
             MenuHelp => "帮助",
             MenuHelpAbout => "关于",
-            MenuHelpLine1 => "Mesen2 风格，eframe + egui 前端",
-            MenuHelpLine2 => "拖拽 .nes/.fds 或使用 文件 → 加载 ROM",
+            MenuHelpLine1 => "基于 eframe + egui 的桌面前端",
+            MenuHelpLine2 => "将 .nes/.fds 拖拽到窗口，或使用「文件 → 加载 ROM」",
             MenuLanguage => "语言",
             AboutWindowTitle => "关于 Nesium",
             AboutLead => "Nesium：基于 nesium-core 的 Rust NES/FC 前端。",
