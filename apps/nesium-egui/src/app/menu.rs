@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use eframe::egui;
 use egui::{Context as EguiContext, MenuBar, TextWrapMode};
 
-use super::{Language, NesiumApp, TextId, dialogs::pick_file_dialog};
+use super::{AppViewport, Language, NesiumApp, TextId, dialogs::pick_file_dialog};
 
 #[derive(Default)]
 pub(super) struct AppCommand {
@@ -142,17 +142,18 @@ impl NesiumApp {
         ui.menu_button(self.t(TextId::MenuWindow), |ui| {
             ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
 
-            let dbg_label = self.t(TextId::MenuWindowDebugger);
-            let tools_label = self.t(TextId::MenuWindowTools);
-            let palette_label = self.t(TextId::MenuWindowPalette);
-            let input_label = self.t(TextId::MenuWindowInput);
-            let audio_label = self.t(TextId::MenuWindowAudio);
+            const WINDOW_TOGGLES: &[(AppViewport, TextId)] = &[
+                (AppViewport::Debugger, TextId::MenuWindowDebugger),
+                (AppViewport::Tools, TextId::MenuWindowTools),
+                (AppViewport::Palette, TextId::MenuWindowPalette),
+                (AppViewport::Input, TextId::MenuWindowInput),
+                (AppViewport::Audio, TextId::MenuWindowAudio),
+            ];
 
-            ui.toggle_value(&mut self.show_debugger, dbg_label);
-            ui.toggle_value(&mut self.show_tools, tools_label);
-            ui.toggle_value(&mut self.show_palette, palette_label);
-            ui.toggle_value(&mut self.show_input, input_label);
-            ui.toggle_value(&mut self.show_audio, audio_label);
+            for (viewport, label_id) in WINDOW_TOGGLES {
+                let label = self.t(*label_id);
+                ui.toggle_value(self.viewports.open_mut(*viewport), label);
+            }
         });
 
         ui.menu_button(self.t(TextId::MenuLanguage), |ui| {
@@ -172,7 +173,7 @@ impl NesiumApp {
             ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
 
             if ui.button(self.t(TextId::MenuHelpAbout)).clicked() {
-                self.show_about = true;
+                self.viewports.set_open(AppViewport::About, true);
                 ui.close();
             }
             ui.separator();

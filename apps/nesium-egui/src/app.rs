@@ -18,7 +18,9 @@ mod viewports;
 
 use anyhow::Result;
 use eframe::egui;
-use egui::{ColorImage, Context as EguiContext, TextureHandle, TextureOptions, Visuals};
+use egui::{
+    ColorImage, Context as EguiContext, TextureHandle, TextureOptions, ViewportId, Visuals,
+};
 use gilrs::GamepadId;
 use nesium_core::{
     audio::bus::AudioBusConfig,
@@ -56,6 +58,71 @@ pub(super) struct UiState {
     gamepads: Vec<(GamepadId, String)>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(usize)]
+pub(super) enum AppViewport {
+    Debugger = 0,
+    Tools = 1,
+    Palette = 2,
+    Input = 3,
+    Audio = 4,
+    About = 5,
+}
+
+impl AppViewport {
+    pub(super) const ALL: [Self; 6] = [
+        Self::Debugger,
+        Self::Tools,
+        Self::Palette,
+        Self::Input,
+        Self::Audio,
+        Self::About,
+    ];
+
+    pub(super) fn id(self) -> ViewportId {
+        match self {
+            Self::Debugger => ViewportId::from_hash_of("debugger"),
+            Self::Tools => ViewportId::from_hash_of("tools"),
+            Self::Palette => ViewportId::from_hash_of("palette"),
+            Self::Input => ViewportId::from_hash_of("input"),
+            Self::Audio => ViewportId::from_hash_of("audio"),
+            Self::About => ViewportId::from_hash_of("about"),
+        }
+    }
+}
+
+const VIEWPORT_COUNT: usize = AppViewport::ALL.len();
+
+pub(super) struct Viewports {
+    open: [bool; VIEWPORT_COUNT],
+    close_requested: [Arc<AtomicBool>; VIEWPORT_COUNT],
+}
+
+impl Viewports {
+    pub(super) fn new() -> Self {
+        Self {
+            open: [false; VIEWPORT_COUNT],
+            close_requested: std::array::from_fn(|_| Arc::new(AtomicBool::new(false))),
+        }
+    }
+
+    pub(super) fn is_open(&self, viewport: AppViewport) -> bool {
+        self.open[viewport as usize]
+    }
+
+    pub(super) fn open_mut(&mut self, viewport: AppViewport) -> &mut bool {
+        &mut self.open[viewport as usize]
+    }
+
+    pub(super) fn set_open(&mut self, viewport: AppViewport, open: bool) {
+        self.open[viewport as usize] = open;
+    }
+
+    pub(super) fn close_flag(&self, viewport: AppViewport) -> Arc<AtomicBool> {
+        Arc::clone(&self.close_requested[viewport as usize])
+    }
+}
+
 pub struct NesiumApp {
     _video_backing: VideoBackingStore,
     runtime_handle: RuntimeHandle,
@@ -69,15 +136,10 @@ pub struct NesiumApp {
     error_dialog: Option<String>,
     error_dialog_close_requested: Arc<AtomicBool>,
     ui_state: Arc<Mutex<UiState>>,
+    viewports: Viewports,
     fps: f32,
     fps_accum_frames: u32,
     fps_last_update: Instant,
-    show_debugger: bool,
-    show_tools: bool,
-    show_palette: bool,
-    show_input: bool,
-    show_audio: bool,
-    show_about: bool,
     gamepads: Option<GamepadManager>,
 }
 
@@ -145,15 +207,10 @@ impl NesiumApp {
             error_dialog: None,
             error_dialog_close_requested: Arc::new(AtomicBool::new(false)),
             ui_state,
+            viewports: Viewports::new(),
             fps: 0.0,
             fps_accum_frames: 0,
             fps_last_update: Instant::now(),
-            show_debugger: false,
-            show_tools: false,
-            show_palette: false,
-            show_input: false,
-            show_audio: false,
-            show_about: false,
             gamepads,
         };
 
