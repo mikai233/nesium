@@ -23,10 +23,12 @@ fn consume_close_requests(
         return;
     }
 
-    if close_flag.swap(false, Ordering::Relaxed)
-        || ctx.viewport_for(id, |v| v.input.viewport().close_requested())
-    {
+    let close_requested = close_flag.swap(false, Ordering::Relaxed)
+        || ctx.viewport_for(id, |v| v.input.viewport().close_requested());
+    if close_requested {
         *open = false;
+        ctx.send_viewport_cmd_to(id, egui::ViewportCommand::Close);
+        ctx.request_repaint_of(ViewportId::ROOT);
     }
 }
 
