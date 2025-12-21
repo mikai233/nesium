@@ -144,10 +144,24 @@ fn generate_bundle_icons(layers: &IconLayers) {
         .expect("write target/generated/nesium.ico");
 
     // ICNS (used by macOS packaging)
-    let png_bytes =
-        encode_png_to_vec(ICON_SIZE, ICON_SIZE, &rgba_256).expect("encode PNG for icns");
+    let icns_sizes = [16u32, 32, 64, 128, 256, 512, BASE_RENDER_SIZE];
+    let mut chunks: Vec<([u8; 4], Vec<u8>)> = Vec::with_capacity(icns_sizes.len());
+    for size in icns_sizes {
+        let kind: [u8; 4] = match size {
+            16 => *b"icp4",
+            32 => *b"icp5",
+            64 => *b"icp6",
+            128 => *b"ic07",
+            256 => *b"ic08",
+            512 => *b"ic09",
+            _ => *b"ic10",
+        };
+        let rgba = compose_icon(layers, size, layout_default());
+        let png_bytes = encode_png_to_vec(size, size, &rgba).expect("encode PNG for icns");
+        chunks.push((kind, png_bytes));
+    }
     let icns_path = generated_dir.join("nesium.icns");
-    write_icns_from_png(&icns_path, &png_bytes).expect("write target/generated/nesium.icns");
+    write_icns_from_png_chunks(&icns_path, &chunks).expect("write target/generated/nesium.icns");
 }
 
 fn generate_windows_resources(out_dir: &Path, layers: &IconLayers) {
@@ -206,12 +220,32 @@ fn generate_macos_assets(layers: &IconLayers) {
     let generated_dir = target_root().join("generated");
     fs::create_dir_all(&generated_dir).expect("create target/generated");
 
-    let rgba = compose_icon(layers, ICON_SIZE, layout_default());
-    let png_bytes =
-        encode_png_to_vec(ICON_SIZE, ICON_SIZE, &rgba).expect("encode PNG for macOS icns");
     let icns_path = generated_dir.join("nesium.icns");
 
-    if let Err(err) = write_icns_from_png(&icns_path, &png_bytes) {
+    let icns_sizes = [16u32, 32, 64, 128, 256, 512, BASE_RENDER_SIZE];
+    let mut chunks: Vec<([u8; 4], Vec<u8>)> = Vec::with_capacity(icns_sizes.len());
+    for size in icns_sizes {
+        let kind: [u8; 4] = match size {
+            16 => *b"icp4",
+            32 => *b"icp5",
+            64 => *b"icp6",
+            128 => *b"ic07",
+            256 => *b"ic08",
+            512 => *b"ic09",
+            _ => *b"ic10",
+        };
+        let rgba = compose_icon(layers, size, layout_default());
+        let png_bytes = match encode_png_to_vec(size, size, &rgba) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                println!("cargo:warning=Failed to encode PNG {size}x{size} for ICNS: {err}");
+                continue;
+            }
+        };
+        chunks.push((kind, png_bytes));
+    }
+
+    if let Err(err) = write_icns_from_png_chunks(&icns_path, &chunks) {
         println!("cargo:warning=Failed to write macOS icns (optional step): {err}");
     }
 }
@@ -431,16 +465,22 @@ fn encode_png_to_vec(
     Ok(buf)
 }
 
-fn write_icns_from_png(path: &Path, png_bytes: &[u8]) -> std::io::Result<()> {
-    // Minimal ICNS writer containing a single 256px PNG chunk (ic08).
-    let mut out = Vec::with_capacity(8 + 8 + png_bytes.len());
-    let total_len = 8 + 8 + png_bytes.len();
+fn write_icns_from_png_chunks(path: &Path, chunks: &[([u8; 4], Vec<u8>)]) -> std::io::Result<()> {
+    // ICNS container with PNG chunks. macOS will pick the best size for the UI surface.
+    let total_len: usize = 8 + chunks
+        .iter()
+        .map(|(_, bytes)| 8 + bytes.len())
+        .sum::<usize>();
+    let mut out = Vec::with_capacity(total_len);
 
     out.extend_from_slice(b"icns");
     out.extend_from_slice(&(total_len as u32).to_be_bytes());
-    out.extend_from_slice(b"ic08");
-    out.extend_from_slice(&((png_bytes.len() + 8) as u32).to_be_bytes());
-    out.extend_from_slice(png_bytes);
+
+    for (kind, bytes) in chunks {
+        out.extend_from_slice(kind);
+        out.extend_from_slice(&((bytes.len() + 8) as u32).to_be_bytes());
+        out.extend_from_slice(bytes);
+    }
 
     fs::write(path, out)
 }

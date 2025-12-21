@@ -143,6 +143,12 @@ jobs:
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
+          # cargo-bundle reads the icon paths before it triggers a build.
+          # Pre-build once so `target/generated/nesium.icns` exists for bundling.
+          cargo build -p nesium-egui --profile release-dist --target aarch64-apple-darwin
+          cargo build -p nesium-egui --profile release-dist --target x86_64-apple-darwin
+          ls -la target/generated || true
+
           cargo bundle -p nesium-egui --profile release-dist --target aarch64-apple-darwin --format osx
           cargo bundle -p nesium-egui --profile release-dist --target x86_64-apple-darwin --format osx
 
@@ -181,6 +187,15 @@ jobs:
           fi
           vol_name="$(basename "$mount_dir")"
           open "$mount_dir" || true
+
+          # Optional: set DMG volume icon (the app icon is inside the .app bundle).
+          if command -v SetFile >/dev/null 2>&1; then
+            cp target/generated/nesium.icns "$mount_dir/.VolumeIcon.icns"
+            SetFile -a V "$mount_dir/.VolumeIcon.icns" || true
+            SetFile -a C "$mount_dir" || true
+          else
+            echo "SetFile not available; skip setting DMG volume icon"
+          fi
 
           # Make the "drag to Applications" window look nicer (white background, fixed layout).
           osascript \
