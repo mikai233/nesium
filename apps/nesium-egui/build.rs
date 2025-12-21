@@ -176,6 +176,12 @@ fn generate_windows_resources(out_dir: &Path, layers: &IconLayers) {
             .to_str()
             .expect("Windows resource path should be valid UTF-8"),
     );
+    // Improve how the app shows up in Windows UI surfaces (Task Manager, file properties, etc).
+    // The icon still comes from the embedded ICO; these strings mainly affect display names.
+    res.set("FileDescription", "Nesium");
+    res.set("ProductName", "Nesium");
+    let original_filename = format!("{BIN_NAME}.exe");
+    res.set("OriginalFilename", &original_filename);
     if let Err(err) = res.compile() {
         println!("cargo:warning=Failed to embed Windows icon resource: {err}");
     }
