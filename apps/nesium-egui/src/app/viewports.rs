@@ -43,6 +43,10 @@ fn show_viewport_deferred_with_close(
         if close_requested {
             close_flag.store(true, Ordering::Relaxed);
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            // On some platforms, the close request doesn't trigger an immediate repaint,
+            // so force a repaint of both this viewport and the root to apply the close.
+            ctx.request_repaint();
+            ctx.request_repaint_of(ViewportId::ROOT);
         }
     });
 }
