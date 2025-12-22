@@ -78,6 +78,131 @@ pub struct Nes {
 /// Internal mixer output sample rate (matches Mesen2's fixed 96 kHz path).
 const INTERNAL_MIXER_SAMPLE_RATE: u32 = 96_000;
 
+/// Builder for configuring and constructing a powered-on NES instance.
+///
+/// This is primarily a readability/ergonomics helper to avoid long constructor
+/// argument chains and to make defaults explicit.
+#[derive(Debug)]
+pub struct NesBuilder {
+    format: Option<ColorFormat>,
+    framebuffer: Option<FrameBuffer>,
+    sample_rate: u32,
+    region: Region,
+    interceptor: Option<EmuInterceptor>,
+    power_on_reset: bool,
+}
+
+impl Default for NesBuilder {
+    fn default() -> Self {
+        Self {
+            format: Some(ColorFormat::Rgb555),
+            framebuffer: None,
+            sample_rate: 48_000,
+            region: Region::Auto,
+            interceptor: None,
+            power_on_reset: true,
+        }
+    }
+}
+
+impl NesBuilder {
+    /// Creates a builder with sensible defaults:
+    /// - RGB555 framebuffer
+    /// - 48 kHz host audio
+    /// - Region::Auto
+    /// - power-on style reset performed once after construction
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the framebuffer color format (ignored if `framebuffer()` is provided).
+    pub fn format(mut self, format: ColorFormat) -> Self {
+        self.format = Some(format);
+        self
+    }
+
+    /// Provides an explicit framebuffer configuration.
+    pub fn framebuffer(mut self, framebuffer: FrameBuffer) -> Self {
+        self.framebuffer = Some(framebuffer);
+        self
+    }
+
+    /// Sets the host audio sample rate.
+    pub fn sample_rate(mut self, sample_rate: u32) -> Self {
+        self.sample_rate = sample_rate;
+        self
+    }
+
+    /// Sets the region selection.
+    pub fn region(mut self, region: Region) -> Self {
+        self.region = region;
+        self
+    }
+
+    /// Overrides the default interceptor stack.
+    pub fn interceptor(mut self, interceptor: EmuInterceptor) -> Self {
+        self.interceptor = Some(interceptor);
+        self
+    }
+
+    /// Enables/disables the initial power-on reset performed after construction.
+    ///
+    /// Most frontends want this enabled. Tests or special setups may disable it.
+    pub fn power_on_reset(mut self, enabled: bool) -> Self {
+        self.power_on_reset = enabled;
+        self
+    }
+
+    /// Builds the NES instance.
+    pub fn build(self) -> Nes {
+        let buffer = match self.framebuffer {
+            Some(buf) => buf,
+            None => {
+                let format = self.format.unwrap_or(ColorFormat::Rgb555);
+                FrameBuffer::new_color(format)
+            }
+        };
+
+        let interceptor = self.interceptor.unwrap_or_else(Nes::build_interceptor);
+
+        let mut nes = Nes {
+            cpu: Cpu::new(),
+            ppu: Ppu::new(buffer),
+            apu: Apu::new(),
+            ram: cpu_ram::Ram::new(),
+            cartridge: None,
+            mapper_provider: None,
+            controllers: ControllerPorts::new(),
+            last_frame: 0,
+            dot_counter: 0,
+            master_clock: 0,
+            ppu_offset: 1,
+            clock_start_count: 6,
+            clock_end_count: 6,
+            serial_log: controller::SerialLogger::default(),
+            pending_dma: PendingDma::default(),
+            open_bus: OpenBus::new(),
+            cycles: u64::MAX,
+            mixer: NesSoundMixer::new(CPU_CLOCK_NTSC, INTERNAL_MIXER_SAMPLE_RATE),
+            sound_bus: SoundMixerBus::new(INTERNAL_MIXER_SAMPLE_RATE, self.sample_rate),
+            audio_sample_rate: self.sample_rate,
+            mixer_frame_buffer: Vec::new(),
+            region: self.region,
+            interceptor,
+        };
+
+        nes.ppu.set_palette(PaletteKind::NesdevNtsc.palette());
+
+        if self.power_on_reset {
+            // Apply a power-on style reset once at construction time. This matches
+            // the console being turned on from a cold state.
+            nes.reset(ResetKind::PowerOn);
+        }
+
+        nes
+    }
+}
+
 macro_rules! nes_cpu_bus {
     ($nes:ident, mixer: $with_mixer:expr, serial: $with_serial:expr) => {{
         let __with_mixer = $with_mixer;
@@ -112,56 +237,34 @@ macro_rules! nes_cpu_bus {
 }
 
 impl Nes {
+    /// Creates a [`NesBuilder`] with defaults.
+    pub fn builder() -> NesBuilder {
+        NesBuilder::new()
+    }
     /// Constructs a powered-on NES instance with cleared RAM and default palette.
     pub fn new(format: ColorFormat) -> Self {
-        Self::new_with_sample_rate(format, 48_000)
+        Self::builder().format(format).build()
     }
 
     /// Constructs a powered-on NES instance with a specified audio sample rate.
     pub fn new_with_sample_rate(format: ColorFormat, sample_rate: u32) -> Self {
-        let buffer = FrameBuffer::new_color(format);
-        Self::new_with_framebuffer_and_sample_rate(buffer, sample_rate)
+        Self::builder()
+            .format(format)
+            .sample_rate(sample_rate)
+            .build()
     }
 
     /// Constructs a powered-on NES instance using an explicit framebuffer configuration.
     pub fn new_with_framebuffer(buffer: FrameBuffer) -> Self {
-        Self::new_with_framebuffer_and_sample_rate(buffer, 48_000)
+        Self::builder().framebuffer(buffer).build()
     }
 
     /// Constructs a powered-on NES instance with a provided framebuffer and sample rate.
     pub fn new_with_framebuffer_and_sample_rate(buffer: FrameBuffer, sample_rate: u32) -> Self {
-        let mut nes = Self {
-            cpu: Cpu::new(),
-            ppu: Ppu::new(buffer),
-            apu: Apu::new(),
-            ram: cpu_ram::Ram::new(),
-            cartridge: None,
-            mapper_provider: None,
-            controllers: ControllerPorts::new(),
-            last_frame: 0,
-            dot_counter: 0,
-            master_clock: 0,
-            ppu_offset: 1,
-            clock_start_count: 6,
-            clock_end_count: 6,
-            serial_log: controller::SerialLogger::default(),
-            pending_dma: PendingDma::default(),
-            open_bus: OpenBus::new(),
-            cycles: u64::MAX,
-            mixer: NesSoundMixer::new(CPU_CLOCK_NTSC, INTERNAL_MIXER_SAMPLE_RATE),
-            sound_bus: SoundMixerBus::new(INTERNAL_MIXER_SAMPLE_RATE, sample_rate),
-            audio_sample_rate: sample_rate,
-            mixer_frame_buffer: Vec::new(),
-            region: Region::Auto,
-            interceptor: Self::build_interceptor(),
-        };
-        nes.ppu.set_palette(PaletteKind::NesdevNtsc.palette());
-        // Apply a power-on style reset once at construction time. This matches
-        // the console being turned on from a cold state (CPU/PPU/APU and RAM
-        // cleared) and is distinct from subsequent warm resets triggered by
-        // the user pressing the reset button.
-        nes.reset(ResetKind::PowerOn); // TODO: Should I remove this? Because insert cartridge also reset the console.
-        nes
+        Self::builder()
+            .framebuffer(buffer)
+            .sample_rate(sample_rate)
+            .build()
     }
 
     /// Replaces the mapper provider used when loading cartridges.

@@ -183,7 +183,7 @@ pub fn run_rom_tv_sha1(rom_rel_path: &str, preferred_testnotes: Option<&str>) ->
     }
 
     // Use an index-mode framebuffer so we hash palette indices directly.
-    let mut nes = Nes::new_with_framebuffer(FrameBuffer::new_index());
+    let mut nes = Nes::builder().framebuffer(FrameBuffer::new_index()).build();
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 

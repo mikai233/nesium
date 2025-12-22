@@ -160,7 +160,10 @@ where
     ) -> Result<Self> {
         // Ask the audio backend for the host sample rate.
         let sample_rate = audio.sample_rate();
-        let mut nes = Nes::new_with_sample_rate(ColorFormat::Rgb565, sample_rate);
+        let mut nes = Nes::builder()
+            .format(ColorFormat::Rgb565)
+            .sample_rate(sample_rate)
+            .build();
 
         // Load the embedded ROM as a cartridge using the static-slice loader.
         let cart = cartridge::load_cartridge(rom_image)

@@ -378,7 +378,10 @@ impl Runner {
             },
         };
 
-        let nes = Nes::new_with_framebuffer_and_sample_rate(framebuffer, runtime_sample_rate);
+        let nes = Nes::builder()
+            .framebuffer(framebuffer)
+            .sample_rate(runtime_sample_rate)
+            .build();
 
         Self {
             config,

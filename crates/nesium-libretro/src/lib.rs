@@ -36,7 +36,10 @@ struct NesiumCore {
 impl NesiumCore {
     fn new() -> Self {
         Self {
-            nes: Nes::new_with_sample_rate(COLOR_FORMAT, SAMPLE_RATE as u32),
+            nes: Nes::builder()
+                .format(COLOR_FORMAT)
+                .sample_rate(SAMPLE_RATE as u32)
+                .build(),
         }
     }
 
