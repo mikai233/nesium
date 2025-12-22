@@ -281,19 +281,43 @@ jobs:
                   APP_DMG="$ROOT/dmg-src/$app_name_ext"
                   BIN_DMG="$APP_DMG/Contents/MacOS/$app_bin_name"
                   FW_DIR="$APP_DMG/Contents/Frameworks"
+                  PLUGINS_DIR="$APP_DMG/Contents/PlugIns"
 
-                  # Sign main executable first
-                  codesign --force --sign - "$BIN_DMG"
+                  # Helper: sign only Mach-O files (avoid signing plists/resources)
+                  sign_macho() {
+                    local p="$1"
+                    if [ -f "$p" ] && file -b "$p" | grep -q "Mach-O"; then
+                      codesign --force --sign - "$p"
+                    fi
+                  }
 
-                  # Sign embedded dylibs
+                  # 1) Sign nested code first (Frameworks / dylibs / framework binaries)
                   if [ -d "$FW_DIR" ]; then
-                    find "$FW_DIR" -type f -name "*.dylib" -print0 | xargs -0 -n1 codesign --force --sign -
+                    echo "Signing embedded dylibs..."
+                    while IFS= read -r -d '' f; do
+                      sign_macho "$f"
+                    done < <(find "$FW_DIR" -type f -name "*.dylib" -print0)
 
-                    # Sign framework Mach-O binaries (typically in Versions/A/<FrameworkName>)
-                    find "$FW_DIR" -type f -path "*.framework/Versions/A/*" -print0 | xargs -0 -n1 codesign --force --sign -
+                    echo "Signing embedded framework binaries..."
+                    while IFS= read -r -d '' f; do
+                      sign_macho "$f"
+                    done < <(find "$FW_DIR" -type f -path "*.framework/Versions/A/*" -print0)
                   fi
 
-                  # Finally sign the app bundle (no --deep to avoid ambiguous framework issues)
+                  # Some Flutter/macOS builds also embed app extensions/plugins here
+                  if [ -d "$PLUGINS_DIR" ]; then
+                    echo "Signing embedded plugins/extensions (PlugIns)..."
+                    while IFS= read -r -d '' f; do
+                      sign_macho "$f"
+                    done < <(find "$PLUGINS_DIR" -type f -print0)
+                  fi
+
+                  # 2) Then sign main executable
+                  echo "Signing main executable..."
+                  sign_macho "$BIN_DMG"
+
+                  # 3) Finally sign the app bundle wrapper (no --deep to avoid ambiguous framework issues)
+                  echo "Signing app bundle wrapper..."
                   codesign --force --sign - "$APP_DMG"
 
                   # Verify (best-effort; does not require notarization)
