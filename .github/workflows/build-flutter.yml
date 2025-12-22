@@ -248,7 +248,7 @@ jobs:
 
                     if [ "$old_path" != "@rpath/$DYLIB_NAME" ]; then
                       echo "Performing $arch patch: '$old_path' -> '@rpath/$DYLIB_NAME'"
-                      install_name_tool -arch "$arch" -change "$old_path" "@rpath/$DYLIB_NAME" "$EXEC_PATH"
+                      install_name_tool -change "$old_path" "@rpath/$DYLIB_NAME" "$EXEC_PATH"
                     else
                       echo "$arch slice already uses @rpath/$DYLIB_NAME"
                     fi
