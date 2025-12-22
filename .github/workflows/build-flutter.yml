@@ -175,7 +175,7 @@ jobs:
                   Pop-Location
 
             # ===================================================
-            # FLUTTER MACOS BUILD & DMG & PORTABLE
+            # FLUTTER MACOS BUILD & FIX & DMG & PORTABLE
             # ===================================================
             - name: Build + package (macOS universal)
               if: runner.os == 'macOS'
@@ -185,6 +185,7 @@ jobs:
                   set -euo pipefail
                   rustup target add aarch64-apple-darwin x86_64-apple-darwin || true
 
+                  # 1. Build Flutter App (This creates the .app structure)
                   flutter config --enable-macos-desktop
                   flutter build macos --release
 
@@ -193,18 +194,78 @@ jobs:
 
                   app_src="$(ls -d build/macos/Build/Products/Release/*.app | head -n 1)"
                   if [ -z "${app_src}" ]; then
-                    echo "No .app produced under build/macos/Build/Products/Release"
-                    exit 1
+                     echo "No .app produced under build/macos/Build/Products/Release"
+                     exit 1
+                  fi
+                  app_name_ext="$(basename "$app_src")"  # e.g. Nesium.app
+                  app_bin_name="${app_name_ext%.*}"     # e.g. Nesium
+
+                  echo "Found App: $app_src (Binary: $app_bin_name)"
+
+                  # ---------------------------------------------------------
+                  # [STEP 2] Manually Build & Embed Rust Dylib
+                  # ---------------------------------------------------------
+                  echo "🔧 Starting manual Rust dylib injection..."
+                  pushd "${ROOT}"
+                  # Build libnesium_flutter.dylib manually to ensure we have the files
+                  cargo build -p nesium-flutter --lib --release --target aarch64-apple-darwin
+                  cargo build -p nesium-flutter --lib --release --target x86_64-apple-darwin
+                  popd
+
+                  FRAMEWORKS_DIR="$app_src/Contents/Frameworks"
+                  mkdir -p "$FRAMEWORKS_DIR"
+
+                  DYLIB_NAME="libnesium_flutter.dylib"
+                  SRC_ARM="${ROOT}/target/aarch64-apple-darwin/release/$DYLIB_NAME"
+                  SRC_X86="${ROOT}/target/x86_64-apple-darwin/release/$DYLIB_NAME"
+                  DEST_DYLIB="$FRAMEWORKS_DIR/$DYLIB_NAME"
+
+                  if [ -f "$SRC_ARM" ] && [ -f "$SRC_X86" ]; then
+                     echo "Merging architectures into universal dylib..."
+                     lipo -create "$SRC_ARM" "$SRC_X86" -output "$DEST_DYLIB"
+                  else
+                     echo "Error: Rust dylibs not found in target directory!"
+                     exit 1
                   fi
 
+                  # ---------------------------------------------------------
+                  # [STEP 3] FIX PATHS (The Core Fix for "Library not loaded")
+                  # ---------------------------------------------------------
+                  echo "🔧 Patching paths..."
+
+                  # A. Fix the Dylib's own ID to be relative
+                  install_name_tool -id "@rpath/$DYLIB_NAME" "$DEST_DYLIB"
+
+                  # B. Fix the Main Executable to look for @rpath instead of absolute path
+                  EXEC_PATH="$app_src/Contents/MacOS/$app_bin_name"
+
+                  # Use otool to find the absolute path reference (e.g., /Users/runner/work/...)
+                  OLD_PATH=$(otool -L "$EXEC_PATH" | grep "$DYLIB_NAME" | awk '{print $1}')
+
+                  if [ -n "$OLD_PATH" ]; then
+                     echo "Detected bad reference: $OLD_PATH"
+                     echo "Replacing with: @rpath/$DYLIB_NAME"
+                     install_name_tool -change "$OLD_PATH" "@rpath/$DYLIB_NAME" "$EXEC_PATH"
+                  else
+                     echo "Warning: Could not find hardcoded reference to $DYLIB_NAME. It might be correct or loaded dynamically."
+                  fi
+
+                  # Verify
+                  otool -L "$EXEC_PATH" | grep "$DYLIB_NAME" || true
+
+                  # ---------------------------------------------------------
+                  # [STEP 4] Packaging
+                  # ---------------------------------------------------------
                   rm -rf "$ROOT/dmg-src" "$DIST/portable"
                   mkdir -p "$ROOT/dmg-src" "$DIST/portable"
 
                   cp -R "$app_src" "$ROOT/dmg-src/"
-                  app_name="$(basename "$app_src")"
 
                   if [ -n "${{ secrets.MACOS_CODESIGN_IDENTITY }}" ]; then
-                    codesign --force --deep --options runtime --sign "${{ secrets.MACOS_CODESIGN_IDENTITY }}" "$ROOT/dmg-src/$app_name" || true
+                    echo "Signing application..."
+                    # Must sign embedded dylib first
+                    codesign --force --deep --options runtime --sign "${{ secrets.MACOS_CODESIGN_IDENTITY }}" "$ROOT/dmg-src/$app_name_ext/Contents/Frameworks/$DYLIB_NAME" || true
+                    codesign --force --deep --options runtime --sign "${{ secrets.MACOS_CODESIGN_IDENTITY }}" "$ROOT/dmg-src/$app_name_ext" || true
                   fi
 
                   ln -s /Applications "$ROOT/dmg-src/Applications"
@@ -217,8 +278,9 @@ jobs:
                   hdiutil convert "$dmg_rw" -format UDZO -o "$dmg"
                   rm -f "$dmg_rw"
 
-                  # Create Portable Zip (Matches Native behavior)
-                  cp -R "$app_src" "$DIST/portable/"
+                  # Create Portable Zip
+                  # Use the signed copy from dmg-src
+                  cp -R "$ROOT/dmg-src/$app_name_ext" "$DIST/portable/"
                   cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DIST/portable/" 2>/dev/null || true
                   (cd "$DIST/portable" && zip -r "../nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.zip" .)
 
