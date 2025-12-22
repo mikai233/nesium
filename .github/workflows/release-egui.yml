@@ -100,7 +100,8 @@ jobs:
             libfontconfig1-dev \
             fakeroot \
             dpkg-dev \
-            patchelf
+            patchelf \
+            libfuse2
 
       - name: Install cargo-bundle
         uses: taiki-e/install-action@v2
