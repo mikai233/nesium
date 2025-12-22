@@ -25,6 +25,8 @@ use libretro_bridge::raw::{
 const WIDTH: u32 = SCREEN_WIDTH as u32;
 const HEIGHT: u32 = SCREEN_HEIGHT as u32;
 const SAMPLE_RATE: f64 = 44_100.0;
+// NES NTSC framerate (~60.0988 Hz). Keep in sync with runtime frame pacing.
+const FPS: f64 = 1_000_000_000.0 / 16_639_263.0;
 const COLOR_FORMAT: ColorFormat = ColorFormat::Rgb555;
 
 struct NesiumCore {
@@ -108,7 +110,7 @@ impl LibretroCore for NesiumCore {
                 aspect_ratio: WIDTH as f32 / HEIGHT as f32,
             },
             timing: SystemTiming {
-                fps: 60.0,
+                fps: FPS,
                 sample_rate: SAMPLE_RATE,
             },
         }
