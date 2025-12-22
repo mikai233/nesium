@@ -272,11 +272,32 @@ jobs:
 
                   cp -R "$app_src" "$ROOT/dmg-src/"
 
-                  if [ -n "${{ secrets.MACOS_CODESIGN_IDENTITY }}" ]; then
-                    echo "Signing application..."
-                    codesign --force --deep --options runtime --sign "${{ secrets.MACOS_CODESIGN_IDENTITY }}" "$ROOT/dmg-src/$app_name_ext/Contents/Frameworks/$DYLIB_NAME" || true
-                    codesign --force --deep --options runtime --sign "${{ secrets.MACOS_CODESIGN_IDENTITY }}" "$ROOT/dmg-src/$app_name_ext" || true
+                  # ---------------------------------------------------------
+                  # [STEP 4.1] Ad-hoc Code Signing (no Apple Developer ID)
+                  # ---------------------------------------------------------
+                  # This is suitable for local/testing. For public distribution without warnings,
+                  # you'll eventually need Developer ID + notarization.
+                  echo "Signing application (ad-hoc)..."
+                  APP_DMG="$ROOT/dmg-src/$app_name_ext"
+                  BIN_DMG="$APP_DMG/Contents/MacOS/$app_bin_name"
+                  FW_DIR="$APP_DMG/Contents/Frameworks"
+
+                  # Sign main executable first
+                  codesign --force --sign - "$BIN_DMG"
+
+                  # Sign embedded dylibs
+                  if [ -d "$FW_DIR" ]; then
+                    find "$FW_DIR" -type f -name "*.dylib" -print0 | xargs -0 -n1 codesign --force --sign -
+
+                    # Sign framework Mach-O binaries (typically in Versions/A/<FrameworkName>)
+                    find "$FW_DIR" -type f -path "*.framework/Versions/A/*" -print0 | xargs -0 -n1 codesign --force --sign -
                   fi
+
+                  # Finally sign the app bundle (no --deep to avoid ambiguous framework issues)
+                  codesign --force --sign - "$APP_DMG"
+
+                  # Verify (best-effort; does not require notarization)
+                  codesign --verify --deep --strict --verbose=2 "$APP_DMG" || true
 
                   ln -s /Applications "$ROOT/dmg-src/Applications"
 
