@@ -14,6 +14,7 @@ env:
   CRATE_MANIFEST: crates/nesium-core/Cargo.toml
   # Skip ESP32 crate here because it needs the Xtensa toolchain/SDK.
   WORKSPACE_FLAGS: --workspace --exclude nesium-esp32
+  COVERAGE_FLAGS: -p nesium-core
   PUBLISH_MANIFESTS: |
     crates/nesium-core/Cargo.toml
 
@@ -72,7 +73,7 @@ jobs:
 
       - name: Generate coverage report
         if: matrix.rust == 'stable'
-        run: cargo llvm-cov ${{ env.WORKSPACE_FLAGS }} --lcov --output-path lcov.info
+        run: cargo llvm-cov ${{ env.COVERAGE_FLAGS }} --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
         if: matrix.rust == 'stable'
