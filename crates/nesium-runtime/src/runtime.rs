@@ -328,6 +328,8 @@ const FRAME_DURATION: Duration = Duration::from_nanos(16_639_263);
 const MAX_SLEEP_CHUNK: Duration = Duration::from_millis(4);
 const SPIN_THRESHOLD: Duration = Duration::from_micros(300);
 const SPIN_YIELD_EVERY: u32 = 512;
+// Allow frames to start slightly early to reduce the chance of missing the deadline.
+const FRAME_LEAD: Duration = Duration::from_micros(50);
 const TURBO_FRAMES_PER_TOGGLE_DEFAULT: u8 = 2;
 
 #[derive(Debug, Clone, Copy)]
@@ -430,7 +432,7 @@ impl Runner {
 
             let mut frames_run: u32 = 0;
             while !self.state.paused.load(Ordering::Acquire)
-                && Instant::now() >= self.next_frame_deadline
+                && Instant::now() + FRAME_LEAD >= self.next_frame_deadline
                 && frames_run < 3
             {
                 self.step_frame();
@@ -449,12 +451,17 @@ impl Runner {
 
     fn wait_until_next_deadline(&mut self) -> WaitOutcome {
         loop {
+            let target = self
+                .next_frame_deadline
+                .checked_sub(FRAME_LEAD)
+                .unwrap_or(self.next_frame_deadline);
+
             let now = Instant::now();
-            if now >= self.next_frame_deadline {
+            if now >= target {
                 return WaitOutcome::DeadlineReached;
             }
 
-            let remaining = self.next_frame_deadline - now;
+            let remaining = target - now;
 
             // Coarse phase: sleep in chunks while still far from the deadline,
             // but always keep a final spin window.
@@ -475,7 +482,7 @@ impl Runner {
             // Fine phase: spin until the deadline. We still poll control messages
             // to keep the runtime responsive.
             let mut spins: u32 = 0;
-            while Instant::now() < self.next_frame_deadline {
+            while Instant::now() < target {
                 match self.ctrl_rx.try_recv() {
                     Ok(msg) => {
                         if self.handle_control(msg) {
