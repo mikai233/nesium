@@ -73,21 +73,16 @@ final class NesiumTexture: NSObject, FlutterTexture {
     /// This method identifies the back buffer (the one not currently marked as latest),
     /// yields it to the closure for writing, and then atomically updates `latestReadyIndex`
     /// to point to this new buffer.
-    func withWritablePixelBuffer(_ body: (CVPixelBuffer, Int) -> Void) {
-        guard pixelBuffers.count == 2 else { return }
-        
-        // 1. Acquire current index
+    func acquireWritablePixelBuffer() -> (CVPixelBuffer, Int)? {
+        guard pixelBuffers.count == 2 else { return nil }
+
         let current = Int(latestReadyIndex.load(ordering: .acquiring))
-        
-        // 2. Determine write index (simple toggle)
         let nextIndex = 1 - current
-        let buffer = pixelBuffers[nextIndex]
-        
-        // 3. Write
-        body(buffer, nextIndex)
-        
-        // 4. Release new index
-        latestReadyIndex.store(Int32(nextIndex), ordering: .releasing)
+        return (pixelBuffers[nextIndex], nextIndex)
+    }
+
+    func commitLatestReady(_ index: Int) {
+        latestReadyIndex.store(Int32(index), ordering: .releasing)
     }
 
     // MARK: - FlutterTexture

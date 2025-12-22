@@ -12,13 +12,15 @@
 //  which runs a background render loop and notifies macOS via a C callback
 //  whenever a new frame is available. This manager:
 //    1. Creates and registers the Flutter external texture.
-//    2. Registers itself as a frame consumer with the Rust runtime.
-//    3. Copies the latest frame into the CVPixelBuffer and notifies Flutter.
+//    2. Receives frame-ready callbacks from the Rust runtime on a background thread.
+//    3. Coalesces updates (latest-only) and copies pixels on a dedicated serial queue.
+//    4. Notifies Flutter on the main thread via `textureFrameAvailable`.
 //
 
 import Cocoa
 import FlutterMacOS
 import CoreVideo
+import Atomics
 
 /// Manages a NesiumTexture instance and exposes it to Flutter via a method
 /// channel. It also owns the render loop that updates the pixel buffer and
@@ -26,8 +28,22 @@ import CoreVideo
 final class NesiumTextureManager: NesiumFrameConsumer {
     private let textureRegistry: FlutterTextureRegistry
 
+    // `texture` is only accessed on `frameCopyQueue`.
     private var texture: NesiumTexture?
-    private var textureId: Int64?
+
+    // Shared cross-thread state.
+    //
+    // - Rust callback thread publishes the latest produced framebuffer index.
+    // - `frameCopyQueue` drains at most one pending index at a time (latest-only).
+    // - Main thread is the only place we call `textureFrameAvailable`.
+    //
+    // `pendingRustBufferIndex` uses `UInt32.max` as the empty sentinel.
+    private let textureId = ManagedAtomic<Int64>(-1)
+    private let pendingRustBufferIndex = ManagedAtomic<UInt32>(UInt32.max)
+    private let copyScheduled = ManagedAtomic<Bool>(false)
+    private let notifyScheduled = ManagedAtomic<Bool>(false)
+
+    private let frameCopyQueue = DispatchQueue(label: "Nesium.FrameCopy", qos: .userInitiated)
 
     // MARK: - Initialization
 
@@ -35,9 +51,8 @@ final class NesiumTextureManager: NesiumFrameConsumer {
         self.textureRegistry = textureRegistry
         // Register this manager as the consumer of frames produced by the Rust runtime.
         nesiumRegisterFrameCallback(for: self)
-        // Optional: if the runtime is not started from Dart/FRB yet, you can
-        // start it here for testing. In a production setup you may prefer to
-        // start the runtime from Dart instead.
+        // Start the runtime here only if you don't already start it from Dart.
+        // If Dart owns runtime lifecycle, remove this call and start/stop from Dart instead.
         nesium_runtime_start()
     }
 
@@ -68,8 +83,11 @@ final class NesiumTextureManager: NesiumFrameConsumer {
         let tex = NesiumTexture(width: width, height: height)
         let id = textureRegistry.register(tex)
 
-        self.texture = tex
-        self.textureId = id
+        // `texture` is only accessed from `frameCopyQueue`, so publish it there.
+        frameCopyQueue.sync {
+            self.texture = tex
+            self.textureId.store(id, ordering: .releasing)
+        }
 
         // Return the texture ID to Dart so that it can construct a Texture widget.
         result(id)
@@ -83,40 +101,98 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     /// The manager is responsible for copying the Rust buffer into the
     /// CVPixelBuffer backing the Flutter texture and then notifying Flutter.
     func nesiumOnFrameReady(bufferIndex: UInt32, width: Int, height: Int, pitch: Int) {
-        guard let texture = self.texture,
-              let textureId = self.textureId
-        else {
-            return
+        // Publish the latest ready framebuffer index (latest-only). We overwrite any previous pending index.
+        pendingRustBufferIndex.store(bufferIndex, ordering: .releasing)
+
+        // Ensure only one drain is scheduled at a time; the drain loop will pick up the latest pending index.
+        let scheduled = copyScheduled.compareExchange(
+            expected: false,
+            desired: true,
+            ordering: .acquiringAndReleasing
+        ).exchanged
+
+        guard scheduled else { return }
+
+        frameCopyQueue.async { [weak self] in
+            self?.drainPendingFrames()
         }
+    }
 
-        texture.withWritablePixelBuffer { pixelBuffer, _ in
-            CVPixelBufferLockBaseAddress(pixelBuffer, [])
-            defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+    private func drainPendingFrames() {
+        let empty = UInt32.max
 
-            guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+        while true {
+            let bufferIndex = pendingRustBufferIndex.exchange(empty, ordering: .acquiringAndReleasing)
+            if bufferIndex == empty {
+                // No work left. Mark unscheduled, then re-check in case a frame arrived concurrently.
+                copyScheduled.store(false, ordering: .releasing)
+
+                let hasNew = pendingRustBufferIndex.load(ordering: .acquiring) != empty
+                if hasNew {
+                    let rescheduled = copyScheduled.compareExchange(
+                        expected: false,
+                        desired: true,
+                        ordering: .acquiringAndReleasing
+                    ).exchanged
+                    if rescheduled {
+                        continue
+                    }
+                }
                 return
+            }
+
+            guard let texture = self.texture else {
+                continue
+            }
+
+            let tid = textureId.load(ordering: .acquiring)
+            if tid < 0 {
+                continue
+            }
+
+            guard let (pixelBuffer, writeIndex) = texture.acquireWritablePixelBuffer() else {
+                continue
+            }
+
+            CVPixelBufferLockBaseAddress(pixelBuffer, [])
+            guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+                CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+                continue
             }
 
             let dstBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
             let dstHeight = CVPixelBufferGetHeight(pixelBuffer)
 
-            // Ask Rust to copy the contents of the selected frame buffer into the
-            // CVPixelBuffer's backing memory.
             nesium_copy_frame(
                 bufferIndex,
                 baseAddress.assumingMemoryBound(to: UInt8.self),
                 UInt32(dstBytesPerRow),
                 UInt32(dstHeight)
             )
-        }
 
-        // Notify Flutter that the external texture has been updated.
-        if Thread.isMainThread {
-            textureRegistry.textureFrameAvailable(textureId)
-        } else {
-            DispatchQueue.main.async { [textureRegistry] in
-                textureRegistry.textureFrameAvailable(textureId)
-            }
+            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+
+            // Publish the newly written buffer only after a successful copy.
+            texture.commitLatestReady(writeIndex)
+
+            scheduleTextureFrameAvailable(tid)
+        }
+    }
+
+    private func scheduleTextureFrameAvailable(_ textureId: Int64) {
+        let scheduled = notifyScheduled.compareExchange(
+            expected: false,
+            desired: true,
+            ordering: .acquiringAndReleasing
+        ).exchanged
+
+        guard scheduled else { return }
+
+        // Flutter texture notifications must be delivered on the platform (main) thread.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.notifyScheduled.store(false, ordering: .releasing)
+            self.textureRegistry.textureFrameAvailable(textureId)
         }
     }
 }
