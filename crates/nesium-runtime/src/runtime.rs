@@ -76,6 +76,15 @@ enum ControlMessage {
 // dereferencing on the sending thread; the receiver owns and uses them.
 unsafe impl Send for ControlMessage {}
 
+enum WaitOutcome {
+    /// Runtime thread should exit (channel disconnected or Stop received).
+    Exit,
+    /// A control message was received and handled; caller should re-check state/deadlines.
+    ControlHandled,
+    /// The target deadline has been reached.
+    DeadlineReached,
+}
+
 #[derive(Debug, Clone)]
 pub struct RuntimeError(String);
 
@@ -313,6 +322,12 @@ fn button_bit(button: Button) -> u8 {
 
 // NTSC: ~60.0988 Hz
 const FRAME_DURATION: Duration = Duration::from_nanos(16_639_263);
+// Hybrid wait tuning:
+// - Sleep in small chunks until we're close to the deadline.
+// - Spin for the final window for tighter frame pacing.
+const MAX_SLEEP_CHUNK: Duration = Duration::from_millis(4);
+const SPIN_THRESHOLD: Duration = Duration::from_micros(300);
+const SPIN_YIELD_EVERY: u32 = 512;
 const TURBO_FRAMES_PER_TOGGLE_DEFAULT: u8 = 2;
 
 #[derive(Debug, Clone, Copy)]
@@ -407,18 +422,10 @@ impl Runner {
                 continue;
             }
 
-            let now = Instant::now();
-            if now < self.next_frame_deadline {
-                match self.ctrl_rx.recv_timeout(self.next_frame_deadline - now) {
-                    Ok(msg) => {
-                        if self.handle_control(msg) {
-                            return;
-                        }
-                        continue;
-                    }
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Err(RecvTimeoutError::Disconnected) => return,
-                }
+            match self.wait_until_next_deadline() {
+                WaitOutcome::Exit => return,
+                WaitOutcome::ControlHandled => continue,
+                WaitOutcome::DeadlineReached => {}
             }
 
             let mut frames_run: u32 = 0;
@@ -437,6 +444,57 @@ impl Runner {
             {
                 self.next_frame_deadline = now;
             }
+        }
+    }
+
+    fn wait_until_next_deadline(&mut self) -> WaitOutcome {
+        loop {
+            let now = Instant::now();
+            if now >= self.next_frame_deadline {
+                return WaitOutcome::DeadlineReached;
+            }
+
+            let remaining = self.next_frame_deadline - now;
+
+            // Coarse phase: sleep in chunks while still far from the deadline,
+            // but always keep a final spin window.
+            if remaining > SPIN_THRESHOLD {
+                let sleep_for = (remaining - SPIN_THRESHOLD).min(MAX_SLEEP_CHUNK);
+                match self.ctrl_rx.recv_timeout(sleep_for) {
+                    Ok(msg) => {
+                        if self.handle_control(msg) {
+                            return WaitOutcome::Exit;
+                        }
+                        return WaitOutcome::ControlHandled;
+                    }
+                    Err(RecvTimeoutError::Timeout) => continue,
+                    Err(RecvTimeoutError::Disconnected) => return WaitOutcome::Exit,
+                }
+            }
+
+            // Fine phase: spin until the deadline. We still poll control messages
+            // to keep the runtime responsive.
+            let mut spins: u32 = 0;
+            while Instant::now() < self.next_frame_deadline {
+                match self.ctrl_rx.try_recv() {
+                    Ok(msg) => {
+                        if self.handle_control(msg) {
+                            return WaitOutcome::Exit;
+                        }
+                        return WaitOutcome::ControlHandled;
+                    }
+                    Err(TryRecvError::Empty) => {}
+                    Err(TryRecvError::Disconnected) => return WaitOutcome::Exit,
+                }
+
+                std::hint::spin_loop();
+                spins = spins.wrapping_add(1);
+                if spins % SPIN_YIELD_EVERY == 0 {
+                    thread::yield_now();
+                }
+            }
+
+            return WaitOutcome::DeadlineReached;
         }
     }
 
