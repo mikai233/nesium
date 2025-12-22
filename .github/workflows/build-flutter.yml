@@ -32,6 +32,7 @@ jobs:
                       asset_suffix: macos-universal
 
         runs-on: ${{ matrix.os }}
+
         steps:
             - uses: actions/checkout@v4
               with:
@@ -83,19 +84,19 @@ jobs:
                   $ErrorActionPreference = 'Stop'
 
                   # 1. Build (Standard x64)
-                  Push-Location "apps\\nesium_flutter"
+                  Push-Location "apps\nesium_flutter"
                   flutter config --enable-windows-desktop
                   flutter build windows --release
                   Pop-Location
 
                   # 2. Locate Artifacts
-                  $src = Join-Path $env:GITHUB_WORKSPACE "apps\\nesium_flutter\\build\\windows\\x64\\runner\\Release"
+                  $src = Join-Path $env:GITHUB_WORKSPACE "apps\nesium_flutter\build\windows\x64\runner\Release"
                   if (-not (Test-Path $src)) {
-                     $src = Join-Path $env:GITHUB_WORKSPACE "apps\\nesium_flutter\\build\\windows\\runner\\Release"
+                      $src = Join-Path $env:GITHUB_WORKSPACE "apps\nesium_flutter\build\windows\runner\Release"
                   }
                   if (-not (Test-Path $src)) {
-                     $exe = Get-ChildItem -Path "apps\\nesium_flutter\\build\\windows" -Recurse -Filter "nesium_flutter.exe" | Select-Object -First 1
-                     if ($exe) { $src = $exe.DirectoryName }
+                      $exe = Get-ChildItem -Path "apps\nesium_flutter\build\windows" -Recurse -Filter "nesium_flutter.exe" | Select-Object -First 1
+                      if ($exe) { $src = $exe.DirectoryName }
                   }
                   if (-not (Test-Path $src)) {
                     Write-Error "Build output directory not found!"
@@ -104,23 +105,26 @@ jobs:
                   Write-Host "Artifacts located at: $src"
 
                   # 3. Create Portable Zip
-                  $portableDir = Join-Path $env:GITHUB_WORKSPACE "dist\\portable"
+                  $portableDir = Join-Path $env:GITHUB_WORKSPACE "dist\portable"
                   New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
                   Copy-Item -Path (Join-Path $src "*") -Destination $portableDir -Recurse -Force
                   if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "README.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "README.md") $portableDir -Force }
                   if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md") $portableDir -Force }
 
                   $portableZip = "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}-portable.zip"
-                  Compress-Archive -Path "$portableDir\\*" -DestinationPath (Join-Path $env:GITHUB_WORKSPACE "dist\\$portableZip") -Force
+                  Compress-Archive -Path "$portableDir\*" -DestinationPath (Join-Path $env:GITHUB_WORKSPACE "dist\$portableZip") -Force
 
                   # 4. Create MSI
-                  $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\\bin"
-                  if (-not (Test-Path $wixBin)) { $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.14\\bin" }
+                  $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\bin"
+                  if (-not (Test-Path $wixBin)) { $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.14\bin" }
 
-                  $outMsi = Join-Path $env:GITHUB_WORKSPACE "dist\\nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+                  $outMsi = Join-Path $env:GITHUB_WORKSPACE "dist\nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
                   $wxsAppFiles = Join-Path $env:RUNNER_TEMP "appfiles.wxs"
+
                   & (Join-Path $wixBin "heat.exe") dir $src -cg AppFiles -dr INSTALLFOLDER -gg -srd -sreg -var var.SourceDir -out $wxsAppFiles
+
                   $wxsProduct = Join-Path $env:RUNNER_TEMP "product.wxs"
+
                   @"
                   <?xml version="1.0" encoding="UTF-8"?>
                   <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
@@ -140,6 +144,7 @@ jobs:
                     </Product>
                   </Wix>
                   "@ | Set-Content -Path $wxsProduct -Encoding UTF8
+
                   Push-Location $env:RUNNER_TEMP
                   & (Join-Path $wixBin "candle.exe") -dSourceDir="$src" $wxsProduct $wxsAppFiles
                   & (Join-Path $wixBin "light.exe") -ext WixUIExtension -o $outMsi product.wixobj appfiles.wixobj
@@ -156,8 +161,8 @@ jobs:
 
                   # 6. Checksums
                   Push-Location "dist"
-                  Get-FileHash "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\\')[-1])" } | Out-File -Encoding ascii "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}.sha256"
-                  Get-FileHash "$portableZip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\\')[-1])" } | Out-File -Encoding ascii "$portableZip.sha256"
+                  Get-FileHash "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\')[-1])" } | Out-File -Encoding ascii "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}.sha256"
+                  Get-FileHash "$portableZip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\')[-1])" } | Out-File -Encoding ascii "$portableZip.sha256"
                   Pop-Location
 
             # ===================================================
@@ -275,15 +280,29 @@ jobs:
                   # ---------------------------------------------------------
                   # [STEP 4.1] Ad-hoc Code Signing (no Apple Developer ID)
                   # ---------------------------------------------------------
-                  # This is suitable for local/testing. For public distribution without warnings,
-                  # you'll eventually need Developer ID + notarization.
                   echo "Signing application (ad-hoc)..."
                   APP_DMG="$ROOT/dmg-src/$app_name_ext"
                   BIN_DMG="$APP_DMG/Contents/MacOS/$app_bin_name"
                   FW_DIR="$APP_DMG/Contents/Frameworks"
                   PLUGINS_DIR="$APP_DMG/Contents/PlugIns"
 
-                  # Helper: sign only Mach-O files (avoid signing plists/resources)
+                  # Entitlements required for file picker
+                  ENTITLEMENTS="$ROOT/nesium.entitlements"
+
+                  # 注意：这里的 HEREDOC 写法要小心缩进
+                  cat > "$ENTITLEMENTS" <<'PLIST'
+                  <?xml version="1.0" encoding="UTF-8"?>
+                  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                  <plist version="1.0">
+                  <dict>
+                    <key>com.apple.security.app-sandbox</key>
+                    <true/>
+                    <key>com.apple.security.files.user-selected.read-write</key>
+                    <true/>
+                  </dict>
+                  </plist>
+                  PLIST
+
                   sign_macho() {
                     local p="$1"
                     if [ -f "$p" ] && file -b "$p" | grep -q "Mach-O"; then
@@ -291,7 +310,7 @@ jobs:
                     fi
                   }
 
-                  # 1) Sign nested code first (Frameworks / dylibs / framework binaries)
+                  # 1) Sign nested code
                   if [ -d "$FW_DIR" ]; then
                     echo "Signing embedded dylibs..."
                     while IFS= read -r -d '' f; do
@@ -304,7 +323,6 @@ jobs:
                     done < <(find "$FW_DIR" -type f -path "*.framework/Versions/A/*" -print0)
                   fi
 
-                  # Some Flutter/macOS builds also embed app extensions/plugins here
                   if [ -d "$PLUGINS_DIR" ]; then
                     echo "Signing embedded plugins/extensions (PlugIns)..."
                     while IFS= read -r -d '' f; do
@@ -312,15 +330,16 @@ jobs:
                     done < <(find "$PLUGINS_DIR" -type f -print0)
                   fi
 
-                  # 2) Then sign main executable
+                  # 2) Sign main executable
                   echo "Signing main executable..."
-                  sign_macho "$BIN_DMG"
+                  if [ -f "$BIN_DMG" ] && file -b "$BIN_DMG" | grep -q "Mach-O"; then
+                    codesign --force --sign - --entitlements "$ENTITLEMENTS" "$BIN_DMG"
+                  fi
 
-                  # 3) Finally sign the app bundle wrapper (no --deep to avoid ambiguous framework issues)
+                  # 3) Sign bundle wrapper
                   echo "Signing app bundle wrapper..."
-                  codesign --force --sign - "$APP_DMG"
+                  codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP_DMG"
 
-                  # Verify (best-effort; does not require notarization)
                   codesign --verify --deep --strict --verbose=2 "$APP_DMG" || true
 
                   ln -s /Applications "$ROOT/dmg-src/Applications"
