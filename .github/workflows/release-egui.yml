@@ -27,18 +27,18 @@ jobs:
       matrix:
         include:
           - name: linux-x86_64-deb
-            os: ubuntu-latest
+            os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             bundle_format: deb
             asset_ext: deb
-            asset_suffix: UbuntuLatest
+            asset_suffix: Ubuntu24.04
 
           - name: linux-x86_64-appimage
-            os: ubuntu-latest
+            os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             bundle_format: appimage
             asset_ext: AppImage
-            asset_suffix: UbuntuLatest
+            asset_suffix: Ubuntu24.04
 
           - name: linux-aarch64-deb
             os: ubuntu-24.04-arm
