@@ -29,6 +29,7 @@
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
 		A510FA1A2EF835E1001737AD /* Atomics in Frameworks */ = {isa = PBXBuildFile; productRef = A510FA192EF835E1001737AD /* Atomics */; };
+		A510FA1B2EF93A3F001737AD /* libnesium_flutter.dylib in Bundle Framework */ = {isa = PBXBuildFile; fileRef = A538FA6C2EDAD57300B481D2 /* libnesium_flutter.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		A55318FE2ED9AEFA009257FA /* NesiumTextureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55318FD2ED9AEF6009257FA /* NesiumTextureManager.swift */; };
 		A55319002ED9BD95009257FA /* NesiumTexture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55318FF2ED9BD8E009257FA /* NesiumTexture.swift */; };
 		A55319022ED9CF39009257FA /* NesiumRustBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55319012ED9CF35009257FA /* NesiumRustBridge.swift */; };
@@ -60,6 +61,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				A510FA1B2EF93A3F001737AD /* libnesium_flutter.dylib in Bundle Framework */,
 			);
 			name = "Bundle Framework";
 			runOnlyForDeploymentPostprocessing = 0;
