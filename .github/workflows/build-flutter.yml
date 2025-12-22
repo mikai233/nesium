@@ -9,7 +9,6 @@ on:
                 type: string
 
 env:
-    # Map input to env
     RELEASE_TAG: ${{ inputs.release_tag }}
 
 jobs:
@@ -19,18 +18,14 @@ jobs:
             fail-fast: false
             matrix:
                 include:
+                    # ✅ Windows x64 Only
                     - name: windows-x86_64-msi
                       os: windows-latest
                       target_arch: x64
                       asset_ext: msi
                       asset_suffix: windows-x86_64
 
-                    - name: windows-aarch64-msi
-                      os: windows-latest
-                      target_arch: arm64
-                      asset_ext: msi
-                      asset_suffix: windows-arm64
-
+                    # ✅ macOS Universal
                     - name: macos-universal-dmg
                       os: macos-latest
                       asset_ext: dmg
@@ -51,7 +46,7 @@ jobs:
               if: runner.os == 'Windows'
               uses: ilammy/msvc-dev-cmd@v1
               with:
-                  arch: ${{ matrix.target_arch == 'arm64' && 'amd64_arm64' || 'amd64' }}
+                  arch: amd64
 
             - name: Cache cargo artifacts
               uses: Swatinem/rust-cache@v2
@@ -79,7 +74,7 @@ jobs:
               run: choco install wixtoolset -y
 
             # ===================================================
-            # FLUTTER WINDOWS BUILD & MSI
+            # FLUTTER WINDOWS BUILD & MSI & PORTABLE
             # ===================================================
             - name: Build + package (Windows)
               if: runner.os == 'Windows'
@@ -87,43 +82,49 @@ jobs:
               run: |
                   $ErrorActionPreference = 'Stop'
 
-                  # Build
+                  # 1. Build (Standard x64)
                   Push-Location "apps\\nesium_flutter"
                   flutter config --enable-windows-desktop
-                  if ("${{ matrix.target_arch }}" -eq "arm64") {
-                    flutter build windows --release --target-platform windows-arm64
-                    $archDir = "arm64"
-                  } else {
-                    flutter build windows --release
-                    $archDir = "x64"
-                  }
+                  flutter build windows --release
                   Pop-Location
 
-                  $src = Join-Path $env:GITHUB_WORKSPACE "apps\\nesium_flutter\\build\\windows\\$archDir\\runner\\Release"
+                  # 2. Locate Artifacts
+                  # Try standard path first
+                  $src = Join-Path $env:GITHUB_WORKSPACE "apps\\nesium_flutter\\build\\windows\\x64\\runner\\Release"
+
+                  # Fallback mechanism if Flutter path changes
                   if (-not (Test-Path $src)) {
-                    Write-Error "Expected Flutter Windows output not found at $src"
+                     $src = Join-Path $env:GITHUB_WORKSPACE "apps\\nesium_flutter\\build\\windows\\runner\\Release"
+                  }
+                  if (-not (Test-Path $src)) {
+                     Write-Host "Standard path not found. Searching for .exe..."
+                     $exe = Get-ChildItem -Path "apps\\nesium_flutter\\build\\windows" -Recurse -Filter "nesium_flutter.exe" | Select-Object -First 1
+                     if ($exe) { $src = $exe.DirectoryName }
+                  }
+                  if (-not (Test-Path $src)) {
+                    Write-Error "Build output directory not found!"
                   }
 
-                  # Portable
+                  Write-Host "Artifacts located at: $src"
+
+                  # 3. Create Portable Zip (Matches Native behavior)
                   $portableDir = Join-Path $env:GITHUB_WORKSPACE "dist\\portable"
                   New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+
+                  # Copy all Flutter build outputs (exe, dlls, data folder)
                   Copy-Item -Path (Join-Path $src "*") -Destination $portableDir -Recurse -Force
+
+                  # Copy Meta files
                   if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "README.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "README.md") $portableDir -Force }
                   if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md") $portableDir -Force }
 
                   $portableZip = "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}-portable.zip"
                   Compress-Archive -Path "$portableDir\\*" -DestinationPath (Join-Path $env:GITHUB_WORKSPACE "dist\\$portableZip") -Force
 
-                  # MSI (WiX v3)
+                  # 4. Create MSI (WiX v3)
                   $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\\bin"
-                  if (-not (Test-Path $wixBin)) {
-                    $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.14\\bin"
-                  }
-                  if (-not (Test-Path $wixBin)) {
-                    Write-Error "WiX Toolset bin directory not found."
-                  }
+                  if (-not (Test-Path $wixBin)) { $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.14\\bin" }
 
-                  $platform = if ("${{ matrix.target_arch }}" -eq "arm64") { "arm64" } else { "x64" }
                   $outMsi = Join-Path $env:GITHUB_WORKSPACE "dist\\nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
 
                   $wxsAppFiles = Join-Path $env:RUNNER_TEMP "appfiles.wxs"
@@ -134,19 +135,16 @@ jobs:
                   <?xml version="1.0" encoding="UTF-8"?>
                   <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
                     <Product Id="*" Name="Nesium" Language="1033" Version="1.0.0" Manufacturer="Nesium" UpgradeCode="8B9D6C11-2E7C-4EAB-9C75-6B0F7B4E1C5A">
-                      <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="$platform" />
+                      <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
                       <MediaTemplate />
-
                       <Directory Id="TARGETDIR" Name="SourceDir">
                         <Directory Id="ProgramFilesFolder">
                           <Directory Id="INSTALLFOLDER" Name="Nesium" />
                         </Directory>
                       </Directory>
-
                       <Feature Id="MainFeature" Title="Nesium" Level="1">
                         <ComponentGroupRef Id="AppFiles" />
                       </Feature>
-
                       <UIRef Id="WixUI_Minimal" />
                       <UIRef Id="WixUI_ErrorProgressText" />
                     </Product>
@@ -158,7 +156,7 @@ jobs:
                   & (Join-Path $wixBin "light.exe") -ext WixUIExtension -o $outMsi product.wixobj appfiles.wixobj
                   Pop-Location
 
-                  # Code signing (optional; requires secrets)
+                  # 5. Code Signing
                   if ("${{ secrets.WINDOWS_CERT_PFX_BASE64 }}" -ne "") {
                     $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
                     [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_CERT_PFX_BASE64 }}"))
@@ -170,14 +168,14 @@ jobs:
                     & signtool sign /f $pfxPath /p "${{ secrets.WINDOWS_CERT_PASSWORD }}" /tr http://timestamp.digicert.com /td sha256 /fd sha256 $outMsi
                   }
 
-                  # Checksums
+                  # 6. Checksums
                   Push-Location "dist"
                   Get-FileHash "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\\')[-1])" } | Out-File -Encoding ascii "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}.sha256"
                   Get-FileHash "$portableZip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\\')[-1])" } | Out-File -Encoding ascii "$portableZip.sha256"
                   Pop-Location
 
             # ===================================================
-            # FLUTTER MACOS BUILD & DMG
+            # FLUTTER MACOS BUILD & DMG & PORTABLE
             # ===================================================
             - name: Build + package (macOS universal)
               if: runner.os == 'macOS'
@@ -188,7 +186,7 @@ jobs:
                   rustup target add aarch64-apple-darwin x86_64-apple-darwin || true
 
                   flutter config --enable-macos-desktop
-                  flutter build macos --release --universal
+                  flutter build macos --release
 
                   ROOT="${GITHUB_WORKSPACE}"
                   DIST="$ROOT/dist"
@@ -205,7 +203,6 @@ jobs:
                   cp -R "$app_src" "$ROOT/dmg-src/"
                   app_name="$(basename "$app_src")"
 
-                  # Optional codesign (requires secrets)
                   if [ -n "${{ secrets.MACOS_CODESIGN_IDENTITY }}" ]; then
                     codesign --force --deep --options runtime --sign "${{ secrets.MACOS_CODESIGN_IDENTITY }}" "$ROOT/dmg-src/$app_name" || true
                   fi
@@ -220,7 +217,7 @@ jobs:
                   hdiutil convert "$dmg_rw" -format UDZO -o "$dmg"
                   rm -f "$dmg_rw"
 
-                  # Portable zip
+                  # Create Portable Zip (Matches Native behavior)
                   cp -R "$app_src" "$DIST/portable/"
                   cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DIST/portable/" 2>/dev/null || true
                   (cd "$DIST/portable" && zip -r "../nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.zip" .)
@@ -234,6 +231,5 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: nesium-flutter-${{ matrix.name }}
-                  path: |
-                      dist/*
+                  path: dist/*
                   if-no-files-found: ignore
