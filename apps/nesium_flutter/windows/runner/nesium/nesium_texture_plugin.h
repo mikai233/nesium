@@ -1,5 +1,6 @@
 #pragma once
-#include "flutter/plugin_registrar_windows.h"
+
+#include "flutter/plugin_registrar.h"
 
 void NesiumTexturePluginRegisterWithRegistrar(
-    flutter::PluginRegistrarWindows *registrar);
+    FlutterDesktopPluginRegistrarRef registrar);
