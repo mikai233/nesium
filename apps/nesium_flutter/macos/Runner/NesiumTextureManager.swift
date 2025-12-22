@@ -21,6 +21,7 @@ import Cocoa
 import FlutterMacOS
 import CoreVideo
 import Atomics
+import QuartzCore
 
 /// Manages a NesiumTexture instance and exposes it to Flutter via a method
 /// channel. It also owns the render loop that updates the pixel buffer and
@@ -41,7 +42,9 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     private let textureId = ManagedAtomic<Int64>(-1)
     private let pendingRustBufferIndex = ManagedAtomic<UInt32>(UInt32.max)
     private let copyScheduled = ManagedAtomic<Bool>(false)
+    private let frameDirty = ManagedAtomic<Bool>(false)
     private let notifyScheduled = ManagedAtomic<Bool>(false)
+    private var displayLink: CVDisplayLink?
 
     private let frameCopyQueue = DispatchQueue(label: "Nesium.FrameCopy", qos: .userInitiated)
 
@@ -89,6 +92,8 @@ final class NesiumTextureManager: NesiumFrameConsumer {
             self.textureId.store(id, ordering: .releasing)
         }
 
+        startVsyncPumpIfNeeded()
+
         // Return the texture ID to Dart so that it can construct a Texture widget.
         result(id)
     }
@@ -121,78 +126,103 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     private func drainPendingFrames() {
         let empty = UInt32.max
 
-        while true {
-            let bufferIndex = pendingRustBufferIndex.exchange(empty, ordering: .acquiringAndReleasing)
-            if bufferIndex == empty {
-                // No work left. Mark unscheduled, then re-check in case a frame arrived concurrently.
-                copyScheduled.store(false, ordering: .releasing)
+        let bufferIndex = pendingRustBufferIndex.exchange(empty, ordering: .acquiringAndReleasing)
+        guard bufferIndex != empty else {
+            copyScheduled.store(false, ordering: .releasing)
+            return
+        }
 
-                let hasNew = pendingRustBufferIndex.load(ordering: .acquiring) != empty
-                if hasNew {
-                    let rescheduled = copyScheduled.compareExchange(
-                        expected: false,
-                        desired: true,
-                        ordering: .acquiringAndReleasing
-                    ).exchanged
-                    if rescheduled {
-                        continue
-                    }
-                }
-                return
-            }
+        guard let texture = self.texture else {
+            copyScheduled.store(false, ordering: .releasing)
+            return
+        }
 
-            guard let texture = self.texture else {
-                continue
-            }
+        guard let (pixelBuffer, writeIndex) = texture.acquireWritablePixelBuffer() else {
+            copyScheduled.store(false, ordering: .releasing)
+            return
+        }
 
-            let tid = textureId.load(ordering: .acquiring)
-            if tid < 0 {
-                continue
-            }
-
-            guard let (pixelBuffer, writeIndex) = texture.acquireWritablePixelBuffer() else {
-                continue
-            }
-
-            CVPixelBufferLockBaseAddress(pixelBuffer, [])
-            guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
-                CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-                continue
-            }
-
-            let dstBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-            let dstHeight = CVPixelBufferGetHeight(pixelBuffer)
-
-            nesium_copy_frame(
-                bufferIndex,
-                baseAddress.assumingMemoryBound(to: UInt8.self),
-                UInt32(dstBytesPerRow),
-                UInt32(dstHeight)
-            )
-
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
             CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+            copyScheduled.store(false, ordering: .releasing)
+            return
+        }
 
-            // Publish the newly written buffer only after a successful copy.
-            texture.commitLatestReady(writeIndex)
+        let dstBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        let dstHeight = CVPixelBufferGetHeight(pixelBuffer)
 
-            scheduleTextureFrameAvailable(tid)
+        nesium_copy_frame(
+            bufferIndex,
+            baseAddress.assumingMemoryBound(to: UInt8.self),
+            UInt32(dstBytesPerRow),
+            UInt32(dstHeight)
+        )
+
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+
+        texture.commitLatestReady(writeIndex)
+        frameDirty.store(true, ordering: .releasing)
+
+        // Unschedule after one copy; if a frame arrived concurrently, schedule another drain.
+        copyScheduled.store(false, ordering: .releasing)
+        let hasNew = pendingRustBufferIndex.load(ordering: .acquiring) != empty
+        if hasNew {
+            let scheduled = copyScheduled.compareExchange(
+                expected: false,
+                desired: true,
+                ordering: .acquiringAndReleasing
+            ).exchanged
+            if scheduled {
+                frameCopyQueue.async { [weak self] in
+                    self?.drainPendingFrames()
+                }
+            }
         }
     }
 
-    private func scheduleTextureFrameAvailable(_ textureId: Int64) {
-        let scheduled = notifyScheduled.compareExchange(
-            expected: false,
-            desired: true,
-            ordering: .acquiringAndReleasing
-        ).exchanged
+    private func startVsyncPumpIfNeeded() {
+        guard displayLink == nil else { return }
 
-        guard scheduled else { return }
+        var link: CVDisplayLink?
+        CVDisplayLinkCreateWithActiveCGDisplays(&link)
+        guard let dl = link else { return }
 
-        // Flutter texture notifications must be delivered on the platform (main) thread.
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.notifyScheduled.store(false, ordering: .releasing)
-            self.textureRegistry.textureFrameAvailable(textureId)
+        displayLink = dl
+
+        let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo in
+            guard let userInfo else { return kCVReturnSuccess }
+            let mgr = Unmanaged<NesiumTextureManager>.fromOpaque(userInfo).takeUnretainedValue()
+
+            let shouldNotify = mgr.frameDirty.exchange(false, ordering: .acquiringAndReleasing)
+            guard shouldNotify else { return kCVReturnSuccess }
+
+            let tid = mgr.textureId.load(ordering: .acquiring)
+            guard tid >= 0 else { return kCVReturnSuccess }
+
+            let shouldEnqueue = mgr.notifyScheduled.compareExchange(
+                expected: false,
+                desired: true,
+                ordering: .acquiringAndReleasing
+            ).exchanged
+            guard shouldEnqueue else { return kCVReturnSuccess }
+
+            DispatchQueue.main.async { [weak mgr] in
+                guard let mgr else { return }
+                mgr.notifyScheduled.store(false, ordering: .releasing)
+                mgr.textureRegistry.textureFrameAvailable(tid)
+            }
+
+            return kCVReturnSuccess
+        }
+
+        CVDisplayLinkSetOutputCallback(dl, callback, Unmanaged.passUnretained(self).toOpaque())
+        CVDisplayLinkStart(dl)
+    }
+
+    deinit {
+        if let dl = displayLink {
+            CVDisplayLinkStop(dl)
         }
     }
 }
