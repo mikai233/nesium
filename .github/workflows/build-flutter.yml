@@ -218,31 +218,51 @@ jobs:
                   # ---------------------------------------------------------
                   echo "🔧 Patching paths..."
 
-                  # A. Fix Dylib ID
+                  # A. Fix Dylib ID (install name)
                   install_name_tool -id "@rpath/$DYLIB_NAME" "$DEST_DYLIB"
 
                   # B. Fix Main Executable
                   EXEC_PATH="$app_src/Contents/MacOS/$app_bin_name"
 
-                  # [CRITICAL FIX]: Use 'head -n 1' to handle Universal Binaries output duplication
-                  OLD_PATH=$(otool -L "$EXEC_PATH" | grep "$DYLIB_NAME" | head -n 1 | awk '{print $1}')
-
-                  # Clean up whitespace
-                  OLD_PATH=$(echo "$OLD_PATH" | xargs)
-
-                  echo "Debug: Detected Raw OLD_PATH: '$OLD_PATH'"
-
-                  if [ -n "$OLD_PATH" ]; then
-                     echo "Performing patch: '$OLD_PATH' -> '@rpath/$DYLIB_NAME'"
-                     install_name_tool -change "$OLD_PATH" "@rpath/$DYLIB_NAME" "$EXEC_PATH"
-                  else
-                     echo "Warning: OLD_PATH is empty. Dumping references for debug:"
-                     otool -L "$EXEC_PATH"
+                  # Ensure the executable can resolve @rpath from Contents/Frameworks
+                  if ! otool -l "$EXEC_PATH" | grep -A2 LC_RPATH | grep -q "@executable_path/../Frameworks"; then
+                    echo "Adding rpath @executable_path/../Frameworks to executable..."
+                    install_name_tool -add_rpath "@executable_path/../Frameworks" "$EXEC_PATH" 2>/dev/null || true
                   fi
 
-                  # Verify
-                  echo "Verifying patch:"
-                  otool -L "$EXEC_PATH" | grep "$DYLIB_NAME" || true
+                  patch_slice() {
+                    local arch="$1"
+                    echo "Patching $arch slice dependency for $DYLIB_NAME..."
+
+                    local old_path
+                    old_path=$(otool -arch "$arch" -L "$EXEC_PATH" | awk -v lib="$DYLIB_NAME" '$1 ~ lib {print $1; exit}')
+                    old_path=$(echo "${old_path:-}" | xargs)
+
+                    if [ -z "$old_path" ]; then
+                      echo "Warning: No $DYLIB_NAME reference found in $arch slice. Dumping $arch otool output:"
+                      otool -arch "$arch" -L "$EXEC_PATH" || true
+                      return 0
+                    fi
+
+                    echo "Detected $arch OLD_PATH: '$old_path'"
+
+                    if [ "$old_path" != "@rpath/$DYLIB_NAME" ]; then
+                      echo "Performing $arch patch: '$old_path' -> '@rpath/$DYLIB_NAME'"
+                      install_name_tool -arch "$arch" -change "$old_path" "@rpath/$DYLIB_NAME" "$EXEC_PATH"
+                    else
+                      echo "$arch slice already uses @rpath/$DYLIB_NAME"
+                    fi
+                  }
+
+                  # Patch both slices (universal executable)
+                  patch_slice arm64
+                  patch_slice x86_64
+
+                  # Verify per-arch
+                  echo "Verifying patch (arm64):"
+                  otool -arch arm64 -L "$EXEC_PATH" | grep "$DYLIB_NAME" || true
+                  echo "Verifying patch (x86_64):"
+                  otool -arch x86_64 -L "$EXEC_PATH" | grep "$DYLIB_NAME" || true
 
                   # ---------------------------------------------------------
                   # [STEP 4] Packaging
