@@ -24,11 +24,7 @@ ExternalLibrary _openRustLibrary() {
   }
 
   if (Platform.isMacOS) {
-    final exePath =
-        Platform.resolvedExecutable; // .../MyApp.app/Contents/MacOS/MyApp
-    final contentsDir = p.dirname(p.dirname(exePath)); // .../MyApp.app/Contents
-    final libPath = p.join(contentsDir, 'Frameworks', name);
-    return ExternalLibrary.open(libPath);
+    return ExternalLibrary.process(iKnowHowToUseIt: true);
   }
 
   final exeDir = File(Platform.resolvedExecutable).parent.path;

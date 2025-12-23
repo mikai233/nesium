@@ -314,7 +314,7 @@
 			);
 			mainGroup = 33CC10E42044A3C60003C045;
 			packageReferences = (
-				A510FA182EF835E1001737AD /* XCRemoteSwiftPackageReference "swift-atomics" */,
+				A510FA182EF835E1001737AD /* XCRemoteSwiftPackageReference "swift-atomics.git" */,
 			);
 			productRefGroup = 33CC10EE2044A3C60003C045 /* Products */;
 			projectDirPath = "";
@@ -433,13 +433,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -859,7 +855,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		A510FA182EF835E1001737AD /* XCRemoteSwiftPackageReference "swift-atomics" */ = {
+		A510FA182EF835E1001737AD /* XCRemoteSwiftPackageReference "swift-atomics.git" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-atomics.git";
 			requirement = {
@@ -872,7 +868,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		A510FA192EF835E1001737AD /* Atomics */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = A510FA182EF835E1001737AD /* XCRemoteSwiftPackageReference "swift-atomics" */;
+			package = A510FA182EF835E1001737AD /* XCRemoteSwiftPackageReference "swift-atomics.git" */;
 			productName = Atomics;
 		};
 /* End XCSwiftPackageProductDependency section */
