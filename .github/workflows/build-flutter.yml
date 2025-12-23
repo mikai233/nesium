@@ -65,6 +65,31 @@ jobs:
                   flutter --version
                   flutter pub get
 
+            - name: Generate icon PNGs (Rust)
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  ICON_DIR="apps/nesium_flutter/tool/generated/icons"
+                  mkdir -p "$ICON_DIR"
+
+                  # Composite icon (1024x1024)
+                  cargo run -p nesium-icon -- --out "$ICON_DIR/app_icon_1024.png"
+
+                  # Layered icons (background/foreground, 1024x1024)
+                  cargo run -p nesium-icon -- layers \
+                    --bg "$ICON_DIR/app_icon_bg_1024.png" \
+                    --fg "$ICON_DIR/app_icon_fg_1024.png"
+
+                  ls -la "$ICON_DIR"
+
+            - name: Update Flutter launcher icons
+              working-directory: apps/nesium_flutter
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  dart run flutter_launcher_icons
+
             - name: Create dist directory
               shell: bash
               run: mkdir -p dist

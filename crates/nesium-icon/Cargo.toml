@@ -7,3 +7,4 @@ license.workspace = true
 [dependencies]
 skia-safe = { workspace = true, features = ["gl"] }
 anyhow.workspace = true
+clap = { workspace = true, features = ["derive"] }

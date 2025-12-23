@@ -11,7 +11,7 @@ use crate::ring::draw_dashed_ring;
 use crate::save::save_surface;
 use skia_safe::image::CachingHint;
 use skia_safe::surfaces::raster_n32_premul;
-use skia_safe::{AlphaType, ColorType, Surface};
+use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
 
 /// Default render dimension (square).
 pub const DEFAULT_ICON_SIZE: u32 = WIDTH as u32;
@@ -80,6 +80,71 @@ pub fn render_rgba_unpremul(size: u32) -> Vec<u8> {
 pub fn render_png(path: &str) -> Result<(), String> {
     let mut surface = render_base_surface()?;
     save_surface(&mut surface, path)
+}
+
+/// Save background + foreground layers as separate PNGs.
+///
+/// This is useful for platforms that support layered/adaptive icons.
+/// The saved PNGs contain the background-only and foreground-only layers.
+pub fn render_layer_pngs(bg_path: &str, fg_path: &str) -> Result<(), String> {
+    render_layer_pngs_sized(bg_path, fg_path, DEFAULT_ICON_SIZE)
+}
+
+/// Same as `render_layer_pngs`, but allows choosing the output size.
+pub fn render_layer_pngs_sized(bg_path: &str, fg_path: &str, size: u32) -> Result<(), String> {
+    let layers = render_layers(size);
+    save_unpremul_rgba_png(&layers.background.rgba, size, size, bg_path)?;
+    save_unpremul_rgba_png(&layers.foreground.rgba, size, size, fg_path)?;
+    Ok(())
+}
+
+fn save_unpremul_rgba_png(
+    rgba_unpremul: &[u8],
+    width: u32,
+    height: u32,
+    path: &str,
+) -> Result<(), String> {
+    let premul = unpremul_to_premul(rgba_unpremul);
+
+    let mut surface = raster_n32_premul((width as i32, height as i32))
+        .ok_or_else(|| "Failed to create surface".to_string())?;
+
+    // Write RGBA8888 premultiplied pixels into the surface.
+    let info = ImageInfo::new(
+        (width as i32, height as i32),
+        ColorType::RGBA8888,
+        AlphaType::Premul,
+        None,
+    );
+    let row_bytes = (width * 4) as usize;
+
+    let ok = surface
+        .canvas()
+        .write_pixels(&info, &premul, row_bytes, (0, 0));
+    if !ok {
+        return Err("Failed to write pixels".to_string());
+    }
+
+    save_surface(&mut surface, path)
+}
+
+fn unpremul_to_premul(rgba_unpremul: &[u8]) -> Vec<u8> {
+    let mut out = rgba_unpremul.to_vec();
+    for chunk in out.chunks_exact_mut(4) {
+        let a = chunk[3] as u16;
+        if a == 0 {
+            chunk[0] = 0;
+            chunk[1] = 0;
+            chunk[2] = 0;
+            continue;
+        }
+
+        // Premultiply: c_premul = c_unpremul * alpha / 255
+        chunk[0] = ((chunk[0] as u16 * a + 127) / 255) as u8;
+        chunk[1] = ((chunk[1] as u16 * a + 127) / 255) as u8;
+        chunk[2] = ((chunk[2] as u16 * a + 127) / 255) as u8;
+    }
+    out
 }
 
 fn render_base_surface() -> Result<Surface, String> {

@@ -51,6 +51,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   integration_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -92,3 +93,18 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Launcher icon generation (icons are produced in CI into tool/generated/icons)
+flutter_launcher_icons:
+  image_path: tool/generated/icons/app_icon_1024.png
+  android: true
+  ios: true
+  macos: true
+  windows: true
+  linux: true
+  web:
+    generate: true
+
+  # Android adaptive icon layers
+  adaptive_icon_background: tool/generated/icons/app_icon_bg_1024.png
+  adaptive_icon_foreground: tool/generated/icons/app_icon_fg_1024.png
