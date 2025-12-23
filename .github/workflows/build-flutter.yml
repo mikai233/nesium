@@ -65,7 +65,27 @@ jobs:
                   flutter --version
                   flutter pub get
 
-            - name: Generate icon PNGs (Rust)
+            - name: Generate icon PNGs (Rust) (Windows)
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  $ErrorActionPreference = 'Stop'
+
+                  $IconDir = "apps/nesium_flutter/tool/generated/icons"
+                  New-Item -ItemType Directory -Force -Path $IconDir | Out-Null
+
+                  # Composite icon (1024x1024)
+                  cargo run -p nesium-icon -- --out "$IconDir/app_icon_1024.png"
+
+                  # Layered icons (background/foreground, 1024x1024)
+                  cargo run -p nesium-icon -- layers `
+                    --bg "$IconDir/app_icon_bg_1024.png" `
+                    --fg "$IconDir/app_icon_fg_1024.png"
+
+                  Get-ChildItem -Path $IconDir
+
+            - name: Generate icon PNGs (Rust) (macOS/Linux)
+              if: runner.os != 'Windows'
               shell: bash
               run: |
                   set -euo pipefail
@@ -83,7 +103,16 @@ jobs:
 
                   ls -la "$ICON_DIR"
 
-            - name: Update Flutter launcher icons
+            - name: Update Flutter launcher icons (Windows)
+              if: runner.os == 'Windows'
+              working-directory: apps/nesium_flutter
+              shell: pwsh
+              run: |
+                  $ErrorActionPreference = 'Stop'
+                  dart run flutter_launcher_icons
+
+            - name: Update Flutter launcher icons (macOS/Linux)
+              if: runner.os != 'Windows'
               working-directory: apps/nesium_flutter
               shell: bash
               run: |
