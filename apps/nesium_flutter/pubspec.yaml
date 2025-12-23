@@ -99,9 +99,18 @@ flutter_launcher_icons:
   image_path: tool/generated/icons/app_icon_1024.png
   android: true
   ios: true
-  macos: true
-  windows: true
-  linux: true
+  macos:
+    generate: true
+    image_path: tool/generated/icons/app_icon_1024.png
+
+  windows:
+    generate: true
+    image_path: tool/generated/icons/app_icon_1024.png
+    icon_size: 256
+
+  linux:
+    generate: true
+    image_path: tool/generated/icons/app_icon_1024.png
   web:
     generate: true
 
