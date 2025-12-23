@@ -10,6 +10,7 @@ members = [
   "crates/nesium-blip",
   "crates/nesium-icon",
   "crates/nesium-runtime",
+  "crates/nesium-wasm",
 ]
 default-members = [
   "apps/nesium-egui",

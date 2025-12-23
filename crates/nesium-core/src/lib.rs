@@ -47,7 +47,7 @@ pub struct Nes {
     ram: cpu_ram::Ram,
     cartridge: Option<Cartridge>,
     mapper_provider: Option<Box<dyn Provider>>,
-    controllers: ControllerPorts,
+    pub controllers: ControllerPorts,
     last_frame: u32,
     /// Master PPU dot counter used to drive CPU/PPU/APU in lockstep (3 dots per CPU cycle).
     dot_counter: u64,

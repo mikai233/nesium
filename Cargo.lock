@@ -2986,6 +2986,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nesium-wasm"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "nesium-core",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "nix"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

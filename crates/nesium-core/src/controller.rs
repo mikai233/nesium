@@ -47,6 +47,17 @@ impl Controller {
         }
     }
 
+    pub fn set_state(&mut self, state: u8) {
+        self.state = state;
+        if self.strobe {
+            self.latched = self.state;
+        }
+    }
+
+    pub fn state(&self) -> u8 {
+        self.state
+    }
+
     /// Writes to `$4016` strobe bit (shared for both ports).
     pub fn write_strobe(&mut self, data: u8) {
         let strobe = (data & 0x01) != 0;

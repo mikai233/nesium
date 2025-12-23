@@ -1,0 +1,13 @@
+[package]
+name = "nesium-wasm"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nesium-core.workspace = true
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
