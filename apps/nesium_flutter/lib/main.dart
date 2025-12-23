@@ -1,41 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import 'package:path/path.dart' as p;
-
-import 'package:nesium_flutter/src/rust/frb_generated.dart';
+import 'package:nesium_flutter/platform/rust_runtime.dart';
 import 'app.dart';
-
-String _libFileName() {
-  if (Platform.isWindows) return 'nesium_flutter.dll';
-  if (Platform.isMacOS) return 'libnesium_flutter.dylib';
-  if (Platform.isLinux) return 'libnesium_flutter.so';
-  if (Platform.isAndroid) return 'libnesium_flutter.so';
-  throw UnsupportedError('Unsupported platform');
-}
-
-ExternalLibrary _openRustLibrary() {
-  final name = _libFileName();
-
-  if (Platform.isAndroid) {
-    return ExternalLibrary.open(name);
-  }
-
-  if (Platform.isMacOS) {
-    return ExternalLibrary.process(iKnowHowToUseIt: true);
-  }
-
-  final exeDir = File(Platform.resolvedExecutable).parent.path;
-  final libPath = p.join(exeDir, name);
-  return ExternalLibrary.open(libPath);
-}
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await RustLib.init(externalLibrary: _openRustLibrary());
-
+  await initRustRuntime();
   runApp(const ProviderScope(child: NesiumApp()));
 }
