@@ -12,10 +12,18 @@ This emulator’s design and implementation draw heavily from the excellent Mese
 - **APU Emulation**: Recreates sound processing with support for the NES sound channels.
 - **Compatibility**: Supports a variety of NES games, with ongoing improvements to compatibility and performance.
 
+
 ## Current Status
 
 - Active development with ongoing improvements to accuracy, performance, and compatibility.
 - Still in the early stages, but several key components are already functional.
+
+## UI frontends
+
+This repository currently ships **two** UI frontends:
+
+- **`nesium-egui`** (`apps/nesium-egui`) — A lightweight desktop frontend built with `egui`. It has a small footprint and provides the essentials for **quick debugging and development**.
+- **`nesium-flutter`** (`apps/nesium_flutter`) — A modern frontend built with **Flutter**. It aims for a more polished UI and broader cross‑platform reach than the `egui` app, but is typically **larger** and **more complex to build**, since it loads a native dynamic library produced by the Rust glue layer (`crates/nesium-flutter`).
 
 ## Mapper support
 
@@ -69,81 +77,81 @@ Legend:
 
 ### Automatically passing ROM suites (✅)
 
-| Suite name                  | Notes                                        | TASVideos accuracy-required |
-| --------------------------- | -------------------------------------------- | --------------------------- |
-| `_240pee_suite`             | TV colour diversity / timing test            | No                          |
-| `mmc1_a12_suite`            | MMC1 A12 line behaviour                      | No                          |
-| `apu_mixer_suite`           | APU mixer / TASVideos test set               | Yes                         |
-| `apu_reset_suite`           | APU reset behaviour                          | Yes                         |
-| `blargg_nes_cpu_test5_suite`| CPU precision tests                          | Yes                         |
+| Suite name                           | Notes                                        | TASVideos accuracy-required |
+| ------------------------------------ | -------------------------------------------- | --------------------------- |
+| `_240pee_suite`                      | TV colour diversity / timing test            | No                          |
+| `mmc1_a12_suite`                     | MMC1 A12 line behaviour                      | No                          |
+| `apu_mixer_suite`                    | APU mixer / TASVideos test set               | Yes                         |
+| `apu_reset_suite`                    | APU reset behaviour                          | Yes                         |
+| `blargg_nes_cpu_test5_suite`         | CPU precision tests                          | Yes                         |
 | `blargg_ppu_tests_2005_09_15b_suite` | PPU palette/VRAM/scrolling behaviour         | Yes                         |
-| `branch_timing_tests_suite` | Branch instruction timing (zero-page result) | Yes                         |
-| `cpu_dummy_reads_suite`     | CPU dummy read behaviour                     | Yes                         |
-| `cpu_dummy_writes_suite`    | CPU dummy write behaviour                    | Yes                         |
-| `cpu_reset_suite`           | Post-reset RAM/register state                | Yes                         |
-| `cpu_timing_test6_suite`    | TASVideos CPU timing (TV SHA1)               | Yes                         |
-| `instr_misc_suite`          | Misc instruction behaviour                   | Yes                         |
-| `instr_test_v3_suite`       | Blargg instruction test v3                   | Yes                         |
-| `instr_test_v5_suite`       | Blargg instruction test v5                   | Yes                         |
-| `instr_timing_suite`        | Instruction timing                           | Yes                         |
-| `nes_instr_test_suite`      | Additional instruction behaviour tests       | Yes                         |
-| `ny2011_suite`              | Visual diversity / timing                    | No                          |
-| `oam_read_suite`            | OAM read behaviour                           | Yes                         |
-| `oam_stress_suite`          | OAM stress / overflow conditions             | Yes                         |
-| `ppu_open_bus_suite`        | PPU open-bus behaviour                       | Yes                         |
-| `ppu_read_buffer_suite`     | PPU read buffer behaviour                    | Yes                         |
-| `ppu_vbl_nmi_suite`         | PPU VBL/NMI timing                           | Yes                         |
-| `sprite_hit_tests_2005_10_05_suite` | Sprite 0 hit timing and edge cases           | Yes                         |
+| `branch_timing_tests_suite`          | Branch instruction timing (zero-page result) | Yes                         |
+| `cpu_dummy_reads_suite`              | CPU dummy read behaviour                     | Yes                         |
+| `cpu_dummy_writes_suite`             | CPU dummy write behaviour                    | Yes                         |
+| `cpu_reset_suite`                    | Post-reset RAM/register state                | Yes                         |
+| `cpu_timing_test6_suite`             | TASVideos CPU timing (TV SHA1)               | Yes                         |
+| `instr_misc_suite`                   | Misc instruction behaviour                   | Yes                         |
+| `instr_test_v3_suite`                | Blargg instruction test v3                   | Yes                         |
+| `instr_test_v5_suite`                | Blargg instruction test v5                   | Yes                         |
+| `instr_timing_suite`                 | Instruction timing                           | Yes                         |
+| `nes_instr_test_suite`               | Additional instruction behaviour tests       | Yes                         |
+| `ny2011_suite`                       | Visual diversity / timing                    | No                          |
+| `oam_read_suite`                     | OAM read behaviour                           | Yes                         |
+| `oam_stress_suite`                   | OAM stress / overflow conditions             | Yes                         |
+| `ppu_open_bus_suite`                 | PPU open-bus behaviour                       | Yes                         |
+| `ppu_read_buffer_suite`              | PPU read buffer behaviour                    | Yes                         |
+| `ppu_vbl_nmi_suite`                  | PPU VBL/NMI timing                           | Yes                         |
+| `sprite_hit_tests_2005_10_05_suite`  | Sprite 0 hit timing and edge cases           | Yes                         |
 | `sprite_overflow_tests_suite`        | Sprite overflow behaviour                    | Yes                         |
-| `spritecans_2011_suite`     | Visual diversity / sprite stress             | No                          |
-| `stomper_suite`             | Visual diversity / timing                    | No                          |
-| `tutor_suite`               | Visual diversity / reference demo            | No                          |
-| `vbl_nmi_timing_suite`      | VBL/NMI timing (zeropage result)             | Yes                         |
-| `window5_suite`             | Colour windowing tests (NTSC/PAL)            | No                          |
+| `spritecans_2011_suite`              | Visual diversity / sprite stress             | No                          |
+| `stomper_suite`                      | Visual diversity / timing                    | No                          |
+| `tutor_suite`                        | Visual diversity / reference demo            | No                          |
+| `vbl_nmi_timing_suite`               | VBL/NMI timing (zeropage result)             | Yes                         |
+| `window5_suite`                      | Colour windowing tests (NTSC/PAL)            | No                          |
 
 ### Interactive / manual ROMs (🔶)
 
 These ROMs are designed for interactive/manual verification and do not expose a simple $6000 state byte or TV hash protocol. They are wired into the test harness but kept under `#[ignore]` and should be checked by hand.
 
-| Suite name             | Notes                                                                               | TASVideos accuracy-required |
-| ---------------------- | ----------------------------------------------------------------------------------- | --------------------------- |
-| `paddletest3_manual`   | Paddle/analog controller test; follow ROM `Info.txt` for instructions               | No                          |
-| `tvpassfail_manual`    | TV characteristics (NTSC chroma/luma, artifacts); verify visually                   | No                          |
-| `vaus_test_manual`     | Arkanoid Vaus controller test (interactive)                                         | No                          |
+| Suite name           | Notes                                                                 | TASVideos accuracy-required |
+| -------------------- | --------------------------------------------------------------------- | --------------------------- |
+| `paddletest3_manual` | Paddle/analog controller test; follow ROM `Info.txt` for instructions | No                          |
+| `tvpassfail_manual`  | TV characteristics (NTSC chroma/luma, artifacts); verify visually     | No                          |
+| `vaus_test_manual`   | Arkanoid Vaus controller test (interactive)                           | No                          |
 
 ### Failing / ignored ROM suites (❌)
 
 The following suites are currently marked with `#[ignore = "this test fails and needs investigation"]`. They highlight areas where Nesium’s behaviour still diverges from reference emulators and hardware.
 
-| Suite name                           | Notes                                        | TASVideos accuracy-required |
-| ------------------------------------ | -------------------------------------------- | --------------------------- |
-| `apu_test_suite`                     | APU accuracy tests (including `rom_singles`) | Yes                         |
-| `blargg_apu_2005_07_30_suite`        | Early Blargg APU tests                       | Yes                         |
-| `blargg_litewall_suite`              | Litewall / timing-related tests              | No                          |
-| `cpu_exec_space_suite`               | CPU exec space tests (APU/PPU I/O)           | Yes                         |
-| `cpu_interrupts_v2_suite`            | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
-| `dmc_dma_during_read4_suite`         | DMC DMA interaction with CPU read cycles     | Yes                         |
-| `dmc_tests_suite`                    | DMC buffer/delay/IRQ behaviour               | Yes                         |
-| `dpcmletterbox_suite`                | DPCM-related visual/audio test               | Yes                         |
-| `exram_suite`                        | MMC5 ExRAM behaviour (currently failing)     | No                          |
-| `full_palette_suite`                 | Full palette rendering and emphasis tests    | No                          |
-| `m22chrbankingtest_suite`            | Mapper 22 CHR banking behaviour              | No                          |
-| `mmc3_irq_tests_suite`               | MMC3 IRQ behaviour                           | Yes                         |
-| `mmc3_test_suite`                    | MMC3/MMC6 functional tests                   | Yes                         |
-| `mmc3_test_2_suite`                  | Second MMC3 test set                         | Yes                         |
-| `mmc5test_suite`                     | MMC5 functional tests                        | Yes                         |
-| `mmc5test_v2_suite`                  | MMC5 test set v2                             | Yes                         |
-| `nes15_1_0_0_suite`                  | `nes15` series tests (NTSC/PAL)              | Yes                         |
-| `nmi_sync_suite`                     | NMI sync behaviour                           | Yes                         |
-| `nrom368_suite`                      | NROM-368 mapping tests                       | No                          |
-| `other_suite`                        | Misc demos/tests bundled with nes-test-roms  | No                          |
-| `pal_apu_tests_suite`                | PAL APU behaviour                            | Yes                         |
-| `read_joy3_suite`                    | Controller read timing                       | Yes                         |
-| `scanline_suite`                     | Scanline timing                              | Yes                         |
-| `scanline_a1_suite`                  | Alternate scanline tests                     | Yes                         |
-| `scrolltest_suite`                   | Scrolling behaviour                          | Yes                         |
-| `sprdma_and_dmc_dma_suite`           | Sprite DMA and DMC DMA interaction           | Yes                         |
-| `volume_tests_suite`                 | Volume/mixing behaviour                      | Yes                         |
+| Suite name                    | Notes                                        | TASVideos accuracy-required |
+| ----------------------------- | -------------------------------------------- | --------------------------- |
+| `apu_test_suite`              | APU accuracy tests (including `rom_singles`) | Yes                         |
+| `blargg_apu_2005_07_30_suite` | Early Blargg APU tests                       | Yes                         |
+| `blargg_litewall_suite`       | Litewall / timing-related tests              | No                          |
+| `cpu_exec_space_suite`        | CPU exec space tests (APU/PPU I/O)           | Yes                         |
+| `cpu_interrupts_v2_suite`     | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
+| `dmc_dma_during_read4_suite`  | DMC DMA interaction with CPU read cycles     | Yes                         |
+| `dmc_tests_suite`             | DMC buffer/delay/IRQ behaviour               | Yes                         |
+| `dpcmletterbox_suite`         | DPCM-related visual/audio test               | Yes                         |
+| `exram_suite`                 | MMC5 ExRAM behaviour (currently failing)     | No                          |
+| `full_palette_suite`          | Full palette rendering and emphasis tests    | No                          |
+| `m22chrbankingtest_suite`     | Mapper 22 CHR banking behaviour              | No                          |
+| `mmc3_irq_tests_suite`        | MMC3 IRQ behaviour                           | Yes                         |
+| `mmc3_test_suite`             | MMC3/MMC6 functional tests                   | Yes                         |
+| `mmc3_test_2_suite`           | Second MMC3 test set                         | Yes                         |
+| `mmc5test_suite`              | MMC5 functional tests                        | Yes                         |
+| `mmc5test_v2_suite`           | MMC5 test set v2                             | Yes                         |
+| `nes15_1_0_0_suite`           | `nes15` series tests (NTSC/PAL)              | Yes                         |
+| `nmi_sync_suite`              | NMI sync behaviour                           | Yes                         |
+| `nrom368_suite`               | NROM-368 mapping tests                       | No                          |
+| `other_suite`                 | Misc demos/tests bundled with nes-test-roms  | No                          |
+| `pal_apu_tests_suite`         | PAL APU behaviour                            | Yes                         |
+| `read_joy3_suite`             | Controller read timing                       | Yes                         |
+| `scanline_suite`              | Scanline timing                              | Yes                         |
+| `scanline_a1_suite`           | Alternate scanline tests                     | Yes                         |
+| `scrolltest_suite`            | Scrolling behaviour                          | Yes                         |
+| `sprdma_and_dmc_dma_suite`    | Sprite DMA and DMC DMA interaction           | Yes                         |
+| `volume_tests_suite`          | Volume/mixing behaviour                      | Yes                         |
 
 ## Disclaimer
 
