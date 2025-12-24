@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [package.metadata.bundle]
 name = "Nesium"
-identifier = "com.mikai233.nesium"
+identifier = "io.github.mikai233.nesium.egui"
 icon = [
     "../../target/generated/nesium.icns",
     "../../target/generated/nesium.ico",

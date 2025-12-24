@@ -1,4 +1,4 @@
-package com.example.nesium_flutter
+package io.github.mikai233.nesium
 
 import io.flutter.embedding.android.FlutterActivity
 

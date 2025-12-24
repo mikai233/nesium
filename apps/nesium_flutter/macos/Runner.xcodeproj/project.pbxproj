@@ -524,7 +524,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.nesiumFlutter.RunnerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.mikai233.nesium.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/nesium_flutter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/nesium_flutter";
@@ -539,7 +539,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.nesiumFlutter.RunnerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.mikai233.nesium.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/nesium_flutter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/nesium_flutter";
@@ -554,7 +554,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.nesiumFlutter.RunnerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.mikai233.nesium.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/nesium_flutter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/nesium_flutter";
@@ -628,6 +628,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks",
 				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.mikai233.nesium;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -764,6 +765,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks",
 				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.mikai233.nesium;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -788,6 +790,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)/Frameworks",
 				);
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.mikai233.nesium;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
