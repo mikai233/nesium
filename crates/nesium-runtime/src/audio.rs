@@ -45,7 +45,7 @@ impl NesAudioPlayer {
         }
 
         let config: cpal::StreamConfig = supported_config.into();
-        let sample_rate = config.sample_rate.0;
+        let sample_rate = config.sample_rate;
         let channels = config.channels as usize;
 
         // Allocate ~0.2 seconds of audio in the ring buffer.
