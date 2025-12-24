@@ -1,0 +1,10 @@
+[package]
+name = "nesium-netplay"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+nesium-netproto.workspace = true
+clap = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["full"] }

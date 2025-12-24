@@ -11,6 +11,9 @@ members = [
   "crates/nesium-icon",
   "crates/nesium-runtime",
   "crates/nesium-wasm",
+  "crates/nesium-netplay",
+  "crates/nesium-netd",
+  "crates/nesium-netproto",
 ]
 default-members = [
   "apps/nesium-egui",
@@ -21,6 +24,9 @@ default-members = [
   "crates/nesium-blip",
   "crates/nesium-icon",
   "crates/nesium-runtime",
+  "crates/nesium-netplay",
+  "crates/nesium-netd",
+  "crates/nesium-netproto",
 ]
 
 [profile.test]
@@ -47,9 +53,10 @@ nesium-blip = { path = "crates/nesium-blip" }
 nesium-core = { path = "crates/nesium-core" }
 nesium-icon = { path = "crates/nesium-icon" }
 nesium-runtime = { path = "crates/nesium-runtime" }
+nesium-netproto = { path = "crates/nesium-netproto" }
 
 bitflags = "2.10.0"
-esp-idf-sys = "0.36"
+esp-idf-sys = "0.36.1"
 rand = "0.9.2"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.22"
@@ -58,28 +65,33 @@ ctor = "0.6.3"
 dyn-clone = "1.0.20"
 eframe = "0.33.3"
 flutter_rust_bridge = "=2.11.1"
-gilrs = "0.11"
+gilrs = "0.11.0"
 once_cell = "1.19"
 bindgen = "0.72"
 ureq = "2.9"
-bincode = "2.0.1"
-anyhow = "1.0"
-sdl2 = "0.35"
+serde = "1.0.228"
+postcard = "1.1.3"
+anyhow = "1.0.100"
+sdl2 = "0.35.2"
 egui_glow = "0.33.2"
-glow = "0.13"
-rfd = "0.16"
-fontdb = "0.23"
+glow = "0.13.1"
+rfd = "0.16.0"
+fontdb = "0.23.0"
 ttf-parser = "0.25"
 cpal = "0.16.0"
 ringbuf = "0.4.8"
 base64 = "0.22"
-quick-xml = "0.38"
-sha1 = "0.10"
-skia-safe = "0.91"
+quick-xml = "0.38.4"
+sha1 = "0.10.6"
+skia-safe = "0.91.0"
 wgpu = "27.0.1"
-ico = "0.5"
-winres = "0.1"
+ico = "0.5.0"
+winres = "0.1.12"
 png = "0.18"
 cc = "1"
-proptest = "1"
+proptest = "1.9.0"
 clap = "4.5.53"
+tokio = "1.48.0"
+thiserror = "2.0.17"
+strum = "0.27.2"
+bytes = "1.11.0"

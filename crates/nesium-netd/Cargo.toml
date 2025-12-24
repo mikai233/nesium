@@ -1,0 +1,13 @@
+[package]
+name = "nesium-netd"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+nesium-netproto.workspace = true
+tokio = { workspace = true, features = ["full"] }
+bytes.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+postcard = { workspace = true, features = ["use-std"] }
