@@ -33,7 +33,7 @@ dependencies:
   flutter_riverpod: ^3.0.3
   desktop_multi_window: ^0.3.0
   flutter_rust_bridge: 2.11.1
-  file_picker: ^10.3.7
+  file_picker: ^10.3.8
   path: ^1.9.1
 
   # The following adds the Cupertino Icons font to your application.
