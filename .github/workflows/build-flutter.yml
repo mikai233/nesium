@@ -78,6 +78,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Setup Android SDK (Android)
+        if: runner.os == 'Linux' && matrix.name == 'android'
+        uses: android-actions/setup-android@v3
+
       - name: Install cargo-ndk (Android)
         if: runner.os == 'Linux' && matrix.name == 'android'
         shell: bash
@@ -90,10 +94,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # GitHub-hosted runners usually have Android SDK, but may not have NDK.
+
+          # `android-actions/setup-android` ensures the Android SDK is present, but
+          # `sdkmanager` may still not be on PATH on some runner images.
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "${SDKMANAGER}" ]; then
+            if [ -n "${ANDROID_SDK_ROOT:-}" ]; then
+              SDKMANAGER="$(find "${ANDROID_SDK_ROOT}" -type f -name sdkmanager 2>/dev/null | head -n 1 || true)"
+            fi
+          fi
+          if [ -z "${SDKMANAGER}" ] && [ -n "${ANDROID_HOME:-}" ]; then
+            SDKMANAGER="$(find "${ANDROID_HOME}" -type f -name sdkmanager 2>/dev/null | head -n 1 || true)"
+          fi
+          if [ -z "${SDKMANAGER}" ]; then
+            echo "ERROR: sdkmanager not found"
+            echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
+            echo "ANDROID_HOME=${ANDROID_HOME:-}"
+            exit 1
+          fi
+
+          echo "Using sdkmanager at: ${SDKMANAGER}"
+
           # Install a known NDK version so `cargo ndk` can find it.
-          yes | sdkmanager --install "ndk;26.1.10909125"
-          sdkmanager --list_installed | grep -E "ndk;" || true
+          yes | "${SDKMANAGER}" --install "ndk;26.1.10909125"
+          "${SDKMANAGER}" --list_installed | grep -E "ndk;" || true
 
       - name: Flutter pub get
         working-directory: apps/nesium_flutter
