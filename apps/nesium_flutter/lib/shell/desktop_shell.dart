@@ -43,7 +43,6 @@ class DesktopShell extends StatelessWidget {
             ),
             Expanded(
               child: NesScreenView(
-                loading: state.loading,
                 error: state.error,
                 textureId: state.textureId,
               ),

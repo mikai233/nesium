@@ -1,32 +1,13 @@
 import 'package:flutter/material.dart';
 
 class NesScreenView extends StatelessWidget {
-  const NesScreenView({
-    super.key,
-    required this.loading,
-    required this.error,
-    required this.textureId,
-  });
+  const NesScreenView({super.key, this.error, required this.textureId});
 
-  final bool loading;
   final String? error;
   final int? textureId;
 
   @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('Initializing NES texture...'),
-          ],
-        ),
-      );
-    }
-
     if (error != null) {
       return Center(
         child: Column(
@@ -48,7 +29,7 @@ class NesScreenView extends StatelessWidget {
     }
 
     if (textureId == null) {
-      return const Center(child: Text('Texture ID is null (unexpected).'));
+      return const SizedBox.shrink();
     }
 
     return LayoutBuilder(

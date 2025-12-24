@@ -20,11 +20,7 @@ class PaneSwitcher extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (selectedPane) {
       case NesPane.console:
-        return NesScreenView(
-          loading: state.loading,
-          error: state.error,
-          textureId: state.textureId,
-        );
+        return NesScreenView(error: state.error, textureId: state.textureId);
       case NesPane.debugger:
         return const DebuggerPanel();
       case NesPane.tools:

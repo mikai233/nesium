@@ -13,12 +13,12 @@ class NesController extends Notifier<NesState> {
   }
 
   Future<void> initTexture() async {
-    state = state.copyWith(loading: true, clearError: true);
+    state = state.copyWith(clearError: true);
     try {
       final textureId = await _textureService.createTexture();
-      state = state.copyWith(loading: false, textureId: textureId);
+      state = state.copyWith(textureId: textureId);
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(error: e.toString());
     }
   }
 }
