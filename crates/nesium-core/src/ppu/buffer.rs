@@ -91,6 +91,8 @@ pub struct ExternalFrameHandle {
     planes: [NonNull<u8>; 2],
     len: usize,
     front_index: AtomicUsize,
+    /// Monotonic frame counter incremented each time the core presents a new front buffer.
+    frame_seq: AtomicUsize,
     /// Which plane the frontend is currently copying from (0/1), or 2 when idle.
     reading_plane: AtomicUsize,
 }
@@ -110,6 +112,15 @@ impl ExternalFrameHandle {
         self.front_index.load(Ordering::Acquire)
     }
 
+    /// Monotonic frame sequence number.
+    ///
+    /// This value is incremented each time the core thread calls [`present`].
+    /// Frontends can use it to detect new frames without comparing buffers.
+    #[inline]
+    pub fn frame_seq(&self) -> usize {
+        self.frame_seq.load(Ordering::Acquire)
+    }
+
     /// Returns the current **front** plane as an immutable slice.
     #[inline]
     pub fn front_slice(&self) -> &[u8] {
@@ -125,10 +136,15 @@ impl ExternalFrameHandle {
     }
 
     /// Publish `index` as the new **front** plane.
+    ///
+    /// This also bumps the [`frame_seq`] so the frontend can observe that a new
+    /// frame has been presented.
     #[inline]
     pub fn present(&self, index: usize) {
         debug_assert!(index < 2);
         self.front_index.store(index, Ordering::Release);
+        // Increment after publishing the front index.
+        self.frame_seq.fetch_add(1, Ordering::Release);
     }
 
     #[inline]
@@ -267,6 +283,7 @@ impl FrameBuffer {
             planes,
             len,
             front_index: AtomicUsize::new(0),
+            frame_seq: AtomicUsize::new(0),
             reading_plane: AtomicUsize::new(ExternalFrameHandle::NOT_READING),
         });
 
