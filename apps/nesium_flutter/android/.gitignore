@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Prebuilt native library for nesium
+app/src/main/jniLibs/**/libnesium_flutter.so

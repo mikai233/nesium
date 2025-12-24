@@ -16,3 +16,7 @@ nesium-core.workspace = true
 flutter_rust_bridge.workspace = true
 anyhow.workspace = true
 nesium-runtime.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni.workspace = true
+ndk-context.workspace = true

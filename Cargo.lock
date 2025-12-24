@@ -3036,6 +3036,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "flutter_rust_bridge",
+ "jni",
+ "ndk-context",
  "nesium-core",
  "nesium-runtime",
 ]
