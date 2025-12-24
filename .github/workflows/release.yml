@@ -71,6 +71,7 @@ jobs:
               with:
                   tag_name: ${{ needs.setup.outputs.release_tag }}
                   prerelease: ${{ contains(needs.setup.outputs.release_tag, '-') }}
+                  generate_release_notes: true
                   files: |
                       # --- Nesium Egui (Native) ---
                       artifacts/**/nesium-egui-*.deb
