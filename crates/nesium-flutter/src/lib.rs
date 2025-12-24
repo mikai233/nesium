@@ -7,6 +7,8 @@
 //! - The macOS runner registers a frame-ready callback and copies the
 //!   latest buffer into a CVPixelBuffer.
 
+#[cfg(target_os = "android")]
+mod android;
 pub mod api;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 
@@ -208,75 +210,4 @@ pub unsafe extern "C" fn nesium_copy_frame(
     }
 
     frame_handle.end_front_copy();
-}
-
-/// Android-specific initialization module.
-///
-/// Compiled only on Android. Kotlin calls the exported JNI symbol to pass an
-/// Android `Context` into Rust so native dependencies can access Android
-/// system services via `ndk_context`.
-#[cfg(target_os = "android")]
-#[allow(non_snake_case)] // JNI symbol names are fixed by convention.
-mod android_init {
-    use jni::JNIEnv;
-    use jni::objects::{GlobalRef, JObject};
-    use std::{ffi::c_void, sync::OnceLock};
-
-    /// A process-wide global reference to an Android `Context`.
-    ///
-    /// Keeping a `GlobalRef` alive prevents the JVM from collecting the object
-    /// while native code still holds its raw `jobject` pointer.
-    static GLOBAL_CONTEXT: OnceLock<GlobalRef> = OnceLock::new();
-
-    /// Ensures `ndk_context::initialize_android_context` runs at most once.
-    ///
-    /// Flutter/Android may recreate the Activity (configuration changes, hot restart,
-    /// etc.). From the native runtime's perspective, initialization should be
-    /// effectively idempotent, so we guard it here.
-    static NDK_CONTEXT_INIT: OnceLock<()> = OnceLock::new();
-
-    /// JNI entry point called from Kotlin.
-    ///
-    /// Target Kotlin Class:  `io.github.mikai233.nesium.MainActivity`
-    /// Target Kotlin Method: `init_android_context(context: Context)`
-    ///
-    /// Naming rules:
-    /// - `.` in package names becomes `_`
-    /// - `_` in identifiers becomes `_1`
-    #[unsafe(no_mangle)]
-    pub unsafe extern "system" fn Java_io_github_mikai233_nesium_MainActivity_init_1android_1context(
-        env: JNIEnv,
-        _class: JObject,
-        context: JObject,
-    ) {
-        // 1) Capture the JavaVM pointer.
-        //
-        // Some native libraries attach native threads to the JVM; `ndk_context`
-        // stores this pointer globally.
-        let java_vm = env
-            .get_java_vm()
-            .expect("Failed to retrieve JavaVM instance");
-        let vm_ptr = java_vm.get_java_vm_pointer() as *mut c_void;
-
-        // 2) Promote the passed `Context` into a JVM GlobalRef.
-        //
-        // This yields a stable `jobject` for `ndk_context` as long as the GlobalRef lives.
-        let global = GLOBAL_CONTEXT.get_or_init(|| {
-            env.new_global_ref(&context)
-                .expect("Failed to create global reference for Context")
-        });
-
-        let context_ptr = global.as_raw() as *mut c_void;
-
-        // 3) Initialize `ndk_context` once per process.
-        //
-        // Repeated calls are ignored.
-        NDK_CONTEXT_INIT.get_or_init(|| {
-            // SAFETY: Pointers are backed by the process-wide GlobalRef and JavaVM.
-            unsafe {
-                ndk_context::initialize_android_context(vm_ptr, context_ptr);
-            }
-            println!("[Rust] Android Context initialized via ndk-context");
-        });
-    }
 }
