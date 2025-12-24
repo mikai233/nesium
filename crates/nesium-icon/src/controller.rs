@@ -26,9 +26,9 @@ impl ControllerGeom {
         let center = Point::new(WIDTH as f32 / 2.0, HEIGHT as f32 / 2.0);
 
         // Controller body size
-        let w = 780.0;
-        let h = 340.0;
-        let r = 60.0;
+        let w = 819.;
+        let h = 357.;
+        let r = 63.;
 
         let rect = Rect::from_xywh(center.x - w / 2.0, center.y - h / 2.0, w, h);
         let rrect = RRect::new_rect_xy(rect, r, r);

@@ -163,7 +163,7 @@ fn render_base_layers() -> Result<(Surface, Surface), String> {
     let mut fg = raster_n32_premul((WIDTH, HEIGHT)).ok_or("Failed to create surface")?;
 
     draw_background(bg.canvas());
-    draw_dashed_ring(bg.canvas());
+    draw_dashed_ring(fg.canvas());
     draw_controller(fg.canvas());
 
     Ok((bg, fg))
