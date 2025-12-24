@@ -167,7 +167,7 @@ fn read_u16_le(buf: &[u8], start: usize) -> Result<u16, ProtoError> {
 #[cfg(test)]
 mod tests {
     use super::Header;
-    use crate::constants::HEADER_LEN;
+    use crate::constants::{HEADER_LEN, MAGIC};
 
     #[test]
     fn header_len_is_locked() {
@@ -192,7 +192,7 @@ mod tests {
         let mut buf = [0u8; HEADER_LEN];
         h.encode_into(&mut buf);
 
-        assert_eq!(&buf[0..2], b"NP");
+        assert_eq!(&buf[0..2], &MAGIC);
         assert_eq!(buf[2], h.version);
         assert_eq!(buf[3], h.msg_id);
         assert_eq!(buf[4], h.flags);

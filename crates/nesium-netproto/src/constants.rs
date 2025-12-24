@@ -28,4 +28,3 @@ pub const MAX_TCP_CONTROL_FRAME: usize = 4096;
 /// `[u16 frame_len_le][Header][Payload]`,
 /// where `frame_len_le` is the length of `[Header][Payload]` in bytes.
 pub const TCP_LEN_PREFIX: usize = 2;
-
