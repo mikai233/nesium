@@ -1,8 +1,15 @@
 version: 2
 updates:
-- package-ecosystem: cargo
-  directory: "/"
-  schedule:
-    interval: daily
-    time: "04:00"
-  open-pull-requests-limit: 10
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "04:00"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "pub"
+    directory: "/apps/nesium_flutter"
+    schedule:
+      interval: "daily"
+      time: "04:30"
+    open-pull-requests-limit: 10
