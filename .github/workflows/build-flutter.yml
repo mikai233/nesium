@@ -78,6 +78,23 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Install cargo-ndk (Android)
+        if: runner.os == 'Linux' && matrix.name == 'android'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo install cargo-ndk --locked
+
+      - name: Install Android NDK (Android)
+        if: runner.os == 'Linux' && matrix.name == 'android'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GitHub-hosted runners usually have Android SDK, but may not have NDK.
+          # Install a known NDK version so `cargo ndk` can find it.
+          yes | sdkmanager --install "ndk;26.1.10909125"
+          sdkmanager --list_installed | grep -E "ndk;" || true
+
       - name: Flutter pub get
         working-directory: apps/nesium_flutter
         shell: bash
