@@ -4,8 +4,8 @@ name: Security and Dependency Audit
 on:
   pull_request:
     paths:
-      - '**/Cargo.toml'
-      - '**/Cargo.lock'
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
   push:
     branches:
       - "**"
@@ -31,8 +31,8 @@ jobs:
     # Do not fail the workflow on PR to avoid blocking
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     permissions:
-      issues: write   # required to create issues if vulnerabilities are found
-      checks: write   # required to create check runs
+      issues: write # required to create issues if vulnerabilities are found
+      checks: write # required to create check runs
     steps:
       # Checkout the repository
       - name: Checkout repository
@@ -59,8 +59,8 @@ jobs:
           - licenses
           - sources
     permissions:
-      issues: write   # required to create issues if violations are found
-      checks: write   # required to create check runs
+      issues: write # required to create issues if violations are found
+      checks: write # required to create check runs
     steps:
       # Checkout repository
       - uses: actions/checkout@v4

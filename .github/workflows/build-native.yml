@@ -1,406 +1,406 @@
 name: Reusable Native Build
 
 on:
-    workflow_call:
-        inputs:
-            release_tag:
-                description: "The version tag for the release"
-                required: true
-                type: string
+  workflow_call:
+    inputs:
+      release_tag:
+        description: "The version tag for the release"
+        required: true
+        type: string
 
 env:
-    CARGO_TERM_COLOR: always
-    # Map input to env so scripts don't need changing
-    RELEASE_TAG: ${{ inputs.release_tag }}
+  CARGO_TERM_COLOR: always
+  # Map input to env so scripts don't need changing
+  RELEASE_TAG: ${{ inputs.release_tag }}
 
 jobs:
-    build-native:
-        name: Native ${{ matrix.name }}
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - name: linux-x86_64-deb
-                      os: ubuntu-24.04
-                      target: x86_64-unknown-linux-gnu
-                      bundle_format: deb
-                      asset_ext: deb
-                      asset_suffix: Ubuntu24.04
+  build-native:
+    name: Native ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64-deb
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            bundle_format: deb
+            asset_ext: deb
+            asset_suffix: Ubuntu24.04
 
-                    - name: linux-x86_64-appimage
-                      os: ubuntu-24.04
-                      target: x86_64-unknown-linux-gnu
-                      bundle_format: appimage
-                      asset_ext: AppImage
-                      asset_suffix: Ubuntu24.04
+          - name: linux-x86_64-appimage
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            bundle_format: appimage
+            asset_ext: AppImage
+            asset_suffix: Ubuntu24.04
 
-                    - name: linux-aarch64-deb
-                      os: ubuntu-24.04-arm
-                      target: aarch64-unknown-linux-gnu
-                      bundle_format: deb
-                      asset_ext: deb
-                      asset_suffix: Ubuntu24.04-arm64
+          - name: linux-aarch64-deb
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            bundle_format: deb
+            asset_ext: deb
+            asset_suffix: Ubuntu24.04-arm64
 
-                    - name: windows-x86_64-msi
-                      os: windows-latest
-                      target: x86_64-pc-windows-msvc
-                      msvc_arch: amd64
-                      bundle_format: msi
-                      asset_ext: msi
-                      asset_suffix: windows-x86_64
+          - name: windows-x86_64-msi
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            msvc_arch: amd64
+            bundle_format: msi
+            asset_ext: msi
+            asset_suffix: windows-x86_64
 
-                    - name: windows-aarch64-msi
-                      os: windows-latest
-                      target: aarch64-pc-windows-msvc
-                      msvc_arch: amd64_arm64
-                      bundle_format: msi
-                      asset_ext: msi
-                      asset_suffix: windows-arm64
+          - name: windows-aarch64-msi
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            msvc_arch: amd64_arm64
+            bundle_format: msi
+            asset_ext: msi
+            asset_suffix: windows-arm64
 
-                    - name: macos-universal-dmg
-                      os: macos-latest
-                      asset_ext: dmg
-                      asset_suffix: macos-universal
+          - name: macos-universal-dmg
+            os: macos-latest
+            asset_ext: dmg
+            asset_suffix: macos-universal
 
-        runs-on: ${{ matrix.os }}
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-            - name: Setup Rust
-              uses: dtolnay/rust-toolchain@master
-              with:
-                  toolchain: stable
-                  components: rustfmt
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
 
-            - name: Setup MSVC env (Windows)
-              if: runner.os == 'Windows'
-              uses: ilammy/msvc-dev-cmd@v1
-              with:
-                  arch: ${{ matrix.msvc_arch }}
+      - name: Setup MSVC env (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc_arch }}
 
-            - name: Cache cargo artifacts
-              uses: Swatinem/rust-cache@v2
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
 
-            - name: Install system development libraries (Linux)
-              if: runner.os == 'Linux'
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y \
-                    pkg-config \
-                    libasound2-dev \
-                    libudev-dev \
-                    libfreetype6-dev \
-                    libfontconfig1-dev \
-                    fakeroot \
-                    dpkg-dev \
-                    patchelf \
-                    libfuse2
+      - name: Install system development libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libasound2-dev \
+            libudev-dev \
+            libfreetype6-dev \
+            libfontconfig1-dev \
+            fakeroot \
+            dpkg-dev \
+            patchelf \
+            libfuse2
 
-            - name: Install cargo-bundle
-              uses: taiki-e/install-action@v2
-              with:
-                  tool: cargo-bundle
+      - name: Install cargo-bundle
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-bundle
 
-            - name: Install WiX Toolset (Windows)
-              if: runner.os == 'Windows'
-              shell: pwsh
-              run: choco install wixtoolset -y
+      - name: Install WiX Toolset (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install wixtoolset -y
 
-            - name: Create dist directory
-              shell: bash
-              run: mkdir -p dist
+      - name: Create dist directory
+        shell: bash
+        run: mkdir -p dist
 
-            # ===================================================
-            # LINUX DEB & PORTABLE BUNDLING
-            # ===================================================
-            - name: Bundle installer + portable (Linux)
-              if: runner.os == 'Linux' && matrix.bundle_format == 'deb'
-              shell: bash
-              run: |
-                  rustup target add "${{ matrix.target }}"
-                  cargo bundle -p nesium-egui --profile release-dist --target "${{ matrix.target }}" --format "${{ matrix.bundle_format }}"
+      # ===================================================
+      # LINUX DEB & PORTABLE BUNDLING
+      # ===================================================
+      - name: Bundle installer + portable (Linux)
+        if: runner.os == 'Linux' && matrix.bundle_format == 'deb'
+        shell: bash
+        run: |
+          rustup target add "${{ matrix.target }}"
+          cargo bundle -p nesium-egui --profile release-dist --target "${{ matrix.target }}" --format "${{ matrix.bundle_format }}"
 
-                  installer="nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
-                  found="$(find target -path '*/bundle/*' -type f -name "*.${{ matrix.asset_ext }}" | head -n 1)"
-                  if [ -z "$found" ]; then
-                    echo "No bundle output found under target/**/bundle/**"
-                    find target -maxdepth 6 -type d -name bundle -print || true
-                    exit 1
-                  fi
+          installer="nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          found="$(find target -path '*/bundle/*' -type f -name "*.${{ matrix.asset_ext }}" | head -n 1)"
+          if [ -z "$found" ]; then
+            echo "No bundle output found under target/**/bundle/**"
+            find target -maxdepth 6 -type d -name bundle -print || true
+            exit 1
+          fi
 
-                  cp "$found" "dist/$installer"
-                  (cd dist && sha256sum "$installer" > "$installer.sha256")
+          cp "$found" "dist/$installer"
+          (cd dist && sha256sum "$installer" > "$installer.sha256")
 
-                  exe="target/${{ matrix.target }}/release-dist/nesium_egui"
-                  if [ ! -f "$exe" ]; then
-                    echo "Expected binary not found at $exe"
-                    ls -la "target/${{ matrix.target }}/release-dist" || true
-                    exit 1
-                  fi
+          exe="target/${{ matrix.target }}/release-dist/nesium_egui"
+          if [ ! -f "$exe" ]; then
+            echo "Expected binary not found at $exe"
+            ls -la "target/${{ matrix.target }}/release-dist" || true
+            exit 1
+          fi
 
-                  mkdir -p dist/portable
-                  cp "$exe" dist/portable/
-                  cp README.md LICENSE.md dist/portable/ 2>/dev/null || true
-                  tar -czf "dist/nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" -C dist/portable .
-                  (cd dist && sha256sum "nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" > "nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz.sha256")
+          mkdir -p dist/portable
+          cp "$exe" dist/portable/
+          cp README.md LICENSE.md dist/portable/ 2>/dev/null || true
+          tar -czf "dist/nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" -C dist/portable .
+          (cd dist && sha256sum "nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" > "nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz.sha256")
 
-                  # Libretro core package
-                  cargo build -p nesium-libretro --profile release-dist --target "${{ matrix.target }}"
-                  core_src="target/${{ matrix.target }}/release-dist/libnesium_libretro.so"
-                  if [ ! -f "$core_src" ]; then
-                    echo "Expected libretro core not found at $core_src"
-                    exit 1
-                  fi
+          # Libretro core package
+          cargo build -p nesium-libretro --profile release-dist --target "${{ matrix.target }}"
+          core_src="target/${{ matrix.target }}/release-dist/libnesium_libretro.so"
+          if [ ! -f "$core_src" ]; then
+            echo "Expected libretro core not found at $core_src"
+            exit 1
+          fi
 
-                  rm -rf dist/libretro
-                  mkdir -p dist/libretro
-                  cp "$core_src" dist/libretro/nesium_libretro.so
-                  cp "crates/nesium-libretro/nesium_libretro.info" dist/libretro/
-                  cp "crates/nesium-libretro/README.md" dist/libretro/README.md
-                  cp "LICENSE.md" dist/libretro/ 2>/dev/null || true
+          rm -rf dist/libretro
+          mkdir -p dist/libretro
+          cp "$core_src" dist/libretro/nesium_libretro.so
+          cp "crates/nesium-libretro/nesium_libretro.info" dist/libretro/
+          cp "crates/nesium-libretro/README.md" dist/libretro/README.md
+          cp "LICENSE.md" dist/libretro/ 2>/dev/null || true
 
-                  tar -czf "dist/nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz" -C dist/libretro .
-                  (cd dist && sha256sum "nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz" > "nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz.sha256")
+          tar -czf "dist/nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz" -C dist/libretro .
+          (cd dist && sha256sum "nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz" > "nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz.sha256")
 
-            # ===================================================
-            # LINUX APPIMAGE BUNDLING
-            # ===================================================
-            - name: Build AppImage (Linux)
-              if: runner.os == 'Linux' && matrix.bundle_format == 'appimage'
-              shell: bash
-              run: |
-                  rustup target add "${{ matrix.target }}"
-                  cargo build -p nesium-egui --profile release-dist --target "${{ matrix.target }}"
+      # ===================================================
+      # LINUX APPIMAGE BUNDLING
+      # ===================================================
+      - name: Build AppImage (Linux)
+        if: runner.os == 'Linux' && matrix.bundle_format == 'appimage'
+        shell: bash
+        run: |
+          rustup target add "${{ matrix.target }}"
+          cargo build -p nesium-egui --profile release-dist --target "${{ matrix.target }}"
 
-                  exe="target/${{ matrix.target }}/release-dist/nesium_egui"
-                  if [ ! -f "$exe" ]; then
-                    echo "Expected binary not found at $exe"
-                    exit 1
-                  fi
+          exe="target/${{ matrix.target }}/release-dist/nesium_egui"
+          if [ ! -f "$exe" ]; then
+            echo "Expected binary not found at $exe"
+            exit 1
+          fi
 
-                  appdir="Nesium.AppDir"
-                  rm -rf "$appdir"
-                  mkdir -p "$appdir/usr/bin" "$appdir/usr/share/applications" "$appdir/usr/share/icons/hicolor/256x256/apps"
+          appdir="Nesium.AppDir"
+          rm -rf "$appdir"
+          mkdir -p "$appdir/usr/bin" "$appdir/usr/share/applications" "$appdir/usr/share/icons/hicolor/256x256/apps"
 
-                  cp "$exe" "$appdir/usr/bin/nesium_egui"
+          cp "$exe" "$appdir/usr/bin/nesium_egui"
 
-                  icon_src=""
-                  if [ -f "target/generated/nesium.png" ]; then
-                    icon_src="target/generated/nesium.png"
-                  elif [ -f "apps/nesium-egui/assets/icons/nesium.png" ]; then
-                    icon_src="apps/nesium-egui/assets/icons/nesium.png"
-                  fi
+          icon_src=""
+          if [ -f "target/generated/nesium.png" ]; then
+            icon_src="target/generated/nesium.png"
+          elif [ -f "apps/nesium-egui/assets/icons/nesium.png" ]; then
+            icon_src="apps/nesium-egui/assets/icons/nesium.png"
+          fi
 
-                  if [ -n "$icon_src" ]; then
-                    cp "$icon_src" "$appdir/nesium.png"
-                    cp "$icon_src" "$appdir/usr/share/icons/hicolor/256x256/apps/nesium.png"
-                  fi
+          if [ -n "$icon_src" ]; then
+            cp "$icon_src" "$appdir/nesium.png"
+            cp "$icon_src" "$appdir/usr/share/icons/hicolor/256x256/apps/nesium.png"
+          fi
 
-                  cat > "$appdir/nesium.desktop" <<'EOF'
-                  [Desktop Entry]
-                  Type=Application
-                  Name=Nesium
-                  Exec=nesium_egui
-                  Icon=nesium
-                  Categories=Game;
-                  Terminal=false
-                  EOF
-                  cp "$appdir/nesium.desktop" "$appdir/usr/share/applications/nesium.desktop"
+          cat > "$appdir/nesium.desktop" <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Nesium
+          Exec=nesium_egui
+          Icon=nesium
+          Categories=Game;
+          Terminal=false
+          EOF
+          cp "$appdir/nesium.desktop" "$appdir/usr/share/applications/nesium.desktop"
 
-                  cat > "$appdir/AppRun" <<'EOF'
-                  #!/bin/sh
-                  HERE="$(dirname "$(readlink -f "$0")")"
-                  exec "$HERE/usr/bin/nesium_egui" "$@"
-                  EOF
-                  chmod +x "$appdir/AppRun"
+          cat > "$appdir/AppRun" <<'EOF'
+          #!/bin/sh
+          HERE="$(dirname "$(readlink -f "$0")")"
+          exec "$HERE/usr/bin/nesium_egui" "$@"
+          EOF
+          chmod +x "$appdir/AppRun"
 
-                  curl -L -o appimagetool-x86_64.AppImage \
-                    https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-                  chmod +x appimagetool-x86_64.AppImage
+          curl -L -o appimagetool-x86_64.AppImage \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
 
-                  out="dist/nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
-                  ARCH=x86_64 ./appimagetool-x86_64.AppImage "$appdir" "$out"
+          out="dist/nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage "$appdir" "$out"
 
-                  (cd dist && sha256sum "$(basename "$out")" > "$(basename "$out").sha256")
+          (cd dist && sha256sum "$(basename "$out")" > "$(basename "$out").sha256")
 
-            # ===================================================
-            # MACOS DMG UNIVERSAL BUNDLING
-            # ===================================================
-            - name: Bundle app + create dmg (macOS universal)
-              if: runner.os == 'macOS'
-              shell: bash
-              working-directory: apps/nesium-egui
-              run: |
-                  ROOT="${GITHUB_WORKSPACE}"
-                  DIST="$ROOT/dist"
-                  TARGET_DIR="$ROOT/target"
+      # ===================================================
+      # MACOS DMG UNIVERSAL BUNDLING
+      # ===================================================
+      - name: Bundle app + create dmg (macOS universal)
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: apps/nesium-egui
+        run: |
+          ROOT="${GITHUB_WORKSPACE}"
+          DIST="$ROOT/dist"
+          TARGET_DIR="$ROOT/target"
 
-                  rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
-                  cargo bundle -p nesium-egui --profile release-dist --target aarch64-apple-darwin --format osx
-                  cargo bundle -p nesium-egui --profile release-dist --target x86_64-apple-darwin --format osx
+          cargo bundle -p nesium-egui --profile release-dist --target aarch64-apple-darwin --format osx
+          cargo bundle -p nesium-egui --profile release-dist --target x86_64-apple-darwin --format osx
 
-                  app_arm="$(ls -d "$TARGET_DIR/aarch64-apple-darwin/release-dist/bundle/osx"/*.app | head -n 1)"
-                  app_x86="$(ls -d "$TARGET_DIR/x86_64-apple-darwin/release-dist/bundle/osx"/*.app | head -n 1)"
+          app_arm="$(ls -d "$TARGET_DIR/aarch64-apple-darwin/release-dist/bundle/osx"/*.app | head -n 1)"
+          app_x86="$(ls -d "$TARGET_DIR/x86_64-apple-darwin/release-dist/bundle/osx"/*.app | head -n 1)"
 
-                  rm -rf "$ROOT/dmg-src" "$DIST/portable"
-                  mkdir -p "$ROOT/dmg-src"
-                  cp -R "$app_arm" "$ROOT/dmg-src/"
+          rm -rf "$ROOT/dmg-src" "$DIST/portable"
+          mkdir -p "$ROOT/dmg-src"
+          cp -R "$app_arm" "$ROOT/dmg-src/"
 
-                  app_name="$(basename "$app_arm")"
-                  app_dst="$ROOT/dmg-src/$app_name"
+          app_name="$(basename "$app_arm")"
+          app_dst="$ROOT/dmg-src/$app_name"
 
-                  exe_arm="$(ls "$app_arm/Contents/MacOS" | head -n 1)"
-                  exe_x86="$(ls "$app_x86/Contents/MacOS" | head -n 1)"
-                  exe_dst="$(ls "$app_dst/Contents/MacOS" | head -n 1)"
+          exe_arm="$(ls "$app_arm/Contents/MacOS" | head -n 1)"
+          exe_x86="$(ls "$app_x86/Contents/MacOS" | head -n 1)"
+          exe_dst="$(ls "$app_dst/Contents/MacOS" | head -n 1)"
 
-                  lipo -create \
-                    "$app_arm/Contents/MacOS/$exe_arm" \
-                    "$app_x86/Contents/MacOS/$exe_x86" \
-                    -output "$app_dst/Contents/MacOS/$exe_dst"
+          lipo -create \
+            "$app_arm/Contents/MacOS/$exe_arm" \
+            "$app_x86/Contents/MacOS/$exe_x86" \
+            -output "$app_dst/Contents/MacOS/$exe_dst"
 
-                  ln -s /Applications "$ROOT/dmg-src/Applications"
+          ln -s /Applications "$ROOT/dmg-src/Applications"
 
-                  dmg_rw="$DIST/nesium-egui-${RELEASE_TAG}-macos-universal-rw.dmg"
-                  dmg="$DIST/nesium-egui-${RELEASE_TAG}-macos-universal.dmg"
-                  vol="Nesium"
+          dmg_rw="$DIST/nesium-egui-${RELEASE_TAG}-macos-universal-rw.dmg"
+          dmg="$DIST/nesium-egui-${RELEASE_TAG}-macos-universal.dmg"
+          vol="Nesium"
 
-                  hdiutil create -volname "$vol" -srcfolder "$ROOT/dmg-src" -ov -format UDRW "$dmg_rw"
-                  attach_out="$(hdiutil attach -readwrite -noverify -noautoopen "$dmg_rw")"
-                  mount_dir="$(echo "$attach_out" | grep -Eo '/Volumes/[^ ]+' | head -n 1)"
-                  if [ -z "$mount_dir" ]; then
-                    echo "Failed to detect mount directory from hdiutil output"
-                    exit 1
-                  fi
-                  vol_name="$(basename "$mount_dir")"
+          hdiutil create -volname "$vol" -srcfolder "$ROOT/dmg-src" -ov -format UDRW "$dmg_rw"
+          attach_out="$(hdiutil attach -readwrite -noverify -noautoopen "$dmg_rw")"
+          mount_dir="$(echo "$attach_out" | grep -Eo '/Volumes/[^ ]+' | head -n 1)"
+          if [ -z "$mount_dir" ]; then
+            echo "Failed to detect mount directory from hdiutil output"
+            exit 1
+          fi
+          vol_name="$(basename "$mount_dir")"
 
-                  if command -v SetFile >/dev/null 2>&1; then
-                    if [ -f "$TARGET_DIR/generated/nesium.icns" ]; then
-                      cp "$TARGET_DIR/generated/nesium.icns" "$mount_dir/.VolumeIcon.icns"
-                      SetFile -a V "$mount_dir/.VolumeIcon.icns" || true
-                      SetFile -a C "$mount_dir" || true
-                    else
-                      echo "Missing .icns; skip setting DMG volume icon"
-                    fi
-                  else
-                    echo "SetFile not available; skip setting DMG volume icon"
-                  fi
+          if command -v SetFile >/dev/null 2>&1; then
+            if [ -f "$TARGET_DIR/generated/nesium.icns" ]; then
+              cp "$TARGET_DIR/generated/nesium.icns" "$mount_dir/.VolumeIcon.icns"
+              SetFile -a V "$mount_dir/.VolumeIcon.icns" || true
+              SetFile -a C "$mount_dir" || true
+            else
+              echo "Missing .icns; skip setting DMG volume icon"
+            fi
+          else
+            echo "SetFile not available; skip setting DMG volume icon"
+          fi
 
-                  osascript \
-                    -e 'tell application "Finder"' \
-                    -e "tell disk \"$vol_name\"" \
-                    -e 'open' \
-                    -e 'set current view of container window to icon view' \
-                    -e 'set toolbar visible of container window to false' \
-                    -e 'set statusbar visible of container window to false' \
-                    -e 'set the bounds of container window to {100, 100, 740, 500}' \
-                    -e 'set viewOptions to the icon view options of container window' \
-                    -e 'set arrangement of viewOptions to not arranged' \
-                    -e 'set icon size of viewOptions to 128' \
-                    -e 'set text size of viewOptions to 12' \
-                    -e "set position of item \"$app_name\" of container window to {190, 250}" \
-                    -e 'set position of item "Applications" of container window to {550, 250}' \
-                    -e 'close' \
-                    -e 'open' \
-                    -e 'update without registering applications' \
-                    -e 'delay 1' \
-                    -e 'end tell' \
-                    -e 'end tell'
+          osascript \
+            -e 'tell application "Finder"' \
+            -e "tell disk \"$vol_name\"" \
+            -e 'open' \
+            -e 'set current view of container window to icon view' \
+            -e 'set toolbar visible of container window to false' \
+            -e 'set statusbar visible of container window to false' \
+            -e 'set the bounds of container window to {100, 100, 740, 500}' \
+            -e 'set viewOptions to the icon view options of container window' \
+            -e 'set arrangement of viewOptions to not arranged' \
+            -e 'set icon size of viewOptions to 128' \
+            -e 'set text size of viewOptions to 12' \
+            -e "set position of item \"$app_name\" of container window to {190, 250}" \
+            -e 'set position of item "Applications" of container window to {550, 250}' \
+            -e 'close' \
+            -e 'open' \
+            -e 'update without registering applications' \
+            -e 'delay 1' \
+            -e 'end tell' \
+            -e 'end tell'
 
-                  sync
-                  hdiutil detach "$mount_dir"
-                  hdiutil convert "$dmg_rw" -format UDZO -o "$dmg"
-                  rm -f "$dmg_rw"
+          sync
+          hdiutil detach "$mount_dir"
+          hdiutil convert "$dmg_rw" -format UDZO -o "$dmg"
+          rm -f "$dmg_rw"
 
-                  mkdir -p "$DIST/portable"
-                  cp -R "$app_dst" "$DIST/portable/"
-                  cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DIST/portable/" 2>/dev/null || true
-                  (cd "$DIST/portable" && zip -r "../nesium-egui-${RELEASE_TAG}-macos-universal-portable.zip" .)
+          mkdir -p "$DIST/portable"
+          cp -R "$app_dst" "$DIST/portable/"
+          cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DIST/portable/" 2>/dev/null || true
+          (cd "$DIST/portable" && zip -r "../nesium-egui-${RELEASE_TAG}-macos-universal-portable.zip" .)
 
-                  # Libretro core
-                  cargo build --manifest-path "$ROOT/Cargo.toml" -p nesium-libretro --profile release-dist --target aarch64-apple-darwin
-                  cargo build --manifest-path "$ROOT/Cargo.toml" -p nesium-libretro --profile release-dist --target x86_64-apple-darwin
+          # Libretro core
+          cargo build --manifest-path "$ROOT/Cargo.toml" -p nesium-libretro --profile release-dist --target aarch64-apple-darwin
+          cargo build --manifest-path "$ROOT/Cargo.toml" -p nesium-libretro --profile release-dist --target x86_64-apple-darwin
 
-                  core_arm="$TARGET_DIR/aarch64-apple-darwin/release-dist/libnesium_libretro.dylib"
-                  core_x86="$TARGET_DIR/x86_64-apple-darwin/release-dist/libnesium_libretro.dylib"
-                  if [ ! -f "$core_arm" ] || [ ! -f "$core_x86" ]; then
-                    echo "Expected libretro dylibs not found"
-                    exit 1
-                  fi
+          core_arm="$TARGET_DIR/aarch64-apple-darwin/release-dist/libnesium_libretro.dylib"
+          core_x86="$TARGET_DIR/x86_64-apple-darwin/release-dist/libnesium_libretro.dylib"
+          if [ ! -f "$core_arm" ] || [ ! -f "$core_x86" ]; then
+            echo "Expected libretro dylibs not found"
+            exit 1
+          fi
 
-                  rm -rf "$DIST/libretro"
-                  mkdir -p "$DIST/libretro"
-                  lipo -create "$core_arm" "$core_x86" -output "$DIST/libretro/nesium_libretro.dylib"
-                  cp "$ROOT/crates/nesium-libretro/nesium_libretro.info" "$DIST/libretro/"
-                  cp "$ROOT/crates/nesium-libretro/README.md" "$DIST/libretro/README.md"
-                  cp "$ROOT/LICENSE.md" "$DIST/libretro/" 2>/dev/null || true
-                  (cd "$DIST/libretro" && zip -r "../nesium-libretro-${RELEASE_TAG}-macos-universal.zip" .)
+          rm -rf "$DIST/libretro"
+          mkdir -p "$DIST/libretro"
+          lipo -create "$core_arm" "$core_x86" -output "$DIST/libretro/nesium_libretro.dylib"
+          cp "$ROOT/crates/nesium-libretro/nesium_libretro.info" "$DIST/libretro/"
+          cp "$ROOT/crates/nesium-libretro/README.md" "$DIST/libretro/README.md"
+          cp "$ROOT/LICENSE.md" "$DIST/libretro/" 2>/dev/null || true
+          (cd "$DIST/libretro" && zip -r "../nesium-libretro-${RELEASE_TAG}-macos-universal.zip" .)
 
-                  ls -la "$DIST"
+          ls -la "$DIST"
 
-            # ===================================================
-            # WINDOWS MSI & PORTABLE BUNDLING
-            # ===================================================
-            - name: Bundle installer + portable (Windows)
-              if: runner.os == 'Windows'
-              shell: pwsh
-              run: |
-                  rustup target add "${{ matrix.target }}"
-                  cargo bundle -p nesium-egui --profile release-dist --target "${{ matrix.target }}" --format "${{ matrix.bundle_format }}"
+      # ===================================================
+      # WINDOWS MSI & PORTABLE BUNDLING
+      # ===================================================
+      - name: Bundle installer + portable (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          rustup target add "${{ matrix.target }}"
+          cargo bundle -p nesium-egui --profile release-dist --target "${{ matrix.target }}" --format "${{ matrix.bundle_format }}"
 
-                  $installer = "nesium-egui-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
-                  $msi = Get-ChildItem -Path "target" -Recurse -Filter "*.msi" | Select-Object -First 1
-                  if (-not $msi) {
-                    Write-Error "No .msi found under target/**/bundle/**"
-                    exit 1
-                  }
-                  Copy-Item $msi.FullName "dist\\$installer" -Force
+          $installer = "nesium-egui-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          $msi = Get-ChildItem -Path "target" -Recurse -Filter "*.msi" | Select-Object -First 1
+          if (-not $msi) {
+            Write-Error "No .msi found under target/**/bundle/**"
+            exit 1
+          }
+          Copy-Item $msi.FullName "dist\\$installer" -Force
 
-                  $exe = "target\\${{ matrix.target }}\\release-dist\\nesium_egui.exe"
-                  if (-not (Test-Path $exe)) {
-                    $exe = "target\\release-dist\\nesium_egui.exe"
-                  }
-                  if (-not (Test-Path $exe)) {
-                    Write-Error "Expected binary not found at target\\${{ matrix.target }}\\release-dist\\nesium_egui.exe"
-                    exit 1
-                  }
+          $exe = "target\\${{ matrix.target }}\\release-dist\\nesium_egui.exe"
+          if (-not (Test-Path $exe)) {
+            $exe = "target\\release-dist\\nesium_egui.exe"
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Error "Expected binary not found at target\\${{ matrix.target }}\\release-dist\\nesium_egui.exe"
+            exit 1
+          }
 
-                  New-Item -ItemType Directory -Force -Path "dist\\portable" | Out-Null
-                  Copy-Item $exe "dist\\portable\\" -Force
-                  if (Test-Path "README.md") { Copy-Item "README.md" "dist\\portable\\" -Force }
-                  if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" "dist\\portable\\" -Force }
+          New-Item -ItemType Directory -Force -Path "dist\\portable" | Out-Null
+          Copy-Item $exe "dist\\portable\\" -Force
+          if (Test-Path "README.md") { Copy-Item "README.md" "dist\\portable\\" -Force }
+          if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" "dist\\portable\\" -Force }
 
-                  $portable = "nesium-egui-$env:RELEASE_TAG-${{ matrix.asset_suffix }}-portable.zip"
-                  Compress-Archive -Path "dist\\portable\\*" -DestinationPath "dist\\$portable" -Force
+          $portable = "nesium-egui-$env:RELEASE_TAG-${{ matrix.asset_suffix }}-portable.zip"
+          Compress-Archive -Path "dist\\portable\\*" -DestinationPath "dist\\$portable" -Force
 
-                  # Libretro core
-                  cargo build -p nesium-libretro --profile release-dist --target "${{ matrix.target }}"
-                  $core = "target\\${{ matrix.target }}\\release-dist\\nesium_libretro.dll"
-                  if (-not (Test-Path $core)) {
-                    $core = "target\\release-dist\\nesium_libretro.dll"
-                  }
-                  if (-not (Test-Path $core)) {
-                    Write-Error "Expected libretro core not found"
-                    exit 1
-                  }
+          # Libretro core
+          cargo build -p nesium-libretro --profile release-dist --target "${{ matrix.target }}"
+          $core = "target\\${{ matrix.target }}\\release-dist\\nesium_libretro.dll"
+          if (-not (Test-Path $core)) {
+            $core = "target\\release-dist\\nesium_libretro.dll"
+          }
+          if (-not (Test-Path $core)) {
+            Write-Error "Expected libretro core not found"
+            exit 1
+          }
 
-                  New-Item -ItemType Directory -Force -Path "dist\\libretro" | Out-Null
-                  Copy-Item $core "dist\\libretro\\nesium_libretro.dll" -Force
-                  Copy-Item "crates\\nesium-libretro\\nesium_libretro.info" "dist\\libretro\\" -Force
-                  Copy-Item "crates\\nesium-libretro\\README.md" "dist\\libretro\\README.md" -Force
-                  if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" "dist\\libretro\\" -Force }
+          New-Item -ItemType Directory -Force -Path "dist\\libretro" | Out-Null
+          Copy-Item $core "dist\\libretro\\nesium_libretro.dll" -Force
+          Copy-Item "crates\\nesium-libretro\\nesium_libretro.info" "dist\\libretro\\" -Force
+          Copy-Item "crates\\nesium-libretro\\README.md" "dist\\libretro\\README.md" -Force
+          if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" "dist\\libretro\\" -Force }
 
-                  $coreZip = "nesium-libretro-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.zip"
-                  Compress-Archive -Path "dist\\libretro\\*" -DestinationPath "dist\\$coreZip" -Force
+          $coreZip = "nesium-libretro-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.zip"
+          Compress-Archive -Path "dist\\libretro\\*" -DestinationPath "dist\\$coreZip" -Force
 
-                  Get-ChildItem -Path dist | Format-Table -AutoSize
+          Get-ChildItem -Path dist | Format-Table -AutoSize
 
-            - name: Upload artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: nesium-egui-${{ matrix.name }}
-                  path: |
-                      dist/*
-                  if-no-files-found: ignore
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nesium-egui-${{ matrix.name }}
+          path: |
+            dist/*
+          if-no-files-found: ignore

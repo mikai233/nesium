@@ -98,5 +98,9 @@ jobs:
                       artifacts/**/nesium-flutter-*.dmg.sha256
                       artifacts/**/nesium-flutter-*-portable.zip
                       artifacts/**/nesium-flutter-*-portable.zip.sha256
+                      artifacts/**/nesium-flutter-*.apk
+                      artifacts/**/nesium-flutter-*.apk.sha256
+                      artifacts/**/nesium-flutter-*.aab
+                      artifacts/**/nesium-flutter-*.aab.sha256
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
