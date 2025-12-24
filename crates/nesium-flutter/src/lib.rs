@@ -3,7 +3,7 @@
 //! Flutter bridge for the shared `nesium-runtime` backend.
 //! - Flutter (via FRB) issues control commands (load/reset/input).
 //! - The runtime owns a dedicated NES thread that renders frames into a
-//!   double-buffered external BGRA8888 framebuffer.
+//!   double-buffered external 32-bit framebuffer (BGRA/RGBA depending on platform).
 //! - The macOS runner registers a frame-ready callback and copies the
 //!   latest buffer into a CVPixelBuffer.
 
@@ -28,7 +28,6 @@ use nesium_runtime::{
 
 pub const FRAME_WIDTH: usize = SCREEN_WIDTH;
 pub const FRAME_HEIGHT: usize = SCREEN_HEIGHT;
-pub const BYTES_PER_PIXEL: usize = 4; // BGRA8888
 
 struct VideoBackingStore {
     _plane0: Box<[u8]>,
@@ -46,7 +45,30 @@ static RUNTIME: OnceLock<RuntimeHolder> = OnceLock::new();
 
 fn ensure_runtime() -> &'static RuntimeHolder {
     RUNTIME.get_or_init(|| {
-        let len = FRAME_WIDTH * FRAME_HEIGHT * BYTES_PER_PIXEL;
+        // Platform-specific framebuffer pixel format.
+        //
+        // - macOS (CoreVideo/CVPixelBuffer paths) prefers BGRA.
+        // - Windows render backends commonly prefer BGRA (e.g. DXGI/WGPU defaults).
+        // - Android (GL upload) prefers RGBA.
+        let color_format = {
+            #[cfg(target_os = "macos")]
+            {
+                ColorFormat::Bgra8888
+            }
+            #[cfg(target_os = "windows")]
+            {
+                ColorFormat::Bgra8888
+            }
+            #[cfg(target_os = "android")]
+            {
+                ColorFormat::Rgba8888
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
+            {
+                ColorFormat::Bgra8888
+            }
+        };
+        let len = FRAME_WIDTH * FRAME_HEIGHT * color_format.bytes_per_pixel();
         let plane0 = vec![0u8; len].into_boxed_slice();
         let plane1 = vec![0u8; len].into_boxed_slice();
 
@@ -59,7 +81,7 @@ fn ensure_runtime() -> &'static RuntimeHolder {
         // The planes do not overlap and are sized to the NES framebuffer.
         let runtime = Runtime::start(RuntimeConfig {
             video: VideoConfig {
-                color_format: ColorFormat::Bgra8888,
+                color_format,
                 plane0: video._plane0.as_mut_ptr(),
                 plane1: video._plane1.as_mut_ptr(),
             },
@@ -114,7 +136,7 @@ impl From<PadButton> for CoreButton {
     }
 }
 
-// === C ABI exposed to Swift/macOS =========================================
+// === C ABI exposed to platform runners ====================================
 
 #[unsafe(no_mangle)]
 pub extern "C" fn nesium_runtime_start() {
@@ -130,7 +152,9 @@ pub extern "C" fn nesium_set_frame_ready_callback(
     let _ = handle.set_frame_ready_callback(cb, user_data);
 }
 
-/// Copy the current NES frame into a BGRA8888 destination buffer.
+/// Copy the current NES frame into a destination buffer.
+///
+/// The pixel format is a platform-specific compile-time default.
 ///
 /// # Safety
 /// - `dst` must be null or point to at least `dst_pitch * dst_height` writable bytes.
@@ -150,7 +174,7 @@ pub unsafe extern "C" fn nesium_copy_frame(
     let src_slice = frame_handle.plane_slice(idx);
 
     let height = FRAME_HEIGHT.min(dst_height as usize);
-    let src_pitch = FRAME_WIDTH * BYTES_PER_PIXEL;
+    let src_pitch = FRAME_WIDTH * frame_handle.bytes_per_pixel();
     let dst_pitch = dst_pitch as usize;
 
     let dst_slice = unsafe {

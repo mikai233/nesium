@@ -36,7 +36,7 @@ pub enum ColorFormat {
 impl ColorFormat {
     /// Returns the number of bytes used to represent a single pixel in this format.
     #[inline]
-    pub fn bytes_per_pixel(self) -> usize {
+    pub const fn bytes_per_pixel(self) -> usize {
         match self {
             ColorFormat::Rgb555 | ColorFormat::Rgb565 => 2,
             ColorFormat::Rgb888 => 3,
@@ -90,6 +90,12 @@ enum FrameBufferStorage {
 pub struct ExternalFrameHandle {
     planes: [NonNull<u8>; 2],
     len: usize,
+
+    /// Pixel format used when the framebuffer is in color mode.
+    ///
+    /// `None` means the framebuffer is in index mode (1 byte per pixel palette indices).
+    color_format: Option<ColorFormat>,
+
     front_index: AtomicUsize,
     /// Monotonic frame counter incremented each time the core presents a new front buffer.
     frame_seq: AtomicUsize,
@@ -104,6 +110,23 @@ impl ExternalFrameHandle {
     #[inline]
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    /// Returns the active color format when the framebuffer is in color mode.
+    ///
+    /// When `None`, the framebuffer is in index mode (1 byte per pixel).
+    #[inline]
+    pub fn color_format(&self) -> Option<ColorFormat> {
+        self.color_format
+    }
+
+    /// Returns the number of bytes per pixel for the current mode.
+    ///
+    /// - Index mode: 1 byte per pixel
+    /// - Color mode: `format.bytes_per_pixel()`
+    #[inline]
+    pub fn bytes_per_pixel(&self) -> usize {
+        self.color_format.map(|f| f.bytes_per_pixel()).unwrap_or(1)
     }
 
     /// Published **front** plane index.
@@ -277,11 +300,17 @@ impl FrameBuffer {
             NonNull::new(plane1).expect("plane1 must not be null"),
         ];
 
+        let color_format = match mode {
+            BufferMode::Index => None,
+            BufferMode::Color { format } => Some(format),
+        };
+
         // Publish plane 0 as the initial front buffer.
         // The PPU will start writing into plane 1 (back).
         let handle = Arc::new(ExternalFrameHandle {
             planes,
             len,
+            color_format,
             front_index: AtomicUsize::new(0),
             frame_seq: AtomicUsize::new(0),
             reading_plane: AtomicUsize::new(ExternalFrameHandle::NOT_READING),
