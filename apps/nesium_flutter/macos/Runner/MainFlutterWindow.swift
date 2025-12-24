@@ -29,6 +29,15 @@ class MainFlutterWindow: NSWindow {
 
       contentView.addSubview(splash)
       self.splashView = splash
+
+      // Fallback: if Flutter never calls `hideSplash` (channel not registered, crash before
+      // first frame, etc.), do not leave the app unusable under a permanent overlay.
+      // We auto-hide after a short timeout.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+        guard let self = self else { return }
+        guard self.splashView != nil else { return }
+        self.hideSplashAnimated()
+      }
     }
 
     RegisterGeneratedPlugins(registry: flutterViewController)
