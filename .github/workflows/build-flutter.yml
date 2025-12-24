@@ -116,7 +116,17 @@ jobs:
           echo "Using sdkmanager at: ${SDKMANAGER}"
 
           # Install a known NDK version so `cargo ndk` can find it.
+          # `sdkmanager` usually exits as soon as it has read enough input, which can
+          # cause `yes` to get SIGPIPE. With `set -o pipefail` that would fail the step.
+          # We capture sdkmanager's exit code explicitly and ignore `yes`'s SIGPIPE.
+          set +o pipefail
           yes | "${SDKMANAGER}" --install "ndk;26.1.10909125"
+          SDK_RC=${PIPESTATUS[1]}
+          set -o pipefail
+          if [ "${SDK_RC}" -ne 0 ]; then
+            echo "ERROR: sdkmanager failed with exit code ${SDK_RC}"
+            exit "${SDK_RC}"
+          fi
           "${SDKMANAGER}" --list_installed | grep -E "ndk;" || true
 
       - name: Flutter pub get
