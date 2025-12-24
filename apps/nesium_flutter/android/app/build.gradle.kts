@@ -82,6 +82,38 @@ tasks.register<Exec>("buildRustAndroidSo") {
     doFirst {
         // Ensure output directory exists.
         jniLibsOutDir.mkdirs()
+
+        // Choose Rust build profile based on the invoked Gradle tasks.
+        // - For Flutter/Android release builds (assembleRelease / bundleRelease / etc.): use `release-dist`.
+        // - For all other builds: use `release`.
+        val buildModeProp = (project.findProperty("flutter.buildMode") as String?)?.lowercase()
+        val isReleaseTask =
+            gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }
+        val isDebugTask =
+            gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }
+        val isProfileTask =
+            gradle.startParameter.taskNames.any { it.contains("profile", ignoreCase = true) }
+
+        val isFlutterRelease =
+            buildModeProp == "release" || (isReleaseTask && !isDebugTask && !isProfileTask)
+        val rustProfile = if (isFlutterRelease) "release-dist" else "release"
+
+        // Build the specific package inside the workspace.
+        // `--profile <name>` lets us select custom profiles like `release-dist`.
+        commandLine(
+            cargoCmd() + listOf(
+                "ndk",
+                "--platform", "26",
+                "-t", "armeabi-v7a",
+                "-t", "arm64-v8a",
+                "-t", "x86",
+                "-t", "x86_64",
+                "-o", jniLibsOutDir.absolutePath,
+                "build",
+                "--profile", rustProfile,
+                "-p", rustPackageName,
+            )
+        )
     }
 
     // Build the specific package inside the workspace.
@@ -94,20 +126,6 @@ tasks.register<Exec>("buildRustAndroidSo") {
     //   android/app/src/main/jniLibs/x86/lib<crate_name>.so
     //
     // Note: The produced library name usually converts '-' to '_' (e.g. libnesium_flutter.so).
-    commandLine(
-        cargoCmd() + listOf(
-            "ndk",
-            "--platform", "26",
-            "-t", "armeabi-v7a",
-            "-t", "arm64-v8a",
-            "-t", "x86",
-            "-t", "x86_64",
-            "-o", jniLibsOutDir.absolutePath,
-            "build",
-            "--release",
-            "-p", rustPackageName,
-        )
-    )
 
     // If your NDK isn't auto-detected, uncomment and set ANDROID_NDK_HOME.
     // environment("ANDROID_NDK_HOME", System.getenv("ANDROID_NDK_HOME") ?: "/absolute/path/to/ndk")
