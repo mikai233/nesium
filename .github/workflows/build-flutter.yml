@@ -48,6 +48,17 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Install Rust targets (Android)
+        if: runner.os == 'Linux' && matrix.name == 'android'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup target add \
+            aarch64-linux-android \
+            armv7-linux-androideabi \
+            i686-linux-android \
+            x86_64-linux-android
+
       - name: Setup MSVC env (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
