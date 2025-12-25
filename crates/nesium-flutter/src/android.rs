@@ -1,14 +1,24 @@
-use std::{ffi::c_void, sync::OnceLock};
+use std::{
+    ffi::{c_uint, c_void},
+    os::unix::io::RawFd,
+    sync::{
+        OnceLock,
+        atomic::{AtomicI32, Ordering},
+    },
+};
 
 use jni::{
+    JNIEnv,
     objects::{GlobalRef, JClass, JObject},
     sys::{jint, jlong, jobject},
-    JNIEnv,
 };
 
 use nesium_core::ppu::buffer::ColorFormat;
 
-use crate::{FRAME_HEIGHT, FRAME_WIDTH, frame_handle_ref, nesium_runtime_start};
+use crate::{FRAME_HEIGHT, FRAME_WIDTH, ensure_runtime, frame_handle_ref, nesium_runtime_start};
+
+// Raw syscalls (fcntl/write) for the Android frame signal pipe.
+use libc;
 
 /// A process-wide global reference to an Android `Context`.
 ///
@@ -21,6 +31,14 @@ static GLOBAL_CONTEXT: OnceLock<GlobalRef> = OnceLock::new();
 /// Flutter/Android may recreate the Activity (configuration changes, hot restart, etc.).
 /// From the native runtime's perspective, initialization should be effectively idempotent.
 static NDK_CONTEXT_INIT: OnceLock<()> = OnceLock::new();
+
+/// A process-wide write-end file descriptor for the "frame ready" signal pipe.
+///
+/// Kotlin creates a pipe and passes the write-end FD via `nativeSetFrameSignalFd(fd)`.
+/// The NES runtime thread writes a small token to this FD when a new frame is published.
+///
+/// Note: the FD is owned by Kotlin (via `ParcelFileDescriptor`) and may be closed during shutdown.
+static FRAME_SIGNAL_FD: AtomicI32 = AtomicI32::new(-1);
 
 /// JNI entry point called from Kotlin.
 ///
@@ -61,7 +79,106 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_init_1android
     });
 
     // Ensure the runtime is started.
-    nesium_runtime_start();
+    let runtime = ensure_runtime();
+    runtime
+        .handle
+        .set_frame_ready_callback(Some(android_frame_ready_cb), std::ptr::null_mut())
+        .expect("Failed to set frame ready callback");
+}
+
+/// Stores the write-end FD for the frame signal pipe and makes it non-blocking.
+fn set_frame_signal_fd(fd: RawFd) {
+    if fd < 0 {
+        return;
+    }
+
+    // Best-effort: make the pipe write FD non-blocking so the producer thread never stalls.
+    // If this fails, we still store the FD; writes may block if the pipe becomes full.
+    unsafe {
+        let flags = libc::fcntl(fd, libc::F_GETFL);
+        if flags >= 0 {
+            let _ = libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        }
+    }
+
+    FRAME_SIGNAL_FD.store(fd as i32, Ordering::Release);
+}
+
+/// Writes a small wakeup token into the frame signal pipe.
+///
+/// This function is designed to be called from a non-JVM thread (e.g. the NES runtime thread).
+/// It must not perform any JNI work.
+///
+/// If the pipe is full (EAGAIN/EWOULDBLOCK), the token is dropped on purpose.
+/// Kotlin uses a "latest-only" frame pull (`nativeFrameSeq` + begin/end copy), so losing
+/// individual wakeup tokens is acceptable.
+pub(crate) fn signal_frame_ready() {
+    let fd = FRAME_SIGNAL_FD.load(Ordering::Acquire);
+    if fd < 0 {
+        return;
+    }
+
+    let seq = frame_handle_ref().frame_seq();
+    let token = seq.to_le_bytes();
+
+    let mut written = 0usize;
+    while written < token.len() {
+        let ptr = unsafe { token.as_ptr().add(written) } as *const c_void;
+        let len = token.len() - written;
+
+        let res = unsafe { libc::write(fd as RawFd, ptr, len) };
+        if res > 0 {
+            written += res as usize;
+            continue;
+        }
+
+        // res == -1
+        let err = std::io::Error::last_os_error();
+        match err.raw_os_error() {
+            Some(code) if code == libc::EINTR => {
+                // Interrupted by a signal; retry.
+                continue;
+            }
+            Some(code) if code == libc::EAGAIN || code == libc::EWOULDBLOCK => {
+                // Pipe full; drop the signal (latest-only pull is fine).
+                return;
+            }
+            Some(code) if code == libc::EBADF || code == libc::EPIPE => {
+                // FD closed/invalid; disable it.
+                FRAME_SIGNAL_FD.store(-1, Ordering::Release);
+                return;
+            }
+            _ => {
+                // Unknown error: ignore to avoid impacting the producer thread.
+                return;
+            }
+        }
+    }
+}
+
+pub extern "C" fn android_frame_ready_cb(
+    _buffer_index: c_uint,
+    _width: c_uint,
+    _height: c_uint,
+    _pitch: c_uint,
+    _user_data: *mut c_void,
+) {
+    // Must not panic here.
+    signal_frame_ready();
+}
+
+/// Receives the write-end FD of the Kotlin-created frame signal pipe.
+///
+/// Kotlin: `NesiumNative.nativeSetFrameSignalFd(fd: Int)`
+///
+/// The FD is stored globally and used by `signal_frame_ready(seq)`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetFrameSignalFd(
+    _env: JNIEnv,
+    _class: JClass,
+    fd: jint,
+) {
+    set_frame_signal_fd(fd as RawFd);
 }
 
 /// Returns the current monotonic frame sequence number.

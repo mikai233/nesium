@@ -3037,6 +3037,7 @@ dependencies = [
  "anyhow",
  "flutter_rust_bridge",
  "jni",
+ "libc",
  "ndk-context",
  "nesium-core",
  "nesium-runtime",

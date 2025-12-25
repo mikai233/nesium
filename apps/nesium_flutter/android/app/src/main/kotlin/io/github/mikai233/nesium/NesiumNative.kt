@@ -45,4 +45,7 @@ object NesiumNative {
 
     @JvmStatic
     external fun nativeFrameHeight(): Int
+
+    @JvmStatic
+    external fun nativeSetFrameSignalFd(fd: Int)
 }

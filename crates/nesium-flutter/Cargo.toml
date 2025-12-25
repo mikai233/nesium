@@ -20,3 +20,4 @@ nesium-runtime.workspace = true
 [target.'cfg(target_os = "android")'.dependencies]
 jni.workspace = true
 ndk-context.workspace = true
+libc.workspace = true

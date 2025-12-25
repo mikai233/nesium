@@ -10,6 +10,14 @@ import android.opengl.GLES20
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import android.os.Looper
+import android.os.MessageQueue
+import android.os.ParcelFileDescriptor
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
+import android.util.Log
+import java.io.FileDescriptor
 
 
 /**
@@ -42,8 +50,36 @@ class NesRenderer(
     private var running = true
     private var lastSeq = -1L
 
-    // Latest-only frame polling: lower values reduce latency but increase CPU usage.
-    private val pollDelayMsWhenIdle = 2L
+    // Cached native constants (NES frame size is fixed).
+    private var frameW = 0
+    private var frameH = 0
+
+    // Cached format decision: 0 = RGBA8888, 1 = BGRA8888.
+    private var swapRb = false
+
+    // Cached DirectByteBuffers for the two persistent planes (double-buffered).
+    private var planeBuffers: Array<ByteBuffer?> = arrayOfNulls(2)
+
+    // Cached EGL surface size for viewport updates.
+    private var surfaceW = -1
+    private var surfaceH = -1
+
+    // Frame-ready wakeup via a native-written pipe.
+    private var frameSignalRead: ParcelFileDescriptor? = null
+    private var frameSignalWrite: ParcelFileDescriptor? = null
+    private var frameSignalFd: FileDescriptor? = null
+
+    @Volatile
+    private var hasNewFrameSignal: Boolean = false
+
+    @Volatile
+    private var renderScheduled: Boolean = false
+
+    // Safety fallback: if we ever miss signals on some devices, we still make progress.
+    private val watchdogDelayMs = 250L
+
+    // Prevent recursive re-initialization when EGL context is lost.
+    private var recreatingEgl = false
 
     private val vertexShaderCode = """
         attribute vec4 a_position;
@@ -142,8 +178,26 @@ class NesRenderer(
             throw RuntimeException("eglMakeCurrent failed")
         }
 
+        // Initialize the frame-ready wakeup pipe on the GL thread looper.
+        ensureFrameSignalPipeInitialized()
+
+        // Disable dithering for a tiny performance win and more deterministic output.
+        GLES20.glDisable(GLES20.GL_DITHER)
+
         // Prefer VSYNC to reduce jitter.
         EGL14.eglSwapInterval(eglDisplay, 1)
+
+        // Cache frame size and format.
+        frameW = NesiumNative.nativeFrameWidth()
+        frameH = NesiumNative.nativeFrameHeight()
+
+        // Cache the source color format decision. This is effectively static for a given build.
+        swapRb = NesiumNative.nativeColorFormat() == 1
+
+        // Cache DirectByteBuffers for the two persistent planes.
+        // The underlying memory is stable for the lifetime of the process.
+        planeBuffers[0] = NesiumNative.nativePlaneBuffer(0)
+        planeBuffers[1] = NesiumNative.nativePlaneBuffer(1)
 
         // Compile and link program.
         val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode)
@@ -187,15 +241,12 @@ class NesRenderer(
         // Robust pixel upload alignment.
         GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1)
 
-        val w = NesiumNative.nativeFrameWidth()
-        val h = NesiumNative.nativeFrameHeight()
-
         GLES20.glTexImage2D(
             GLES20.GL_TEXTURE_2D,
             0,
             GLES20.GL_RGBA,
-            w,
-            h,
+            frameW,
+            frameH,
             0,
             GLES20.GL_RGBA,
             GLES20.GL_UNSIGNED_BYTE,
@@ -203,11 +254,7 @@ class NesRenderer(
         )
 
         // Default viewport to the surface size.
-        val surfaceW = IntArray(1)
-        val surfaceH = IntArray(1)
-        EGL14.eglQuerySurface(eglDisplay, eglSurface, EGL14.EGL_WIDTH, surfaceW, 0)
-        EGL14.eglQuerySurface(eglDisplay, eglSurface, EGL14.EGL_HEIGHT, surfaceH, 0)
-        GLES20.glViewport(0, 0, surfaceW[0], surfaceH[0])
+        updateViewportIfNeeded()
 
         renderLoop()
     }
@@ -219,29 +266,210 @@ class NesRenderer(
         return shader
     }
 
+    private fun ensureFrameSignalPipeInitialized() {
+        if (frameSignalRead != null) return
+
+        // Create a simple pipe: Rust writes to `write`, GL thread listens on `read`.
+        val pipe = ParcelFileDescriptor.createPipe()
+        frameSignalRead = pipe[0]
+        frameSignalWrite = pipe[1]
+
+        val readPfd = requireNotNull(frameSignalRead) {
+            "Frame signal pipe: read ParcelFileDescriptor is unexpectedly null"
+        }
+        val writePfd = requireNotNull(frameSignalWrite) {
+            "Frame signal pipe: write ParcelFileDescriptor is unexpectedly null"
+        }
+
+        frameSignalFd = readPfd.fileDescriptor
+        val fd = requireNotNull(frameSignalFd) {
+            "Frame signal pipe: failed to obtain read FileDescriptor"
+        }
+
+        // Make reads non-blocking so we can drain without risking a stall.
+        try {
+            val flags = Os.fcntlInt(fd, OsConstants.F_GETFL, 0)
+            Os.fcntlInt(fd, OsConstants.F_SETFL, flags or OsConstants.O_NONBLOCK)
+        } catch (e: ErrnoException) {
+            throw IllegalStateException("Failed to set O_NONBLOCK on frame signal pipe", e)
+        }
+
+        // Register an FD listener on THIS looper (the GL thread looper).
+        val queue = Looper.myQueue()
+        queue.addOnFileDescriptorEventListener(
+            fd,
+            MessageQueue.OnFileDescriptorEventListener.EVENT_INPUT,
+        ) { _, events ->
+            if ((events and MessageQueue.OnFileDescriptorEventListener.EVENT_INPUT) != 0) {
+                drainFrameSignal()
+                onFrameSignal()
+            }
+            MessageQueue.OnFileDescriptorEventListener.EVENT_INPUT
+        }
+
+        // Pass the write-end FD to native. Native should store it and write() a small token per frame.
+        NesiumNative.nativeSetFrameSignalFd(writePfd.fd)
+    }
+
+    private fun drainFrameSignal() {
+        val fd = frameSignalFd ?: return
+        val buf = ByteArray(64)
+        while (true) {
+            try {
+                val n = Os.read(fd, buf, 0, buf.size)
+                if (n <= 0) return
+            } catch (e: ErrnoException) {
+                // EAGAIN means we've drained all currently available bytes.
+                if (e.errno == OsConstants.EAGAIN) return
+                return
+            }
+        }
+    }
+
+    private fun onFrameSignal() {
+        hasNewFrameSignal = true
+        scheduleRender()
+    }
+
+    private fun scheduleRender() {
+        if (!running) return
+        if (renderScheduled) return
+        renderScheduled = true
+        handler.post { renderLoop() }
+    }
+
+    private fun teardownFrameSignalPipe() {
+        val fd = frameSignalFd
+        if (fd != null) {
+            try {
+                Looper.myQueue().removeOnFileDescriptorEventListener(fd)
+            } catch (_: Throwable) {
+                // Best-effort cleanup.
+            }
+        }
+
+        try {
+            frameSignalRead?.close()
+        } catch (_: Throwable) {
+        }
+        try {
+            frameSignalWrite?.close()
+        } catch (_: Throwable) {
+        }
+
+        frameSignalRead = null
+        frameSignalWrite = null
+        frameSignalFd = null
+        hasNewFrameSignal = false
+        renderScheduled = false
+    }
+
+    private fun updateViewportIfNeeded() {
+        val wArr = IntArray(1)
+        val hArr = IntArray(1)
+        EGL14.eglQuerySurface(eglDisplay, eglSurface, EGL14.EGL_WIDTH, wArr, 0)
+        EGL14.eglQuerySurface(eglDisplay, eglSurface, EGL14.EGL_HEIGHT, hArr, 0)
+
+        val newW = wArr[0]
+        val newH = hArr[0]
+        if (newW > 0 && newH > 0 && (newW != surfaceW || newH != surfaceH)) {
+            surfaceW = newW
+            surfaceH = newH
+            GLES20.glViewport(0, 0, surfaceW, surfaceH)
+        }
+    }
+
+    private fun handleSwapFailure() {
+        val err = EGL14.eglGetError()
+        // EGL_CONTEXT_LOST requires full context recreation.
+        if (err == EGL14.EGL_CONTEXT_LOST || err == EGL14.EGL_BAD_CONTEXT) {
+            if (!recreatingEgl) {
+                recreatingEgl = true
+                // Attempt a best-effort re-init. If this fails, the renderer will stop.
+                handler.post {
+                    try {
+                        destroyEglOnly()
+                        initGLAndLoop()
+                    } catch (t: Throwable) {
+                        running = false
+                        throw t
+                    } finally {
+                        recreatingEgl = false
+                    }
+                }
+            }
+        }
+
+        // Other EGL errors: keep running but back off slightly.
+        handler.postDelayed({ renderLoop() }, 16)
+    }
+
+    private fun destroyEglOnly() {
+        try {
+            if (textureId != 0) {
+                GLES20.glDeleteTextures(1, intArrayOf(textureId), 0)
+                textureId = 0
+            }
+            if (program != 0) {
+                GLES20.glDeleteProgram(program)
+                program = 0
+            }
+        } catch (_: Throwable) {
+            // Best-effort cleanup; ignore GL errors during teardown.
+        }
+
+        if (eglDisplay != EGL14.EGL_NO_DISPLAY && eglSurface != EGL14.EGL_NO_SURFACE) {
+            EGL14.eglDestroySurface(eglDisplay, eglSurface)
+        }
+        eglSurface = EGL14.EGL_NO_SURFACE
+
+        if (eglDisplay != EGL14.EGL_NO_DISPLAY && eglContext != EGL14.EGL_NO_CONTEXT) {
+            EGL14.eglDestroyContext(eglDisplay, eglContext)
+        }
+        eglContext = EGL14.EGL_NO_CONTEXT
+
+        if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
+            EGL14.eglTerminate(eglDisplay)
+        }
+        eglDisplay = EGL14.EGL_NO_DISPLAY
+
+        windowSurface?.release()
+        windowSurface = null
+
+        // Reset cached state.
+        lastSeq = -1L
+        surfaceW = -1
+        surfaceH = -1
+    }
+
     private fun renderLoop() {
+        // This function is scheduled via `scheduleRender()` (signal-driven).
+        renderScheduled = false
         if (!running) return
 
+        val hadSignal = hasNewFrameSignal
         val seq = NesiumNative.nativeFrameSeq()
+
         if (seq == lastSeq) {
-            // No new frame: avoid spinning.
-            handler.postDelayed({ renderLoop() }, pollDelayMsWhenIdle)
+            // If we were signaled but the producer hasn't published the new seq yet, retry soon.
+            if (hadSignal) {
+                handler.postDelayed({ scheduleRender() }, 1)
+            } else {
+                // Watchdog fallback: if signals are missed, we still make progress.
+                handler.postDelayed({ scheduleRender() }, watchdogDelayMs)
+            }
             return
         }
 
+        // We observed a new frame seq.
+        hasNewFrameSignal = false
         lastSeq = seq
-
-        // Decide swizzle based on the source format.
-        // 0 = RGBA, 1 = BGRA
-        val swapRb = NesiumNative.nativeColorFormat() == 1
 
         val idx = NesiumNative.nativeBeginFrontCopy()
         try {
-            val buffer = NesiumNative.nativePlaneBuffer(idx)
+            val buffer = planeBuffers[idx]
+                ?: throw IllegalStateException("Plane buffer is not initialized")
             buffer.position(0)
-
-            val w = NesiumNative.nativeFrameWidth()
-            val h = NesiumNative.nativeFrameHeight()
 
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
             GLES20.glTexSubImage2D(
@@ -249,16 +477,14 @@ class NesRenderer(
                 0,
                 0,
                 0,
-                w,
-                h,
+                frameW,
+                frameH,
                 GLES20.GL_RGBA,
                 GLES20.GL_UNSIGNED_BYTE,
                 buffer
             )
 
-            // Draw.
-            GLES20.glClearColor(0f, 0f, 0f, 1f)
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            updateViewportIfNeeded()
 
             GLES20.glUseProgram(program)
             GLES20.glUniform1i(uTexture, 0)
@@ -274,14 +500,19 @@ class NesRenderer(
 
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
 
-            EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+            if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
+                handleSwapFailure()
+                return
+            }
 
             // For SurfaceTexture-backed Flutter textures, swapping the EGL window surface enqueues
             // a new buffer to the underlying SurfaceTexture. The Flutter embedding registers an
             // internal OnFrameAvailableListener on that SurfaceTexture and will schedule a redraw.
 
-            // Post the next frame ASAP to keep latency low.
-            handler.post { renderLoop() }
+            // If another frame arrived while we were uploading/swapping, render again.
+            if (hasNewFrameSignal) {
+                scheduleRender()
+            }
         } finally {
             NesiumNative.nativeEndFrontCopy()
         }
@@ -291,26 +522,10 @@ class NesRenderer(
         running = false
         handler.post {
             try {
-                if (textureId != 0) {
-                    GLES20.glDeleteTextures(1, intArrayOf(textureId), 0)
-                }
-                if (program != 0) {
-                    GLES20.glDeleteProgram(program)
-                }
-
-                if (eglDisplay != EGL14.EGL_NO_DISPLAY && eglSurface != EGL14.EGL_NO_SURFACE) {
-                    EGL14.eglDestroySurface(eglDisplay, eglSurface)
-                }
-                if (eglDisplay != EGL14.EGL_NO_DISPLAY && eglContext != EGL14.EGL_NO_CONTEXT) {
-                    EGL14.eglDestroyContext(eglDisplay, eglContext)
-                }
-                if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
-                    EGL14.eglTerminate(eglDisplay)
-                }
+                destroyEglOnly()
             } finally {
-                // Release Java Surface wrapper explicitly.
-                windowSurface?.release()
-                windowSurface = null
+                // Must run on the GL thread looper.
+                teardownFrameSignalPipe()
 
                 textureEntry.release()
                 thread.quitSafely()
