@@ -32,21 +32,38 @@ endif()
 set(NESIUM_RUST_LIB_DST_DIR "${NESIUM_BUNDLE_DIR}/lib")
 set(NESIUM_RUST_LIB_DST "${NESIUM_RUST_LIB_DST_DIR}/libnesium_flutter.so")
 
-# Build the Rust cdylib as an explicit build output so Ninja knows how to
-# produce `${NESIUM_RUST_LIB_SRC}` before the final link step.
+# Build the Rust cdylib using a build-tree stamp file as the explicit OUTPUT.
+#
+# Why a stamp?
+# - The Rust artifact lives under the repo `target/` directory and may already
+#   exist when CMake/Ninja starts, which would cause the command to be skipped.
+# - Using a stamp in the build directory guarantees the build+copy step runs at
+#   least once per build dir, and re-runs when Rust sources change.
+set(NESIUM_RUST_STAMP "${CMAKE_BINARY_DIR}/nesium_rust_${NESIUM_RUST_PROFILE}.stamp")
+
+# Track Rust sources so edits trigger a rebuild.
+file(GLOB_RECURSE NESIUM_RUST_SOURCES CONFIGURE_DEPENDS
+  "${NESIUM_RUST_CRATE_DIR}/Cargo.toml"
+  "${NESIUM_RUST_CRATE_DIR}/Cargo.lock"
+  "${NESIUM_RUST_CRATE_DIR}/build.rs"
+  "${NESIUM_RUST_CRATE_DIR}/src/*.rs"
+)
+
 add_custom_command(
-  OUTPUT "${NESIUM_RUST_LIB_SRC}"
+  OUTPUT "${NESIUM_RUST_STAMP}"
   COMMAND ${CMAKE_COMMAND} -E echo "[nesium] building Rust library (${NESIUM_RUST_PROFILE})"
   COMMAND cargo build --manifest-path "${NESIUM_RUST_CRATE_DIR}/Cargo.toml" --profile ${NESIUM_RUST_PROFILE}
   COMMAND ${CMAKE_COMMAND} -E make_directory "${NESIUM_RUST_LIB_DST_DIR}"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NESIUM_RUST_LIB_SRC}" "${NESIUM_RUST_LIB_DST}"
+  COMMAND ${CMAKE_COMMAND} -E touch "${NESIUM_RUST_STAMP}"
   WORKING_DIRECTORY "${NESIUM_REPO_ROOT}"
-  BYPRODUCTS "${NESIUM_RUST_LIB_DST}"
+  DEPENDS ${NESIUM_RUST_SOURCES}
+  BYPRODUCTS "${NESIUM_RUST_LIB_SRC}" "${NESIUM_RUST_LIB_DST}"
   VERBATIM
 )
 
 add_custom_target(nesium_rust_lib ALL
-  DEPENDS "${NESIUM_RUST_LIB_SRC}"
+  DEPENDS "${NESIUM_RUST_STAMP}"
 )
 
 # Define the application target. To change its name, change BINARY_NAME in the
