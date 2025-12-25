@@ -98,6 +98,12 @@ jobs:
                       artifacts/**/nesium-flutter-*.dmg.sha256
                       artifacts/**/nesium-flutter-*-portable.zip
                       artifacts/**/nesium-flutter-*-portable.zip.sha256
+
+                      artifacts/**/nesium-flutter-*.deb       
+                      artifacts/**/nesium-flutter-*.deb.sha256 
+                      artifacts/**/nesium-flutter-*-portable.tar.gz 
+                      artifacts/**/nesium-flutter-*-portable.tar.gz.sha256
+
                       artifacts/**/nesium-flutter-*.apk
                       artifacts/**/nesium-flutter-*.apk.sha256
                       artifacts/**/nesium-flutter-*.aab

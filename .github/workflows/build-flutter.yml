@@ -14,6 +14,7 @@ env:
 jobs:
   build-flutter:
     name: Flutter ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,12 +32,22 @@ jobs:
             asset_ext: dmg
             asset_suffix: macos-universal
 
+          # ✅ Linux x86_64 (tar.gz)
+          - name: linux-x86_64-tar
+            os: ubuntu-latest
+            asset_ext: tar.gz
+            asset_suffix: linux-x86_64
+
+          # ✅ Linux arm64 (tar.gz)
+          - name: linux-aarch64-tar
+            os: ubuntu-24.04-arm
+            asset_ext: tar.gz
+            asset_suffix: linux-aarch64
+
           # ✅ Android (APK + AAB)
           - name: android
             os: ubuntu-latest
             asset_suffix: android
-
-    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -68,13 +79,29 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Linux deps for nesium-icon (Android)
-        if: runner.os == 'Linux' && matrix.name == 'android'
+      - name: Install Linux deps for nesium-icon
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y pkg-config libfreetype6-dev libfontconfig1-dev
+
+      - name: Install Linux deps for Flutter Linux desktop
+        if: runner.os == 'Linux' && startsWith(matrix.name, 'linux-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libgtk-3-dev \
+            liblzma-dev \
+            libasound2-dev \
+            dpkg-dev
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -127,9 +154,6 @@ jobs:
           echo "Using sdkmanager at: ${SDKMANAGER}"
 
           # Install a known NDK version so `cargo ndk` can find it.
-          # `sdkmanager` usually exits as soon as it has read enough input, which can
-          # cause `yes` to get SIGPIPE. With `set -o pipefail` that would fail the step.
-          # We capture sdkmanager's exit code explicitly and ignore `yes`'s SIGPIPE.
           set +o pipefail
           yes | "${SDKMANAGER}" --install "ndk;26.1.10909125"
           SDK_RC=${PIPESTATUS[1]}
@@ -163,7 +187,7 @@ jobs:
           cargo run -p nesium-icon -- layers `
             --bg "$IconDir/app_icon_bg_1024.png" `
             --fg "$IconDir/app_icon_fg_1024.png"
-
+            
           Get-ChildItem -Path $IconDir
 
       - name: Generate icon PNGs (Rust) (macOS/Linux)
@@ -182,7 +206,7 @@ jobs:
           cargo run -p nesium-icon -- layers \
             --bg "$ICON_DIR/app_icon_bg_1024.png" \
             --fg "$ICON_DIR/app_icon_fg_1024.png"
-
+            
           ls -la "$ICON_DIR"
 
       - name: Update Flutter launcher icons (Windows)
@@ -204,6 +228,102 @@ jobs:
       - name: Create dist directory
         shell: bash
         run: mkdir -p dist
+
+      # ===================================================
+      # FLUTTER LINUX BUILD (TAR.GZ)
+      # ===================================================
+      - name: Build + package (Linux)
+        if: runner.os == 'Linux' && startsWith(matrix.name, 'linux-')
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ROOT="${GITHUB_WORKSPACE}"
+          DIST="$ROOT/dist"
+
+          pushd "$ROOT/apps/nesium_flutter" >/dev/null
+
+          flutter config --enable-linux-desktop
+          flutter build linux --release
+
+          # Flutter outputs the bundle under an arch-specific directory.
+          BUNDLE_DIR="$(find build/linux -type d -path '*/release/bundle' | head -n 1 || true)"
+          if [ -z "${BUNDLE_DIR}" ] || [ ! -d "${BUNDLE_DIR}" ]; then
+            echo "ERROR: Linux bundle directory not found under apps/nesium_flutter/build/linux"
+            find build/linux -maxdepth 4 -type d || true
+            exit 1
+          fi
+
+          popd >/dev/null
+
+          PKG_DIR="${RUNNER_TEMP}/nesium-linux-pkg"
+          rm -rf "${PKG_DIR}"
+          mkdir -p "${PKG_DIR}/Nesium"
+
+          # Bundle contents.
+          cp -R "${ROOT}/apps/nesium_flutter/${BUNDLE_DIR}/"* "${PKG_DIR}/Nesium/"
+
+          # Optional docs.
+          if [ -f "${ROOT}/README.md" ]; then cp -f "${ROOT}/README.md" "${PKG_DIR}/Nesium/"; fi
+          if [ -f "${ROOT}/LICENSE.md" ]; then cp -f "${ROOT}/LICENSE.md" "${PKG_DIR}/Nesium/"; fi
+
+          # -------------------------------------------------
+          # Portable package (tar.gz)
+          # -------------------------------------------------
+          OUT_TAR="${DIST}/nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.${{ matrix.asset_ext }}"
+          tar -C "${PKG_DIR}" -czf "${OUT_TAR}" Nesium
+          (cd "$DIST" && shasum -a 256 "$(basename "$OUT_TAR")" > "$(basename "$OUT_TAR").sha256")
+
+          # -------------------------------------------------
+          # Installable package (.deb)
+          # -------------------------------------------------
+          DEB_ARCH="amd64"
+          if [ "${{ matrix.asset_suffix }}" = "linux-aarch64" ]; then
+            DEB_ARCH="arm64"
+          fi
+
+          DEB_ROOT="${RUNNER_TEMP}/nesium-deb"
+          rm -rf "${DEB_ROOT}"
+          mkdir -p "${DEB_ROOT}/DEBIAN"
+          mkdir -p "${DEB_ROOT}/opt/nesium"
+          mkdir -p "${DEB_ROOT}/usr/bin"
+          mkdir -p "${DEB_ROOT}/usr/share/applications"
+
+          # Install the bundle under /opt/nesium and provide a launcher in /usr/bin.
+          cp -R "${PKG_DIR}/Nesium" "${DEB_ROOT}/opt/nesium/"
+          cat > "${DEB_ROOT}/usr/bin/nesium" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec /opt/nesium/Nesium/nesium_flutter "$@"
+          SH
+          chmod +x "${DEB_ROOT}/usr/bin/nesium"
+
+          # Desktop entry (icon is optional).
+          cat > "${DEB_ROOT}/usr/share/applications/nesium.desktop" <<'DESKTOP'
+          [Desktop Entry]
+          Type=Application
+          Name=Nesium
+          Exec=nesium
+          Terminal=false
+          Categories=Game;
+          DESKTOP
+
+          # Minimal control file.
+          cat > "${DEB_ROOT}/DEBIAN/control" <<CONTROL
+          Package: nesium
+          Version: ${RELEASE_TAG}
+          Section: games
+          Priority: optional
+          Architecture: ${DEB_ARCH}
+          Maintainer: Nesium
+          Description: Nesium (Flutter)
+          CONTROL
+
+          OUT_DEB="${DIST}/nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}.deb"
+          dpkg-deb --build "${DEB_ROOT}" "${OUT_DEB}"
+          (cd "$DIST" && shasum -a 256 "$(basename "$OUT_DEB")" > "$(basename "$OUT_DEB").sha256")
+
+          ls -la "$DIST"
 
       # ===================================================
       # FLUTTER ANDROID BUILD (APK + AAB)
@@ -366,8 +486,8 @@ jobs:
 
           app_src="$(ls -d build/macos/Build/Products/Release/*.app | head -n 1)"
           if [ -z "${app_src}" ]; then
-             echo "No .app produced under build/macos/Build/Products/Release"
-             exit 1
+              echo "No .app produced under build/macos/Build/Products/Release"
+              exit 1
           fi
           app_name_ext="$(basename "$app_src")"  # e.g. Nesium.app
           app_bin_name="${app_name_ext%.*}"     # e.g. Nesium
@@ -392,11 +512,11 @@ jobs:
           DEST_DYLIB="$FRAMEWORKS_DIR/$DYLIB_NAME"
 
           if [ -f "$SRC_ARM" ] && [ -f "$SRC_X86" ]; then
-             echo "Merging architectures into universal dylib..."
-             lipo -create "$SRC_ARM" "$SRC_X86" -output "$DEST_DYLIB"
+              echo "Merging architectures into universal dylib..."
+              lipo -create "$SRC_ARM" "$SRC_X86" -output "$DEST_DYLIB"
           else
-             echo "Error: Rust dylibs not found in target directory!"
-             exit 1
+              echo "Error: Rust dylibs not found in target directory!"
+              exit 1
           fi
 
           # ---------------------------------------------------------
@@ -470,7 +590,6 @@ jobs:
           # Entitlements required for file picker
           ENTITLEMENTS="$ROOT/nesium.entitlements"
 
-          # 注意：这里的 HEREDOC 写法要小心缩进
           cat > "$ENTITLEMENTS" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
