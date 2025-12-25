@@ -2,6 +2,13 @@
 
 #include <stddef.h>
 
+#include <glib.h>
+
+namespace {
+// A permanent fallback pixel used before the first real frame is published.
+constexpr uint8_t kFallbackPixelRGBA[4] = {0, 0, 0, 255};
+}  // namespace
+
 // IMPORTANT:
 // This struct MUST be defined in the global namespace because the type is
 // forward-declared by G_DECLARE_FINAL_TYPE in the header.
@@ -13,21 +20,21 @@ struct _NesiumTexture {
 
   // Double-buffered, CPU-owned RGBA pixels.
   uint8_t* buffers[2] = {nullptr, nullptr};
-  size_t buffer_capacity = 0;  // bytes, per-buffer.
+  size_t buffer_capacity = 0;  // bytes per buffer.
 
   // Front buffer index used by `copy_pixels()`.
   gint front_index = 0;
 
-  // Frame metadata for the current front buffer.
+  // Published frame metadata for the current front buffer.
+  gboolean has_frame = FALSE;
   uint32_t width = 0;
   uint32_t height = 0;
-  uint32_t stride_bytes = 0;
 
   // Write-in-progress state (back buffer).
+  gboolean write_active = FALSE;
   gint write_index = 1;
   uint32_t write_width = 0;
   uint32_t write_height = 0;
-  uint32_t write_stride_bytes = 0;
 };
 
 G_DEFINE_TYPE(NesiumTexture, nesium_texture, fl_pixel_buffer_texture_get_type())
@@ -39,17 +46,31 @@ static gboolean nesium_texture_copy_pixels(FlPixelBufferTexture* texture,
                                           GError** /*error*/) {
   auto* self = NESIUM_TEXTURE(texture);
 
+  // Always initialize output parameters.
+  *out_buffer = kFallbackPixelRGBA;
+  *width = 1;
+  *height = 1;
+
   g_mutex_lock(&self->mutex);
 
-  const int front = g_atomic_int_get(&self->front_index);
+  const int front = self->front_index;
   const uint8_t* ptr = self->buffers[front];
+  const gboolean has_frame = self->has_frame;
   const uint32_t w = self->width;
   const uint32_t h = self->height;
+  const size_t cap = self->buffer_capacity;
 
   g_mutex_unlock(&self->mutex);
 
-  if (ptr == nullptr || w == 0 || h == 0) {
-    return FALSE;
+  // The Flutter pixel-buffer texture callback does not provide a stride output.
+  // The engine assumes tightly-packed RGBA: stride == width * 4.
+  if (!has_frame || ptr == nullptr || w == 0 || h == 0) {
+    return TRUE;
+  }
+
+  const size_t needed = static_cast<size_t>(w) * static_cast<size_t>(h) * 4u;
+  if (needed == 0 || needed > cap) {
+    return TRUE;
   }
 
   *out_buffer = ptr;
@@ -59,9 +80,17 @@ static gboolean nesium_texture_copy_pixels(FlPixelBufferTexture* texture,
 }
 
 static void nesium_texture_dispose(GObject* object) {
+  // `dispose()` is intended for releasing references to other GObjects.
+  // This texture owns raw memory that may be accessed by the engine while
+  // rendering, so memory is released in `finalize()` instead.
+  G_OBJECT_CLASS(nesium_texture_parent_class)->dispose(object);
+}
+
+static void nesium_texture_finalize(GObject* object) {
   auto* self = NESIUM_TEXTURE(object);
 
   g_mutex_lock(&self->mutex);
+
   if (self->buffers[0] != nullptr) {
     g_free(self->buffers[0]);
     self->buffers[0] = nullptr;
@@ -70,20 +99,25 @@ static void nesium_texture_dispose(GObject* object) {
     g_free(self->buffers[1]);
     self->buffers[1] = nullptr;
   }
+
   self->buffer_capacity = 0;
+  self->front_index = 0;
+  self->has_frame = FALSE;
   self->width = 0;
   self->height = 0;
-  self->stride_bytes = 0;
+  self->write_active = FALSE;
+
   g_mutex_unlock(&self->mutex);
 
   g_mutex_clear(&self->mutex);
 
-  G_OBJECT_CLASS(nesium_texture_parent_class)->dispose(object);
+  G_OBJECT_CLASS(nesium_texture_parent_class)->finalize(object);
 }
 
 static void nesium_texture_class_init(NesiumTextureClass* klass) {
   auto* gobject_class = G_OBJECT_CLASS(klass);
   gobject_class->dispose = nesium_texture_dispose;
+  gobject_class->finalize = nesium_texture_finalize;
 
   auto* pixel_texture_class = FL_PIXEL_BUFFER_TEXTURE_CLASS(klass);
   pixel_texture_class->copy_pixels = nesium_texture_copy_pixels;
@@ -93,19 +127,21 @@ static void nesium_texture_init(NesiumTexture* texture) {
   auto* self = NESIUM_TEXTURE(texture);
   g_mutex_init(&self->mutex);
 
-  // Start with a valid but empty state.
   self->front_index = 0;
+  self->has_frame = FALSE;
   self->write_index = 1;
+  self->write_active = FALSE;
 }
 
-static bool ensure_capacity(NesiumTexture* self, size_t needed_bytes) {
+static bool ensure_capacity_once(NesiumTexture* self, size_t needed_bytes) {
   if (needed_bytes == 0) return false;
-  if (self->buffer_capacity >= needed_bytes && self->buffers[0] != nullptr &&
-      self->buffers[1] != nullptr) {
-    return true;
+
+  // Allocate exactly once. If the texture size changes later, reject the write.
+  if (self->buffer_capacity != 0) {
+    return needed_bytes <= self->buffer_capacity && self->buffers[0] != nullptr &&
+           self->buffers[1] != nullptr;
   }
 
-  // Reallocate both buffers to the new capacity.
   uint8_t* b0 = static_cast<uint8_t*>(g_malloc(needed_bytes));
   uint8_t* b1 = static_cast<uint8_t*>(g_malloc(needed_bytes));
   if (b0 == nullptr || b1 == nullptr) {
@@ -113,9 +149,6 @@ static bool ensure_capacity(NesiumTexture* self, size_t needed_bytes) {
     if (b1 != nullptr) g_free(b1);
     return false;
   }
-
-  if (self->buffers[0] != nullptr) g_free(self->buffers[0]);
-  if (self->buffers[1] != nullptr) g_free(self->buffers[1]);
 
   self->buffers[0] = b0;
   self->buffers[1] = b1;
@@ -134,7 +167,9 @@ bool nesium_texture_begin_write(NesiumTexture* texture,
                                uint8_t** out_ptr) {
   if (texture == nullptr || out_ptr == nullptr) return false;
   if (width == 0 || height == 0) return false;
-  if (stride_bytes < width * 4u) return false;
+
+  // The engine expects tightly-packed RGBA.
+  if (stride_bytes != width * 4u) return false;
 
   auto* self = NESIUM_TEXTURE(texture);
 
@@ -143,18 +178,23 @@ bool nesium_texture_begin_write(NesiumTexture* texture,
 
   g_mutex_lock(&self->mutex);
 
-  if (!ensure_capacity(self, needed)) {
+  if (self->write_active) {
     g_mutex_unlock(&self->mutex);
     return false;
   }
 
-  const int front = g_atomic_int_get(&self->front_index);
+  if (!ensure_capacity_once(self, needed)) {
+    g_mutex_unlock(&self->mutex);
+    return false;
+  }
+
+  const int front = self->front_index;
   const int back = 1 - front;
 
+  self->write_active = TRUE;
   self->write_index = back;
   self->write_width = width;
   self->write_height = height;
-  self->write_stride_bytes = stride_bytes;
 
   *out_ptr = self->buffers[back];
 
@@ -168,11 +208,17 @@ void nesium_texture_end_write(NesiumTexture* texture) {
 
   g_mutex_lock(&self->mutex);
 
+  if (!self->write_active) {
+    g_mutex_unlock(&self->mutex);
+    return;
+  }
+
   // Publish the back buffer as the new front buffer.
-  g_atomic_int_set(&self->front_index, self->write_index);
+  self->front_index = self->write_index;
   self->width = self->write_width;
   self->height = self->write_height;
-  self->stride_bytes = self->write_stride_bytes;
+  self->has_frame = TRUE;
+  self->write_active = FALSE;
 
   g_mutex_unlock(&self->mutex);
 }

@@ -21,7 +21,7 @@ ExternalLibrary _openRustLibrary() {
     return ExternalLibrary.open(name);
   }
 
-  if (Platform.isMacOS) {
+  if (Platform.isMacOS || Platform.isLinux) {
     return ExternalLibrary.process(iKnowHowToUseIt: true);
   }
 

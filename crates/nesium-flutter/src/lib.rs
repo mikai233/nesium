@@ -49,9 +49,8 @@ fn ensure_runtime() -> &'static RuntimeHolder {
     RUNTIME.get_or_init(|| {
         // Platform-specific framebuffer pixel format.
         //
-        // - macOS (CoreVideo/CVPixelBuffer paths) prefers BGRA.
-        // - Windows render backends commonly prefer BGRA (e.g. DXGI/WGPU defaults).
-        // - Android (GL upload) prefers RGBA.
+        // Flutter desktop pixel-buffer textures expect tightly packed RGBA bytes.
+        // macOS uses a CoreVideo (CVPixelBuffer) path that prefers BGRA.
         let color_format = {
             #[cfg(target_os = "macos")]
             {
@@ -59,7 +58,7 @@ fn ensure_runtime() -> &'static RuntimeHolder {
             }
             #[cfg(target_os = "windows")]
             {
-                ColorFormat::Bgra8888
+                ColorFormat::Rgba8888
             }
             #[cfg(target_os = "android")]
             {
@@ -67,7 +66,7 @@ fn ensure_runtime() -> &'static RuntimeHolder {
             }
             #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
             {
-                ColorFormat::Bgra8888
+                ColorFormat::Rgba8888
             }
         };
         let len = FRAME_WIDTH * FRAME_HEIGHT * color_format.bytes_per_pixel();
