@@ -7,9 +7,15 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+#include "nesium/nesium_texture.h"
+#include "nesium/nesium_channels.h"
+
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+
+  // Owns the Linux method channel + external texture bridge.
+  NesiumChannels* nesium_channels;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -75,6 +81,9 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
+  // Initialize Nesium Linux platform bridge (method channel + external texture).
+  self->nesium_channels = nesium_channels_new(view);
+
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
 
@@ -120,6 +129,12 @@ static void my_application_shutdown(GApplication* application) {
 // Implements GObject::dispose.
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
+
+  if (self->nesium_channels != nullptr) {
+    nesium_channels_free(self->nesium_channels);
+    self->nesium_channels = nullptr;
+  }
+
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
@@ -133,7 +148,9 @@ static void my_application_class_init(MyApplicationClass* klass) {
   G_OBJECT_CLASS(klass)->dispose = my_application_dispose;
 }
 
-static void my_application_init(MyApplication* self) {}
+static void my_application_init(MyApplication* self) {
+  self->nesium_channels = nullptr;
+}
 
 MyApplication* my_application_new() {
   // Set the program name to the application ID, which helps various systems

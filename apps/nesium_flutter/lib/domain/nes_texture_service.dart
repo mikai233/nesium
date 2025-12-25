@@ -6,4 +6,7 @@ class NesTextureService {
 
   Future<int?> createTexture() =>
       _channel.invokeMethod<int>('createNesTexture');
+
+  Future<int?> disposeTexture() =>
+      _channel.invokeMethod<int>('disposeNesTexture');
 }
