@@ -48,15 +48,17 @@ set(RUST_LIB_SRC "${PROJECT_ROOT}/target/${TARGET_DIR}/${RUST_LIB_FILENAME}")
 # 3. Build Rust Target
 # ==============================================================================
 
-# Create a custom target to run 'cargo build'
-add_custom_target(cargo_build ALL
-    # Run cargo build
+# Ninja needs to know which file is produced; otherwise it will error before running Cargo.
+add_custom_command(
+    OUTPUT "${RUST_LIB_SRC}"
     COMMAND cargo build --manifest-path "${CRATE_DIR}/Cargo.toml" --lib ${CARGO_ARGS}
-    
-    # Print status
-    COMMENT "Building Rust library (${RUST_PROFILE})..."
     WORKING_DIRECTORY "${PROJECT_ROOT}"
+    COMMENT "Building Rust library (${RUST_PROFILE})..."
     VERBATIM
+)
+
+add_custom_target(cargo_build ALL
+    DEPENDS "${RUST_LIB_SRC}"
 )
 
 # ==============================================================================
