@@ -103,11 +103,30 @@ jobs:
             libasound2-dev \
             dpkg-dev
 
-      - name: Setup Flutter
+      - name: Setup Flutter (official)
+        if: ${{ !(runner.os == 'Linux' && matrix.asset_suffix == 'linux-aarch64') }}
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
+      - name: Setup Flutter (Linux arm64 via git)
+        if: ${{ runner.os == 'Linux' && matrix.asset_suffix == 'linux-aarch64' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FLUTTER_DIR="$RUNNER_TEMP/flutter"
+          rm -rf "$FLUTTER_DIR"
+          git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$FLUTTER_DIR"
+
+          # Make Flutter available to subsequent steps.
+          echo "$FLUTTER_DIR/bin" >> "$GITHUB_PATH"
+
+          # Prime caches / download artifacts.
+          "$FLUTTER_DIR/bin/flutter" --version
+          "$FLUTTER_DIR/bin/flutter" precache --linux
+          "$FLUTTER_DIR/bin/flutter" doctor -v
 
       - name: Setup Java (Android)
         if: runner.os == 'Linux' && matrix.name == 'android'
