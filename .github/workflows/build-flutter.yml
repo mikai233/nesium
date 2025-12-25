@@ -327,10 +327,19 @@ jobs:
           Categories=Game;
           DESKTOP
 
+          # Debian package versions must start with a digit (e.g. "0.0.1"), so strip a leading "v" or any other non-digit prefix.
+          DEB_VERSION="${RELEASE_TAG}"
+          DEB_VERSION="${DEB_VERSION#v}"
+          DEB_VERSION="$(echo "$DEB_VERSION" | sed -E 's/^[^0-9]*//')"
+          if [ -z "${DEB_VERSION}" ]; then
+            echo "ERROR: Could not derive a valid Debian version from RELEASE_TAG=${RELEASE_TAG}"
+            exit 1
+          fi
+
           # Minimal control file.
           cat > "${DEB_ROOT}/DEBIAN/control" <<CONTROL
           Package: nesium
-          Version: ${RELEASE_TAG}
+          Version: ${DEB_VERSION}
           Section: games
           Priority: optional
           Architecture: ${DEB_ARCH}
