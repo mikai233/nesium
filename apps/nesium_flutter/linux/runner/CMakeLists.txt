@@ -32,6 +32,23 @@ endif()
 set(NESIUM_RUST_LIB_DST_DIR "${NESIUM_BUNDLE_DIR}/lib")
 set(NESIUM_RUST_LIB_DST "${NESIUM_RUST_LIB_DST_DIR}/libnesium_flutter.so")
 
+# Build the Rust cdylib as an explicit build output so Ninja knows how to
+# produce `${NESIUM_RUST_LIB_SRC}` before the final link step.
+add_custom_command(
+  OUTPUT "${NESIUM_RUST_LIB_SRC}"
+  COMMAND ${CMAKE_COMMAND} -E echo "[nesium] building Rust library (${NESIUM_RUST_PROFILE})"
+  COMMAND cargo build --manifest-path "${NESIUM_RUST_CRATE_DIR}/Cargo.toml" --profile ${NESIUM_RUST_PROFILE}
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${NESIUM_RUST_LIB_DST_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NESIUM_RUST_LIB_SRC}" "${NESIUM_RUST_LIB_DST}"
+  WORKING_DIRECTORY "${NESIUM_REPO_ROOT}"
+  BYPRODUCTS "${NESIUM_RUST_LIB_DST}"
+  VERBATIM
+)
+
+add_custom_target(nesium_rust_lib ALL
+  DEPENDS "${NESIUM_RUST_LIB_SRC}"
+)
+
 # Define the application target. To change its name, change BINARY_NAME in the
 # top-level CMakeLists.txt, not the value here, or `flutter run` will no longer
 # work.
@@ -51,15 +68,6 @@ add_executable(${BINARY_NAME}
 # The runner links against libnesium_flutter.so, so the .so must exist before
 # the final link step. We therefore use a dedicated custom target and make the
 # runner depend on it.
-add_custom_target(nesium_rust_lib ALL
-  COMMAND ${CMAKE_COMMAND} -E echo "[nesium] building Rust library (${NESIUM_RUST_PROFILE})"
-  COMMAND cargo build --manifest-path "${NESIUM_RUST_CRATE_DIR}/Cargo.toml" --profile ${NESIUM_RUST_PROFILE}
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${NESIUM_RUST_LIB_DST_DIR}"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NESIUM_RUST_LIB_SRC}" "${NESIUM_RUST_LIB_DST}"
-  WORKING_DIRECTORY "${NESIUM_REPO_ROOT}"
-  VERBATIM
-)
-
 add_dependencies(${BINARY_NAME} nesium_rust_lib)
 
 # Import the Rust shared library and link it.
