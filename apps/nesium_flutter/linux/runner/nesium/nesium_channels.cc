@@ -2,8 +2,6 @@
 
 #include <flutter_linux/flutter_linux.h>
 
-#include <dlfcn.h>
-
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
@@ -17,23 +15,23 @@ static constexpr const char *kChannelName = "nesium";
 static constexpr const char *kMethodCreate = "createNesTexture";
 static constexpr const char *kMethodDispose = "disposeNesTexture";
 
-// ---- Rust FFI (resolved via dlsym at runtime) ----
+// ---- Rust FFI (linked at build time) ----
 //
-// The Rust shared object is expected to be loaded by Dart FFI (dlopen).
-// On Linux, Dart may load the .so with RTLD_LOCAL, which means symbols are not
-// visible via RTLD_DEFAULT. We therefore fall back to dlopen(RTLD_GLOBAL) +
-// dlsym(handle, ...) to resolve the symbols reliably.
+// The Linux runner links against libnesium_flutter.so, so we can call the
+// exported C ABI functions directly. If the symbols are missing, the build will
+// fail at link time instead of failing at runtime.
+extern "C" {
+void nesium_runtime_start();
 
 using FrameReadyCallback = void (*)(uint32_t buffer_index, uint32_t width,
                                     uint32_t height, uint32_t pitch_bytes,
                                     void *user_data);
 
-using NesiumRuntimeStartFn = void (*)();
-using NesiumSetFrameReadyCallbackFn = void (*)(FrameReadyCallback cb,
-                                               void *user_data);
-using NesiumCopyFrameFn = void (*)(uint32_t buffer_index, uint8_t *dst_rgba,
-                                   uint32_t dst_pitch_bytes,
-                                   uint32_t dst_height);
+void nesium_set_frame_ready_callback(FrameReadyCallback cb, void *user_data);
+
+void nesium_copy_frame(uint32_t buffer_index, uint8_t *dst_rgba,
+                       uint32_t dst_pitch_bytes, uint32_t dst_height);
+}
 
 struct PendingFrame {
   uint32_t buffer_index;
@@ -49,17 +47,9 @@ struct _NesiumChannels {
   FlTexture *texture = nullptr;
   int64_t texture_id = -1;
 
-  // Handle to the Rust shared object (used for dlsym fallback on Linux).
-  void *rust_handle = nullptr;
-
-  // Rust API function pointers.
-  NesiumRuntimeStartFn runtime_start = nullptr;
-  NesiumSetFrameReadyCallbackFn set_frame_ready_cb = nullptr;
-  NesiumCopyFrameFn copy_frame = nullptr;
-
   bool runtime_started = false;
 
-  // Copy worker.
+  // Copy worker thread. The Rust callback only posts the latest frame metadata.
   std::thread copy_thread;
   std::mutex mu;
   std::condition_variable cv;
@@ -79,58 +69,6 @@ static FlMethodResponse *make_error(const char *code, const char *message) {
 static FlMethodResponse *make_ok_with_int64(int64_t value) {
   g_autoptr(FlValue) result = fl_value_new_int(value);
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-}
-
-static void *resolve_sym(NesiumChannels *self, const char *name) {
-  // First try the global namespace.
-  // This works if the Rust .so was loaded with RTLD_GLOBAL.
-  (void)dlerror();
-  void *sym = dlsym(RTLD_DEFAULT, name);
-  if (sym != nullptr) {
-    return sym;
-  }
-
-  // Fallback: ensure the Rust .so is globally visible and resolve via its
-  // handle. This covers the common case where Dart FFI loaded the library with
-  // RTLD_LOCAL.
-  if (self->rust_handle == nullptr) {
-    // Best-effort: load by soname. The runner binary usually has an rpath that
-    // includes $ORIGIN/lib where Flutter bundles native libraries.
-    self->rust_handle = dlopen("libnesium_flutter.so", RTLD_NOW | RTLD_GLOBAL);
-    if (self->rust_handle == nullptr) {
-      // Keep the error for diagnostics.
-      const char *err = dlerror();
-      if (err != nullptr) {
-        g_warning("dlopen(libnesium_flutter.so) failed: %s", err);
-      }
-      return nullptr;
-    }
-  }
-
-  (void)dlerror();
-  sym = dlsym(self->rust_handle, name);
-  if (sym == nullptr) {
-    const char *err = dlerror();
-    if (err != nullptr) {
-      g_warning("dlsym(%s) failed: %s", name, err);
-    }
-  }
-  return sym;
-}
-
-static bool resolve_rust_api(NesiumChannels *self) {
-  if (self->set_frame_ready_cb != nullptr && self->copy_frame != nullptr) {
-    return true;
-  }
-
-  self->runtime_start = reinterpret_cast<NesiumRuntimeStartFn>(
-      resolve_sym(self, "nesium_runtime_start"));
-  self->set_frame_ready_cb = reinterpret_cast<NesiumSetFrameReadyCallbackFn>(
-      resolve_sym(self, "nesium_set_frame_ready_callback"));
-  self->copy_frame = reinterpret_cast<NesiumCopyFrameFn>(
-      resolve_sym(self, "nesium_copy_frame"));
-
-  return self->set_frame_ready_cb != nullptr && self->copy_frame != nullptr;
 }
 
 static gboolean notify_on_main(gpointer user_data) {
@@ -173,7 +111,7 @@ static void copy_worker_main(NesiumChannels *self) {
       self->pending.reset();
     }
 
-    if (self->texture == nullptr || self->copy_frame == nullptr) {
+    if (self->texture == nullptr) {
       continue;
     }
 
@@ -188,7 +126,7 @@ static void copy_worker_main(NesiumChannels *self) {
     }
 
     // Copy the current Rust frame into the writable back buffer.
-    self->copy_frame(f.buffer_index, dst, dst_stride, f.height);
+    nesium_copy_frame(f.buffer_index, dst, dst_stride, f.height);
 
     // Publish and request a redraw.
     nesium_texture_end_write(tex);
@@ -241,16 +179,6 @@ static void handle_create_texture(NesiumChannels *self, FlMethodCall *call) {
     return;
   }
 
-  if (!resolve_rust_api(self)) {
-    fl_method_call_respond(
-        call,
-        make_error("rust_api_unavailable",
-                   "Rust symbols not found. Make sure the Rust shared library "
-                   "is loaded before calling createNesTexture."),
-        nullptr);
-    return;
-  }
-
   // Reuse existing texture if already registered.
   if (self->texture != nullptr && self->texture_id >= 0) {
     fl_method_call_respond(call, make_ok_with_int64(self->texture_id), nullptr);
@@ -280,21 +208,19 @@ static void handle_create_texture(NesiumChannels *self, FlMethodCall *call) {
   // Start the copy worker and hook the Rust callback.
   ensure_copy_worker(self);
 
-  if (!self->runtime_started && self->runtime_start != nullptr) {
-    self->runtime_start();
+  if (!self->runtime_started) {
+    nesium_runtime_start();
     self->runtime_started = true;
   }
 
-  self->set_frame_ready_cb(frame_ready_cb, self);
+  nesium_set_frame_ready_callback(frame_ready_cb, self);
 
   fl_method_call_respond(call, make_ok_with_int64(self->texture_id), nullptr);
 }
 
 static void handle_dispose_texture(NesiumChannels *self, FlMethodCall *call) {
-  // Unhook the Rust callback (best-effort).
-  if (self->set_frame_ready_cb != nullptr) {
-    self->set_frame_ready_cb(nullptr, nullptr);
-  }
+  // Unhook the Rust callback.
+  nesium_set_frame_ready_callback(nullptr, nullptr);
 
   stop_copy_worker(self);
 
@@ -363,9 +289,7 @@ void nesium_channels_free(NesiumChannels *self) {
     return;
 
   // Unhook callback and stop worker first.
-  if (self->set_frame_ready_cb != nullptr) {
-    self->set_frame_ready_cb(nullptr, nullptr);
-  }
+  nesium_set_frame_ready_callback(nullptr, nullptr);
 
   stop_copy_worker(self);
 
@@ -385,11 +309,6 @@ void nesium_channels_free(NesiumChannels *self) {
   if (self->registrar != nullptr) {
     g_object_unref(self->registrar);
     self->registrar = nullptr;
-  }
-
-  if (self->rust_handle != nullptr) {
-    dlclose(self->rust_handle);
-    self->rust_handle = nullptr;
   }
 
   delete self;
