@@ -1,9 +1,6 @@
 name: Release Controller
 
 on:
-    push:
-        tags:
-            - "v*"
     workflow_dispatch:
         inputs:
             mode:
@@ -13,11 +10,8 @@ on:
                 default: test
                 options:
                     - test
+                    - prerelease
                     - release
-            tag:
-                description: "Release tag (e.g. v0.1.0)"
-                required: false
-                type: string
 
 jobs:
     # ------------------------------------------------------------------
@@ -28,28 +22,40 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             release_tag: ${{ steps.get_tag.outputs.tag }}
-            is_release: ${{ steps.get_tag.outputs.is_release }}
+            publish_release: ${{ steps.get_tag.outputs.publish_release }}
+            prerelease: ${{ steps.get_tag.outputs.prerelease }}
+            mode: ${{ steps.get_tag.outputs.mode }}
         steps:
             - name: Determine Tag
               id: get_tag
               shell: bash
               run: |
-                  if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-                    if [ "${{ github.event.inputs.mode }}" == "release" ]; then
-                      if [ -z "${{ github.event.inputs.tag }}" ]; then
-                        echo "ERROR: inputs.tag is required when mode=release" >&2
-                        exit 1
-                      fi
-                      echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-                      echo "is_release=true" >> $GITHUB_OUTPUT
-                    else
-                      SHORT_SHA="${GITHUB_SHA::7}"
-                      echo "tag=dev-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> $GITHUB_OUTPUT
-                      echo "is_release=false" >> $GITHUB_OUTPUT
-                    fi
+                  set -euo pipefail
+
+                  MODE="${{ github.event.inputs.mode }}"
+                  echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
+
+                  SHORT_SHA="${GITHUB_SHA::7}"
+                  DATE_UTC="$(date -u +%Y%m%d)"
+
+                  if [ "${MODE}" = "test" ]; then
+                    # Test builds: no GitHub Release, only artifacts with a generated external tag.
+                    echo "tag=dev-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+                    echo "publish_release=false" >> "$GITHUB_OUTPUT"
+                    echo "prerelease=false" >> "$GITHUB_OUTPUT"
+                  elif [ "${MODE}" = "prerelease" ]; then
+                    # Pre-release: create a GitHub Release marked as prerelease.
+                    echo "tag=pre-${DATE_UTC}-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+                    echo "publish_release=true" >> "$GITHUB_OUTPUT"
+                    echo "prerelease=true" >> "$GITHUB_OUTPUT"
+                  elif [ "${MODE}" = "release" ]; then
+                    # Release: create a GitHub Release (not prerelease).
+                    echo "tag=rel-${DATE_UTC}-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+                    echo "publish_release=true" >> "$GITHUB_OUTPUT"
+                    echo "prerelease=false" >> "$GITHUB_OUTPUT"
                   else
-                    echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-                    echo "is_release=true" >> $GITHUB_OUTPUT
+                    echo "ERROR: unknown mode=${MODE}" >&2
+                    exit 1
                   fi
 
     # ------------------------------------------------------------------
@@ -60,6 +66,7 @@ jobs:
         uses: ./.github/workflows/build-native.yml
         with:
             release_tag: ${{ needs.setup.outputs.release_tag }}
+            mode: ${{ needs.setup.outputs.mode }}
         secrets: inherit
 
     # ------------------------------------------------------------------
@@ -70,6 +77,7 @@ jobs:
         uses: ./.github/workflows/build-flutter.yml
         with:
             release_tag: ${{ needs.setup.outputs.release_tag }}
+            mode: ${{ needs.setup.outputs.mode }}
         secrets: inherit
 
     # ------------------------------------------------------------------
@@ -77,7 +85,7 @@ jobs:
     # ------------------------------------------------------------------
     create-release:
         name: Publish to GitHub Release
-        if: ${{ needs.setup.outputs.is_release == 'true' }}
+        if: ${{ needs.setup.outputs.publish_release == 'true' }}
         needs: [setup, call-build-native, call-build-flutter]
         runs-on: ubuntu-latest
         permissions:
@@ -92,7 +100,7 @@ jobs:
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: ${{ needs.setup.outputs.release_tag }}
-                  prerelease: ${{ contains(needs.setup.outputs.release_tag, '-') }}
+                  prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
                   generate_release_notes: true
                   files: |
                       # --- Nesium Egui (Native) ---

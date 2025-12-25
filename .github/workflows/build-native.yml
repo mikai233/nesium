@@ -4,18 +4,24 @@ on:
   workflow_call:
     inputs:
       release_tag:
-        description: "The version tag for the release"
+        description: "The version tag for the release (external/filename tag)"
+        required: true
+        type: string
+      mode:
+        description: "Build mode: test | prerelease | release"
         required: true
         type: string
 
 env:
   CARGO_TERM_COLOR: always
-  # Map input to env so scripts don't need changing
+  # Map inputs to env so scripts don't need changing
   RELEASE_TAG: ${{ inputs.release_tag }}
+  MODE: ${{ inputs.mode }}
 
 jobs:
   build-native:
     name: Native ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -62,7 +68,6 @@ jobs:
             asset_ext: dmg
             asset_suffix: macos-universal
 
-    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,6 +87,46 @@ jobs:
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
+
+      - name: Compute packaging/version vars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${MODE}" = "test" ]; then
+            # Test builds: use externally-generated tag for file names.
+            echo "EGUI_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
+            echo "LIBRETRO_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
+          else
+            # Pre-release / Release: read versions from Cargo metadata for each package.
+            PYTHON_BIN="$(command -v python3 || command -v python)"
+            cargo metadata --format-version 1 --no-deps > "$RUNNER_TEMP/metadata.json"
+
+            "${PYTHON_BIN}" - <<'PY' >> "$GITHUB_ENV"
+          import json
+          import os
+          import pathlib
+
+          meta_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "metadata.json"
+          meta = json.loads(meta_path.read_text(encoding="utf-8"))
+
+          pkgs = {p["name"]: p["version"] for p in meta.get("packages", [])}
+
+          need = ["nesium-egui", "nesium-libretro"]
+          missing = [n for n in need if n not in pkgs]
+          if missing:
+              raise SystemExit(
+                  f"ERROR: missing packages in cargo metadata: {missing}. Found: {sorted(pkgs.keys())}"
+              )
+
+          print(f"EGUI_TAG={pkgs['nesium-egui']}")
+          print(f"LIBRETRO_TAG={pkgs['nesium-libretro']}")
+          PY
+          fi
+
+          echo "MODE=${MODE}"
+          echo "EGUI_TAG=${EGUI_TAG:-}"
+          echo "LIBRETRO_TAG=${LIBRETRO_TAG:-}"
 
       - name: Install system development libraries (Linux)
         if: runner.os == 'Linux'
@@ -122,7 +167,7 @@ jobs:
           rustup target add "${{ matrix.target }}"
           cargo bundle -p nesium-egui --profile release-dist --target "${{ matrix.target }}" --format "${{ matrix.bundle_format }}"
 
-          installer="nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          installer="nesium-egui-${EGUI_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
           found="$(find target -path '*/bundle/*' -type f -name "*.${{ matrix.asset_ext }}" | head -n 1)"
           if [ -z "$found" ]; then
             echo "No bundle output found under target/**/bundle/**"
@@ -143,8 +188,8 @@ jobs:
           mkdir -p dist/portable
           cp "$exe" dist/portable/
           cp README.md LICENSE.md dist/portable/ 2>/dev/null || true
-          tar -czf "dist/nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" -C dist/portable .
-          (cd dist && sha256sum "nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" > "nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz.sha256")
+          tar -czf "dist/nesium-egui-${EGUI_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" -C dist/portable .
+          (cd dist && sha256sum "nesium-egui-${EGUI_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz" > "nesium-egui-${EGUI_TAG}-${{ matrix.asset_suffix }}-portable.tar.gz.sha256")
 
           # Libretro core package
           cargo build -p nesium-libretro --profile release-dist --target "${{ matrix.target }}"
@@ -161,8 +206,8 @@ jobs:
           cp "crates/nesium-libretro/README.md" dist/libretro/README.md
           cp "LICENSE.md" dist/libretro/ 2>/dev/null || true
 
-          tar -czf "dist/nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz" -C dist/libretro .
-          (cd dist && sha256sum "nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz" > "nesium-libretro-${RELEASE_TAG}-${{ matrix.asset_suffix }}.tar.gz.sha256")
+          tar -czf "dist/nesium-libretro-${LIBRETRO_TAG}-${{ matrix.asset_suffix }}.tar.gz" -C dist/libretro .
+          (cd dist && sha256sum "nesium-libretro-${LIBRETRO_TAG}-${{ matrix.asset_suffix }}.tar.gz" > "nesium-libretro-${LIBRETRO_TAG}-${{ matrix.asset_suffix }}.tar.gz.sha256")
 
       # ===================================================
       # LINUX APPIMAGE BUNDLING
@@ -220,7 +265,7 @@ jobs:
             https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
 
-          out="dist/nesium-egui-${RELEASE_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          out="dist/nesium-egui-${EGUI_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
           ARCH=x86_64 ./appimagetool-x86_64.AppImage "$appdir" "$out"
 
           (cd dist && sha256sum "$(basename "$out")" > "$(basename "$out").sha256")
@@ -263,8 +308,8 @@ jobs:
 
           ln -s /Applications "$ROOT/dmg-src/Applications"
 
-          dmg_rw="$DIST/nesium-egui-${RELEASE_TAG}-macos-universal-rw.dmg"
-          dmg="$DIST/nesium-egui-${RELEASE_TAG}-macos-universal.dmg"
+          dmg_rw="$DIST/nesium-egui-${EGUI_TAG}-macos-universal-rw.dmg"
+          dmg="$DIST/nesium-egui-${EGUI_TAG}-macos-universal.dmg"
           vol="Nesium"
 
           hdiutil create -volname "$vol" -srcfolder "$ROOT/dmg-src" -ov -format UDRW "$dmg_rw"
@@ -317,7 +362,7 @@ jobs:
           mkdir -p "$DIST/portable"
           cp -R "$app_dst" "$DIST/portable/"
           cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DIST/portable/" 2>/dev/null || true
-          (cd "$DIST/portable" && zip -r "../nesium-egui-${RELEASE_TAG}-macos-universal-portable.zip" .)
+          (cd "$DIST/portable" && zip -r "../nesium-egui-${EGUI_TAG}-macos-universal-portable.zip" .)
 
           # Libretro core
           cargo build --manifest-path "$ROOT/Cargo.toml" -p nesium-libretro --profile release-dist --target aarch64-apple-darwin
@@ -336,7 +381,7 @@ jobs:
           cp "$ROOT/crates/nesium-libretro/nesium_libretro.info" "$DIST/libretro/"
           cp "$ROOT/crates/nesium-libretro/README.md" "$DIST/libretro/README.md"
           cp "$ROOT/LICENSE.md" "$DIST/libretro/" 2>/dev/null || true
-          (cd "$DIST/libretro" && zip -r "../nesium-libretro-${RELEASE_TAG}-macos-universal.zip" .)
+          (cd "$DIST/libretro" && zip -r "../nesium-libretro-${LIBRETRO_TAG}-macos-universal.zip" .)
 
           ls -la "$DIST"
 
@@ -350,7 +395,7 @@ jobs:
           rustup target add "${{ matrix.target }}"
           cargo bundle -p nesium-egui --profile release-dist --target "${{ matrix.target }}" --format "${{ matrix.bundle_format }}"
 
-          $installer = "nesium-egui-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          $installer = "nesium-egui-$env:EGUI_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
           $msi = Get-ChildItem -Path "target" -Recurse -Filter "*.msi" | Select-Object -First 1
           if (-not $msi) {
             Write-Error "No .msi found under target/**/bundle/**"
@@ -372,7 +417,7 @@ jobs:
           if (Test-Path "README.md") { Copy-Item "README.md" "dist\\portable\\" -Force }
           if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" "dist\\portable\\" -Force }
 
-          $portable = "nesium-egui-$env:RELEASE_TAG-${{ matrix.asset_suffix }}-portable.zip"
+          $portable = "nesium-egui-$env:EGUI_TAG-${{ matrix.asset_suffix }}-portable.zip"
           Compress-Archive -Path "dist\\portable\\*" -DestinationPath "dist\\$portable" -Force
 
           # Libretro core
@@ -392,7 +437,7 @@ jobs:
           Copy-Item "crates\\nesium-libretro\\README.md" "dist\\libretro\\README.md" -Force
           if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" "dist\\libretro\\" -Force }
 
-          $coreZip = "nesium-libretro-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.zip"
+          $coreZip = "nesium-libretro-$env:LIBRETRO_TAG-${{ matrix.asset_suffix }}.zip"
           Compress-Archive -Path "dist\\libretro\\*" -DestinationPath "dist\\$coreZip" -Force
 
           Get-ChildItem -Path dist | Format-Table -AutoSize

@@ -7,9 +7,14 @@ on:
         description: "The version tag for the release"
         required: true
         type: string
+      mode:
+        description: "Build mode: test | prerelease | release"
+        required: true
+        type: string
 
 env:
   RELEASE_TAG: ${{ inputs.release_tag }}
+  MODE: ${{ inputs.mode }}
 
 jobs:
   build-flutter:
@@ -19,32 +24,32 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ✅ Windows x64 Only
+          # Windows x64 Only
           - name: windows-x86_64-msi
             os: windows-latest
             target_arch: x64
             asset_ext: msi
             asset_suffix: windows-x86_64
 
-          # ✅ macOS Universal
+          # macOS Universal
           - name: macos-universal-dmg
             os: macos-latest
             asset_ext: dmg
             asset_suffix: macos-universal
 
-          # ✅ Linux x86_64 (tar.gz)
+          # Linux x86_64 (tar.gz)
           - name: linux-x86_64-tar
             os: ubuntu-latest
             asset_ext: tar.gz
             asset_suffix: linux-x86_64
 
-          # ✅ Linux arm64 (tar.gz)
+          # Linux arm64 (tar.gz)
           - name: linux-aarch64-tar
             os: ubuntu-24.04-arm
             asset_ext: tar.gz
             asset_suffix: linux-aarch64
 
-          # ✅ Android (APK + AAB)
+          # Android (APK + AAB)
           - name: android
             os: ubuntu-latest
             asset_suffix: android
@@ -53,6 +58,56 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Compute packaging/version vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          if [ "${MODE}" = "test" ]; then
+            # Test builds: use externally-generated tag for file names
+            echo "ASSET_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
+            echo "FLUTTER_BUILD_NAME=0.0.0" >> "$GITHUB_ENV"
+            echo "FLUTTER_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+            echo "DEB_VERSION=0.0.0~dev.${GITHUB_RUN_NUMBER}+${SHORT_SHA}" >> "$GITHUB_ENV"
+            echo "MSI_VERSION=0.0.0" >> "$GITHUB_ENV"
+          else
+            # Pre-release / Release: read Flutter version from pubspec.yaml
+            python3 - <<'PY' >> "$GITHUB_ENV"
+          import re, pathlib, sys
+          try:
+              p = pathlib.Path('apps/nesium_flutter/pubspec.yaml')
+              s = p.read_text(encoding='utf-8')
+              m = re.search(r'^version:\s*([^\s]+)\s*$', s, re.M)
+              if not m:
+                  sys.exit('ERROR: version: not found in apps/nesium_flutter/pubspec.yaml')
+              v = m.group(1)
+              if '+' in v:
+                  name, build = v.split('+', 1)
+              else:
+                  name, build = v, '0'
+              if not build.isdigit():
+                  sys.exit(f'ERROR: pubspec build number must be digits, got: {build}')
+              
+              # MSI Product Version must be numeric x.y.z
+              base = re.split(r'[-+]', name)[0]
+              parts = base.split('.')
+              while len(parts) < 3:
+                  parts.append('0')
+              msi = '.'.join(parts[:3])
+              
+              print(f'ASSET_TAG={v}')
+              print(f'FLUTTER_BUILD_NAME={name}')
+              print(f'FLUTTER_BUILD_NUMBER={build}')
+              print(f'DEB_VERSION={v}')
+              print(f'MSI_VERSION={msi}')
+          except Exception as e:
+              sys.exit(f'ERROR: Script failed: {e}')
+          PY
+          fi
+
+          echo "Using ASSET_TAG=${ASSET_TAG:-}" || true
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
@@ -120,10 +175,8 @@ jobs:
           rm -rf "$FLUTTER_DIR"
           git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$FLUTTER_DIR"
 
-          # Make Flutter available to subsequent steps.
           echo "$FLUTTER_DIR/bin" >> "$GITHUB_PATH"
 
-          # Prime caches / download artifacts.
           "$FLUTTER_DIR/bin/flutter" --version
           "$FLUTTER_DIR/bin/flutter" precache --linux
           "$FLUTTER_DIR/bin/flutter" doctor -v
@@ -152,8 +205,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # `android-actions/setup-android` ensures the Android SDK is present, but
-          # `sdkmanager` may still not be on PATH on some runner images.
+          # Try finding sdkmanager
           SDKMANAGER="$(command -v sdkmanager || true)"
           if [ -z "${SDKMANAGER}" ]; then
             if [ -n "${ANDROID_SDK_ROOT:-}" ]; then
@@ -165,14 +217,11 @@ jobs:
           fi
           if [ -z "${SDKMANAGER}" ]; then
             echo "ERROR: sdkmanager not found"
-            echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
-            echo "ANDROID_HOME=${ANDROID_HOME:-}"
             exit 1
           fi
 
           echo "Using sdkmanager at: ${SDKMANAGER}"
 
-          # Install a known NDK version so `cargo ndk` can find it.
           set +o pipefail
           yes | "${SDKMANAGER}" --install "ndk;26.1.10909125"
           SDK_RC=${PIPESTATUS[1]}
@@ -195,14 +244,13 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-
           $IconDir = "apps/nesium_flutter/tool/generated/icons"
           New-Item -ItemType Directory -Force -Path $IconDir | Out-Null
 
-          # Composite icon (1024x1024)
+          # Composite icon
           cargo run -p nesium-icon -- --out "$IconDir/app_icon_1024.png"
 
-          # Layered icons (background/foreground, 1024x1024)
+          # Layered icons
           cargo run -p nesium-icon -- layers `
             --bg "$IconDir/app_icon_bg_1024.png" `
             --fg "$IconDir/app_icon_fg_1024.png"
@@ -214,14 +262,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           ICON_DIR="apps/nesium_flutter/tool/generated/icons"
           mkdir -p "$ICON_DIR"
 
-          # Composite icon (1024x1024)
           cargo run -p nesium-icon -- --out "$ICON_DIR/app_icon_1024.png"
 
-          # Layered icons (background/foreground, 1024x1024)
           cargo run -p nesium-icon -- layers \
             --bg "$ICON_DIR/app_icon_bg_1024.png" \
             --fg "$ICON_DIR/app_icon_fg_1024.png"
@@ -256,16 +301,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           ROOT="${GITHUB_WORKSPACE}"
           DIST="$ROOT/dist"
 
           pushd "$ROOT/apps/nesium_flutter" >/dev/null
-
           flutter config --enable-linux-desktop
-          flutter build linux --release
+          flutter build linux --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
 
-          # Flutter outputs the bundle under an arch-specific directory.
           BUNDLE_DIR="$(find build/linux -type d -path '*/release/bundle' | head -n 1 || true)"
           if [ -z "${BUNDLE_DIR}" ] || [ ! -d "${BUNDLE_DIR}" ]; then
             echo "ERROR: Linux bundle directory not found under apps/nesium_flutter/build/linux"
@@ -279,23 +321,19 @@ jobs:
           rm -rf "${PKG_DIR}"
           mkdir -p "${PKG_DIR}/Nesium"
 
-          # Bundle contents.
+          # Bundle contents
           cp -R "${ROOT}/apps/nesium_flutter/${BUNDLE_DIR}/"* "${PKG_DIR}/Nesium/"
 
-          # Optional docs.
+          # Optional docs
           if [ -f "${ROOT}/README.md" ]; then cp -f "${ROOT}/README.md" "${PKG_DIR}/Nesium/"; fi
           if [ -f "${ROOT}/LICENSE.md" ]; then cp -f "${ROOT}/LICENSE.md" "${PKG_DIR}/Nesium/"; fi
 
-          # -------------------------------------------------
           # Portable package (tar.gz)
-          # -------------------------------------------------
-          OUT_TAR="${DIST}/nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.${{ matrix.asset_ext }}"
+          OUT_TAR="${DIST}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-portable.${{ matrix.asset_ext }}"
           tar -C "${PKG_DIR}" -czf "${OUT_TAR}" Nesium
           (cd "$DIST" && shasum -a 256 "$(basename "$OUT_TAR")" > "$(basename "$OUT_TAR").sha256")
 
-          # -------------------------------------------------
           # Installable package (.deb)
-          # -------------------------------------------------
           DEB_ARCH="amd64"
           if [ "${{ matrix.asset_suffix }}" = "linux-aarch64" ]; then
             DEB_ARCH="arm64"
@@ -308,7 +346,6 @@ jobs:
           mkdir -p "${DEB_ROOT}/usr/bin"
           mkdir -p "${DEB_ROOT}/usr/share/applications"
 
-          # Install the bundle under /opt/nesium and provide a launcher in /usr/bin.
           cp -R "${PKG_DIR}/Nesium" "${DEB_ROOT}/opt/nesium/"
           cat > "${DEB_ROOT}/usr/bin/nesium" <<'SH'
           #!/usr/bin/env bash
@@ -317,7 +354,7 @@ jobs:
           SH
           chmod +x "${DEB_ROOT}/usr/bin/nesium"
 
-          # Desktop entry (icon is optional).
+          # Desktop entry
           cat > "${DEB_ROOT}/usr/share/applications/nesium.desktop" <<'DESKTOP'
           [Desktop Entry]
           Type=Application
@@ -327,16 +364,7 @@ jobs:
           Categories=Game;
           DESKTOP
 
-          # Debian package versions must start with a digit (e.g. "0.0.1"), so strip a leading "v" or any other non-digit prefix.
-          DEB_VERSION="${RELEASE_TAG}"
-          DEB_VERSION="${DEB_VERSION#v}"
-          DEB_VERSION="$(echo "$DEB_VERSION" | sed -E 's/^[^0-9]*//')"
-          if [ -z "${DEB_VERSION}" ]; then
-            echo "ERROR: Could not derive a valid Debian version from RELEASE_TAG=${RELEASE_TAG}"
-            exit 1
-          fi
-
-          # Minimal control file.
+          # Minimal control file
           cat > "${DEB_ROOT}/DEBIAN/control" <<CONTROL
           Package: nesium
           Version: ${DEB_VERSION}
@@ -347,7 +375,7 @@ jobs:
           Description: Nesium (Flutter)
           CONTROL
 
-          OUT_DEB="${DIST}/nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}.deb"
+          OUT_DEB="${DIST}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.deb"
           dpkg-deb --build "${DEB_ROOT}" "${OUT_DEB}"
           (cd "$DIST" && shasum -a 256 "$(basename "$OUT_DEB")" > "$(basename "$OUT_DEB").sha256")
 
@@ -361,17 +389,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           ROOT="${GITHUB_WORKSPACE}"
           DIST="$ROOT/dist"
 
           pushd "$ROOT/apps/nesium_flutter" >/dev/null
 
-          # Build release APK (fat APK by default).
-          flutter build apk --release
-
-          # Build Play Store bundle.
-          flutter build appbundle --release
+          # Build release APK and AAB
+          flutter build apk --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+          flutter build appbundle --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
 
           popd >/dev/null
 
@@ -387,8 +412,8 @@ jobs:
             exit 1
           fi
 
-          APK_OUT="$DIST/nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}.apk"
-          AAB_OUT="$DIST/nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}.aab"
+          APK_OUT="$DIST/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.apk"
+          AAB_OUT="$DIST/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.aab"
 
           cp -f "$APK_SRC" "$APK_OUT"
           cp -f "$AAB_SRC" "$AAB_OUT"
@@ -415,7 +440,7 @@ jobs:
           # 1. Build (Standard x64)
           Push-Location "apps\nesium_flutter"
           flutter config --enable-windows-desktop
-          flutter build windows --release
+          flutter build windows --release --build-name "$env:FLUTTER_BUILD_NAME" --build-number "$env:FLUTTER_BUILD_NUMBER"
           Pop-Location
 
           # 2. Locate Artifacts
@@ -440,14 +465,14 @@ jobs:
           if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "README.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "README.md") $portableDir -Force }
           if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md") $portableDir -Force }
 
-          $portableZip = "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}-portable.zip"
+          $portableZip = "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}-portable.zip"
           Compress-Archive -Path "$portableDir\*" -DestinationPath (Join-Path $env:GITHUB_WORKSPACE "dist\$portableZip") -Force
 
           # 4. Create MSI
           $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\bin"
           if (-not (Test-Path $wixBin)) { $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.14\bin" }
 
-          $outMsi = Join-Path $env:GITHUB_WORKSPACE "dist\nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          $outMsi = Join-Path $env:GITHUB_WORKSPACE "dist\nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
           $wxsAppFiles = Join-Path $env:RUNNER_TEMP "appfiles.wxs"
 
           & (Join-Path $wixBin "heat.exe") dir $src -cg AppFiles -dr INSTALLFOLDER -gg -srd -sreg -var var.SourceDir -out $wxsAppFiles
@@ -457,7 +482,7 @@ jobs:
           @"
           <?xml version="1.0" encoding="UTF-8"?>
           <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-            <Product Id="*" Name="Nesium" Language="1033" Version="1.0.0" Manufacturer="Nesium" UpgradeCode="8B9D6C11-2E7C-4EAB-9C75-6B0F7B4E1C5A">
+            <Product Id="*" Name="Nesium" Language="1033" Version="$env:MSI_VERSION" Manufacturer="Nesium" UpgradeCode="8B9D6C11-2E7C-4EAB-9C75-6B0F7B4E1C5A">
               <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
               <MediaTemplate />
               <Directory Id="TARGETDIR" Name="SourceDir">
@@ -490,7 +515,7 @@ jobs:
 
           # 6. Checksums
           Push-Location "dist"
-          Get-FileHash "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\')[-1])" } | Out-File -Encoding ascii "nesium-flutter-$env:RELEASE_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}.sha256"
+          Get-FileHash "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\')[-1])" } | Out-File -Encoding ascii "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}.sha256"
           Get-FileHash "$portableZip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\')[-1])" } | Out-File -Encoding ascii "$portableZip.sha256"
           Pop-Location
 
@@ -507,7 +532,7 @@ jobs:
 
           # 1. Build Flutter App
           flutter config --enable-macos-desktop
-          flutter build macos --release
+          flutter build macos --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
 
           ROOT="${GITHUB_WORKSPACE}"
           DIST="$ROOT/dist"
@@ -517,14 +542,12 @@ jobs:
               echo "No .app produced under build/macos/Build/Products/Release"
               exit 1
           fi
-          app_name_ext="$(basename "$app_src")"  # e.g. Nesium.app
-          app_bin_name="${app_name_ext%.*}"     # e.g. Nesium
+          app_name_ext="$(basename "$app_src")"
+          app_bin_name="${app_name_ext%.*}"
 
           echo "Found App: $app_src (Binary: $app_bin_name)"
 
-          # ---------------------------------------------------------
           # [STEP 2] Manually Build & Embed Rust Dylib
-          # ---------------------------------------------------------
           echo "🔧 Starting manual Rust dylib injection..."
           pushd "${ROOT}"
           cargo build -p nesium-flutter --lib --release --target aarch64-apple-darwin
@@ -547,9 +570,7 @@ jobs:
               exit 1
           fi
 
-          # ---------------------------------------------------------
           # [STEP 3] FIX PATHS (Core Fix for Universal Binary)
-          # ---------------------------------------------------------
           echo "🔧 Patching paths..."
 
           # A. Fix Dylib ID (install name)
@@ -573,8 +594,7 @@ jobs:
             old_path=$(echo "${old_path:-}" | xargs)
 
             if [ -z "$old_path" ]; then
-              echo "Warning: No $DYLIB_NAME reference found in $arch slice. Dumping $arch otool output:"
-              otool -arch "$arch" -L "$EXEC_PATH" || true
+              echo "Warning: No $DYLIB_NAME reference found in $arch slice."
               return 0
             fi
 
@@ -592,30 +612,19 @@ jobs:
           patch_slice arm64
           patch_slice x86_64
 
-          # Verify per-arch
-          echo "Verifying patch (arm64):"
-          otool -arch arm64 -L "$EXEC_PATH" | grep "$DYLIB_NAME" || true
-          echo "Verifying patch (x86_64):"
-          otool -arch x86_64 -L "$EXEC_PATH" | grep "$DYLIB_NAME" || true
-
-          # ---------------------------------------------------------
           # [STEP 4] Packaging
-          # ---------------------------------------------------------
           rm -rf "$ROOT/dmg-src" "$DIST/portable"
           mkdir -p "$ROOT/dmg-src" "$DIST/portable"
 
           cp -R "$app_src" "$ROOT/dmg-src/"
 
-          # ---------------------------------------------------------
-          # [STEP 4.1] Ad-hoc Code Signing (no Apple Developer ID)
-          # ---------------------------------------------------------
+          # [STEP 4.1] Ad-hoc Code Signing
           echo "Signing application (ad-hoc)..."
           APP_DMG="$ROOT/dmg-src/$app_name_ext"
           BIN_DMG="$APP_DMG/Contents/MacOS/$app_bin_name"
           FW_DIR="$APP_DMG/Contents/Frameworks"
           PLUGINS_DIR="$APP_DMG/Contents/PlugIns"
 
-          # Entitlements required for file picker
           ENTITLEMENTS="$ROOT/nesium.entitlements"
 
           cat > "$ENTITLEMENTS" <<'PLIST'
@@ -672,8 +681,8 @@ jobs:
 
           ln -s /Applications "$ROOT/dmg-src/Applications"
 
-          dmg_rw="$DIST/nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}-rw.dmg"
-          dmg="$DIST/nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          dmg_rw="$DIST/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-rw.dmg"
+          dmg="$DIST/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
           vol="Nesium"
 
           hdiutil create -volname "$vol" -srcfolder "$ROOT/dmg-src" -ov -format UDRW "$dmg_rw"
@@ -682,10 +691,10 @@ jobs:
 
           cp -R "$ROOT/dmg-src/$app_name_ext" "$DIST/portable/"
           cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DIST/portable/" 2>/dev/null || true
-          (cd "$DIST/portable" && zip -r "../nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.zip" .)
+          (cd "$DIST/portable" && zip -r "../nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-portable.zip" .)
 
           (cd "$DIST" && shasum -a 256 "$(basename "$dmg")" > "$(basename "$dmg").sha256")
-          (cd "$DIST" && shasum -a 256 "nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.zip" > "nesium-flutter-${RELEASE_TAG}-${{ matrix.asset_suffix }}-portable.zip.sha256")
+          (cd "$DIST" && shasum -a 256 "nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-portable.zip" > "nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-portable.zip.sha256")
 
           ls -la "$DIST"
 
