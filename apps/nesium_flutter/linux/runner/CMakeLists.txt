@@ -32,38 +32,33 @@ endif()
 set(NESIUM_RUST_LIB_DST_DIR "${NESIUM_BUNDLE_DIR}/lib")
 set(NESIUM_RUST_LIB_DST "${NESIUM_RUST_LIB_DST_DIR}/libnesium_flutter.so")
 
-# Build the Rust cdylib using a build-tree stamp file as the explicit OUTPUT.
+# Flutter sometimes builds into an "intermediates_do_not_run" directory.
+# We still want the final runnable bundle at `${CMAKE_BINARY_DIR}/bundle` to
+# contain the Rust shared library as well.
+set(NESIUM_FINAL_BUNDLE_DIR "${CMAKE_BINARY_DIR}/bundle")
+set(NESIUM_FINAL_LIB_DST_DIR "${NESIUM_FINAL_BUNDLE_DIR}/lib")
+set(NESIUM_FINAL_LIB_DST "${NESIUM_FINAL_LIB_DST_DIR}/libnesium_flutter.so")
+
+# Always build the Rust cdylib as part of the Linux runner build.
 #
-# Why a stamp?
-# - The Rust artifact lives under the repo `target/` directory and may already
-#   exist when CMake/Ninja starts, which would cause the command to be skipped.
-# - Using a stamp in the build directory guarantees the build+copy step runs at
-#   least once per build dir, and re-runs when Rust sources change.
-set(NESIUM_RUST_STAMP "${CMAKE_BINARY_DIR}/nesium_rust_${NESIUM_RUST_PROFILE}.stamp")
-
-# Track Rust sources so edits trigger a rebuild.
-file(GLOB_RECURSE NESIUM_RUST_SOURCES CONFIGURE_DEPENDS
-  "${NESIUM_RUST_CRATE_DIR}/Cargo.toml"
-  "${NESIUM_RUST_CRATE_DIR}/Cargo.lock"
-  "${NESIUM_RUST_CRATE_DIR}/build.rs"
-  "${NESIUM_RUST_CRATE_DIR}/src/*.rs"
-)
-
-add_custom_command(
-  OUTPUT "${NESIUM_RUST_STAMP}"
+# We intentionally do NOT try to model Rust's dependency graph in CMake.
+# Instead, we invoke `cargo build` every time to ensure changes in other
+# workspace crates are picked up reliably.
+add_custom_target(nesium_rust_lib ALL
   COMMAND ${CMAKE_COMMAND} -E echo "[nesium] building Rust library (${NESIUM_RUST_PROFILE})"
   COMMAND cargo build --manifest-path "${NESIUM_RUST_CRATE_DIR}/Cargo.toml" --profile ${NESIUM_RUST_PROFILE}
+
+  # Copy into the directory where the runner binary will be executed from.
   COMMAND ${CMAKE_COMMAND} -E make_directory "${NESIUM_RUST_LIB_DST_DIR}"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NESIUM_RUST_LIB_SRC}" "${NESIUM_RUST_LIB_DST}"
-  COMMAND ${CMAKE_COMMAND} -E touch "${NESIUM_RUST_STAMP}"
-  WORKING_DIRECTORY "${NESIUM_REPO_ROOT}"
-  DEPENDS ${NESIUM_RUST_SOURCES}
-  BYPRODUCTS "${NESIUM_RUST_LIB_SRC}" "${NESIUM_RUST_LIB_DST}"
-  VERBATIM
-)
 
-add_custom_target(nesium_rust_lib ALL
-  DEPENDS "${NESIUM_RUST_STAMP}"
+  # Also copy into the final `bundle/` output for local runs and packaging.
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${NESIUM_FINAL_LIB_DST_DIR}"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NESIUM_RUST_LIB_SRC}" "${NESIUM_FINAL_LIB_DST}"
+
+  WORKING_DIRECTORY "${NESIUM_REPO_ROOT}"
+  BYPRODUCTS "${NESIUM_RUST_LIB_DST}" "${NESIUM_FINAL_LIB_DST}"
+  VERBATIM
 )
 
 # Define the application target. To change its name, change BINARY_NAME in the
@@ -90,7 +85,7 @@ add_dependencies(${BINARY_NAME} nesium_rust_lib)
 # Import the Rust shared library and link it.
 add_library(nesium_flutter SHARED IMPORTED GLOBAL)
 set_target_properties(nesium_flutter PROPERTIES
-  IMPORTED_LOCATION "${NESIUM_RUST_LIB_SRC}"
+  IMPORTED_LOCATION "${NESIUM_RUST_LIB_DST}"
 )
 
 target_link_libraries(${BINARY_NAME} PRIVATE nesium_flutter)
