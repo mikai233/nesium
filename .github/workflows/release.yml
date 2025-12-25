@@ -39,10 +39,10 @@ jobs:
                   DATE_UTC="$(date -u +%Y%m%d)"
 
                   if [ "${MODE}" = "test" ]; then
-                    # Test builds: publish a GitHub Release marked as prerelease, using a generated external tag.
+                    # Test builds: no GitHub Release, only artifacts with a generated external tag.
                     echo "tag=dev-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-                    echo "publish_release=true" >> "$GITHUB_OUTPUT"
-                    echo "prerelease=true" >> "$GITHUB_OUTPUT"
+                    echo "publish_release=false" >> "$GITHUB_OUTPUT"
+                    echo "prerelease=false" >> "$GITHUB_OUTPUT"
                   elif [ "${MODE}" = "prerelease" ]; then
                     # Pre-release: create a GitHub Release marked as prerelease.
                     echo "tag=pre-${DATE_UTC}-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
