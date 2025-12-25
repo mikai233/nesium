@@ -350,7 +350,7 @@ jobs:
           cat > "${DEB_ROOT}/usr/bin/nesium" <<'SH'
           #!/usr/bin/env bash
           set -euo pipefail
-          exec /opt/nesium/Nesium/nesium_flutter "$@"
+          exec /opt/nesium/Nesium/Nesium "$@"
           SH
           chmod +x "${DEB_ROOT}/usr/bin/nesium"
 
@@ -449,7 +449,7 @@ jobs:
               $src = Join-Path $env:GITHUB_WORKSPACE "apps\nesium_flutter\build\windows\runner\Release"
           }
           if (-not (Test-Path $src)) {
-              $exe = Get-ChildItem -Path "apps\nesium_flutter\build\windows" -Recurse -Filter "nesium_flutter.exe" | Select-Object -First 1
+              $exe = Get-ChildItem -Path "apps\nesium_flutter\build\windows" -Recurse -Filter "Nesium.exe" | Select-Object -First 1
               if ($exe) { $src = $exe.DirectoryName }
           }
           if (-not (Test-Path $src)) {
