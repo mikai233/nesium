@@ -13,8 +13,8 @@ import '../domain/nes_controller.dart';
 import '../domain/nes_state.dart';
 import '../platform/desktop_window_manager.dart';
 import 'desktop_shell.dart';
+import 'nes_actions.dart';
 import 'mobile_shell.dart';
-import 'panes.dart';
 
 class NesShell extends ConsumerStatefulWidget {
   const NesShell({super.key});
@@ -47,10 +47,6 @@ class _NesShellState extends ConsumerState<NesShell> {
       }
       await ref.read(nesControllerProvider.notifier).initTexture();
     });
-  }
-
-  void _selectPane(NesPane pane) {
-    ref.read(selectedPaneProvider.notifier).state = pane;
   }
 
   void _showTodo(String label) {
@@ -146,18 +142,33 @@ class _NesShellState extends ConsumerState<NesShell> {
     return KeyEventResult.handled;
   }
 
+  Future<void> _togglePause() async {
+    _showTodo('Pause/Resume');
+  }
+
+  Future<void> _openSettings() async {
+    _showTodo('Settings');
+  }
+
+  Future<void> _openDebugger() async {
+    await _desktopWindowManager.openDebuggerWindow();
+  }
+
+  Future<void> _openTools() async {
+    await _desktopWindowManager.openToolsWindow();
+  }
+
   @override
   Widget build(BuildContext context) {
     final NesState state = ref.watch(nesControllerProvider);
-    final NesPane selectedPane = ref.watch(selectedPaneProvider);
 
-    final callbacks = (
+    final actions = NesActions(
       openRom: _promptAndLoadRom,
-      togglePause: () => _showTodo('Pause/Resume'),
       reset: _resetConsole,
-      openSettings: () => _showTodo('Settings'),
-      openDebugger: () => _desktopWindowManager.openDebuggerWindow(),
-      openTools: () => _desktopWindowManager.openToolsWindow(),
+      togglePause: _togglePause,
+      openSettings: _openSettings,
+      openDebugger: _openDebugger,
+      openTools: _openTools,
     );
 
     if (_isDesktop) {
@@ -165,26 +176,10 @@ class _NesShellState extends ConsumerState<NesShell> {
         focusNode: _focusNode,
         autofocus: true,
         onKeyEvent: _handleKeyEvent,
-        child: DesktopShell(
-          state: state,
-          onOpenRom: callbacks.openRom,
-          onTogglePause: callbacks.togglePause,
-          onReset: callbacks.reset,
-          onOpenSettings: callbacks.openSettings,
-          onOpenDebugger: callbacks.openDebugger,
-          onOpenTools: callbacks.openTools,
-        ),
+        child: DesktopShell(state: state, actions: actions),
       );
     }
 
-    return MobileShell(
-      state: state,
-      selectedPane: selectedPane,
-      onSelectPane: _selectPane,
-      onOpenRom: callbacks.openRom,
-      onTogglePause: callbacks.togglePause,
-      onReset: callbacks.reset,
-      onOpenSettings: callbacks.openSettings,
-    );
+    return MobileShell(state: state, actions: actions);
   }
 }

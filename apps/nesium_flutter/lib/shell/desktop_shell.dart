@@ -1,27 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../features/screen/nes_screen_view.dart';
 import '../domain/nes_state.dart';
+import 'nes_actions.dart';
+import 'nes_menu_model.dart';
 
 class DesktopShell extends StatelessWidget {
-  const DesktopShell({
-    super.key,
-    required this.state,
-    required this.onOpenRom,
-    required this.onTogglePause,
-    required this.onReset,
-    required this.onOpenSettings,
-    required this.onOpenDebugger,
-    required this.onOpenTools,
-  });
+  const DesktopShell({super.key, required this.state, required this.actions});
 
   final NesState state;
-  final VoidCallback onOpenRom;
-  final VoidCallback onTogglePause;
-  final VoidCallback onReset;
-  final VoidCallback onOpenSettings;
-  final VoidCallback onOpenDebugger;
-  final VoidCallback onOpenTools;
+  final NesActions actions;
 
   @override
   Widget build(BuildContext context) {
@@ -33,14 +23,7 @@ class DesktopShell extends StatelessWidget {
         removeBottom: true,
         child: Column(
           children: [
-            _DesktopMenuBar(
-              onOpenRom: onOpenRom,
-              onReset: onReset,
-              onTogglePause: onTogglePause,
-              onOpenSettings: onOpenSettings,
-              onOpenDebugger: onOpenDebugger,
-              onOpenTools: onOpenTools,
-            ),
+            _DesktopMenuBar(actions: actions),
             Expanded(
               child: NesScreenView(
                 error: state.error,
@@ -55,21 +38,9 @@ class DesktopShell extends StatelessWidget {
 }
 
 class _DesktopMenuBar extends StatelessWidget {
-  const _DesktopMenuBar({
-    required this.onOpenRom,
-    required this.onReset,
-    required this.onTogglePause,
-    required this.onOpenSettings,
-    required this.onOpenDebugger,
-    required this.onOpenTools,
-  });
+  const _DesktopMenuBar({required this.actions});
 
-  final VoidCallback onOpenRom;
-  final VoidCallback onReset;
-  final VoidCallback onTogglePause;
-  final VoidCallback onOpenSettings;
-  final VoidCallback onOpenDebugger;
-  final VoidCallback onOpenTools;
+  final NesActions actions;
 
   @override
   Widget build(BuildContext context) {
@@ -90,42 +61,23 @@ class _DesktopMenuBar extends StatelessWidget {
           // elevation: WidgetStateProperty.all(0),
           // backgroundColor: WidgetStateProperty.all(Colors.transparent),
         ),
-        children: [
-          _buildMenu('File', [
-            MenuItemButton(
-              onPressed: onOpenRom,
-              child: const Text('Open ROM...'),
-            ),
-            MenuItemButton(onPressed: onReset, child: const Text('Reset')),
-          ], textStyle),
-          _buildMenu('Emulation', [
-            MenuItemButton(
-              onPressed: onTogglePause,
-              child: const Text('Pause / Resume'),
-            ),
-            MenuItemButton(onPressed: onReset, child: const Text('Soft Reset')),
-          ], textStyle),
-          _buildMenu('Settings', [
-            MenuItemButton(
-              onPressed: onOpenSettings,
-              child: const Text('Preferences...'),
-            ),
-            const MenuItemButton(
-              onPressed: null,
-              child: Text('Input Mapping (coming soon)'),
-            ),
-          ], textStyle),
-          _buildMenu('Windows', [
-            MenuItemButton(
-              onPressed: onOpenDebugger,
-              child: const Text('Open Debugger Window'),
-            ),
-            MenuItemButton(
-              onPressed: onOpenTools,
-              child: const Text('Open Tools Window'),
-            ),
-          ], textStyle),
-        ],
+        children: NesMenus.desktopMenuSections
+            .map(
+              (section) => _buildMenu(section.title, [
+                ...section.items.map(
+                  (item) => MenuItemButton(
+                    onPressed: () => _dispatch(item.id),
+                    child: Text(_desktopLabel(item.id)),
+                  ),
+                ),
+                if (section.title == 'Settings')
+                  const MenuItemButton(
+                    onPressed: null,
+                    child: Text('Input Mapping (coming soon)'),
+                  ),
+              ], textStyle),
+            )
+            .toList(growable: false),
       ),
     );
   }
@@ -135,5 +87,45 @@ class _DesktopMenuBar extends StatelessWidget {
       menuChildren: items,
       child: Text(title, style: textStyle, textAlign: TextAlign.center),
     );
+  }
+
+  void _dispatch(NesMenuItemId id) {
+    switch (id) {
+      case NesMenuItemId.openRom:
+        unawaited(actions.openRom());
+        break;
+      case NesMenuItemId.reset:
+        unawaited(actions.reset());
+        break;
+      case NesMenuItemId.togglePause:
+        unawaited(actions.togglePause());
+        break;
+      case NesMenuItemId.settings:
+        unawaited(actions.openSettings());
+        break;
+      case NesMenuItemId.debugger:
+        unawaited(actions.openDebugger());
+        break;
+      case NesMenuItemId.tools:
+        unawaited(actions.openTools());
+        break;
+    }
+  }
+
+  String _desktopLabel(NesMenuItemId id) {
+    switch (id) {
+      case NesMenuItemId.openRom:
+        return 'Open ROM...';
+      case NesMenuItemId.reset:
+        return 'Reset';
+      case NesMenuItemId.togglePause:
+        return 'Pause / Resume';
+      case NesMenuItemId.settings:
+        return 'Preferences...';
+      case NesMenuItemId.debugger:
+        return 'Open Debugger Window';
+      case NesMenuItemId.tools:
+        return 'Open Tools Window';
+    }
   }
 }
