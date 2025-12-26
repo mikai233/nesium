@@ -34,12 +34,6 @@ object NesiumNative {
     @JvmStatic
     external fun nativeEndFrontCopy()
 
-    /**
-     * 0 = RGBA8888, 1 = BGRA8888
-     */
-    @JvmStatic
-    external fun nativeColorFormat(): Int
-
     @JvmStatic
     external fun nativeFrameWidth(): Int
 

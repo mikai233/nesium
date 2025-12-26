@@ -28,13 +28,18 @@ class MainActivity : FlutterActivity() {
                         val entry = flutterEngine.renderer.createSurfaceTexture()
                         entry.surfaceTexture().setDefaultBufferSize(256, 240)
 
-                        renderer?.dispose()
+                        renderer?.dispose(waitForShutdown = true)
                         renderer = NesRenderer(
                             flutterEngine = flutterEngine,
                             textureEntry = entry,
                         )
 
                         result.success(entry.id())
+                    }
+                    "disposeNesTexture" -> {
+                        renderer?.dispose(waitForShutdown = true)
+                        renderer = null
+                        result.success(null)
                     }
 
                     else -> result.notImplemented()
@@ -43,7 +48,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
-        renderer?.dispose()
+        renderer?.dispose(waitForShutdown = true)
         renderer = null
         super.onDestroy()
     }

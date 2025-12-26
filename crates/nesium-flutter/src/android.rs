@@ -13,9 +13,7 @@ use jni::{
     sys::{jint, jlong, jobject},
 };
 
-use nesium_core::ppu::buffer::ColorFormat;
-
-use crate::{FRAME_HEIGHT, FRAME_WIDTH, ensure_runtime, frame_handle_ref, nesium_runtime_start};
+use crate::{FRAME_HEIGHT, FRAME_WIDTH, ensure_runtime, frame_handle_ref};
 
 // Raw syscalls (fcntl/write) for the Android frame signal pipe.
 use libc;
@@ -89,6 +87,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_init_1android
 /// Stores the write-end FD for the frame signal pipe and makes it non-blocking.
 fn set_frame_signal_fd(fd: RawFd) {
     if fd < 0 {
+        FRAME_SIGNAL_FD.store(-1, Ordering::Release);
         return;
     }
 
@@ -250,26 +249,6 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeEndFron
 ) {
     let h = frame_handle_ref();
     h.end_front_copy();
-}
-
-/// Returns the current pixel format.
-///
-/// Kotlin: `NesiumNative.nativeColorFormat(): Int`
-///
-/// 0 = RGBA8888, 1 = BGRA8888, 2 = Unknown
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeColorFormat(
-    _env: JNIEnv,
-    _class: JClass,
-) -> jint {
-    nesium_runtime_start();
-
-    let h = frame_handle_ref();
-    match h.color_format() {
-        Some(ColorFormat::Rgba8888) => 0,
-        Some(ColorFormat::Bgra8888) => 1,
-        _ => 2,
-    }
 }
 
 /// Returns the fixed NES framebuffer width in pixels.

@@ -16,8 +16,8 @@ import android.os.ParcelFileDescriptor
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
-import android.util.Log
 import java.io.FileDescriptor
+import java.util.concurrent.CountDownLatch
 
 
 /**
@@ -45,17 +45,12 @@ class NesRenderer(
     private var aPosition = -1
     private var aTexCoord = -1
     private var uTexture = -1
-    private var uSwapRb = -1
-
     private var running = true
     private var lastSeq = -1L
 
     // Cached native constants (NES frame size is fixed).
     private var frameW = 0
     private var frameH = 0
-
-    // Cached format decision: 0 = RGBA8888, 1 = BGRA8888.
-    private var swapRb = false
 
     // Cached DirectByteBuffers for the two persistent planes (double-buffered).
     private var planeBuffers: Array<ByteBuffer?> = arrayOfNulls(2)
@@ -94,13 +89,9 @@ class NesRenderer(
     private val fragmentShaderCode = """
         precision mediump float;
         uniform sampler2D u_texture;
-        uniform int u_swap_rb;
         varying vec2 v_tex_coord;
         void main() {
             vec4 c = texture2D(u_texture, v_tex_coord);
-            if (u_swap_rb != 0) {
-                c = vec4(c.b, c.g, c.r, c.a);
-            }
             gl_FragColor = c;
         }
     """.trimIndent()
@@ -191,9 +182,6 @@ class NesRenderer(
         frameW = NesiumNative.nativeFrameWidth()
         frameH = NesiumNative.nativeFrameHeight()
 
-        // Cache the source color format decision. This is effectively static for a given build.
-        swapRb = NesiumNative.nativeColorFormat() == 1
-
         // Cache DirectByteBuffers for the two persistent planes.
         // The underlying memory is stable for the lifetime of the process.
         planeBuffers[0] = NesiumNative.nativePlaneBuffer(0)
@@ -206,11 +194,18 @@ class NesRenderer(
         GLES20.glAttachShader(program, vertexShader)
         GLES20.glAttachShader(program, fragmentShader)
         GLES20.glLinkProgram(program)
+        val linkStatus = IntArray(1)
+        GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0)
+        if (linkStatus[0] == 0) {
+            val log = GLES20.glGetProgramInfoLog(program)
+            GLES20.glDeleteProgram(program)
+            program = 0
+            throw IllegalStateException("Program link failed: $log")
+        }
 
         aPosition = GLES20.glGetAttribLocation(program, "a_position")
         aTexCoord = GLES20.glGetAttribLocation(program, "a_tex_coord")
         uTexture = GLES20.glGetUniformLocation(program, "u_texture")
-        uSwapRb = GLES20.glGetUniformLocation(program, "u_swap_rb")
 
         // Texture storage.
         val textures = IntArray(1)
@@ -263,6 +258,13 @@ class NesRenderer(
         val shader = GLES20.glCreateShader(type)
         GLES20.glShaderSource(shader, code)
         GLES20.glCompileShader(shader)
+        val status = IntArray(1)
+        GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, status, 0)
+        if (status[0] == 0) {
+            val log = GLES20.glGetShaderInfoLog(shader)
+            GLES20.glDeleteShader(shader)
+            throw IllegalStateException("Shader compile failed: $log")
+        }
         return shader
     }
 
@@ -347,6 +349,9 @@ class NesRenderer(
                 // Best-effort cleanup.
             }
         }
+
+        // Stop native writes before closing the pipe.
+        NesiumNative.nativeSetFrameSignalFd(-1)
 
         try {
             frameSignalRead?.close()
@@ -488,7 +493,6 @@ class NesRenderer(
 
             GLES20.glUseProgram(program)
             GLES20.glUniform1i(uTexture, 0)
-            GLES20.glUniform1i(uSwapRb, if (swapRb) 1 else 0)
 
             vertexData.position(0)
             GLES20.glVertexAttribPointer(aPosition, 2, GLES20.GL_FLOAT, false, 16, vertexData)
@@ -519,7 +523,13 @@ class NesRenderer(
     }
 
     fun dispose() {
+        dispose(waitForShutdown = false)
+    }
+
+    fun dispose(waitForShutdown: Boolean) {
+        if (!running) return
         running = false
+        val latch = if (waitForShutdown) CountDownLatch(1) else null
         handler.post {
             try {
                 destroyEglOnly()
@@ -529,6 +539,16 @@ class NesRenderer(
 
                 textureEntry.release()
                 thread.quitSafely()
+                latch?.countDown()
+            }
+        }
+
+        if (waitForShutdown && latch != null) {
+            try {
+                latch.await()
+                thread.join(500)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
             }
         }
     }
