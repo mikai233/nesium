@@ -25,7 +25,7 @@ class MainFlutterWindow: NSWindow {
       let splash = NSView(frame: contentView.bounds)
       splash.autoresizingMask = [.width, .height]
       splash.wantsLayer = true
-      splash.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+      splash.layer?.backgroundColor = NSColor.black.cgColor
 
       contentView.addSubview(splash)
       self.splashView = splash
