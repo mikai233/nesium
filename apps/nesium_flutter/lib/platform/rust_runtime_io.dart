@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-import '../src/rust/frb_generated.dart';
+import '../bridge/frb_generated.dart';
 
 import 'package:path/path.dart' as p;
 

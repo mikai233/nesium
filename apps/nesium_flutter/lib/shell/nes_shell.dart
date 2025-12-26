@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nesium_flutter/src/rust/api/load_rom.dart' as nes_api;
-import 'package:nesium_flutter/src/rust/api/input.dart' as nes_input;
-import 'package:nesium_flutter/src/rust/api/pause.dart' as nes_pause;
-import 'package:nesium_flutter/src/rust/lib.dart' show PadButton;
+import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
+import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
+import 'package:nesium_flutter/bridge/api/pause.dart' as nes_pause;
+import 'package:nesium_flutter/bridge/lib.dart' show PadButton;
 
 import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';

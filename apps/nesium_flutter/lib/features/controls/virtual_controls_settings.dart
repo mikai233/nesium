@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-import 'package:nesium_flutter/src/rust/api/input.dart' as nes_input;
+import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

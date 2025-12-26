@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nesium_flutter/src/rust/api/input.dart' as nes_input;
-import 'package:nesium_flutter/src/rust/lib.dart' show PadButton;
+import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
+import 'package:nesium_flutter/bridge/lib.dart' show PadButton;
 
 class NesInputMasksState {
   const NesInputMasksState({required this.padMask, required this.turboMask});
