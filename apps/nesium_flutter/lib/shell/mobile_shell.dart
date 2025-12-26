@@ -17,10 +17,47 @@ class MobileShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Nesium')),
+      appBar: isLandscape ? null : AppBar(title: const Text('Nesium')),
       drawer: _MobileDrawer(actions: actions),
-      body: NesScreenView(error: state.error, textureId: state.textureId),
+      body: isLandscape
+          ? Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned.fill(
+                  child: NesScreenView(
+                    error: state.error,
+                    textureId: state.textureId,
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Builder(
+                        builder: (context) => Material(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(12),
+                          clipBehavior: Clip.antiAlias,
+                          child: IconButton(
+                            onPressed: () => Scaffold.of(context).openDrawer(),
+                            icon: const Icon(Icons.menu),
+                            color: Colors.white,
+                            tooltip: 'Menu',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : NesScreenView(error: state.error, textureId: state.textureId),
     );
   }
 }
