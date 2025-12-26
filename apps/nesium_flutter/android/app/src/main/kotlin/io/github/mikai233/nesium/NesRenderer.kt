@@ -10,6 +10,7 @@ import android.opengl.GLES20
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import android.os.Build
 import android.os.Looper
 import android.os.MessageQueue
 import android.os.ParcelFileDescriptor
@@ -63,6 +64,7 @@ class NesRenderer(
     private var frameSignalRead: ParcelFileDescriptor? = null
     private var frameSignalWrite: ParcelFileDescriptor? = null
     private var frameSignalFd: FileDescriptor? = null
+    private var frameSignalNonBlocking = false
 
     @Volatile
     private var hasNewFrameSignal: Boolean = false
@@ -289,11 +291,15 @@ class NesRenderer(
         }
 
         // Make reads non-blocking so we can drain without risking a stall.
-        try {
-            val flags = Os.fcntlInt(fd, OsConstants.F_GETFL, 0)
-            Os.fcntlInt(fd, OsConstants.F_SETFL, flags or OsConstants.O_NONBLOCK)
-        } catch (e: ErrnoException) {
-            throw IllegalStateException("Failed to set O_NONBLOCK on frame signal pipe", e)
+        frameSignalNonBlocking = false
+        if (Build.VERSION.SDK_INT >= 30) {
+            try {
+                val flags = Os.fcntlInt(fd, OsConstants.F_GETFL, 0)
+                Os.fcntlInt(fd, OsConstants.F_SETFL, flags or OsConstants.O_NONBLOCK)
+                frameSignalNonBlocking = true
+            } catch (e: ErrnoException) {
+                throw IllegalStateException("Failed to set O_NONBLOCK on frame signal pipe", e)
+            }
         }
 
         // Register an FD listener on THIS looper (the GL thread looper).
@@ -316,6 +322,14 @@ class NesRenderer(
     private fun drainFrameSignal() {
         val fd = frameSignalFd ?: return
         val buf = ByteArray(64)
+        if (!frameSignalNonBlocking) {
+            try {
+                Os.read(fd, buf, 0, buf.size)
+            } catch (_: ErrnoException) {
+                return
+            }
+            return
+        }
         while (true) {
             try {
                 val n = Os.read(fd, buf, 0, buf.size)
@@ -520,10 +534,6 @@ class NesRenderer(
         } finally {
             NesiumNative.nativeEndFrontCopy()
         }
-    }
-
-    fun dispose() {
-        dispose(waitForShutdown = false)
     }
 
     fun dispose(waitForShutdown: Boolean) {
