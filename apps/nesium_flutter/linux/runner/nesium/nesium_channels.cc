@@ -15,6 +15,12 @@ static constexpr const char *kChannelName = "nesium";
 static constexpr const char *kMethodCreate = "createNesTexture";
 static constexpr const char *kMethodDispose = "disposeNesTexture";
 
+// Texture upload pipeline (Linux):
+// 1) Rust runtime emits a frame-ready callback from its render thread.
+// 2) We coalesce callbacks and wake a dedicated copy worker.
+// 3) The copy worker blits the latest frame into a double-buffered RGBA
+// texture. 4) We schedule a GTK main-thread notify to present the new frame.
+
 // ---- Rust FFI (linked at build time) ----
 //
 // The Linux runner links against libnesium_flutter.so, so we can call the
@@ -58,7 +64,21 @@ struct _NesiumChannels {
 
   // Coalesce notifications to the GTK main thread.
   std::atomic<bool> notify_scheduled{false};
+
+  // Keep the instance alive while async GTK callbacks are in flight.
+  std::atomic<int> ref_count{1};
+  std::atomic<bool> shutting_down{false};
 };
+
+static void nesium_channels_ref(NesiumChannels *self) {
+  self->ref_count.fetch_add(1, std::memory_order_relaxed);
+}
+
+static void nesium_channels_unref(NesiumChannels *self) {
+  if (self->ref_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+    delete self;
+  }
+}
 
 static FlMethodResponse *make_error(const char *code, const char *message) {
   g_autoptr(FlValue) details = fl_value_new_null();
@@ -75,6 +95,10 @@ static gboolean notify_on_main(gpointer user_data) {
   auto *self = static_cast<NesiumChannels *>(user_data);
   self->notify_scheduled.store(false, std::memory_order_release);
 
+  if (self->shutting_down.load(std::memory_order_acquire)) {
+    return G_SOURCE_REMOVE;
+  }
+
   if (self->registrar != nullptr && self->texture != nullptr) {
     fl_texture_registrar_mark_texture_frame_available(self->registrar,
                                                       self->texture);
@@ -83,15 +107,26 @@ static gboolean notify_on_main(gpointer user_data) {
   return G_SOURCE_REMOVE;
 }
 
+static void notify_on_main_destroy(gpointer user_data) {
+  auto *self = static_cast<NesiumChannels *>(user_data);
+  nesium_channels_unref(self);
+}
+
 static void schedule_notify(NesiumChannels *self) {
+  if (self->shutting_down.load(std::memory_order_acquire)) {
+    return;
+  }
+
   bool expected = false;
   if (!self->notify_scheduled.compare_exchange_strong(
           expected, true, std::memory_order_acq_rel)) {
     return;
   }
 
-  // Run on the GTK main loop.
-  g_main_context_invoke(nullptr, notify_on_main, self);
+  // Run on the GTK main loop, keeping the instance alive until callback runs.
+  nesium_channels_ref(self);
+  g_main_context_invoke_full(nullptr, G_PRIORITY_DEFAULT, notify_on_main, self,
+                             notify_on_main_destroy);
 }
 
 static void copy_worker_main(NesiumChannels *self) {
@@ -111,14 +146,19 @@ static void copy_worker_main(NesiumChannels *self) {
       self->pending.reset();
     }
 
-    if (self->texture == nullptr) {
+    if (self->texture == nullptr ||
+        self->shutting_down.load(std::memory_order_acquire)) {
       continue;
     }
 
     auto *tex = NESIUM_TEXTURE(self->texture);
 
-    // Force tightly-packed RGBA for Flutter's pixel buffer texture.
+    // Flutter's pixel buffer texture expects tightly-packed RGBA.
     const uint32_t dst_stride = f.width * 4u;
+    if (f.pitch_bytes != dst_stride) {
+      // Rust guarantees RGBA; skip mismatched frames defensively.
+      continue;
+    }
 
     uint8_t *dst = nullptr;
     if (!nesium_texture_begin_write(tex, f.width, f.height, dst_stride, &dst)) {
@@ -138,6 +178,9 @@ static void frame_ready_cb(uint32_t buffer_index, uint32_t width,
                            uint32_t height, uint32_t pitch_bytes,
                            void *user_data) {
   auto *self = static_cast<NesiumChannels *>(user_data);
+  if (self->shutting_down.load(std::memory_order_acquire)) {
+    return;
+  }
 
   // Keep the callback lightweight: overwrite the latest pending frame and wake
   // the copy worker.
@@ -288,6 +331,8 @@ void nesium_channels_free(NesiumChannels *self) {
   if (self == nullptr)
     return;
 
+  self->shutting_down.store(true, std::memory_order_release);
+
   // Unhook callback and stop worker first.
   nesium_set_frame_ready_callback(nullptr, nullptr);
 
@@ -311,5 +356,5 @@ void nesium_channels_free(NesiumChannels *self) {
     self->registrar = nullptr;
   }
 
-  delete self;
+  nesium_channels_unref(self);
 }
