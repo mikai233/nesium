@@ -24,7 +24,7 @@ final class NesiumTexture: NSObject, FlutterTexture {
 
     /// Atomic index indicating which buffer contains the latest fully written frame.
     /// 0 or 1.
-    let latestReadyIndex = ManagedAtomic<Int32>(0)
+    private let latestReadyIndex = ManagedAtomic<Int32>(0)
 
     init(width: Int, height: Int) {
         self.width = width
@@ -34,6 +34,8 @@ final class NesiumTexture: NSObject, FlutterTexture {
         if let pb0 = NesiumTexture.makePixelBuffer(width: width, height: height),
            let pb1 = NesiumTexture.makePixelBuffer(width: width, height: height) {
             self.pixelBuffers = [pb0, pb1]
+        } else {
+            NSLog("NesiumTexture: failed to create CVPixelBuffer(s) for %dx%d", width, height)
         }
     }
 
@@ -65,7 +67,7 @@ final class NesiumTexture: NSObject, FlutterTexture {
 
         return pb
     }
-    
+
     // MARK: - Writer Interface
 
     /// Executes the given closure with a writable pixel buffer.

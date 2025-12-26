@@ -6,7 +6,7 @@
 
 namespace {
 // A permanent fallback pixel used before the first real frame is published.
-constexpr uint8_t kFallbackPixelRGBA[4] = {0, 0, 0, 255};
+constexpr uint8_t kFallbackPixelRGBA[4] = {0, 0, 0, 0};
 }  // namespace
 
 // IMPORTANT:
