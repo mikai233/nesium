@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/src/rust/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/src/rust/api/input.dart' as nes_input;
+import 'package:nesium_flutter/src/rust/api/pause.dart' as nes_pause;
 import 'package:nesium_flutter/src/rust/lib.dart' show PadButton;
 
 import '../domain/nes_controller.dart';
@@ -26,10 +27,12 @@ class NesShell extends ConsumerStatefulWidget {
   ConsumerState<NesShell> createState() => _NesShellState();
 }
 
-class _NesShellState extends ConsumerState<NesShell> {
+class _NesShellState extends ConsumerState<NesShell>
+    with WidgetsBindingObserver {
   final DesktopWindowManager _desktopWindowManager =
       const DesktopWindowManager();
   final FocusNode _focusNode = FocusNode();
+  bool _pausedByLifecycle = false;
 
   bool get _isDesktop =>
       !kIsWeb &&
@@ -40,6 +43,7 @@ class _NesShellState extends ConsumerState<NesShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Future.microtask(() async {
       // Start the NES runtime thread on the Rust side via FRB,
       // then initialize the texture used for rendering.
@@ -58,10 +62,38 @@ class _NesShellState extends ConsumerState<NesShell> {
     });
   }
 
-  void _showTodo(String label) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$label: TODO (wire via FRB)')));
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (_pausedByLifecycle) {
+          _pausedByLifecycle = false;
+          unawaited(nes_pause.setPaused(paused: false).catchError((_) {}));
+        }
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        unawaited(_pauseForLifecycle());
+        break;
+    }
+  }
+
+  Future<void> _pauseForLifecycle() async {
+    try {
+      final wasPaused = await nes_pause.isPaused();
+      if (wasPaused) return;
+      _pausedByLifecycle = true;
+      await nes_pause.setPaused(paused: true);
+    } catch (_) {}
   }
 
   void _showSnack(String message) {
@@ -150,7 +182,15 @@ class _NesShellState extends ConsumerState<NesShell> {
   }
 
   Future<void> _togglePause() async {
-    _showTodo('Pause/Resume');
+    try {
+      _pausedByLifecycle = false;
+      final paused = await nes_pause.togglePause();
+      if (!mounted) return;
+      _showSnack(paused ? 'Paused' : 'Resumed');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Pause failed: $e');
+    }
   }
 
   Future<void> _openSettings() async {
