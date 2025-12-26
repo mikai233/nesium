@@ -3,7 +3,6 @@ package io.github.mikai233.nesium
 import android.os.Handler
 import android.os.HandlerThread
 import android.view.Surface
-import android.view.Choreographer
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.view.TextureRegistry
 import android.opengl.EGL14
@@ -71,13 +70,7 @@ class NesRenderer(
     private var hasNewFrameSignal: Boolean = false
 
     @Volatile
-    private var vsyncScheduled: Boolean = false
-
-    private var choreographer: Choreographer? = null
-    private val frameCallback = Choreographer.FrameCallback {
-        vsyncScheduled = false
-        renderLoop()
-    }
+    private var renderScheduled: Boolean = false
 
     // Safety fallback: if we ever miss signals on some devices, we still make progress.
     private val watchdogDelayMs = 250L
@@ -177,10 +170,6 @@ class NesRenderer(
         if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) {
             throw RuntimeException("eglMakeCurrent failed")
         }
-
-        // Prefer vsync-aligned scheduling to reduce occasional missed frames (scroll jitter).
-        // Choreographer callbacks run on this thread's looper.
-        choreographer = Choreographer.getInstance()
 
         // Initialize the frame-ready wakeup pipe on the GL thread looper.
         ensureFrameSignalPipeInitialized()
@@ -360,14 +349,10 @@ class NesRenderer(
 
     private fun scheduleRender() {
         if (!running) return
-        if (vsyncScheduled) return
-        vsyncScheduled = true
-        val ch = choreographer
-        if (ch != null) {
-            ch.postFrameCallback(frameCallback)
-        } else {
-            handler.post { renderLoop() }
-        }
+        if (renderScheduled) return
+        renderScheduled = true
+        // Post at front to reduce latency from the signal->render path.
+        handler.postAtFrontOfQueue { renderLoop() }
     }
 
     private fun teardownFrameSignalPipe() {
@@ -396,7 +381,7 @@ class NesRenderer(
         frameSignalWrite = null
         frameSignalFd = null
         hasNewFrameSignal = false
-        vsyncScheduled = false
+        renderScheduled = false
     }
 
     private fun updateViewportIfNeeded() {
@@ -478,7 +463,8 @@ class NesRenderer(
     }
 
     private fun renderLoop() {
-        // This function is scheduled via `scheduleRender()` (signal-driven, vsync-aligned).
+        // This function is scheduled via `scheduleRender()` (signal-driven).
+        renderScheduled = false
         if (!running) return
 
         val hadSignal = hasNewFrameSignal
@@ -557,8 +543,6 @@ class NesRenderer(
         val latch = if (waitForShutdown) CountDownLatch(1) else null
         handler.post {
             try {
-                choreographer?.removeFrameCallback(frameCallback)
-                choreographer = null
                 destroyEglOnly()
             } finally {
                 // Must run on the GL thread looper.
