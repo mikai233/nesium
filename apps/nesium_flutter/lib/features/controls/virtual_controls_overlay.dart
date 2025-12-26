@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../domain/nes_input_masks.dart';
 import '../screen/nes_screen_view.dart';
+import 'input_settings.dart';
 import 'virtual_controls_settings.dart';
 
 class VirtualControlsOverlay extends ConsumerWidget {
@@ -17,7 +18,10 @@ class VirtualControlsOverlay extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(virtualControlsSettingsProvider);
-    if (!settings.enabled) return const SizedBox.shrink();
+    final inputSettings = ref.watch(inputSettingsProvider);
+    if (inputSettings.device != InputDevice.virtualController) {
+      return const SizedBox.shrink();
+    }
 
     final safeInsets = MediaQuery.paddingOf(context);
     final input = ref.read(nesInputMasksProvider.notifier);

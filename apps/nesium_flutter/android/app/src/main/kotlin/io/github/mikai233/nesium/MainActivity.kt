@@ -1,5 +1,6 @@
 package io.github.mikai233.nesium
 
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 
 import io.flutter.embedding.android.FlutterActivity
@@ -32,10 +33,12 @@ class MainActivity : FlutterActivity() {
                         renderer = NesRenderer(
                             flutterEngine = flutterEngine,
                             textureEntry = entry,
+                            profilingEnabled = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0,
                         )
 
                         result.success(entry.id())
                     }
+
                     "disposeNesTexture" -> {
                         renderer?.dispose(waitForShutdown = true)
                         renderer = null

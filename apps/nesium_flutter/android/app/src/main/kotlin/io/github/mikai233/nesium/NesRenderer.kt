@@ -17,6 +17,7 @@ import android.os.ParcelFileDescriptor
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
+import android.util.Log
 import java.io.FileDescriptor
 import java.util.concurrent.CountDownLatch
 
@@ -30,7 +31,12 @@ import java.util.concurrent.CountDownLatch
 class NesRenderer(
     private val flutterEngine: FlutterEngine,
     private val textureEntry: TextureRegistry.SurfaceTextureEntry,
+    private val profilingEnabled: Boolean = false,
 ) {
+    private companion object {
+        private const val TAG = "NesRenderer"
+    }
+
     private val thread = HandlerThread("NesGLThread")
     private val handler: Handler
 
@@ -77,6 +83,73 @@ class NesRenderer(
 
     // Prevent recursive re-initialization when EGL context is lost.
     private var recreatingEgl = false
+
+    // --- Profiling (optional) ---
+    private var profFrames = 0
+    private var profLastLogNs = 0L
+    private var profSumUploadNs = 0L
+    private var profMaxUploadNs = 0L
+    private var profSumSwapNs = 0L
+    private var profMaxSwapNs = 0L
+    private var profSumTotalNs = 0L
+    private var profMaxTotalNs = 0L
+
+    private fun recordFrameTiming(
+        tStartNs: Long,
+        tUploadStartNs: Long,
+        tUploadEndNs: Long,
+        tSwapStartNs: Long,
+        tSwapEndNs: Long,
+    ) {
+        val pacingThresholdSwapNs = 25_000_000L // ~25ms, likely missed vsync on 60Hz
+
+        val uploadNs = tUploadEndNs - tUploadStartNs
+        val swapNs = tSwapEndNs - tSwapStartNs
+        val totalNs = tSwapEndNs - tStartNs
+
+        profFrames += 1
+        profSumUploadNs += uploadNs
+        profSumSwapNs += swapNs
+        profSumTotalNs += totalNs
+        if (uploadNs > profMaxUploadNs) profMaxUploadNs = uploadNs
+        if (swapNs > profMaxSwapNs) profMaxSwapNs = swapNs
+        if (totalNs > profMaxTotalNs) profMaxTotalNs = totalNs
+
+        val now = tSwapEndNs
+        val shouldLog = (profLastLogNs == 0L) ||
+                (now - profLastLogNs >= 1_000_000_000L) ||
+                (swapNs >= pacingThresholdSwapNs)
+
+        if (!shouldLog) return
+
+        val avgUploadMs = profSumUploadNs.toDouble() / profFrames / 1_000_000.0
+        val avgSwapMs = profSumSwapNs.toDouble() / profFrames / 1_000_000.0
+        val avgTotalMs = profSumTotalNs.toDouble() / profFrames / 1_000_000.0
+        val maxUploadMs = profMaxUploadNs.toDouble() / 1_000_000.0
+        val maxSwapMs = profMaxSwapNs.toDouble() / 1_000_000.0
+        val maxTotalMs = profMaxTotalNs.toDouble() / 1_000_000.0
+
+        val msg =
+            "frame pacing: avg upload=${"%.2f".format(avgUploadMs)}ms (max ${"%.2f".format(maxUploadMs)}ms), " +
+                "avg swap=${"%.2f".format(avgSwapMs)}ms (max ${"%.2f".format(maxSwapMs)}ms), " +
+                "avg total=${"%.2f".format(avgTotalMs)}ms (max ${"%.2f".format(maxTotalMs)}ms), " +
+                "frames=$profFrames"
+
+        if (profMaxSwapNs >= pacingThresholdSwapNs) {
+            Log.w(TAG, msg)
+        } else {
+            Log.d(TAG, msg)
+        }
+
+        profLastLogNs = now
+        profFrames = 0
+        profSumUploadNs = 0L
+        profMaxUploadNs = 0L
+        profSumSwapNs = 0L
+        profMaxSwapNs = 0L
+        profSumTotalNs = 0L
+        profMaxTotalNs = 0L
+    }
 
     private val vertexShaderCode = """
         attribute vec4 a_position;
@@ -485,12 +558,14 @@ class NesRenderer(
         hasNewFrameSignal = false
         lastSeq = seq
 
+        val tStartNs = if (profilingEnabled) System.nanoTime() else 0L
         val idx = NesiumNative.nativeBeginFrontCopy()
         try {
             val buffer = planeBuffers[idx]
                 ?: throw IllegalStateException("Plane buffer is not initialized")
             buffer.position(0)
 
+            val tUploadStartNs = if (profilingEnabled) System.nanoTime() else 0L
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
             GLES20.glTexSubImage2D(
                 GLES20.GL_TEXTURE_2D,
@@ -503,6 +578,7 @@ class NesRenderer(
                 GLES20.GL_UNSIGNED_BYTE,
                 buffer
             )
+            val tUploadEndNs = if (profilingEnabled) System.nanoTime() else 0L
 
             updateViewportIfNeeded()
 
@@ -519,10 +595,12 @@ class NesRenderer(
 
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
 
+            val tSwapStartNs = if (profilingEnabled) System.nanoTime() else 0L
             if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
                 handleSwapFailure()
                 return
             }
+            val tSwapEndNs = if (profilingEnabled) System.nanoTime() else 0L
 
             // For SurfaceTexture-backed Flutter textures, swapping the EGL window surface enqueues
             // a new buffer to the underlying SurfaceTexture. The Flutter embedding registers an
@@ -531,6 +609,16 @@ class NesRenderer(
             // If another frame arrived while we were uploading/swapping, render again.
             if (hasNewFrameSignal) {
                 scheduleRender()
+            }
+
+            if (profilingEnabled) {
+                recordFrameTiming(
+                    tStartNs = tStartNs,
+                    tUploadStartNs = tUploadStartNs,
+                    tUploadEndNs = tUploadEndNs,
+                    tSwapStartNs = tSwapStartNs,
+                    tSwapEndNs = tSwapEndNs,
+                )
             }
         } finally {
             NesiumNative.nativeEndFrontCopy()

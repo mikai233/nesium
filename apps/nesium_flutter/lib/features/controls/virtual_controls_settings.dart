@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 @immutable
 class VirtualControlsSettings {
   const VirtualControlsSettings({
-    required this.enabled,
     required this.buttonSize,
     required this.gap,
     required this.opacity,
@@ -21,7 +20,6 @@ class VirtualControlsSettings {
     required this.landscapeButtonsOffset,
   });
 
-  final bool enabled;
   final double buttonSize;
   final double gap;
   final double opacity;
@@ -36,7 +34,6 @@ class VirtualControlsSettings {
   final Offset landscapeButtonsOffset;
 
   VirtualControlsSettings copyWith({
-    bool? enabled,
     double? buttonSize,
     double? gap,
     double? opacity,
@@ -50,7 +47,6 @@ class VirtualControlsSettings {
     Offset? landscapeButtonsOffset,
   }) {
     return VirtualControlsSettings(
-      enabled: enabled ?? this.enabled,
       buttonSize: buttonSize ?? this.buttonSize,
       gap: gap ?? this.gap,
       opacity: opacity ?? this.opacity,
@@ -68,7 +64,6 @@ class VirtualControlsSettings {
   }
 
   static const defaults = VirtualControlsSettings(
-    enabled: true,
     buttonSize: 64,
     gap: 10,
     opacity: 0.65,
@@ -88,7 +83,6 @@ class VirtualControlsSettingsController
   @override
   VirtualControlsSettings build() => VirtualControlsSettings.defaults;
 
-  void setEnabled(bool value) => state = state.copyWith(enabled: value);
   void setButtonSize(double value) => state = state.copyWith(buttonSize: value);
   void setGap(double value) => state = state.copyWith(gap: value);
   void setOpacity(double value) => state = state.copyWith(opacity: value);

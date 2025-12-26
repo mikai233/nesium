@@ -13,6 +13,7 @@ import 'package:nesium_flutter/src/rust/lib.dart' show PadButton;
 import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
 import '../domain/nes_state.dart';
+import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_settings.dart';
 import '../features/settings/settings_page.dart';
 import '../platform/desktop_window_manager.dart';
@@ -150,6 +151,13 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent event) {
+    // Avoid sending key events to the emulator when a different route (e.g. settings)
+    // is on top.
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      return KeyEventResult.ignored;
+    }
+
     // Treat key repeat as a continued key down to avoid system beeps.
     if (event is! KeyDownEvent &&
         event is! KeyUpEvent &&
@@ -160,23 +168,47 @@ class _NesShellState extends ConsumerState<NesShell>
     final pressed = event is KeyDownEvent || event is KeyRepeatEvent;
     final key = event.logicalKey;
 
-    // Map a handful of logical keys to NES buttons.
-    final mapping = <LogicalKeyboardKey, PadButton>{
-      LogicalKeyboardKey.keyZ: PadButton.a,
-      LogicalKeyboardKey.keyX: PadButton.b,
-      LogicalKeyboardKey.shiftLeft: PadButton.select,
-      LogicalKeyboardKey.shiftRight: PadButton.select,
-      LogicalKeyboardKey.enter: PadButton.start,
-      LogicalKeyboardKey.arrowUp: PadButton.up,
-      LogicalKeyboardKey.arrowDown: PadButton.down,
-      LogicalKeyboardKey.arrowLeft: PadButton.left,
-      LogicalKeyboardKey.arrowRight: PadButton.right,
-    };
+    final inputSettings = ref.read(inputSettingsProvider);
+    if (inputSettings.device != InputDevice.keyboard) {
+      return KeyEventResult.ignored;
+    }
 
-    final button = mapping[key];
-    if (button == null) return KeyEventResult.ignored;
+    final action = inputSettings.resolveKeyboardBindings()[key];
+    if (action == null) return KeyEventResult.ignored;
 
-    ref.read(nesInputMasksProvider.notifier).setPressed(button, pressed);
+    final input = ref.read(nesInputMasksProvider.notifier);
+    switch (action) {
+      case KeyboardBindingAction.up:
+        input.setPressed(PadButton.up, pressed);
+        break;
+      case KeyboardBindingAction.down:
+        input.setPressed(PadButton.down, pressed);
+        break;
+      case KeyboardBindingAction.left:
+        input.setPressed(PadButton.left, pressed);
+        break;
+      case KeyboardBindingAction.right:
+        input.setPressed(PadButton.right, pressed);
+        break;
+      case KeyboardBindingAction.a:
+        input.setPressed(PadButton.a, pressed);
+        break;
+      case KeyboardBindingAction.b:
+        input.setPressed(PadButton.b, pressed);
+        break;
+      case KeyboardBindingAction.select:
+        input.setPressed(PadButton.select, pressed);
+        break;
+      case KeyboardBindingAction.start:
+        input.setPressed(PadButton.start, pressed);
+        break;
+      case KeyboardBindingAction.turboA:
+        input.setTurboEnabled(PadButton.a, pressed);
+        break;
+      case KeyboardBindingAction.turboB:
+        input.setTurboEnabled(PadButton.b, pressed);
+        break;
+    }
 
     return KeyEventResult.handled;
   }
@@ -221,15 +253,15 @@ class _NesShellState extends ConsumerState<NesShell>
       openTools: _openTools,
     );
 
-    if (_isDesktop) {
-      return Focus(
-        focusNode: _focusNode,
-        autofocus: true,
-        onKeyEvent: _handleKeyEvent,
-        child: DesktopShell(state: state, actions: actions),
-      );
-    }
+    final shell = _isDesktop
+        ? DesktopShell(state: state, actions: actions)
+        : MobileShell(state: state, actions: actions);
 
-    return MobileShell(state: state, actions: actions);
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: shell,
+    );
   }
 }
