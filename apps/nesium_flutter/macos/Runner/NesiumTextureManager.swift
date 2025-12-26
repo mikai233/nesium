@@ -66,10 +66,13 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     /// Expected methods:
     /// - `createNesTexture`: creates the NES texture, starts the render loop,
     ///   and returns the textureId to Flutter.
+    /// - `disposeNesTexture`: unregisters the texture and clears pending state.
     func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "createNesTexture":
             createNesTexture(result: result)
+        case "disposeNesTexture":
+            disposeNesTexture(result: result)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -78,6 +81,8 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     // MARK: - Texture & render-loop setup
 
     private func createNesTexture(result: @escaping FlutterResult) {
+        nesiumRegisterFrameCallback(for: self)
+
         // NES resolution; keep this in sync with the Rust core.
         let width = 256
         let height = 240
@@ -96,6 +101,32 @@ final class NesiumTextureManager: NesiumFrameConsumer {
 
         // Return the texture ID to Dart so that it can construct a Texture widget.
         result(id)
+    }
+
+    private func disposeNesTexture(result: @escaping FlutterResult) {
+        nesium_set_frame_ready_callback(nil, nil)
+
+        let id = textureId.load(ordering: .acquiring)
+        if id >= 0 {
+            textureRegistry.unregisterTexture(id)
+        }
+
+        frameCopyQueue.sync {
+            self.texture = nil
+            self.textureId.store(-1, ordering: .releasing)
+        }
+
+        pendingRustBufferIndex.store(UInt32.max, ordering: .releasing)
+        copyScheduled.store(false, ordering: .releasing)
+        frameDirty.store(false, ordering: .releasing)
+        notifyScheduled.store(false, ordering: .releasing)
+
+        if let dl = displayLink {
+            CVDisplayLinkStop(dl)
+            displayLink = nil
+        }
+
+        result(nil)
     }
 
     // MARK: - NesiumFrameConsumer

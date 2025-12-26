@@ -1,12 +1,12 @@
 #include "nesium_texture_plugin.h"
 
-#include <windows.h>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <windows.h>
 
 #include "flutter/method_channel.h"
 #include "flutter/plugin_registrar.h"
@@ -19,31 +19,39 @@
 // Windows software-texture backend for Nesium (Flutter desktop).
 //
 // Design notes:
-// - The Rust library is expected to be loaded by Dart/Flutter via `DynamicLibrary.open(...)`
-//   before invoking `createNesTexture`. This plugin will NOT attempt to load the DLL itself.
-// - This plugin only resolves exported C ABI symbols from the already-loaded module, then
+// - The Rust library is expected to be loaded by Dart/Flutter via
+// `DynamicLibrary.open(...)`
+//   before invoking `createNesTexture`. This plugin will NOT attempt to load
+//   the DLL itself.
+// - This plugin only resolves exported C ABI symbols from the already-loaded
+// module, then
 //   wires the "frame-ready" callback to a copy worker thread.
-// - Frames are copied into a double-buffered CPU RGBA backing store (see `NesiumTexture`),
-//   and `MarkTextureFrameAvailable(textureId)` is used to notify Flutter that a new frame is ready.
+// - Frames are copied into a double-buffered CPU RGBA backing store (see
+// `NesiumTexture`),
+//   and `MarkTextureFrameAvailable(textureId)` is used to notify Flutter that a
+//   new frame is ready.
 
 namespace {
+
+constexpr uint32_t kEmptyPending = 0xFFFFFFFFu;
 
 using NesiumFrameReadyCallback = void (*)(uint32_t /*bufferIndex*/,
                                           uint32_t /*width*/,
                                           uint32_t /*height*/,
-                                          uint32_t /*pitch*/,
-                                          void* /*user*/);
+                                          uint32_t /*pitch*/, void * /*user*/);
 
 struct RustApi {
   HMODULE dll = nullptr;
 
   void (*runtime_start)() = nullptr;
-  void (*set_frame_ready_callback)(NesiumFrameReadyCallback cb, void* user) = nullptr;
-  void (*copy_frame)(uint32_t bufferIndex, uint8_t* dst, uint32_t dstPitch, uint32_t dstHeight) = nullptr;
+  void (*set_frame_ready_callback)(NesiumFrameReadyCallback cb,
+                                   void *user) = nullptr;
+  void (*copy_frame)(uint32_t bufferIndex, uint8_t *dst, uint32_t dstPitch,
+                     uint32_t dstHeight) = nullptr;
 
   // Bind to an already-loaded module. We do NOT call LoadLibrary here.
   // If this returns false, Dart likely hasn't opened the library yet.
-  bool BindLoadedModule(const wchar_t* module_name) {
+  bool BindLoadedModule(const wchar_t *module_name) {
     dll = ::GetModuleHandleW(module_name);
     if (!dll) {
       return false;
@@ -51,8 +59,9 @@ struct RustApi {
 
     runtime_start = reinterpret_cast<decltype(runtime_start)>(
         ::GetProcAddress(dll, "nesium_runtime_start"));
-    set_frame_ready_callback = reinterpret_cast<decltype(set_frame_ready_callback)>(
-        ::GetProcAddress(dll, "nesium_set_frame_ready_callback"));
+    set_frame_ready_callback =
+        reinterpret_cast<decltype(set_frame_ready_callback)>(
+            ::GetProcAddress(dll, "nesium_set_frame_ready_callback"));
     copy_frame = reinterpret_cast<decltype(copy_frame)>(
         ::GetProcAddress(dll, "nesium_copy_frame"));
 
@@ -61,13 +70,16 @@ struct RustApi {
 };
 
 class NesiumTexturePlugin : public flutter::Plugin {
- public:
-  explicit NesiumTexturePlugin(flutter::PluginRegistrarWindows* registrar)
-      : registrar_(registrar), texture_registrar_(registrar->texture_registrar()) {
-    channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-        registrar_->messenger(), "nesium", &flutter::StandardMethodCodec::GetInstance());
+public:
+  explicit NesiumTexturePlugin(flutter::PluginRegistrarWindows *registrar)
+      : registrar_(registrar),
+        texture_registrar_(registrar->texture_registrar()) {
+    channel_ =
+        std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+            registrar_->messenger(), "nesium",
+            &flutter::StandardMethodCodec::GetInstance());
 
-    channel_->SetMethodCallHandler([this](const auto& call, auto result) {
+    channel_->SetMethodCallHandler([this](const auto &call, auto result) {
       HandleMethodCall(call, std::move(result));
     });
 
@@ -79,6 +91,9 @@ class NesiumTexturePlugin : public flutter::Plugin {
   }
 
   ~NesiumTexturePlugin() override {
+    if (rust_.set_frame_ready_callback) {
+      rust_.set_frame_ready_callback(nullptr, nullptr);
+    }
     shutting_down_.store(true, std::memory_order_release);
     {
       std::lock_guard<std::mutex> lk(mu_);
@@ -89,24 +104,31 @@ class NesiumTexturePlugin : public flutter::Plugin {
     }
   }
 
- private:
-  void HandleMethodCall(const flutter::MethodCall<flutter::EncodableValue>& call,
-                        std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+private:
+  void HandleMethodCall(
+      const flutter::MethodCall<flutter::EncodableValue> &call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
     if (call.method_name() == "createNesTexture") {
       CreateNesTexture(std::move(result));
+      return;
+    }
+    if (call.method_name() == "disposeNesTexture") {
+      DisposeNesTexture(std::move(result));
       return;
     }
     result->NotImplemented();
   }
 
-  void CreateNesTexture(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  void CreateNesTexture(
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
     if (texture_id_.load(std::memory_order_acquire) >= 0) {
       result->Success(flutter::EncodableValue(texture_id_.load()));
       return;
     }
 
-    // Expectation: Dart has already loaded "nesium_flutter.dll" via DynamicLibrary.open().
-    // We only bind symbols from the already-loaded module.
+    // Expectation: Dart has already loaded "nesium_flutter.dll" via
+    // DynamicLibrary.open(). We only bind symbols from the already-loaded
+    // module.
     if (!rust_.BindLoadedModule(L"nesium_flutter.dll")) {
       result->Error(
           "rust_dll_not_loaded",
@@ -122,28 +144,51 @@ class NesiumTexturePlugin : public flutter::Plugin {
 
     texture_ = std::make_unique<NesiumTexture>(width, height);
 
-    // Flutter software texture: engine calls this callback to fetch the latest CPU buffer.
-    texture_variant_ = std::make_unique<flutter::TextureVariant>(
-        flutter::PixelBufferTexture([this](size_t w, size_t h) -> const FlutterDesktopPixelBuffer* {
-          return texture_ ? texture_->CopyPixelBuffer(w, h) : nullptr;
-        }));
+    // Flutter software texture: engine calls this callback to fetch the latest
+    // CPU buffer.
+    texture_variant_ =
+        std::make_unique<flutter::TextureVariant>(flutter::PixelBufferTexture(
+            [this](size_t w, size_t h) -> const FlutterDesktopPixelBuffer * {
+              return texture_ ? texture_->CopyPixelBuffer(w, h) : nullptr;
+            }));
 
-    const int64_t id = texture_registrar_->RegisterTexture(texture_variant_.get());
+    const int64_t id =
+        texture_registrar_->RegisterTexture(texture_variant_.get());
     texture_id_.store(id, std::memory_order_release);
 
     // Wire callback and start runtime after texture registration is ready.
-    rust_.set_frame_ready_callback(&NesiumTexturePlugin::OnFrameReadyThunk, this);
+    rust_.set_frame_ready_callback(&NesiumTexturePlugin::OnFrameReadyThunk,
+                                   this);
     rust_.runtime_start();
 
     result->Success(flutter::EncodableValue(id));
   }
 
-  static void OnFrameReadyThunk(uint32_t bufferIndex,
-                                uint32_t width,
-                                uint32_t height,
-                                uint32_t pitch,
-                                void* user) {
-    static_cast<NesiumTexturePlugin*>(user)->OnFrameReady(bufferIndex, width, height, pitch);
+  void DisposeNesTexture(
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+    if (rust_.set_frame_ready_callback) {
+      rust_.set_frame_ready_callback(nullptr, nullptr);
+    }
+
+    pending_index_.store(kEmptyPending, std::memory_order_release);
+    copy_scheduled_.store(false, std::memory_order_release);
+
+    const int64_t id = texture_id_.load(std::memory_order_acquire);
+    if (id >= 0) {
+      texture_registrar_->UnregisterTexture(id);
+    }
+
+    texture_variant_.reset();
+    texture_.reset();
+    texture_id_.store(-1, std::memory_order_release);
+
+    result->Success(flutter::EncodableValue());
+  }
+
+  static void OnFrameReadyThunk(uint32_t bufferIndex, uint32_t width,
+                                uint32_t height, uint32_t pitch, void *user) {
+    static_cast<NesiumTexturePlugin *>(user)->OnFrameReady(bufferIndex, width,
+                                                           height, pitch);
   }
 
   // Called from the Rust runtime thread. Must be lightweight and non-blocking.
@@ -152,7 +197,8 @@ class NesiumTexturePlugin : public flutter::Plugin {
     pending_index_.store(bufferIndex, std::memory_order_release);
 
     bool expected = false;
-    if (!copy_scheduled_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+    if (!copy_scheduled_.compare_exchange_strong(expected, true,
+                                                 std::memory_order_acq_rel)) {
       return;
     }
 
@@ -161,8 +207,6 @@ class NesiumTexturePlugin : public flutter::Plugin {
   }
 
   void CopyWorkerMain() {
-    const uint32_t empty = 0xFFFFFFFFu;
-
     while (!shutting_down_.load(std::memory_order_acquire)) {
       {
         std::unique_lock<std::mutex> lk(mu_);
@@ -176,30 +220,31 @@ class NesiumTexturePlugin : public flutter::Plugin {
         break;
       }
 
-      const uint32_t idx = pending_index_.exchange(empty, std::memory_order_acq_rel);
+      const uint32_t idx =
+          pending_index_.exchange(kEmptyPending, std::memory_order_acq_rel);
       copy_scheduled_.store(false, std::memory_order_release);
 
-      auto* tex = texture_.get();
+      auto *tex = texture_.get();
       const int64_t tid = texture_id_.load(std::memory_order_acquire);
-      if (!tex || tid < 0 || idx == empty) {
+      if (!tex || tid < 0 || idx == kEmptyPending) {
         continue;
       }
 
       // Copy RGBA pixels into the back buffer, then publish it atomically.
       auto [dst, write_index] = tex->acquireWritableBuffer();
-      rust_.copy_frame(idx,
-                       dst,
-                       static_cast<uint32_t>(tex->stride()),
+      rust_.copy_frame(idx, dst, static_cast<uint32_t>(tex->stride()),
                        static_cast<uint32_t>(tex->height()));
       tex->commitLatestReady(write_index);
 
       // Notify Flutter that the texture has a new frame.
       texture_registrar_->MarkTextureFrameAvailable(tid);
 
-      // If another frame arrived while copying, schedule one more drain (latest-only).
-      if (pending_index_.load(std::memory_order_acquire) != empty) {
+      // If another frame arrived while copying, schedule one more drain
+      // (latest-only).
+      if (pending_index_.load(std::memory_order_acquire) != kEmptyPending) {
         bool expected = false;
-        if (copy_scheduled_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+        if (copy_scheduled_.compare_exchange_strong(
+                expected, true, std::memory_order_acq_rel)) {
           std::lock_guard<std::mutex> lk(mu_);
           cv_.notify_one();
         }
@@ -207,9 +252,9 @@ class NesiumTexturePlugin : public flutter::Plugin {
     }
   }
 
- private:
-  flutter::PluginRegistrarWindows* registrar_;
-  flutter::TextureRegistrar* texture_registrar_;
+private:
+  flutter::PluginRegistrarWindows *registrar_;
+  flutter::TextureRegistrar *texture_registrar_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
 
   RustApi rust_;
@@ -220,7 +265,7 @@ class NesiumTexturePlugin : public flutter::Plugin {
   std::atomic<int64_t> texture_id_{-1};
 
   // Latest-only signaling from Rust thread -> copy worker thread.
-  std::atomic<uint32_t> pending_index_{0xFFFFFFFFu};
+  std::atomic<uint32_t> pending_index_{kEmptyPending};
   std::atomic<bool> copy_scheduled_{false};
   std::atomic<bool> shutting_down_{false};
 
@@ -229,10 +274,11 @@ class NesiumTexturePlugin : public flutter::Plugin {
   std::thread worker_;
 };
 
-}  // namespace
+} // namespace
 
-void NesiumTexturePluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar) {
-  auto* cpp_registrar =
+void NesiumTexturePluginRegisterWithRegistrar(
+    FlutterDesktopPluginRegistrarRef registrar) {
+  auto *cpp_registrar =
       flutter::PluginRegistrarManager::GetInstance()
           ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar);
 
