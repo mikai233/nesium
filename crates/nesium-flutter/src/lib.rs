@@ -107,8 +107,8 @@ fn ensure_runtime() -> &'static RuntimeHolder {
     })
 }
 
-pub(crate) fn runtime_handle() -> RuntimeHandle {
-    ensure_runtime().handle.clone()
+pub(crate) fn runtime_handle() -> &'static RuntimeHandle {
+    &ensure_runtime().handle
 }
 
 fn frame_handle_ref() -> &'static ExternalFrameHandle {

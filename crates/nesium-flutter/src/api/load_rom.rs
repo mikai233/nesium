@@ -4,9 +4,11 @@ use flutter_rust_bridge::frb;
 
 use nesium_core::reset_kind::ResetKind;
 
+use crate::ensure_runtime;
+
 #[frb]
 pub fn start_nes_runtime() -> Result<(), String> {
-    let _ = crate::runtime_handle();
+    ensure_runtime();
     Ok(())
 }
 

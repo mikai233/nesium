@@ -10,7 +10,10 @@ import 'package:nesium_flutter/src/rust/api/input.dart' as nes_input;
 import 'package:nesium_flutter/src/rust/lib.dart' show PadButton;
 
 import '../domain/nes_controller.dart';
+import '../domain/nes_input_masks.dart';
 import '../domain/nes_state.dart';
+import '../features/controls/virtual_controls_settings.dart';
+import '../features/settings/settings_page.dart';
 import '../platform/desktop_window_manager.dart';
 import 'desktop_shell.dart';
 import 'nes_actions.dart';
@@ -46,6 +49,12 @@ class _NesShellState extends ConsumerState<NesShell> {
         // Let UI report errors lazily when commands are used.
       }
       await ref.read(nesControllerProvider.notifier).initTexture();
+      final frames = ref
+          .read(virtualControlsSettingsProvider)
+          .turboFramesPerToggle;
+      await nes_input
+          .setTurboFramesPerToggle(frames: frames)
+          .catchError((_) {});
     });
   }
 
@@ -135,9 +144,7 @@ class _NesShellState extends ConsumerState<NesShell> {
     final button = mapping[key];
     if (button == null) return KeyEventResult.ignored;
 
-    nes_input
-        .setButton(pad: 0, button: button, pressed: pressed)
-        .catchError((e) => _showSnack('Input error: $e'));
+    ref.read(nesInputMasksProvider.notifier).setPressed(button, pressed);
 
     return KeyEventResult.handled;
   }
@@ -147,7 +154,10 @@ class _NesShellState extends ConsumerState<NesShell> {
   }
 
   Future<void> _openSettings() async {
-    _showTodo('Settings');
+    if (!mounted) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
   }
 
   Future<void> _openDebugger() async {

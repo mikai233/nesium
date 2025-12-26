@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../domain/nes_state.dart';
+import '../features/controls/virtual_controls_overlay.dart';
 import '../features/debugger/debugger_panel.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/tools/tools_panel.dart';
@@ -23,41 +24,41 @@ class MobileShell extends StatelessWidget {
     return Scaffold(
       appBar: isLandscape ? null : AppBar(title: const Text('Nesium')),
       drawer: _MobileDrawer(actions: actions),
-      body: isLandscape
-          ? Stack(
-              fit: StackFit.expand,
-              children: [
-                Positioned.fill(
-                  child: NesScreenView(
-                    error: state.error,
-                    textureId: state.textureId,
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Builder(
-                        builder: (context) => Material(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(12),
-                          clipBehavior: Clip.antiAlias,
-                          child: IconButton(
-                            onPressed: () => Scaffold.of(context).openDrawer(),
-                            icon: const Icon(Icons.menu),
-                            color: Colors.white,
-                            tooltip: 'Menu',
-                          ),
-                        ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: NesScreenView(
+              error: state.error,
+              textureId: state.textureId,
+            ),
+          ),
+          if (isLandscape)
+            Positioned(
+              left: 0,
+              top: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Builder(
+                    builder: (context) => Material(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(12),
+                      clipBehavior: Clip.antiAlias,
+                      child: IconButton(
+                        onPressed: () => Scaffold.of(context).openDrawer(),
+                        icon: const Icon(Icons.menu),
+                        color: Colors.white,
+                        tooltip: 'Menu',
                       ),
                     ),
                   ),
                 ),
-              ],
-            )
-          : NesScreenView(error: state.error, textureId: state.textureId),
+              ),
+            ),
+          VirtualControlsOverlay(isLandscape: isLandscape),
+        ],
+      ),
     );
   }
 }

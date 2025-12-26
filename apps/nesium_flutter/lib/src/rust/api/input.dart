@@ -4,15 +4,13 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
-import '../lib.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-Future<void> setButton({
-  required int pad,
-  required PadButton button,
-  required bool pressed,
-}) => RustLib.instance.api.crateApiInputSetButton(
-  pad: pad,
-  button: button,
-  pressed: pressed,
-);
+Future<void> setPadMask({required int pad, required int mask}) =>
+    RustLib.instance.api.crateApiInputSetPadMask(pad: pad, mask: mask);
+
+Future<void> setTurboMask({required int pad, required int mask}) =>
+    RustLib.instance.api.crateApiInputSetTurboMask(pad: pad, mask: mask);
+
+Future<void> setTurboFramesPerToggle({required int frames}) =>
+    RustLib.instance.api.crateApiInputSetTurboFramesPerToggle(frames: frames);

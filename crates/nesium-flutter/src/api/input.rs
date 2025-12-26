@@ -1,9 +1,19 @@
 use flutter_rust_bridge::frb;
 
-use crate::PadButton;
+#[frb]
+pub fn set_pad_mask(pad: u8, mask: u8) -> Result<(), String> {
+    crate::runtime_handle().set_pad_mask(pad as usize, mask);
+    Ok(())
+}
 
 #[frb]
-pub fn set_button(pad: u8, button: PadButton, pressed: bool) -> Result<(), String> {
-    crate::runtime_handle().set_button(pad as usize, button.into(), pressed);
+pub fn set_turbo_mask(pad: u8, mask: u8) -> Result<(), String> {
+    crate::runtime_handle().set_turbo_mask(pad as usize, mask);
+    Ok(())
+}
+
+#[frb]
+pub fn set_turbo_frames_per_toggle(frames: u8) -> Result<(), String> {
+    crate::runtime_handle().set_turbo_frames_per_toggle(frames);
     Ok(())
 }
