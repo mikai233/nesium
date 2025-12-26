@@ -19,10 +19,10 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral
 
 SPEC CHECKSUMS:
-  desktop_multi_window: 566489c048b501134f9d7fb6a2354c60a9126486
-  file_picker: e716a70a9fe5fd9e09ebc922d7541464289443af
+  desktop_multi_window: 93667594ccc4b88d91a97972fd3b1b89667fa80a
+  file_picker: 7584aae6fa07a041af2b36a2655122d42f578c1a
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
 
-COCOAPODS: 1.11.2
+COCOAPODS: 1.16.2

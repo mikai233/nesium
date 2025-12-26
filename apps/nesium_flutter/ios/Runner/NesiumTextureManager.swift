@@ -1,6 +1,5 @@
 import CoreVideo
 import Flutter
-import QuartzCore
 import UIKit
 
 /// Bridges Rust framebuffer updates into a Flutter external texture on iOS.
@@ -11,12 +10,11 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     private var textureId: Int64 = -1
 
     private let stateLock = NSLock()
-    private var pendingRustBufferIndex: UInt32?
-    private var copyScheduled = false
-    private var frameDirty = false
-    private var displayLink: CADisplayLink?
+    private var copyInFlight = false
+    private var copyPending = false
 
-    private let frameCopyQueue = DispatchQueue(label: "Nesium.FrameCopy", qos: .userInitiated)
+    // Copying into CVPixelBuffer can be expensive; keep it off the Rust callback thread.
+    private let frameCopyQueue = DispatchQueue(label: "Nesium.FrameCopy", qos: .userInteractive)
 
     init(textureRegistry: FlutterTextureRegistry) {
         self.textureRegistry = textureRegistry
@@ -46,34 +44,31 @@ final class NesiumTextureManager: NesiumFrameConsumer {
 
         frameCopyQueue.sync {
             self.texture = tex
-            self.textureId = id
         }
 
-        startDisplayLinkIfNeeded()
+        stateLock.lock()
+        textureId = id
+        copyInFlight = false
+        copyPending = false
+        stateLock.unlock()
+
         result(id)
     }
 
     private func disposeNesTexture(result: @escaping FlutterResult) {
         nesium_set_frame_ready_callback(nil, nil)
 
-        if textureId >= 0 {
-            textureRegistry.unregisterTexture(textureId)
-        }
+        let tid: Int64
+        stateLock.lock()
+        tid = textureId
+        textureId = -1
+        copyInFlight = false
+        copyPending = false
+        stateLock.unlock()
+        if tid >= 0 { textureRegistry.unregisterTexture(tid) }
 
         frameCopyQueue.sync {
             self.texture = nil
-            self.textureId = -1
-        }
-
-        stateLock.lock()
-        pendingRustBufferIndex = nil
-        copyScheduled = false
-        frameDirty = false
-        stateLock.unlock()
-
-        if let link = displayLink {
-            link.invalidate()
-            displayLink = nil
         }
 
         result(nil)
@@ -81,49 +76,51 @@ final class NesiumTextureManager: NesiumFrameConsumer {
 
     func nesiumOnFrameReady(bufferIndex: UInt32, width: Int, height: Int, pitch: Int) {
         stateLock.lock()
-        pendingRustBufferIndex = bufferIndex
-        let shouldSchedule = !copyScheduled
-        if shouldSchedule {
-            copyScheduled = true
-        }
-        stateLock.unlock()
-
-        guard shouldSchedule else { return }
-        frameCopyQueue.async { [weak self] in
-            self?.drainPendingFrames()
-        }
-    }
-
-    private func drainPendingFrames() {
-        var bufferIndex: UInt32?
-        var texture: NesiumTexture?
-
-        stateLock.lock()
-        bufferIndex = pendingRustBufferIndex
-        pendingRustBufferIndex = nil
-        texture = self.texture
-        stateLock.unlock()
-
-        guard let bufferIndex, let texture else {
-            stateLock.lock()
-            copyScheduled = false
+        if copyInFlight {
+            copyPending = true
             stateLock.unlock()
             return
         }
+        copyInFlight = true
+        stateLock.unlock()
+
+        frameCopyQueue.async { [weak self] in
+            self?.drainPendingCopies()
+        }
+    }
+
+    private func drainPendingCopies() {
+        while true {
+            copyLatestFrame()
+
+            stateLock.lock()
+            if copyPending {
+                copyPending = false
+                stateLock.unlock()
+                continue
+            }
+            copyInFlight = false
+            stateLock.unlock()
+            return
+        }
+    }
+
+    private func copyLatestFrame() {
+        guard let texture = self.texture else { return }
+
+        let tid: Int64
+        stateLock.lock()
+        tid = textureId
+        stateLock.unlock()
+        guard tid >= 0 else { return }
 
         guard let (pixelBuffer, writeIndex) = texture.acquireWritablePixelBuffer() else {
-            stateLock.lock()
-            copyScheduled = false
-            stateLock.unlock()
             return
         }
 
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
         guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
             CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-            stateLock.lock()
-            copyScheduled = false
-            stateLock.unlock()
             return
         }
 
@@ -131,7 +128,7 @@ final class NesiumTextureManager: NesiumFrameConsumer {
         let dstHeight = CVPixelBufferGetHeight(pixelBuffer)
 
         nesium_copy_frame(
-            bufferIndex,
+            0, // `bufferIndex` is informational; Rust copy API uses a safe front-copy internally.
             baseAddress.assumingMemoryBound(to: UInt8.self),
             UInt32(dstBytesPerRow),
             UInt32(dstHeight)
@@ -141,38 +138,13 @@ final class NesiumTextureManager: NesiumFrameConsumer {
 
         texture.commitLatestReady(writeIndex)
 
-        var scheduleAgain = false
-        stateLock.lock()
-        frameDirty = true
-        copyScheduled = false
-        if pendingRustBufferIndex != nil {
-            copyScheduled = true
-            scheduleAgain = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.stateLock.lock()
+            let stillSame = self.textureId == tid
+            self.stateLock.unlock()
+            guard stillSame else { return }
+            self.textureRegistry.textureFrameAvailable(tid)
         }
-        stateLock.unlock()
-
-        if scheduleAgain {
-            frameCopyQueue.async { [weak self] in
-                self?.drainPendingFrames()
-            }
-        }
-    }
-
-    private func startDisplayLinkIfNeeded() {
-        guard displayLink == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(onDisplayLink))
-        link.add(to: .main, forMode: .common)
-        displayLink = link
-    }
-
-    @objc private func onDisplayLink() {
-        stateLock.lock()
-        let shouldNotify = frameDirty
-        frameDirty = false
-        let tid = textureId
-        stateLock.unlock()
-
-        guard shouldNotify, tid >= 0 else { return }
-        textureRegistry.textureFrameAvailable(tid)
     }
 }
