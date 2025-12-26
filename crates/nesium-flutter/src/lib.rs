@@ -50,9 +50,9 @@ fn ensure_runtime() -> &'static RuntimeHolder {
         // Platform-specific framebuffer pixel format.
         //
         // Flutter desktop pixel-buffer textures expect tightly packed RGBA bytes.
-        // macOS uses a CoreVideo (CVPixelBuffer) path that prefers BGRA.
+        // Apple CVPixelBuffer paths prefer BGRA.
         let color_format = {
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             {
                 ColorFormat::Bgra8888
             }
@@ -64,7 +64,12 @@ fn ensure_runtime() -> &'static RuntimeHolder {
             {
                 ColorFormat::Rgba8888
             }
-            #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "android")))]
+            #[cfg(not(any(
+                target_os = "macos",
+                target_os = "ios",
+                target_os = "windows",
+                target_os = "android"
+            )))]
             {
                 ColorFormat::Rgba8888
             }

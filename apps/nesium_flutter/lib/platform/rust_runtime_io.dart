@@ -11,6 +11,7 @@ String _libFileName() {
   if (Platform.isMacOS) return 'libnesium_flutter.dylib';
   if (Platform.isLinux) return 'libnesium_flutter.so';
   if (Platform.isAndroid) return 'libnesium_flutter.so';
+  if (Platform.isIOS) return 'libnesium_flutter.a';
   throw UnsupportedError('Unsupported platform');
 }
 
@@ -21,7 +22,7 @@ ExternalLibrary _openRustLibrary() {
     return ExternalLibrary.open(name);
   }
 
-  if (Platform.isMacOS || Platform.isLinux) {
+  if (Platform.isMacOS || Platform.isIOS || Platform.isLinux) {
     return ExternalLibrary.process(iKnowHowToUseIt: true);
   }
 
