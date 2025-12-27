@@ -11,6 +11,7 @@ impl LanguagePack for Zh {
             MenuFile => "文件",
             MenuFileLoadRom => "加载 ROM…",
             MenuFileReset => "重置",
+            MenuFilePowerReset => "电源重置",
             MenuFileEject => "弹出",
             MenuFileStartRecording => "开始录制 WAV…",
             MenuFileStopRecording => "停止录制 WAV",

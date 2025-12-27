@@ -2,7 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 
-enum NesMenuItemId { openRom, reset, togglePause, settings, debugger, tools }
+enum NesMenuItemId {
+  openRom,
+  reset,
+  powerReset,
+  togglePause,
+  settings,
+  debugger,
+  tools,
+}
 
 class NesMenuItemSpec {
   const NesMenuItemSpec({required this.id, required this.icon});
@@ -13,6 +21,7 @@ class NesMenuItemSpec {
   String label(AppLocalizations l10n) => switch (id) {
     NesMenuItemId.openRom => l10n.menuOpenRom,
     NesMenuItemId.reset => l10n.menuReset,
+    NesMenuItemId.powerReset => l10n.menuPowerReset,
     NesMenuItemId.togglePause => l10n.menuPauseResume,
     NesMenuItemId.settings => l10n.menuPreferences,
     NesMenuItemId.debugger => l10n.menuDebugger,
@@ -47,6 +56,11 @@ class NesMenus {
     icon: Icons.restart_alt,
   );
 
+  static const NesMenuItemSpec powerReset = NesMenuItemSpec(
+    id: NesMenuItemId.powerReset,
+    icon: Icons.power_settings_new,
+  );
+
   static const NesMenuItemSpec togglePause = NesMenuItemSpec(
     id: NesMenuItemId.togglePause,
     icon: Icons.pause_circle_outline,
@@ -70,6 +84,7 @@ class NesMenus {
   static const List<NesMenuItemSpec> mobileDrawerItems = [
     openRom,
     reset,
+    powerReset,
     togglePause,
     debugger,
     tools,
@@ -77,10 +92,13 @@ class NesMenus {
   ];
 
   static const List<NesMenuSectionSpec> desktopMenuSections = [
-    NesMenuSectionSpec(id: NesMenuSectionId.file, items: [openRom, reset]),
+    NesMenuSectionSpec(
+      id: NesMenuSectionId.file,
+      items: [openRom, reset, powerReset],
+    ),
     NesMenuSectionSpec(
       id: NesMenuSectionId.emulation,
-      items: [togglePause, reset],
+      items: [togglePause, reset, powerReset],
     ),
     NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
     NesMenuSectionSpec(id: NesMenuSectionId.windows, items: [debugger, tools]),

@@ -11,6 +11,7 @@ impl LanguagePack for En {
             MenuFile => "File",
             MenuFileLoadRom => "Load ROM…",
             MenuFileReset => "Reset",
+            MenuFilePowerReset => "Power Reset",
             MenuFileEject => "Eject",
             MenuFileStartRecording => "Start recording WAV…",
             MenuFileStopRecording => "Stop recording WAV",

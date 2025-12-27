@@ -14,3 +14,6 @@ Future<void> loadRom({required String path}) =>
 
 Future<void> resetConsole() =>
     RustLib.instance.api.crateApiLoadRomResetConsole();
+
+Future<void> powerResetConsole() =>
+    RustLib.instance.api.crateApiLoadRomPowerResetConsole();

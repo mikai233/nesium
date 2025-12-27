@@ -95,6 +95,8 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiLoadRomResetConsole();
 
+  Future<void> crateApiLoadRomPowerResetConsole();
+
   Stream<RuntimeNotification> crateApiEventsRuntimeNotifications();
 
   Future<void> crateApiEmulationSetIntegerFpsMode({required bool enabled});
@@ -282,6 +284,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiLoadRomResetConsoleConstMeta =>
       const TaskConstMeta(debugName: "reset_console", argNames: []);
+
+  @override
+  Future<void> crateApiLoadRomPowerResetConsole() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiLoadRomPowerResetConsoleConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLoadRomPowerResetConsoleConstMeta =>
+      const TaskConstMeta(debugName: "power_reset_console", argNames: []);
 
   @override
   Stream<RuntimeNotification> crateApiEventsRuntimeNotifications() {

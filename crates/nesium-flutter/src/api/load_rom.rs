@@ -25,3 +25,10 @@ pub fn reset_console() -> Result<(), String> {
         .reset(ResetKind::Soft)
         .map_err(|e| e.to_string())
 }
+
+#[frb]
+pub fn power_reset_console() -> Result<(), String> {
+    crate::runtime_handle()
+        .reset(ResetKind::PowerOn)
+        .map_err(|e| e.to_string())
+}

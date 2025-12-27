@@ -274,7 +274,15 @@ impl NesiumApp {
     }
 
     fn reset(&mut self) {
-        let _ = self.runtime_handle.reset(ResetKind::Soft);
+        self.reset_with(ResetKind::Soft);
+    }
+
+    fn power_reset(&mut self) {
+        self.reset_with(ResetKind::PowerOn);
+    }
+
+    fn reset_with(&mut self, kind: ResetKind) {
+        let _ = self.runtime_handle.reset(kind);
         self.paused = false;
         self.runtime_handle.set_paused(false);
         self.last_frame_seq = self.runtime_handle.frame_seq();

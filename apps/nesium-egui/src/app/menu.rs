@@ -9,6 +9,7 @@ use super::{AppViewport, Language, NesiumApp, TextId, dialogs::pick_file_dialog}
 pub(super) struct AppCommand {
     pub load_rom: Option<PathBuf>,
     pub reset: bool,
+    pub power_reset: bool,
     pub eject: bool,
     pub toggle_pause: bool,
     pub quit: bool,
@@ -86,6 +87,16 @@ impl NesiumApp {
             if ui
                 .add_enabled(
                     self.rom_path.is_some(),
+                    egui::Button::new(self.t(TextId::MenuFilePowerReset)),
+                )
+                .clicked()
+            {
+                cmd.power_reset = true;
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    self.rom_path.is_some(),
                     egui::Button::new(self.t(TextId::MenuFileEject)),
                 )
                 .clicked()
@@ -125,6 +136,16 @@ impl NesiumApp {
                 .clicked()
             {
                 cmd.reset = true;
+                ui.close();
+            }
+            if ui
+                .add_enabled(
+                    self.rom_path.is_some(),
+                    egui::Button::new(self.t(TextId::MenuFilePowerReset)),
+                )
+                .clicked()
+            {
+                cmd.power_reset = true;
                 ui.close();
             }
             if ui
@@ -204,6 +225,9 @@ impl NesiumApp {
         }
         if cmd.reset {
             self.reset();
+        }
+        if cmd.power_reset {
+            self.power_reset();
         }
         if cmd.eject {
             self.eject();

@@ -24,6 +24,7 @@ pub enum TextId {
     MenuFile,
     MenuFileLoadRom,
     MenuFileReset,
+    MenuFilePowerReset,
     MenuFileEject,
     MenuFileStartRecording,
     MenuFileStopRecording,
