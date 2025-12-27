@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
-class NesScreenView extends StatelessWidget {
+class NesScreenView extends StatefulWidget {
   const NesScreenView({super.key, this.error, required this.textureId});
 
   final String? error;
@@ -24,9 +25,52 @@ class NesScreenView extends StatelessWidget {
   }
 
   @override
+  State<NesScreenView> createState() => _NesScreenViewState();
+}
+
+class _NesScreenViewState extends State<NesScreenView> {
+  static const Duration _cursorHideDelay = Duration(seconds: 2);
+
+  Timer? _cursorTimer;
+  bool _cursorHidden = false;
+
+  void _showCursorAndArmTimer() {
+    if (_cursorHidden) {
+      setState(() => _cursorHidden = false);
+    }
+    _cursorTimer?.cancel();
+    _cursorTimer = Timer(_cursorHideDelay, () {
+      if (!mounted) return;
+      setState(() => _cursorHidden = true);
+    });
+  }
+
+  void _showCursorAndCancelTimer() {
+    _cursorTimer?.cancel();
+    _cursorTimer = null;
+    if (_cursorHidden) {
+      setState(() => _cursorHidden = false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant NesScreenView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.textureId == null || widget.error != null) {
+      _showCursorAndCancelTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _cursorTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     Widget content;
-    if (error != null) {
+    if (widget.error != null) {
       content = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -39,24 +83,32 @@ class NesScreenView extends StatelessWidget {
             ).textTheme.titleMedium?.copyWith(color: Colors.red),
           ),
           const SizedBox(height: 4),
-          Text(error!, textAlign: TextAlign.center),
+          Text(widget.error!, textAlign: TextAlign.center),
         ],
       );
-    } else if (textureId == null) {
+    } else if (widget.textureId == null) {
       content = const SizedBox.shrink();
     } else {
       content = LayoutBuilder(
         builder: (context, constraints) {
-          final viewport = computeViewportSize(constraints);
+          final viewport = NesScreenView.computeViewportSize(constraints);
           if (viewport == null) return const SizedBox.shrink();
 
-          return SizedBox(
+          final child = SizedBox(
             width: viewport.width,
             height: viewport.height,
             child: Texture(
-              textureId: textureId!,
+              textureId: widget.textureId!,
               filterQuality: FilterQuality.none, // nearest-neighbor scaling
             ),
+          );
+
+          return MouseRegion(
+            cursor: _cursorHidden ? SystemMouseCursors.none : MouseCursor.defer,
+            onEnter: (_) => _showCursorAndArmTimer(),
+            onHover: (_) => _showCursorAndArmTimer(),
+            onExit: (_) => _showCursorAndCancelTimer(),
+            child: child,
           );
         },
       );

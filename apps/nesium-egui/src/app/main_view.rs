@@ -4,13 +4,15 @@ use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 use super::NesiumApp;
 
+const CURSOR_HIDE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+
 impl NesiumApp {
     pub(super) fn draw_main_view(&mut self, ctx: &EguiContext) {
         egui::CentralPanel::default()
             .frame(egui::Frame::central_panel(ctx.style().as_ref()).inner_margin(0))
             .show(ctx, |ui| {
                 let canvas_size = ui.available_size();
-                let (rect, _) = ui.allocate_exact_size(canvas_size, egui::Sense::hover());
+                let (rect, response) = ui.allocate_exact_size(canvas_size, egui::Sense::hover());
                 ui.painter().rect_filled(rect, 0.0, Color32::BLACK);
 
                 let base = Vec2::new(SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32);
@@ -53,6 +55,31 @@ impl NesiumApp {
                         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                         Color32::WHITE,
                     );
+
+                    // Auto-hide cursor when hovering over the game image without moving.
+                    let pointer_over_image = response.hovered()
+                        && ctx
+                            .input(|i| i.pointer.hover_pos())
+                            .is_some_and(|p| image_rect.contains(p));
+
+                    if pointer_over_image {
+                        let pointer_delta = ctx.input(|i| i.pointer.delta());
+                        if pointer_delta != Vec2::ZERO {
+                            self.cursor_last_activity = std::time::Instant::now();
+                            self.cursor_hidden = false;
+                        } else if !self.cursor_hidden
+                            && self.cursor_last_activity.elapsed() >= CURSOR_HIDE_DELAY
+                        {
+                            self.cursor_hidden = true;
+                        }
+                    } else {
+                        self.cursor_hidden = false;
+                        self.cursor_last_activity = std::time::Instant::now();
+                    }
+
+                    if self.cursor_hidden {
+                        ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::None);
+                    }
                 }
             });
     }
