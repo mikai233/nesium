@@ -1,0 +1,47 @@
+name: Flutter
+
+on:
+  pull_request:
+    paths:
+      - "apps/nesium_flutter/**"
+      - ".github/workflows/flutter.yml"
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/nesium_flutter/**"
+      - ".github/workflows/flutter.yml"
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Flutter checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/nesium_flutter
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Format (check)
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Build web (release)
+        run: flutter build web --release --no-wasm-dry-run
