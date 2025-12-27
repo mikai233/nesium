@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../controls/input_settings.dart';
 import '../controls/virtual_controls_settings.dart';
@@ -332,7 +333,14 @@ class SettingsPage extends ConsumerWidget {
                               await videoController.setBuiltinPreset(
                                 videoSettings.builtinPreset,
                               );
-                            } catch (_) {}
+                            } catch (e, st) {
+                              logWarning(
+                                e,
+                                stackTrace: st,
+                                message: 'setBuiltinPreset failed',
+                                logger: 'settings_page',
+                              );
+                            }
                             return;
                           }
 
@@ -385,7 +393,14 @@ class SettingsPage extends ConsumerWidget {
                             if (value == null) return;
                             try {
                               await videoController.setBuiltinPreset(value);
-                            } catch (_) {}
+                            } catch (e, st) {
+                              logWarning(
+                                e,
+                                stackTrace: st,
+                                message: 'setBuiltinPreset failed',
+                                logger: 'settings_page',
+                              );
+                            }
                           },
                         ),
                       ),

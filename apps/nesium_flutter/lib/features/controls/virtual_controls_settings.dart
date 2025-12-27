@@ -5,6 +5,7 @@ import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
@@ -257,9 +258,11 @@ class VirtualControlsSettingsController
     );
     final settings = loaded ?? VirtualControlsSettings.defaults;
 
-    nes_input
-        .setTurboFramesPerToggle(frames: settings.turboFramesPerToggle)
-        .catchError((_) {});
+    unawaitedLogged(
+      nes_input.setTurboFramesPerToggle(frames: settings.turboFramesPerToggle),
+      message: 'setTurboFramesPerToggle (init)',
+      logger: 'virtual_controls_settings',
+    );
 
     return settings;
   }
@@ -277,7 +280,11 @@ class VirtualControlsSettingsController
   void setTurboFramesPerToggle(int value) {
     final next = value.clamp(1, 255);
     _set(state.copyWith(turboFramesPerToggle: next));
-    nes_input.setTurboFramesPerToggle(frames: next).catchError((_) {});
+    unawaitedLogged(
+      nes_input.setTurboFramesPerToggle(frames: next),
+      message: 'setTurboFramesPerToggle',
+      logger: 'virtual_controls_settings',
+    );
   }
 
   void setPortraitDpadOffset(Offset value) =>
@@ -312,14 +319,17 @@ class VirtualControlsSettingsController
   }
 
   void _persist(VirtualControlsSettings value) {
-    unawaited(
-      ref
-          .read(appStorageProvider)
-          .put(
-            StorageKeys.settingsVirtualControls,
-            _virtualControlsToStorage(value),
-          )
-          .catchError((_) {}),
+    unawaitedLogged(
+      Future<void>.sync(
+        () => ref
+            .read(appStorageProvider)
+            .put(
+              StorageKeys.settingsVirtualControls,
+              _virtualControlsToStorage(value),
+            ),
+      ),
+      message: 'Persist virtual controls settings',
+      logger: 'virtual_controls_settings',
     );
   }
 }

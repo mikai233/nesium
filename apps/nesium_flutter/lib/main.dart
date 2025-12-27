@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/persistence/app_storage.dart';
 import 'package:nesium_flutter/platform/rust_runtime.dart';
 import 'package:nesium_flutter/startup/macos_splash.dart';
@@ -9,11 +11,34 @@ import 'package:nesium_flutter/startup/macos_splash.dart';
 import 'app.dart';
 
 Future<void> main(List<String> args) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initAppStorage();
-  await initRustRuntime();
+  initLogging();
 
-  runApp(const ProviderScope(child: NesiumApp()));
+  await runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-  unawaited(hideMacOsSplashAfterFirstFrame(args: args));
+      FlutterError.onError = (details) {
+        FlutterError.presentError(details);
+        logError(
+          details.exception,
+          stackTrace: details.stack,
+          message: 'FlutterError',
+        );
+      };
+
+      PlatformDispatcher.instance.onError = (error, stack) {
+        logError(error, stackTrace: stack, message: 'Uncaught error');
+        return true;
+      };
+
+      await initAppStorage();
+      await initRustRuntime();
+
+      runApp(const ProviderScope(child: NesiumApp()));
+      unawaited(hideMacOsSplashAfterFirstFrame(args: args));
+    },
+    (error, stack) {
+      logError(error, stackTrace: stack, message: 'Uncaught zone error');
+    },
+  );
 }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/api/palette.dart' as nes_palette;
+import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
@@ -62,12 +63,18 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     scheduleMicrotask(() {
       if (settings.paletteMode == PaletteMode.custom &&
           customBytes is Uint8List) {
-        nes_palette.setPalettePalData(data: customBytes).catchError((_) {});
+        unawaitedLogged(
+          nes_palette.setPalettePalData(data: customBytes),
+          message: 'setPalettePalData (init)',
+          logger: 'video_settings',
+        );
         return;
       }
-      nes_palette
-          .setPalettePreset(kind: settings.builtinPreset)
-          .catchError((_) {});
+      unawaitedLogged(
+        nes_palette.setPalettePreset(kind: settings.builtinPreset),
+        message: 'setPalettePreset (init)',
+        logger: 'video_settings',
+      );
     });
 
     if (settings.paletteMode == PaletteMode.custom &&
@@ -114,7 +121,11 @@ class VideoSettingsController extends Notifier<VideoSettings> {
         .read(appStorageProvider)
         .get(StorageKeys.settingsVideoCustomPaletteBytes);
     if (bytes is Uint8List) {
-      nes_palette.setPalettePalData(data: bytes).catchError((_) {});
+      unawaitedLogged(
+        nes_palette.setPalettePalData(data: bytes),
+        message: 'setPalettePalData (useCustomIfAvailable)',
+        logger: 'video_settings',
+      );
     }
   }
 

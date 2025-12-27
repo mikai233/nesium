@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/nes_input_masks.dart';
+import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
@@ -374,11 +375,14 @@ class InputSettingsController extends Notifier<InputSettings> {
   }
 
   void _persist(InputSettings value) {
-    unawaited(
-      ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsInput, _inputSettingsToStorage(value))
-          .catchError((_) {}),
+    unawaitedLogged(
+      Future<void>.sync(
+        () => ref
+            .read(appStorageProvider)
+            .put(StorageKeys.settingsInput, _inputSettingsToStorage(value)),
+      ),
+      message: 'Persist input settings',
+      logger: 'input_settings',
     );
   }
 }

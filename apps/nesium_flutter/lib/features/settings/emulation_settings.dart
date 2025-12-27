@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/api/emulation.dart' as nes_emulation;
+import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
@@ -42,16 +43,22 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
       defaults: defaults,
     );
     final settings = loaded ?? defaults;
-    nes_emulation
-        .setIntegerFpsMode(enabled: settings.integerFpsMode)
-        .catchError((_) {});
+    unawaitedLogged(
+      nes_emulation.setIntegerFpsMode(enabled: settings.integerFpsMode),
+      message: 'setIntegerFpsMode (init)',
+      logger: 'emulation_settings',
+    );
     return settings;
   }
 
   void setIntegerFpsMode(bool enabled) {
     if (enabled == state.integerFpsMode) return;
     state = state.copyWith(integerFpsMode: enabled);
-    nes_emulation.setIntegerFpsMode(enabled: enabled).catchError((_) {});
+    unawaitedLogged(
+      nes_emulation.setIntegerFpsMode(enabled: enabled),
+      message: 'setIntegerFpsMode',
+      logger: 'emulation_settings',
+    );
     _persist(state);
   }
 
@@ -62,14 +69,17 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
   }
 
   void _persist(EmulationSettings value) {
-    unawaited(
-      ref
-          .read(appStorageProvider)
-          .put(
-            StorageKeys.settingsEmulation,
-            _emulationSettingsToStorage(value),
-          )
-          .catchError((_) {}),
+    unawaitedLogged(
+      Future<void>.sync(
+        () => ref
+            .read(appStorageProvider)
+            .put(
+              StorageKeys.settingsEmulation,
+              _emulationSettingsToStorage(value),
+            ),
+      ),
+      message: 'Persist emulation settings',
+      logger: 'emulation_settings',
     );
   }
 }

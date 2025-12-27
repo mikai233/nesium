@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../platform/platform_capabilities.dart';
+import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
@@ -104,11 +105,14 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
   }
 
   void _persist(AppLanguage language) {
-    unawaited(
-      ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsLanguage, language.name)
-          .catchError((_) {}),
+    unawaitedLogged(
+      Future<void>.sync(
+        () => ref
+            .read(appStorageProvider)
+            .put(StorageKeys.settingsLanguage, language.name),
+      ),
+      message: 'Persist language',
+      logger: 'language_settings',
     );
   }
 

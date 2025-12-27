@@ -1,8 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 
+import '../logging/app_logger.dart';
 import 'pad_button.dart';
 
 class NesInputMasksState {
@@ -30,8 +29,10 @@ class NesInputMasksController extends Notifier<NesInputMasksState> {
     final next = pressed ? (state.padMask | mask) : (state.padMask & ~mask);
     if (next == state.padMask) return;
     state = state.copyWith(padMask: next);
-    unawaited(
-      nes_input.setPadMask(pad: 0, mask: next & 0xFF).catchError((_) {}),
+    unawaitedLogged(
+      nes_input.setPadMask(pad: 0, mask: next & 0xFF),
+      message: 'setPadMask',
+      logger: 'nes_input_masks',
     );
   }
 
@@ -41,16 +42,26 @@ class NesInputMasksController extends Notifier<NesInputMasksState> {
     final next = enabled ? (state.turboMask | mask) : (state.turboMask & ~mask);
     if (next == state.turboMask) return;
     state = state.copyWith(turboMask: next);
-    unawaited(
-      nes_input.setTurboMask(pad: 0, mask: next & 0xFF).catchError((_) {}),
+    unawaitedLogged(
+      nes_input.setTurboMask(pad: 0, mask: next & 0xFF),
+      message: 'setTurboMask',
+      logger: 'nes_input_masks',
     );
   }
 
   void clearAll() {
     if (state.padMask == 0 && state.turboMask == 0) return;
     state = const NesInputMasksState(padMask: 0, turboMask: 0);
-    unawaited(nes_input.setPadMask(pad: 0, mask: 0).catchError((_) {}));
-    unawaited(nes_input.setTurboMask(pad: 0, mask: 0).catchError((_) {}));
+    unawaitedLogged(
+      nes_input.setPadMask(pad: 0, mask: 0),
+      message: 'setPadMask (clearAll)',
+      logger: 'nes_input_masks',
+    );
+    unawaitedLogged(
+      nes_input.setTurboMask(pad: 0, mask: 0),
+      message: 'setTurboMask (clearAll)',
+      logger: 'nes_input_masks',
+    );
   }
 }
 

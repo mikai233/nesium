@@ -19,6 +19,7 @@ import '../features/settings/emulation_settings.dart';
 import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
 import '../l10n/app_localizations.dart';
+import '../logging/app_logger.dart';
 import '../platform/desktop_window_manager.dart';
 import '../platform/platform_capabilities.dart';
 import 'desktop_shell.dart';
@@ -59,9 +60,17 @@ class _NesShellState extends ConsumerState<NesShell>
       final frames = ref
           .read(virtualControlsSettingsProvider)
           .turboFramesPerToggle;
-      await nes_input
-          .setTurboFramesPerToggle(frames: frames)
-          .catchError((_) {});
+      await nes_input.setTurboFramesPerToggle(frames: frames).catchError((
+        Object e,
+        StackTrace st,
+      ) {
+        logError(
+          e,
+          stackTrace: st,
+          message: 'setTurboFramesPerToggle (init)',
+          logger: 'nes_shell',
+        );
+      });
     });
   }
 
@@ -106,7 +115,11 @@ class _NesShellState extends ConsumerState<NesShell>
       case AppLifecycleState.resumed:
         if (_pausedByLifecycle) {
           _pausedByLifecycle = false;
-          unawaited(nes_pause.setPaused(paused: false).catchError((_) {}));
+          unawaitedLogged(
+            nes_pause.setPaused(paused: false),
+            message: 'setPaused(false) (resume)',
+            logger: 'nes_shell',
+          );
         }
         break;
       case AppLifecycleState.inactive:
@@ -124,7 +137,14 @@ class _NesShellState extends ConsumerState<NesShell>
       if (wasPaused) return;
       _pausedByLifecycle = true;
       await nes_pause.setPaused(paused: true);
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'pauseForLifecycle failed',
+        logger: 'nes_shell',
+      );
+    }
   }
 
   void _showSnack(String message) {
