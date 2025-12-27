@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/api/palette.dart' as nes_palette;
 import '../../logging/app_logger.dart';
+import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
@@ -17,21 +18,25 @@ class VideoSettings {
   const VideoSettings({
     required this.paletteMode,
     required this.builtinPreset,
+    required this.integerScaling,
     this.customPaletteName,
   });
 
   final PaletteMode paletteMode;
   final nes_palette.PaletteKind builtinPreset;
+  final bool integerScaling;
   final String? customPaletteName;
 
   VideoSettings copyWith({
     PaletteMode? paletteMode,
     nes_palette.PaletteKind? builtinPreset,
+    bool? integerScaling,
     Object? customPaletteName = _unset,
   }) {
     return VideoSettings(
       paletteMode: paletteMode ?? this.paletteMode,
       builtinPreset: builtinPreset ?? this.builtinPreset,
+      integerScaling: integerScaling ?? this.integerScaling,
       customPaletteName: identical(customPaletteName, _unset)
           ? this.customPaletteName
           : customPaletteName as String?,
@@ -39,9 +44,10 @@ class VideoSettings {
   }
 
   static VideoSettings defaults() {
-    return const VideoSettings(
+    return VideoSettings(
       paletteMode: PaletteMode.builtin,
       builtinPreset: nes_palette.PaletteKind.nesdevNtsc,
+      integerScaling: isNativeMobile,
       customPaletteName: null,
     );
   }
@@ -113,6 +119,12 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     await nes_palette.setPalettePalData(data: data);
   }
 
+  Future<void> setIntegerScaling(bool value) async {
+    if (value == state.integerScaling) return;
+    state = state.copyWith(integerScaling: value);
+    await _persist(state);
+  }
+
   void useCustomIfAvailable() {
     if (state.customPaletteName == null) return;
     state = state.copyWith(paletteMode: PaletteMode.custom);
@@ -147,6 +159,7 @@ Map<String, Object?> _videoSettingsToStorage(VideoSettings value) =>
     <String, Object?>{
       'paletteMode': value.paletteMode.name,
       'builtinPreset': value.builtinPreset.name,
+      'integerScaling': value.integerScaling,
       'customPaletteName': value.customPaletteName,
     };
 
@@ -177,9 +190,14 @@ VideoSettings? _videoSettingsFromStorage(
       ? map['customPaletteName'] as String
       : null;
 
+  final integerScaling = map['integerScaling'] is bool
+      ? map['integerScaling'] as bool
+      : defaults.integerScaling;
+
   return defaults.copyWith(
     paletteMode: paletteMode,
     builtinPreset: builtinPreset,
+    integerScaling: integerScaling,
     customPaletteName: customPaletteName,
   );
 }

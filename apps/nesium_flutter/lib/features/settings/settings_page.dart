@@ -423,6 +423,25 @@ class SettingsPage extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: videoSettings.integerScaling,
+                    title: Text(l10n.videoIntegerScalingTitle),
+                    subtitle: Text(l10n.videoIntegerScalingSubtitle),
+                    onChanged: (value) async {
+                      try {
+                        await videoController.setIntegerScaling(value);
+                      } catch (e, st) {
+                        logWarning(
+                          e,
+                          stackTrace: st,
+                          message: 'setIntegerScaling failed',
+                          logger: 'settings_page',
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   if (videoSettings.paletteMode == PaletteMode.builtin)
                     InputDecorator(
                       decoration: InputDecoration(

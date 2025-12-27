@@ -620,6 +620,18 @@ abstract class AppLocalizations {
   /// **'Video'**
   String get videoTitle;
 
+  /// No description provided for @videoIntegerScalingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Integer scaling'**
+  String get videoIntegerScalingTitle;
+
+  /// No description provided for @videoIntegerScalingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pixel-perfect scaling (reduces shimmer on scrolling).'**
+  String get videoIntegerScalingSubtitle;
+
   /// No description provided for @paletteModeLabel.
   ///
   /// In en, this message translates to:

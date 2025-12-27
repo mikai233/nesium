@@ -118,6 +118,8 @@
   "actionEjectNes": "Eject",
   "actionLoadPalette": "Load palette",
   "videoTitle": "Video",
+  "videoIntegerScalingTitle": "Integer scaling",
+  "videoIntegerScalingSubtitle": "Pixel-perfect scaling (reduces shimmer on scrolling).",
   "paletteModeLabel": "Palette",
   "paletteModeBuiltin": "Built-in",
   "paletteModeCustom": "Custom…",

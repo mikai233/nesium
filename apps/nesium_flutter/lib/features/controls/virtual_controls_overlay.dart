@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../domain/nes_input_masks.dart';
 import '../../domain/pad_button.dart';
 import '../screen/nes_screen_view.dart';
+import '../settings/video_settings.dart';
 import 'input_settings.dart';
 import 'virtual_controls_editor.dart';
 import 'virtual_controls_settings.dart';
@@ -33,7 +34,10 @@ class VirtualControlsOverlay extends ConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final viewport = NesScreenView.computeViewportSize(constraints);
+        final viewport = NesScreenView.computeViewportSize(
+          constraints,
+          integerScaling: ref.watch(videoSettingsProvider).integerScaling,
+        );
         if (viewport == null) return const SizedBox.shrink();
 
         final available = constraints.biggest;

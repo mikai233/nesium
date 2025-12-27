@@ -280,6 +280,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoTitle => '画面';
 
   @override
+  String get videoIntegerScalingTitle => '整数缩放';
+
+  @override
+  String get videoIntegerScalingSubtitle => '像素级整数缩放（减少滚动抖动）。';
+
+  @override
   String get paletteModeLabel => '调色板';
 
   @override

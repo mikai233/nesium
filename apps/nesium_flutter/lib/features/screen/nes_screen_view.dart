@@ -1,8 +1,12 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
-class NesScreenView extends StatefulWidget {
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../settings/video_settings.dart';
+
+class NesScreenView extends ConsumerStatefulWidget {
   const NesScreenView({super.key, this.error, required this.textureId});
 
   final String? error;
@@ -11,7 +15,10 @@ class NesScreenView extends StatefulWidget {
   static const double nesWidth = 256;
   static const double nesHeight = 240;
 
-  static Size? computeViewportSize(BoxConstraints constraints) {
+  static Size? computeViewportSize(
+    BoxConstraints constraints, {
+    required bool integerScaling,
+  }) {
     if (constraints.maxWidth <= 0 || constraints.maxHeight <= 0) {
       return null;
     }
@@ -20,15 +27,19 @@ class NesScreenView extends StatefulWidget {
       constraints.maxWidth / nesWidth,
       constraints.maxHeight / nesHeight,
     );
-    final finalScale = scale < 1.0 ? 1.0 : scale;
+    final finalScale = scale < 1.0
+        ? 1.0
+        : integerScaling
+        ? scale.floorToDouble().clamp(1.0, double.infinity)
+        : scale;
     return Size(nesWidth * finalScale, nesHeight * finalScale);
   }
 
   @override
-  State<NesScreenView> createState() => _NesScreenViewState();
+  ConsumerState<NesScreenView> createState() => _NesScreenViewState();
 }
 
-class _NesScreenViewState extends State<NesScreenView> {
+class _NesScreenViewState extends ConsumerState<NesScreenView> {
   static const Duration _cursorHideDelay = Duration(seconds: 2);
 
   Timer? _cursorTimer;
@@ -69,6 +80,8 @@ class _NesScreenViewState extends State<NesScreenView> {
 
   @override
   Widget build(BuildContext context) {
+    final integerScaling = ref.watch(videoSettingsProvider).integerScaling;
+
     Widget content;
     if (widget.error != null) {
       content = Column(
@@ -91,7 +104,10 @@ class _NesScreenViewState extends State<NesScreenView> {
     } else {
       content = LayoutBuilder(
         builder: (context, constraints) {
-          final viewport = NesScreenView.computeViewportSize(constraints);
+          final viewport = NesScreenView.computeViewportSize(
+            constraints,
+            integerScaling: integerScaling,
+          );
           if (viewport == null) return const SizedBox.shrink();
 
           final child = SizedBox(

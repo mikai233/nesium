@@ -287,6 +287,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoTitle => 'Video';
 
   @override
+  String get videoIntegerScalingTitle => 'Integer scaling';
+
+  @override
+  String get videoIntegerScalingSubtitle =>
+      'Pixel-perfect scaling (reduces shimmer on scrolling).';
+
+  @override
   String get paletteModeLabel => 'Palette';
 
   @override
