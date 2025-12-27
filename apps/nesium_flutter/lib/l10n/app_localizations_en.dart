@@ -169,6 +169,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get keyCapturePressEscToClear => 'Press Escape to clear.';
 
   @override
+  String get keyBindingsTitle => 'Key bindings';
+
+  @override
   String get cancel => 'Cancel';
 
   @override

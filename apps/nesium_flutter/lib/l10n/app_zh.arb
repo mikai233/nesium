@@ -49,6 +49,7 @@
   "keyCaptureCurrent": "当前：{key}",
   "keyCaptureCaptured": "捕获：{key}",
   "keyCapturePressEscToClear": "按 Esc 清除。",
+  "keyBindingsTitle": "按键绑定",
   "cancel": "取消"
   ,
   "appName": "Nesium",

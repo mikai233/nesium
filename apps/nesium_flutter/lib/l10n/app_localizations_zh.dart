@@ -164,6 +164,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get keyCapturePressEscToClear => '按 Esc 清除。';
 
   @override
+  String get keyBindingsTitle => '按键绑定';
+
+  @override
   String get cancel => '取消';
 
   @override

@@ -78,6 +78,7 @@
     }
   },
   "keyCapturePressEscToClear": "Press Escape to clear.",
+  "keyBindingsTitle": "Key bindings",
   "cancel": "Cancel"
   ,
   "appName": "Nesium",

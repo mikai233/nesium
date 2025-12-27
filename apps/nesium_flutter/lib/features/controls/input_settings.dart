@@ -139,60 +139,60 @@ class InputSettings {
       bindings[key] = action;
     }
 
+    for (final action in KeyboardBindingAction.values) {
+      bind(action, bindingForAction(action));
+    }
+    return bindings;
+  }
+
+  LogicalKeyboardKey? bindingForAction(KeyboardBindingAction action) {
     final preset = keyboardPreset;
     if (preset == KeyboardPreset.nesStandard) {
-      bind(KeyboardBindingAction.up, LogicalKeyboardKey.arrowUp);
-      bind(KeyboardBindingAction.down, LogicalKeyboardKey.arrowDown);
-      bind(KeyboardBindingAction.left, LogicalKeyboardKey.arrowLeft);
-      bind(KeyboardBindingAction.right, LogicalKeyboardKey.arrowRight);
-      bind(KeyboardBindingAction.a, LogicalKeyboardKey.keyZ);
-      bind(KeyboardBindingAction.b, LogicalKeyboardKey.keyX);
-      bind(KeyboardBindingAction.start, LogicalKeyboardKey.enter);
-      bind(KeyboardBindingAction.select, LogicalKeyboardKey.space);
-      bind(KeyboardBindingAction.turboA, LogicalKeyboardKey.keyC);
-      bind(KeyboardBindingAction.turboB, LogicalKeyboardKey.keyV);
-      return bindings;
+      return switch (action) {
+        KeyboardBindingAction.up => LogicalKeyboardKey.arrowUp,
+        KeyboardBindingAction.down => LogicalKeyboardKey.arrowDown,
+        KeyboardBindingAction.left => LogicalKeyboardKey.arrowLeft,
+        KeyboardBindingAction.right => LogicalKeyboardKey.arrowRight,
+        KeyboardBindingAction.a => LogicalKeyboardKey.keyZ,
+        KeyboardBindingAction.b => LogicalKeyboardKey.keyX,
+        KeyboardBindingAction.select => LogicalKeyboardKey.space,
+        KeyboardBindingAction.start => LogicalKeyboardKey.enter,
+        KeyboardBindingAction.turboA => LogicalKeyboardKey.keyC,
+        KeyboardBindingAction.turboB => LogicalKeyboardKey.keyV,
+      };
     }
 
     if (preset == KeyboardPreset.fightStick) {
-      bind(KeyboardBindingAction.up, LogicalKeyboardKey.keyW);
-      bind(KeyboardBindingAction.down, LogicalKeyboardKey.keyS);
-      bind(KeyboardBindingAction.left, LogicalKeyboardKey.keyA);
-      bind(KeyboardBindingAction.right, LogicalKeyboardKey.keyD);
-      bind(KeyboardBindingAction.a, LogicalKeyboardKey.keyJ);
-      bind(KeyboardBindingAction.b, LogicalKeyboardKey.keyK);
-      bind(KeyboardBindingAction.start, LogicalKeyboardKey.enter);
-      bind(KeyboardBindingAction.select, LogicalKeyboardKey.space);
-      bind(KeyboardBindingAction.turboA, LogicalKeyboardKey.keyU);
-      bind(KeyboardBindingAction.turboB, LogicalKeyboardKey.keyI);
-      return bindings;
+      return switch (action) {
+        KeyboardBindingAction.up => LogicalKeyboardKey.keyW,
+        KeyboardBindingAction.down => LogicalKeyboardKey.keyS,
+        KeyboardBindingAction.left => LogicalKeyboardKey.keyA,
+        KeyboardBindingAction.right => LogicalKeyboardKey.keyD,
+        KeyboardBindingAction.a => LogicalKeyboardKey.keyJ,
+        KeyboardBindingAction.b => LogicalKeyboardKey.keyK,
+        KeyboardBindingAction.select => LogicalKeyboardKey.space,
+        KeyboardBindingAction.start => LogicalKeyboardKey.enter,
+        KeyboardBindingAction.turboA => LogicalKeyboardKey.keyU,
+        KeyboardBindingAction.turboB => LogicalKeyboardKey.keyI,
+      };
     }
 
     if (preset == KeyboardPreset.arcadeLayout) {
-      bind(KeyboardBindingAction.up, LogicalKeyboardKey.arrowUp);
-      bind(KeyboardBindingAction.down, LogicalKeyboardKey.arrowDown);
-      bind(KeyboardBindingAction.left, LogicalKeyboardKey.arrowLeft);
-      bind(KeyboardBindingAction.right, LogicalKeyboardKey.arrowRight);
-      bind(KeyboardBindingAction.a, LogicalKeyboardKey.keyJ);
-      bind(KeyboardBindingAction.b, LogicalKeyboardKey.keyH);
-      bind(KeyboardBindingAction.start, LogicalKeyboardKey.enter);
-      bind(KeyboardBindingAction.select, LogicalKeyboardKey.space);
-      bind(KeyboardBindingAction.turboA, LogicalKeyboardKey.keyK);
-      bind(KeyboardBindingAction.turboB, LogicalKeyboardKey.keyL);
-      return bindings;
+      return switch (action) {
+        KeyboardBindingAction.up => LogicalKeyboardKey.arrowUp,
+        KeyboardBindingAction.down => LogicalKeyboardKey.arrowDown,
+        KeyboardBindingAction.left => LogicalKeyboardKey.arrowLeft,
+        KeyboardBindingAction.right => LogicalKeyboardKey.arrowRight,
+        KeyboardBindingAction.a => LogicalKeyboardKey.keyJ,
+        KeyboardBindingAction.b => LogicalKeyboardKey.keyH,
+        KeyboardBindingAction.select => LogicalKeyboardKey.space,
+        KeyboardBindingAction.start => LogicalKeyboardKey.enter,
+        KeyboardBindingAction.turboA => LogicalKeyboardKey.keyK,
+        KeyboardBindingAction.turboB => LogicalKeyboardKey.keyL,
+      };
     }
 
-    bind(KeyboardBindingAction.up, customUp);
-    bind(KeyboardBindingAction.down, customDown);
-    bind(KeyboardBindingAction.left, customLeft);
-    bind(KeyboardBindingAction.right, customRight);
-    bind(KeyboardBindingAction.a, customA);
-    bind(KeyboardBindingAction.b, customB);
-    bind(KeyboardBindingAction.start, customStart);
-    bind(KeyboardBindingAction.select, customSelect);
-    bind(KeyboardBindingAction.turboA, customTurboA);
-    bind(KeyboardBindingAction.turboB, customTurboB);
-    return bindings;
+    return customBindingFor(action);
   }
 
   LogicalKeyboardKey? customBindingFor(KeyboardBindingAction action) =>

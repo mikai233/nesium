@@ -226,17 +226,22 @@ class SettingsPage extends ConsumerWidget {
                 ),
               ),
             ),
-            if (inputSettings.keyboardPreset == KeyboardPreset.custom) ...[
-              const SizedBox(height: 12),
-              Text(
-                l10n.customKeyBindingsTitle,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Card(
-                elevation: 0,
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: Column(
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Theme(
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: false,
+                  title: Text(
+                    inputSettings.keyboardPreset == KeyboardPreset.custom
+                        ? l10n.customKeyBindingsTitle
+                        : l10n.keyBindingsTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   children: [
                     for (final action in KeyboardBindingAction.values)
                       ListTile(
@@ -244,25 +249,37 @@ class SettingsPage extends ConsumerWidget {
                         subtitle: Text(
                           _keyLabel(
                             l10n,
-                            inputSettings.customBindingFor(action),
+                            inputSettings.bindingForAction(action),
                           ),
                         ),
-                        trailing: const Icon(Icons.edit),
-                        onTap: () => _editCustomBinding(
-                          context,
-                          inputController,
-                          inputSettings,
-                          action,
+                        trailing:
+                            inputSettings.keyboardPreset ==
+                                KeyboardPreset.custom
+                            ? const Icon(Icons.edit)
+                            : null,
+                        onTap:
+                            inputSettings.keyboardPreset ==
+                                KeyboardPreset.custom
+                            ? () => _editCustomBinding(
+                                context,
+                                inputController,
+                                inputSettings,
+                                action,
+                              )
+                            : null,
+                      ),
+                    if (inputSettings.keyboardPreset == KeyboardPreset.custom)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Text(
+                          l10n.tipPressEscapeToClearBinding,
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
                   ],
                 ),
               ),
-              Text(
-                l10n.tipPressEscapeToClearBinding,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+            ),
           ],
           const Divider(),
           Text(

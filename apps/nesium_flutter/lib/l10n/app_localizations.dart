@@ -392,6 +392,12 @@ abstract class AppLocalizations {
   /// **'Press Escape to clear.'**
   String get keyCapturePressEscToClear;
 
+  /// No description provided for @keyBindingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Key bindings'**
+  String get keyBindingsTitle;
+
   /// No description provided for @cancel.
   ///
   /// In en, this message translates to:
