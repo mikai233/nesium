@@ -14,7 +14,7 @@ import '../domain/nes_input_masks.dart';
 import '../domain/nes_state.dart';
 import '../domain/pad_button.dart';
 import '../features/controls/input_settings.dart';
-import '../features/controls/virtual_controls_settings.dart';
+import '../features/controls/turbo_settings.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
@@ -57,20 +57,17 @@ class _NesShellState extends ConsumerState<NesShell>
       }
       _startRuntimeEvents();
       await ref.read(nesControllerProvider.notifier).initTexture();
-      final frames = ref
-          .read(virtualControlsSettingsProvider)
-          .turboFramesPerToggle;
-      await nes_input.setTurboFramesPerToggle(frames: frames).catchError((
-        Object e,
-        StackTrace st,
-      ) {
-        logError(
-          e,
-          stackTrace: st,
-          message: 'setTurboFramesPerToggle (init)',
-          logger: 'nes_shell',
-        );
-      });
+      final turbo = ref.read(turboSettingsProvider);
+      await nes_input
+          .setTurboTiming(onFrames: turbo.onFrames, offFrames: turbo.offFrames)
+          .catchError((Object e, StackTrace st) {
+            logError(
+              e,
+              stackTrace: st,
+              message: 'setTurboTiming (init)',
+              logger: 'nes_shell',
+            );
+          });
     });
   }
 

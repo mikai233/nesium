@@ -140,6 +140,18 @@ abstract class AppLocalizations {
   /// **'Input'**
   String get inputTitle;
 
+  /// No description provided for @turboTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turbo'**
+  String get turboTitle;
+
+  /// No description provided for @turboLinkPressRelease.
+  ///
+  /// In en, this message translates to:
+  /// **'Link press/release'**
+  String get turboLinkPressRelease;
+
   /// No description provided for @inputDeviceLabel.
   ///
   /// In en, this message translates to:
@@ -355,6 +367,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Turbo frames per toggle'**
   String get virtualControlsTurboFramesPerToggle;
+
+  /// No description provided for @virtualControlsTurboOnFrames.
+  ///
+  /// In en, this message translates to:
+  /// **'Turbo press frames'**
+  String get virtualControlsTurboOnFrames;
+
+  /// No description provided for @virtualControlsTurboOffFrames.
+  ///
+  /// In en, this message translates to:
+  /// **'Turbo release frames'**
+  String get virtualControlsTurboOffFrames;
 
   /// No description provided for @framesValue.
   ///

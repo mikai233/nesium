@@ -62,7 +62,9 @@ pub(super) struct UiState {
     palette_use_external: bool,
     palette_external_path: Option<PathBuf>,
     palette_error: Option<String>,
-    turbo_frames_per_toggle: u8,
+    turbo_on_frames: u8,
+    turbo_off_frames: u8,
+    turbo_linked: bool,
     gamepads_available: bool,
     gamepads: Vec<(GamepadId, String)>,
 }
@@ -190,7 +192,7 @@ impl NesiumApp {
         let gamepads = GamepadManager::new();
         let gamepad_snapshot = gamepads.as_ref().map(|m| m.gamepads()).unwrap_or_default();
 
-        runtime_handle.set_turbo_frames_per_toggle(2);
+        runtime_handle.set_turbo_timing(2, 2);
 
         let ui_state = Arc::new(Mutex::new(UiState {
             i18n: if has_cjk_font {
@@ -214,7 +216,9 @@ impl NesiumApp {
             palette_use_external: false,
             palette_external_path: None,
             palette_error: None,
-            turbo_frames_per_toggle: 2,
+            turbo_on_frames: 2,
+            turbo_off_frames: 2,
+            turbo_linked: true,
             gamepads_available: gamepads.is_some(),
             gamepads: gamepad_snapshot,
         }));

@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
@@ -18,7 +16,6 @@ class VirtualControlsSettings {
     required this.hitboxScale,
     required this.hapticsEnabled,
     required this.dpadDeadzoneRatio,
-    required this.turboFramesPerToggle,
     required this.portraitDpadOffset,
     required this.portraitButtonsOffset,
     required this.portraitSystemOffset,
@@ -63,7 +60,6 @@ class VirtualControlsSettings {
   final double hitboxScale;
   final bool hapticsEnabled;
   final double dpadDeadzoneRatio;
-  final int turboFramesPerToggle;
 
   final Offset portraitDpadOffset;
   final Offset portraitButtonsOffset;
@@ -110,7 +106,6 @@ class VirtualControlsSettings {
     double? hitboxScale,
     bool? hapticsEnabled,
     double? dpadDeadzoneRatio,
-    int? turboFramesPerToggle,
     Offset? portraitDpadOffset,
     Offset? portraitButtonsOffset,
     Offset? portraitSystemOffset,
@@ -155,7 +150,6 @@ class VirtualControlsSettings {
       hitboxScale: hitboxScale ?? this.hitboxScale,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       dpadDeadzoneRatio: dpadDeadzoneRatio ?? this.dpadDeadzoneRatio,
-      turboFramesPerToggle: turboFramesPerToggle ?? this.turboFramesPerToggle,
       portraitDpadOffset: portraitDpadOffset ?? this.portraitDpadOffset,
       portraitButtonsOffset:
           portraitButtonsOffset ?? this.portraitButtonsOffset,
@@ -209,7 +203,6 @@ class VirtualControlsSettings {
     hitboxScale: 1.25,
     hapticsEnabled: false,
     dpadDeadzoneRatio: 0.16,
-    turboFramesPerToggle: 2,
     portraitDpadOffset: Offset.zero,
     portraitButtonsOffset: Offset.zero,
     portraitSystemOffset: Offset.zero,
@@ -256,15 +249,7 @@ class VirtualControlsSettingsController
     final loaded = _virtualControlsFromStorage(
       ref.read(appStorageProvider).get(StorageKeys.settingsVirtualControls),
     );
-    final settings = loaded ?? VirtualControlsSettings.defaults;
-
-    unawaitedLogged(
-      nes_input.setTurboFramesPerToggle(frames: settings.turboFramesPerToggle),
-      message: 'setTurboFramesPerToggle (init)',
-      logger: 'virtual_controls_settings',
-    );
-
-    return settings;
+    return loaded ?? VirtualControlsSettings.defaults;
   }
 
   void replace(VirtualControlsSettings value) => _set(value);
@@ -277,15 +262,6 @@ class VirtualControlsSettingsController
       _set(state.copyWith(hapticsEnabled: value));
   void setDpadDeadzoneRatio(double value) =>
       _set(state.copyWith(dpadDeadzoneRatio: value));
-  void setTurboFramesPerToggle(int value) {
-    final next = value.clamp(1, 255);
-    _set(state.copyWith(turboFramesPerToggle: next));
-    unawaitedLogged(
-      nes_input.setTurboFramesPerToggle(frames: next),
-      message: 'setTurboFramesPerToggle',
-      logger: 'virtual_controls_settings',
-    );
-  }
 
   void setPortraitDpadOffset(Offset value) =>
       _set(state.copyWith(portraitDpadOffset: value));
@@ -319,17 +295,14 @@ class VirtualControlsSettingsController
   }
 
   void _persist(VirtualControlsSettings value) {
-    unawaitedLogged(
-      Future<void>.sync(
-        () => ref
-            .read(appStorageProvider)
-            .put(
-              StorageKeys.settingsVirtualControls,
-              _virtualControlsToStorage(value),
-            ),
-      ),
-      message: 'Persist virtual controls settings',
-      logger: 'virtual_controls_settings',
+    unawaited(
+      ref
+          .read(appStorageProvider)
+          .put(
+            StorageKeys.settingsVirtualControls,
+            _virtualControlsToStorage(value),
+          )
+          .catchError((_) {}),
     );
   }
 }
@@ -350,7 +323,6 @@ Map<String, Object?> _virtualControlsToStorage(VirtualControlsSettings value) {
     'hitboxScale': value.hitboxScale,
     'hapticsEnabled': value.hapticsEnabled,
     'dpadDeadzoneRatio': value.dpadDeadzoneRatio,
-    'turboFramesPerToggle': value.turboFramesPerToggle,
     'portraitDpadOffset': offset(value.portraitDpadOffset),
     'portraitButtonsOffset': offset(value.portraitButtonsOffset),
     'portraitSystemOffset': offset(value.portraitSystemOffset),
@@ -396,7 +368,6 @@ VirtualControlsSettings? _virtualControlsFromStorage(Object? value) {
   final defaults = VirtualControlsSettings.defaults;
 
   double d(Object? v, double fallback) => v is num ? v.toDouble() : fallback;
-  int i(Object? v, int fallback) => v is num ? v.toInt() : fallback;
   bool b(Object? v, bool fallback) => v is bool ? v : fallback;
   Offset o(Object? v, Offset fallback) {
     if (v is List && v.length == 2 && v[0] is num && v[1] is num) {
@@ -412,10 +383,6 @@ VirtualControlsSettings? _virtualControlsFromStorage(Object? value) {
     hitboxScale: d(map['hitboxScale'], defaults.hitboxScale),
     hapticsEnabled: b(map['hapticsEnabled'], defaults.hapticsEnabled),
     dpadDeadzoneRatio: d(map['dpadDeadzoneRatio'], defaults.dpadDeadzoneRatio),
-    turboFramesPerToggle: i(
-      map['turboFramesPerToggle'],
-      defaults.turboFramesPerToggle,
-    ).clamp(1, 255),
     portraitDpadOffset: o(
       map['portraitDpadOffset'],
       defaults.portraitDpadOffset,

@@ -7,6 +7,8 @@
   "languageEnglish": "English",
   "languageChineseSimplified": "Simplified Chinese",
   "inputTitle": "Input",
+  "turboTitle": "Turbo",
+  "turboLinkPressRelease": "Link press/release",
   "inputDeviceLabel": "Input device",
   "inputDeviceKeyboard": "Keyboard",
   "inputDeviceVirtualController": "Virtual controller",
@@ -50,6 +52,8 @@
   "virtualControlsHapticFeedback": "Haptic feedback",
   "virtualControlsDpadDeadzone": "D-pad deadzone",
   "virtualControlsTurboFramesPerToggle": "Turbo frames per toggle",
+  "virtualControlsTurboOnFrames": "Turbo press frames",
+  "virtualControlsTurboOffFrames": "Turbo release frames",
   "framesValue": "{frames} frames",
   "@framesValue": {
     "placeholders": {

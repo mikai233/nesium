@@ -30,6 +30,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get inputTitle => '输入';
 
   @override
+  String get turboTitle => '连发';
+
+  @override
+  String get turboLinkPressRelease => '联动按下/抬起';
+
+  @override
   String get inputDeviceLabel => '输入设备';
 
   @override
@@ -138,6 +144,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get virtualControlsTurboFramesPerToggle => '连发切换帧数';
+
+  @override
+  String get virtualControlsTurboOnFrames => '连发按下帧数';
+
+  @override
+  String get virtualControlsTurboOffFrames => '连发抬起帧数';
 
   @override
   String framesValue(int frames) {

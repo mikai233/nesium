@@ -30,6 +30,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inputTitle => 'Input';
 
   @override
+  String get turboTitle => 'Turbo';
+
+  @override
+  String get turboLinkPressRelease => 'Link press/release';
+
+  @override
   String get inputDeviceLabel => 'Input device';
 
   @override
@@ -142,6 +148,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get virtualControlsTurboFramesPerToggle => 'Turbo frames per toggle';
+
+  @override
+  String get virtualControlsTurboOnFrames => 'Turbo press frames';
+
+  @override
+  String get virtualControlsTurboOffFrames => 'Turbo release frames';
 
   @override
   String framesValue(int frames) {

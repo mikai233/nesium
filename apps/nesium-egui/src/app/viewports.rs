@@ -487,17 +487,53 @@ impl NesiumApp {
                                 ui.collapsing(
                                     ui_state.i18n.text(TextId::InputTurboSection),
                                     |ui| {
-                                        let mut frames = ui_state.turbo_frames_per_toggle.max(1);
-                                        let label = ui_state.i18n.text(TextId::InputTurboRateLabel);
-                                        if ui
+                                        let mut on_frames = ui_state.turbo_on_frames.max(1);
+                                        let mut off_frames = ui_state.turbo_off_frames.max(1);
+                                        let mut linked = ui_state.turbo_linked;
+
+                                        let on_label =
+                                            ui_state.i18n.text(TextId::InputTurboOnFramesLabel);
+                                        let off_label =
+                                            ui_state.i18n.text(TextId::InputTurboOffFramesLabel);
+                                        let link_label =
+                                            ui_state.i18n.text(TextId::InputTurboLinkPressRelease);
+
+                                        let mut changed = false;
+
+                                        let link_changed =
+                                            ui.checkbox(&mut linked, link_label).changed();
+                                        if link_changed && linked {
+                                            off_frames = on_frames;
+                                        }
+                                        changed |= link_changed;
+
+                                        let on_changed = ui
                                             .add(
-                                                egui::Slider::new(&mut frames, 1u8..=10u8)
-                                                    .text(label),
+                                                egui::Slider::new(&mut on_frames, 1u8..=60u8)
+                                                    .text(on_label),
                                             )
-                                            .changed()
-                                        {
-                                            ui_state.turbo_frames_per_toggle = frames;
-                                            runtime_handle.set_turbo_frames_per_toggle(frames);
+                                            .changed();
+                                        let off_changed = ui
+                                            .add(
+                                                egui::Slider::new(&mut off_frames, 1u8..=60u8)
+                                                    .text(off_label),
+                                            )
+                                            .changed();
+
+                                        if linked {
+                                            if on_changed {
+                                                off_frames = on_frames;
+                                            } else if off_changed {
+                                                on_frames = off_frames;
+                                            }
+                                        }
+
+                                        changed |= on_changed || off_changed;
+                                        if changed {
+                                            ui_state.turbo_on_frames = on_frames;
+                                            ui_state.turbo_off_frames = off_frames;
+                                            ui_state.turbo_linked = linked;
+                                            runtime_handle.set_turbo_timing(on_frames, off_frames);
                                         }
                                         ui.small(ui_state.i18n.text(TextId::InputTurboHelp));
                                     },

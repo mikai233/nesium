@@ -7,6 +7,7 @@ import '../../l10n/app_localizations.dart';
 import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../controls/input_settings.dart';
+import '../controls/turbo_settings.dart';
 import '../controls/virtual_controls_settings.dart';
 import 'emulation_settings.dart';
 import 'language_settings.dart';
@@ -92,6 +93,9 @@ class SettingsPage extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final inputSettings = ref.watch(inputSettingsProvider);
     final inputController = ref.read(inputSettingsProvider.notifier);
+
+    final turboSettings = ref.watch(turboSettingsProvider);
+    final turboController = ref.read(turboSettingsProvider.notifier);
 
     final settings = ref.watch(virtualControlsSettingsProvider);
     final controller = ref.read(virtualControlsSettingsProvider.notifier);
@@ -191,6 +195,51 @@ class SettingsPage extends ConsumerWidget {
                     },
                   ),
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            elevation: 0,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.turboTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: turboSettings.linked,
+                    title: Text(l10n.turboLinkPressRelease),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      turboController.setLinked(value);
+                    },
+                  ),
+                  _SliderTile(
+                    label: l10n.virtualControlsTurboOnFrames,
+                    value: turboSettings.onFrames.toDouble(),
+                    min: 1,
+                    max: 30,
+                    divisions: 29,
+                    onChanged: (v) => turboController.setOnFrames(v.round()),
+                    valueLabel: l10n.framesValue(turboSettings.onFrames),
+                  ),
+                  _SliderTile(
+                    label: l10n.virtualControlsTurboOffFrames,
+                    value: turboSettings.offFrames.toDouble(),
+                    min: 1,
+                    max: 30,
+                    divisions: 29,
+                    onChanged: (v) => turboController.setOffFrames(v.round()),
+                    valueLabel: l10n.framesValue(turboSettings.offFrames),
+                  ),
+                ],
               ),
             ),
           ),
@@ -501,18 +550,6 @@ class SettingsPage extends ConsumerWidget {
                       divisions: 48,
                       onChanged: controller.setDpadDeadzoneRatio,
                       valueLabel: settings.dpadDeadzoneRatio.toStringAsFixed(2),
-                    ),
-                    _SliderTile(
-                      label: l10n.virtualControlsTurboFramesPerToggle,
-                      value: settings.turboFramesPerToggle.toDouble(),
-                      min: 1,
-                      max: 8,
-                      divisions: 7,
-                      onChanged: (v) =>
-                          controller.setTurboFramesPerToggle(v.round()),
-                      valueLabel: l10n.framesValue(
-                        settings.turboFramesPerToggle,
-                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(

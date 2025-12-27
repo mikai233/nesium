@@ -14,3 +14,9 @@ Future<void> setTurboMask({required int pad, required int mask}) =>
 
 Future<void> setTurboFramesPerToggle({required int frames}) =>
     RustLib.instance.api.crateApiInputSetTurboFramesPerToggle(frames: frames);
+
+Future<void> setTurboTiming({required int onFrames, required int offFrames}) =>
+    RustLib.instance.api.crateApiInputSetTurboTiming(
+      onFrames: onFrames,
+      offFrames: offFrames,
+    );

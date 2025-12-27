@@ -291,12 +291,10 @@ impl Runner {
     fn step_frame(&mut self) {
         use std::sync::atomic::Ordering;
         let frame = self.state.frame_seq.load(Ordering::Relaxed);
-        let turbo_frames_per_toggle = self
-            .state
-            .turbo_frames_per_toggle
-            .load(Ordering::Acquire)
-            .max(1) as u64;
-        let turbo_on = (frame / turbo_frames_per_toggle) % 2 == 0;
+        let turbo_on_frames = self.state.turbo_on_frames.load(Ordering::Acquire).max(1) as u64;
+        let turbo_off_frames = self.state.turbo_off_frames.load(Ordering::Acquire).max(1) as u64;
+        let turbo_cycle = turbo_on_frames + turbo_off_frames;
+        let turbo_on = (frame % turbo_cycle) < turbo_on_frames;
         let buttons = [
             Button::A,
             Button::B,

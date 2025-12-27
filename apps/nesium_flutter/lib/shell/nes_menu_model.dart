@@ -100,10 +100,7 @@ class NesMenus {
   ];
 
   static const List<NesMenuSectionSpec> desktopMenuSections = [
-    NesMenuSectionSpec(
-      id: NesMenuSectionId.file,
-      items: [openRom, reset, powerReset, eject],
-    ),
+    NesMenuSectionSpec(id: NesMenuSectionId.file, items: [openRom]),
     NesMenuSectionSpec(
       id: NesMenuSectionId.emulation,
       items: [togglePause, reset, powerReset, eject],

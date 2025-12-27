@@ -186,10 +186,22 @@ impl RuntimeHandle {
     /// - `1` toggles every frame (~30Hz on NTSC)
     /// - `2` toggles every 2 frames (~15Hz on NTSC)
     pub fn set_turbo_frames_per_toggle(&self, frames: u8) {
+        self.set_turbo_timing(frames, frames);
+    }
+
+    /// Configure turbo as an ON/OFF cycle.
+    ///
+    /// Example: `on_frames=2, off_frames=1` means press for 2 frames, release for 1 frame.
+    pub fn set_turbo_timing(&self, on_frames: u8, off_frames: u8) {
+        use std::sync::atomic::Ordering;
         self.inner
             .state
-            .turbo_frames_per_toggle
-            .store(frames.max(1), std::sync::atomic::Ordering::Release);
+            .turbo_on_frames
+            .store(on_frames.max(1), Ordering::Release);
+        self.inner
+            .state
+            .turbo_off_frames
+            .store(off_frames.max(1), Ordering::Release);
     }
 
     pub fn set_button(&self, pad: usize, button: Button, pressed: bool) {

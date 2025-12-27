@@ -84,9 +84,11 @@ impl LanguagePack for En {
             InputButtonTurboA => "Turbo A",
             InputButtonTurboB => "Turbo B",
             InputTurboSection => "Turbo",
-            InputTurboRateLabel => "Frames per toggle",
+            InputTurboOnFramesLabel => "Press frames",
+            InputTurboOffFramesLabel => "Release frames",
+            InputTurboLinkPressRelease => "Link press/release",
             InputTurboHelp => {
-                "Lower is faster. Turbo alternates ON/OFF every N frames (e.g. 1≈30Hz, 2≈15Hz on NTSC)."
+                "Turbo repeats: press for N frames, then release for Z frames (e.g. 1/1≈30Hz on NTSC)."
             }
             InputPromptPressAnyKey => "Press any key...",
             InputNotBound => "Unbound",

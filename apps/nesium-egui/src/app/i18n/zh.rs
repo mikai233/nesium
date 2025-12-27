@@ -82,10 +82,10 @@ impl LanguagePack for Zh {
             InputButtonTurboA => "连发 A",
             InputButtonTurboB => "连发 B",
             InputTurboSection => "连发 (Turbo)",
-            InputTurboRateLabel => "切换帧数",
-            InputTurboHelp => {
-                "数值越小越快。连发会每 N 帧在“按下/松开”之间切换（例如 N=1≈30Hz，N=2≈15Hz）。"
-            }
+            InputTurboOnFramesLabel => "按下帧数",
+            InputTurboOffFramesLabel => "抬起帧数",
+            InputTurboLinkPressRelease => "联动按下/抬起",
+            InputTurboHelp => "连发按 N 帧、抬 Z 帧循环（例如 1/1≈30Hz）。数值越小越快。",
             InputPromptPressAnyKey => "按任意键...",
             InputNotBound => "未绑定",
             InputBindButton => "绑定",

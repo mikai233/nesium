@@ -113,6 +113,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiInputSetTurboFramesPerToggle({required int frames});
 
+  Future<void> crateApiInputSetTurboTiming({
+    required int onFrames,
+    required int offFrames,
+  });
+
   Future<void> crateApiInputSetTurboMask({required int pad, required int mask});
 
   Future<void> crateApiLoadRomStartNesRuntime();
@@ -552,6 +557,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "set_turbo_frames_per_toggle",
         argNames: ["frames"],
+      );
+
+  @override
+  Future<void> crateApiInputSetTurboTiming({
+    required int onFrames,
+    required int offFrames,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_8(onFrames, serializer);
+          sse_encode_u_8(offFrames, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiInputSetTurboTimingConstMeta,
+        argValues: [onFrames, offFrames],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiInputSetTurboTimingConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_turbo_timing",
+        argNames: ["onFrames", "offFrames"],
       );
 
   @override
