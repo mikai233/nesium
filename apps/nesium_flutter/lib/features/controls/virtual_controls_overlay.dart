@@ -821,6 +821,7 @@ class _EditableClusterState extends State<_EditableCluster> {
 
   bool _active = false;
   bool _resizeMode = false;
+  Offset? _snappedCenter;
   Offset _rawCenter = Offset.zero;
   Offset _rawTopLeft = Offset.zero;
   double _startScale = 1.0;
@@ -848,6 +849,7 @@ class _EditableClusterState extends State<_EditableCluster> {
     _rawCenter = widget.topLeft + Offset(size.width / 2, size.height / 2);
     _rawTopLeft = widget.topLeft;
     _startScale = widget.scale;
+    _snappedCenter = null;
 
     final minSide = math.min(size.width, size.height);
     final handleSize = math.min(_resizeHandleSize, minSide / 2);
@@ -862,6 +864,40 @@ class _EditableClusterState extends State<_EditableCluster> {
     _baseDiagonal = math.max(1e-6, math.sqrt(baseW * baseW + baseH * baseH));
     _diagonalDir = Offset(baseW / _baseDiagonal, baseH / _baseDiagonal);
     _rawDiagonal = _baseDiagonal * widget.scale;
+  }
+
+  Offset _snapCenter(Offset rawCenter) {
+    if (!widget.gridSnapEnabled) {
+      _snappedCenter = null;
+      return rawCenter;
+    }
+
+    final step = widget.gridSpacing.clamp(4.0, 128.0);
+    final nearest = Offset(
+      (rawCenter.dx / step).roundToDouble() * step,
+      (rawCenter.dy / step).roundToDouble() * step,
+    );
+
+    // Smooth snap: only snap when close enough; keep snapped with a small hysteresis
+    // so it doesn't flicker on/off near the threshold.
+    final snapThreshold = (step * 0.35).clamp(6.0, 24.0);
+    final releaseThreshold = snapThreshold * 1.25;
+
+    final snapped = _snappedCenter;
+    if (snapped != null) {
+      if ((rawCenter - snapped).distance <= releaseThreshold) {
+        return snapped;
+      }
+      _snappedCenter = null;
+      return rawCenter;
+    }
+
+    if ((rawCenter - nearest).distance <= snapThreshold) {
+      _snappedCenter = nearest;
+      return nearest;
+    }
+
+    return rawCenter;
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
@@ -911,14 +947,7 @@ class _EditableClusterState extends State<_EditableCluster> {
         .toDouble();
 
     var rawCenter = _rawCenter + details.focalPointDelta;
-    var center = rawCenter;
-    if (widget.gridSnapEnabled) {
-      final step = widget.gridSpacing.clamp(4.0, 128.0);
-      center = Offset(
-        (center.dx / step).roundToDouble() * step,
-        (center.dy / step).roundToDouble() * step,
-      );
-    }
+    final center = _snapCenter(rawCenter);
 
     final size = Size(
       widget.baseSize.width * nextScale,
@@ -943,6 +972,7 @@ class _EditableClusterState extends State<_EditableCluster> {
   void _onScaleEnd(ScaleEndDetails details) {
     _active = false;
     _resizeMode = false;
+    _snappedCenter = null;
   }
 
   @override
