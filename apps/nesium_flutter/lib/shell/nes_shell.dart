@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nesium_flutter/bridge/api/events.dart' as nes_events;
 import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 import 'package:nesium_flutter/bridge/api/pause.dart' as nes_pause;
@@ -37,6 +38,7 @@ class _NesShellState extends ConsumerState<NesShell>
       const DesktopWindowManager();
   final FocusNode _focusNode = FocusNode();
   bool _pausedByLifecycle = false;
+  StreamSubscription<nes_events.RuntimeNotification>? _runtimeNotificationsSub;
 
   bool get _isDesktop =>
       !kIsWeb &&
@@ -56,6 +58,7 @@ class _NesShellState extends ConsumerState<NesShell>
       } catch (_) {
         // Let UI report errors lazily when commands are used.
       }
+      _startRuntimeEvents();
       await ref.read(nesControllerProvider.notifier).initTexture();
       final frames = ref
           .read(virtualControlsSettingsProvider)
@@ -69,8 +72,27 @@ class _NesShellState extends ConsumerState<NesShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _runtimeNotificationsSub?.cancel();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _startRuntimeEvents() {
+    if (!mounted) return;
+    if (_runtimeNotificationsSub != null) return;
+
+    _runtimeNotificationsSub = nes_events.runtimeNotifications().listen((
+      notification,
+    ) {
+      if (!mounted) return;
+
+      switch (notification.kind) {
+        case nes_events.RuntimeNotificationKind.audioInitFailed:
+          final error = notification.error ?? 'unknown error';
+          _showSnack('Audio init failed: $error');
+          break;
+      }
+    }, onError: (_) {});
   }
 
   @override

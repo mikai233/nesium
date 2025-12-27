@@ -6,8 +6,7 @@ use std::sync::{
 use eframe::egui;
 use egui::{Color32, Context as EguiContext, ViewportBuilder, ViewportClass, ViewportId};
 use gilrs::Button as GilrsButton;
-use nesium_core::controller::Button;
-use nesium_runtime::PaletteKind;
+use nesium_core::{controller::Button, ppu::palette::PaletteKind};
 
 use super::{
     AppViewport, NesiumApp, TextId, controller,

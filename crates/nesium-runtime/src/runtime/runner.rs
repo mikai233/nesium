@@ -12,7 +12,7 @@ use crate::audio::NesAudioPlayer;
 use super::{
     control::ControlMessage,
     state::RuntimeState,
-    types::{AudioMode, NTSC_FPS_EXACT, RuntimeError, RuntimeEvent},
+    types::{AudioMode, NTSC_FPS_EXACT, RuntimeError, RuntimeNotification},
     util::button_bit,
 };
 
@@ -40,12 +40,8 @@ const FRAME_LEAD: Duration = Duration::from_micros(50);
 pub(crate) struct Runner {
     nes: Nes,
     audio: Option<NesAudioPlayer>,
-
     ctrl_rx: Receiver<ControlMessage>,
-    event_tx: Sender<RuntimeEvent>,
-
     state: Arc<RuntimeState>,
-
     has_cartridge: bool,
     next_frame_deadline: Instant,
     frame_duration: Duration,
@@ -56,7 +52,7 @@ impl Runner {
     pub(crate) fn new(
         audio_mode: AudioMode,
         ctrl_rx: Receiver<ControlMessage>,
-        event_tx: Sender<RuntimeEvent>,
+        event_tx: Sender<RuntimeNotification>,
         framebuffer: FrameBuffer,
         state: Arc<RuntimeState>,
     ) -> Self {
@@ -68,7 +64,7 @@ impl Runner {
                     (Some(player), sr)
                 }
                 Err(e) => {
-                    let _ = event_tx.send(RuntimeEvent::AudioInitFailed {
+                    let _ = event_tx.send(RuntimeNotification::AudioInitFailed {
                         error: e.to_string(),
                     });
                     (None, 48_000)
@@ -85,7 +81,6 @@ impl Runner {
             nes,
             audio,
             ctrl_rx,
-            event_tx,
             state,
             has_cartridge: false,
             next_frame_deadline: Instant::now(),
@@ -218,18 +213,11 @@ impl Runner {
                         if let Some(audio) = &self.audio {
                             audio.clear();
                         }
-                        let _ = self
-                            .event_tx
-                            .send(RuntimeEvent::RomLoaded { path: path.clone() });
                         let _ = reply.send(Ok(()));
                     }
                     Err(e) => {
                         self.has_cartridge = false;
                         let error = e.to_string();
-                        let _ = self.event_tx.send(RuntimeEvent::RomLoadFailed {
-                            path: path.clone(),
-                            error: error.clone(),
-                        });
                         let _ = reply.send(Err(RuntimeError::LoadRomFailed { path, error }));
                     }
                 }
@@ -248,7 +236,6 @@ impl Runner {
                     }
                     self.state.paused.store(false, Ordering::Release);
                     self.next_frame_deadline = Instant::now();
-                    let _ = self.event_tx.send(RuntimeEvent::Reset { kind });
                 }
                 let _ = reply.send(Ok(()));
             }
@@ -264,7 +251,6 @@ impl Runner {
                 if let Some(audio) = &self.audio {
                     audio.clear();
                 }
-                let _ = self.event_tx.send(RuntimeEvent::Ejected);
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::SetAudioConfig(cfg, reply) => {

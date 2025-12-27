@@ -109,6 +109,10 @@ pub(crate) fn runtime_handle() -> &'static RuntimeHandle {
     &ensure_runtime().handle
 }
 
+pub(crate) fn try_runtime_handle() -> Option<&'static RuntimeHandle> {
+    RUNTIME.get().map(|holder| &holder.handle)
+}
+
 fn frame_handle_ref() -> &'static ExternalFrameHandle {
     ensure_runtime().frame_handle.as_ref()
 }

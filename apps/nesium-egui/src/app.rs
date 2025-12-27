@@ -29,7 +29,9 @@ use nesium_core::{
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH},
     reset_kind::ResetKind,
 };
-use nesium_runtime::{AudioMode, Runtime, RuntimeConfig, RuntimeEvent, RuntimeHandle, VideoConfig};
+use nesium_runtime::{
+    AudioMode, Runtime, RuntimeConfig, RuntimeHandle, RuntimeNotification, VideoConfig,
+};
 
 struct VideoBackingStore {
     _plane0: Box<[u8]>,
@@ -530,23 +532,9 @@ impl eframe::App for NesiumApp {
         }
 
         // 1. Process Events from Runtime thread
-        while let Some(event) = self.runtime_handle.try_recv_event() {
-            match event {
-                RuntimeEvent::RomLoaded { path } => {
-                    tracing::info!("Loaded {}", path.display());
-                }
-                RuntimeEvent::RomLoadFailed { path, error } => {
-                    let msg = format!("Failed to load ROM {}: {error}", path.display());
-                    tracing::error!("{msg}");
-                    self.error_dialog = Some(msg);
-                }
-                RuntimeEvent::Reset { kind } => {
-                    tracing::info!("Reset: {kind:?}");
-                }
-                RuntimeEvent::Ejected => {
-                    tracing::info!("Ejected");
-                }
-                RuntimeEvent::AudioInitFailed { error } => {
+        while let Some(notification) = self.runtime_handle.try_recv_notification() {
+            match notification {
+                RuntimeNotification::AudioInitFailed { error } => {
                     let msg = format!("Audio init failed: {error}");
                     tracing::error!("{msg}");
                     self.error_dialog = Some(msg);

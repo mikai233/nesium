@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/emulation.dart';
+import 'api/events.dart';
 import 'api/input.dart';
 import 'api/load_rom.dart';
 import 'api/palette.dart';
@@ -24,6 +25,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     required super.generalizedFrbRustBinding,
     required super.portManager,
   });
+
+  @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
+  RustStreamSink<RuntimeNotification>
+  dco_decode_StreamSink_runtime_notification_Sse(dynamic raw);
 
   @protected
   String dco_decode_String(dynamic raw);
@@ -44,16 +52,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  String? dco_decode_opt_String(dynamic raw);
+
+  @protected
   PaletteKind dco_decode_palette_kind(dynamic raw);
 
   @protected
   PalettePresetInfo dco_decode_palette_preset_info(dynamic raw);
 
   @protected
+  RuntimeNotification dco_decode_runtime_notification(dynamic raw);
+
+  @protected
+  RuntimeNotificationKind dco_decode_runtime_notification_kind(dynamic raw);
+
+  @protected
   int dco_decode_u_8(dynamic raw);
 
   @protected
   void dco_decode_unit(dynamic raw);
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  RustStreamSink<RuntimeNotification>
+  sse_decode_StreamSink_runtime_notification_Sse(SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -76,6 +100,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
   PaletteKind sse_decode_palette_kind(SseDeserializer deserializer);
 
   @protected
@@ -84,10 +111,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RuntimeNotification sse_decode_runtime_notification(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RuntimeNotificationKind sse_decode_runtime_notification_kind(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_u_8(SseDeserializer deserializer);
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_runtime_notification_Sse(
+    RustStreamSink<RuntimeNotification> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -114,11 +163,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_palette_kind(PaletteKind self, SseSerializer serializer);
 
   @protected
   void sse_encode_palette_preset_info(
     PalettePresetInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_runtime_notification(
+    RuntimeNotification self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_runtime_notification_kind(
+    RuntimeNotificationKind self,
     SseSerializer serializer,
   );
 

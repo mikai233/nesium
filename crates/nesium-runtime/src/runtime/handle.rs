@@ -21,14 +21,15 @@ use super::{
     runner::Runner,
     state::RuntimeState,
     types::{
-        CONTROL_REPLY_TIMEOUT, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError, RuntimeEvent,
+        CONTROL_REPLY_TIMEOUT, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError,
+        RuntimeNotification,
     },
     util::button_bit,
 };
 
 struct RuntimeInner {
     ctrl_tx: Sender<ControlMessage>,
-    events_rx: Mutex<Receiver<RuntimeEvent>>,
+    notifications_rx: Mutex<Receiver<RuntimeNotification>>,
     frame_handle: Arc<ExternalFrameHandle>,
     state: Arc<RuntimeState>,
 }
@@ -46,7 +47,7 @@ pub struct RuntimeHandle {
 impl Runtime {
     pub fn start(config: RuntimeConfig) -> Result<Self, RuntimeError> {
         let (ctrl_tx, ctrl_rx) = unbounded::<ControlMessage>();
-        let (event_tx, event_rx) = unbounded::<RuntimeEvent>();
+        let (event_tx, event_rx) = unbounded::<RuntimeNotification>();
 
         let len = config.video.len_bytes();
         if len == 0 {
@@ -75,7 +76,7 @@ impl Runtime {
 
         let inner = Arc::new(RuntimeInner {
             ctrl_tx,
-            events_rx: Mutex::new(event_rx),
+            notifications_rx: Mutex::new(event_rx),
             frame_handle,
             state,
         });
@@ -136,13 +137,22 @@ impl RuntimeHandle {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn try_recv_event(&self) -> Option<RuntimeEvent> {
-        let rx = self.inner.events_rx.lock().ok()?;
+    pub fn try_recv_notification(&self) -> Option<RuntimeNotification> {
+        let rx = self.inner.notifications_rx.lock().ok()?;
         match rx.try_recv() {
             Ok(ev) => Some(ev),
             Err(TryRecvError::Empty) => None,
             Err(TryRecvError::Disconnected) => None,
         }
+    }
+
+    /// Blocks until a runtime notification is available or the channel is disconnected.
+    ///
+    /// Note: this holds the internal receiver mutex while blocking, so it should only be used
+    /// when you have a single consumer (e.g. a dedicated notification stream thread).
+    pub fn recv_notification_blocking(&self) -> Option<RuntimeNotification> {
+        let rx = self.inner.notifications_rx.lock().ok()?;
+        rx.recv().ok()
     }
 
     pub fn set_paused(&self, paused: bool) {

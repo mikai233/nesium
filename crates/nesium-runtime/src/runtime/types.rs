@@ -1,9 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
-use nesium_core::{
-    ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat},
-    reset_kind::ResetKind,
-};
+use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioMode {
@@ -32,11 +29,9 @@ pub struct RuntimeConfig {
 }
 
 #[derive(Debug, Clone)]
-pub enum RuntimeEvent {
-    RomLoaded { path: PathBuf },
-    RomLoadFailed { path: PathBuf, error: String },
-    Reset { kind: ResetKind },
-    Ejected,
+pub enum RuntimeNotification {
+    /// Out-of-band notification emitted by the runtime thread (not a direct response
+    /// to a control command).
     AudioInitFailed { error: String },
 }
 
