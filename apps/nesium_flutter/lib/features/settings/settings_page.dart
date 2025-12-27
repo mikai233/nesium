@@ -70,11 +70,13 @@ class SettingsPage extends ConsumerWidget {
                         value: InputDevice.keyboard,
                         child: Text('Keyboard'),
                       ),
-                      DropdownMenuItem(
-                        value: InputDevice.virtualController,
-                        enabled: supportsVirtual,
-                        child: const Text('Virtual controller'),
-                      ),
+                      if (supportsVirtual ||
+                          inputSettings.device == InputDevice.virtualController)
+                        DropdownMenuItem(
+                          value: InputDevice.virtualController,
+                          enabled: supportsVirtual,
+                          child: const Text('Virtual controller'),
+                        ),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -167,90 +169,93 @@ class SettingsPage extends ConsumerWidget {
               onChanged: emulationController.setIntegerFpsMode,
             ),
           ),
-          const Divider(),
-          Text(
-            'Virtual Controls',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          if (!usingVirtual)
+          if (supportsVirtual) ...[
+            const Divider(),
             Text(
-              'Switch input to "Virtual controller" to use these settings.',
-              style: Theme.of(context).textTheme.bodyMedium,
+              'Virtual Controls',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-          const SizedBox(height: 8),
-          Opacity(
-            opacity: usingVirtual ? 1 : 0.5,
-            child: IgnorePointer(
-              ignoring: !usingVirtual,
-              child: Column(
-                children: [
-                  _SliderTile(
-                    label: 'Button size',
-                    value: settings.buttonSize,
-                    min: 40,
-                    max: 120,
-                    onChanged: controller.setButtonSize,
-                    valueLabel: '${settings.buttonSize.toStringAsFixed(0)} px',
-                  ),
-                  _SliderTile(
-                    label: 'Gap',
-                    value: settings.gap,
-                    min: 4,
-                    max: 24,
-                    onChanged: controller.setGap,
-                    valueLabel: '${settings.gap.toStringAsFixed(0)} px',
-                  ),
-                  _SliderTile(
-                    label: 'Opacity',
-                    value: settings.opacity,
-                    min: 0.2,
-                    max: 0.8,
-                    onChanged: controller.setOpacity,
-                    valueLabel: settings.opacity.toStringAsFixed(2),
-                  ),
-                  _SliderTile(
-                    label: 'Hitbox scale',
-                    value: settings.hitboxScale,
-                    min: 1.0,
-                    max: 1.4,
-                    divisions: 40,
-                    onChanged: controller.setHitboxScale,
-                    valueLabel: settings.hitboxScale.toStringAsFixed(2),
-                  ),
-                  SwitchListTile(
-                    value: settings.hapticsEnabled,
-                    title: const Text('Haptic feedback'),
-                    onChanged: controller.setHapticsEnabled,
-                  ),
-                  _SliderTile(
-                    label: 'D-pad deadzone',
-                    value: settings.dpadDeadzoneRatio,
-                    min: 0.06,
-                    max: 0.30,
-                    divisions: 48,
-                    onChanged: controller.setDpadDeadzoneRatio,
-                    valueLabel: settings.dpadDeadzoneRatio.toStringAsFixed(2),
-                  ),
-                  _SliderTile(
-                    label: 'Turbo frames per toggle',
-                    value: settings.turboFramesPerToggle.toDouble(),
-                    min: 1,
-                    max: 8,
-                    divisions: 7,
-                    onChanged: (v) =>
-                        controller.setTurboFramesPerToggle(v.round()),
-                    valueLabel: '${settings.turboFramesPerToggle} frames',
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tip: adjust button position/size from the in-game drawer.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+            const SizedBox(height: 8),
+            if (!usingVirtual)
+              Text(
+                'Switch input to "Virtual controller" to use these settings.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            const SizedBox(height: 8),
+            Opacity(
+              opacity: usingVirtual ? 1 : 0.5,
+              child: IgnorePointer(
+                ignoring: !usingVirtual,
+                child: Column(
+                  children: [
+                    _SliderTile(
+                      label: 'Button size',
+                      value: settings.buttonSize,
+                      min: 40,
+                      max: 120,
+                      onChanged: controller.setButtonSize,
+                      valueLabel:
+                          '${settings.buttonSize.toStringAsFixed(0)} px',
+                    ),
+                    _SliderTile(
+                      label: 'Gap',
+                      value: settings.gap,
+                      min: 4,
+                      max: 24,
+                      onChanged: controller.setGap,
+                      valueLabel: '${settings.gap.toStringAsFixed(0)} px',
+                    ),
+                    _SliderTile(
+                      label: 'Opacity',
+                      value: settings.opacity,
+                      min: 0.2,
+                      max: 0.8,
+                      onChanged: controller.setOpacity,
+                      valueLabel: settings.opacity.toStringAsFixed(2),
+                    ),
+                    _SliderTile(
+                      label: 'Hitbox scale',
+                      value: settings.hitboxScale,
+                      min: 1.0,
+                      max: 1.4,
+                      divisions: 40,
+                      onChanged: controller.setHitboxScale,
+                      valueLabel: settings.hitboxScale.toStringAsFixed(2),
+                    ),
+                    SwitchListTile(
+                      value: settings.hapticsEnabled,
+                      title: const Text('Haptic feedback'),
+                      onChanged: controller.setHapticsEnabled,
+                    ),
+                    _SliderTile(
+                      label: 'D-pad deadzone',
+                      value: settings.dpadDeadzoneRatio,
+                      min: 0.06,
+                      max: 0.30,
+                      divisions: 48,
+                      onChanged: controller.setDpadDeadzoneRatio,
+                      valueLabel: settings.dpadDeadzoneRatio.toStringAsFixed(2),
+                    ),
+                    _SliderTile(
+                      label: 'Turbo frames per toggle',
+                      value: settings.turboFramesPerToggle.toDouble(),
+                      min: 1,
+                      max: 8,
+                      divisions: 7,
+                      onChanged: (v) =>
+                          controller.setTurboFramesPerToggle(v.round()),
+                      valueLabel: '${settings.turboFramesPerToggle} frames',
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tip: adjust button position/size from the in-game drawer.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

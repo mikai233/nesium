@@ -202,7 +202,7 @@ class VirtualControlsSettings {
     gap: 10,
     opacity: 0.65,
     hitboxScale: 1.25,
-    hapticsEnabled: true,
+    hapticsEnabled: false,
     dpadDeadzoneRatio: 0.16,
     turboFramesPerToggle: 2,
     portraitDpadOffset: Offset.zero,
