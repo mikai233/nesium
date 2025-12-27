@@ -223,39 +223,10 @@ class SettingsPage extends ConsumerWidget {
                         controller.setTurboFramesPerToggle(v.round()),
                     valueLabel: '${settings.turboFramesPerToggle} frames',
                   ),
-                  const Divider(),
-                  Text(
-                    'Position Offsets (Portrait)',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
                   const SizedBox(height: 8),
-                  _OffsetEditor(
-                    label: 'D-pad',
-                    value: settings.portraitDpadOffset,
-                    onChanged: controller.setPortraitDpadOffset,
-                  ),
-                  const SizedBox(height: 12),
-                  _OffsetEditor(
-                    label: 'Buttons',
-                    value: settings.portraitButtonsOffset,
-                    onChanged: controller.setPortraitButtonsOffset,
-                  ),
-                  const Divider(),
                   Text(
-                    'Position Offsets (Landscape)',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  _OffsetEditor(
-                    label: 'D-pad',
-                    value: settings.landscapeDpadOffset,
-                    onChanged: controller.setLandscapeDpadOffset,
-                  ),
-                  const SizedBox(height: 12),
-                  _OffsetEditor(
-                    label: 'Buttons',
-                    value: settings.landscapeButtonsOffset,
-                    onChanged: controller.setLandscapeButtonsOffset,
+                    'Tip: adjust button position/size from the in-game drawer.',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
@@ -305,54 +276,6 @@ class _SliderTile extends StatelessWidget {
           onChanged: onChanged,
         ),
       ],
-    );
-  }
-}
-
-class _OffsetEditor extends StatelessWidget {
-  const _OffsetEditor({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final Offset value;
-  final ValueChanged<Offset> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            _SliderTile(
-              label: 'X offset',
-              value: value.dx,
-              min: -250,
-              max: 250,
-              divisions: 200,
-              onChanged: (v) => onChanged(Offset(v, value.dy)),
-              valueLabel: '${value.dx.toStringAsFixed(0)} px',
-            ),
-            _SliderTile(
-              label: 'Y offset',
-              value: value.dy,
-              min: -250,
-              max: 250,
-              divisions: 200,
-              onChanged: (v) => onChanged(Offset(value.dx, v)),
-              valueLabel: '${value.dy.toStringAsFixed(0)} px',
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

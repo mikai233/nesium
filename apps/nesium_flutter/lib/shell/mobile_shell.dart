@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/nes_state.dart';
+import '../features/controls/input_settings.dart';
+import '../features/controls/virtual_controls_editor.dart';
 import '../features/controls/virtual_controls_overlay.dart';
 import '../features/debugger/debugger_panel.dart';
 import '../features/screen/nes_screen_view.dart';
@@ -79,36 +82,103 @@ class _MobileDrawer extends StatelessWidget {
       ).push(MaterialPageRoute<void>(builder: (_) => page));
     }
 
-    return Drawer(
-      child: SafeArea(
-        child: ListView(
-          children: [
-            const DrawerHeader(
-              margin: EdgeInsets.zero,
-              child: Align(
-                alignment: Alignment.bottomLeft,
-                child: Text('Nesium', style: TextStyle(fontSize: 24)),
-              ),
-            ),
-            for (final item in NesMenus.mobileDrawerItems) ...[
-              if (item.id == NesMenuItemId.settings ||
-                  item.id == NesMenuItemId.debugger) ...[
-                const Divider(),
-              ],
-              ListTile(
-                leading: Icon(item.icon),
-                title: Text(item.label),
-                onTap: () => _dispatch(
-                  context,
-                  item.id,
-                  closeDrawer: closeDrawer,
-                  openPage: openPage,
+    return Consumer(
+      builder: (context, ref, _) {
+        final inputSettings = ref.watch(inputSettingsProvider);
+        final inputCtrl = ref.read(inputSettingsProvider.notifier);
+
+        final editor = ref.watch(virtualControlsEditorProvider);
+        final editorCtrl = ref.read(virtualControlsEditorProvider.notifier);
+
+        return Drawer(
+          child: SafeArea(
+            child: ListView(
+              children: [
+                const DrawerHeader(
+                  margin: EdgeInsets.zero,
+                  child: Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Text('Nesium', style: TextStyle(fontSize: 24)),
+                  ),
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
+                for (final item in NesMenus.mobileDrawerItems) ...[
+                  if (item.id == NesMenuItemId.settings ||
+                      item.id == NesMenuItemId.debugger) ...[
+                    const Divider(),
+                  ],
+                  ListTile(
+                    leading: Icon(item.icon),
+                    title: Text(item.label),
+                    onTap: () => _dispatch(
+                      context,
+                      item.id,
+                      closeDrawer: closeDrawer,
+                      openPage: openPage,
+                    ),
+                  ),
+                ],
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.tune),
+                  title: const Text('Edit virtual controls'),
+                  subtitle: Text(
+                    editor.enabled
+                        ? 'Drag to move, pinch or drag corner to resize'
+                        : 'Enable interactive adjustment',
+                  ),
+                  trailing: Switch(
+                    value: editor.enabled,
+                    onChanged: (enabled) {
+                      if (enabled &&
+                          inputSettings.device !=
+                              InputDevice.virtualController) {
+                        inputCtrl.setDevice(InputDevice.virtualController);
+                      }
+                      editorCtrl.setEnabled(enabled);
+                      closeDrawer();
+                    },
+                  ),
+                ),
+                if (editor.enabled) ...[
+                  SwitchListTile(
+                    secondary: const Icon(Icons.grid_4x4),
+                    title: const Text('Grid snapping'),
+                    value: editor.gridSnapEnabled,
+                    onChanged: editorCtrl.setGridSnapEnabled,
+                  ),
+                  if (editor.gridSnapEnabled)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Expanded(child: Text('Grid spacing')),
+                              Text(
+                                '${editor.gridSpacing.toStringAsFixed(0)} px',
+                              ),
+                            ],
+                          ),
+                          Slider(
+                            value: editor.gridSpacing.clamp(4, 64),
+                            min: 4,
+                            max: 64,
+                            divisions: 60,
+                            onChanged: editorCtrl.setGridSpacing,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
