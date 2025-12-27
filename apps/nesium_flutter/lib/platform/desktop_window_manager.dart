@@ -1,18 +1,14 @@
 import 'dart:convert';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:flutter/foundation.dart';
 
 import '../windows/window_routing.dart';
+import 'platform_capabilities.dart';
 
 class DesktopWindowManager {
   const DesktopWindowManager();
 
-  bool get isSupported =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.linux ||
-          defaultTargetPlatform == TargetPlatform.windows);
+  bool get isSupported => isNativeDesktop;
 
   String? _routeFromArgs(String args) {
     if (args.isEmpty) return null;

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/api/emulation.dart' as nes_emulation;
+import '../../platform/platform_capabilities.dart';
 
 @immutable
 class EmulationSettings {
@@ -21,13 +22,9 @@ class EmulationSettings {
   }
 
   static EmulationSettings defaults() {
-    final isMobile =
-        !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.iOS);
     return EmulationSettings(
       integerFpsMode: false,
-      pauseInBackground: isMobile,
+      pauseInBackground: isNativeMobile,
     );
   }
 }

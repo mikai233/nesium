@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/nes_input_masks.dart';
+import '../../platform/platform_capabilities.dart';
 
 enum InputDevice { keyboard, virtualController }
 
@@ -205,9 +206,7 @@ class InputSettings {
 }
 
 bool _supportsVirtualController() {
-  if (kIsWeb) return false;
-  return defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS;
+  return isNativeMobile;
 }
 
 class InputSettingsController extends Notifier<InputSettings> {

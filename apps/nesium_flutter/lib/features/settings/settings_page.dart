@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../platform/platform_capabilities.dart';
 import '../controls/input_settings.dart';
 import '../controls/virtual_controls_settings.dart';
 import 'emulation_settings.dart';
@@ -104,10 +104,7 @@ class SettingsPage extends ConsumerWidget {
     final language = ref.watch(appLanguageProvider);
     final languageController = ref.read(appLanguageProvider.notifier);
 
-    final supportsVirtual =
-        !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.iOS);
+    final supportsVirtual = isNativeMobile;
     final usingVirtual = inputSettings.device == InputDevice.virtualController;
 
     return Scaffold(

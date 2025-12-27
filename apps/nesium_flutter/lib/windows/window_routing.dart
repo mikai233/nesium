@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../platform/platform_capabilities.dart';
 import '../shell/nes_shell.dart';
 import 'secondary_window.dart';
 
@@ -60,12 +60,7 @@ class WindowRouter extends StatefulWidget {
 
 class _WindowRouterState extends State<WindowRouter> {
   WindowKind? _kind;
-
-  bool get _isDesktop =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.linux ||
-          defaultTargetPlatform == TargetPlatform.windows);
+  bool get _isDesktop => isNativeDesktop;
 
   @override
   void initState() {

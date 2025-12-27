@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../platform/platform_capabilities.dart';
 
 enum AppLanguage { system, english, chineseSimplified }
 
@@ -48,11 +49,7 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
     unawaited(_broadcastLanguage(language));
   }
 
-  bool get _supportsWindowMessaging =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.linux ||
-          defaultTargetPlatform == TargetPlatform.windows);
+  bool get _supportsWindowMessaging => isNativeDesktop;
 
   Future<void> _init() async {
     if (!_supportsWindowMessaging) return;

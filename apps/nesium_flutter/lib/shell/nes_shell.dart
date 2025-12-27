@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -21,6 +20,7 @@ import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
 import '../l10n/app_localizations.dart';
 import '../platform/desktop_window_manager.dart';
+import '../platform/platform_capabilities.dart';
 import 'desktop_shell.dart';
 import 'nes_actions.dart';
 import 'mobile_shell.dart';
@@ -40,11 +40,7 @@ class _NesShellState extends ConsumerState<NesShell>
   bool _pausedByLifecycle = false;
   StreamSubscription<nes_events.RuntimeNotification>? _runtimeNotificationsSub;
 
-  bool get _isDesktop =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.linux ||
-          defaultTargetPlatform == TargetPlatform.windows);
+  bool get _isDesktop => isNativeDesktop;
 
   @override
   void initState() {
