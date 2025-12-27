@@ -5,27 +5,46 @@ import '../../bridge/api/emulation.dart' as nes_emulation;
 
 @immutable
 class EmulationSettings {
-  const EmulationSettings({required this.integerFpsMode});
+  const EmulationSettings({
+    required this.integerFpsMode,
+    required this.pauseInBackground,
+  });
 
   final bool integerFpsMode;
+  final bool pauseInBackground;
 
-  EmulationSettings copyWith({bool? integerFpsMode}) {
+  EmulationSettings copyWith({bool? integerFpsMode, bool? pauseInBackground}) {
     return EmulationSettings(
       integerFpsMode: integerFpsMode ?? this.integerFpsMode,
+      pauseInBackground: pauseInBackground ?? this.pauseInBackground,
     );
   }
 
-  static const defaults = EmulationSettings(integerFpsMode: false);
+  static EmulationSettings defaults() {
+    final isMobile =
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+    return EmulationSettings(
+      integerFpsMode: false,
+      pauseInBackground: isMobile,
+    );
+  }
 }
 
 class EmulationSettingsController extends Notifier<EmulationSettings> {
   @override
-  EmulationSettings build() => EmulationSettings.defaults;
+  EmulationSettings build() => EmulationSettings.defaults();
 
   void setIntegerFpsMode(bool enabled) {
     if (enabled == state.integerFpsMode) return;
     state = state.copyWith(integerFpsMode: enabled);
     nes_emulation.setIntegerFpsMode(enabled: enabled).catchError((_) {});
+  }
+
+  void setPauseInBackground(bool enabled) {
+    if (enabled == state.pauseInBackground) return;
+    state = state.copyWith(pauseInBackground: enabled);
   }
 }
 

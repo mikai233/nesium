@@ -160,13 +160,25 @@ class SettingsPage extends ConsumerWidget {
           Card(
             elevation: 0,
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: SwitchListTile(
-              value: emulationSettings.integerFpsMode,
-              title: const Text('Integer FPS mode (60Hz, NTSC)'),
-              subtitle: const Text(
-                'Reduces scrolling judder on 60Hz displays. PAL will be added later.',
-              ),
-              onChanged: emulationController.setIntegerFpsMode,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  value: emulationSettings.integerFpsMode,
+                  title: const Text('Integer FPS mode (60Hz, NTSC)'),
+                  subtitle: const Text(
+                    'Reduces scrolling judder on 60Hz displays. PAL will be added later.',
+                  ),
+                  onChanged: emulationController.setIntegerFpsMode,
+                ),
+                SwitchListTile(
+                  value: emulationSettings.pauseInBackground,
+                  title: const Text('Pause in background'),
+                  subtitle: const Text(
+                    'Automatically pauses the emulator when the app is not active.',
+                  ),
+                  onChanged: emulationController.setPauseInBackground,
+                ),
+              ],
             ),
           ),
           if (supportsVirtual) ...[

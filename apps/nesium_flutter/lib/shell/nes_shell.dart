@@ -15,6 +15,7 @@ import '../domain/nes_input_masks.dart';
 import '../domain/nes_state.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_settings.dart';
+import '../features/settings/emulation_settings.dart';
 import '../features/settings/settings_page.dart';
 import '../platform/desktop_window_manager.dart';
 import 'desktop_shell.dart';
@@ -72,6 +73,15 @@ class _NesShellState extends ConsumerState<NesShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final pauseInBackground = ref
+        .read(emulationSettingsProvider)
+        .pauseInBackground;
+    if (!pauseInBackground) {
+      // Never auto-pause; also don't auto-resume.
+      _pausedByLifecycle = false;
+      return;
+    }
+
     switch (state) {
       case AppLifecycleState.resumed:
         if (_pausedByLifecycle) {
