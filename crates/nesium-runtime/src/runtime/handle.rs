@@ -11,6 +11,7 @@ use nesium_core::{
     audio::bus::AudioBusConfig,
     controller::Button,
     ppu::buffer::{BufferMode, ExternalFrameHandle, FrameBuffer},
+    ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
 };
 
@@ -247,6 +248,49 @@ impl RuntimeHandle {
 
         self.send_with_reply("set_integer_fps_target", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::SetIntegerFpsTarget(fps, reply)
+        })
+    }
+
+    pub fn set_palette_kind(&self, kind: PaletteKind) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_palette_kind", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetPaletteKind(kind, reply)
+        })
+    }
+
+    pub fn set_palette_from_pal_data(&self, data: &[u8]) -> Result<(), RuntimeError> {
+        let palette = Palette::from_pal_data(data).map_err(|e| match e {
+            nesium_core::error::Error::InvalidPaletteSize { actual } => {
+                RuntimeError::InvalidPaletteSize { actual }
+            }
+            _ => RuntimeError::InvalidPaletteData {
+                error: e.to_string(),
+            },
+        })?;
+
+        self.send_with_reply("set_palette", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetPalette(palette, reply)
+        })
+    }
+
+    pub fn set_palette_from_pal_file(&self, path: impl Into<PathBuf>) -> Result<(), RuntimeError> {
+        let path = path.into();
+        let data = std::fs::read(&path).map_err(|e| RuntimeError::LoadPaletteFailed {
+            path: path.clone(),
+            error: e.to_string(),
+        })?;
+
+        let palette = Palette::from_pal_data(&data).map_err(|e| match e {
+            nesium_core::error::Error::InvalidPaletteSize { actual } => {
+                RuntimeError::InvalidPaletteSize { actual }
+            }
+            _ => RuntimeError::LoadPaletteFailed {
+                path: path.clone(),
+                error: e.to_string(),
+            },
+        })?;
+
+        self.send_with_reply("set_palette", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetPalette(palette, reply)
         })
     }
 }

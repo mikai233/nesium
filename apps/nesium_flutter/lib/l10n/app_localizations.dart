@@ -554,6 +554,60 @@ abstract class AppLocalizations {
   /// **'Reset NES'**
   String get actionResetNes;
 
+  /// No description provided for @actionLoadPalette.
+  ///
+  /// In en, this message translates to:
+  /// **'Load palette'**
+  String get actionLoadPalette;
+
+  /// No description provided for @videoTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get videoTitle;
+
+  /// No description provided for @paletteModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette'**
+  String get paletteModeLabel;
+
+  /// No description provided for @paletteModeBuiltin.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get paletteModeBuiltin;
+
+  /// No description provided for @paletteModeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom…'**
+  String get paletteModeCustom;
+
+  /// No description provided for @paletteModeCustomActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom ({name})'**
+  String paletteModeCustomActive(String name);
+
+  /// No description provided for @builtinPaletteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in palette'**
+  String get builtinPaletteLabel;
+
+  /// No description provided for @customPaletteLoadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Load palette file (.pal)…'**
+  String get customPaletteLoadTitle;
+
+  /// No description provided for @customPaletteLoadSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'192 bytes (RGB) or 256 bytes (RGBA)'**
+  String get customPaletteLoadSubtitle;
+
   /// No description provided for @commandSucceeded.
   ///
   /// In en, this message translates to:

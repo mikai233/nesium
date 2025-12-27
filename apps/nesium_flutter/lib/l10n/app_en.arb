@@ -107,6 +107,22 @@
   ,
   "actionLoadRom": "Load ROM",
   "actionResetNes": "Reset NES",
+  "actionLoadPalette": "Load palette",
+  "videoTitle": "Video",
+  "paletteModeLabel": "Palette",
+  "paletteModeBuiltin": "Built-in",
+  "paletteModeCustom": "Custom…",
+  "paletteModeCustomActive": "Custom ({name})",
+  "@paletteModeCustomActive": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "builtinPaletteLabel": "Built-in palette",
+  "customPaletteLoadTitle": "Load palette file (.pal)…",
+  "customPaletteLoadSubtitle": "192 bytes (RGB) or 256 bytes (RGBA)",
   "commandSucceeded": "{label} succeeded",
   "@commandSucceeded": {
     "placeholders": {

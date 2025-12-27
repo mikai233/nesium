@@ -28,7 +28,9 @@ use nesium_core::{
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH},
     reset_kind::ResetKind,
 };
-use nesium_runtime::{AudioMode, Runtime, RuntimeConfig, RuntimeEvent, RuntimeHandle, VideoConfig};
+use nesium_runtime::{
+    AudioMode, PaletteKind, Runtime, RuntimeConfig, RuntimeEvent, RuntimeHandle, VideoConfig,
+};
 
 struct VideoBackingStore {
     _plane0: Box<[u8]>,
@@ -55,6 +57,10 @@ pub(super) struct UiState {
     active_input_port: usize,
     pixel_perfect_scaling: bool,
     integer_fps_mode: bool,
+    palette_builtin_kind: PaletteKind,
+    palette_use_external: bool,
+    palette_external_path: Option<PathBuf>,
+    palette_error: Option<String>,
     turbo_frames_per_toggle: u8,
     gamepads_available: bool,
     gamepads: Vec<(GamepadId, String)>,
@@ -203,6 +209,10 @@ impl NesiumApp {
             active_input_port: 0,
             pixel_perfect_scaling: false,
             integer_fps_mode: false,
+            palette_builtin_kind: PaletteKind::default(),
+            palette_use_external: false,
+            palette_external_path: None,
+            palette_error: None,
             turbo_frames_per_toggle: 2,
             gamepads_available: gamepads.is_some(),
             gamepads: gamepad_snapshot,

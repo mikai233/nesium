@@ -78,6 +78,22 @@
   ,
   "actionLoadRom": "加载 ROM",
   "actionResetNes": "重置 NES",
+  "actionLoadPalette": "加载调色板",
+  "videoTitle": "画面",
+  "paletteModeLabel": "调色板",
+  "paletteModeBuiltin": "内置",
+  "paletteModeCustom": "自定义…",
+  "paletteModeCustomActive": "自定义（{name}）",
+  "@paletteModeCustomActive": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "builtinPaletteLabel": "内置调色板",
+  "customPaletteLoadTitle": "加载调色板文件（.pal）…",
+  "customPaletteLoadSubtitle": "192 字节（RGB）或 256 字节（RGBA）",
   "commandSucceeded": "{label} 成功",
   "commandFailed": "{label} 失败",
   "snackPaused": "已暂停",

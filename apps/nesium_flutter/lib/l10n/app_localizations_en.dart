@@ -254,6 +254,35 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionResetNes => 'Reset NES';
 
   @override
+  String get actionLoadPalette => 'Load palette';
+
+  @override
+  String get videoTitle => 'Video';
+
+  @override
+  String get paletteModeLabel => 'Palette';
+
+  @override
+  String get paletteModeBuiltin => 'Built-in';
+
+  @override
+  String get paletteModeCustom => 'Custom…';
+
+  @override
+  String paletteModeCustomActive(String name) {
+    return 'Custom ($name)';
+  }
+
+  @override
+  String get builtinPaletteLabel => 'Built-in palette';
+
+  @override
+  String get customPaletteLoadTitle => 'Load palette file (.pal)…';
+
+  @override
+  String get customPaletteLoadSubtitle => '192 bytes (RGB) or 256 bytes (RGBA)';
+
+  @override
   String commandSucceeded(String label) {
     return '$label succeeded';
   }

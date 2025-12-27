@@ -10,6 +10,12 @@ pub fn pick_file_dialog() -> Option<PathBuf> {
         .pick_file()
 }
 
+pub fn pick_palette_dialog() -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .add_filter("NES palette", &["pal"])
+        .pick_file()
+}
+
 pub fn save_wav_dialog() -> Option<PathBuf> {
     rfd::FileDialog::new()
         .add_filter("WAV audio", &["wav"])

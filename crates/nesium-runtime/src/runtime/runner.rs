@@ -289,6 +289,14 @@ impl Runner {
                 self.next_frame_deadline = Instant::now();
                 let _ = reply.send(Ok(()));
             }
+            ControlMessage::SetPaletteKind(kind, reply) => {
+                self.nes.set_palette(kind.palette());
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetPalette(palette, reply) => {
+                self.nes.set_palette(palette);
+                let _ = reply.send(Ok(()));
+            }
         }
 
         false

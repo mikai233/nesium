@@ -9,6 +9,7 @@
 import 'api/emulation.dart';
 import 'api/input.dart';
 import 'api/load_rom.dart';
+import 'api/palette.dart';
 import 'api/pause.dart';
 import 'api/simple.dart';
 import 'dart:async';
@@ -31,7 +32,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  List<PalettePresetInfo> dco_decode_list_palette_preset_info(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  PalettePresetInfo dco_decode_palette_preset_info(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -46,7 +56,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  List<PalettePresetInfo> sse_decode_list_palette_preset_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PalettePresetInfo sse_decode_palette_preset_info(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -64,8 +87,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_palette_preset_info(
+    List<PalettePresetInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_palette_preset_info(
+    PalettePresetInfo self,
     SseSerializer serializer,
   );
 

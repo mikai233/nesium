@@ -2,15 +2,46 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../controls/input_settings.dart';
 import '../controls/virtual_controls_settings.dart';
 import 'emulation_settings.dart';
 import 'language_settings.dart';
+import 'video_settings.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
+
+  Future<void> _pickAndApplyCustomPalette(
+    BuildContext context,
+    VideoSettingsController controller,
+  ) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pal'],
+      withData: true,
+      withReadStream: false,
+    );
+    final file = result?.files.single;
+    if (file == null) return;
+
+    final bytes = file.bytes;
+    if (bytes == null) return;
+
+    try {
+      await controller.setCustomPalette(bytes, name: file.name);
+    } catch (e) {
+      if (!context.mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${l10n.commandFailed(l10n.actionLoadPalette)}: $e'),
+        ),
+      );
+    }
+  }
 
   Future<void> _editCustomBinding(
     BuildContext context,
@@ -65,6 +96,9 @@ class SettingsPage extends ConsumerWidget {
 
     final emulationSettings = ref.watch(emulationSettingsProvider);
     final emulationController = ref.read(emulationSettingsProvider.notifier);
+
+    final videoSettings = ref.watch(videoSettingsProvider);
+    final videoController = ref.read(videoSettingsProvider.notifier);
 
     final language = ref.watch(appLanguageProvider);
     final languageController = ref.read(appLanguageProvider.notifier);
@@ -255,6 +289,120 @@ class SettingsPage extends ConsumerWidget {
                   onChanged: emulationController.setPauseInBackground,
                 ),
               ],
+            ),
+          ),
+          const Divider(),
+          Text(l10n.videoTitle, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 0,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: l10n.paletteModeLabel,
+                      border: const OutlineInputBorder(),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<PaletteMode>(
+                        value: videoSettings.paletteMode,
+                        isExpanded: true,
+                        items: [
+                          DropdownMenuItem(
+                            value: PaletteMode.builtin,
+                            child: Text(l10n.paletteModeBuiltin),
+                          ),
+                          DropdownMenuItem(
+                            value: PaletteMode.custom,
+                            child: Text(
+                              videoSettings.customPaletteName == null
+                                  ? l10n.paletteModeCustom
+                                  : l10n.paletteModeCustomActive(
+                                      videoSettings.customPaletteName!,
+                                    ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) async {
+                          if (value == null) return;
+                          if (value == PaletteMode.builtin) {
+                            try {
+                              await videoController.setBuiltinPalette(
+                                videoSettings.builtinPaletteId,
+                              );
+                            } catch (_) {}
+                            return;
+                          }
+
+                          if (videoSettings.customPaletteName != null) {
+                            videoController.useCustomIfAvailable();
+                            return;
+                          }
+                          await _pickAndApplyCustomPalette(
+                            context,
+                            videoController,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (videoSettings.paletteMode == PaletteMode.builtin)
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: l10n.builtinPaletteLabel,
+                        border: const OutlineInputBorder(),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: videoSettings.builtinPaletteId,
+                          isExpanded: true,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'nesdev-ntsc',
+                              child: Text('Nesdev (NTSC)'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'fbx-composite-direct',
+                              child: Text('FirebrandX (Composite Direct)'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'sony-cxa2025as-us',
+                              child: Text('Sony CXA2025AS (US)'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'pal-2c07',
+                              child: Text('RP2C07 (PAL)'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'raw-linear',
+                              child: Text('Raw linear'),
+                            ),
+                          ],
+                          onChanged: (value) async {
+                            if (value == null) return;
+                            try {
+                              await videoController.setBuiltinPalette(value);
+                            } catch (_) {}
+                          },
+                        ),
+                      ),
+                    )
+                  else
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.customPaletteLoadTitle),
+                      subtitle: Text(l10n.customPaletteLoadSubtitle),
+                      trailing: const Icon(Icons.folder_open),
+                      onTap: () =>
+                          _pickAndApplyCustomPalette(context, videoController),
+                    ),
+                ],
+              ),
             ),
           ),
           if (supportsVirtual) ...[

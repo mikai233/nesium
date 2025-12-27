@@ -46,6 +46,14 @@ impl LanguagePack for Zh {
 
             // Palette viewport
             PaletteHeading => "当前调色板 (前 16 项)",
+            PaletteModeLabel => "调色板来源",
+            PaletteModeBuiltin => "内置",
+            PaletteModeCustom => "外部文件（.pal）",
+            PaletteBuiltinLabel => "内置调色板",
+            PaletteCustomLoad => "加载 .pal 文件…",
+            PaletteCustomActive => "外部调色板：",
+            PaletteUseBuiltin => "使用内置调色板",
+            PaletteError => "错误：",
 
             // Input viewport
             InputHeading => "输入配置",

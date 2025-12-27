@@ -247,6 +247,35 @@ class AppLocalizationsZh extends AppLocalizations {
   String get actionResetNes => '重置 NES';
 
   @override
+  String get actionLoadPalette => '加载调色板';
+
+  @override
+  String get videoTitle => '画面';
+
+  @override
+  String get paletteModeLabel => '调色板';
+
+  @override
+  String get paletteModeBuiltin => '内置';
+
+  @override
+  String get paletteModeCustom => '自定义…';
+
+  @override
+  String paletteModeCustomActive(String name) {
+    return '自定义（$name）';
+  }
+
+  @override
+  String get builtinPaletteLabel => '内置调色板';
+
+  @override
+  String get customPaletteLoadTitle => '加载调色板文件（.pal）…';
+
+  @override
+  String get customPaletteLoadSubtitle => '192 字节（RGB）或 256 字节（RGBA）';
+
+  @override
   String commandSucceeded(String label) {
     return '$label 成功';
   }

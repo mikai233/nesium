@@ -7,10 +7,12 @@ use eframe::egui;
 use egui::{Color32, Context as EguiContext, ViewportBuilder, ViewportClass, ViewportId};
 use gilrs::Button as GilrsButton;
 use nesium_core::controller::Button;
+use nesium_runtime::PaletteKind;
 
 use super::{
     AppViewport, NesiumApp, TextId, controller,
     controller::{ControllerDevice, InputAction, InputPreset},
+    dialogs::pick_palette_dialog,
 };
 
 fn consume_close_requests(
@@ -308,6 +310,7 @@ impl NesiumApp {
                 .with_title(self.t(TextId::MenuWindowPalette))
                 .with_inner_size([280.0, 240.0]);
             let ui_state = Arc::clone(&self.ui_state);
+            let runtime_handle = self.runtime_handle.clone();
             let close_flag = self.viewports.close_flag(AppViewport::Palette);
             show_viewport_with_close(
                 ctx,
@@ -315,16 +318,131 @@ impl NesiumApp {
                 builder,
                 close_flag,
                 move |ctx, class| {
-                    let (title, heading) = {
-                        let ui_state = ui_state.lock().unwrap();
-                        (
-                            ui_state.i18n.text(TextId::MenuWindowPalette),
-                            ui_state.i18n.text(TextId::PaletteHeading),
-                        )
-                    };
+                    let mut ui_state = ui_state.lock().unwrap();
+                    let title = ui_state.i18n.text(TextId::MenuWindowPalette);
+                    let heading = ui_state.i18n.text(TextId::PaletteHeading);
                     let close_requested = show_viewport_content(ctx, class, title, |ui| {
                         ui.heading(heading);
-                        ui.label("Palette viewer is currently unavailable.");
+                        ui.add_space(6.0);
+
+                        // Built-in palette selector.
+                        let mut builtin = ui_state.palette_builtin_kind;
+                        egui::ComboBox::from_label(ui_state.i18n.text(TextId::PaletteBuiltinLabel))
+                            .selected_text(builtin.as_str())
+                            .show_ui(ui, |ui| {
+                                for kind in PaletteKind::all() {
+                                    ui.selectable_value(&mut builtin, *kind, kind.as_str());
+                                }
+                            });
+
+                        if builtin != ui_state.palette_builtin_kind {
+                            ui_state.palette_builtin_kind = builtin;
+                            ui_state.palette_use_external = false;
+                            ui_state.palette_error = runtime_handle
+                                .set_palette_kind(builtin)
+                                .err()
+                                .map(|e| e.to_string());
+                        }
+
+                        ui.add_space(8.0);
+
+                        // External palette controls.
+                        let mut use_external = ui_state.palette_use_external;
+                        ui.horizontal(|ui| {
+                            ui.label(ui_state.i18n.text(TextId::PaletteModeLabel));
+                            ui.radio_value(
+                                &mut use_external,
+                                false,
+                                ui_state.i18n.text(TextId::PaletteModeBuiltin),
+                            );
+                            ui.radio_value(
+                                &mut use_external,
+                                true,
+                                ui_state.i18n.text(TextId::PaletteModeCustom),
+                            );
+                        });
+
+                        if use_external != ui_state.palette_use_external {
+                            if use_external {
+                                if let Some(path) = ui_state.palette_external_path.clone() {
+                                    ui_state.palette_error = runtime_handle
+                                        .set_palette_from_pal_file(&path)
+                                        .err()
+                                        .map(|e| e.to_string());
+                                    if ui_state.palette_error.is_none() {
+                                        ui_state.palette_use_external = true;
+                                    }
+                                } else if let Some(path) = pick_palette_dialog() {
+                                    ui_state.palette_error = runtime_handle
+                                        .set_palette_from_pal_file(&path)
+                                        .err()
+                                        .map(|e| e.to_string());
+                                    if ui_state.palette_error.is_none() {
+                                        ui_state.palette_external_path = Some(path);
+                                        ui_state.palette_use_external = true;
+                                    }
+                                }
+                            } else {
+                                ui_state.palette_error = runtime_handle
+                                    .set_palette_kind(ui_state.palette_builtin_kind)
+                                    .err()
+                                    .map(|e| e.to_string());
+                                if ui_state.palette_error.is_none() {
+                                    ui_state.palette_use_external = false;
+                                }
+                            }
+                        }
+
+                        if ui_state.palette_use_external {
+                            if let Some(path) = &ui_state.palette_external_path {
+                                ui.label(format!(
+                                    "{} {}",
+                                    ui_state.i18n.text(TextId::PaletteCustomActive),
+                                    path.display()
+                                ));
+                            }
+                        }
+
+                        if ui
+                            .button(ui_state.i18n.text(TextId::PaletteCustomLoad))
+                            .clicked()
+                        {
+                            if let Some(path) = pick_palette_dialog() {
+                                ui_state.palette_error = runtime_handle
+                                    .set_palette_from_pal_file(&path)
+                                    .err()
+                                    .map(|e| e.to_string());
+                                if ui_state.palette_error.is_none() {
+                                    ui_state.palette_external_path = Some(path);
+                                    ui_state.palette_use_external = true;
+                                }
+                            }
+                        }
+
+                        ui.add_space(6.0);
+                        if ui
+                            .button(ui_state.i18n.text(TextId::PaletteUseBuiltin))
+                            .clicked()
+                        {
+                            ui_state.palette_error = runtime_handle
+                                .set_palette_kind(ui_state.palette_builtin_kind)
+                                .err()
+                                .map(|e| e.to_string());
+                            if ui_state.palette_error.is_none() {
+                                ui_state.palette_use_external = false;
+                            }
+                        }
+
+                        if let Some(err) = ui_state.palette_error.as_deref() {
+                            ui.add_space(6.0);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.colored_label(
+                                    Color32::LIGHT_RED,
+                                    ui_state.i18n.text(TextId::PaletteError),
+                                );
+                                ui.colored_label(Color32::LIGHT_RED, err);
+                            });
+                        }
                     });
                     close_requested
                 },

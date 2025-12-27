@@ -2,7 +2,11 @@ use core::ffi::c_void;
 use std::path::PathBuf;
 
 use crossbeam_channel::Sender;
-use nesium_core::{audio::bus::AudioBusConfig, reset_kind::ResetKind};
+use nesium_core::{
+    audio::bus::AudioBusConfig,
+    ppu::palette::{Palette, PaletteKind},
+    reset_kind::ResetKind,
+};
 
 use super::types::{FrameReadyCallback, RuntimeError};
 
@@ -15,6 +19,8 @@ pub(crate) enum ControlMessage {
     Eject(ControlReplySender),
     SetAudioConfig(AudioBusConfig, ControlReplySender),
     SetFrameReadyCallback(Option<FrameReadyCallback>, *mut c_void, ControlReplySender),
+    SetPaletteKind(PaletteKind, ControlReplySender),
+    SetPalette(Palette, ControlReplySender),
     /// None = exact NTSC FPS, Some(60) = integer FPS (PAL reserved for future).
     SetIntegerFpsTarget(Option<u32>, ControlReplySender),
 }

@@ -54,6 +54,14 @@ pub enum TextId {
 
     // Palette viewport
     PaletteHeading,
+    PaletteModeLabel,
+    PaletteModeBuiltin,
+    PaletteModeCustom,
+    PaletteBuiltinLabel,
+    PaletteCustomLoad,
+    PaletteCustomActive,
+    PaletteUseBuiltin,
+    PaletteError,
 
     // Input viewport
     InputHeading,

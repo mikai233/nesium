@@ -6,6 +6,7 @@ use nesium_core::{
 };
 
 pub use nesium_core::ppu::buffer::FrameReadyCallback;
+pub use nesium_core::ppu::palette::PaletteKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioMode {
@@ -56,6 +57,12 @@ pub enum RuntimeError {
     UnsupportedIntegerFpsTarget { fps: u32 },
     #[error("failed to load ROM: {path}: {error}")]
     LoadRomFailed { path: PathBuf, error: String },
+    #[error("palette blobs must be 192 or 256 bytes (got {actual})")]
+    InvalidPaletteSize { actual: usize },
+    #[error("invalid palette data: {error}")]
+    InvalidPaletteData { error: String },
+    #[error("failed to load palette: {path}: {error}")]
+    LoadPaletteFailed { path: PathBuf, error: String },
 }
 
 pub(crate) const NTSC_FPS_EXACT: f64 = 60.098_811_862_348_4;

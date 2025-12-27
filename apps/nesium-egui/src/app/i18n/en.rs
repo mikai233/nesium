@@ -46,6 +46,14 @@ impl LanguagePack for En {
 
             // Palette viewport
             PaletteHeading => "Current palette (first 16 entries)",
+            PaletteModeLabel => "Palette source",
+            PaletteModeBuiltin => "Built-in",
+            PaletteModeCustom => "External (.pal)",
+            PaletteBuiltinLabel => "Built-in palette",
+            PaletteCustomLoad => "Load .pal file…",
+            PaletteCustomActive => "External palette:",
+            PaletteUseBuiltin => "Use built-in palette",
+            PaletteError => "Error:",
 
             // Input viewport
             InputHeading => "Input configuration",
