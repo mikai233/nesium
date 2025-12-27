@@ -52,8 +52,11 @@ pub struct RuntimeConfig {
 
 #[derive(Debug, Clone)]
 pub enum RuntimeEvent {
-    StatusInfo(String),
-    Error(String),
+    RomLoaded { path: PathBuf },
+    RomLoadFailed { path: PathBuf, error: String },
+    Reset { kind: ResetKind },
+    Ejected,
+    AudioInitFailed { error: String },
 }
 
 pub use nesium_core::ppu::buffer::FrameReadyCallback;
@@ -88,16 +91,21 @@ enum WaitOutcome {
     DeadlineReached,
 }
 
-#[derive(Debug, Clone)]
-pub struct RuntimeError(String);
-
-impl std::fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum RuntimeError {
+    #[error("video buffer length is zero")]
+    VideoBufferLenZero,
+    #[error("runtime control channel disconnected")]
+    ControlChannelDisconnected,
+    #[error("runtime did not respond in time for {op}")]
+    ControlTimeout { op: &'static str },
+    #[error("PAL is not supported yet")]
+    PalNotSupported,
+    #[error("unsupported integer FPS target: {fps}")]
+    UnsupportedIntegerFpsTarget { fps: u32 },
+    #[error("failed to load ROM: {path}: {error}")]
+    LoadRomFailed { path: PathBuf, error: String },
 }
-
-impl std::error::Error for RuntimeError {}
 
 struct RuntimeState {
     paused: AtomicBool,
@@ -143,7 +151,7 @@ impl Runtime {
 
         let len = config.video.len_bytes();
         if len == 0 {
-            return Err(RuntimeError("video buffer length is zero".to_string()));
+            return Err(RuntimeError::VideoBufferLenZero);
         }
 
         let (framebuffer, frame_handle) = unsafe {
@@ -198,6 +206,7 @@ impl Drop for Runtime {
 impl RuntimeHandle {
     fn send_with_reply(
         &self,
+        op: &'static str,
         timeout: Duration,
         build: impl FnOnce(ControlReplySender) -> ControlMessage,
     ) -> Result<(), RuntimeError> {
@@ -205,15 +214,11 @@ impl RuntimeHandle {
         self.inner
             .ctrl_tx
             .send(build(reply_tx))
-            .map_err(|e| RuntimeError(e.to_string()))?;
+            .map_err(|_| RuntimeError::ControlChannelDisconnected)?;
         match reply_rx.recv_timeout(timeout) {
             Ok(res) => res,
-            Err(RecvTimeoutError::Timeout) => {
-                Err(RuntimeError("runtime did not respond in time".to_string()))
-            }
-            Err(RecvTimeoutError::Disconnected) => Err(RuntimeError(
-                "runtime control channel disconnected".to_string(),
-            )),
+            Err(RecvTimeoutError::Timeout) => Err(RuntimeError::ControlTimeout { op }),
+            Err(RecvTimeoutError::Disconnected) => Err(RuntimeError::ControlChannelDisconnected),
         }
     }
 
@@ -281,23 +286,23 @@ impl RuntimeHandle {
 
     pub fn load_rom(&self, path: impl Into<PathBuf>) -> Result<(), RuntimeError> {
         let path = path.into();
-        self.send_with_reply(LOAD_ROM_REPLY_TIMEOUT, |reply| {
+        self.send_with_reply("load_rom", LOAD_ROM_REPLY_TIMEOUT, |reply| {
             ControlMessage::LoadRom(path, reply)
         })
     }
 
     pub fn reset(&self, kind: ResetKind) -> Result<(), RuntimeError> {
-        self.send_with_reply(CONTROL_REPLY_TIMEOUT, |reply| {
+        self.send_with_reply("reset", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::Reset(kind, reply)
         })
     }
 
     pub fn eject(&self) -> Result<(), RuntimeError> {
-        self.send_with_reply(CONTROL_REPLY_TIMEOUT, ControlMessage::Eject)
+        self.send_with_reply("eject", CONTROL_REPLY_TIMEOUT, ControlMessage::Eject)
     }
 
     pub fn set_audio_config(&self, cfg: AudioBusConfig) -> Result<(), RuntimeError> {
-        self.send_with_reply(CONTROL_REPLY_TIMEOUT, |reply| {
+        self.send_with_reply("set_audio_config", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::SetAudioConfig(cfg, reply)
         })
     }
@@ -307,7 +312,7 @@ impl RuntimeHandle {
         cb: Option<FrameReadyCallback>,
         user_data: *mut c_void,
     ) -> Result<(), RuntimeError> {
-        self.send_with_reply(CONTROL_REPLY_TIMEOUT, |reply| {
+        self.send_with_reply("set_frame_ready_callback", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::SetFrameReadyCallback(cb, user_data, reply)
         })
     }
@@ -322,16 +327,14 @@ impl RuntimeHandle {
         if let Some(fps) = fps {
             match fps {
                 60 => {}
-                50 => return Err(RuntimeError("PAL is not supported yet".to_string())),
+                50 => return Err(RuntimeError::PalNotSupported),
                 _ => {
-                    return Err(RuntimeError(format!(
-                        "unsupported integer FPS target: {fps}"
-                    )));
+                    return Err(RuntimeError::UnsupportedIntegerFpsTarget { fps });
                 }
             }
         }
 
-        self.send_with_reply(CONTROL_REPLY_TIMEOUT, |reply| {
+        self.send_with_reply("set_integer_fps_target", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::SetIntegerFpsTarget(fps, reply)
         })
     }
@@ -394,7 +397,9 @@ impl Runner {
                     (Some(player), sr)
                 }
                 Err(e) => {
-                    let _ = event_tx.send(RuntimeEvent::Error(format!("Audio init failed: {e}")));
+                    let _ = event_tx.send(RuntimeEvent::AudioInitFailed {
+                        error: e.to_string(),
+                    });
                     (None, 48_000)
                 }
             },
@@ -540,18 +545,19 @@ impl Runner {
                         if let Some(audio) = &self.audio {
                             audio.clear();
                         }
-                        let _ = self.event_tx.send(RuntimeEvent::StatusInfo(format!(
-                            "Loaded {}",
-                            path.display()
-                        )));
+                        let _ = self
+                            .event_tx
+                            .send(RuntimeEvent::RomLoaded { path: path.clone() });
                         let _ = reply.send(Ok(()));
                     }
                     Err(e) => {
                         self.has_cartridge = false;
-                        let _ = self
-                            .event_tx
-                            .send(RuntimeEvent::Error(format!("Failed to load ROM: {e}")));
-                        let _ = reply.send(Err(RuntimeError(format!("Failed to load ROM: {e}"))));
+                        let error = e.to_string();
+                        let _ = self.event_tx.send(RuntimeEvent::RomLoadFailed {
+                            path: path.clone(),
+                            error: error.clone(),
+                        });
+                        let _ = reply.send(Err(RuntimeError::LoadRomFailed { path, error }));
                     }
                 }
             }
@@ -569,9 +575,7 @@ impl Runner {
                     }
                     self.state.paused.store(false, Ordering::Release);
                     self.next_frame_deadline = Instant::now();
-                    let _ = self
-                        .event_tx
-                        .send(RuntimeEvent::StatusInfo("Reset".to_string()));
+                    let _ = self.event_tx.send(RuntimeEvent::Reset { kind });
                 }
                 let _ = reply.send(Ok(()));
             }
@@ -587,9 +591,7 @@ impl Runner {
                 if let Some(audio) = &self.audio {
                     audio.clear();
                 }
-                let _ = self
-                    .event_tx
-                    .send(RuntimeEvent::StatusInfo("Ejected".to_string()));
+                let _ = self.event_tx.send(RuntimeEvent::Ejected);
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::SetAudioConfig(cfg, reply) => {

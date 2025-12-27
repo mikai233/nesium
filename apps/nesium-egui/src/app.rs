@@ -523,10 +523,22 @@ impl eframe::App for NesiumApp {
         // 1. Process Events from Runtime thread
         while let Some(event) = self.runtime_handle.try_recv_event() {
             match event {
-                RuntimeEvent::StatusInfo(msg) => {
-                    tracing::info!("{msg}");
+                RuntimeEvent::RomLoaded { path } => {
+                    tracing::info!("Loaded {}", path.display());
                 }
-                RuntimeEvent::Error(msg) => {
+                RuntimeEvent::RomLoadFailed { path, error } => {
+                    let msg = format!("Failed to load ROM {}: {error}", path.display());
+                    tracing::error!("{msg}");
+                    self.error_dialog = Some(msg);
+                }
+                RuntimeEvent::Reset { kind } => {
+                    tracing::info!("Reset: {kind:?}");
+                }
+                RuntimeEvent::Ejected => {
+                    tracing::info!("Ejected");
+                }
+                RuntimeEvent::AudioInitFailed { error } => {
+                    let msg = format!("Audio init failed: {error}");
                     tracing::error!("{msg}");
                     self.error_dialog = Some(msg);
                 }

@@ -10,3 +10,4 @@ anyhow.workspace = true
 cpal.workspace = true
 ringbuf.workspace = true
 crossbeam-channel.workspace = true
+thiserror.workspace = true
