@@ -10,6 +10,7 @@ import '../features/controls/virtual_controls_overlay.dart';
 import '../features/debugger/debugger_panel.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/tools/tools_panel.dart';
+import '../l10n/app_localizations.dart';
 import 'nes_actions.dart';
 import 'nes_menu_model.dart';
 
@@ -21,11 +22,12 @@ class MobileShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
 
     return Scaffold(
-      appBar: isLandscape ? null : AppBar(title: const Text('Nesium')),
+      appBar: isLandscape ? null : AppBar(title: Text(l10n.appName)),
       drawer: _MobileDrawer(actions: actions),
       body: Stack(
         fit: StackFit.expand,
@@ -52,7 +54,7 @@ class MobileShell extends StatelessWidget {
                         onPressed: () => Scaffold.of(context).openDrawer(),
                         icon: const Icon(Icons.menu),
                         color: Colors.white,
-                        tooltip: 'Menu',
+                        tooltip: l10n.menuTooltip,
                       ),
                     ),
                   ),
@@ -73,6 +75,7 @@ class _MobileDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     void closeDrawer() => Navigator.of(context).pop();
 
     Future<void> openPage(Widget page) async {
@@ -94,11 +97,14 @@ class _MobileDrawer extends StatelessWidget {
           child: SafeArea(
             child: ListView(
               children: [
-                const DrawerHeader(
+                DrawerHeader(
                   margin: EdgeInsets.zero,
                   child: Align(
                     alignment: Alignment.bottomLeft,
-                    child: Text('Nesium', style: TextStyle(fontSize: 24)),
+                    child: Text(
+                      l10n.appName,
+                      style: const TextStyle(fontSize: 24),
+                    ),
                   ),
                 ),
                 for (final item in NesMenus.mobileDrawerItems) ...[
@@ -108,7 +114,7 @@ class _MobileDrawer extends StatelessWidget {
                   ],
                   ListTile(
                     leading: Icon(item.icon),
-                    title: Text(item.label),
+                    title: Text(item.label(l10n)),
                     onTap: () => _dispatch(
                       context,
                       item.id,
@@ -120,11 +126,11 @@ class _MobileDrawer extends StatelessWidget {
                 const Divider(),
                 ListTile(
                   leading: const Icon(Icons.tune),
-                  title: const Text('Edit virtual controls'),
+                  title: Text(l10n.virtualControlsEditTitle),
                   subtitle: Text(
                     editor.enabled
-                        ? 'Drag to move, pinch or drag corner to resize'
-                        : 'Enable interactive adjustment',
+                        ? l10n.virtualControlsEditSubtitleEnabled
+                        : l10n.virtualControlsEditSubtitleDisabled,
                   ),
                   trailing: Switch(
                     value: editor.enabled,
@@ -142,7 +148,7 @@ class _MobileDrawer extends StatelessWidget {
                 if (editor.enabled) ...[
                   SwitchListTile(
                     secondary: const Icon(Icons.grid_4x4),
-                    title: const Text('Grid snapping'),
+                    title: Text(l10n.gridSnappingTitle),
                     value: editor.gridSnapEnabled,
                     onChanged: editorCtrl.setGridSnapEnabled,
                   ),
@@ -157,7 +163,7 @@ class _MobileDrawer extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              const Expanded(child: Text('Grid spacing')),
+                              Expanded(child: Text(l10n.gridSpacingLabel)),
                               Text(
                                 '${editor.gridSpacing.toStringAsFixed(0)} px',
                               ),
@@ -188,6 +194,7 @@ class _MobileDrawer extends StatelessWidget {
     required VoidCallback closeDrawer,
     required Future<void> Function(Widget page) openPage,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     switch (id) {
       case NesMenuItemId.openRom:
         closeDrawer();
@@ -208,13 +215,21 @@ class _MobileDrawer extends StatelessWidget {
       case NesMenuItemId.debugger:
         unawaited(
           openPage(
-            const _MobilePage(title: 'Debugger', child: DebuggerPanel()),
+            _MobilePage(
+              title: l10n.windowDebuggerTitle,
+              child: const DebuggerPanel(),
+            ),
           ),
         );
         break;
       case NesMenuItemId.tools:
         unawaited(
-          openPage(const _MobilePage(title: 'Tools', child: ToolsPanel())),
+          openPage(
+            _MobilePage(
+              title: l10n.windowToolsTitle,
+              child: const ToolsPanel(),
+            ),
+          ),
         );
         break;
     }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../features/screen/nes_screen_view.dart';
 import '../domain/nes_state.dart';
+import '../l10n/app_localizations.dart';
 import 'nes_actions.dart';
 import 'nes_menu_model.dart';
 
@@ -44,6 +45,7 @@ class _DesktopMenuBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final textStyle = Theme.of(context).textTheme.titleSmall;
     return Container(
       height: 28,
@@ -63,17 +65,17 @@ class _DesktopMenuBar extends StatelessWidget {
         ),
         children: NesMenus.desktopMenuSections
             .map(
-              (section) => _buildMenu(section.title, [
+              (section) => _buildMenu(section.title(l10n), [
                 ...section.items.map(
                   (item) => MenuItemButton(
                     onPressed: () => _dispatch(item.id),
-                    child: Text(_desktopLabel(item.id)),
+                    child: Text(_desktopLabel(l10n, item.id)),
                   ),
                 ),
-                if (section.title == 'Settings')
-                  const MenuItemButton(
+                if (section.id == NesMenuSectionId.settings)
+                  MenuItemButton(
                     onPressed: null,
-                    child: Text('Input Mapping (coming soon)'),
+                    child: Text(l10n.menuInputMappingComingSoon),
                   ),
               ], textStyle),
             )
@@ -112,20 +114,20 @@ class _DesktopMenuBar extends StatelessWidget {
     }
   }
 
-  String _desktopLabel(NesMenuItemId id) {
+  String _desktopLabel(AppLocalizations l10n, NesMenuItemId id) {
     switch (id) {
       case NesMenuItemId.openRom:
-        return 'Open ROM...';
+        return l10n.menuOpenRom;
       case NesMenuItemId.reset:
-        return 'Reset';
+        return l10n.menuReset;
       case NesMenuItemId.togglePause:
-        return 'Pause / Resume';
+        return l10n.menuPauseResume;
       case NesMenuItemId.settings:
-        return 'Preferences...';
+        return l10n.menuPreferences;
       case NesMenuItemId.debugger:
-        return 'Open Debugger Window';
+        return l10n.menuOpenDebuggerWindow;
       case NesMenuItemId.tools:
-        return 'Open Tools Window';
+        return l10n.menuOpenToolsWindow;
     }
   }
 }

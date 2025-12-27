@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart';
 
@@ -12,13 +14,30 @@ class DesktopWindowManager {
           defaultTargetPlatform == TargetPlatform.linux ||
           defaultTargetPlatform == TargetPlatform.windows);
 
-  Future<WindowController> _openOrCreate(WindowKind kind) async {
-    final args = encodeWindowArguments(kind);
+  String? _routeFromArgs(String args) {
+    if (args.isEmpty) return null;
+    try {
+      final data = jsonDecode(args);
+      if (data is Map && data['route'] is String) {
+        return data['route'] as String;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<WindowController> _openOrCreate(
+    WindowKind kind, {
+    String? languageCode,
+  }) async {
+    final routeOnlyArgs = encodeWindowArguments(kind);
+    final targetRoute = _routeFromArgs(routeOnlyArgs);
+    final args = encodeWindowArguments(kind, languageCode: languageCode);
 
     // First, try to find an existing window with the same arguments.
     final existingWindows = await WindowController.getAll();
     for (final window in existingWindows) {
-      if (window.arguments == args) {
+      if (targetRoute != null &&
+          _routeFromArgs(window.arguments) == targetRoute) {
         // Ensure it is visible; show() is idempotent.
         await window.show();
         return window;
@@ -32,13 +51,21 @@ class DesktopWindowManager {
     return controller;
   }
 
-  Future<void> openDebuggerWindow() async {
+  Future<void> openDebuggerWindow({String? languageCode}) async {
     if (!isSupported) return;
-    await _openOrCreate(WindowKind.debugger);
+    final window = await _openOrCreate(
+      WindowKind.debugger,
+      languageCode: languageCode,
+    );
+    await window.invokeMethod<void>('setLanguage', languageCode);
   }
 
-  Future<void> openToolsWindow() async {
+  Future<void> openToolsWindow({String? languageCode}) async {
     if (!isSupported) return;
-    await _openOrCreate(WindowKind.tools);
+    final window = await _openOrCreate(
+      WindowKind.tools,
+      languageCode: languageCode,
+    );
+    await window.invokeMethod<void>('setLanguage', languageCode);
   }
 }

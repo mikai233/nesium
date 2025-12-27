@@ -4,19 +4,29 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../shell/nes_shell.dart';
 import 'secondary_window.dart';
 
 enum WindowKind { main, debugger, tools }
 
-String encodeWindowArguments(WindowKind kind) {
+String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
   switch (kind) {
     case WindowKind.main:
-      return jsonEncode({'route': 'main'});
+      return jsonEncode({
+        'route': 'main',
+        if (languageCode != null) 'lang': languageCode,
+      });
     case WindowKind.debugger:
-      return jsonEncode({'route': 'debugger'});
+      return jsonEncode({
+        'route': 'debugger',
+        if (languageCode != null) 'lang': languageCode,
+      });
     case WindowKind.tools:
-      return jsonEncode({'route': 'tools'});
+      return jsonEncode({
+        'route': 'tools',
+        if (languageCode != null) 'lang': languageCode,
+      });
   }
 }
 
@@ -91,14 +101,14 @@ class _WindowRouterState extends State<WindowRouter> {
       case WindowKind.main:
         return const NesShell();
       case WindowKind.debugger:
-        return const SecondaryWindow(
-          title: 'Nesium Debugger',
-          child: SecondaryDebuggerContent(),
+        return SecondaryWindow(
+          title: AppLocalizations.of(context)!.windowDebuggerTitle,
+          child: const SecondaryDebuggerContent(),
         );
       case WindowKind.tools:
-        return const SecondaryWindow(
-          title: 'Nesium Tools',
-          child: SecondaryToolsContent(),
+        return SecondaryWindow(
+          title: AppLocalizations.of(context)!.windowToolsTitle,
+          child: const SecondaryToolsContent(),
         );
     }
   }

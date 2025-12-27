@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'features/settings/language_settings.dart';
+import 'l10n/app_localizations.dart';
 import 'windows/window_routing.dart';
 
-class NesiumApp extends StatelessWidget {
+class NesiumApp extends ConsumerWidget {
   const NesiumApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(appLanguageProvider);
     return MaterialApp(
-      title: 'Nesium',
+      onGenerateTitle: (context) =>
+          AppLocalizations.of(context)?.appName ?? 'Nesium',
+      locale: language.locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blueGrey,

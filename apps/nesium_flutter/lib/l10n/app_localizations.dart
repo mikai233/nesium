@@ -1,0 +1,626 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/intl.dart' as intl;
+
+import 'app_localizations_en.dart';
+import 'app_localizations_zh.dart';
+
+// ignore_for_file: type=lint
+
+/// Callers can lookup localized strings with an instance of AppLocalizations
+/// returned by `AppLocalizations.of(context)`.
+///
+/// Applications need to include `AppLocalizations.delegate()` in their app's
+/// `localizationDelegates` list, and the locales they support in the app's
+/// `supportedLocales` list. For example:
+///
+/// ```dart
+/// import 'l10n/app_localizations.dart';
+///
+/// return MaterialApp(
+///   localizationsDelegates: AppLocalizations.localizationsDelegates,
+///   supportedLocales: AppLocalizations.supportedLocales,
+///   home: MyApplicationHome(),
+/// );
+/// ```
+///
+/// ## Update pubspec.yaml
+///
+/// Please make sure to update your pubspec.yaml to include the following
+/// packages:
+///
+/// ```yaml
+/// dependencies:
+///   # Internationalization support.
+///   flutter_localizations:
+///     sdk: flutter
+///   intl: any # Use the pinned version from flutter_localizations
+///
+///   # Rest of dependencies
+/// ```
+///
+/// ## iOS Applications
+///
+/// iOS applications define key application metadata, including supported
+/// locales, in an Info.plist file that is built into the application bundle.
+/// To configure the locales supported by your app, you’ll need to edit this
+/// file.
+///
+/// First, open your project’s ios/Runner.xcworkspace Xcode workspace file.
+/// Then, in the Project Navigator, open the Info.plist file under the Runner
+/// project’s Runner folder.
+///
+/// Next, select the Information Property List item, select Add Item from the
+/// Editor menu, then select Localizations from the pop-up menu.
+///
+/// Select and expand the newly-created Localizations item then, for each
+/// locale your application supports, add a new item and select the locale
+/// you wish to add from the pop-up menu in the Value field. This list should
+/// be consistent with the languages listed in the AppLocalizations.supportedLocales
+/// property.
+abstract class AppLocalizations {
+  AppLocalizations(String locale)
+    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+
+  final String localeName;
+
+  static AppLocalizations? of(BuildContext context) {
+    return Localizations.of<AppLocalizations>(context, AppLocalizations);
+  }
+
+  static const LocalizationsDelegate<AppLocalizations> delegate =
+      _AppLocalizationsDelegate();
+
+  /// A list of this localizations delegate along with the default localizations
+  /// delegates.
+  ///
+  /// Returns a list of localizations delegates containing this delegate along with
+  /// GlobalMaterialLocalizations.delegate, GlobalCupertinoLocalizations.delegate,
+  /// and GlobalWidgetsLocalizations.delegate.
+  ///
+  /// Additional delegates can be added by appending to this list in
+  /// MaterialApp. This list does not have to be used at all if a custom list
+  /// of delegates is preferred or required.
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
+      <LocalizationsDelegate<dynamic>>[
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
+
+  /// A list of this localizations delegate's supported locales.
+  static const List<Locale> supportedLocales = <Locale>[
+    Locale('en'),
+    Locale('zh'),
+  ];
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// No description provided for @generalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'General'**
+  String get generalTitle;
+
+  /// No description provided for @languageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get languageLabel;
+
+  /// No description provided for @languageSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get languageSystem;
+
+  /// No description provided for @languageEnglish.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageEnglish;
+
+  /// No description provided for @languageChineseSimplified.
+  ///
+  /// In en, this message translates to:
+  /// **'Simplified Chinese'**
+  String get languageChineseSimplified;
+
+  /// No description provided for @inputTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Input'**
+  String get inputTitle;
+
+  /// No description provided for @inputDeviceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Input device'**
+  String get inputDeviceLabel;
+
+  /// No description provided for @inputDeviceKeyboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard'**
+  String get inputDeviceKeyboard;
+
+  /// No description provided for @inputDeviceVirtualController.
+  ///
+  /// In en, this message translates to:
+  /// **'Virtual controller'**
+  String get inputDeviceVirtualController;
+
+  /// No description provided for @keyboardPresetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard preset'**
+  String get keyboardPresetLabel;
+
+  /// No description provided for @keyboardPresetNesStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'NES standard'**
+  String get keyboardPresetNesStandard;
+
+  /// No description provided for @keyboardPresetFightStick.
+  ///
+  /// In en, this message translates to:
+  /// **'Fight stick'**
+  String get keyboardPresetFightStick;
+
+  /// No description provided for @keyboardPresetArcadeLayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Arcade layout'**
+  String get keyboardPresetArcadeLayout;
+
+  /// No description provided for @keyboardPresetCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get keyboardPresetCustom;
+
+  /// No description provided for @customKeyBindingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom key bindings'**
+  String get customKeyBindingsTitle;
+
+  /// No description provided for @bindKeyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bind {action}'**
+  String bindKeyTitle(String action);
+
+  /// No description provided for @unassignedKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned'**
+  String get unassignedKey;
+
+  /// No description provided for @tipPressEscapeToClearBinding.
+  ///
+  /// In en, this message translates to:
+  /// **'Tip: press Escape to clear a binding.'**
+  String get tipPressEscapeToClearBinding;
+
+  /// No description provided for @keyboardActionUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Up'**
+  String get keyboardActionUp;
+
+  /// No description provided for @keyboardActionDown.
+  ///
+  /// In en, this message translates to:
+  /// **'Down'**
+  String get keyboardActionDown;
+
+  /// No description provided for @keyboardActionLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get keyboardActionLeft;
+
+  /// No description provided for @keyboardActionRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get keyboardActionRight;
+
+  /// No description provided for @keyboardActionA.
+  ///
+  /// In en, this message translates to:
+  /// **'A'**
+  String get keyboardActionA;
+
+  /// No description provided for @keyboardActionB.
+  ///
+  /// In en, this message translates to:
+  /// **'B'**
+  String get keyboardActionB;
+
+  /// No description provided for @keyboardActionSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get keyboardActionSelect;
+
+  /// No description provided for @keyboardActionStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get keyboardActionStart;
+
+  /// No description provided for @keyboardActionTurboA.
+  ///
+  /// In en, this message translates to:
+  /// **'Turbo A'**
+  String get keyboardActionTurboA;
+
+  /// No description provided for @keyboardActionTurboB.
+  ///
+  /// In en, this message translates to:
+  /// **'Turbo B'**
+  String get keyboardActionTurboB;
+
+  /// No description provided for @emulationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Emulation'**
+  String get emulationTitle;
+
+  /// No description provided for @integerFpsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Integer FPS mode (60Hz, NTSC)'**
+  String get integerFpsTitle;
+
+  /// No description provided for @integerFpsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reduces scrolling judder on 60Hz displays. PAL will be added later.'**
+  String get integerFpsSubtitle;
+
+  /// No description provided for @pauseInBackgroundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause in background'**
+  String get pauseInBackgroundTitle;
+
+  /// No description provided for @pauseInBackgroundSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically pauses the emulator when the app is not active.'**
+  String get pauseInBackgroundSubtitle;
+
+  /// No description provided for @virtualControlsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Virtual Controls'**
+  String get virtualControlsTitle;
+
+  /// No description provided for @virtualControlsSwitchInputTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch input to \"Virtual controller\" to use these settings.'**
+  String get virtualControlsSwitchInputTip;
+
+  /// No description provided for @virtualControlsButtonSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Button size'**
+  String get virtualControlsButtonSize;
+
+  /// No description provided for @virtualControlsGap.
+  ///
+  /// In en, this message translates to:
+  /// **'Gap'**
+  String get virtualControlsGap;
+
+  /// No description provided for @virtualControlsOpacity.
+  ///
+  /// In en, this message translates to:
+  /// **'Opacity'**
+  String get virtualControlsOpacity;
+
+  /// No description provided for @virtualControlsHitboxScale.
+  ///
+  /// In en, this message translates to:
+  /// **'Hitbox scale'**
+  String get virtualControlsHitboxScale;
+
+  /// No description provided for @virtualControlsHapticFeedback.
+  ///
+  /// In en, this message translates to:
+  /// **'Haptic feedback'**
+  String get virtualControlsHapticFeedback;
+
+  /// No description provided for @virtualControlsDpadDeadzone.
+  ///
+  /// In en, this message translates to:
+  /// **'D-pad deadzone'**
+  String get virtualControlsDpadDeadzone;
+
+  /// No description provided for @virtualControlsTurboFramesPerToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turbo frames per toggle'**
+  String get virtualControlsTurboFramesPerToggle;
+
+  /// No description provided for @framesValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{frames} frames'**
+  String framesValue(int frames);
+
+  /// No description provided for @tipAdjustButtonsInDrawer.
+  ///
+  /// In en, this message translates to:
+  /// **'Tip: adjust button position/size from the in-game drawer.'**
+  String get tipAdjustButtonsInDrawer;
+
+  /// No description provided for @keyCapturePressKeyToBind.
+  ///
+  /// In en, this message translates to:
+  /// **'Press a key to bind.'**
+  String get keyCapturePressKeyToBind;
+
+  /// No description provided for @keyCaptureCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current: {key}'**
+  String keyCaptureCurrent(String key);
+
+  /// No description provided for @keyCaptureCaptured.
+  ///
+  /// In en, this message translates to:
+  /// **'Captured: {key}'**
+  String keyCaptureCaptured(String key);
+
+  /// No description provided for @keyCapturePressEscToClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Press Escape to clear.'**
+  String get keyCapturePressEscToClear;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @appName.
+  ///
+  /// In en, this message translates to:
+  /// **'Nesium'**
+  String get appName;
+
+  /// No description provided for @menuTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get menuTooltip;
+
+  /// No description provided for @menuSectionFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get menuSectionFile;
+
+  /// No description provided for @menuSectionEmulation.
+  ///
+  /// In en, this message translates to:
+  /// **'Emulation'**
+  String get menuSectionEmulation;
+
+  /// No description provided for @menuSectionSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get menuSectionSettings;
+
+  /// No description provided for @menuSectionWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows'**
+  String get menuSectionWindows;
+
+  /// No description provided for @menuOpenRom.
+  ///
+  /// In en, this message translates to:
+  /// **'Open ROM...'**
+  String get menuOpenRom;
+
+  /// No description provided for @menuReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get menuReset;
+
+  /// No description provided for @menuPauseResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause / Resume'**
+  String get menuPauseResume;
+
+  /// No description provided for @menuPreferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences...'**
+  String get menuPreferences;
+
+  /// No description provided for @menuDebugger.
+  ///
+  /// In en, this message translates to:
+  /// **'Debugger'**
+  String get menuDebugger;
+
+  /// No description provided for @menuTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Tools'**
+  String get menuTools;
+
+  /// No description provided for @menuOpenDebuggerWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Debugger Window'**
+  String get menuOpenDebuggerWindow;
+
+  /// No description provided for @menuOpenToolsWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Tools Window'**
+  String get menuOpenToolsWindow;
+
+  /// No description provided for @menuInputMappingComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Input Mapping (coming soon)'**
+  String get menuInputMappingComingSoon;
+
+  /// No description provided for @windowDebuggerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nesium Debugger'**
+  String get windowDebuggerTitle;
+
+  /// No description provided for @windowToolsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nesium Tools'**
+  String get windowToolsTitle;
+
+  /// No description provided for @virtualControlsEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit virtual controls'**
+  String get virtualControlsEditTitle;
+
+  /// No description provided for @virtualControlsEditSubtitleEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to move, pinch or drag corner to resize'**
+  String get virtualControlsEditSubtitleEnabled;
+
+  /// No description provided for @virtualControlsEditSubtitleDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable interactive adjustment'**
+  String get virtualControlsEditSubtitleDisabled;
+
+  /// No description provided for @gridSnappingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid snapping'**
+  String get gridSnappingTitle;
+
+  /// No description provided for @gridSpacingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid spacing'**
+  String get gridSpacingLabel;
+
+  /// No description provided for @debuggerPlaceholderBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Space reserved for CPU/PPU monitors, memory viewers, and OAM inspectors. The same widgets can live in a desktop side panel or a mobile sheet.'**
+  String get debuggerPlaceholderBody;
+
+  /// No description provided for @toolsPlaceholderBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Recording/playback, input mapping, and cheats can share these widgets between desktop side panes and mobile bottom sheets.'**
+  String get toolsPlaceholderBody;
+
+  /// No description provided for @actionLoadRom.
+  ///
+  /// In en, this message translates to:
+  /// **'Load ROM'**
+  String get actionLoadRom;
+
+  /// No description provided for @actionResetNes.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset NES'**
+  String get actionResetNes;
+
+  /// No description provided for @commandSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} succeeded'**
+  String commandSucceeded(String label);
+
+  /// No description provided for @commandFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} failed'**
+  String commandFailed(String label);
+
+  /// No description provided for @snackPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get snackPaused;
+
+  /// No description provided for @snackResumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Resumed'**
+  String get snackResumed;
+
+  /// No description provided for @snackPauseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause failed: {error}'**
+  String snackPauseFailed(String error);
+
+  /// No description provided for @dialogOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get dialogOk;
+}
+
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
+  const _AppLocalizationsDelegate();
+
+  @override
+  Future<AppLocalizations> load(Locale locale) {
+    return SynchronousFuture<AppLocalizations>(lookupAppLocalizations(locale));
+  }
+
+  @override
+  bool isSupported(Locale locale) =>
+      <String>['en', 'zh'].contains(locale.languageCode);
+
+  @override
+  bool shouldReload(_AppLocalizationsDelegate old) => false;
+}
+
+AppLocalizations lookupAppLocalizations(Locale locale) {
+  // Lookup logic when only language code is specified.
+  switch (locale.languageCode) {
+    case 'en':
+      return AppLocalizationsEn();
+    case 'zh':
+      return AppLocalizationsZh();
+  }
+
+  throw FlutterError(
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.',
+  );
+}

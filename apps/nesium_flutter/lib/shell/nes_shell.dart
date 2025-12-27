@@ -16,7 +16,9 @@ import '../domain/nes_state.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_settings.dart';
 import '../features/settings/emulation_settings.dart';
+import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
+import '../l10n/app_localizations.dart';
 import '../platform/desktop_window_manager.dart';
 import 'desktop_shell.dart';
 import 'nes_actions.dart';
@@ -122,19 +124,21 @@ class _NesShellState extends ConsumerState<NesShell>
       await action();
       if (!mounted) return;
       if (showSuccessSnack) {
-        _showSnack('$label succeeded');
+        final l10n = AppLocalizations.of(context)!;
+        _showSnack(l10n.commandSucceeded(label));
       }
     } catch (e) {
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('$label failed'),
+          title: Text(l10n.commandFailed(label)),
           content: Text('$e'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
+              child: Text(l10n.dialogOk),
             ),
           ],
         ),
@@ -153,11 +157,17 @@ class _NesShellState extends ConsumerState<NesShell>
       return;
     }
 
-    await _runRustCommand('Load ROM', () => nes_api.loadRom(path: path));
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    await _runRustCommand(
+      l10n.actionLoadRom,
+      () => nes_api.loadRom(path: path),
+    );
   }
 
   Future<void> _resetConsole() async {
-    await _runRustCommand('Reset NES', nes_api.resetConsole);
+    final l10n = AppLocalizations.of(context)!;
+    await _runRustCommand(l10n.actionResetNes, nes_api.resetConsole);
   }
 
   KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent event) {
@@ -228,10 +238,12 @@ class _NesShellState extends ConsumerState<NesShell>
       _pausedByLifecycle = false;
       final paused = await nes_pause.togglePause();
       if (!mounted) return;
-      _showSnack(paused ? 'Paused' : 'Resumed');
+      final l10n = AppLocalizations.of(context)!;
+      _showSnack(paused ? l10n.snackPaused : l10n.snackResumed);
     } catch (e) {
       if (!mounted) return;
-      _showSnack('Pause failed: $e');
+      final l10n = AppLocalizations.of(context)!;
+      _showSnack(l10n.snackPauseFailed('$e'));
     }
   }
 
@@ -243,11 +255,13 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   Future<void> _openDebugger() async {
-    await _desktopWindowManager.openDebuggerWindow();
+    final languageCode = ref.read(appLanguageProvider).languageCode;
+    await _desktopWindowManager.openDebuggerWindow(languageCode: languageCode);
   }
 
   Future<void> _openTools() async {
-    await _desktopWindowManager.openToolsWindow();
+    final languageCode = ref.read(appLanguageProvider).languageCode;
+    await _desktopWindowManager.openToolsWindow(languageCode: languageCode);
   }
 
   @override

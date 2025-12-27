@@ -1,0 +1,137 @@
+{
+  "@@locale": "en",
+  "settingsTitle": "Settings",
+  "generalTitle": "General",
+  "languageLabel": "Language",
+  "languageSystem": "System",
+  "languageEnglish": "English",
+  "languageChineseSimplified": "Simplified Chinese",
+  "inputTitle": "Input",
+  "inputDeviceLabel": "Input device",
+  "inputDeviceKeyboard": "Keyboard",
+  "inputDeviceVirtualController": "Virtual controller",
+  "keyboardPresetLabel": "Keyboard preset",
+  "keyboardPresetNesStandard": "NES standard",
+  "keyboardPresetFightStick": "Fight stick",
+  "keyboardPresetArcadeLayout": "Arcade layout",
+  "keyboardPresetCustom": "Custom",
+  "customKeyBindingsTitle": "Custom key bindings",
+  "bindKeyTitle": "Bind {action}",
+  "@bindKeyTitle": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "unassignedKey": "Unassigned",
+  "tipPressEscapeToClearBinding": "Tip: press Escape to clear a binding.",
+  "keyboardActionUp": "Up",
+  "keyboardActionDown": "Down",
+  "keyboardActionLeft": "Left",
+  "keyboardActionRight": "Right",
+  "keyboardActionA": "A",
+  "keyboardActionB": "B",
+  "keyboardActionSelect": "Select",
+  "keyboardActionStart": "Start",
+  "keyboardActionTurboA": "Turbo A",
+  "keyboardActionTurboB": "Turbo B",
+  "emulationTitle": "Emulation",
+  "integerFpsTitle": "Integer FPS mode (60Hz, NTSC)",
+  "integerFpsSubtitle": "Reduces scrolling judder on 60Hz displays. PAL will be added later.",
+  "pauseInBackgroundTitle": "Pause in background",
+  "pauseInBackgroundSubtitle": "Automatically pauses the emulator when the app is not active.",
+  "virtualControlsTitle": "Virtual Controls",
+  "virtualControlsSwitchInputTip": "Switch input to \"Virtual controller\" to use these settings.",
+  "virtualControlsButtonSize": "Button size",
+  "virtualControlsGap": "Gap",
+  "virtualControlsOpacity": "Opacity",
+  "virtualControlsHitboxScale": "Hitbox scale",
+  "virtualControlsHapticFeedback": "Haptic feedback",
+  "virtualControlsDpadDeadzone": "D-pad deadzone",
+  "virtualControlsTurboFramesPerToggle": "Turbo frames per toggle",
+  "framesValue": "{frames} frames",
+  "@framesValue": {
+    "placeholders": {
+      "frames": {
+        "type": "int"
+      }
+    }
+  },
+  "tipAdjustButtonsInDrawer": "Tip: adjust button position/size from the in-game drawer."
+  ,
+  "keyCapturePressKeyToBind": "Press a key to bind.",
+  "keyCaptureCurrent": "Current: {key}",
+  "@keyCaptureCurrent": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "keyCaptureCaptured": "Captured: {key}",
+  "@keyCaptureCaptured": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "keyCapturePressEscToClear": "Press Escape to clear.",
+  "cancel": "Cancel"
+  ,
+  "appName": "Nesium",
+  "menuTooltip": "Menu",
+  "menuSectionFile": "File",
+  "menuSectionEmulation": "Emulation",
+  "menuSectionSettings": "Settings",
+  "menuSectionWindows": "Windows",
+  "menuOpenRom": "Open ROM...",
+  "menuReset": "Reset",
+  "menuPauseResume": "Pause / Resume",
+  "menuPreferences": "Preferences...",
+  "menuDebugger": "Debugger",
+  "menuTools": "Tools",
+  "menuOpenDebuggerWindow": "Open Debugger Window",
+  "menuOpenToolsWindow": "Open Tools Window",
+  "menuInputMappingComingSoon": "Input Mapping (coming soon)",
+  "windowDebuggerTitle": "Nesium Debugger",
+  "windowToolsTitle": "Nesium Tools",
+  "virtualControlsEditTitle": "Edit virtual controls",
+  "virtualControlsEditSubtitleEnabled": "Drag to move, pinch or drag corner to resize",
+  "virtualControlsEditSubtitleDisabled": "Enable interactive adjustment",
+  "gridSnappingTitle": "Grid snapping",
+  "gridSpacingLabel": "Grid spacing",
+  "debuggerPlaceholderBody": "Space reserved for CPU/PPU monitors, memory viewers, and OAM inspectors. The same widgets can live in a desktop side panel or a mobile sheet.",
+  "toolsPlaceholderBody": "Recording/playback, input mapping, and cheats can share these widgets between desktop side panes and mobile bottom sheets."
+  ,
+  "actionLoadRom": "Load ROM",
+  "actionResetNes": "Reset NES",
+  "commandSucceeded": "{label} succeeded",
+  "@commandSucceeded": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "commandFailed": "{label} failed",
+  "@commandFailed": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "snackPaused": "Paused",
+  "snackResumed": "Resumed",
+  "snackPauseFailed": "Pause failed: {error}",
+  "@snackPauseFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "dialogOk": "OK"
+}

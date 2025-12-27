@@ -1,60 +1,69 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
+
 enum NesMenuItemId { openRom, reset, togglePause, settings, debugger, tools }
 
 class NesMenuItemSpec {
-  const NesMenuItemSpec({
-    required this.id,
-    required this.label,
-    required this.icon,
-  });
+  const NesMenuItemSpec({required this.id, required this.icon});
 
   final NesMenuItemId id;
-  final String label;
   final IconData icon;
+
+  String label(AppLocalizations l10n) => switch (id) {
+    NesMenuItemId.openRom => l10n.menuOpenRom,
+    NesMenuItemId.reset => l10n.menuReset,
+    NesMenuItemId.togglePause => l10n.menuPauseResume,
+    NesMenuItemId.settings => l10n.menuPreferences,
+    NesMenuItemId.debugger => l10n.menuDebugger,
+    NesMenuItemId.tools => l10n.menuTools,
+  };
 }
 
-class NesMenuSectionSpec {
-  const NesMenuSectionSpec({required this.title, required this.items});
+enum NesMenuSectionId { file, emulation, settings, windows }
 
-  final String title;
+class NesMenuSectionSpec {
+  const NesMenuSectionSpec({required this.id, required this.items});
+
+  final NesMenuSectionId id;
   final List<NesMenuItemSpec> items;
+
+  String title(AppLocalizations l10n) => switch (id) {
+    NesMenuSectionId.file => l10n.menuSectionFile,
+    NesMenuSectionId.emulation => l10n.menuSectionEmulation,
+    NesMenuSectionId.settings => l10n.menuSectionSettings,
+    NesMenuSectionId.windows => l10n.menuSectionWindows,
+  };
 }
 
 class NesMenus {
   static const NesMenuItemSpec openRom = NesMenuItemSpec(
     id: NesMenuItemId.openRom,
-    label: 'Open ROM...',
     icon: Icons.upload_file,
   );
 
   static const NesMenuItemSpec reset = NesMenuItemSpec(
     id: NesMenuItemId.reset,
-    label: 'Reset',
     icon: Icons.restart_alt,
   );
 
   static const NesMenuItemSpec togglePause = NesMenuItemSpec(
     id: NesMenuItemId.togglePause,
-    label: 'Pause / Resume',
     icon: Icons.pause_circle_outline,
   );
 
   static const NesMenuItemSpec settings = NesMenuItemSpec(
     id: NesMenuItemId.settings,
-    label: 'Settings',
     icon: Icons.settings_outlined,
   );
 
   static const NesMenuItemSpec debugger = NesMenuItemSpec(
     id: NesMenuItemId.debugger,
-    label: 'Debugger',
     icon: Icons.bug_report_outlined,
   );
 
   static const NesMenuItemSpec tools = NesMenuItemSpec(
     id: NesMenuItemId.tools,
-    label: 'Tools',
     icon: Icons.analytics_outlined,
   );
 
@@ -68,9 +77,12 @@ class NesMenus {
   ];
 
   static const List<NesMenuSectionSpec> desktopMenuSections = [
-    NesMenuSectionSpec(title: 'File', items: [openRom, reset]),
-    NesMenuSectionSpec(title: 'Emulation', items: [togglePause, reset]),
-    NesMenuSectionSpec(title: 'Settings', items: [settings]),
-    NesMenuSectionSpec(title: 'Windows', items: [debugger, tools]),
+    NesMenuSectionSpec(id: NesMenuSectionId.file, items: [openRom, reset]),
+    NesMenuSectionSpec(
+      id: NesMenuSectionId.emulation,
+      items: [togglePause, reset],
+    ),
+    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
+    NesMenuSectionSpec(id: NesMenuSectionId.windows, items: [debugger, tools]),
   ];
 }

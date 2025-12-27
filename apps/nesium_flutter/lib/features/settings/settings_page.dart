@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../controls/input_settings.dart';
 import '../controls/virtual_controls_settings.dart';
 import 'emulation_settings.dart';
+import 'language_settings.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -16,10 +18,11 @@ class SettingsPage extends ConsumerWidget {
     InputSettings settings,
     KeyboardBindingAction action,
   ) async {
+    final l10n = AppLocalizations.of(context)!;
     final result = await showDialog<_KeyCaptureResult>(
       context: context,
       builder: (context) => _KeyCaptureDialog(
-        title: 'Bind ${action.label}',
+        title: l10n.bindKeyTitle(_actionLabel(l10n, action)),
         current: settings.customBindingFor(action),
       ),
     );
@@ -27,8 +30,33 @@ class SettingsPage extends ConsumerWidget {
     controller.setCustomBinding(action, result.key);
   }
 
+  static String _presetLabel(AppLocalizations l10n, KeyboardPreset preset) =>
+      switch (preset) {
+        KeyboardPreset.nesStandard => l10n.keyboardPresetNesStandard,
+        KeyboardPreset.fightStick => l10n.keyboardPresetFightStick,
+        KeyboardPreset.arcadeLayout => l10n.keyboardPresetArcadeLayout,
+        KeyboardPreset.custom => l10n.keyboardPresetCustom,
+      };
+
+  static String _actionLabel(
+    AppLocalizations l10n,
+    KeyboardBindingAction action,
+  ) => switch (action) {
+    KeyboardBindingAction.up => l10n.keyboardActionUp,
+    KeyboardBindingAction.down => l10n.keyboardActionDown,
+    KeyboardBindingAction.left => l10n.keyboardActionLeft,
+    KeyboardBindingAction.right => l10n.keyboardActionRight,
+    KeyboardBindingAction.a => l10n.keyboardActionA,
+    KeyboardBindingAction.b => l10n.keyboardActionB,
+    KeyboardBindingAction.select => l10n.keyboardActionSelect,
+    KeyboardBindingAction.start => l10n.keyboardActionStart,
+    KeyboardBindingAction.turboA => l10n.keyboardActionTurboA,
+    KeyboardBindingAction.turboB => l10n.keyboardActionTurboB,
+  };
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final inputSettings = ref.watch(inputSettingsProvider);
     final inputController = ref.read(inputSettingsProvider.notifier);
 
@@ -38,6 +66,9 @@ class SettingsPage extends ConsumerWidget {
     final emulationSettings = ref.watch(emulationSettingsProvider);
     final emulationController = ref.read(emulationSettingsProvider.notifier);
 
+    final language = ref.watch(appLanguageProvider);
+    final languageController = ref.read(appLanguageProvider.notifier);
+
     final supportsVirtual =
         !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.android ||
@@ -45,11 +76,14 @@ class SettingsPage extends ConsumerWidget {
     final usingVirtual = inputSettings.device == InputDevice.virtualController;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Input', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            l10n.generalTitle,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 8),
           Card(
             elevation: 0,
@@ -57,25 +91,65 @@ class SettingsPage extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Input device',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: l10n.languageLabel,
+                  border: const OutlineInputBorder(),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<AppLanguage>(
+                    value: language,
+                    isExpanded: true,
+                    items: [
+                      DropdownMenuItem(
+                        value: AppLanguage.system,
+                        child: Text(l10n.languageSystem),
+                      ),
+                      DropdownMenuItem(
+                        value: AppLanguage.english,
+                        child: Text(l10n.languageEnglish),
+                      ),
+                      DropdownMenuItem(
+                        value: AppLanguage.chineseSimplified,
+                        child: Text(l10n.languageChineseSimplified),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      languageController.setLanguage(value);
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const Divider(),
+          Text(l10n.inputTitle, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 0,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: l10n.inputDeviceLabel,
+                  border: const OutlineInputBorder(),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<InputDevice>(
                     value: inputSettings.device,
                     isExpanded: true,
                     items: [
-                      const DropdownMenuItem(
+                      DropdownMenuItem(
                         value: InputDevice.keyboard,
-                        child: Text('Keyboard'),
+                        child: Text(l10n.inputDeviceKeyboard),
                       ),
                       if (supportsVirtual ||
                           inputSettings.device == InputDevice.virtualController)
                         DropdownMenuItem(
                           value: InputDevice.virtualController,
                           enabled: supportsVirtual,
-                          child: const Text('Virtual controller'),
+                          child: Text(l10n.inputDeviceVirtualController),
                         ),
                     ],
                     onChanged: (value) {
@@ -95,9 +169,9 @@ class SettingsPage extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Keyboard preset',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.keyboardPresetLabel,
+                    border: const OutlineInputBorder(),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<KeyboardPreset>(
@@ -107,7 +181,7 @@ class SettingsPage extends ConsumerWidget {
                         for (final preset in KeyboardPreset.values)
                           DropdownMenuItem(
                             value: preset,
-                            child: Text(preset.label),
+                            child: Text(_presetLabel(l10n, preset)),
                           ),
                       ],
                       onChanged: (value) {
@@ -122,7 +196,7 @@ class SettingsPage extends ConsumerWidget {
             if (inputSettings.keyboardPreset == KeyboardPreset.custom) ...[
               const SizedBox(height: 12),
               Text(
-                'Custom key bindings',
+                l10n.customKeyBindingsTitle,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -133,9 +207,12 @@ class SettingsPage extends ConsumerWidget {
                   children: [
                     for (final action in KeyboardBindingAction.values)
                       ListTile(
-                        title: Text(action.label),
+                        title: Text(_actionLabel(l10n, action)),
                         subtitle: Text(
-                          _keyLabel(inputSettings.customBindingFor(action)),
+                          _keyLabel(
+                            l10n,
+                            inputSettings.customBindingFor(action),
+                          ),
                         ),
                         trailing: const Icon(Icons.edit),
                         onTap: () => _editCustomBinding(
@@ -149,13 +226,16 @@ class SettingsPage extends ConsumerWidget {
                 ),
               ),
               Text(
-                'Tip: press Escape to clear a binding.',
+                l10n.tipPressEscapeToClearBinding,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ],
           const Divider(),
-          Text('Emulation', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            l10n.emulationTitle,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 8),
           Card(
             elevation: 0,
@@ -164,18 +244,14 @@ class SettingsPage extends ConsumerWidget {
               children: [
                 SwitchListTile(
                   value: emulationSettings.integerFpsMode,
-                  title: const Text('Integer FPS mode (60Hz, NTSC)'),
-                  subtitle: const Text(
-                    'Reduces scrolling judder on 60Hz displays. PAL will be added later.',
-                  ),
+                  title: Text(l10n.integerFpsTitle),
+                  subtitle: Text(l10n.integerFpsSubtitle),
                   onChanged: emulationController.setIntegerFpsMode,
                 ),
                 SwitchListTile(
                   value: emulationSettings.pauseInBackground,
-                  title: const Text('Pause in background'),
-                  subtitle: const Text(
-                    'Automatically pauses the emulator when the app is not active.',
-                  ),
+                  title: Text(l10n.pauseInBackgroundTitle),
+                  subtitle: Text(l10n.pauseInBackgroundSubtitle),
                   onChanged: emulationController.setPauseInBackground,
                 ),
               ],
@@ -184,13 +260,13 @@ class SettingsPage extends ConsumerWidget {
           if (supportsVirtual) ...[
             const Divider(),
             Text(
-              'Virtual Controls',
+              l10n.virtualControlsTitle,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
             if (!usingVirtual)
               Text(
-                'Switch input to "Virtual controller" to use these settings.',
+                l10n.virtualControlsSwitchInputTip,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             const SizedBox(height: 8),
@@ -201,7 +277,7 @@ class SettingsPage extends ConsumerWidget {
                 child: Column(
                   children: [
                     _SliderTile(
-                      label: 'Button size',
+                      label: l10n.virtualControlsButtonSize,
                       value: settings.buttonSize,
                       min: 40,
                       max: 120,
@@ -210,7 +286,7 @@ class SettingsPage extends ConsumerWidget {
                           '${settings.buttonSize.toStringAsFixed(0)} px',
                     ),
                     _SliderTile(
-                      label: 'Gap',
+                      label: l10n.virtualControlsGap,
                       value: settings.gap,
                       min: 4,
                       max: 24,
@@ -218,7 +294,7 @@ class SettingsPage extends ConsumerWidget {
                       valueLabel: '${settings.gap.toStringAsFixed(0)} px',
                     ),
                     _SliderTile(
-                      label: 'Opacity',
+                      label: l10n.virtualControlsOpacity,
                       value: settings.opacity,
                       min: 0.2,
                       max: 0.8,
@@ -226,7 +302,7 @@ class SettingsPage extends ConsumerWidget {
                       valueLabel: settings.opacity.toStringAsFixed(2),
                     ),
                     _SliderTile(
-                      label: 'Hitbox scale',
+                      label: l10n.virtualControlsHitboxScale,
                       value: settings.hitboxScale,
                       min: 1.0,
                       max: 1.4,
@@ -236,11 +312,11 @@ class SettingsPage extends ConsumerWidget {
                     ),
                     SwitchListTile(
                       value: settings.hapticsEnabled,
-                      title: const Text('Haptic feedback'),
+                      title: Text(l10n.virtualControlsHapticFeedback),
                       onChanged: controller.setHapticsEnabled,
                     ),
                     _SliderTile(
-                      label: 'D-pad deadzone',
+                      label: l10n.virtualControlsDpadDeadzone,
                       value: settings.dpadDeadzoneRatio,
                       min: 0.06,
                       max: 0.30,
@@ -249,18 +325,20 @@ class SettingsPage extends ConsumerWidget {
                       valueLabel: settings.dpadDeadzoneRatio.toStringAsFixed(2),
                     ),
                     _SliderTile(
-                      label: 'Turbo frames per toggle',
+                      label: l10n.virtualControlsTurboFramesPerToggle,
                       value: settings.turboFramesPerToggle.toDouble(),
                       min: 1,
                       max: 8,
                       divisions: 7,
                       onChanged: (v) =>
                           controller.setTurboFramesPerToggle(v.round()),
-                      valueLabel: '${settings.turboFramesPerToggle} frames',
+                      valueLabel: l10n.framesValue(
+                        settings.turboFramesPerToggle,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Tip: adjust button position/size from the in-game drawer.',
+                      l10n.tipAdjustButtonsInDrawer,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -316,8 +394,8 @@ class _SliderTile extends StatelessWidget {
   }
 }
 
-String _keyLabel(LogicalKeyboardKey? key) {
-  if (key == null) return 'Unassigned';
+String _keyLabel(AppLocalizations l10n, LogicalKeyboardKey? key) {
+  if (key == null) return l10n.unassignedKey;
   final label = key.keyLabel.trim();
   if (label.isNotEmpty) return label;
   return key.debugName ?? 'Key 0x${key.keyId.toRadixString(16)}';
@@ -368,6 +446,7 @@ class _KeyCaptureDialogState extends State<_KeyCaptureDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       title: Text(widget.title),
       content: Focus(
@@ -380,13 +459,14 @@ class _KeyCaptureDialogState extends State<_KeyCaptureDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Press a key to bind.'),
+              Text(l10n.keyCapturePressKeyToBind),
               const SizedBox(height: 8),
-              Text('Current: ${_keyLabel(widget.current)}'),
-              if (_last != null) Text('Captured: ${_keyLabel(_last)}'),
+              Text(l10n.keyCaptureCurrent(_keyLabel(l10n, widget.current))),
+              if (_last != null)
+                Text(l10n.keyCaptureCaptured(_keyLabel(l10n, _last))),
               const SizedBox(height: 8),
               Text(
-                'Press Escape to clear.',
+                l10n.keyCapturePressEscToClear,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -396,7 +476,7 @@ class _KeyCaptureDialogState extends State<_KeyCaptureDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
       ],
     );
