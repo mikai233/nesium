@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../controls/input_settings.dart';
 import '../controls/virtual_controls_settings.dart';
+import 'emulation_settings.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -33,6 +34,9 @@ class SettingsPage extends ConsumerWidget {
 
     final settings = ref.watch(virtualControlsSettingsProvider);
     final controller = ref.read(virtualControlsSettingsProvider.notifier);
+
+    final emulationSettings = ref.watch(emulationSettingsProvider);
+    final emulationController = ref.read(emulationSettingsProvider.notifier);
 
     final supportsVirtual =
         !kIsWeb &&
@@ -148,6 +152,21 @@ class SettingsPage extends ConsumerWidget {
               ),
             ],
           ],
+          const Divider(),
+          Text('Emulation', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 0,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: SwitchListTile(
+              value: emulationSettings.integerFpsMode,
+              title: const Text('Integer FPS mode (60Hz, NTSC)'),
+              subtitle: const Text(
+                'Reduces scrolling judder on 60Hz displays. PAL will be added later.',
+              ),
+              onChanged: emulationController.setIntegerFpsMode,
+            ),
+          ),
           const Divider(),
           Text(
             'Virtual Controls',

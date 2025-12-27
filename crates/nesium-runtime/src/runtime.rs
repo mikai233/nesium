@@ -57,6 +57,8 @@ pub enum RuntimeEvent {
 
 pub use nesium_core::ppu::buffer::FrameReadyCallback;
 
+const NTSC_FPS_EXACT: f64 = 60.098_811_862_348_4;
+
 enum ControlMessage {
     Stop,
     LoadRom(PathBuf),
@@ -64,6 +66,8 @@ enum ControlMessage {
     Eject,
     SetAudioConfig(AudioBusConfig),
     SetFrameReadyCallback(Option<FrameReadyCallback>, *mut c_void),
+    /// None = exact NTSC FPS, Some(60) = integer FPS (PAL reserved for future).
+    SetIntegerFpsTarget(Option<u32>),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without
@@ -287,6 +291,31 @@ impl RuntimeHandle {
             .send(ControlMessage::SetFrameReadyCallback(cb, user_data))
             .map_err(|e| RuntimeError(e.to_string()))
     }
+
+    /// Enables an integer FPS pacing mode.
+    ///
+    /// - `None`: run at the NES's exact NTSC FPS (~60.0988Hz)
+    /// - `Some(60)`: pace frames at 60Hz to match common displays (reduces judder)
+    ///
+    /// PAL (`Some(50)`) is reserved for future support.
+    pub fn set_integer_fps_target(&self, fps: Option<u32>) -> Result<(), RuntimeError> {
+        if let Some(fps) = fps {
+            match fps {
+                60 => {}
+                50 => return Err(RuntimeError("PAL is not supported yet".to_string())),
+                _ => {
+                    return Err(RuntimeError(format!(
+                        "unsupported integer FPS target: {fps}"
+                    )));
+                }
+            }
+        }
+
+        self.inner
+            .ctrl_tx
+            .send(ControlMessage::SetIntegerFpsTarget(fps))
+            .map_err(|e| RuntimeError(e.to_string()))
+    }
 }
 
 fn button_bit(button: Button) -> u8 {
@@ -303,7 +332,8 @@ fn button_bit(button: Button) -> u8 {
 }
 
 // NTSC: ~60.0988 Hz
-const FRAME_DURATION: Duration = Duration::from_nanos(16_639_263);
+const FRAME_DURATION_NTSC: Duration = Duration::from_nanos(16_639_263);
+const FRAME_DURATION_60HZ: Duration = Duration::from_nanos(16_666_667);
 // Hybrid wait tuning:
 // - Sleep in small chunks until we're close to the deadline.
 // - Spin for the final window for tighter frame pacing.
@@ -325,6 +355,8 @@ struct Runner {
 
     has_cartridge: bool,
     next_frame_deadline: Instant,
+    frame_duration: Duration,
+    integer_fps_target: Option<u32>,
 }
 
 impl Runner {
@@ -362,6 +394,8 @@ impl Runner {
             state,
             has_cartridge: false,
             next_frame_deadline: Instant::now(),
+            frame_duration: FRAME_DURATION_NTSC,
+            integer_fps_target: None,
         }
     }
 
@@ -406,13 +440,13 @@ impl Runner {
                 && frames_run < 3
             {
                 self.step_frame();
-                self.next_frame_deadline += FRAME_DURATION;
+                self.next_frame_deadline += self.frame_duration;
                 frames_run += 1;
             }
 
             let now = Instant::now();
             if now > self.next_frame_deadline
-                && now.duration_since(self.next_frame_deadline) > FRAME_DURATION * 2
+                && now.duration_since(self.next_frame_deadline) > self.frame_duration * 2
             {
                 self.next_frame_deadline = now;
             }
@@ -538,6 +572,19 @@ impl Runner {
             }
             ControlMessage::SetFrameReadyCallback(cb, user_data) => {
                 self.nes.set_frame_ready_callback(cb, user_data);
+            }
+            ControlMessage::SetIntegerFpsTarget(fps) => {
+                self.integer_fps_target = fps;
+                if fps == Some(60) {
+                    self.frame_duration = FRAME_DURATION_60HZ;
+                    self.nes.set_audio_integer_fps_scale(60.0 / NTSC_FPS_EXACT);
+                } else {
+                    self.frame_duration = FRAME_DURATION_NTSC;
+                    self.nes.reset_audio_integer_fps_scale();
+                }
+
+                // Re-anchor to avoid a big catch-up burst right after toggling.
+                self.next_frame_deadline = Instant::now();
             }
         }
 

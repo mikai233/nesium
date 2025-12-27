@@ -1,3 +1,4 @@
+pub mod emulation;
 pub mod input;
 pub mod load_rom;
 pub mod pause;

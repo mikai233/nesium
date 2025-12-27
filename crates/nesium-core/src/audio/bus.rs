@@ -198,7 +198,13 @@ impl CrossFeedFilter {
 
 #[derive(Debug, Clone)]
 pub struct SoundMixerBus {
-    /// Fixed input sample rate used by the per-console mixer (e.g. 96 kHz).
+    /// Base input sample rate used by the per-console mixer (e.g. 96 kHz).
+    base_input_rate: u32,
+    /// Effective input sample rate used by the bus resampler.
+    ///
+    /// This usually matches `base_input_rate`, but can be adjusted to time-stretch
+    /// audio when the frontend runs the emulator at an integer display FPS (e.g. 60Hz)
+    /// instead of the console's exact FPS (e.g. 60.0988Hz on NTSC).
     input_rate: u32,
     /// Host/device output sample rate.
     output_rate: u32,
@@ -217,8 +223,10 @@ pub struct SoundMixerBus {
 impl SoundMixerBus {
     /// Constructs a new bus that converts from `input_rate` to `output_rate`.
     pub fn new(input_rate: u32, output_rate: u32) -> Self {
+        let input_rate = input_rate.max(1);
         Self {
-            input_rate: input_rate.max(1),
+            base_input_rate: input_rate,
+            input_rate,
             output_rate: output_rate.max(1),
             config: AudioBusConfig::default(),
             eq: Equalizer::default(),
@@ -232,6 +240,20 @@ impl SoundMixerBus {
     pub fn reset(&mut self) {
         self.mix_scratch.clear();
         self.reverb.reset();
+    }
+
+    /// Adjusts the effective input sample rate used by the bus resampler.
+    ///
+    /// This is a "time-stretch" knob. The actual input samples are still produced at
+    /// `base_input_rate`, but changing this value alters how many samples the resampler
+    /// outputs for a given input chunk.
+    pub fn set_resample_input_rate(&mut self, input_rate: u32) {
+        self.input_rate = input_rate.max(1);
+    }
+
+    /// Restores the resampler input rate back to the original mixer input rate.
+    pub fn reset_resample_input_rate(&mut self) {
+        self.input_rate = self.base_input_rate;
     }
 
     /// Updates the output sample rate while keeping the input rate fixed.

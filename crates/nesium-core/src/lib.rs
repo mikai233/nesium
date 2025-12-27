@@ -532,6 +532,27 @@ impl Nes {
         self.sound_bus.set_output_rate(sample_rate);
     }
 
+    /// Enables a simple "integer FPS" audio stretch.
+    ///
+    /// When a frontend runs the emulator at an integer display FPS (e.g. 60Hz) rather than
+    /// the NES's exact NTSC FPS (~60.0988Hz), the emulator produces slightly fewer audio
+    /// samples per wall-clock second. To avoid audio underruns without changing the output
+    /// device rate, we time-stretch the resampler input rate by `scale`.
+    ///
+    /// - `scale < 1.0` stretches audio (more output samples per input chunk).
+    /// - `scale > 1.0` compresses audio (fewer output samples).
+    pub fn set_audio_integer_fps_scale(&mut self, scale: f64) {
+        let scale = scale.clamp(0.25, 4.0);
+        let input = (INTERNAL_MIXER_SAMPLE_RATE as f64 * scale).round();
+        let input = input.clamp(1.0, u32::MAX as f64) as u32;
+        self.sound_bus.set_resample_input_rate(input);
+    }
+
+    /// Disables integer-FPS audio stretching and restores the default resampler input rate.
+    pub fn reset_audio_integer_fps_scale(&mut self) {
+        self.sound_bus.reset_resample_input_rate();
+    }
+
     /// Apply per-channel mixer settings (volume / panning).
     pub fn set_mixer_settings(&mut self, settings: &crate::audio::MixerSettings) {
         self.mixer.apply_mixer_settings(settings);

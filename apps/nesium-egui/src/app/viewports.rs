@@ -122,6 +122,7 @@ impl NesiumApp {
                 .with_title(self.t(TextId::MenuWindowTools))
                 .with_inner_size([360.0, 260.0]);
             let ui_state_arc = Arc::clone(&self.ui_state);
+            let runtime_handle = self.runtime_handle.clone();
             let close_flag = self.viewports.close_flag(AppViewport::Tools);
             show_viewport_with_close(
                 ctx,
@@ -130,15 +131,33 @@ impl NesiumApp {
                 close_flag,
                 move |ctx, class| {
                     // Snapshot state
-                    let (mut pixel_perfect, title, label, heading, placeholder) = {
+                    let (
+                        mut pixel_perfect,
+                        mut integer_fps,
+                        title,
+                        pixel_label,
+                        fps_label,
+                        fps_hint,
+                        heading,
+                        placeholder,
+                    ) = {
                         let state = ui_state_arc.lock().unwrap();
                         let lang = state.i18n.language();
                         (
                             state.pixel_perfect_scaling,
+                            state.integer_fps_mode,
                             state.i18n.text(TextId::MenuWindowTools),
                             match lang {
                                 super::Language::English => "Pixel-perfect scaling (integer)",
                                 super::Language::ChineseSimplified => "像素完美缩放（整数倍）",
+                            },
+                            match lang {
+                                super::Language::English => "Integer FPS mode (60Hz, NTSC)",
+                                super::Language::ChineseSimplified => "整数 FPS 模式（60Hz，NTSC）",
+                            },
+                            match lang {
+                                super::Language::English => "PAL (50Hz) will be added later.",
+                                super::Language::ChineseSimplified => "PAL（50Hz）后续再支持。",
                             },
                             state.i18n.text(TextId::ToolsHeading),
                             state.i18n.text(TextId::ToolsPlaceholder),
@@ -146,17 +165,30 @@ impl NesiumApp {
                     };
 
                     let mut changed = false;
+                    let mut fps_changed = false;
                     let close_requested = show_viewport_content(ctx, class, title, |ui| {
                         ui.heading(heading);
-                        if ui.checkbox(&mut pixel_perfect, label).changed() {
+                        if ui.checkbox(&mut pixel_perfect, pixel_label).changed() {
                             changed = true;
                         }
+                        if ui.checkbox(&mut integer_fps, fps_label).changed() {
+                            fps_changed = true;
+                        }
+                        ui.label(fps_hint);
                         ui.add_space(6.0);
                         ui.label(placeholder);
                     });
 
                     if changed {
                         ui_state_arc.lock().unwrap().pixel_perfect_scaling = pixel_perfect;
+                    }
+                    if fps_changed {
+                        ui_state_arc.lock().unwrap().integer_fps_mode = integer_fps;
+                        let _ = runtime_handle.set_integer_fps_target(if integer_fps {
+                            Some(60)
+                        } else {
+                            None
+                        });
                     }
                     close_requested
                 },

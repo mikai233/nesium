@@ -8,6 +8,15 @@ import 'package:nesium_flutter/platform/rust_runtime.dart';
 
 import 'app.dart';
 
+Future<void> main(List<String> args) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initRustRuntime();
+
+  runApp(const ProviderScope(child: NesiumApp()));
+
+  hideMacOsSplashAfterFirstFrame();
+}
+
 /// macOS-only: hide the native splash overlay after Flutter renders the first frame.
 ///
 /// If this fails and we silently ignore it, the splash may stay forever and the app
@@ -37,13 +46,4 @@ void hideMacOsSplashAfterFirstFrame() {
       }
     }
   });
-}
-
-Future<void> main(List<String> args) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initRustRuntime();
-
-  runApp(const ProviderScope(child: NesiumApp()));
-
-  hideMacOsSplashAfterFirstFrame();
 }

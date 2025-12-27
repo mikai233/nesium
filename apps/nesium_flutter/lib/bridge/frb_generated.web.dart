@@ -6,6 +6,7 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
+import 'api/emulation.dart';
 import 'api/input.dart';
 import 'api/load_rom.dart';
 import 'api/pause.dart';
