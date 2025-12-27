@@ -1,3 +1,4 @@
+use core::ffi::c_void;
 use std::path::Path;
 
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
     mem_block::cpu as cpu_ram,
     ppu::{
         Ppu,
-        buffer::{ColorFormat, FrameBuffer},
+        buffer::{ColorFormat, FrameBuffer, FrameReadyCallback},
         palette::{Palette, PaletteKind},
     },
     reset_kind::ResetKind,
@@ -554,6 +555,14 @@ impl Nes {
     /// Palette indices for the latest frame (PPU native format).
     pub fn render_buffer(&self) -> &[u8] {
         self.ppu.render_buffer()
+    }
+
+    pub fn set_frame_ready_callback(
+        &mut self,
+        cb: Option<FrameReadyCallback>,
+        user_data: *mut c_void,
+    ) {
+        self.ppu.set_frame_ready_callback(cb, user_data);
     }
 
     /// Selects one of the built-in palettes.

@@ -96,7 +96,7 @@ fn ensure_runtime() -> &'static RuntimeHolder {
         .expect("failed to start nesium runtime");
 
         let handle = runtime.handle();
-        let frame_handle = handle.frame_handle();
+        let frame_handle = handle.frame_handle().clone();
 
         RuntimeHolder {
             _video: video,

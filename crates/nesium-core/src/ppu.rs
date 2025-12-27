@@ -44,6 +44,7 @@ use self::{
     sprite_state::{SpriteEvalState, SpriteFetchState, SpriteLineBuffers},
 };
 
+use core::ffi::c_void;
 use core::fmt;
 
 use crate::{
@@ -55,6 +56,7 @@ use crate::{
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
         buffer::FrameBuffer,
+        buffer::FrameReadyCallback,
         palette::{Palette, PaletteRam},
         pattern_bus::PatternBus,
         pending_vram_increment::PendingVramIncrement,
@@ -315,6 +317,14 @@ impl Ppu {
     /// with palette indices (`0..=63`).
     pub fn render_buffer(&self) -> &[u8] {
         self.framebuffer.render()
+    }
+
+    pub fn set_frame_ready_callback(
+        &mut self,
+        cb: Option<FrameReadyCallback>,
+        user_data: *mut c_void,
+    ) {
+        self.framebuffer.set_frame_ready_callback(cb, user_data);
     }
 
     /// Current frame counter (increments when scanline wraps from 260 to -1).

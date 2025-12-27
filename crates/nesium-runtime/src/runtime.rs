@@ -1,5 +1,5 @@
 use std::{
-    os::raw::{c_uint, c_void},
+    os::raw::c_void,
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -55,13 +55,7 @@ pub enum RuntimeEvent {
     Error(String),
 }
 
-pub type FrameReadyCallback = extern "C" fn(
-    buffer_index: c_uint,
-    width: c_uint,
-    height: c_uint,
-    pitch: c_uint,
-    user_data: *mut c_void,
-);
+pub use nesium_core::ppu::buffer::FrameReadyCallback;
 
 enum ControlMessage {
     Stop,
@@ -153,25 +147,13 @@ impl Runtime {
                 config.video.plane1,
             )
         };
-
-        let runner_config = RunnerConfig {
-            color_format: config.video.color_format,
-            audio: config.audio,
-        };
+        let audio_mode = config.audio;
 
         let state = Arc::new(RuntimeState::new());
         let thread_state = Arc::clone(&state);
-        let thread_frame_handle = Arc::clone(&frame_handle);
 
         let join = thread::spawn(move || {
-            let mut runner = Runner::new(
-                runner_config,
-                ctrl_rx,
-                event_tx,
-                framebuffer,
-                thread_frame_handle,
-                thread_state,
-            );
+            let mut runner = Runner::new(audio_mode, ctrl_rx, event_tx, framebuffer, thread_state);
             runner.run();
         });
 
@@ -205,8 +187,8 @@ impl Drop for Runtime {
 }
 
 impl RuntimeHandle {
-    pub fn frame_handle(&self) -> Arc<ExternalFrameHandle> {
-        Arc::clone(&self.inner.frame_handle)
+    pub fn frame_handle(&self) -> &Arc<ExternalFrameHandle> {
+        &self.inner.frame_handle
     }
 
     pub fn frame_seq(&self) -> u64 {
@@ -332,23 +314,13 @@ const SPIN_YIELD_EVERY: u32 = 512;
 const FRAME_LEAD: Duration = Duration::from_micros(50);
 const TURBO_FRAMES_PER_TOGGLE_DEFAULT: u8 = 2;
 
-#[derive(Debug, Clone, Copy)]
-struct RunnerConfig {
-    color_format: ColorFormat,
-    audio: AudioMode,
-}
-
 struct Runner {
-    config: RunnerConfig,
     nes: Nes,
     audio: Option<NesAudioPlayer>,
-    runtime_sample_rate: u32,
 
     ctrl_rx: Receiver<ControlMessage>,
     event_tx: Sender<RuntimeEvent>,
-    callback: Option<(FrameReadyCallback, *mut c_void)>,
 
-    frame_handle: Arc<ExternalFrameHandle>,
     state: Arc<RuntimeState>,
 
     has_cartridge: bool,
@@ -357,14 +329,13 @@ struct Runner {
 
 impl Runner {
     fn new(
-        config: RunnerConfig,
+        audio_mode: AudioMode,
         ctrl_rx: Receiver<ControlMessage>,
         event_tx: Sender<RuntimeEvent>,
         framebuffer: FrameBuffer,
-        frame_handle: Arc<ExternalFrameHandle>,
         state: Arc<RuntimeState>,
     ) -> Self {
-        let (audio, runtime_sample_rate) = match config.audio {
+        let (audio, runtime_sample_rate) = match audio_mode {
             AudioMode::Disabled => (None, 48_000),
             AudioMode::Auto => match NesAudioPlayer::new() {
                 Ok(player) => {
@@ -384,14 +355,10 @@ impl Runner {
             .build();
 
         Self {
-            config,
             nes,
             audio,
-            runtime_sample_rate,
             ctrl_rx,
             event_tx,
-            callback: None,
-            frame_handle,
             state,
             has_cartridge: false,
             next_frame_deadline: Instant::now(),
@@ -570,7 +537,7 @@ impl Runner {
                 self.nes.set_audio_bus_config(cfg);
             }
             ControlMessage::SetFrameReadyCallback(cb, user_data) => {
-                self.callback = cb.map(|f| (f, user_data));
+                self.nes.set_frame_ready_callback(cb, user_data);
             }
         }
 
@@ -618,18 +585,5 @@ impl Runner {
         }
 
         self.state.frame_seq.fetch_add(1, Ordering::Relaxed);
-
-        if let Some((cb, user_data)) = self.callback {
-            // NOTE: `buffer_index` is informational. Readers should use a safe copy API
-            // (e.g. begin/end front copy) to avoid races.
-            let buffer_index = self.frame_handle.front_index() as c_uint;
-            cb(
-                buffer_index,
-                SCREEN_WIDTH as c_uint,
-                SCREEN_HEIGHT as c_uint,
-                (SCREEN_WIDTH * self.config.color_format.bytes_per_pixel()) as c_uint,
-                user_data,
-            );
-        }
     }
 }

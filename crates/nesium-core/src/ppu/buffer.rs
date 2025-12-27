@@ -4,6 +4,7 @@
 /// - index mode: stores raw palette indices for debugging or PPU inspection
 /// - color mode: stores packed RGB/RGBA pixels ready to be consumed by a frontend (SDL, libretro, Flutter, etc.)
 use crate::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, palette::Color};
+use core::{ffi::c_void, fmt};
 use std::{
     ptr::NonNull,
     slice,
@@ -12,6 +13,42 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
 };
+
+pub type FrameReadyCallback =
+    extern "C" fn(buffer_index: u32, width: u32, height: u32, pitch: u32, user_data: *mut c_void);
+
+#[derive(Clone, Copy)]
+struct FrameReadyHook {
+    cb: FrameReadyCallback,
+    user_data: *mut c_void,
+}
+
+// SAFETY: `FrameReadyHook` only carries opaque pointers that are never dereferenced by the core.
+// The embedder is responsible for ensuring the callback and `user_data` remain valid on the NES thread.
+unsafe impl Send for FrameReadyHook {}
+
+impl fmt::Debug for FrameReadyHook {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FrameReadyHook")
+            .field("cb", &(self.cb as usize))
+            .field("user_data", &self.user_data)
+            .finish()
+    }
+}
+
+impl FrameReadyHook {
+    #[inline]
+    fn call(&self, buffer_index: usize, pitch: usize) {
+        debug_assert!(buffer_index < 2);
+        (self.cb)(
+            buffer_index as u32,
+            SCREEN_WIDTH as u32,
+            SCREEN_HEIGHT as u32,
+            pitch as u32,
+            self.user_data,
+        );
+    }
+}
 
 /// Describes how a logical RGB color is packed into the underlying byte buffer.
 ///
@@ -58,6 +95,7 @@ pub struct FrameBuffer {
     active_index: usize,
     storage: FrameBufferStorage,
     mode: BufferMode,
+    frame_ready_hook: Option<FrameReadyHook>,
 }
 
 /// Backing storage for the framebuffer planes.
@@ -265,6 +303,7 @@ impl FrameBuffer {
                 vec![0; len].into_boxed_slice(),
             ]),
             mode,
+            frame_ready_hook: None,
         }
     }
 
@@ -321,6 +360,7 @@ impl FrameBuffer {
             active_index: 1,
             storage: FrameBufferStorage::External(Arc::clone(&handle)),
             mode,
+            frame_ready_hook: None,
         };
 
         (fb, handle)
@@ -401,6 +441,14 @@ impl FrameBuffer {
         }
     }
 
+    pub fn set_frame_ready_callback(
+        &mut self,
+        cb: Option<FrameReadyCallback>,
+        user_data: *mut c_void,
+    ) {
+        self.frame_ready_hook = cb.map(|cb| FrameReadyHook { cb, user_data });
+    }
+
     /// Returns the index of the current **back** (write) plane.
     ///
     /// For external storage, the published **front** index is managed by the
@@ -426,7 +474,11 @@ impl FrameBuffer {
     pub fn swap(&mut self) {
         match &self.storage {
             FrameBufferStorage::Owned(_) => {
+                let finished_back = self.active_index;
                 self.active_index = 1 - self.active_index;
+                if let Some(hook) = self.frame_ready_hook {
+                    hook.call(finished_back, self.pitch());
+                }
                 self.write().fill(0);
             }
             FrameBufferStorage::External(handle) => {
@@ -436,6 +488,10 @@ impl FrameBuffer {
 
                 // Switch to the other plane for the next frame.
                 self.active_index = 1 - self.active_index;
+
+                if let Some(hook) = self.frame_ready_hook {
+                    hook.call(finished_back, self.pitch());
+                }
 
                 // The new back plane was previously the front plane. If the frontend is
                 // still copying it, wait for the copy to finish before clearing/writing.
