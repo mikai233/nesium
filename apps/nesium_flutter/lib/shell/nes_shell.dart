@@ -195,6 +195,11 @@ class _NesShellState extends ConsumerState<NesShell>
     await _runRustCommand(l10n.actionPowerResetNes, nes_api.powerResetConsole);
   }
 
+  Future<void> _ejectConsole() async {
+    final l10n = AppLocalizations.of(context)!;
+    await _runRustCommand(l10n.actionEjectNes, nes_api.ejectConsole);
+  }
+
   KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent event) {
     // Avoid sending key events to the emulator when a different route (e.g. settings)
     // is on top.
@@ -296,6 +301,7 @@ class _NesShellState extends ConsumerState<NesShell>
       openRom: _promptAndLoadRom,
       reset: _resetConsole,
       powerReset: _powerResetConsole,
+      eject: _ejectConsole,
       togglePause: _togglePause,
       openSettings: _openSettings,
       openDebugger: _openDebugger,

@@ -208,6 +208,10 @@ class _MobileDrawer extends StatelessWidget {
         closeDrawer();
         unawaited(actions.powerReset());
         break;
+      case NesMenuItemId.eject:
+        closeDrawer();
+        unawaited(actions.eject());
+        break;
       case NesMenuItemId.togglePause:
         closeDrawer();
         unawaited(actions.togglePause());

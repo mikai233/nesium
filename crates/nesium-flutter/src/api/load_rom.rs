@@ -32,3 +32,8 @@ pub fn power_reset_console() -> Result<(), String> {
         .reset(ResetKind::PowerOn)
         .map_err(|e| e.to_string())
 }
+
+#[frb]
+pub fn eject_console() -> Result<(), String> {
+    crate::runtime_handle().eject().map_err(|e| e.to_string())
+}

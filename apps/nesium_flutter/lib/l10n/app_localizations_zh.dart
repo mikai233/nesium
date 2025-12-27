@@ -194,6 +194,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuPowerReset => '电源重置';
 
   @override
+  String get menuEject => '弹出';
+
+  @override
   String get menuPauseResume => '暂停 / 继续';
 
   @override
@@ -251,6 +254,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get actionPowerResetNes => '电源重置 NES';
+
+  @override
+  String get actionEjectNes => '弹出';
 
   @override
   String get actionLoadPalette => '加载调色板';

@@ -17,3 +17,6 @@ Future<void> resetConsole() =>
 
 Future<void> powerResetConsole() =>
     RustLib.instance.api.crateApiLoadRomPowerResetConsole();
+
+Future<void> ejectConsole() =>
+    RustLib.instance.api.crateApiLoadRomEjectConsole();

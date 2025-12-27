@@ -102,6 +102,9 @@ class _DesktopMenuBar extends StatelessWidget {
       case NesMenuItemId.powerReset:
         unawaited(actions.powerReset());
         break;
+      case NesMenuItemId.eject:
+        unawaited(actions.eject());
+        break;
       case NesMenuItemId.togglePause:
         unawaited(actions.togglePause());
         break;
@@ -125,6 +128,8 @@ class _DesktopMenuBar extends StatelessWidget {
         return l10n.menuReset;
       case NesMenuItemId.powerReset:
         return l10n.menuPowerReset;
+      case NesMenuItemId.eject:
+        return l10n.menuEject;
       case NesMenuItemId.togglePause:
         return l10n.menuPauseResume;
       case NesMenuItemId.settings:

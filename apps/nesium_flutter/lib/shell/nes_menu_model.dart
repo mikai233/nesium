@@ -6,6 +6,7 @@ enum NesMenuItemId {
   openRom,
   reset,
   powerReset,
+  eject,
   togglePause,
   settings,
   debugger,
@@ -22,6 +23,7 @@ class NesMenuItemSpec {
     NesMenuItemId.openRom => l10n.menuOpenRom,
     NesMenuItemId.reset => l10n.menuReset,
     NesMenuItemId.powerReset => l10n.menuPowerReset,
+    NesMenuItemId.eject => l10n.menuEject,
     NesMenuItemId.togglePause => l10n.menuPauseResume,
     NesMenuItemId.settings => l10n.menuPreferences,
     NesMenuItemId.debugger => l10n.menuDebugger,
@@ -61,6 +63,11 @@ class NesMenus {
     icon: Icons.power_settings_new,
   );
 
+  static const NesMenuItemSpec eject = NesMenuItemSpec(
+    id: NesMenuItemId.eject,
+    icon: Icons.eject,
+  );
+
   static const NesMenuItemSpec togglePause = NesMenuItemSpec(
     id: NesMenuItemId.togglePause,
     icon: Icons.pause_circle_outline,
@@ -85,6 +92,7 @@ class NesMenus {
     openRom,
     reset,
     powerReset,
+    eject,
     togglePause,
     debugger,
     tools,
@@ -94,11 +102,11 @@ class NesMenus {
   static const List<NesMenuSectionSpec> desktopMenuSections = [
     NesMenuSectionSpec(
       id: NesMenuSectionId.file,
-      items: [openRom, reset, powerReset],
+      items: [openRom, reset, powerReset, eject],
     ),
     NesMenuSectionSpec(
       id: NesMenuSectionId.emulation,
-      items: [togglePause, reset, powerReset],
+      items: [togglePause, reset, powerReset, eject],
     ),
     NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
     NesMenuSectionSpec(id: NesMenuSectionId.windows, items: [debugger, tools]),

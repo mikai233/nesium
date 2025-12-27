@@ -199,6 +199,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuPowerReset => 'Power Reset';
 
   @override
+  String get menuEject => 'Eject';
+
+  @override
   String get menuPauseResume => 'Pause / Resume';
 
   @override
@@ -258,6 +261,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get actionPowerResetNes => 'Power Reset NES';
+
+  @override
+  String get actionEjectNes => 'Eject';
 
   @override
   String get actionLoadPalette => 'Load palette';

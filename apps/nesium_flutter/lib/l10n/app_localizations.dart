@@ -452,6 +452,12 @@ abstract class AppLocalizations {
   /// **'Power Reset'**
   String get menuPowerReset;
 
+  /// No description provided for @menuEject.
+  ///
+  /// In en, this message translates to:
+  /// **'Eject'**
+  String get menuEject;
+
   /// No description provided for @menuPauseResume.
   ///
   /// In en, this message translates to:
@@ -565,6 +571,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Power Reset NES'**
   String get actionPowerResetNes;
+
+  /// No description provided for @actionEjectNes.
+  ///
+  /// In en, this message translates to:
+  /// **'Eject'**
+  String get actionEjectNes;
 
   /// No description provided for @actionLoadPalette.
   ///
