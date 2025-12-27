@@ -4,11 +4,12 @@ use std::{
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU8, Ordering},
-        mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel},
     },
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
+
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError, bounded, unbounded};
 
 use nesium_core::{
     Nes,
@@ -58,16 +59,20 @@ pub enum RuntimeEvent {
 pub use nesium_core::ppu::buffer::FrameReadyCallback;
 
 const NTSC_FPS_EXACT: f64 = 60.098_811_862_348_4;
+const CONTROL_REPLY_TIMEOUT: Duration = Duration::from_secs(2);
+const LOAD_ROM_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
+
+type ControlReplySender = crossbeam_channel::Sender<Result<(), RuntimeError>>;
 
 enum ControlMessage {
     Stop,
-    LoadRom(PathBuf),
-    Reset(ResetKind),
-    Eject,
-    SetAudioConfig(AudioBusConfig),
-    SetFrameReadyCallback(Option<FrameReadyCallback>, *mut c_void),
+    LoadRom(PathBuf, ControlReplySender),
+    Reset(ResetKind, ControlReplySender),
+    Eject(ControlReplySender),
+    SetAudioConfig(AudioBusConfig, ControlReplySender),
+    SetFrameReadyCallback(Option<FrameReadyCallback>, *mut c_void, ControlReplySender),
     /// None = exact NTSC FPS, Some(60) = integer FPS (PAL reserved for future).
-    SetIntegerFpsTarget(Option<u32>),
+    SetIntegerFpsTarget(Option<u32>, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without
@@ -133,8 +138,8 @@ pub struct RuntimeHandle {
 
 impl Runtime {
     pub fn start(config: RuntimeConfig) -> Result<Self, RuntimeError> {
-        let (ctrl_tx, ctrl_rx) = channel::<ControlMessage>();
-        let (event_tx, event_rx) = channel::<RuntimeEvent>();
+        let (ctrl_tx, ctrl_rx) = unbounded::<ControlMessage>();
+        let (event_tx, event_rx) = unbounded::<RuntimeEvent>();
 
         let len = config.video.len_bytes();
         if len == 0 {
@@ -191,6 +196,27 @@ impl Drop for Runtime {
 }
 
 impl RuntimeHandle {
+    fn send_with_reply(
+        &self,
+        timeout: Duration,
+        build: impl FnOnce(ControlReplySender) -> ControlMessage,
+    ) -> Result<(), RuntimeError> {
+        let (reply_tx, reply_rx) = bounded::<Result<(), RuntimeError>>(1);
+        self.inner
+            .ctrl_tx
+            .send(build(reply_tx))
+            .map_err(|e| RuntimeError(e.to_string()))?;
+        match reply_rx.recv_timeout(timeout) {
+            Ok(res) => res,
+            Err(RecvTimeoutError::Timeout) => {
+                Err(RuntimeError("runtime did not respond in time".to_string()))
+            }
+            Err(RecvTimeoutError::Disconnected) => Err(RuntimeError(
+                "runtime control channel disconnected".to_string(),
+            )),
+        }
+    }
+
     pub fn frame_handle(&self) -> &Arc<ExternalFrameHandle> {
         &self.inner.frame_handle
     }
@@ -254,31 +280,26 @@ impl RuntimeHandle {
     }
 
     pub fn load_rom(&self, path: impl Into<PathBuf>) -> Result<(), RuntimeError> {
-        self.inner
-            .ctrl_tx
-            .send(ControlMessage::LoadRom(path.into()))
-            .map_err(|e| RuntimeError(e.to_string()))
+        let path = path.into();
+        self.send_with_reply(LOAD_ROM_REPLY_TIMEOUT, |reply| {
+            ControlMessage::LoadRom(path, reply)
+        })
     }
 
     pub fn reset(&self, kind: ResetKind) -> Result<(), RuntimeError> {
-        self.inner
-            .ctrl_tx
-            .send(ControlMessage::Reset(kind))
-            .map_err(|e| RuntimeError(e.to_string()))
+        self.send_with_reply(CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::Reset(kind, reply)
+        })
     }
 
     pub fn eject(&self) -> Result<(), RuntimeError> {
-        self.inner
-            .ctrl_tx
-            .send(ControlMessage::Eject)
-            .map_err(|e| RuntimeError(e.to_string()))
+        self.send_with_reply(CONTROL_REPLY_TIMEOUT, ControlMessage::Eject)
     }
 
     pub fn set_audio_config(&self, cfg: AudioBusConfig) -> Result<(), RuntimeError> {
-        self.inner
-            .ctrl_tx
-            .send(ControlMessage::SetAudioConfig(cfg))
-            .map_err(|e| RuntimeError(e.to_string()))
+        self.send_with_reply(CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetAudioConfig(cfg, reply)
+        })
     }
 
     pub fn set_frame_ready_callback(
@@ -286,10 +307,9 @@ impl RuntimeHandle {
         cb: Option<FrameReadyCallback>,
         user_data: *mut c_void,
     ) -> Result<(), RuntimeError> {
-        self.inner
-            .ctrl_tx
-            .send(ControlMessage::SetFrameReadyCallback(cb, user_data))
-            .map_err(|e| RuntimeError(e.to_string()))
+        self.send_with_reply(CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetFrameReadyCallback(cb, user_data, reply)
+        })
     }
 
     /// Enables an integer FPS pacing mode.
@@ -311,10 +331,9 @@ impl RuntimeHandle {
             }
         }
 
-        self.inner
-            .ctrl_tx
-            .send(ControlMessage::SetIntegerFpsTarget(fps))
-            .map_err(|e| RuntimeError(e.to_string()))
+        self.send_with_reply(CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetIntegerFpsTarget(fps, reply)
+        })
     }
 }
 
@@ -512,27 +531,31 @@ impl Runner {
     fn handle_control(&mut self, msg: ControlMessage) -> bool {
         match msg {
             ControlMessage::Stop => return true,
-            ControlMessage::LoadRom(path) => match self.nes.load_cartridge_from_file(&path) {
-                Ok(_) => {
-                    self.has_cartridge = true;
-                    self.state.paused.store(false, Ordering::Release);
-                    self.next_frame_deadline = Instant::now();
-                    if let Some(audio) = &self.audio {
-                        audio.clear();
+            ControlMessage::LoadRom(path, reply) => {
+                match self.nes.load_cartridge_from_file(&path) {
+                    Ok(_) => {
+                        self.has_cartridge = true;
+                        self.state.paused.store(false, Ordering::Release);
+                        self.next_frame_deadline = Instant::now();
+                        if let Some(audio) = &self.audio {
+                            audio.clear();
+                        }
+                        let _ = self.event_tx.send(RuntimeEvent::StatusInfo(format!(
+                            "Loaded {}",
+                            path.display()
+                        )));
+                        let _ = reply.send(Ok(()));
                     }
-                    let _ = self.event_tx.send(RuntimeEvent::StatusInfo(format!(
-                        "Loaded {}",
-                        path.display()
-                    )));
+                    Err(e) => {
+                        self.has_cartridge = false;
+                        let _ = self
+                            .event_tx
+                            .send(RuntimeEvent::Error(format!("Failed to load ROM: {e}")));
+                        let _ = reply.send(Err(RuntimeError(format!("Failed to load ROM: {e}"))));
+                    }
                 }
-                Err(e) => {
-                    self.has_cartridge = false;
-                    let _ = self
-                        .event_tx
-                        .send(RuntimeEvent::Error(format!("Failed to load ROM: {e}")));
-                }
-            },
-            ControlMessage::Reset(kind) => {
+            }
+            ControlMessage::Reset(kind, reply) => {
                 if self.has_cartridge {
                     self.nes.reset(kind);
                     for mask in &self.state.pad_masks {
@@ -550,8 +573,9 @@ impl Runner {
                         .event_tx
                         .send(RuntimeEvent::StatusInfo("Reset".to_string()));
                 }
+                let _ = reply.send(Ok(()));
             }
-            ControlMessage::Eject => {
+            ControlMessage::Eject(reply) => {
                 self.nes.eject_cartridge();
                 self.has_cartridge = false;
                 for mask in &self.state.pad_masks {
@@ -566,14 +590,17 @@ impl Runner {
                 let _ = self
                     .event_tx
                     .send(RuntimeEvent::StatusInfo("Ejected".to_string()));
+                let _ = reply.send(Ok(()));
             }
-            ControlMessage::SetAudioConfig(cfg) => {
+            ControlMessage::SetAudioConfig(cfg, reply) => {
                 self.nes.set_audio_bus_config(cfg);
+                let _ = reply.send(Ok(()));
             }
-            ControlMessage::SetFrameReadyCallback(cb, user_data) => {
+            ControlMessage::SetFrameReadyCallback(cb, user_data, reply) => {
                 self.nes.set_frame_ready_callback(cb, user_data);
+                let _ = reply.send(Ok(()));
             }
-            ControlMessage::SetIntegerFpsTarget(fps) => {
+            ControlMessage::SetIntegerFpsTarget(fps, reply) => {
                 self.integer_fps_target = fps;
                 if fps == Some(60) {
                     self.frame_duration = FRAME_DURATION_60HZ;
@@ -585,6 +612,7 @@ impl Runner {
 
                 // Re-anchor to avoid a big catch-up burst right after toggling.
                 self.next_frame_deadline = Instant::now();
+                let _ = reply.send(Ok(()));
             }
         }
 

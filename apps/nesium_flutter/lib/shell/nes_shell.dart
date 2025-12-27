@@ -117,32 +117,14 @@ class _NesShellState extends ConsumerState<NesShell>
 
   Future<void> _runRustCommand(
     String label,
-    Future<void> Function() action, {
-    bool showSuccessSnack = true,
-  }) async {
+    Future<void> Function() action,
+  ) async {
     try {
       await action();
-      if (!mounted) return;
-      if (showSuccessSnack) {
-        final l10n = AppLocalizations.of(context)!;
-        _showSnack(l10n.commandSucceeded(label));
-      }
     } catch (e) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(l10n.commandFailed(label)),
-          content: Text('$e'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(l10n.dialogOk),
-            ),
-          ],
-        ),
-      );
+      _showSnack('${l10n.commandFailed(label)}: $e');
     }
   }
 
@@ -236,10 +218,9 @@ class _NesShellState extends ConsumerState<NesShell>
   Future<void> _togglePause() async {
     try {
       _pausedByLifecycle = false;
-      final paused = await nes_pause.togglePause();
-      if (!mounted) return;
-      final l10n = AppLocalizations.of(context)!;
-      _showSnack(paused ? l10n.snackPaused : l10n.snackResumed);
+      await nes_pause.togglePause();
+      // Intentionally do not show a snackbar on success to avoid noisy UI.
+      // Errors are still surfaced below.
     } catch (e) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
