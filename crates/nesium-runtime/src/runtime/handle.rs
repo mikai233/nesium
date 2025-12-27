@@ -10,6 +10,7 @@ use crossbeam_channel::{Receiver, Sender, TryRecvError, bounded, unbounded};
 use nesium_core::{
     audio::bus::AudioBusConfig,
     controller::Button,
+    ppu::buffer::FrameReadyCallback,
     ppu::buffer::{BufferMode, ExternalFrameHandle, FrameBuffer},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
@@ -20,8 +21,7 @@ use super::{
     runner::Runner,
     state::RuntimeState,
     types::{
-        CONTROL_REPLY_TIMEOUT, FrameReadyCallback, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig,
-        RuntimeError, RuntimeEvent,
+        CONTROL_REPLY_TIMEOUT, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError, RuntimeEvent,
     },
     util::button_bit,
 };

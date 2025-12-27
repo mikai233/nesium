@@ -4,11 +4,12 @@ use std::path::PathBuf;
 use crossbeam_channel::Sender;
 use nesium_core::{
     audio::bus::AudioBusConfig,
+    ppu::buffer::FrameReadyCallback,
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
 };
 
-use super::types::{FrameReadyCallback, RuntimeError};
+use super::types::RuntimeError;
 
 pub(crate) type ControlReplySender = Sender<Result<(), RuntimeError>>;
 

@@ -100,7 +100,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiPaletteSetPalettePalData({required List<int> data});
 
-  Future<void> crateApiPaletteSetPalettePreset({required String id});
+  Future<void> crateApiPaletteSetPalettePreset({required PaletteKind kind});
 
   Future<void> crateApiPauseSetPaused({required bool paused});
 
@@ -372,12 +372,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiPaletteSetPalettePreset({required String id}) {
+  Future<void> crateApiPaletteSetPalettePreset({required PaletteKind kind}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(id, serializer);
+          sse_encode_palette_kind(kind, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -390,14 +390,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiPaletteSetPalettePresetConstMeta,
-        argValues: [id],
+        argValues: [kind],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiPaletteSetPalettePresetConstMeta =>
-      const TaskConstMeta(debugName: "set_palette_preset", argNames: ["id"]);
+      const TaskConstMeta(debugName: "set_palette_preset", argNames: ["kind"]);
 
   @override
   Future<void> crateApiPauseSetPaused({required bool paused}) {
@@ -559,6 +559,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   List<PalettePresetInfo> dco_decode_list_palette_preset_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_palette_preset_info).toList();
@@ -577,13 +583,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PaletteKind dco_decode_palette_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return PaletteKind.values[raw as int];
+  }
+
+  @protected
   PalettePresetInfo dco_decode_palette_preset_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return PalettePresetInfo(
-      id: dco_decode_String(arr[0]),
+      kind: dco_decode_palette_kind(arr[0]),
       description: dco_decode_String(arr[1]),
     );
   }
@@ -611,6 +623,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
   }
 
   @protected
@@ -642,13 +660,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PaletteKind sse_decode_palette_kind(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return PaletteKind.values[inner];
+  }
+
+  @protected
   PalettePresetInfo sse_decode_palette_preset_info(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_id = sse_decode_String(deserializer);
+    var var_kind = sse_decode_palette_kind(deserializer);
     var var_description = sse_decode_String(deserializer);
-    return PalettePresetInfo(id: var_id, description: var_description);
+    return PalettePresetInfo(kind: var_kind, description: var_description);
   }
 
   @protected
@@ -663,12 +688,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
-  }
-
-  @protected
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
@@ -678,6 +697,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
   }
 
   @protected
@@ -715,12 +740,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_palette_kind(PaletteKind self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_palette_preset_info(
     PalettePresetInfo self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.id, serializer);
+    sse_encode_palette_kind(self.kind, serializer);
     sse_encode_String(self.description, serializer);
   }
 
@@ -733,11 +764,5 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_unit(void self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-  }
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
   }
 }

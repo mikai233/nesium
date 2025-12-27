@@ -6,32 +6,40 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `parse_palette_kind`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `all`, `to_core`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `fmt`, `fmt`
 
 Future<List<PalettePresetInfo>> palettePresets() =>
     RustLib.instance.api.crateApiPalettePalettePresets();
 
-Future<void> setPalettePreset({required String id}) =>
-    RustLib.instance.api.crateApiPaletteSetPalettePreset(id: id);
+Future<void> setPalettePreset({required PaletteKind kind}) =>
+    RustLib.instance.api.crateApiPaletteSetPalettePreset(kind: kind);
 
 Future<void> setPalettePalData({required List<int> data}) =>
     RustLib.instance.api.crateApiPaletteSetPalettePalData(data: data);
 
+enum PaletteKind {
+  nesdevNtsc,
+  fbxCompositeDirect,
+  sonyCxa2025AsUs,
+  pal2C07,
+  rawLinear,
+}
+
 class PalettePresetInfo {
-  final String id;
+  final PaletteKind kind;
   final String description;
 
-  const PalettePresetInfo({required this.id, required this.description});
+  const PalettePresetInfo({required this.kind, required this.description});
 
   @override
-  int get hashCode => id.hashCode ^ description.hashCode;
+  int get hashCode => kind.hashCode ^ description.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is PalettePresetInfo &&
           runtimeType == other.runtimeType &&
-          id == other.id &&
+          kind == other.kind &&
           description == other.description;
 }

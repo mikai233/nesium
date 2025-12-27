@@ -1,40 +1,63 @@
 use flutter_rust_bridge::frb;
-use nesium_core::ppu::palette::PaletteKind;
+
+use nesium_core::ppu::palette::PaletteKind as CorePaletteKind;
+
+// NOTE: FRB cannot directly generate Dart enums for types defined in other crates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PaletteKind {
+    NesdevNtsc,
+    FbxCompositeDirect,
+    SonyCxa2025AsUs,
+    Pal2c07,
+    RawLinear,
+}
+
+impl From<PaletteKind> for CorePaletteKind {
+    fn from(value: PaletteKind) -> Self {
+        match value {
+            PaletteKind::NesdevNtsc => CorePaletteKind::NesdevNtsc,
+            PaletteKind::FbxCompositeDirect => CorePaletteKind::FbxCompositeDirect,
+            PaletteKind::SonyCxa2025AsUs => CorePaletteKind::SonyCxa2025AsUs,
+            PaletteKind::Pal2c07 => CorePaletteKind::Pal2c07,
+            PaletteKind::RawLinear => CorePaletteKind::RawLinear,
+        }
+    }
+}
+
+impl From<CorePaletteKind> for PaletteKind {
+    fn from(value: CorePaletteKind) -> Self {
+        match value {
+            CorePaletteKind::NesdevNtsc => PaletteKind::NesdevNtsc,
+            CorePaletteKind::FbxCompositeDirect => PaletteKind::FbxCompositeDirect,
+            CorePaletteKind::SonyCxa2025AsUs => PaletteKind::SonyCxa2025AsUs,
+            CorePaletteKind::Pal2c07 => PaletteKind::Pal2c07,
+            CorePaletteKind::RawLinear => PaletteKind::RawLinear,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PalettePresetInfo {
-    pub id: String,
+    pub kind: PaletteKind,
     pub description: String,
-}
-
-fn parse_palette_kind(id: &str) -> Option<PaletteKind> {
-    match id {
-        "nesdev-ntsc" => Some(PaletteKind::NesdevNtsc),
-        "fbx-composite-direct" => Some(PaletteKind::FbxCompositeDirect),
-        "sony-cxa2025as-us" => Some(PaletteKind::SonyCxa2025AsUs),
-        "pal-2c07" => Some(PaletteKind::Pal2c07),
-        "raw-linear" => Some(PaletteKind::RawLinear),
-        _ => None,
-    }
 }
 
 #[frb]
 pub fn palette_presets() -> Vec<PalettePresetInfo> {
-    PaletteKind::all()
+    CorePaletteKind::all()
         .iter()
         .copied()
         .map(|k| PalettePresetInfo {
-            id: k.as_str().to_string(),
+            kind: PaletteKind::from(k),
             description: k.description().to_string(),
         })
         .collect()
 }
 
 #[frb]
-pub fn set_palette_preset(id: String) -> Result<(), String> {
-    let kind = parse_palette_kind(&id).ok_or_else(|| format!("unknown palette preset: {id}"))?;
+pub fn set_palette_preset(kind: PaletteKind) -> Result<(), String> {
     crate::runtime_handle()
-        .set_palette_kind(kind)
+        .set_palette_kind(CorePaletteKind::from(kind))
         .map_err(|e| e.to_string())
 }
 

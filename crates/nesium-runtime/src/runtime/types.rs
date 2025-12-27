@@ -5,9 +5,6 @@ use nesium_core::{
     reset_kind::ResetKind,
 };
 
-pub use nesium_core::ppu::buffer::FrameReadyCallback;
-pub use nesium_core::ppu::palette::PaletteKind;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioMode {
     Auto,

@@ -25,12 +25,11 @@ use gilrs::GamepadId;
 use nesium_core::{
     audio::bus::AudioBusConfig,
     ppu::buffer::ColorFormat,
+    ppu::palette::PaletteKind,
     ppu::{SCREEN_HEIGHT, SCREEN_WIDTH},
     reset_kind::ResetKind,
 };
-use nesium_runtime::{
-    AudioMode, PaletteKind, Runtime, RuntimeConfig, RuntimeEvent, RuntimeHandle, VideoConfig,
-};
+use nesium_runtime::{AudioMode, Runtime, RuntimeConfig, RuntimeEvent, RuntimeHandle, VideoConfig};
 
 struct VideoBackingStore {
     _plane0: Box<[u8]>,

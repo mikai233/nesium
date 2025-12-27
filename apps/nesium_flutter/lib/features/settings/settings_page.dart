@@ -10,6 +10,7 @@ import '../controls/virtual_controls_settings.dart';
 import 'emulation_settings.dart';
 import 'language_settings.dart';
 import 'video_settings.dart';
+import '../../bridge/api/palette.dart' as nes_palette;
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -331,8 +332,8 @@ class SettingsPage extends ConsumerWidget {
                           if (value == null) return;
                           if (value == PaletteMode.builtin) {
                             try {
-                              await videoController.setBuiltinPalette(
-                                videoSettings.builtinPaletteId,
+                              await videoController.setBuiltinPreset(
+                                videoSettings.builtinPreset,
                               );
                             } catch (_) {}
                             return;
@@ -358,35 +359,35 @@ class SettingsPage extends ConsumerWidget {
                         border: const OutlineInputBorder(),
                       ),
                       child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: videoSettings.builtinPaletteId,
+                        child: DropdownButton<nes_palette.PaletteKind>(
+                          value: videoSettings.builtinPreset,
                           isExpanded: true,
                           items: const [
                             DropdownMenuItem(
-                              value: 'nesdev-ntsc',
+                              value: nes_palette.PaletteKind.nesdevNtsc,
                               child: Text('Nesdev (NTSC)'),
                             ),
                             DropdownMenuItem(
-                              value: 'fbx-composite-direct',
+                              value: nes_palette.PaletteKind.fbxCompositeDirect,
                               child: Text('FirebrandX (Composite Direct)'),
                             ),
                             DropdownMenuItem(
-                              value: 'sony-cxa2025as-us',
+                              value: nes_palette.PaletteKind.sonyCxa2025AsUs,
                               child: Text('Sony CXA2025AS (US)'),
                             ),
                             DropdownMenuItem(
-                              value: 'pal-2c07',
+                              value: nes_palette.PaletteKind.pal2C07,
                               child: Text('RP2C07 (PAL)'),
                             ),
                             DropdownMenuItem(
-                              value: 'raw-linear',
+                              value: nes_palette.PaletteKind.rawLinear,
                               child: Text('Raw linear'),
                             ),
                           ],
                           onChanged: (value) async {
                             if (value == null) return;
                             try {
-                              await videoController.setBuiltinPalette(value);
+                              await videoController.setBuiltinPreset(value);
                             } catch (_) {}
                           },
                         ),

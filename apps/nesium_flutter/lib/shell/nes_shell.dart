@@ -8,11 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 import 'package:nesium_flutter/bridge/api/pause.dart' as nes_pause;
-import 'package:nesium_flutter/bridge/lib.dart' show PadButton;
 
 import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
 import '../domain/nes_state.dart';
+import '../domain/pad_button.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_settings.dart';
 import '../features/settings/emulation_settings.dart';

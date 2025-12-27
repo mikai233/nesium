@@ -2,10 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nesium_flutter/bridge/lib.dart' show PadButton;
 import 'package:flutter/services.dart';
 
 import '../../domain/nes_input_masks.dart';
+import '../../domain/pad_button.dart';
 import '../screen/nes_screen_view.dart';
 import 'input_settings.dart';
 import 'virtual_controls_editor.dart';

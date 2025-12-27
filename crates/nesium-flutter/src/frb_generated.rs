@@ -360,11 +360,11 @@ fn wire__crate__api__palette__set_palette_preset_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_id = <String>::sse_decode(&mut deserializer);
+            let api_kind = <crate::api::palette::PaletteKind>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::palette::set_palette_preset(api_id)?;
+                    let output_ok = crate::api::palette::set_palette_preset(api_kind)?;
                     Ok(output_ok)
                 })())
             }
@@ -555,6 +555,13 @@ impl SseDecode for bool {
     }
 }
 
+impl SseDecode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for Vec<crate::api::palette::PalettePresetInfo> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -581,13 +588,28 @@ impl SseDecode for Vec<u8> {
     }
 }
 
+impl SseDecode for crate::api::palette::PaletteKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::palette::PaletteKind::NesdevNtsc,
+            1 => crate::api::palette::PaletteKind::FbxCompositeDirect,
+            2 => crate::api::palette::PaletteKind::SonyCxa2025AsUs,
+            3 => crate::api::palette::PaletteKind::Pal2c07,
+            4 => crate::api::palette::PaletteKind::RawLinear,
+            _ => unreachable!("Invalid variant for PaletteKind: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::palette::PalettePresetInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_kind = <crate::api::palette::PaletteKind>::sse_decode(deserializer);
         let mut var_description = <String>::sse_decode(deserializer);
         return crate::api::palette::PalettePresetInfo {
-            id: var_id,
+            kind: var_kind,
             description: var_description,
         };
     }
@@ -603,13 +625,6 @@ impl SseDecode for u8 {
 impl SseDecode for () {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
-}
-
-impl SseDecode for i32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
-    }
 }
 
 fn pde_ffi_dispatcher_primary_impl(
@@ -667,10 +682,34 @@ fn pde_ffi_dispatcher_sync_impl(
 // Section: rust2dart
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::palette::PaletteKind {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::NesdevNtsc => 0.into_dart(),
+            Self::FbxCompositeDirect => 1.into_dart(),
+            Self::SonyCxa2025AsUs => 2.into_dart(),
+            Self::Pal2c07 => 3.into_dart(),
+            Self::RawLinear => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::palette::PaletteKind
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::palette::PaletteKind>
+    for crate::api::palette::PaletteKind
+{
+    fn into_into_dart(self) -> crate::api::palette::PaletteKind {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::palette::PalettePresetInfo {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
             self.description.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -702,6 +741,13 @@ impl SseEncode for bool {
     }
 }
 
+impl SseEncode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
+    }
+}
+
 impl SseEncode for Vec<crate::api::palette::PalettePresetInfo> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -722,10 +768,29 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for crate::api::palette::PaletteKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::palette::PaletteKind::NesdevNtsc => 0,
+                crate::api::palette::PaletteKind::FbxCompositeDirect => 1,
+                crate::api::palette::PaletteKind::SonyCxa2025AsUs => 2,
+                crate::api::palette::PaletteKind::Pal2c07 => 3,
+                crate::api::palette::PaletteKind::RawLinear => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::palette::PalettePresetInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.id, serializer);
+        <crate::api::palette::PaletteKind>::sse_encode(self.kind, serializer);
         <String>::sse_encode(self.description, serializer);
     }
 }
@@ -740,13 +805,6 @@ impl SseEncode for u8 {
 impl SseEncode for () {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
-}
-
-impl SseEncode for i32 {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
-    }
 }
 
 #[cfg(not(target_family = "wasm"))]

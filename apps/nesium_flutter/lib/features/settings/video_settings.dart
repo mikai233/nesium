@@ -11,22 +11,22 @@ class VideoSettings {
 
   const VideoSettings({
     required this.paletteMode,
-    required this.builtinPaletteId,
+    required this.builtinPreset,
     this.customPaletteName,
   });
 
   final PaletteMode paletteMode;
-  final String builtinPaletteId;
+  final nes_palette.PaletteKind builtinPreset;
   final String? customPaletteName;
 
   VideoSettings copyWith({
     PaletteMode? paletteMode,
-    String? builtinPaletteId,
+    nes_palette.PaletteKind? builtinPreset,
     Object? customPaletteName = _unset,
   }) {
     return VideoSettings(
       paletteMode: paletteMode ?? this.paletteMode,
-      builtinPaletteId: builtinPaletteId ?? this.builtinPaletteId,
+      builtinPreset: builtinPreset ?? this.builtinPreset,
       customPaletteName: identical(customPaletteName, _unset)
           ? this.customPaletteName
           : customPaletteName as String?,
@@ -36,7 +36,7 @@ class VideoSettings {
   static VideoSettings defaults() {
     return const VideoSettings(
       paletteMode: PaletteMode.builtin,
-      builtinPaletteId: 'nesdev-ntsc',
+      builtinPreset: nes_palette.PaletteKind.nesdevNtsc,
       customPaletteName: null,
     );
   }
@@ -46,17 +46,17 @@ class VideoSettingsController extends Notifier<VideoSettings> {
   @override
   VideoSettings build() => VideoSettings.defaults();
 
-  Future<void> setBuiltinPalette(String id) async {
-    if (id == state.builtinPaletteId &&
+  Future<void> setBuiltinPreset(nes_palette.PaletteKind preset) async {
+    if (preset == state.builtinPreset &&
         state.paletteMode == PaletteMode.builtin) {
       return;
     }
     state = state.copyWith(
       paletteMode: PaletteMode.builtin,
-      builtinPaletteId: id,
+      builtinPreset: preset,
       customPaletteName: null,
     );
-    await nes_palette.setPalettePreset(id: id);
+    await nes_palette.setPalettePreset(kind: preset);
   }
 
   Future<void> setCustomPalette(Uint8List data, {String? name}) async {

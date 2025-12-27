@@ -21,12 +21,10 @@ use nesium_core::{
     controller::Button as CoreButton,
     ppu::{
         SCREEN_HEIGHT, SCREEN_WIDTH,
-        buffer::{ColorFormat, ExternalFrameHandle},
+        buffer::{ColorFormat, ExternalFrameHandle, FrameReadyCallback},
     },
 };
-use nesium_runtime::{
-    AudioMode, FrameReadyCallback, Runtime, RuntimeConfig, RuntimeHandle, VideoConfig,
-};
+use nesium_runtime::{AudioMode, Runtime, RuntimeConfig, RuntimeHandle, VideoConfig};
 
 pub const FRAME_WIDTH: usize = SCREEN_WIDTH;
 pub const FRAME_HEIGHT: usize = SCREEN_HEIGHT;
