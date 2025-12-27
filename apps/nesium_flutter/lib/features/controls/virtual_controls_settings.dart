@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../persistence/app_storage.dart';
+import '../../persistence/keys.dart';
 
 @immutable
 class VirtualControlsSettings {
@@ -247,50 +251,77 @@ class VirtualControlsSettings {
 class VirtualControlsSettingsController
     extends Notifier<VirtualControlsSettings> {
   @override
-  VirtualControlsSettings build() => VirtualControlsSettings.defaults;
+  VirtualControlsSettings build() {
+    final loaded = _virtualControlsFromStorage(
+      ref.read(appStorageProvider).get(StorageKeys.settingsVirtualControls),
+    );
+    final settings = loaded ?? VirtualControlsSettings.defaults;
 
-  void replace(VirtualControlsSettings value) => state = value;
+    nes_input
+        .setTurboFramesPerToggle(frames: settings.turboFramesPerToggle)
+        .catchError((_) {});
 
-  void setButtonSize(double value) => state = state.copyWith(buttonSize: value);
-  void setGap(double value) => state = state.copyWith(gap: value);
-  void setOpacity(double value) => state = state.copyWith(opacity: value);
-  void setHitboxScale(double value) =>
-      state = state.copyWith(hitboxScale: value);
+    return settings;
+  }
+
+  void replace(VirtualControlsSettings value) => _set(value);
+
+  void setButtonSize(double value) => _set(state.copyWith(buttonSize: value));
+  void setGap(double value) => _set(state.copyWith(gap: value));
+  void setOpacity(double value) => _set(state.copyWith(opacity: value));
+  void setHitboxScale(double value) => _set(state.copyWith(hitboxScale: value));
   void setHapticsEnabled(bool value) =>
-      state = state.copyWith(hapticsEnabled: value);
+      _set(state.copyWith(hapticsEnabled: value));
   void setDpadDeadzoneRatio(double value) =>
-      state = state.copyWith(dpadDeadzoneRatio: value);
+      _set(state.copyWith(dpadDeadzoneRatio: value));
   void setTurboFramesPerToggle(int value) {
     final next = value.clamp(1, 255);
-    state = state.copyWith(turboFramesPerToggle: next);
+    _set(state.copyWith(turboFramesPerToggle: next));
     nes_input.setTurboFramesPerToggle(frames: next).catchError((_) {});
   }
 
   void setPortraitDpadOffset(Offset value) =>
-      state = state.copyWith(portraitDpadOffset: value);
+      _set(state.copyWith(portraitDpadOffset: value));
   void setPortraitButtonsOffset(Offset value) =>
-      state = state.copyWith(portraitButtonsOffset: value);
+      _set(state.copyWith(portraitButtonsOffset: value));
   void setPortraitSystemOffset(Offset value) =>
-      state = state.copyWith(portraitSystemOffset: value);
+      _set(state.copyWith(portraitSystemOffset: value));
   void setLandscapeDpadOffset(Offset value) =>
-      state = state.copyWith(landscapeDpadOffset: value);
+      _set(state.copyWith(landscapeDpadOffset: value));
   void setLandscapeButtonsOffset(Offset value) =>
-      state = state.copyWith(landscapeButtonsOffset: value);
+      _set(state.copyWith(landscapeButtonsOffset: value));
   void setLandscapeSystemOffset(Offset value) =>
-      state = state.copyWith(landscapeSystemOffset: value);
+      _set(state.copyWith(landscapeSystemOffset: value));
 
   void setPortraitDpadScale(double value) =>
-      state = state.copyWith(portraitDpadScale: value);
+      _set(state.copyWith(portraitDpadScale: value));
   void setPortraitButtonsScale(double value) =>
-      state = state.copyWith(portraitButtonsScale: value);
+      _set(state.copyWith(portraitButtonsScale: value));
   void setPortraitSystemScale(double value) =>
-      state = state.copyWith(portraitSystemScale: value);
+      _set(state.copyWith(portraitSystemScale: value));
   void setLandscapeDpadScale(double value) =>
-      state = state.copyWith(landscapeDpadScale: value);
+      _set(state.copyWith(landscapeDpadScale: value));
   void setLandscapeButtonsScale(double value) =>
-      state = state.copyWith(landscapeButtonsScale: value);
+      _set(state.copyWith(landscapeButtonsScale: value));
   void setLandscapeSystemScale(double value) =>
-      state = state.copyWith(landscapeSystemScale: value);
+      _set(state.copyWith(landscapeSystemScale: value));
+
+  void _set(VirtualControlsSettings next) {
+    state = next;
+    _persist(next);
+  }
+
+  void _persist(VirtualControlsSettings value) {
+    unawaited(
+      ref
+          .read(appStorageProvider)
+          .put(
+            StorageKeys.settingsVirtualControls,
+            _virtualControlsToStorage(value),
+          )
+          .catchError((_) {}),
+    );
+  }
 }
 
 final virtualControlsSettingsProvider =
@@ -298,3 +329,199 @@ final virtualControlsSettingsProvider =
       VirtualControlsSettingsController,
       VirtualControlsSettings
     >(VirtualControlsSettingsController.new);
+
+Map<String, Object?> _virtualControlsToStorage(VirtualControlsSettings value) {
+  List<double> offset(Offset v) => <double>[v.dx, v.dy];
+
+  return <String, Object?>{
+    'buttonSize': value.buttonSize,
+    'gap': value.gap,
+    'opacity': value.opacity,
+    'hitboxScale': value.hitboxScale,
+    'hapticsEnabled': value.hapticsEnabled,
+    'dpadDeadzoneRatio': value.dpadDeadzoneRatio,
+    'turboFramesPerToggle': value.turboFramesPerToggle,
+    'portraitDpadOffset': offset(value.portraitDpadOffset),
+    'portraitButtonsOffset': offset(value.portraitButtonsOffset),
+    'portraitSystemOffset': offset(value.portraitSystemOffset),
+    'portraitAOffset': offset(value.portraitAOffset),
+    'portraitBOffset': offset(value.portraitBOffset),
+    'portraitTurboAOffset': offset(value.portraitTurboAOffset),
+    'portraitTurboBOffset': offset(value.portraitTurboBOffset),
+    'portraitSelectOffset': offset(value.portraitSelectOffset),
+    'portraitStartOffset': offset(value.portraitStartOffset),
+    'landscapeDpadOffset': offset(value.landscapeDpadOffset),
+    'landscapeButtonsOffset': offset(value.landscapeButtonsOffset),
+    'landscapeSystemOffset': offset(value.landscapeSystemOffset),
+    'landscapeAOffset': offset(value.landscapeAOffset),
+    'landscapeBOffset': offset(value.landscapeBOffset),
+    'landscapeTurboAOffset': offset(value.landscapeTurboAOffset),
+    'landscapeTurboBOffset': offset(value.landscapeTurboBOffset),
+    'landscapeSelectOffset': offset(value.landscapeSelectOffset),
+    'landscapeStartOffset': offset(value.landscapeStartOffset),
+    'portraitDpadScale': value.portraitDpadScale,
+    'portraitButtonsScale': value.portraitButtonsScale,
+    'portraitSystemScale': value.portraitSystemScale,
+    'portraitAScale': value.portraitAScale,
+    'portraitBScale': value.portraitBScale,
+    'portraitTurboAScale': value.portraitTurboAScale,
+    'portraitTurboBScale': value.portraitTurboBScale,
+    'portraitSelectScale': value.portraitSelectScale,
+    'portraitStartScale': value.portraitStartScale,
+    'landscapeDpadScale': value.landscapeDpadScale,
+    'landscapeButtonsScale': value.landscapeButtonsScale,
+    'landscapeSystemScale': value.landscapeSystemScale,
+    'landscapeAScale': value.landscapeAScale,
+    'landscapeBScale': value.landscapeBScale,
+    'landscapeTurboAScale': value.landscapeTurboAScale,
+    'landscapeTurboBScale': value.landscapeTurboBScale,
+    'landscapeSelectScale': value.landscapeSelectScale,
+    'landscapeStartScale': value.landscapeStartScale,
+  };
+}
+
+VirtualControlsSettings? _virtualControlsFromStorage(Object? value) {
+  if (value is! Map) return null;
+  final map = value.cast<String, Object?>();
+  final defaults = VirtualControlsSettings.defaults;
+
+  double d(Object? v, double fallback) => v is num ? v.toDouble() : fallback;
+  int i(Object? v, int fallback) => v is num ? v.toInt() : fallback;
+  bool b(Object? v, bool fallback) => v is bool ? v : fallback;
+  Offset o(Object? v, Offset fallback) {
+    if (v is List && v.length == 2 && v[0] is num && v[1] is num) {
+      return Offset((v[0] as num).toDouble(), (v[1] as num).toDouble());
+    }
+    return fallback;
+  }
+
+  return defaults.copyWith(
+    buttonSize: d(map['buttonSize'], defaults.buttonSize),
+    gap: d(map['gap'], defaults.gap),
+    opacity: d(map['opacity'], defaults.opacity),
+    hitboxScale: d(map['hitboxScale'], defaults.hitboxScale),
+    hapticsEnabled: b(map['hapticsEnabled'], defaults.hapticsEnabled),
+    dpadDeadzoneRatio: d(map['dpadDeadzoneRatio'], defaults.dpadDeadzoneRatio),
+    turboFramesPerToggle: i(
+      map['turboFramesPerToggle'],
+      defaults.turboFramesPerToggle,
+    ).clamp(1, 255),
+    portraitDpadOffset: o(
+      map['portraitDpadOffset'],
+      defaults.portraitDpadOffset,
+    ),
+    portraitButtonsOffset: o(
+      map['portraitButtonsOffset'],
+      defaults.portraitButtonsOffset,
+    ),
+    portraitSystemOffset: o(
+      map['portraitSystemOffset'],
+      defaults.portraitSystemOffset,
+    ),
+    portraitAOffset: o(map['portraitAOffset'], defaults.portraitAOffset),
+    portraitBOffset: o(map['portraitBOffset'], defaults.portraitBOffset),
+    portraitTurboAOffset: o(
+      map['portraitTurboAOffset'],
+      defaults.portraitTurboAOffset,
+    ),
+    portraitTurboBOffset: o(
+      map['portraitTurboBOffset'],
+      defaults.portraitTurboBOffset,
+    ),
+    portraitSelectOffset: o(
+      map['portraitSelectOffset'],
+      defaults.portraitSelectOffset,
+    ),
+    portraitStartOffset: o(
+      map['portraitStartOffset'],
+      defaults.portraitStartOffset,
+    ),
+    landscapeDpadOffset: o(
+      map['landscapeDpadOffset'],
+      defaults.landscapeDpadOffset,
+    ),
+    landscapeButtonsOffset: o(
+      map['landscapeButtonsOffset'],
+      defaults.landscapeButtonsOffset,
+    ),
+    landscapeSystemOffset: o(
+      map['landscapeSystemOffset'],
+      defaults.landscapeSystemOffset,
+    ),
+    landscapeAOffset: o(map['landscapeAOffset'], defaults.landscapeAOffset),
+    landscapeBOffset: o(map['landscapeBOffset'], defaults.landscapeBOffset),
+    landscapeTurboAOffset: o(
+      map['landscapeTurboAOffset'],
+      defaults.landscapeTurboAOffset,
+    ),
+    landscapeTurboBOffset: o(
+      map['landscapeTurboBOffset'],
+      defaults.landscapeTurboBOffset,
+    ),
+    landscapeSelectOffset: o(
+      map['landscapeSelectOffset'],
+      defaults.landscapeSelectOffset,
+    ),
+    landscapeStartOffset: o(
+      map['landscapeStartOffset'],
+      defaults.landscapeStartOffset,
+    ),
+    portraitDpadScale: d(map['portraitDpadScale'], defaults.portraitDpadScale),
+    portraitButtonsScale: d(
+      map['portraitButtonsScale'],
+      defaults.portraitButtonsScale,
+    ),
+    portraitSystemScale: d(
+      map['portraitSystemScale'],
+      defaults.portraitSystemScale,
+    ),
+    portraitAScale: d(map['portraitAScale'], defaults.portraitAScale),
+    portraitBScale: d(map['portraitBScale'], defaults.portraitBScale),
+    portraitTurboAScale: d(
+      map['portraitTurboAScale'],
+      defaults.portraitTurboAScale,
+    ),
+    portraitTurboBScale: d(
+      map['portraitTurboBScale'],
+      defaults.portraitTurboBScale,
+    ),
+    portraitSelectScale: d(
+      map['portraitSelectScale'],
+      defaults.portraitSelectScale,
+    ),
+    portraitStartScale: d(
+      map['portraitStartScale'],
+      defaults.portraitStartScale,
+    ),
+    landscapeDpadScale: d(
+      map['landscapeDpadScale'],
+      defaults.landscapeDpadScale,
+    ),
+    landscapeButtonsScale: d(
+      map['landscapeButtonsScale'],
+      defaults.landscapeButtonsScale,
+    ),
+    landscapeSystemScale: d(
+      map['landscapeSystemScale'],
+      defaults.landscapeSystemScale,
+    ),
+    landscapeAScale: d(map['landscapeAScale'], defaults.landscapeAScale),
+    landscapeBScale: d(map['landscapeBScale'], defaults.landscapeBScale),
+    landscapeTurboAScale: d(
+      map['landscapeTurboAScale'],
+      defaults.landscapeTurboAScale,
+    ),
+    landscapeTurboBScale: d(
+      map['landscapeTurboBScale'],
+      defaults.landscapeTurboBScale,
+    ),
+    landscapeSelectScale: d(
+      map['landscapeSelectScale'],
+      defaults.landscapeSelectScale,
+    ),
+    landscapeStartScale: d(
+      map['landscapeStartScale'],
+      defaults.landscapeStartScale,
+    ),
+  );
+}

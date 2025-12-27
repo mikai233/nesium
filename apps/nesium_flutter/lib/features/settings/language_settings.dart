@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../platform/platform_capabilities.dart';
+import '../../persistence/app_storage.dart';
+import '../../persistence/keys.dart';
 
 enum AppLanguage { system, english, chineseSimplified }
 
@@ -40,12 +42,21 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
       _initialized = true;
       scheduleMicrotask(_init);
     }
+    final stored = ref
+        .read(appStorageProvider)
+        .get(StorageKeys.settingsLanguage);
+    if (stored is String) {
+      try {
+        return AppLanguage.values.byName(stored);
+      } catch (_) {}
+    }
     return AppLanguage.system;
   }
 
   void setLanguage(AppLanguage language) {
     if (language == state) return;
     state = language;
+    _persist(language);
     unawaited(_broadcastLanguage(language));
   }
 
@@ -89,6 +100,16 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
     _suppressBroadcast = true;
     state = next;
     _suppressBroadcast = false;
+    _persist(next);
+  }
+
+  void _persist(AppLanguage language) {
+    unawaited(
+      ref
+          .read(appStorageProvider)
+          .put(StorageKeys.settingsLanguage, language.name)
+          .catchError((_) {}),
+    );
   }
 
   Future<void> _broadcastLanguage(AppLanguage language) async {

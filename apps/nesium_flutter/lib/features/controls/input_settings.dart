@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/nes_input_masks.dart';
 import '../../platform/platform_capabilities.dart';
+import '../../persistence/app_storage.dart';
+import '../../persistence/keys.dart';
 
 enum InputDevice { keyboard, virtualController }
 
@@ -212,23 +216,17 @@ bool _supportsVirtualController() {
 class InputSettingsController extends Notifier<InputSettings> {
   @override
   InputSettings build() {
-    final device = _supportsVirtualController()
-        ? InputDevice.virtualController
-        : InputDevice.keyboard;
-    return InputSettings(
-      device: device,
-      keyboardPreset: KeyboardPreset.nesStandard,
-      customUp: LogicalKeyboardKey.arrowUp,
-      customDown: LogicalKeyboardKey.arrowDown,
-      customLeft: LogicalKeyboardKey.arrowLeft,
-      customRight: LogicalKeyboardKey.arrowRight,
-      customA: LogicalKeyboardKey.keyZ,
-      customB: LogicalKeyboardKey.keyX,
-      customSelect: LogicalKeyboardKey.space,
-      customStart: LogicalKeyboardKey.enter,
-      customTurboA: LogicalKeyboardKey.keyC,
-      customTurboB: LogicalKeyboardKey.keyV,
+    final defaults = _defaults();
+    final loaded = _inputSettingsFromStorage(
+      ref.read(appStorageProvider).get(StorageKeys.settingsInput),
+      defaults: defaults,
     );
+    var settings = loaded ?? defaults;
+    if (settings.device == InputDevice.virtualController &&
+        !_supportsVirtualController()) {
+      settings = settings.copyWith(device: InputDevice.keyboard);
+    }
+    return settings;
   }
 
   void setDevice(InputDevice device) {
@@ -238,11 +236,13 @@ class InputSettingsController extends Notifier<InputSettings> {
     }
     ref.read(nesInputMasksProvider.notifier).clearAll();
     state = state.copyWith(device: device);
+    _persist(state);
   }
 
   void setKeyboardPreset(KeyboardPreset preset) {
     ref.read(nesInputMasksProvider.notifier).clearAll();
     state = state.copyWith(keyboardPreset: preset);
+    _persist(state);
   }
 
   void setCustomBinding(KeyboardBindingAction action, LogicalKeyboardKey? key) {
@@ -350,6 +350,36 @@ class InputSettingsController extends Notifier<InputSettings> {
       customTurboA: nextTurboA,
       customTurboB: nextTurboB,
     );
+    _persist(state);
+  }
+
+  InputSettings _defaults() {
+    final device = _supportsVirtualController()
+        ? InputDevice.virtualController
+        : InputDevice.keyboard;
+    return InputSettings(
+      device: device,
+      keyboardPreset: KeyboardPreset.nesStandard,
+      customUp: LogicalKeyboardKey.arrowUp,
+      customDown: LogicalKeyboardKey.arrowDown,
+      customLeft: LogicalKeyboardKey.arrowLeft,
+      customRight: LogicalKeyboardKey.arrowRight,
+      customA: LogicalKeyboardKey.keyZ,
+      customB: LogicalKeyboardKey.keyX,
+      customSelect: LogicalKeyboardKey.space,
+      customStart: LogicalKeyboardKey.enter,
+      customTurboA: LogicalKeyboardKey.keyC,
+      customTurboB: LogicalKeyboardKey.keyV,
+    );
+  }
+
+  void _persist(InputSettings value) {
+    unawaited(
+      ref
+          .read(appStorageProvider)
+          .put(StorageKeys.settingsInput, _inputSettingsToStorage(value))
+          .catchError((_) {}),
+    );
   }
 }
 
@@ -357,3 +387,64 @@ final inputSettingsProvider =
     NotifierProvider<InputSettingsController, InputSettings>(
       InputSettingsController.new,
     );
+
+Map<String, Object?> _inputSettingsToStorage(InputSettings value) {
+  int? keyId(LogicalKeyboardKey? key) => key?.keyId;
+
+  return <String, Object?>{
+    'device': value.device.name,
+    'keyboardPreset': value.keyboardPreset.name,
+    'customUp': keyId(value.customUp),
+    'customDown': keyId(value.customDown),
+    'customLeft': keyId(value.customLeft),
+    'customRight': keyId(value.customRight),
+    'customA': keyId(value.customA),
+    'customB': keyId(value.customB),
+    'customSelect': keyId(value.customSelect),
+    'customStart': keyId(value.customStart),
+    'customTurboA': keyId(value.customTurboA),
+    'customTurboB': keyId(value.customTurboB),
+  };
+}
+
+InputSettings? _inputSettingsFromStorage(
+  Object? value, {
+  required InputSettings defaults,
+}) {
+  if (value is! Map) return null;
+  final map = value.cast<String, Object?>();
+
+  T byNameOr<T extends Enum>(List<T> values, Object? raw, T fallback) {
+    if (raw is String) {
+      try {
+        return values.byName(raw);
+      } catch (_) {}
+    }
+    return fallback;
+  }
+
+  LogicalKeyboardKey? key(Object? raw, LogicalKeyboardKey? fallback) {
+    if (raw == null) return null;
+    if (raw is num) return LogicalKeyboardKey(raw.toInt());
+    return fallback;
+  }
+
+  return defaults.copyWith(
+    device: byNameOr(InputDevice.values, map['device'], defaults.device),
+    keyboardPreset: byNameOr(
+      KeyboardPreset.values,
+      map['keyboardPreset'],
+      defaults.keyboardPreset,
+    ),
+    customUp: key(map['customUp'], defaults.customUp),
+    customDown: key(map['customDown'], defaults.customDown),
+    customLeft: key(map['customLeft'], defaults.customLeft),
+    customRight: key(map['customRight'], defaults.customRight),
+    customA: key(map['customA'], defaults.customA),
+    customB: key(map['customB'], defaults.customB),
+    customSelect: key(map['customSelect'], defaults.customSelect),
+    customStart: key(map['customStart'], defaults.customStart),
+    customTurboA: key(map['customTurboA'], defaults.customTurboA),
+    customTurboB: key(map['customTurboB'], defaults.customTurboB),
+  );
+}

@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/api/palette.dart' as nes_palette;
+import '../../persistence/app_storage.dart';
+import '../../persistence/keys.dart';
 
 enum PaletteMode { builtin, custom }
 
@@ -44,7 +48,34 @@ class VideoSettings {
 
 class VideoSettingsController extends Notifier<VideoSettings> {
   @override
-  VideoSettings build() => VideoSettings.defaults();
+  VideoSettings build() {
+    final defaults = VideoSettings.defaults();
+    final loaded = _videoSettingsFromStorage(
+      ref.read(appStorageProvider).get(StorageKeys.settingsVideo),
+      defaults: defaults,
+    );
+    final settings = loaded ?? defaults;
+
+    final customBytes = ref
+        .read(appStorageProvider)
+        .get(StorageKeys.settingsVideoCustomPaletteBytes);
+    scheduleMicrotask(() {
+      if (settings.paletteMode == PaletteMode.custom &&
+          customBytes is Uint8List) {
+        nes_palette.setPalettePalData(data: customBytes).catchError((_) {});
+        return;
+      }
+      nes_palette
+          .setPalettePreset(kind: settings.builtinPreset)
+          .catchError((_) {});
+    });
+
+    if (settings.paletteMode == PaletteMode.custom &&
+        customBytes is! Uint8List) {
+      return settings.copyWith(paletteMode: PaletteMode.builtin);
+    }
+    return settings;
+  }
 
   Future<void> setBuiltinPreset(nes_palette.PaletteKind preset) async {
     if (preset == state.builtinPreset &&
@@ -54,8 +85,8 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     state = state.copyWith(
       paletteMode: PaletteMode.builtin,
       builtinPreset: preset,
-      customPaletteName: null,
     );
+    await _persist(state);
     await nes_palette.setPalettePreset(kind: preset);
   }
 
@@ -64,12 +95,35 @@ class VideoSettingsController extends Notifier<VideoSettings> {
       paletteMode: PaletteMode.custom,
       customPaletteName: name ?? state.customPaletteName ?? 'custom',
     );
+    final storage = ref.read(appStorageProvider);
+    try {
+      await storage.put(
+        StorageKeys.settingsVideoCustomPaletteBytes,
+        Uint8List.fromList(data),
+      );
+    } catch (_) {}
+    await _persist(state);
     await nes_palette.setPalettePalData(data: data);
   }
 
   void useCustomIfAvailable() {
     if (state.customPaletteName == null) return;
     state = state.copyWith(paletteMode: PaletteMode.custom);
+    unawaited(_persist(state));
+    final bytes = ref
+        .read(appStorageProvider)
+        .get(StorageKeys.settingsVideoCustomPaletteBytes);
+    if (bytes is Uint8List) {
+      nes_palette.setPalettePalData(data: bytes).catchError((_) {});
+    }
+  }
+
+  Future<void> _persist(VideoSettings value) async {
+    try {
+      await ref
+          .read(appStorageProvider)
+          .put(StorageKeys.settingsVideo, _videoSettingsToStorage(value));
+    } catch (_) {}
   }
 }
 
@@ -77,3 +131,44 @@ final videoSettingsProvider =
     NotifierProvider<VideoSettingsController, VideoSettings>(
       VideoSettingsController.new,
     );
+
+Map<String, Object?> _videoSettingsToStorage(VideoSettings value) =>
+    <String, Object?>{
+      'paletteMode': value.paletteMode.name,
+      'builtinPreset': value.builtinPreset.name,
+      'customPaletteName': value.customPaletteName,
+    };
+
+VideoSettings? _videoSettingsFromStorage(
+  Object? value, {
+  required VideoSettings defaults,
+}) {
+  if (value is! Map) return null;
+  final map = value.cast<String, Object?>();
+
+  PaletteMode paletteMode = defaults.paletteMode;
+  if (map['paletteMode'] is String) {
+    try {
+      paletteMode = PaletteMode.values.byName(map['paletteMode'] as String);
+    } catch (_) {}
+  }
+
+  nes_palette.PaletteKind builtinPreset = defaults.builtinPreset;
+  if (map['builtinPreset'] is String) {
+    try {
+      builtinPreset = nes_palette.PaletteKind.values.byName(
+        map['builtinPreset'] as String,
+      );
+    } catch (_) {}
+  }
+
+  final customPaletteName = map['customPaletteName'] is String
+      ? map['customPaletteName'] as String
+      : null;
+
+  return defaults.copyWith(
+    paletteMode: paletteMode,
+    builtinPreset: builtinPreset,
+    customPaletteName: customPaletteName,
+  );
+}

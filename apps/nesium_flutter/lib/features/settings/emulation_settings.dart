@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/api/emulation.dart' as nes_emulation;
 import '../../platform/platform_capabilities.dart';
+import '../../persistence/app_storage.dart';
+import '../../persistence/keys.dart';
 
 @immutable
 class EmulationSettings {
@@ -31,17 +35,42 @@ class EmulationSettings {
 
 class EmulationSettingsController extends Notifier<EmulationSettings> {
   @override
-  EmulationSettings build() => EmulationSettings.defaults();
+  EmulationSettings build() {
+    final defaults = EmulationSettings.defaults();
+    final loaded = _emulationSettingsFromStorage(
+      ref.read(appStorageProvider).get(StorageKeys.settingsEmulation),
+      defaults: defaults,
+    );
+    final settings = loaded ?? defaults;
+    nes_emulation
+        .setIntegerFpsMode(enabled: settings.integerFpsMode)
+        .catchError((_) {});
+    return settings;
+  }
 
   void setIntegerFpsMode(bool enabled) {
     if (enabled == state.integerFpsMode) return;
     state = state.copyWith(integerFpsMode: enabled);
     nes_emulation.setIntegerFpsMode(enabled: enabled).catchError((_) {});
+    _persist(state);
   }
 
   void setPauseInBackground(bool enabled) {
     if (enabled == state.pauseInBackground) return;
     state = state.copyWith(pauseInBackground: enabled);
+    _persist(state);
+  }
+
+  void _persist(EmulationSettings value) {
+    unawaited(
+      ref
+          .read(appStorageProvider)
+          .put(
+            StorageKeys.settingsEmulation,
+            _emulationSettingsToStorage(value),
+          )
+          .catchError((_) {}),
+    );
   }
 }
 
@@ -49,3 +78,27 @@ final emulationSettingsProvider =
     NotifierProvider<EmulationSettingsController, EmulationSettings>(
       EmulationSettingsController.new,
     );
+
+Map<String, Object?> _emulationSettingsToStorage(EmulationSettings value) =>
+    <String, Object?>{
+      'integerFpsMode': value.integerFpsMode,
+      'pauseInBackground': value.pauseInBackground,
+    };
+
+EmulationSettings? _emulationSettingsFromStorage(
+  Object? value, {
+  required EmulationSettings defaults,
+}) {
+  if (value is! Map) return null;
+  final map = value.cast<String, Object?>();
+  final integerFpsMode = map['integerFpsMode'] is bool
+      ? map['integerFpsMode'] as bool
+      : null;
+  final pauseInBackground = map['pauseInBackground'] is bool
+      ? map['pauseInBackground'] as bool
+      : null;
+  return defaults.copyWith(
+    integerFpsMode: integerFpsMode ?? defaults.integerFpsMode,
+    pauseInBackground: pauseInBackground ?? defaults.pauseInBackground,
+  );
+}
