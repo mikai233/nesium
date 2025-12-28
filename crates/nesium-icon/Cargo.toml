@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2024"
 license.workspace = true
 
+[features]
+default = []
+svg = ["skia-safe/svg"]
+
 [dependencies]
-skia-safe = { workspace = true, features = ["gl", "svg"] }
+skia-safe = { workspace = true, features = ["gl"] }
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }

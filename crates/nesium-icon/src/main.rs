@@ -31,6 +31,7 @@ enum Command {
         size: Option<u32>,
     },
     /// Output the icon as an SVG file
+    #[cfg(feature = "svg")]
     Svg {
         /// Output path
         #[arg(long, default_value = "icon.svg")]
@@ -62,6 +63,7 @@ fn main() -> Result<(), String> {
                 )
             }
         }
+        #[cfg(feature = "svg")]
         Some(Command::Svg { out }) => nesium_icon::render_svg(out.to_string_lossy().as_ref()),
         None => {
             let out_path = cli.out.unwrap_or_else(|| PathBuf::from("icon_1024.png"));
