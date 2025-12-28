@@ -238,6 +238,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuInputMappingComingSoon => 'Input Mapping (coming soon)';
 
   @override
+  String get menuLastError => 'Last error';
+
+  @override
+  String get lastErrorDetailsAction => 'Details';
+
+  @override
+  String get lastErrorDialogTitle => 'Last error';
+
+  @override
+  String get lastErrorCopied => 'Copied';
+
+  @override
   String get windowDebuggerTitle => 'Nesium Debugger';
 
   @override

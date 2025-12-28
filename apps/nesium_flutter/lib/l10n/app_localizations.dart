@@ -530,6 +530,30 @@ abstract class AppLocalizations {
   /// **'Input Mapping (coming soon)'**
   String get menuInputMappingComingSoon;
 
+  /// No description provided for @menuLastError.
+  ///
+  /// In en, this message translates to:
+  /// **'Last error'**
+  String get menuLastError;
+
+  /// No description provided for @lastErrorDetailsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get lastErrorDetailsAction;
+
+  /// No description provided for @lastErrorDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Last error'**
+  String get lastErrorDialogTitle;
+
+  /// No description provided for @lastErrorCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get lastErrorCopied;
+
   /// No description provided for @windowDebuggerTitle.
   ///
   /// In en, this message translates to:

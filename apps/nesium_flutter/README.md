@@ -34,6 +34,20 @@ flutter pub get
 flutter run
 ```
 
+## Web (local)
+
+This project uses a Web Worker + `wasm-pack` build of `crates/nesium-wasm`.
+To auto-build the WASM output into `web/nes/pkg` before launching Chrome:
+
+```bash
+cd apps/nesium_flutter
+dart run tool/run_web.dart
+```
+
+Options:
+- `--force-wasm`: rebuild even if up-to-date
+- `--skip-wasm`: skip wasm-pack step
+
 > Note: this project embeds the Rust core; make sure you have a Rust toolchain installed (`rustc`/`cargo`) before building.
 
 > Desktop builds may require platform toolchains (Xcode for macOS, MSVC Build Tools for Windows, etc.).

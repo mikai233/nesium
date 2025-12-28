@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../bridge/api/input.dart' as nes_input;
+import '../../platform/nes_input.dart' as nes_input;
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
@@ -43,17 +43,18 @@ class TurboSettingsController extends Notifier<TurboSettings> {
     );
     final settings = loaded ?? defaults;
 
+    scheduleMicrotask(applyToRuntime);
+
+    return settings;
+  }
+
+  void applyToRuntime() {
     // Best-effort apply; callers may invoke before the runtime is initialized.
     unawaited(
       nes_input
-          .setTurboTiming(
-            onFrames: settings.onFrames,
-            offFrames: settings.offFrames,
-          )
+          .setTurboTiming(onFrames: state.onFrames, offFrames: state.offFrames)
           .catchError((_) {}),
     );
-
-    return settings;
   }
 
   void setOnFrames(int value) {

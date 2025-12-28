@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../bridge/api/palette.dart' as nes_palette;
+import '../../platform/nes_palette.dart' as nes_palette;
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
@@ -65,28 +65,33 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     final customBytes = ref
         .read(appStorageProvider)
         .get(StorageKeys.settingsVideoCustomPaletteBytes);
+    final next =
+        (settings.paletteMode == PaletteMode.custom &&
+            customBytes is! Uint8List)
+        ? settings.copyWith(paletteMode: PaletteMode.builtin)
+        : settings;
     scheduleMicrotask(() {
-      if (settings.paletteMode == PaletteMode.custom &&
-          customBytes is Uint8List) {
-        unawaitedLogged(
-          nes_palette.setPalettePalData(data: customBytes),
-          message: 'setPalettePalData (init)',
-          logger: 'video_settings',
-        );
-        return;
-      }
       unawaitedLogged(
-        nes_palette.setPalettePreset(kind: settings.builtinPreset),
-        message: 'setPalettePreset (init)',
+        applyToRuntime(),
+        message: 'applyToRuntime (init)',
         logger: 'video_settings',
       );
     });
+    return next;
+  }
 
-    if (settings.paletteMode == PaletteMode.custom &&
-        customBytes is! Uint8List) {
-      return settings.copyWith(paletteMode: PaletteMode.builtin);
+  Future<void> applyToRuntime() async {
+    final storage = ref.read(appStorageProvider);
+    if (state.paletteMode == PaletteMode.custom) {
+      final customBytes = storage.get(
+        StorageKeys.settingsVideoCustomPaletteBytes,
+      );
+      if (customBytes is Uint8List) {
+        await nes_palette.setPalettePalData(data: customBytes);
+        return;
+      }
     }
-    return settings;
+    await nes_palette.setPalettePreset(kind: state.builtinPreset);
   }
 
   Future<void> setBuiltinPreset(nes_palette.PaletteKind preset) async {

@@ -6,18 +6,37 @@ class NesAudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
 
-        // ~1 second stereo ring buffer at 48kHz => 48000 * 2 samples
-        // Make it larger if you want more jitter tolerance.
-        this.capacity = 48000 * 2;
+        // Ring buffer sized by the actual output sample rate.
+        // Capacity ~1 second stereo.
+        const sr = sampleRate || 48000;
+        this.capacity = Math.max(2048, Math.floor(sr * 2));
         this.ring = new Float32Array(this.capacity);
         this.read = 0;
         this.write = 0;
         this.available = 0;
 
+        // Keep audio latency bounded by trimming buffered samples when the worker
+        // catches up after a jank spike.
+        //
+        // target ~= 120ms, clamp between 40ms and 250ms.
+        const targetSeconds = 0.12;
+        const minSeconds = 0.04;
+        const maxSeconds = 0.25;
+        this.targetAvailable = Math.floor(sr * 2 * targetSeconds);
+        this.minAvailable = Math.floor(sr * 2 * minSeconds);
+        this.maxAvailable = Math.floor(sr * 2 * maxSeconds);
+
         this.port.onmessage = (e) => {
             const chunk = e.data;
-            // We expect Float32Array. If you send ArrayBuffer, wrap it before posting.
-            if (chunk && chunk.length != null) {
+            if (!chunk) return;
+
+            // Accept either Float32Array (or any TypedArray view) or raw ArrayBuffer.
+            if (chunk instanceof ArrayBuffer) {
+                this.push(new Float32Array(chunk));
+                return;
+            }
+
+            if (ArrayBuffer.isView(chunk) && chunk.length != null) {
                 this.push(chunk);
             }
         };
@@ -34,6 +53,15 @@ class NesAudioProcessor extends AudioWorkletProcessor {
             } else {
                 // Overrun: drop oldest
                 this.read = (this.read + 1) % this.capacity;
+            }
+        }
+
+        // If we have too much buffered audio, drop oldest samples to keep latency small.
+        if (this.available > this.maxAvailable) {
+            const drop = this.available - this.targetAvailable;
+            if (drop > 0) {
+                this.read = (this.read + drop) % this.capacity;
+                this.available -= drop;
             }
         }
     }

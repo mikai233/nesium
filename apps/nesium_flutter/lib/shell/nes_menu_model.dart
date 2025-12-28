@@ -108,4 +108,14 @@ class NesMenus {
     NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
     NesMenuSectionSpec(id: NesMenuSectionId.windows, items: [debugger, tools]),
   ];
+
+  /// Minimal menu for Web builds (no debugger/tools).
+  static const List<NesMenuSectionSpec> webMenuSections = [
+    NesMenuSectionSpec(id: NesMenuSectionId.file, items: [openRom]),
+    NesMenuSectionSpec(
+      id: NesMenuSectionId.emulation,
+      items: [togglePause, reset, powerReset],
+    ),
+    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
+  ];
 }

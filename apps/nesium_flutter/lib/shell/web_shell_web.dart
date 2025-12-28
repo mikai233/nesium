@@ -1,0 +1,904 @@
+import 'dart:async';
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+import 'dart:ui_web' as ui_web;
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:web/web.dart' as web;
+
+import '../domain/nes_input_masks.dart';
+import '../domain/pad_button.dart';
+import '../features/controls/input_settings.dart';
+import '../features/controls/virtual_controls_editor.dart';
+import '../features/controls/turbo_settings.dart';
+import '../features/controls/virtual_controls_overlay.dart';
+import '../features/screen/nes_screen_view.dart';
+import '../features/settings/emulation_settings.dart';
+import '../features/settings/settings_page.dart';
+import '../features/settings/video_settings.dart';
+import '../l10n/app_localizations.dart';
+import '../logging/app_logger.dart';
+import '../platform/platform_capabilities.dart';
+import '../platform/web_cmd_sender.dart';
+import 'nes_actions.dart';
+import 'nes_menu_bar.dart';
+import 'nes_menu_model.dart';
+
+class WebShell extends ConsumerStatefulWidget {
+  const WebShell({super.key});
+
+  @override
+  ConsumerState<WebShell> createState() => _WebShellState();
+}
+
+class _WebShellState extends ConsumerState<WebShell> {
+  static const int _nesWidth = 256;
+  static const int _nesHeight = 240;
+  static const double _desktopMenuMinWidth = 820;
+
+  final FocusNode _focusNode = FocusNode();
+
+  late final String _viewType;
+  web.HTMLCanvasElement? _canvas;
+  web.OffscreenCanvas? _offscreenCanvas;
+
+  web.Worker? _worker;
+
+  bool _workerInitialized = false;
+  Completer<void>? _initCompleter;
+  bool _running = false;
+  String? _error;
+
+  JSObject? _audioContext;
+  JSObject? _audioPort;
+
+  String? _lastSnackMessage;
+  DateTime? _lastSnackAt;
+  String? _lastError;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewType = 'nesium-canvas-${DateTime.now().microsecondsSinceEpoch}';
+    _initCanvasView();
+  }
+
+  @override
+  void dispose() {
+    final worker = _worker;
+    if (worker != null) {
+      worker.onmessage = null;
+      worker.onerror = null;
+      worker.onmessageerror = null;
+      worker.terminate();
+    }
+    _worker = null;
+    _initCompleter = null;
+    setWebCmdSender(null);
+    setWebNesReady(false);
+    _stopAudio();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _initCanvasView() {
+    final canvas = web.HTMLCanvasElement()
+      ..width = _nesWidth
+      ..height = _nesHeight;
+    canvas.style
+      ..width = '100%'
+      ..height = '100%'
+      ..backgroundColor = 'black'
+      ..setProperty('image-rendering', 'pixelated')
+      ..setProperty('image-rendering', 'crisp-edges')
+      ..setProperty('touch-action', 'none');
+
+    _canvas = canvas;
+    ui_web.platformViewRegistry.registerViewFactory(_viewType, (_) => canvas);
+  }
+
+  web.Worker _createModuleWorker(String scriptUrl) {
+    return web.Worker(scriptUrl.toJS, web.WorkerOptions(type: 'module'));
+  }
+
+  void _ensureWorker() {
+    if (_worker != null) return;
+
+    final worker = _createModuleWorker('nes/nes_worker.js');
+    _worker = worker;
+    setWebCmdSender((cmd, extra) => _postCmd(cmd, extra));
+    worker.onmessage = ((web.MessageEvent e) => _onWorkerMessage(e)).toJS;
+    worker.onerror = ((web.Event e) {
+      final details = _formatWorkerErrorEvent(e);
+      _initCompleter?.completeError(StateError(details ?? 'Worker error'));
+      _handleFatalWorkerFailure(details ?? 'Worker error', error: e);
+    }).toJS;
+    worker.onmessageerror = ((web.Event e) {
+      final details = _formatWorkerErrorEvent(e);
+      _initCompleter?.completeError(
+        StateError(details ?? 'Worker message error'),
+      );
+      _handleFatalWorkerFailure(details ?? 'Worker message error', error: e);
+    }).toJS;
+  }
+
+  Future<void> _ensureInitialized() async {
+    _ensureWorker();
+    if (_workerInitialized) return;
+    final existing = _initCompleter;
+    if (existing != null) return existing.future;
+
+    await _preflightWebAssetsOrThrow();
+    final completer = Completer<void>();
+    _initCompleter = completer;
+
+    final canvas = _canvas;
+    if (canvas == null) {
+      final err = StateError('Canvas not initialized');
+      _initCompleter = null;
+      throw err;
+    }
+
+    final sampleRate = await _startAudio();
+
+    _offscreenCanvas ??= canvas.transferControlToOffscreen();
+    final payload = JSObject()
+      ..['type'] = 'init'.toJS
+      ..['canvas'] = _offscreenCanvas
+      ..['width'] = _nesWidth.toJS
+      ..['height'] = _nesHeight.toJS
+      ..['sampleRate'] = sampleRate.toJS;
+    final transfer = JSArray<JSAny?>()..add(_offscreenCanvas!);
+    _worker!.postMessage(payload, transfer);
+
+    try {
+      await completer.future.timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      _initCompleter = null;
+      throw StateError(
+        'Worker init timed out.\n'
+        'Check DevTools Network for `nes/nes_worker.js`, `nes/pkg/nesium_wasm.js`, and `nes/pkg/nesium_wasm_bg.wasm`.',
+      );
+    }
+  }
+
+  Future<int> _startAudio() async {
+    if (_audioContext != null) {
+      try {
+        return (_audioContext!['sampleRate'] as JSNumber).toDartInt;
+      } catch (_) {
+        return 48_000;
+      }
+    }
+
+    final audioContextCtor =
+        (globalContext['AudioContext'] as JSFunction?) ??
+        (globalContext['webkitAudioContext'] as JSFunction?);
+    if (audioContextCtor == null) {
+      throw UnsupportedError('WebAudio not available');
+    }
+
+    final ctx = audioContextCtor.callAsConstructor<JSObject>(
+      (JSObject()..['latencyHint'] = 'interactive'.toJS),
+    );
+
+    final worklet = ctx['audioWorklet'] as JSObject;
+    await worklet
+        .callMethod<JSPromise<JSAny?>>(
+          'addModule'.toJS,
+          'nes/audio_worklet.js'.toJS,
+        )
+        .toDart;
+
+    final nodeCtor = globalContext['AudioWorkletNode'] as JSFunction;
+    final outputChannelCount = JSArray<JSNumber>()..add(2.toJS);
+    final nodeOpts = JSObject()
+      ..['numberOfOutputs'] = 1.toJS
+      ..['outputChannelCount'] = outputChannelCount;
+    final node = nodeCtor.callAsConstructor<JSObject>(
+      ctx,
+      'nes-audio'.toJS,
+      nodeOpts,
+    );
+
+    node.callMethod<JSAny?>('connect'.toJS, ctx['destination']);
+    await ctx.callMethod<JSPromise<JSAny?>>('resume'.toJS).toDart;
+
+    _audioContext = ctx;
+    _audioPort = node['port'] as JSObject?;
+
+    try {
+      return (ctx['sampleRate'] as JSNumber).toDartInt;
+    } catch (_) {
+      return 48_000;
+    }
+  }
+
+  void _stopAudio() {
+    final ctx = _audioContext;
+    _audioPort = null;
+    _audioContext = null;
+    if (ctx != null) {
+      try {
+        ctx.callMethod<JSAny?>('close'.toJS);
+      } catch (_) {
+        // Ignore.
+      }
+    }
+  }
+
+  void _postCmd(String cmd, [Map<String, Object?>? extra]) {
+    final payload = JSObject()
+      ..['type'] = 'cmd'.toJS
+      ..['cmd'] = cmd.toJS;
+    extra?.forEach((k, v) => payload[k] = _toJsAny(v));
+    _worker?.postMessage(payload);
+  }
+
+  void _onWorkerMessage(web.MessageEvent event) {
+    final dataAny = event.data;
+    if (dataAny == null) return;
+    final data = dataAny as JSObject;
+    final type = (data['type'] as JSString?)?.toDart;
+    if (type == null) return;
+
+    if (type == 'log') {
+      final message = (data['message'] as JSString?)?.toDart;
+      if (message != null && message.isNotEmpty) {
+        // Useful when the worker errors before it can post a structured error.
+        // ignore: avoid_print
+        print('[nes_worker] $message');
+      }
+      return;
+    }
+
+    if (type == 'ready') {
+      _initCompleter?.complete();
+      setWebNesReady(true);
+      ref.read(nesInputMasksProvider.notifier).flushToNative();
+      ref.read(emulationSettingsProvider.notifier).applyToRuntime();
+      ref.read(turboSettingsProvider.notifier).applyToRuntime();
+      unawaited(ref.read(videoSettingsProvider.notifier).applyToRuntime());
+      setState(() {
+        _workerInitialized = true;
+        _error = null;
+      });
+      return;
+    }
+
+    if (type == 'running') {
+      final value = data['value'] as JSBoolean?;
+      setState(() => _running = value?.toDart ?? false);
+      return;
+    }
+
+    if (type == 'error') {
+      final message = (data['message'] as JSString?)?.toDart;
+      final err = StateError(message ?? 'Unknown worker error');
+      if (!_workerInitialized) {
+        _initCompleter?.completeError(err);
+        _initCompleter = null;
+        setWebNesReady(false);
+      } else {
+        // Keep the runtime "ready" so input stays active. Worker-reported errors
+        // are usually recoverable (e.g. bad ROM, paused run loop).
+        setWebNesReady(true);
+      }
+      _reportError(
+        message ?? 'Unknown worker error',
+        persistent: true,
+        error: err,
+      );
+      setState(() {
+        _error = message ?? 'Unknown worker error';
+        _running = false;
+      });
+      return;
+    }
+
+    if (type == 'audio' && _audioPort != null) {
+      final buffer = data['buffer'];
+      if (buffer == null) return;
+      final transfer = JSArray<JSAny?>()..add(buffer);
+      _audioPort!.callMethodVarArgs<JSAny?>('postMessage'.toJS, [
+        buffer,
+        transfer,
+      ]);
+    }
+  }
+
+  String? _formatWorkerErrorEvent(web.Event e) {
+    final obj = e as JSObject;
+    final message = (obj['message'] as JSString?)?.toDart;
+    final filename = (obj['filename'] as JSString?)?.toDart;
+    final lineno = (obj['lineno'] as JSNumber?)?.toDartInt;
+    final colno = (obj['colno'] as JSNumber?)?.toDartInt;
+
+    final parts = <String>[];
+    if (message != null && message.isNotEmpty) parts.add(message);
+    if (filename != null && filename.isNotEmpty) {
+      final loc = (lineno != null && colno != null)
+          ? '$filename:$lineno:$colno'
+          : filename;
+      parts.add(loc);
+    }
+
+    final out = parts.join('\n');
+    if (out.isEmpty) return null;
+
+    if (out.contains('nesium_wasm') || out.contains('nes/nes_worker.js')) {
+      return '$out\n\nHint: run `dart run tool/run_web.dart` to build `web/nes/pkg/` (wasm-pack output).';
+    }
+    return out;
+  }
+
+  Future<void> _preflightWebAssetsOrThrow() async {
+    // If wasm-pack output is missing, the worker's dynamic import will fail.
+    // We preflight here to provide a clearer error message.
+    final workerUrl = 'nes/nes_worker.js';
+    final jsUrl = 'nes/pkg/nesium_wasm.js';
+    final wasmUrl = 'nes/pkg/nesium_wasm_bg.wasm';
+
+    final workerOk = await _fetchOk(workerUrl);
+    final jsOk = await _fetchOk(jsUrl);
+    final wasmOk = await _fetchOk(wasmUrl);
+    if (workerOk && jsOk && wasmOk) return;
+
+    final missing = <String>[
+      if (!workerOk) workerUrl,
+      if (!jsOk) jsUrl,
+      if (!wasmOk) wasmUrl,
+    ].join('\n');
+
+    final msg =
+        'Missing Web assets:\n$missing\n\n'
+        'Run: `cd apps/nesium_flutter && dart run tool/run_web.dart`';
+    _reportError(msg, persistent: true);
+    throw StateError(msg);
+  }
+
+  Future<bool> _fetchOk(String url) async {
+    try {
+      final resp = await web.window.fetch(url.toJS).toDart;
+      return resp.ok;
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'fetch failed: $url',
+        logger: 'web_shell',
+      );
+      return false;
+    }
+  }
+
+  Future<void> _pickAndLoadRom() async {
+    setState(() => _error = null);
+    final result = await FilePicker.platform.pickFiles(
+      withData: true,
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: const ['nes'],
+    );
+    if (!mounted || result == null || result.files.isEmpty) return;
+
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      _reportError('Failed to read ROM bytes');
+      return;
+    }
+
+    try {
+      await _ensureInitialized();
+      final u8 = bytes.toJS;
+      final arrayBuffer = (u8 as JSObject)['buffer'] as JSArrayBuffer;
+      final payload = JSObject()
+        ..['type'] = 'cmd'.toJS
+        ..['cmd'] = 'loadRom'.toJS
+        ..['rom'] = arrayBuffer;
+      final transfer = JSArray<JSAny?>()..add(arrayBuffer);
+      _worker?.postMessage(payload, transfer);
+      // Match native behavior: start running immediately after loading a ROM.
+      _postCmd('run', {'emitAudio': true});
+      setState(() {});
+    } catch (e) {
+      _reportError(e.toString());
+    }
+  }
+
+  Future<void> _toggleRun() async {
+    setState(() => _error = null);
+    try {
+      await _ensureInitialized();
+      if (_running) {
+        _postCmd('pause');
+      } else {
+        _postCmd('run', {'emitAudio': true});
+      }
+    } catch (e) {
+      _reportError(e.toString());
+    }
+  }
+
+  Future<void> _togglePause() async {
+    await _toggleRun();
+  }
+
+  Future<void> _reset({required bool powerOn}) async {
+    setState(() => _error = null);
+    try {
+      await _ensureInitialized();
+      _postCmd(powerOn ? 'powerOnReset' : 'softReset');
+    } catch (e) {
+      _reportError(e.toString());
+    }
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent event) {
+    // Avoid sending key events to the emulator when a different route (e.g. settings)
+    // is on top.
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      return KeyEventResult.ignored;
+    }
+
+    // Treat key repeat as a continued key down to avoid system beeps.
+    if (event is! KeyDownEvent &&
+        event is! KeyUpEvent &&
+        event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final pressed = event is KeyDownEvent || event is KeyRepeatEvent;
+    final key = event.logicalKey;
+
+    final inputSettings = ref.read(inputSettingsProvider);
+    if (inputSettings.device != InputDevice.keyboard) {
+      return KeyEventResult.ignored;
+    }
+
+    final action = inputSettings.resolveKeyboardBindings()[key];
+    if (action == null) return KeyEventResult.ignored;
+
+    final input = ref.read(nesInputMasksProvider.notifier);
+    switch (action) {
+      case KeyboardBindingAction.up:
+        input.setPressed(PadButton.up, pressed);
+        break;
+      case KeyboardBindingAction.down:
+        input.setPressed(PadButton.down, pressed);
+        break;
+      case KeyboardBindingAction.left:
+        input.setPressed(PadButton.left, pressed);
+        break;
+      case KeyboardBindingAction.right:
+        input.setPressed(PadButton.right, pressed);
+        break;
+      case KeyboardBindingAction.a:
+        input.setPressed(PadButton.a, pressed);
+        break;
+      case KeyboardBindingAction.b:
+        input.setPressed(PadButton.b, pressed);
+        break;
+      case KeyboardBindingAction.select:
+        input.setPressed(PadButton.select, pressed);
+        break;
+      case KeyboardBindingAction.start:
+        input.setPressed(PadButton.start, pressed);
+        break;
+      case KeyboardBindingAction.turboA:
+        input.setTurboEnabled(PadButton.a, pressed);
+        break;
+      case KeyboardBindingAction.turboB:
+        input.setTurboEnabled(PadButton.b, pressed);
+        break;
+    }
+
+    return KeyEventResult.handled;
+  }
+
+  JSAny? _toJsAny(Object? value) {
+    if (value == null) return null;
+    if (value is bool) return value.toJS;
+    if (value is num) return value.toJS;
+    if (value is String) return value.toJS;
+    if (value is Uint8List) return value.toJS;
+    throw ArgumentError.value(value, 'value', 'Unsupported JS interop value');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final lastError = _lastError;
+    final actions = NesActions(
+      openRom: _pickAndLoadRom,
+      reset: () => _reset(powerOn: false),
+      powerReset: () => _reset(powerOn: true),
+      eject: () async {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Eject is not supported on Web')),
+        );
+      },
+      togglePause: _togglePause,
+      openSettings: () async {
+        if (!mounted) return;
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
+      },
+      openDebugger: () async {},
+      openTools: () async {},
+    );
+
+    final isLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final useDrawerMenu =
+        MediaQuery.sizeOf(context).width < _desktopMenuMinWidth;
+
+    return Scaffold(
+      appBar: useDrawerMenu && !isLandscape
+          ? AppBar(
+              title: Text(l10n.appName),
+              actions: [
+                if (lastError != null)
+                  IconButton(
+                    tooltip: l10n.menuLastError,
+                    icon: const Icon(Icons.error_outline),
+                    onPressed: _showLastErrorDialog,
+                  ),
+              ],
+            )
+          : null,
+      drawer: useDrawerMenu
+          ? Drawer(child: _buildDrawer(context, actions))
+          : null,
+      body: Focus(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKeyEvent: _handleKeyEvent,
+        child: Column(
+          children: [
+            if (!useDrawerMenu)
+              NesMenuBar(
+                actions: actions,
+                sections: NesMenus.webMenuSections,
+                trailing: lastError == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: IconButton(
+                          iconSize: 18,
+                          tooltip: l10n.menuLastError,
+                          onPressed: _showLastErrorDialog,
+                          icon: const Icon(Icons.error_outline),
+                        ),
+                      ),
+              ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final viewport = NesScreenView.computeViewportSize(
+                    constraints,
+                    integerScaling: ref
+                        .watch(videoSettingsProvider)
+                        .integerScaling,
+                  );
+                  if (viewport == null) return const SizedBox.shrink();
+
+                  final view = SizedBox(
+                    width: viewport.width,
+                    height: viewport.height,
+                    child: GestureDetector(
+                      onTap: () => _focusNode.requestFocus(),
+                      child: HtmlElementView(viewType: _viewType),
+                    ),
+                  );
+
+                  return Container(
+                    color: Colors.black,
+                    alignment: Alignment.center,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        view,
+                        if (useDrawerMenu && isLandscape)
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            child: SafeArea(
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Builder(
+                                  builder: (context) => Material(
+                                    color: Colors.black54,
+                                    borderRadius: BorderRadius.circular(12),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          onPressed: () =>
+                                              Scaffold.of(context).openDrawer(),
+                                          icon: const Icon(Icons.menu),
+                                          color: Colors.white,
+                                          tooltip: l10n.menuTooltip,
+                                        ),
+                                        if (lastError != null)
+                                          IconButton(
+                                            onPressed: _showLastErrorDialog,
+                                            icon: const Icon(
+                                              Icons.error_outline,
+                                            ),
+                                            color: Colors.white,
+                                            tooltip: l10n.menuLastError,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        VirtualControlsOverlay(isLandscape: isLandscape),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _reportError(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    bool persistent = false,
+  }) {
+    if (message.trim().isEmpty) return;
+
+    final l10n = AppLocalizations.of(context)!;
+    logWarning(
+      error ?? message,
+      stackTrace: stackTrace,
+      message: message,
+      logger: 'web_shell',
+    );
+
+    final now = DateTime.now();
+    final lastAt = _lastSnackAt;
+    final lastMessage = _lastSnackMessage;
+    if (lastAt != null &&
+        lastMessage == message &&
+        now.difference(lastAt) < const Duration(seconds: 2)) {
+      if (persistent && mounted) {
+        setState(() => _error = message);
+      }
+      return;
+    }
+
+    _lastSnackAt = now;
+    _lastSnackMessage = message;
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          duration: persistent
+              ? const Duration(seconds: 8)
+              : const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: l10n.lastErrorDetailsAction,
+            onPressed: _showLastErrorDialog,
+          ),
+        ),
+      );
+    }
+
+    _lastError = message;
+    if (persistent && mounted) setState(() => _error = message);
+  }
+
+  void _handleFatalWorkerFailure(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    final worker = _worker;
+    if (worker != null) {
+      worker.onmessage = null;
+      worker.onerror = null;
+      worker.onmessageerror = null;
+      worker.terminate();
+    }
+    _worker = null;
+    _initCompleter = null;
+    _workerInitialized = false;
+    _running = false;
+
+    setWebCmdSender(null);
+    setWebNesReady(false);
+
+    _reportError(
+      '$message\n\nHint: refresh the page to fully reset the Web runtime.',
+      persistent: true,
+      error: error ?? message,
+      stackTrace: stackTrace,
+    );
+  }
+
+  void _showLastErrorDialog() {
+    final message = _lastError ?? _error ?? _lastSnackMessage;
+    if (message == null || message.trim().isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
+    final localizations = MaterialLocalizations.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.lastErrorDialogTitle),
+        content: SelectableText(message),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: message));
+              if (context.mounted) {
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(l10n.lastErrorCopied),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: Text(localizations.copyButtonLabel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(localizations.closeButtonLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context, NesActions actions) {
+    final l10n = AppLocalizations.of(context)!;
+    void closeDrawer() => Navigator.of(context).pop();
+
+    final inputSettings = ref.watch(inputSettingsProvider);
+    final inputCtrl = ref.read(inputSettingsProvider.notifier);
+    final editor = ref.watch(virtualControlsEditorProvider);
+    final editorCtrl = ref.read(virtualControlsEditorProvider.notifier);
+
+    return SafeArea(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            margin: EdgeInsets.zero,
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: Text(l10n.appName, style: const TextStyle(fontSize: 24)),
+            ),
+          ),
+          for (final section in NesMenus.webMenuSections) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Text(
+                section.title(l10n),
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+            ),
+            for (final item in section.items)
+              ListTile(
+                leading: Icon(item.icon),
+                title: Text(item.label(l10n)),
+                onTap: () {
+                  closeDrawer();
+                  _dispatchDrawerAction(item.id, actions);
+                },
+              ),
+            const Divider(height: 1),
+          ],
+          if (supportsVirtualControls) ...[
+            ListTile(
+              leading: const Icon(Icons.tune),
+              title: Text(l10n.virtualControlsEditTitle),
+              subtitle: Text(
+                editor.enabled
+                    ? l10n.virtualControlsEditSubtitleEnabled
+                    : l10n.virtualControlsEditSubtitleDisabled,
+              ),
+              trailing: Switch(
+                value: editor.enabled,
+                onChanged: (enabled) {
+                  if (enabled &&
+                      inputSettings.device != InputDevice.virtualController) {
+                    inputCtrl.setDevice(InputDevice.virtualController);
+                  }
+                  editorCtrl.setEnabled(enabled);
+                  closeDrawer();
+                },
+              ),
+            ),
+            if (editor.enabled) ...[
+              SwitchListTile(
+                secondary: const Icon(Icons.grid_4x4),
+                title: Text(l10n.gridSnappingTitle),
+                value: editor.gridSnapEnabled,
+                onChanged: editorCtrl.setGridSnapEnabled,
+              ),
+              if (editor.gridSnapEnabled)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: Text(l10n.gridSpacingLabel)),
+                          Text('${editor.gridSpacing.toStringAsFixed(0)} px'),
+                        ],
+                      ),
+                      Slider(
+                        value: editor.gridSpacing.clamp(4, 64),
+                        min: 4,
+                        max: 64,
+                        divisions: 60,
+                        onChanged: editorCtrl.setGridSpacing,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _dispatchDrawerAction(NesMenuItemId id, NesActions actions) {
+    switch (id) {
+      case NesMenuItemId.openRom:
+        unawaited(actions.openRom());
+        break;
+      case NesMenuItemId.reset:
+        unawaited(actions.reset());
+        break;
+      case NesMenuItemId.powerReset:
+        unawaited(actions.powerReset());
+        break;
+      case NesMenuItemId.eject:
+        unawaited(actions.eject());
+        break;
+      case NesMenuItemId.togglePause:
+        unawaited(actions.togglePause());
+        break;
+      case NesMenuItemId.settings:
+        unawaited(actions.openSettings());
+        break;
+      case NesMenuItemId.debugger:
+        unawaited(actions.openDebugger());
+        break;
+      case NesMenuItemId.tools:
+        unawaited(actions.openTools());
+        break;
+    }
+  }
+
+  // Viewport size is computed via `NesScreenView.computeViewportSize(...)`.
+}

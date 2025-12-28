@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 
 import '../logging/app_logger.dart';
+import '../platform/nes_input.dart' as nes_input;
 import 'pad_button.dart';
 
 class NesInputMasksState {
@@ -22,6 +22,19 @@ class NesInputMasksController extends Notifier<NesInputMasksState> {
   @override
   NesInputMasksState build() =>
       const NesInputMasksState(padMask: 0, turboMask: 0);
+
+  void flushToNative() {
+    unawaitedLogged(
+      nes_input.setPadMask(pad: 0, mask: state.padMask & 0xFF),
+      message: 'setPadMask (flush)',
+      logger: 'nes_input_masks',
+    );
+    unawaitedLogged(
+      nes_input.setTurboMask(pad: 0, mask: state.turboMask & 0xFF),
+      message: 'setTurboMask (flush)',
+      logger: 'nes_input_masks',
+    );
+  }
 
   void setPressed(PadButton button, bool pressed) {
     final bit = _buttonBit(button);

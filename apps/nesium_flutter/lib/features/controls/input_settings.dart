@@ -211,7 +211,7 @@ class InputSettings {
 }
 
 bool _supportsVirtualController() {
-  return isNativeMobile;
+  return supportsVirtualControls;
 }
 
 class InputSettingsController extends Notifier<InputSettings> {
@@ -355,7 +355,7 @@ class InputSettingsController extends Notifier<InputSettings> {
   }
 
   InputSettings _defaults() {
-    final device = _supportsVirtualController()
+    final device = preferVirtualControlsByDefault
         ? InputDevice.virtualController
         : InputDevice.keyboard;
     return InputSettings(

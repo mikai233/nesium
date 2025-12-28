@@ -9,12 +9,13 @@ import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../controls/input_settings.dart';
 import '../controls/turbo_settings.dart';
+import '../controls/virtual_controls_editor.dart';
 import '../controls/virtual_controls_settings.dart';
 import 'android_video_backend_settings.dart';
 import 'emulation_settings.dart';
 import 'language_settings.dart';
 import 'video_settings.dart';
-import '../../bridge/api/palette.dart' as nes_palette;
+import '../../platform/nes_palette.dart' as nes_palette;
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -101,6 +102,8 @@ class SettingsPage extends ConsumerWidget {
 
     final settings = ref.watch(virtualControlsSettingsProvider);
     final controller = ref.read(virtualControlsSettingsProvider.notifier);
+    final editor = ref.watch(virtualControlsEditorProvider);
+    final editorController = ref.read(virtualControlsEditorProvider.notifier);
 
     final emulationSettings = ref.watch(emulationSettingsProvider);
     final emulationController = ref.read(emulationSettingsProvider.notifier);
@@ -116,7 +119,7 @@ class SettingsPage extends ConsumerWidget {
     final language = ref.watch(appLanguageProvider);
     final languageController = ref.read(appLanguageProvider.notifier);
 
-    final supportsVirtual = isNativeMobile;
+    final supportsVirtual = supportsVirtualControls;
     final usingVirtual = inputSettings.device == InputDevice.virtualController;
     final isAndroid =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -553,13 +556,81 @@ class SettingsPage extends ConsumerWidget {
               ),
             ),
           ),
-          if (supportsVirtual) ...[
+          if (supportsVirtualControls) ...[
             const Divider(),
             Text(
               l10n.virtualControlsTitle,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
+            Card(
+              elevation: 0,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: ListTile(
+                leading: const Icon(Icons.tune),
+                title: Text(l10n.virtualControlsEditTitle),
+                subtitle: Text(
+                  editor.enabled
+                      ? l10n.virtualControlsEditSubtitleEnabled
+                      : l10n.virtualControlsEditSubtitleDisabled,
+                ),
+                trailing: Switch(
+                  value: editor.enabled,
+                  onChanged: (enabled) {
+                    if (enabled &&
+                        inputSettings.device != InputDevice.virtualController) {
+                      inputController.setDevice(InputDevice.virtualController);
+                    }
+                    editorController.setEnabled(enabled);
+                    if (enabled) {
+                      // Return to the game view so the user can drag/resize the controls.
+                      Navigator.of(context).maybePop();
+                    }
+                  },
+                ),
+              ),
+            ),
+            if (editor.enabled) ...[
+              const SizedBox(height: 12),
+              Card(
+                elevation: 0,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      secondary: const Icon(Icons.grid_4x4),
+                      title: Text(l10n.gridSnappingTitle),
+                      value: editor.gridSnapEnabled,
+                      onChanged: editorController.setGridSnapEnabled,
+                    ),
+                    if (editor.gridSnapEnabled)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(child: Text(l10n.gridSpacingLabel)),
+                                Text(
+                                  '${editor.gridSpacing.toStringAsFixed(0)} px',
+                                ),
+                              ],
+                            ),
+                            Slider(
+                              value: editor.gridSpacing.clamp(4, 64),
+                              min: 4,
+                              max: 64,
+                              divisions: 60,
+                              onChanged: editorController.setGridSpacing,
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
             if (!usingVirtual)
               Text(
                 l10n.virtualControlsSwitchInputTip,

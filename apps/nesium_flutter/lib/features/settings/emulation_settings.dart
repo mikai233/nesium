@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../bridge/api/emulation.dart' as nes_emulation;
+import '../../platform/nes_emulation.dart' as nes_emulation;
 import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
@@ -43,12 +43,16 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
       defaults: defaults,
     );
     final settings = loaded ?? defaults;
+    scheduleMicrotask(() => applyToRuntime());
+    return settings;
+  }
+
+  void applyToRuntime() {
     unawaitedLogged(
-      nes_emulation.setIntegerFpsMode(enabled: settings.integerFpsMode),
-      message: 'setIntegerFpsMode (init)',
+      nes_emulation.setIntegerFpsMode(enabled: state.integerFpsMode),
+      message: 'setIntegerFpsMode (apply)',
       logger: 'emulation_settings',
     );
-    return settings;
   }
 
   void setIntegerFpsMode(bool enabled) {

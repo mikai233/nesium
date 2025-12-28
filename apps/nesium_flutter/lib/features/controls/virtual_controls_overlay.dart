@@ -303,6 +303,18 @@ class VirtualControlsOverlay extends ConsumerWidget {
                 ),
               ),
             ),
+            if (isEditing)
+              Positioned(
+                right: 12,
+                top: safeInsets.top + 12,
+                child: FloatingActionButton.small(
+                  tooltip: MaterialLocalizations.of(context).okButtonLabel,
+                  onPressed: () => ref
+                      .read(virtualControlsEditorProvider.notifier)
+                      .setEnabled(false),
+                  child: const Icon(Icons.check),
+                ),
+              ),
             Positioned(
               left: selectPos.dx,
               top: selectPos.dy,

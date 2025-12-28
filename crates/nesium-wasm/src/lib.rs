@@ -6,7 +6,11 @@
 use wasm_bindgen::prelude::*;
 
 use nesium_core::{
-    Nes, cartridge::load_cartridge, config::region::Region, ppu::buffer::ColorFormat,
+    Nes,
+    cartridge::load_cartridge,
+    config::region::Region,
+    ppu::buffer::ColorFormat,
+    ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
 };
 
@@ -161,6 +165,34 @@ impl WasmNes {
         Ok(())
     }
 
+    /// Selects a built-in palette preset.
+    ///
+    /// Accepts either Dart enum names (e.g. `nesdevNtsc`) or preset slugs
+    /// (e.g. `nesdev-ntsc`).
+    pub fn set_palette_preset(&mut self, kind: &str) -> Result<(), JsValue> {
+        let kind =
+            parse_palette_kind(kind).ok_or_else(|| JsValue::from_str("Invalid palette preset"))?;
+        self.nes.set_palette(kind.palette());
+        Ok(())
+    }
+
+    /// Loads a `.pal` blob (192-byte RGB or 256-byte RGBA) and sets it as the active palette.
+    pub fn set_palette_pal_data(&mut self, data: &[u8]) -> Result<(), JsValue> {
+        let palette = Palette::from_pal_data(data).map_err(js_err)?;
+        self.nes.set_palette(palette);
+        Ok(())
+    }
+
+    /// Enables a simple integer-FPS audio stretch.
+    pub fn set_audio_integer_fps_scale(&mut self, scale: f64) {
+        self.nes.set_audio_integer_fps_scale(scale);
+    }
+
+    /// Disables integer-FPS audio stretching and restores the default resampler input rate.
+    pub fn reset_audio_integer_fps_scale(&mut self) {
+        self.nes.reset_audio_integer_fps_scale();
+    }
+
     /// Pointer to the stable RGBA buffer.
     ///
     /// JS usage:
@@ -193,6 +225,21 @@ impl WasmNes {
     /// For stereo interleaved data, `len` is 2x the number of frames.
     pub fn audio_len(&self) -> usize {
         self.audio.len()
+    }
+}
+
+fn parse_palette_kind(kind: &str) -> Option<PaletteKind> {
+    match kind {
+        "nesdevNtsc" | "NesdevNtsc" | "nesdev-ntsc" => Some(PaletteKind::NesdevNtsc),
+        "fbxCompositeDirect" | "FbxCompositeDirect" | "fbx-composite-direct" => {
+            Some(PaletteKind::FbxCompositeDirect)
+        }
+        "sonyCxa2025AsUs" | "SonyCxa2025AsUs" | "sony-cxa2025as-us" => {
+            Some(PaletteKind::SonyCxa2025AsUs)
+        }
+        "pal2C07" | "pal2c07" | "Pal2c07" | "pal-2c07" => Some(PaletteKind::Pal2c07),
+        "rawLinear" | "RawLinear" | "raw-linear" => Some(PaletteKind::RawLinear),
+        _ => None,
     }
 }
 

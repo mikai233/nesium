@@ -233,6 +233,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuInputMappingComingSoon => '按键映射（敬请期待）';
 
   @override
+  String get menuLastError => '最近错误';
+
+  @override
+  String get lastErrorDetailsAction => '详情';
+
+  @override
+  String get lastErrorDialogTitle => '最近错误';
+
+  @override
+  String get lastErrorCopied => '已复制';
+
+  @override
   String get windowDebuggerTitle => 'Nesium 调试器';
 
   @override
