@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,9 @@ import '../settings/video_settings.dart';
 import 'input_settings.dart';
 import 'virtual_controls_editor.dart';
 import 'virtual_controls_settings.dart';
+
+final Path _kDpadCrossPath24 = _buildDpadCrossPath24();
+const Rect _kDpadCrossBounds24 = Rect.fromLTWH(2, 2, 20, 20);
 
 class VirtualControlsOverlay extends ConsumerWidget {
   const VirtualControlsOverlay({super.key, required this.isLandscape});
@@ -241,12 +245,13 @@ class VirtualControlsOverlay extends ConsumerWidget {
           safeInsets: safeInsets,
         );
 
+        // Dark, translucent "chrome" that still reads on black sidebars.
         final chromeBase = const Color(
-          0xFFB0B0B0,
-        ).withValues(alpha: (settings.opacity * 0.55).clamp(0.0, 1.0));
+          0xFF2A303A,
+        ).withValues(alpha: (settings.opacity * 0.70).clamp(0.0, 1.0));
         final chromeSurface = const Color(
-          0xFF2B2B2B,
-        ).withValues(alpha: (settings.opacity * 0.80).clamp(0.0, 1.0));
+          0xFF3A4352,
+        ).withValues(alpha: (settings.opacity * 0.72).clamp(0.0, 1.0));
 
         return Stack(
           fit: StackFit.expand,
@@ -1082,7 +1087,7 @@ Offset _clampPosition(
 Size _dpadClusterSize(VirtualControlsSettings settings) {
   final s = settings.buttonSize;
   final g = settings.gap;
-  final disc = s * 3 + g * 2;
+  final disc = s * 2.15 + g * 2;
   final hitbox = disc * settings.hitboxScale;
   return Size.square(hitbox);
 }
@@ -1090,8 +1095,8 @@ Size _dpadClusterSize(VirtualControlsSettings settings) {
 Size _abClusterSize(VirtualControlsSettings settings) {
   final s = settings.buttonSize;
   final g = settings.gap;
-  final main = s * 1.12;
-  final turbo = s * 0.84;
+  final main = s;
+  final turbo = s;
   final mainHit = main * settings.hitboxScale;
   final turboHit = turbo * settings.hitboxScale;
   final dx = mainHit * 0.10;
@@ -1116,13 +1121,13 @@ Size _systemClusterSize(VirtualControlsSettings settings) {
 
 Size _mainButtonHitboxSize(VirtualControlsSettings settings) {
   final s = settings.buttonSize;
-  final main = s * 1.12;
+  final main = s;
   return Size.square(main * settings.hitboxScale);
 }
 
 Size _turboButtonHitboxSize(VirtualControlsSettings settings) {
   final s = settings.buttonSize;
-  final turbo = s * 0.84;
+  final turbo = s;
   return Size.square(turbo * settings.hitboxScale);
 }
 
@@ -1146,7 +1151,7 @@ Size _systemButtonHitboxSize(VirtualControlsSettings settings) {
     turboB: const Offset(pad, pad),
     turboA: Offset(pad + mainHit + g + dx, pad),
     b: Offset(pad, pad + turboHit + g + dy),
-    a: Offset(pad + mainHit + g + dx, pad + turboHit + g),
+    a: Offset(pad + mainHit + g + dx, pad + turboHit + g + dy),
   );
 }
 
@@ -1341,7 +1346,8 @@ class _DpadCluster extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = settings.buttonSize;
     final g = settings.gap;
-    final disc = s * 3 + g * 2;
+    // Keep the D-pad smaller relative to the A/B cluster.
+    final disc = s * 2.15 + g * 2;
     final hitbox = disc * settings.hitboxScale;
     return SizedBox(
       width: hitbox,
@@ -1521,170 +1527,152 @@ class _DpadPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2;
+    final radius = math.min(size.width, size.height) / 2 * 0.98;
+    final rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Typical emulator overlays use a soft, translucent base with a darker cross.
-    final disc = baseColor.withValues(
-      alpha: (baseColor.a * 1.25).clamp(0.0, 1),
-    );
-    final cross = surfaceColor.withValues(
-      alpha: (surfaceColor.a * 1.10).clamp(0.0, 1),
+    double rad(double deg) => deg * math.pi / 180.0;
+
+    final discBase = baseColor.withValues(
+      alpha: (baseColor.a * 1.15).clamp(0.0, 1),
     );
 
-    canvas.drawCircle(center, radius * 0.98, Paint()..color = disc);
+    // Subtle outer glow so it reads on black sidebars.
+    canvas.drawShadow(
+      Path()..addOval(rect),
+      Colors.white.withValues(alpha: 0.10),
+      radius * 0.04,
+      false,
+    );
+
+    final discPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color.alphaBlend(Colors.white.withValues(alpha: 0.10), discBase),
+          discBase,
+          Color.alphaBlend(Colors.black.withValues(alpha: 0.20), discBase),
+        ],
+      ).createShader(rect);
+    canvas.drawCircle(center, radius, discPaint);
+
     canvas.drawCircle(
       center,
-      radius * 0.98,
+      radius,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..color = Colors.white.withValues(alpha: disc.a * 0.18),
+        ..strokeWidth = 1.4
+        ..color = Colors.white.withValues(
+          alpha: (discBase.a * 0.28).clamp(0.0, 1),
+        ),
     );
 
-    final plusThickness = radius * 0.62;
-    final plusLength = radius * 1.30;
-    final plusRadius = Radius.circular(radius * 0.12);
+    // Center circle radius relative to the outer radius.
+    // Larger divisor => smaller center circle.
+    const centerRadiusDivisor = 2.4;
+    final centerRadius = radius / centerRadiusDivisor;
+    final centerRect = Rect.fromCircle(center: center, radius: centerRadius);
 
-    final vertical = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: center, width: plusThickness, height: plusLength),
-      plusRadius,
+    final sectionAngle = 88.0;
+    final half = sectionAngle / 2.0;
+
+    final normal = surfaceColor.withValues(
+      alpha: (surfaceColor.a * 0.95).clamp(0.0, 1),
     );
-    final horizontal = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: center, width: plusLength, height: plusThickness),
-      plusRadius,
+    final pressed = Color.alphaBlend(
+      Colors.white.withValues(alpha: 0.24),
+      normal.withValues(alpha: (normal.a * 0.95).clamp(0.0, 1)),
     );
-    final plusPath = Path()
-      ..addRRect(vertical)
-      ..addRRect(horizontal);
 
-    canvas.drawShadow(plusPath, Colors.black.withValues(alpha: 0.18), 5, true);
-    canvas.drawPath(plusPath, Paint()..color = cross);
+    final sectorPaint = Paint()..style = PaintingStyle.fill;
 
-    final plusBorder = Paint()
-      ..color = Colors.white.withValues(alpha: disc.a * 0.10)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawPath(plusPath, plusBorder);
+    void drawSector(double startDeg, bool isPressed) {
+      sectorPaint.color = isPressed ? pressed : normal;
+      final startRad = rad(startDeg);
+      final sweepRad = rad(sectionAngle);
+      final endRad = startRad + sweepRad;
 
-    final centerRect = Rect.fromCircle(center: center, radius: radius * 0.16);
+      final outerStart = Offset(
+        center.dx + radius * math.cos(startRad),
+        center.dy + radius * math.sin(startRad),
+      );
+      final innerStart = Offset(
+        center.dx + centerRadius * math.cos(startRad),
+        center.dy + centerRadius * math.sin(startRad),
+      );
+      final innerEnd = Offset(
+        center.dx + centerRadius * math.cos(endRad),
+        center.dy + centerRadius * math.sin(endRad),
+      );
+
+      // Ring segment: avoids highlighting under the center circle.
+      final path = Path()
+        ..moveTo(innerStart.dx, innerStart.dy)
+        ..lineTo(outerStart.dx, outerStart.dy)
+        ..arcTo(rect, startRad, sweepRad, false)
+        ..lineTo(innerEnd.dx, innerEnd.dy)
+        ..arcTo(centerRect, endRad, -sweepRad, false)
+        ..close();
+
+      canvas.drawPath(path, sectorPaint);
+    }
+
+    drawSector(90 - half, active.contains(PadButton.down));
+    drawSector(180 - half, active.contains(PadButton.left));
+    drawSector(270 - half, active.contains(PadButton.up));
+    drawSector(-half, active.contains(PadButton.right));
     canvas.drawCircle(
       center,
-      radius * 0.16,
+      centerRadius,
       Paint()
         ..shader = RadialGradient(
           colors: [
-            Colors.black.withValues(alpha: cross.a * 0.28),
-            Colors.transparent,
+            Color.alphaBlend(
+              Colors.white.withValues(alpha: 0.14),
+              surfaceColor.withValues(alpha: (discBase.a * 1.25).clamp(0.0, 1)),
+            ),
+            Color.alphaBlend(
+              Colors.black.withValues(alpha: 0.20),
+              surfaceColor.withValues(alpha: (discBase.a * 1.25).clamp(0.0, 1)),
+            ),
           ],
         ).createShader(centerRect),
     );
-
-    final activePaint = Paint()..style = PaintingStyle.fill;
-    final armHighlight = Colors.white.withValues(alpha: disc.a * 0.12);
-    final arrowNormal = Colors.white.withValues(alpha: disc.a * 0.28);
-    final arrowActive = Colors.white.withValues(alpha: disc.a * 0.65);
-
-    if (active.contains(PadButton.up)) {
-      activePaint.color = armHighlight;
-      canvas.save();
-      canvas.clipPath(plusPath);
-      canvas.drawRect(
-        Rect.fromLTRB(
-          center.dx - plusThickness / 2,
-          center.dy - plusLength / 2,
-          center.dx + plusThickness / 2,
-          center.dy - plusThickness / 2,
+    canvas.drawCircle(
+      center,
+      centerRadius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.1
+        ..color = Colors.white.withValues(
+          alpha: (discBase.a * 0.18).clamp(0.0, 1),
         ),
-        activePaint,
-      );
-      canvas.restore();
-    }
-    if (active.contains(PadButton.down)) {
-      activePaint.color = armHighlight;
-      canvas.save();
-      canvas.clipPath(plusPath);
-      canvas.drawRect(
-        Rect.fromLTRB(
-          center.dx - plusThickness / 2,
-          center.dy + plusThickness / 2,
-          center.dx + plusThickness / 2,
-          center.dy + plusLength / 2,
-        ),
-        activePaint,
-      );
-      canvas.restore();
-    }
-    if (active.contains(PadButton.left)) {
-      activePaint.color = armHighlight;
-      canvas.save();
-      canvas.clipPath(plusPath);
-      canvas.drawRect(
-        Rect.fromLTRB(
-          center.dx - plusLength / 2,
-          center.dy - plusThickness / 2,
-          center.dx - plusThickness / 2,
-          center.dy + plusThickness / 2,
-        ),
-        activePaint,
-      );
-      canvas.restore();
-    }
-    if (active.contains(PadButton.right)) {
-      activePaint.color = armHighlight;
-      canvas.save();
-      canvas.clipPath(plusPath);
-      canvas.drawRect(
-        Rect.fromLTRB(
-          center.dx + plusThickness / 2,
-          center.dy - plusThickness / 2,
-          center.dx + plusLength / 2,
-          center.dy + plusThickness / 2,
-        ),
-        activePaint,
-      );
-      canvas.restore();
-    }
-
-    void drawArrow(Offset tip, Offset left, Offset right, bool isActive) {
-      final path = Path()
-        ..moveTo(tip.dx, tip.dy)
-        ..lineTo(left.dx, left.dy)
-        ..lineTo(right.dx, right.dy)
-        ..close();
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = isActive ? arrowActive : arrowNormal
-          ..style = PaintingStyle.fill,
-      );
-    }
-
-    final arrowTipOffset = radius * 0.60;
-    final arrowBaseOffset = radius * 0.34;
-    final arrowHalfWidth = radius * 0.16;
-    drawArrow(
-      center.translate(0, -arrowTipOffset),
-      center.translate(-arrowHalfWidth, -arrowBaseOffset),
-      center.translate(arrowHalfWidth, -arrowBaseOffset),
-      active.contains(PadButton.up),
     );
-    drawArrow(
-      center.translate(0, arrowTipOffset),
-      center.translate(arrowHalfWidth, arrowBaseOffset),
-      center.translate(-arrowHalfWidth, arrowBaseOffset),
-      active.contains(PadButton.down),
+
+    final crossSize = radius * 1.55;
+    final crossScale =
+        crossSize /
+        math.max(_kDpadCrossBounds24.width, _kDpadCrossBounds24.height);
+    final cross = _kDpadCrossPath24.transform(
+      _translateScaleFromOrigin(
+        origin: _kDpadCrossBounds24.center,
+        scale: crossScale,
+        translate: center,
+      ),
     );
-    drawArrow(
-      center.translate(-arrowTipOffset, 0),
-      center.translate(-arrowBaseOffset, -arrowHalfWidth),
-      center.translate(-arrowBaseOffset, arrowHalfWidth),
-      active.contains(PadButton.left),
+    canvas.drawShadow(
+      cross,
+      Colors.black.withValues(alpha: 0.35),
+      radius * 0.02,
+      true,
     );
-    drawArrow(
-      center.translate(arrowTipOffset, 0),
-      center.translate(arrowBaseOffset, arrowHalfWidth),
-      center.translate(arrowBaseOffset, -arrowHalfWidth),
-      active.contains(PadButton.right),
+    canvas.drawPath(
+      cross,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..color = const Color(
+          0xFF0B0D10,
+        ).withValues(alpha: (discBase.a * 1.0).clamp(0.0, 1)),
     );
   }
 
@@ -1694,6 +1682,65 @@ class _DpadPainter extends CustomPainter {
         oldDelegate.surfaceColor != surfaceColor ||
         oldDelegate.active != active;
   }
+}
+
+Float64List _translateScaleFromOrigin({
+  required Offset origin,
+  required double scale,
+  required Offset translate,
+}) {
+  // Column-major 4x4 matrix for: translate(translate) * scale(scale) * translate(-origin).
+  final tx = translate.dx - origin.dx * scale;
+  final ty = translate.dy - origin.dy * scale;
+  return Float64List.fromList([
+    scale,
+    0,
+    0,
+    0,
+    0,
+    scale,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    tx,
+    ty,
+    0,
+    1,
+  ]);
+}
+
+Path _buildDpadCrossPath24() {
+  final path = Path();
+  path
+    ..moveTo(15, 7.5)
+    ..lineTo(15, 2)
+    ..lineTo(9, 2)
+    ..lineTo(9, 7.5)
+    ..lineTo(12, 10.5)
+    ..close()
+    ..moveTo(7.5, 9)
+    ..lineTo(2, 9)
+    ..lineTo(2, 15)
+    ..lineTo(7.5, 15)
+    ..lineTo(10.5, 12)
+    ..close()
+    ..moveTo(9, 16.5)
+    ..lineTo(9, 22)
+    ..lineTo(15, 22)
+    ..lineTo(15, 16.5)
+    ..lineTo(12, 13.5)
+    ..close()
+    ..moveTo(16.5, 9)
+    ..lineTo(13.5, 12)
+    ..lineTo(16.5, 15)
+    ..lineTo(22, 15)
+    ..lineTo(22, 9)
+    ..close();
+
+  return path;
 }
 
 bool _setEquals(Set<PadButton> a, Set<PadButton> b) {
@@ -1711,6 +1758,10 @@ Widget _roundVisual({
   required bool pressed,
   Color? ringColor,
 }) {
+  final borderColor = (ringColor != null && pressed)
+      ? ringColor
+      : Colors.white.withValues(alpha: 0.18);
+
   return DecoratedBox(
     decoration: BoxDecoration(
       shape: BoxShape.circle,
@@ -1725,16 +1776,19 @@ Widget _roundVisual({
       ),
       boxShadow: [
         BoxShadow(
+          color: Colors.white.withValues(alpha: 0.06),
+          blurRadius: 10,
+          offset: const Offset(0, 0),
+        ),
+        BoxShadow(
           color: Colors.black.withValues(alpha: 0.22),
           blurRadius: 10,
           offset: const Offset(0, 6),
         ),
       ],
       border: Border.all(
-        color: (ringColor != null && pressed)
-            ? ringColor
-            : Colors.black.withValues(alpha: 0.22),
-        width: (ringColor != null && pressed) ? 2.0 : 1.5,
+        color: borderColor,
+        width: (ringColor != null && pressed) ? 2.0 : 1.6,
       ),
     ),
     child: Center(child: child),
@@ -1757,7 +1811,7 @@ class _MainButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = settings.buttonSize;
-    final main = s * 1.12;
+    final main = s;
 
     final labelStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
       color: Colors.white.withValues(alpha: 0.92),
@@ -1770,7 +1824,9 @@ class _MainButton extends StatelessWidget {
       hitboxScale: settings.hitboxScale,
       hapticsEnabled: settings.hapticsEnabled,
       visualBuilder: (pressed) => _roundVisual(
-        base: const Color(0xFFD32F2F).withValues(alpha: settings.opacity),
+        base: const Color(
+          0xFF272B33,
+        ).withValues(alpha: (settings.opacity * 0.80).clamp(0.0, 1.0)),
         pressed: pressed,
         child: Text(label, style: labelStyle),
       ),
@@ -1795,7 +1851,7 @@ class _TurboButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = settings.buttonSize;
-    final turbo = s * 0.84;
+    final turbo = s;
 
     final labelStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
       color: Colors.white.withValues(alpha: 0.92),
@@ -1808,11 +1864,13 @@ class _TurboButton extends StatelessWidget {
       hitboxScale: settings.hitboxScale,
       hapticsEnabled: settings.hapticsEnabled,
       visualBuilder: (pressed) => _roundVisual(
-        base: const Color(0xFF3D3D3D).withValues(alpha: settings.opacity),
+        base: const Color(
+          0xFF1D2128,
+        ).withValues(alpha: (settings.opacity * 0.78).clamp(0.0, 1.0)),
         pressed: pressed,
         ringColor: const Color(
           0xFFFFC107,
-        ).withValues(alpha: (settings.opacity * 0.9).clamp(0.0, 1.0)),
+        ).withValues(alpha: (settings.opacity * 0.75).clamp(0.0, 1.0)),
         child: Text(label, style: labelStyle),
       ),
       onToggle: (enabled) => onTurboChanged(button, enabled),
@@ -1852,12 +1910,17 @@ class _SystemButton extends StatelessWidget {
         decoration: ShapeDecoration(
           shape: StadiumBorder(
             side: BorderSide(
-              color: Colors.black.withValues(alpha: 0.18),
+              color: Colors.white.withValues(alpha: 0.16),
               width: 1,
             ),
           ),
           color: base,
           shadows: [
+            BoxShadow(
+              color: Colors.white.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 0),
+            ),
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.18),
               blurRadius: 10,

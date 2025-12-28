@@ -197,9 +197,9 @@ class VirtualControlsSettings {
   }
 
   static const defaults = VirtualControlsSettings(
-    buttonSize: 64,
-    gap: 10,
-    opacity: 0.65,
+    buttonSize: 56,
+    gap: 8,
+    opacity: 0.55,
     hitboxScale: 1.25,
     hapticsEnabled: false,
     dpadDeadzoneRatio: 0.16,
