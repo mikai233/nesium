@@ -85,9 +85,15 @@ unsafe extern "C" {
 pub struct AhbSwapchain {
     buffers: [*mut AHardwareBuffer; 2],
     pitch_bytes: usize,
-    gpu_busy: [AtomicBool; 2],
-    gpu_busy_mu: Mutex<()>,
+    sync_mu: Mutex<AhbSyncState>,
     gpu_busy_cv: Condvar,
+    fallback_planes: [Box<[u8]>; 2],
+}
+
+#[derive(Clone, Copy)]
+struct AhbSyncState {
+    gpu_busy: [bool; 2],
+    cpu_locked: [bool; 2],
 }
 
 // SAFETY: The swapchain buffers are stable native handles; access is coordinated via internal
@@ -129,14 +135,23 @@ impl AhbSwapchain {
             rfu1: 0,
         };
         unsafe { AHardwareBuffer_describe(buffers[0] as *const _, &mut described as *mut _) };
-        let pitch_bytes = described.stride as usize * 4;
+        let stride_pixels = described.stride.max(width);
+        let pitch_bytes = stride_pixels as usize * 4;
+        let fallback_len = pitch_bytes * height as usize;
+        let fallback_planes = [
+            vec![0u8; fallback_len].into_boxed_slice(),
+            vec![0u8; fallback_len].into_boxed_slice(),
+        ];
 
         Self {
             buffers,
             pitch_bytes,
-            gpu_busy: [AtomicBool::new(false), AtomicBool::new(false)],
-            gpu_busy_mu: Mutex::new(()),
+            sync_mu: Mutex::new(AhbSyncState {
+                gpu_busy: [false; 2],
+                cpu_locked: [false; 2],
+            }),
             gpu_busy_cv: Condvar::new(),
+            fallback_planes,
         }
     }
 
@@ -149,17 +164,24 @@ impl AhbSwapchain {
     }
 
     fn wait_gpu_idle(&self, idx: usize) {
-        if !self.gpu_busy[idx].load(Ordering::Acquire) {
-            return;
-        }
-        let mut guard = self.gpu_busy_mu.lock().unwrap();
-        while self.gpu_busy[idx].load(Ordering::Acquire) {
-            guard = self.gpu_busy_cv.wait(guard).unwrap();
+        let mut guard = match self.sync_mu.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        while guard.gpu_busy[idx] {
+            guard = match self.gpu_busy_cv.wait(guard) {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
         }
     }
 
     fn set_gpu_busy(&self, idx: usize, busy: bool) {
-        self.gpu_busy[idx].store(busy, Ordering::Release);
+        let mut guard = match self.sync_mu.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        guard.gpu_busy[idx] = busy;
         if !busy {
             self.gpu_busy_cv.notify_all();
         }
@@ -169,22 +191,58 @@ impl AhbSwapchain {
         self.wait_gpu_idle(idx);
 
         let mut out: *mut c_void = std::ptr::null_mut();
-        let res = unsafe {
-            AHardwareBuffer_lock(
-                self.buffers[idx],
-                AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
-                -1,
-                std::ptr::null(),
-                &mut out as *mut _,
-            )
-        };
-        if res != 0 || out.is_null() {
-            return std::ptr::null_mut();
+        let mut last_err: c_int = 0;
+        for attempt in 0..6u32 {
+            out = std::ptr::null_mut();
+            let res = unsafe {
+                AHardwareBuffer_lock(
+                    self.buffers[idx],
+                    AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
+                    -1,
+                    std::ptr::null(),
+                    &mut out as *mut _,
+                )
+            };
+            if res == 0 && !out.is_null() {
+                let mut guard = match self.sync_mu.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                guard.cpu_locked[idx] = true;
+                return out as *mut u8;
+            }
+            last_err = res;
+
+            // Short backoff to tolerate transient failures; avoid spinning too aggressively.
+            let backoff_ms = (1u64 << attempt).min(16);
+            std::thread::sleep(Duration::from_millis(backoff_ms));
         }
-        out as *mut u8
+
+        eprintln!(
+            "AHardwareBuffer_lock failed for idx={idx} (err={last_err}); falling back to dummy buffer"
+        );
+        let mut guard = match self.sync_mu.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        guard.cpu_locked[idx] = false;
+        self.fallback_planes[idx].as_ptr() as *mut u8
     }
 
     fn unlock_plane(&self, idx: usize) {
+        let should_unlock = {
+            let mut guard = match self.sync_mu.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            let was_locked = guard.cpu_locked[idx];
+            guard.cpu_locked[idx] = false;
+            was_locked
+        };
+        if !should_unlock {
+            return;
+        }
+
         let res = unsafe { AHardwareBuffer_unlock(self.buffers[idx], std::ptr::null_mut()) };
         if res != 0 {
             eprintln!("AHardwareBuffer_unlock failed: {res}");
@@ -262,7 +320,10 @@ fn notify_rust_renderer(buffer_index: u32) {
         signal
             .last_index
             .store(buffer_index as i32, Ordering::Release);
-        let mut seq = signal.mu.lock().unwrap();
+        let mut seq = match signal.mu.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         *seq = seq.wrapping_add(1);
         signal.cv.notify_one();
     }
@@ -431,8 +492,10 @@ type EGLSurface = *mut c_void;
 type EGLConfig = *mut c_void;
 type EGLClientBuffer = *mut c_void;
 type EGLImageKHR = *mut c_void;
+type EGLSyncKHR = *mut c_void;
 type EGLBoolean = c_int;
 type EGLint = c_int;
+type EGLTimeKHR = u64;
 type EGLNativeDisplayType = *mut c_void;
 type EGLNativeWindowType = *mut ANativeWindow;
 
@@ -443,6 +506,7 @@ const EGL_NO_DISPLAY: EGLDisplay = std::ptr::null_mut();
 const EGL_NO_CONTEXT: EGLContext = std::ptr::null_mut();
 const EGL_NO_SURFACE: EGLSurface = std::ptr::null_mut();
 const EGL_NO_IMAGE_KHR: EGLImageKHR = std::ptr::null_mut();
+const EGL_NO_SYNC_KHR: EGLSyncKHR = std::ptr::null_mut();
 
 const EGL_NONE: EGLint = 0x3038;
 const EGL_RED_SIZE: EGLint = 0x3024;
@@ -458,6 +522,10 @@ const EGL_OPENGL_ES_API: EGLint = 0x30A0;
 
 const EGL_NATIVE_BUFFER_ANDROID: EGLint = 0x3140;
 const EGL_IMAGE_PRESERVED_KHR: EGLint = 0x30D2;
+
+const EGL_SYNC_FENCE_KHR: EGLint = 0x30F9;
+const EGL_SYNC_FLUSH_COMMANDS_BIT_KHR: EGLint = 0x0001;
+const EGL_FOREVER_KHR: EGLTimeKHR = 0xFFFFFFFFFFFFFFFF;
 
 #[link(name = "EGL")]
 unsafe extern "C" {
@@ -501,10 +569,12 @@ unsafe extern "C" {
 #[link(name = "GLESv2")]
 unsafe extern "C" {
     fn glDisable(cap: u32);
+    fn glFlush();
     fn glViewport(x: c_int, y: c_int, width: c_int, height: c_int);
     fn glClearColor(r: f32, g: f32, b: f32, a: f32);
     fn glClear(mask: u32);
     fn glGenTextures(n: c_int, textures: *mut u32);
+    fn glDeleteTextures(n: c_int, textures: *const u32);
     fn glBindTexture(target: u32, texture: u32);
     fn glTexParameteri(target: u32, pname: u32, param: c_int);
     fn glActiveTexture(texture: u32);
@@ -529,6 +599,7 @@ unsafe extern "C" {
         info_log: *mut c_char,
     );
     fn glUseProgram(program: u32);
+    fn glDeleteProgram(program: u32);
     fn glGetAttribLocation(program: u32, name: *const c_char) -> c_int;
     fn glGetUniformLocation(program: u32, name: *const c_char) -> c_int;
     fn glEnableVertexAttribArray(index: u32);
@@ -577,6 +648,16 @@ type PFNEGLCREATEIMAGEKHRPROC = unsafe extern "C" fn(
 type PFNEGLDESTROYIMAGEKHRPROC =
     unsafe extern "C" fn(dpy: EGLDisplay, image: EGLImageKHR) -> EGLBoolean;
 type PFNGLEGLIMAGETARGETTEXTURE2DOESPROC = unsafe extern "C" fn(target: u32, image: *const c_void);
+type PFNEGLCREATESYNCKHRPROC =
+    unsafe extern "C" fn(dpy: EGLDisplay, ty: EGLint, attrib_list: *const EGLint) -> EGLSyncKHR;
+type PFNEGLDESTROYSYNCKHRPROC =
+    unsafe extern "C" fn(dpy: EGLDisplay, sync: EGLSyncKHR) -> EGLBoolean;
+type PFNEGLCLIENTWAITSYNCKHRPROC = unsafe extern "C" fn(
+    dpy: EGLDisplay,
+    sync: EGLSyncKHR,
+    flags: EGLint,
+    timeout: EGLTimeKHR,
+) -> EGLint;
 
 unsafe fn egl_proc<T>(name: &'static [u8]) -> Option<T> {
     debug_assert!(name.last() == Some(&0));
@@ -608,7 +689,10 @@ fn rust_renderer_signal() -> &'static RustRendererSignal {
 
 fn rust_renderer_wake() {
     let signal = rust_renderer_signal();
-    let mut seq = signal.mu.lock().unwrap();
+    let mut seq = match signal.mu.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     *seq = seq.wrapping_add(1);
     signal.cv.notify_one();
 }
@@ -619,6 +703,24 @@ fn get_ahb_swapchain() -> Option<&'static AhbSwapchain> {
     match &ensure_runtime()._video {
         crate::VideoBacking::Ahb(swapchain) => Some(&**swapchain),
         _ => None,
+    }
+}
+
+struct GpuBusyGuard {
+    swapchain: &'static AhbSwapchain,
+    idx: usize,
+}
+
+impl GpuBusyGuard {
+    fn new(swapchain: &'static AhbSwapchain, idx: usize) -> Self {
+        swapchain.set_gpu_busy(idx, true);
+        Self { swapchain, idx }
+    }
+}
+
+impl Drop for GpuBusyGuard {
+    fn drop(&mut self) {
+        self.swapchain.set_gpu_busy(self.idx, false);
     }
 }
 
@@ -660,7 +762,11 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
         unsafe { ANativeWindow_release(window) };
     });
 
-    *rust_renderer_slot().lock().unwrap() = Some(RustRendererHandle { stop, join });
+    let mut slot = match rust_renderer_slot().lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    *slot = Some(RustRendererHandle { stop, join });
 }
 
 #[unsafe(no_mangle)]
@@ -668,7 +774,13 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStopRus
     _env: JNIEnv,
     _class: JClass,
 ) {
-    let handle = rust_renderer_slot().lock().unwrap().take();
+    let handle = {
+        let mut slot = match rust_renderer_slot().lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        slot.take()
+    };
     if let Some(handle) = handle {
         handle.stop.store(true, Ordering::Release);
         rust_renderer_wake();
@@ -732,22 +844,80 @@ unsafe fn link_program(vs: u32, fs: u32) -> Option<u32> {
     None
 }
 
+struct EglCleanup {
+    dpy: EGLDisplay,
+    ctx: EGLContext,
+    surf: EGLSurface,
+    initialized: bool,
+}
+
+impl EglCleanup {
+    fn new() -> Self {
+        Self {
+            dpy: EGL_NO_DISPLAY,
+            ctx: EGL_NO_CONTEXT,
+            surf: EGL_NO_SURFACE,
+            initialized: false,
+        }
+    }
+}
+
+impl Drop for EglCleanup {
+    fn drop(&mut self) {
+        unsafe {
+            if self.dpy == EGL_NO_DISPLAY || !self.initialized {
+                return;
+            }
+            let _ = eglMakeCurrent(self.dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+            if self.surf != EGL_NO_SURFACE {
+                let _ = eglDestroySurface(self.dpy, self.surf);
+            }
+            if self.ctx != EGL_NO_CONTEXT {
+                let _ = eglDestroyContext(self.dpy, self.ctx);
+            }
+            let _ = eglTerminate(self.dpy);
+        }
+    }
+}
+
+struct EglImagesCleanup {
+    dpy: EGLDisplay,
+    destroy_image: PFNEGLDESTROYIMAGEKHRPROC,
+    images: [EGLImageKHR; 2],
+}
+
+impl Drop for EglImagesCleanup {
+    fn drop(&mut self) {
+        unsafe {
+            for img in self.images {
+                if img != EGL_NO_IMAGE_KHR {
+                    let _ = (self.destroy_image)(self.dpy, img);
+                }
+            }
+        }
+    }
+}
+
 unsafe fn run_rust_renderer(
     window: *mut ANativeWindow,
     swapchain: &'static AhbSwapchain,
     stop: Arc<AtomicBool>,
 ) {
+    let mut egl = EglCleanup::new();
+
     let dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if dpy == EGL_NO_DISPLAY {
         eprintln!("eglGetDisplay failed");
         return;
     }
+    egl.dpy = dpy;
     let mut major: EGLint = 0;
     let mut minor: EGLint = 0;
     if eglInitialize(dpy, &mut major as *mut _, &mut minor as *mut _) == EGL_FALSE {
         eprintln!("eglInitialize failed: 0x{:x}", eglGetError());
         return;
     }
+    egl.initialized = true;
     if eglBindAPI(EGL_OPENGL_ES_API) == EGL_FALSE {
         eprintln!("eglBindAPI failed: 0x{:x}", eglGetError());
     }
@@ -779,7 +949,6 @@ unsafe fn run_rust_renderer(
         || num <= 0
     {
         eprintln!("eglChooseConfig failed: 0x{:x}", eglGetError());
-        eglTerminate(dpy);
         return;
     }
 
@@ -787,23 +956,19 @@ unsafe fn run_rust_renderer(
     let ctx = eglCreateContext(dpy, config, EGL_NO_CONTEXT, ctx_attribs.as_ptr());
     if ctx == EGL_NO_CONTEXT {
         eprintln!("eglCreateContext failed: 0x{:x}", eglGetError());
-        eglTerminate(dpy);
         return;
     }
+    egl.ctx = ctx;
 
     let surf = eglCreateWindowSurface(dpy, config, window, [EGL_NONE].as_ptr());
     if surf == EGL_NO_SURFACE {
         eprintln!("eglCreateWindowSurface failed: 0x{:x}", eglGetError());
-        eglDestroyContext(dpy, ctx);
-        eglTerminate(dpy);
         return;
     }
+    egl.surf = surf;
 
     if eglMakeCurrent(dpy, surf, surf, ctx) == EGL_FALSE {
         eprintln!("eglMakeCurrent failed: 0x{:x}", eglGetError());
-        eglDestroySurface(dpy, surf);
-        eglDestroyContext(dpy, ctx);
-        eglTerminate(dpy);
         return;
     }
 
@@ -837,6 +1002,34 @@ unsafe fn run_rust_renderer(
                 return;
             }
         };
+
+    let fence_sync_procs = match (
+        egl_proc::<PFNEGLCREATESYNCKHRPROC>(b"eglCreateSyncKHR\0"),
+        egl_proc::<PFNEGLDESTROYSYNCKHRPROC>(b"eglDestroySyncKHR\0"),
+        egl_proc::<PFNEGLCLIENTWAITSYNCKHRPROC>(b"eglClientWaitSyncKHR\0"),
+    ) {
+        (Some(create), Some(destroy), Some(wait)) => Some((create, destroy, wait)),
+        _ => None,
+    };
+
+    let wait_for_gpu = |dpy: EGLDisplay| {
+        if let Some((egl_create_sync, egl_destroy_sync, egl_client_wait_sync)) = fence_sync_procs {
+            let sync = unsafe { egl_create_sync(dpy, EGL_SYNC_FENCE_KHR, [EGL_NONE].as_ptr()) };
+            if sync != EGL_NO_SYNC_KHR {
+                let _ = unsafe {
+                    egl_client_wait_sync(
+                        dpy,
+                        sync,
+                        EGL_SYNC_FLUSH_COMMANDS_BIT_KHR,
+                        EGL_FOREVER_KHR,
+                    )
+                };
+                let _ = unsafe { egl_destroy_sync(dpy, sync) };
+                return;
+            }
+        }
+        unsafe { glFinish() };
+    };
 
     // Log extensions once (useful when debugging device compatibility).
     let ext_ptr = glGetString(GL_EXTENSIONS);
@@ -876,6 +1069,12 @@ unsafe fn run_rust_renderer(
         images[i] = image;
         gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void);
     }
+
+    let _images_cleanup = EglImagesCleanup {
+        dpy,
+        destroy_image: egl_destroy_image,
+        images,
+    };
 
     let vs_src = CStr::from_bytes_with_nul_unchecked(
         b"attribute vec4 a_position;\nattribute vec2 a_tex_coord;\nvarying vec2 v_tex_coord;\nvoid main() {\n  gl_Position = a_position;\n  v_tex_coord = a_tex_coord;\n}\n\0",
@@ -932,12 +1131,15 @@ unsafe fn run_rust_renderer(
     let mut last_seen = 0u64;
 
     while !stop.load(Ordering::Acquire) {
-        let mut guard = signal.mu.lock().unwrap();
+        let mut guard = match signal.mu.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         while *guard == last_seen && !stop.load(Ordering::Acquire) {
-            let (g, _) = signal
-                .cv
-                .wait_timeout(guard, Duration::from_millis(500))
-                .unwrap();
+            let (g, _) = match signal.cv.wait_timeout(guard, Duration::from_millis(500)) {
+                Ok(res) => res,
+                Err(poisoned) => poisoned.into_inner(),
+            };
             guard = g;
         }
         last_seen = *guard;
@@ -953,7 +1155,7 @@ unsafe fn run_rust_renderer(
         }
         let idx = idx as usize;
 
-        swapchain.set_gpu_busy(idx, true);
+        let _busy = GpuBusyGuard::new(swapchain, idx);
 
         glViewport(0, 0, FRAME_WIDTH as c_int, FRAME_HEIGHT as c_int);
         glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -965,24 +1167,17 @@ unsafe fn run_rust_renderer(
 
         if eglSwapBuffers(dpy, surf) == EGL_FALSE {
             eprintln!("eglSwapBuffers failed: 0x{:x}", eglGetError());
-            glFinish();
-            swapchain.set_gpu_busy(idx, false);
+            wait_for_gpu(dpy);
             break;
         }
-        glFinish();
-
-        swapchain.set_gpu_busy(idx, false);
+        wait_for_gpu(dpy);
     }
 
-    for img in images {
-        if img != EGL_NO_IMAGE_KHR {
-            let _ = egl_destroy_image(dpy, img);
-        }
+    unsafe {
+        glDeleteTextures(2, textures.as_ptr());
+        glDeleteProgram(program);
+        glFlush();
     }
-    let _ = eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-    let _ = eglDestroySurface(dpy, surf);
-    let _ = eglDestroyContext(dpy, ctx);
-    let _ = eglTerminate(dpy);
 }
 
 /// Receives the write-end FD of the Kotlin-created frame signal pipe.
