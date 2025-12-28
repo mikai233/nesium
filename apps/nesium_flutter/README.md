@@ -54,6 +54,7 @@ Options:
 
 ## Web (CI + GitHub Pages)
 
+- Online demo: https://mikai233.github.io/nesium/
 - CI builds Flutter Web and runs `wasm-pack` to generate `web/nes/pkg` in `.github/workflows/flutter.yml`.
 - Releases deploy the Web build to GitHub Pages from `.github/workflows/release.yml`.
 - `mode=test` in the Release Controller workflow also deploys to GitHub Pages (no GitHub Release is created).

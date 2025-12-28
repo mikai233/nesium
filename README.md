@@ -24,6 +24,7 @@ This repository currently ships **two** UI frontends:
 
 - **`nesium-egui`** (`apps/nesium-egui`) — A lightweight desktop frontend built with `egui`. It has a small footprint and provides the essentials for **quick debugging and development**.
 - **`nesium-flutter`** (`apps/nesium_flutter`) — A modern frontend built with **Flutter**. It aims for a more polished UI and broader cross‑platform reach than the `egui` app, but is typically **larger** and **more complex to build**, since it loads a native dynamic library produced by the Rust glue layer (`crates/nesium-flutter`).
+- **Web build (play online)** — https://mikai233.github.io/nesium/ (runs in the browser via Flutter Web + Web Worker + WASM; bring your own ROM).
 
 ## Mapper support
 
