@@ -216,6 +216,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuSectionWindows => 'Windows';
 
   @override
+  String get menuSectionHelp => 'Help';
+
+  @override
   String get menuOpenRom => 'Open ROM...';
 
   @override

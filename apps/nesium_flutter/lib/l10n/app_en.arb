@@ -94,6 +94,7 @@
   "menuSectionEmulation": "Emulation",
   "menuSectionSettings": "Settings",
   "menuSectionWindows": "Windows",
+  "menuSectionHelp": "Help",
   "menuOpenRom": "Open ROM...",
   "menuReset": "Reset",
   "menuPowerReset": "Power Reset",

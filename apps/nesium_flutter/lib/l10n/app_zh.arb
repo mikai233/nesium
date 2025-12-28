@@ -65,6 +65,7 @@
   "menuSectionEmulation": "模拟",
   "menuSectionSettings": "设置",
   "menuSectionWindows": "窗口",
+  "menuSectionHelp": "帮助",
   "menuOpenRom": "打开 ROM…",
   "menuReset": "重置",
   "menuPowerReset": "电源重置",

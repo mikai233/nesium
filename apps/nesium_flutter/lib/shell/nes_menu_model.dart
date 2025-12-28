@@ -33,7 +33,7 @@ class NesMenuItemSpec {
   };
 }
 
-enum NesMenuSectionId { file, emulation, settings, windows }
+enum NesMenuSectionId { file, emulation, settings, windows, help }
 
 class NesMenuSectionSpec {
   const NesMenuSectionSpec({required this.id, required this.items});
@@ -46,6 +46,7 @@ class NesMenuSectionSpec {
     NesMenuSectionId.emulation => l10n.menuSectionEmulation,
     NesMenuSectionId.settings => l10n.menuSectionSettings,
     NesMenuSectionId.windows => l10n.menuSectionWindows,
+    NesMenuSectionId.help => l10n.menuSectionHelp,
   };
 }
 
@@ -113,8 +114,9 @@ class NesMenus {
       id: NesMenuSectionId.emulation,
       items: [togglePause, reset, powerReset, eject],
     ),
-    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings, about]),
+    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
     NesMenuSectionSpec(id: NesMenuSectionId.windows, items: [debugger, tools]),
+    NesMenuSectionSpec(id: NesMenuSectionId.help, items: [about]),
   ];
 
   /// Minimal menu for Web builds (no debugger/tools).
@@ -124,6 +126,7 @@ class NesMenus {
       id: NesMenuSectionId.emulation,
       items: [togglePause, reset, powerReset],
     ),
-    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings, about]),
+    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
+    NesMenuSectionSpec(id: NesMenuSectionId.help, items: [about]),
   ];
 }

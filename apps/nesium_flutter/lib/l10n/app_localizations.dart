@@ -482,6 +482,12 @@ abstract class AppLocalizations {
   /// **'Windows'**
   String get menuSectionWindows;
 
+  /// No description provided for @menuSectionHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Help'**
+  String get menuSectionHelp;
+
   /// No description provided for @menuOpenRom.
   ///
   /// In en, this message translates to:

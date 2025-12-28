@@ -210,6 +210,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuSectionWindows => '窗口';
 
   @override
+  String get menuSectionHelp => '帮助';
+
+  @override
   String get menuOpenRom => '打开 ROM…';
 
   @override
