@@ -45,7 +45,6 @@ class VirtualControlsOverlay extends ConsumerWidget {
         if (viewport == null) return const SizedBox.shrink();
 
         final available = constraints.biggest;
-        final basePadding = 8.0;
 
         final base = _basePositions(
           settings,
@@ -54,9 +53,6 @@ class VirtualControlsOverlay extends ConsumerWidget {
         );
 
         final dpadBaseSize = _dpadClusterSize(settings);
-        final buttonsGroupBaseSize = _abClusterSize(settings);
-        final systemGroupBaseSize = _systemClusterSize(settings);
-
         final mainButtonBaseSize = _mainButtonHitboxSize(settings);
         final turboButtonBaseSize = _turboButtonHitboxSize(settings);
         final systemButtonBaseSize = _systemButtonHitboxSize(settings);
@@ -74,14 +70,6 @@ class VirtualControlsOverlay extends ConsumerWidget {
         final dpadSize = Size(
           dpadBaseSize.width * dpadScale,
           dpadBaseSize.height * dpadScale,
-        );
-        final buttonsGroupSize = Size(
-          buttonsGroupBaseSize.width * buttonsScale,
-          buttonsGroupBaseSize.height * buttonsScale,
-        );
-        final systemGroupSize = Size(
-          systemGroupBaseSize.width * systemScale,
-          systemGroupBaseSize.height * systemScale,
         );
 
         final dpadOffset = isLandscape
@@ -132,38 +120,40 @@ class VirtualControlsOverlay extends ConsumerWidget {
             ? settings.landscapeStartScale
             : settings.portraitStartScale;
 
+        const frameGap = 2.0;
+
+        final dpadDisc = _dpadDiscDiameter(settings);
+        final dpadFrameInsets = _frameInsetsFromHitbox(
+          hitbox: dpadBaseSize,
+          visual: Size.square(dpadDisc),
+        );
+        final mainFrameInsets = _frameInsetsFromHitbox(
+          hitbox: mainButtonBaseSize,
+          visual: Size.square(settings.buttonSize),
+        );
+        final turboFrameInsets = _frameInsetsFromHitbox(
+          hitbox: turboButtonBaseSize,
+          visual: Size.square(settings.buttonSize),
+        );
+        final systemVisualSize = _systemButtonVisualSize(settings);
+        final systemFrameInsets = _frameInsetsFromHitbox(
+          hitbox: systemButtonBaseSize,
+          visual: systemVisualSize,
+        );
+
         var dpadPos = base.dpad + dpadOffset;
         final buttonsGroupPos = base.buttons + buttonsOffset;
-        var systemGroupPos = base.system + systemOffset;
 
-        dpadPos = _clampPosition(
+        dpadPos = _clampPositionForFrame(
           dpadPos,
           size: dpadSize,
+          frameInsets: _scaleInsets(dpadFrameInsets, dpadScale),
+          frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
         );
 
-        // Avoid placing Select/Start directly under the D-pad/buttons group.
-        //
-        // When the user has explicitly positioned Select/Start (or when editing),
-        // do not auto-shift them.
-        if (!isEditing &&
-            systemOffset == Offset.zero &&
-            selectOffset == Offset.zero &&
-            startOffset == Offset.zero) {
-          final systemRect = systemGroupPos & systemGroupSize;
-          final leftRect = dpadPos & dpadSize;
-          final rightRect = buttonsGroupPos & buttonsGroupSize;
-          if (systemRect.overlaps(leftRect) || systemRect.overlaps(rightRect)) {
-            systemGroupPos = systemGroupPos.translate(
-              0,
-              -(systemGroupSize.height + basePadding),
-            );
-          }
-        }
-
         final buttonsLocal = _buttonsLocalOffsets(settings);
-        final systemLocal = _systemLocalOffsets(settings);
 
         final aTotalScale = buttonsScale * aScale;
         final bTotalScale = buttonsScale * bScale;
@@ -203,44 +193,55 @@ class VirtualControlsOverlay extends ConsumerWidget {
             buttonsGroupPos + buttonsLocal.turboA * buttonsScale + turboAOffset;
         var turboBPos =
             buttonsGroupPos + buttonsLocal.turboB * buttonsScale + turboBOffset;
-        var selectPos =
-            systemGroupPos + systemLocal.select * systemScale + selectOffset;
-        var startPos =
-            systemGroupPos + systemLocal.start * systemScale + startOffset;
 
-        aPos = _clampPosition(
+        var selectPos = base.select + systemOffset + selectOffset;
+        var startPos = base.start + systemOffset + startOffset;
+
+        aPos = _clampPositionForFrame(
           aPos,
           size: aSize,
+          frameInsets: _scaleInsets(mainFrameInsets, aTotalScale),
+          frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
         );
-        bPos = _clampPosition(
+        bPos = _clampPositionForFrame(
           bPos,
           size: bSize,
+          frameInsets: _scaleInsets(mainFrameInsets, bTotalScale),
+          frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
         );
-        turboAPos = _clampPosition(
+        turboAPos = _clampPositionForFrame(
           turboAPos,
           size: turboASize,
+          frameInsets: _scaleInsets(turboFrameInsets, turboATotalScale),
+          frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
         );
-        turboBPos = _clampPosition(
+        turboBPos = _clampPositionForFrame(
           turboBPos,
           size: turboBSize,
+          frameInsets: _scaleInsets(turboFrameInsets, turboBTotalScale),
+          frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
         );
-        selectPos = _clampPosition(
+        selectPos = _clampPositionForFrame(
           selectPos,
           size: selectSize,
+          frameInsets: _scaleInsets(systemFrameInsets, selectTotalScale),
+          frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
         );
-        startPos = _clampPosition(
+        startPos = _clampPositionForFrame(
           startPos,
           size: startSize,
+          frameInsets: _scaleInsets(systemFrameInsets, startTotalScale),
+          frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
         );
@@ -276,6 +277,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
               child: _EditableCluster(
                 enabled: isEditing,
                 baseSize: dpadBaseSize,
+                frameInsets: dpadFrameInsets,
                 scale: dpadScale,
                 topLeft: dpadPos,
                 available: available,
@@ -328,6 +330,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
               child: _EditableCluster(
                 enabled: isEditing,
                 baseSize: systemButtonBaseSize,
+                frameInsets: systemFrameInsets,
                 scale: selectTotalScale,
                 topLeft: selectPos,
                 available: available,
@@ -369,6 +372,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
               child: _EditableCluster(
                 enabled: isEditing,
                 baseSize: systemButtonBaseSize,
+                frameInsets: systemFrameInsets,
                 scale: startTotalScale,
                 topLeft: startPos,
                 available: available,
@@ -410,6 +414,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
               child: _EditableCluster(
                 enabled: isEditing,
                 baseSize: turboButtonBaseSize,
+                frameInsets: turboFrameInsets,
                 scale: turboBTotalScale,
                 topLeft: turboBPos,
                 available: available,
@@ -450,6 +455,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
               child: _EditableCluster(
                 enabled: isEditing,
                 baseSize: turboButtonBaseSize,
+                frameInsets: turboFrameInsets,
                 scale: turboATotalScale,
                 topLeft: turboAPos,
                 available: available,
@@ -490,6 +496,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
               child: _EditableCluster(
                 enabled: isEditing,
                 baseSize: mainButtonBaseSize,
+                frameInsets: mainFrameInsets,
                 scale: bTotalScale,
                 topLeft: bPos,
                 available: available,
@@ -530,6 +537,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
               child: _EditableCluster(
                 enabled: isEditing,
                 baseSize: mainButtonBaseSize,
+                frameInsets: mainFrameInsets,
                 scale: aTotalScale,
                 topLeft: aPos,
                 available: available,
@@ -679,12 +687,8 @@ VirtualControlsSettings _applyElementTransform(
   final buttonsScale = isLandscape
       ? withScale.landscapeButtonsScale
       : withScale.portraitButtonsScale;
-  final systemScale = isLandscape
-      ? withScale.landscapeSystemScale
-      : withScale.portraitSystemScale;
 
   final buttonsLocal = _buttonsLocalOffsets(withScale);
-  final systemLocal = _systemLocalOffsets(withScale);
 
   switch (element) {
     case _VirtualControlElement.dpad:
@@ -716,21 +720,19 @@ VirtualControlsSettings _applyElementTransform(
           ? withScale.copyWith(landscapeTurboBOffset: topLeft - baseline)
           : withScale.copyWith(portraitTurboBOffset: topLeft - baseline);
     case _VirtualControlElement.select:
-      final baseline =
-          base.system + systemOffset + systemLocal.select * systemScale;
+      final baseline = base.select + systemOffset;
       return isLandscape
           ? withScale.copyWith(landscapeSelectOffset: topLeft - baseline)
           : withScale.copyWith(portraitSelectOffset: topLeft - baseline);
     case _VirtualControlElement.start:
-      final baseline =
-          base.system + systemOffset + systemLocal.start * systemScale;
+      final baseline = base.start + systemOffset;
       return isLandscape
           ? withScale.copyWith(landscapeStartOffset: topLeft - baseline)
           : withScale.copyWith(portraitStartOffset: topLeft - baseline);
   }
 }
 
-({Offset dpad, Offset buttons, Offset system}) _basePositions(
+({Offset dpad, Offset buttons, Offset select, Offset start}) _basePositions(
   VirtualControlsSettings settings, {
   required bool isLandscape,
   required Size available,
@@ -739,7 +741,7 @@ VirtualControlsSettings _applyElementTransform(
 
   final dpadBaseSize = _dpadClusterSize(settings);
   final buttonsBaseSize = _abClusterSize(settings);
-  final systemBaseSize = _systemClusterSize(settings);
+  final systemButtonBaseSize = _systemButtonHitboxSize(settings);
 
   final dpadScale = isLandscape
       ? settings.landscapeDpadScale
@@ -759,9 +761,9 @@ VirtualControlsSettings _applyElementTransform(
     buttonsBaseSize.width * buttonsScale,
     buttonsBaseSize.height * buttonsScale,
   );
-  final systemSize = Size(
-    systemBaseSize.width * systemScale,
-    systemBaseSize.height * systemScale,
+  final systemButtonSize = Size(
+    systemButtonBaseSize.width * systemScale,
+    systemButtonBaseSize.height * systemScale,
   );
 
   final dpadPos = Offset(
@@ -772,12 +774,38 @@ VirtualControlsSettings _applyElementTransform(
     available.width - buttonsSize.width - basePadding,
     available.height - buttonsSize.height - basePadding,
   );
-  final systemPos = Offset(
-    (available.width - systemSize.width) / 2,
-    available.height - systemSize.height - basePadding,
-  );
 
-  return (dpad: dpadPos, buttons: buttonsPos, system: systemPos);
+  final Offset selectPos;
+  final Offset startPos;
+
+  if (isLandscape) {
+    final y = available.height * 0.3;
+    selectPos = Offset(basePadding, y);
+    startPos = Offset(
+      available.width - basePadding - systemButtonSize.width,
+      y,
+    );
+  } else {
+    final y =
+        math.min(dpadPos.dy, buttonsPos.dy) -
+        systemButtonSize.height -
+        basePadding;
+    selectPos = Offset(
+      dpadPos.dx + (dpadSize.width - systemButtonSize.width) / 2,
+      y,
+    );
+    startPos = Offset(
+      buttonsPos.dx + (buttonsSize.width - systemButtonSize.width) / 2,
+      y,
+    );
+  }
+
+  return (
+    dpad: dpadPos,
+    buttons: buttonsPos,
+    select: selectPos,
+    start: startPos,
+  );
 }
 
 class _GridPainter extends CustomPainter {
@@ -812,6 +840,7 @@ class _EditableCluster extends StatefulWidget {
   const _EditableCluster({
     required this.enabled,
     required this.baseSize,
+    this.frameInsets = EdgeInsets.zero,
     required this.scale,
     required this.topLeft,
     required this.available,
@@ -824,6 +853,7 @@ class _EditableCluster extends StatefulWidget {
 
   final bool enabled;
   final Size baseSize;
+  final EdgeInsets frameInsets;
   final double scale;
   final Offset topLeft;
   final Size available;
@@ -839,6 +869,7 @@ class _EditableCluster extends StatefulWidget {
 
 class _EditableClusterState extends State<_EditableCluster> {
   static const double _resizeHandleSize = 32;
+  static const double _frameGap = 2.0;
 
   bool _active = false;
   bool _resizeMode = false;
@@ -867,6 +898,7 @@ class _EditableClusterState extends State<_EditableCluster> {
       widget.baseSize.width * widget.scale,
       widget.baseSize.height * widget.scale,
     );
+    final scaledInsets = _scaleInsets(widget.frameInsets, widget.scale);
     _rawCenter = widget.topLeft + Offset(size.width / 2, size.height / 2);
     _rawTopLeft = widget.topLeft;
     _startScale = widget.scale;
@@ -874,11 +906,13 @@ class _EditableClusterState extends State<_EditableCluster> {
 
     final minSide = math.min(size.width, size.height);
     final handleSize = math.min(_resizeHandleSize, minSide / 2);
+    final right = (size.width - scaledInsets.right).clamp(0.0, size.width);
+    final bottom = (size.height - scaledInsets.bottom).clamp(0.0, size.height);
     _resizeMode =
         widget.enabled &&
         details.pointerCount == 1 &&
-        details.localFocalPoint.dx >= size.width - handleSize &&
-        details.localFocalPoint.dy >= size.height - handleSize;
+        details.localFocalPoint.dx >= right - handleSize &&
+        details.localFocalPoint.dy >= bottom - handleSize;
 
     final baseW = widget.baseSize.width;
     final baseH = widget.baseSize.height;
@@ -931,6 +965,8 @@ class _EditableClusterState extends State<_EditableCluster> {
 
       final baseW = widget.baseSize.width;
       final baseH = widget.baseSize.height;
+      final insetR = widget.frameInsets.right;
+      final insetB = widget.frameInsets.bottom;
       final maxScaleFromBounds = math.min(
         baseW <= 0
             ? _clusterScaleMax
@@ -938,14 +974,14 @@ class _EditableClusterState extends State<_EditableCluster> {
                           widget.safeInsets.right -
                           _rawTopLeft.dx)
                       .clamp(0.0, double.infinity) /
-                  baseW,
+                  math.max(1e-6, baseW - insetR),
         baseH <= 0
             ? _clusterScaleMax
             : (widget.available.height -
                           widget.safeInsets.bottom -
                           _rawTopLeft.dy)
                       .clamp(0.0, double.infinity) /
-                  baseH,
+                  math.max(1e-6, baseH - insetB),
       );
 
       final nextScale = rawScale
@@ -976,9 +1012,11 @@ class _EditableClusterState extends State<_EditableCluster> {
     );
 
     var topLeft = center - Offset(size.width / 2, size.height / 2);
-    final clampedTopLeft = _clampPosition(
+    final clampedTopLeft = _clampPositionForFrame(
       topLeft,
       size: size,
+      frameInsets: _scaleInsets(widget.frameInsets, nextScale),
+      frameGap: _frameGap,
       available: widget.available,
       safeInsets: widget.safeInsets,
     );
@@ -998,22 +1036,33 @@ class _EditableClusterState extends State<_EditableCluster> {
 
   @override
   Widget build(BuildContext context) {
+    final scaledInsets = _scaleInsets(widget.frameInsets, widget.scale);
+    final framePadding = EdgeInsets.fromLTRB(
+      (scaledInsets.left - _frameGap).clamp(0.0, double.infinity),
+      (scaledInsets.top - _frameGap).clamp(0.0, double.infinity),
+      (scaledInsets.right - _frameGap).clamp(0.0, double.infinity),
+      (scaledInsets.bottom - _frameGap).clamp(0.0, double.infinity),
+    );
+
     final handle = widget.enabled
-        ? Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.25),
-                width: 1,
+        ? Padding(
+            padding: framePadding,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.35),
+                  width: 1,
+                ),
+                borderRadius: BorderRadius.circular(12),
               ),
-              borderRadius: BorderRadius.circular(12),
             ),
           )
         : null;
 
     final resizeHandle = widget.enabled
         ? Positioned(
-            right: 0,
-            bottom: 0,
+            right: framePadding.right,
+            bottom: framePadding.bottom,
             width: _resizeHandleSize,
             height: _resizeHandleSize,
             child: Center(
@@ -1056,7 +1105,8 @@ class _EditableClusterState extends State<_EditableCluster> {
               child: widget.child,
             ),
           ),
-          if (handle != null) Positioned.fill(child: handle),
+          if (handle != null)
+            Positioned.fill(child: IgnorePointer(child: handle)),
           if (resizeHandle != null) resizeHandle,
         ],
       ),
@@ -1064,18 +1114,51 @@ class _EditableClusterState extends State<_EditableCluster> {
   }
 }
 
-Offset _clampPosition(
+EdgeInsets _scaleInsets(EdgeInsets value, double scale) {
+  return EdgeInsets.fromLTRB(
+    value.left * scale,
+    value.top * scale,
+    value.right * scale,
+    value.bottom * scale,
+  );
+}
+
+EdgeInsets _frameInsetsFromHitbox({
+  required Size hitbox,
+  required Size visual,
+}) {
+  return EdgeInsets.fromLTRB(
+    math.max(0.0, (hitbox.width - visual.width) / 2),
+    math.max(0.0, (hitbox.height - visual.height) / 2),
+    math.max(0.0, (hitbox.width - visual.width) / 2),
+    math.max(0.0, (hitbox.height - visual.height) / 2),
+  );
+}
+
+Offset _clampPositionForFrame(
   Offset pos, {
   required Size size,
+  required EdgeInsets frameInsets,
+  double frameGap = 0.0,
   required Size available,
   required EdgeInsets safeInsets,
 }) {
-  final minX = safeInsets.left;
-  final minY = safeInsets.top;
-  final maxX = math.max(minX, available.width - size.width - safeInsets.right);
+  final leftPad = (frameInsets.left - frameGap).clamp(0.0, double.infinity);
+  final topPad = (frameInsets.top - frameGap).clamp(0.0, double.infinity);
+  final rightPad = (frameInsets.right - frameGap).clamp(0.0, double.infinity);
+  final bottomPad = (frameInsets.bottom - frameGap).clamp(0.0, double.infinity);
+
+  // Clamp based on the visual frame, not the full hitbox, so users can move
+  // controls flush to the screen edges even when the hitbox is larger.
+  final minX = safeInsets.left - leftPad;
+  final minY = safeInsets.top - topPad;
+  final maxX = math.max(
+    minX,
+    available.width - safeInsets.right - (size.width - rightPad),
+  );
   final maxY = math.max(
     minY,
-    available.height - size.height - safeInsets.bottom,
+    available.height - safeInsets.bottom - (size.height - bottomPad),
   );
 
   return Offset(
@@ -1085,11 +1168,20 @@ Offset _clampPosition(
 }
 
 Size _dpadClusterSize(VirtualControlsSettings settings) {
-  final s = settings.buttonSize;
-  final g = settings.gap;
-  final disc = s * 2.15 + g * 2;
+  final disc = _dpadDiscDiameter(settings);
   final hitbox = disc * settings.hitboxScale;
   return Size.square(hitbox);
+}
+
+double _dpadDiscDiameter(VirtualControlsSettings settings) {
+  final s = settings.buttonSize;
+  final g = settings.gap;
+  return s * 2.15 + g * 2;
+}
+
+Size _systemButtonVisualSize(VirtualControlsSettings settings) {
+  final s = settings.buttonSize;
+  return Size(s * 1.25, s * 0.55);
 }
 
 Size _abClusterSize(VirtualControlsSettings settings) {
@@ -1108,17 +1200,6 @@ Size _abClusterSize(VirtualControlsSettings settings) {
   );
 }
 
-Size _systemClusterSize(VirtualControlsSettings settings) {
-  final s = settings.buttonSize;
-  final g = settings.gap;
-  final h = s * 0.55;
-  final w = s * 1.25;
-  final hitboxW = w * settings.hitboxScale;
-  final hitboxH = h * settings.hitboxScale;
-  const pad = 6.0;
-  return Size(pad + hitboxW * 2 + g + pad, pad + hitboxH + pad);
-}
-
 Size _mainButtonHitboxSize(VirtualControlsSettings settings) {
   final s = settings.buttonSize;
   final main = s;
@@ -1132,9 +1213,9 @@ Size _turboButtonHitboxSize(VirtualControlsSettings settings) {
 }
 
 Size _systemButtonHitboxSize(VirtualControlsSettings settings) {
-  final s = settings.buttonSize;
-  final h = s * 0.55;
-  final w = s * 1.25;
+  final visual = _systemButtonVisualSize(settings);
+  final w = visual.width;
+  final h = visual.height;
   return Size(w * settings.hitboxScale, h * settings.hitboxScale);
 }
 
@@ -1152,18 +1233,6 @@ Size _systemButtonHitboxSize(VirtualControlsSettings settings) {
     turboA: Offset(pad + mainHit + g + dx, pad),
     b: Offset(pad, pad + turboHit + g + dy),
     a: Offset(pad + mainHit + g + dx, pad + turboHit + g + dy),
-  );
-}
-
-({Offset select, Offset start}) _systemLocalOffsets(
-  VirtualControlsSettings settings,
-) {
-  final g = settings.gap;
-  final buttonW = _systemButtonHitboxSize(settings).width;
-  const pad = 6.0;
-  return (
-    select: const Offset(pad, pad),
-    start: Offset(pad + buttonW + g, pad),
   );
 }
 
@@ -1344,10 +1413,8 @@ class _DpadCluster extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = settings.buttonSize;
-    final g = settings.gap;
     // Keep the D-pad smaller relative to the A/B cluster.
-    final disc = s * 2.15 + g * 2;
+    final disc = _dpadDiscDiameter(settings);
     final hitbox = disc * settings.hitboxScale;
     return SizedBox(
       width: hitbox,

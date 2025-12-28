@@ -656,6 +656,12 @@ abstract class AppLocalizations {
   /// **'Pixel-perfect scaling (reduces shimmer on scrolling).'**
   String get videoIntegerScalingSubtitle;
 
+  /// No description provided for @videoScreenVerticalOffset.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen vertical offset'**
+  String get videoScreenVerticalOffset;
+
   /// No description provided for @videoBackendLabel.
   ///
   /// In en, this message translates to:

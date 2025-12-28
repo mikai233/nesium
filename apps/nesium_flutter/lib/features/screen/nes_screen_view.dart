@@ -7,10 +7,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../settings/video_settings.dart';
 
 class NesScreenView extends ConsumerStatefulWidget {
-  const NesScreenView({super.key, this.error, required this.textureId});
+  const NesScreenView({
+    super.key,
+    this.error,
+    required this.textureId,
+    this.screenVerticalOffset = 0,
+  });
 
   final String? error;
   final int? textureId;
+  final double screenVerticalOffset;
 
   static const double nesWidth = 256;
   static const double nesHeight = 240;
@@ -133,7 +139,10 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
     return Container(
       color: Colors.black,
       alignment: Alignment.center,
-      child: content,
+      child: Transform.translate(
+        offset: Offset(0, widget.screenVerticalOffset),
+        child: content,
+      ),
     );
   }
 }

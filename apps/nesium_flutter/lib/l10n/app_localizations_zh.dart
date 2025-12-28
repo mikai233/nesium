@@ -298,6 +298,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoIntegerScalingSubtitle => '像素级整数缩放（减少滚动抖动）。';
 
   @override
+  String get videoScreenVerticalOffset => '画面垂直偏移';
+
+  @override
   String get videoBackendLabel => 'Android 渲染后端';
 
   @override

@@ -18,24 +18,28 @@ class VideoSettings {
     required this.paletteMode,
     required this.builtinPreset,
     required this.integerScaling,
+    required this.screenVerticalOffset,
     this.customPaletteName,
   });
 
   final PaletteMode paletteMode;
   final nes_palette.PaletteKind builtinPreset;
   final bool integerScaling;
+  final double screenVerticalOffset;
   final String? customPaletteName;
 
   VideoSettings copyWith({
     PaletteMode? paletteMode,
     nes_palette.PaletteKind? builtinPreset,
     bool? integerScaling,
+    double? screenVerticalOffset,
     Object? customPaletteName = _unset,
   }) {
     return VideoSettings(
       paletteMode: paletteMode ?? this.paletteMode,
       builtinPreset: builtinPreset ?? this.builtinPreset,
       integerScaling: integerScaling ?? this.integerScaling,
+      screenVerticalOffset: screenVerticalOffset ?? this.screenVerticalOffset,
       customPaletteName: identical(customPaletteName, _unset)
           ? this.customPaletteName
           : customPaletteName as String?,
@@ -47,6 +51,7 @@ class VideoSettings {
       paletteMode: PaletteMode.builtin,
       builtinPreset: nes_palette.PaletteKind.nesdevNtsc,
       integerScaling: false,
+      screenVerticalOffset: 0,
       customPaletteName: null,
     );
   }
@@ -129,6 +134,13 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     await _persist(state);
   }
 
+  Future<void> setScreenVerticalOffset(double value) async {
+    final clamped = value.clamp(-240.0, 240.0).toDouble();
+    if (clamped == state.screenVerticalOffset) return;
+    state = state.copyWith(screenVerticalOffset: clamped);
+    await _persist(state);
+  }
+
   void useCustomIfAvailable() {
     if (state.customPaletteName == null) return;
     state = state.copyWith(paletteMode: PaletteMode.custom);
@@ -164,6 +176,7 @@ Map<String, Object?> _videoSettingsToStorage(VideoSettings value) =>
       'paletteMode': value.paletteMode.name,
       'builtinPreset': value.builtinPreset.name,
       'integerScaling': value.integerScaling,
+      'screenVerticalOffset': value.screenVerticalOffset,
       'customPaletteName': value.customPaletteName,
     };
 
@@ -198,10 +211,15 @@ VideoSettings? _videoSettingsFromStorage(
       ? map['integerScaling'] as bool
       : defaults.integerScaling;
 
+  final screenVerticalOffset = map['screenVerticalOffset'] is num
+      ? (map['screenVerticalOffset'] as num).toDouble()
+      : defaults.screenVerticalOffset;
+
   return defaults.copyWith(
     paletteMode: paletteMode,
     builtinPreset: builtinPreset,
     integerScaling: integerScaling,
+    screenVerticalOffset: screenVerticalOffset,
     customPaletteName: customPaletteName,
   );
 }

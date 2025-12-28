@@ -124,6 +124,7 @@
   "videoTitle": "Video",
   "videoIntegerScalingTitle": "Integer scaling",
   "videoIntegerScalingSubtitle": "Pixel-perfect scaling (reduces shimmer on scrolling).",
+  "videoScreenVerticalOffset": "Screen vertical offset",
   "videoBackendLabel": "Android renderer backend",
   "videoBackendHardware": "Hardware (AHardwareBuffer)",
   "videoBackendUpload": "Compatibility (CPU upload)",

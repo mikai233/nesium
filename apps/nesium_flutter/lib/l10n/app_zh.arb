@@ -95,6 +95,7 @@
   "videoTitle": "画面",
   "videoIntegerScalingTitle": "整数缩放",
   "videoIntegerScalingSubtitle": "像素级整数缩放（减少滚动抖动）。",
+  "videoScreenVerticalOffset": "画面垂直偏移",
   "videoBackendLabel": "Android 渲染后端",
   "videoBackendHardware": "硬件（AHardwareBuffer）",
   "videoBackendUpload": "兼容（CPU 上传）",

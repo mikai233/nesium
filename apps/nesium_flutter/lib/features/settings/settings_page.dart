@@ -453,6 +453,18 @@ class SettingsPage extends ConsumerWidget {
                       }
                     },
                   ),
+                  _SliderTile(
+                    label: l10n.videoScreenVerticalOffset,
+                    value: videoSettings.screenVerticalOffset,
+                    min: -240,
+                    max: 240,
+                    divisions: 96,
+                    onChanged: (v) => videoController.setScreenVerticalOffset(
+                      v.roundToDouble(),
+                    ),
+                    valueLabel:
+                        '${videoSettings.screenVerticalOffset.toStringAsFixed(0)} px',
+                  ),
                   if (isAndroid) ...[
                     const SizedBox(height: 12),
                     InputDecorator(

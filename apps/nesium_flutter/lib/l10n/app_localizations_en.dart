@@ -306,6 +306,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Pixel-perfect scaling (reduces shimmer on scrolling).';
 
   @override
+  String get videoScreenVerticalOffset => 'Screen vertical offset';
+
+  @override
   String get videoBackendLabel => 'Android renderer backend';
 
   @override

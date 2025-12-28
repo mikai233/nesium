@@ -15,6 +15,7 @@ import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_editor.dart';
 import '../features/controls/turbo_settings.dart';
 import '../features/controls/virtual_controls_overlay.dart';
+import '../features/controls/virtual_controls_settings.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/settings/settings_page.dart';
@@ -621,20 +622,37 @@ class _WebShellState extends ConsumerState<WebShell> {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
+                  final videoSettings = ref.watch(videoSettingsProvider);
+                  final inputSettings = ref.watch(inputSettingsProvider);
+                  final editor = ref.watch(virtualControlsEditorProvider);
+                  final controlsSettings = ref.watch(
+                    virtualControlsSettingsProvider,
+                  );
+
+                  final usingVirtual =
+                      editor.enabled ||
+                      inputSettings.device == InputDevice.virtualController;
+                  final autoOffsetY = (!isLandscape && usingVirtual)
+                      ? -(controlsSettings.buttonSize * 0.55)
+                      : 0.0;
+                  final screenOffsetY =
+                      videoSettings.screenVerticalOffset + autoOffsetY;
+
                   final viewport = NesScreenView.computeViewportSize(
                     constraints,
-                    integerScaling: ref
-                        .watch(videoSettingsProvider)
-                        .integerScaling,
+                    integerScaling: videoSettings.integerScaling,
                   );
                   if (viewport == null) return const SizedBox.shrink();
 
-                  final view = SizedBox(
-                    width: viewport.width,
-                    height: viewport.height,
-                    child: GestureDetector(
-                      onTap: () => _focusNode.requestFocus(),
-                      child: HtmlElementView(viewType: _viewType),
+                  final view = Transform.translate(
+                    offset: Offset(0, screenOffsetY),
+                    child: SizedBox(
+                      width: viewport.width,
+                      height: viewport.height,
+                      child: GestureDetector(
+                        onTap: () => _focusNode.requestFocus(),
+                        child: HtmlElementView(viewType: _viewType),
+                      ),
                     ),
                   );
 

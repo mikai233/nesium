@@ -7,24 +7,38 @@ import '../domain/nes_state.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_editor.dart';
 import '../features/controls/virtual_controls_overlay.dart';
+import '../features/controls/virtual_controls_settings.dart';
 import '../features/debugger/debugger_panel.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/tools/tools_panel.dart';
+import '../features/settings/video_settings.dart';
 import '../l10n/app_localizations.dart';
 import 'nes_actions.dart';
 import 'nes_menu_model.dart';
 
-class MobileShell extends StatelessWidget {
+class MobileShell extends ConsumerWidget {
   const MobileShell({super.key, required this.state, required this.actions});
 
   final NesState state;
   final NesActions actions;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
+
+    final videoSettings = ref.watch(videoSettingsProvider);
+    final inputSettings = ref.watch(inputSettingsProvider);
+    final editor = ref.watch(virtualControlsEditorProvider);
+    final controlsSettings = ref.watch(virtualControlsSettingsProvider);
+
+    final usingVirtual =
+        editor.enabled || inputSettings.device == InputDevice.virtualController;
+    final autoOffsetY = (!isLandscape && usingVirtual)
+        ? -(controlsSettings.buttonSize * 0.55)
+        : 0.0;
+    final screenOffsetY = videoSettings.screenVerticalOffset + autoOffsetY;
 
     return Scaffold(
       appBar: isLandscape ? null : AppBar(title: Text(l10n.appName)),
@@ -36,6 +50,7 @@ class MobileShell extends StatelessWidget {
             child: NesScreenView(
               error: state.error,
               textureId: state.textureId,
+              screenVerticalOffset: screenOffsetY,
             ),
           ),
           if (isLandscape)
