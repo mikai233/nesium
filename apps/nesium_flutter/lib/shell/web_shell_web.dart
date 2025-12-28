@@ -38,6 +38,7 @@ class _WebShellState extends ConsumerState<WebShell> {
   static const int _nesWidth = 256;
   static const int _nesHeight = 240;
   static const double _desktopMenuMinWidth = 820;
+  static const Duration _cursorHideDelay = Duration(seconds: 2);
 
   final FocusNode _focusNode = FocusNode();
 
@@ -59,6 +60,9 @@ class _WebShellState extends ConsumerState<WebShell> {
   DateTime? _lastSnackAt;
   String? _lastError;
 
+  Timer? _cursorTimer;
+  bool _cursorHidden = false;
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +72,7 @@ class _WebShellState extends ConsumerState<WebShell> {
 
   @override
   void dispose() {
+    _cursorTimer?.cancel();
     final worker = _worker;
     if (worker != null) {
       worker.onmessage = null;
@@ -84,6 +89,35 @@ class _WebShellState extends ConsumerState<WebShell> {
     super.dispose();
   }
 
+  void _showCursorAndArmTimer() {
+    if (_cursorHidden) {
+      setState(() => _cursorHidden = false);
+      _setCanvasCursorHidden(false);
+    }
+    _cursorTimer?.cancel();
+    _cursorTimer = Timer(_cursorHideDelay, () {
+      if (!mounted) return;
+      if (_cursorHidden) return;
+      setState(() => _cursorHidden = true);
+      _setCanvasCursorHidden(true);
+    });
+  }
+
+  void _showCursorAndCancelTimer() {
+    _cursorTimer?.cancel();
+    _cursorTimer = null;
+    if (_cursorHidden) {
+      setState(() => _cursorHidden = false);
+      _setCanvasCursorHidden(false);
+    }
+  }
+
+  void _setCanvasCursorHidden(bool hidden) {
+    final canvas = _canvas;
+    if (canvas == null) return;
+    canvas.style.cursor = hidden ? 'none' : 'default';
+  }
+
   void _initCanvasView() {
     final canvas = web.HTMLCanvasElement()
       ..width = _nesWidth
@@ -95,6 +129,11 @@ class _WebShellState extends ConsumerState<WebShell> {
       ..setProperty('image-rendering', 'pixelated')
       ..setProperty('image-rendering', 'crisp-edges')
       ..setProperty('touch-action', 'none');
+
+    canvas.style.cursor = 'default';
+    canvas.onmousemove = ((web.Event _) => _showCursorAndArmTimer()).toJS;
+    canvas.onmouseenter = ((web.Event _) => _showCursorAndArmTimer()).toJS;
+    canvas.onmouseleave = ((web.Event _) => _showCursorAndCancelTimer()).toJS;
 
     _canvas = canvas;
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (_) => canvas);

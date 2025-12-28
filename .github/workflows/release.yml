@@ -179,7 +179,13 @@ jobs:
                   test -f apps/nesium_flutter/build/web/nes/nes_worker.js
                   test -f apps/nesium_flutter/build/web/nes/pkg/nesium_wasm.js
                   test -f apps/nesium_flutter/build/web/nes/pkg/nesium_wasm_bg.wasm
+                  test -f apps/nesium_flutter/build/web/favicon.png
+                  test -f apps/nesium_flutter/build/web/manifest.json
+                  test -f apps/nesium_flutter/build/web/icons/Icon-192.png
+                  test -f apps/nesium_flutter/build/web/icons/Icon-512.png
                   ls -la apps/nesium_flutter/build/web/nes/pkg
+                  ls -la apps/nesium_flutter/build/web/favicon.png apps/nesium_flutter/build/web/manifest.json
+                  sha256sum apps/nesium_flutter/build/web/favicon.png apps/nesium_flutter/build/web/manifest.json | cat
 
             - name: Configure Pages
               uses: actions/configure-pages@v5
