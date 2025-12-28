@@ -145,6 +145,7 @@ jobs:
               shell: bash
               run: |
                   set -euo pipefail
+                  cd "${GITHUB_WORKSPACE}"
                   OUT_DIR="${GITHUB_WORKSPACE}/apps/nesium_flutter/web/nes/pkg"
                   mkdir -p "${OUT_DIR}"
                   pushd crates/nesium-wasm >/dev/null
