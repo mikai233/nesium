@@ -8,10 +8,7 @@ import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
-enum AndroidVideoBackend {
-  upload,
-  hardware,
-}
+enum AndroidVideoBackend { upload, hardware }
 
 extension on AndroidVideoBackend {
   int get mode => switch (this) {
@@ -22,7 +19,9 @@ extension on AndroidVideoBackend {
 
 AndroidVideoBackend androidVideoBackendFromMode(Object? value) {
   if (value is int) {
-    return value == 0 ? AndroidVideoBackend.upload : AndroidVideoBackend.hardware;
+    return value == 0
+        ? AndroidVideoBackend.upload
+        : AndroidVideoBackend.hardware;
   }
   return AndroidVideoBackend.hardware;
 }
@@ -40,9 +39,9 @@ class AndroidVideoBackendSettingsController
   @override
   AndroidVideoBackendSettings build() {
     _textureService = NesTextureService();
-    final stored = ref.read(appStorageProvider).get(
-          StorageKeys.settingsAndroidVideoBackend,
-        );
+    final stored = ref
+        .read(appStorageProvider)
+        .get(StorageKeys.settingsAndroidVideoBackend);
     return AndroidVideoBackendSettings(
       backend: androidVideoBackendFromMode(stored),
     );
@@ -57,7 +56,8 @@ class AndroidVideoBackendSettingsController
           .put(StorageKeys.settingsAndroidVideoBackend, backend.mode);
     } catch (_) {}
 
-    final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final isAndroid =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     if (!isAndroid) return;
 
     unawaitedLogged(
@@ -68,7 +68,8 @@ class AndroidVideoBackendSettingsController
   }
 }
 
-final androidVideoBackendSettingsProvider = NotifierProvider<
-    AndroidVideoBackendSettingsController, AndroidVideoBackendSettings>(
-  AndroidVideoBackendSettingsController.new,
-);
+final androidVideoBackendSettingsProvider =
+    NotifierProvider<
+      AndroidVideoBackendSettingsController,
+      AndroidVideoBackendSettings
+    >(AndroidVideoBackendSettingsController.new);

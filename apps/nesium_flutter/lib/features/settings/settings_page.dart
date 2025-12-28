@@ -109,15 +109,17 @@ class SettingsPage extends ConsumerWidget {
     final videoController = ref.read(videoSettingsProvider.notifier);
 
     final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
-    final androidBackendController =
-        ref.read(androidVideoBackendSettingsProvider.notifier);
+    final androidBackendController = ref.read(
+      androidVideoBackendSettingsProvider.notifier,
+    );
 
     final language = ref.watch(appLanguageProvider);
     final languageController = ref.read(appLanguageProvider.notifier);
 
     final supportsVirtual = isNativeMobile;
     final usingVirtual = inputSettings.device == InputDevice.virtualController;
-    final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final isAndroid =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
