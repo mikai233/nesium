@@ -294,6 +294,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'Pixel-perfect scaling (reduces shimmer on scrolling).';
 
   @override
+  String get videoBackendLabel => 'Android renderer backend';
+
+  @override
+  String get videoBackendHardware => 'Hardware (AHardwareBuffer)';
+
+  @override
+  String get videoBackendUpload => 'Compatibility (CPU upload)';
+
+  @override
+  String get videoBackendRestartHint => 'Takes effect after app restart.';
+
+  @override
   String get paletteModeLabel => 'Palette';
 
   @override

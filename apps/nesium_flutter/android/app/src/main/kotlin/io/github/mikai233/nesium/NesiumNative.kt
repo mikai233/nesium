@@ -1,6 +1,7 @@
 package io.github.mikai233.nesium
 
 import android.content.Context
+import android.view.Surface
 import java.nio.ByteBuffer
 
 /**
@@ -17,6 +18,31 @@ object NesiumNative {
 
     @JvmStatic
     external fun init_android_context(context: Context)
+
+    /**
+     * Selects the Android video backend.
+     *
+     * Must be called before [init_android_context] triggers runtime initialization.
+     *
+     * 0 = Upload (Kotlin GL uploader)
+     * 1 = AHardwareBuffer swapchain + Rust EGL/GL renderer
+     */
+    @JvmStatic
+    external fun nativeSetVideoBackend(mode: Int)
+
+    /**
+     * Starts the Rust-side EGL/GL renderer that presents into the given [Surface].
+     *
+     * Only used when `nativeSetVideoBackend(1)` was selected.
+     */
+    @JvmStatic
+    external fun nativeStartRustRenderer(surface: Surface)
+
+    /**
+     * Stops the Rust-side EGL/GL renderer (if running).
+     */
+    @JvmStatic
+    external fun nativeStopRustRenderer()
 
     @JvmStatic
     external fun nativeFrameSeq(): Long

@@ -24,7 +24,12 @@ use nesium_core::{
         buffer::{ColorFormat, ExternalFrameHandle, FrameReadyCallback},
     },
 };
-use nesium_runtime::{AudioMode, Runtime, RuntimeConfig, RuntimeHandle, VideoConfig};
+use nesium_runtime::{
+    AudioMode, Runtime, RuntimeConfig, RuntimeHandle, VideoConfig, VideoExternalConfig,
+};
+
+#[cfg(target_os = "android")]
+use nesium_runtime::VideoSwapchainConfig;
 
 pub const FRAME_WIDTH: usize = SCREEN_WIDTH;
 pub const FRAME_HEIGHT: usize = SCREEN_HEIGHT;
@@ -34,10 +39,19 @@ struct VideoBackingStore {
     _plane1: Box<[u8]>,
 }
 
+#[cfg(target_os = "android")]
+enum VideoBacking {
+    Cpu(VideoBackingStore),
+    Ahb(Box<android::AhbSwapchain>),
+}
+
 struct RuntimeHolder {
+    #[cfg(target_os = "android")]
+    _video: VideoBacking,
+    #[cfg(not(target_os = "android"))]
     _video: VideoBackingStore,
     handle: RuntimeHandle,
-    frame_handle: Arc<ExternalFrameHandle>,
+    frame_handle: Option<Arc<ExternalFrameHandle>>,
     _runtime: Runtime,
 }
 
@@ -72,32 +86,84 @@ fn ensure_runtime() -> &'static RuntimeHolder {
                 ColorFormat::Rgba8888
             }
         };
-        let len = FRAME_WIDTH * FRAME_HEIGHT * color_format.bytes_per_pixel();
-        let plane0 = vec![0u8; len].into_boxed_slice();
-        let plane1 = vec![0u8; len].into_boxed_slice();
-
-        let mut video = VideoBackingStore {
-            _plane0: plane0,
-            _plane1: plane1,
+        #[cfg(target_os = "android")]
+        let (video_cfg, video_backing): (VideoConfig, VideoBacking) = {
+            if android::use_ahb_video_backend() {
+                let swapchain = Box::new(android::AhbSwapchain::new(
+                    FRAME_WIDTH as u32,
+                    FRAME_HEIGHT as u32,
+                ));
+                let user_data = (&*swapchain as *const android::AhbSwapchain) as *mut c_void;
+                let cfg = VideoConfig::Swapchain(VideoSwapchainConfig {
+                    color_format,
+                    lock: android::ahb_lock_plane,
+                    unlock: android::ahb_unlock_plane,
+                    user_data,
+                });
+                // NOTE: callbacks own a clone-like handle; keep the backing store alive too.
+                (cfg, VideoBacking::Ahb(swapchain))
+            } else {
+                let len = FRAME_WIDTH * FRAME_HEIGHT * color_format.bytes_per_pixel();
+                let plane0 = vec![0u8; len].into_boxed_slice();
+                let plane1 = vec![0u8; len].into_boxed_slice();
+                let mut video = VideoBackingStore {
+                    _plane0: plane0,
+                    _plane1: plane1,
+                };
+                let cfg = VideoConfig::External(VideoExternalConfig {
+                    color_format,
+                    pitch_bytes: FRAME_WIDTH * color_format.bytes_per_pixel(),
+                    plane0: video._plane0.as_mut_ptr(),
+                    plane1: video._plane1.as_mut_ptr(),
+                });
+                (cfg, VideoBacking::Cpu(video))
+            }
         };
 
-        // SAFETY: `video` keeps the two planes alive for the lifetime of the process.
-        // The planes do not overlap and are sized to the NES framebuffer.
-        let runtime = Runtime::start(RuntimeConfig {
-            video: VideoConfig {
+        #[cfg(not(target_os = "android"))]
+        let (video_cfg, video_backing): (VideoConfig, VideoBackingStore) = {
+            let len = FRAME_WIDTH * FRAME_HEIGHT * color_format.bytes_per_pixel();
+            let plane0 = vec![0u8; len].into_boxed_slice();
+            let plane1 = vec![0u8; len].into_boxed_slice();
+            let mut video = VideoBackingStore {
+                _plane0: plane0,
+                _plane1: plane1,
+            };
+            let cfg = VideoConfig::External(VideoExternalConfig {
                 color_format,
+                pitch_bytes: FRAME_WIDTH * color_format.bytes_per_pixel(),
                 plane0: video._plane0.as_mut_ptr(),
                 plane1: video._plane1.as_mut_ptr(),
-            },
+            });
+            (cfg, video)
+        };
+
+        // SAFETY:
+        // - CPU backend: `video_backing` keeps the two planes alive for the lifetime of the process.
+        // - AHB backend: the swapchain callbacks manage per-frame locking and pointer validity.
+        let runtime = Runtime::start(RuntimeConfig {
+            video: video_cfg,
             audio: AudioMode::Auto,
         })
         .expect("failed to start nesium runtime");
 
         let handle = runtime.handle();
-        let frame_handle = handle.frame_handle().clone();
+        #[cfg(target_os = "android")]
+        {
+            // Default frame-ready callback for Android, used by both backends:
+            // - Upload backend: wakes Kotlin GL uploader (pipe)
+            // - AHB backend: wakes Rust renderer (condvar) + pipe (optional)
+            handle
+                .set_frame_ready_callback(
+                    Some(android::android_frame_ready_cb),
+                    std::ptr::null_mut(),
+                )
+                .expect("failed to set android frame ready callback");
+        }
+        let frame_handle = handle.frame_handle().cloned();
 
         RuntimeHolder {
-            _video: video,
+            _video: video_backing,
             handle,
             frame_handle,
             _runtime: runtime,
@@ -114,7 +180,10 @@ pub(crate) fn try_runtime_handle() -> Option<&'static RuntimeHandle> {
 }
 
 fn frame_handle_ref() -> &'static ExternalFrameHandle {
-    ensure_runtime().frame_handle.as_ref()
+    ensure_runtime()
+        .frame_handle
+        .as_ref()
+        .expect("frame handle not available for this video backend")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

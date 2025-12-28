@@ -9,4 +9,13 @@ class NesTextureService {
 
   Future<int?> disposeTexture() =>
       _channel.invokeMethod<int>('disposeNesTexture');
+
+  /// Switches the Android video backend.
+  ///
+  /// - `0`: Kotlin GL uploader (software upload)
+  /// - `1`: AHardwareBuffer swapchain + Rust EGL/GL renderer
+  ///
+  /// Note: takes effect on next app restart.
+  Future<void> setVideoBackend(int mode) =>
+      _channel.invokeMethod<void>('setVideoBackend', {'mode': mode});
 }

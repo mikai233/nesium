@@ -632,6 +632,30 @@ abstract class AppLocalizations {
   /// **'Pixel-perfect scaling (reduces shimmer on scrolling).'**
   String get videoIntegerScalingSubtitle;
 
+  /// No description provided for @videoBackendLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Android renderer backend'**
+  String get videoBackendLabel;
+
+  /// No description provided for @videoBackendHardware.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware (AHardwareBuffer)'**
+  String get videoBackendHardware;
+
+  /// No description provided for @videoBackendUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Compatibility (CPU upload)'**
+  String get videoBackendUpload;
+
+  /// No description provided for @videoBackendRestartHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Takes effect after app restart.'**
+  String get videoBackendRestartHint;
+
   /// No description provided for @paletteModeLabel.
   ///
   /// In en, this message translates to:

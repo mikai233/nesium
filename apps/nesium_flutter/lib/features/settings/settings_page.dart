@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -9,6 +10,7 @@ import '../../platform/platform_capabilities.dart';
 import '../controls/input_settings.dart';
 import '../controls/turbo_settings.dart';
 import '../controls/virtual_controls_settings.dart';
+import 'android_video_backend_settings.dart';
 import 'emulation_settings.dart';
 import 'language_settings.dart';
 import 'video_settings.dart';
@@ -106,11 +108,16 @@ class SettingsPage extends ConsumerWidget {
     final videoSettings = ref.watch(videoSettingsProvider);
     final videoController = ref.read(videoSettingsProvider.notifier);
 
+    final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
+    final androidBackendController =
+        ref.read(androidVideoBackendSettingsProvider.notifier);
+
     final language = ref.watch(appLanguageProvider);
     final languageController = ref.read(appLanguageProvider.notifier);
 
     final supportsVirtual = isNativeMobile;
     final usingVirtual = inputSettings.device == InputDevice.virtualController;
+    final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
@@ -441,6 +448,45 @@ class SettingsPage extends ConsumerWidget {
                       }
                     },
                   ),
+                  if (isAndroid) ...[
+                    const SizedBox(height: 12),
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: l10n.videoBackendLabel,
+                        border: const OutlineInputBorder(),
+                        helperText: l10n.videoBackendRestartHint,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<AndroidVideoBackend>(
+                          value: androidBackend.backend,
+                          isExpanded: true,
+                          items: [
+                            DropdownMenuItem(
+                              value: AndroidVideoBackend.hardware,
+                              child: Text(l10n.videoBackendHardware),
+                            ),
+                            DropdownMenuItem(
+                              value: AndroidVideoBackend.upload,
+                              child: Text(l10n.videoBackendUpload),
+                            ),
+                          ],
+                          onChanged: (value) async {
+                            if (value == null) return;
+                            try {
+                              await androidBackendController.setBackend(value);
+                            } catch (e, st) {
+                              logWarning(
+                                e,
+                                stackTrace: st,
+                                message: 'setBackend failed',
+                                logger: 'settings_page',
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   if (videoSettings.paletteMode == PaletteMode.builtin)
                     InputDecorator(

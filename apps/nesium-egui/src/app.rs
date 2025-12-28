@@ -31,6 +31,7 @@ use nesium_core::{
 };
 use nesium_runtime::{
     AudioMode, Runtime, RuntimeConfig, RuntimeHandle, RuntimeNotification, VideoConfig,
+    VideoExternalConfig,
 };
 
 struct VideoBackingStore {
@@ -179,11 +180,12 @@ impl NesiumApp {
         // SAFETY: `video_backing` keeps the two planes alive for the lifetime of the app.
         // The planes do not overlap and are sized to the NES framebuffer.
         let runtime = Runtime::start(RuntimeConfig {
-            video: VideoConfig {
+            video: VideoConfig::External(VideoExternalConfig {
                 color_format: ColorFormat::Rgba8888,
+                pitch_bytes: SCREEN_WIDTH * ColorFormat::Rgba8888.bytes_per_pixel(),
                 plane0: video_backing._plane0.as_mut_ptr(),
                 plane1: video_backing._plane1.as_mut_ptr(),
-            },
+            }),
             audio: AudioMode::Auto,
         })
         .expect("failed to start nesium runtime");
@@ -316,7 +318,10 @@ impl NesiumApp {
     }
 
     fn update_frame_texture(&mut self, ctx: &EguiContext) {
-        let handle = self.runtime_handle.frame_handle();
+        let handle = self
+            .runtime_handle
+            .frame_handle()
+            .expect("egui requires a readable CPU framebuffer");
 
         let idx = handle.begin_front_copy();
         let slice = handle.plane_slice(idx);

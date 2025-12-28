@@ -1,6 +1,10 @@
+use core::ffi::c_void;
 use std::{path::PathBuf, time::Duration};
 
-use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat};
+use nesium_core::ppu::{
+    SCREEN_HEIGHT, SCREEN_WIDTH,
+    buffer::{ColorFormat, SwapchainLockCallback, SwapchainUnlockCallback},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioMode {
@@ -9,17 +13,40 @@ pub enum AudioMode {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct VideoConfig {
+pub struct VideoExternalConfig {
     pub color_format: ColorFormat,
+    /// Bytes per scanline for each plane.
+    ///
+    /// This can be larger than `SCREEN_WIDTH * bytes_per_pixel` (e.g. padded/strided buffers).
+    pub pitch_bytes: usize,
     pub plane0: *mut u8,
     pub plane1: *mut u8,
 }
 
-impl VideoConfig {
+impl VideoExternalConfig {
     #[inline]
     pub fn len_bytes(self) -> usize {
-        SCREEN_WIDTH * SCREEN_HEIGHT * self.color_format.bytes_per_pixel()
+        self.pitch_bytes * SCREEN_HEIGHT
     }
+
+    #[inline]
+    pub fn expected_pitch_bytes(self) -> usize {
+        SCREEN_WIDTH * self.color_format.bytes_per_pixel()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct VideoSwapchainConfig {
+    pub color_format: ColorFormat,
+    pub lock: SwapchainLockCallback,
+    pub unlock: SwapchainUnlockCallback,
+    pub user_data: *mut c_void,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum VideoConfig {
+    External(VideoExternalConfig),
+    Swapchain(VideoSwapchainConfig),
 }
 
 #[derive(Debug, Clone, Copy)]

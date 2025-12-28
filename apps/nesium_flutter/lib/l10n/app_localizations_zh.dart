@@ -286,6 +286,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoIntegerScalingSubtitle => '像素级整数缩放（减少滚动抖动）。';
 
   @override
+  String get videoBackendLabel => 'Android 渲染后端';
+
+  @override
+  String get videoBackendHardware => '硬件（AHardwareBuffer）';
+
+  @override
+  String get videoBackendUpload => '兼容（CPU 上传）';
+
+  @override
+  String get videoBackendRestartHint => '重启后生效。';
+
+  @override
   String get paletteModeLabel => '调色板';
 
   @override

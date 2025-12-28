@@ -22,7 +22,7 @@ use super::{
     state::RuntimeState,
     types::{
         CONTROL_REPLY_TIMEOUT, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError,
-        RuntimeNotification,
+        RuntimeNotification, VideoConfig,
     },
     util::button_bit,
 };
@@ -30,7 +30,7 @@ use super::{
 struct RuntimeInner {
     ctrl_tx: Sender<ControlMessage>,
     notifications_rx: Mutex<Receiver<RuntimeNotification>>,
-    frame_handle: Arc<ExternalFrameHandle>,
+    frame_handle: Option<Arc<ExternalFrameHandle>>,
     state: Arc<RuntimeState>,
 }
 
@@ -49,20 +49,39 @@ impl Runtime {
         let (ctrl_tx, ctrl_rx) = unbounded::<ControlMessage>();
         let (event_tx, event_rx) = unbounded::<RuntimeNotification>();
 
-        let len = config.video.len_bytes();
-        if len == 0 {
-            return Err(RuntimeError::VideoBufferLenZero);
-        }
-
-        let (framebuffer, frame_handle) = unsafe {
-            FrameBuffer::new_external(
-                BufferMode::Color {
-                    format: config.video.color_format,
-                },
-                len,
-                config.video.plane0,
-                config.video.plane1,
-            )
+        let (framebuffer, frame_handle) = match config.video {
+            VideoConfig::External(video) => {
+                let len = video.len_bytes();
+                if len == 0 {
+                    return Err(RuntimeError::VideoBufferLenZero);
+                }
+                assert!(
+                    video.pitch_bytes >= video.expected_pitch_bytes(),
+                    "video pitch_bytes is smaller than the expected minimum pitch"
+                );
+                let (fb, handle) = unsafe {
+                    FrameBuffer::new_external(
+                        BufferMode::Color {
+                            format: video.color_format,
+                        },
+                        video.pitch_bytes,
+                        video.plane0,
+                        video.plane1,
+                    )
+                };
+                (fb, Some(handle))
+            }
+            VideoConfig::Swapchain(video) => {
+                let fb = FrameBuffer::new_swapchain(
+                    BufferMode::Color {
+                        format: video.color_format,
+                    },
+                    video.lock,
+                    video.unlock,
+                    video.user_data,
+                );
+                (fb, None)
+            }
         };
 
         let state = Arc::new(RuntimeState::new());
@@ -126,8 +145,8 @@ impl RuntimeHandle {
         }
     }
 
-    pub fn frame_handle(&self) -> &Arc<ExternalFrameHandle> {
-        &self.inner.frame_handle
+    pub fn frame_handle(&self) -> Option<&Arc<ExternalFrameHandle>> {
+        self.inner.frame_handle.as_ref()
     }
 
     pub fn frame_seq(&self) -> u64 {

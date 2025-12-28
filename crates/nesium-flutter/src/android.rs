@@ -1,10 +1,11 @@
 use std::{
-    ffi::{c_uint, c_void},
+    ffi::{CStr, c_char, c_int, c_uint, c_void},
     os::unix::io::RawFd,
     sync::{
-        OnceLock,
-        atomic::{AtomicI32, Ordering},
+        Arc, Condvar, Mutex, OnceLock,
+        atomic::{AtomicBool, AtomicI32, Ordering},
     },
+    time::Duration,
 };
 
 use jni::{
@@ -13,10 +14,219 @@ use jni::{
     sys::{jint, jlong, jobject},
 };
 
-use crate::{FRAME_HEIGHT, FRAME_WIDTH, ensure_runtime, frame_handle_ref};
+use crate::{FRAME_HEIGHT, FRAME_WIDTH, ensure_runtime, runtime_handle};
 
 // Raw syscalls (fcntl/write) for the Android frame signal pipe.
 use libc;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum AndroidVideoBackend {
+    Upload = 0,
+    AhbSwapchain = 1,
+}
+
+static VIDEO_BACKEND: AtomicI32 = AtomicI32::new(AndroidVideoBackend::AhbSwapchain as i32);
+
+pub fn use_ahb_video_backend() -> bool {
+    VIDEO_BACKEND.load(Ordering::Acquire) == AndroidVideoBackend::AhbSwapchain as i32
+}
+
+// === AHardwareBuffer swapchain (Scheme B) ==================================
+
+#[repr(C)]
+pub struct AHardwareBuffer {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+pub struct AHardwareBuffer_Desc {
+    pub width: u32,
+    pub height: u32,
+    pub layers: u32,
+    pub format: u32,
+    pub usage: u64,
+    pub stride: u32,
+    pub rfu0: u32,
+    pub rfu1: u64,
+}
+
+#[repr(C)]
+pub struct ARect {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
+// https://developer.android.com/ndk/reference/group/a-hardware-buffer
+const AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM: u32 = 1;
+const AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN: u64 = 0x30;
+const AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE: u64 = 0x100;
+
+#[link(name = "android")]
+unsafe extern "C" {
+    fn AHardwareBuffer_allocate(
+        desc: *const AHardwareBuffer_Desc,
+        out: *mut *mut AHardwareBuffer,
+    ) -> c_int;
+    fn AHardwareBuffer_release(buffer: *mut AHardwareBuffer);
+    fn AHardwareBuffer_describe(buffer: *const AHardwareBuffer, out: *mut AHardwareBuffer_Desc);
+    fn AHardwareBuffer_lock(
+        buffer: *mut AHardwareBuffer,
+        usage: u64,
+        fence: c_int,
+        rect: *const ARect,
+        out_virtual_address: *mut *mut c_void,
+    ) -> c_int;
+    fn AHardwareBuffer_unlock(buffer: *mut AHardwareBuffer, fence: *mut c_int) -> c_int;
+}
+
+pub struct AhbSwapchain {
+    buffers: [*mut AHardwareBuffer; 2],
+    pitch_bytes: usize,
+    gpu_busy: [AtomicBool; 2],
+    gpu_busy_mu: Mutex<()>,
+    gpu_busy_cv: Condvar,
+}
+
+// SAFETY: The swapchain buffers are stable native handles; access is coordinated via internal
+// atomics/mutexes and the Android NDK AHardwareBuffer APIs are thread-safe.
+unsafe impl Send for AhbSwapchain {}
+unsafe impl Sync for AhbSwapchain {}
+
+impl AhbSwapchain {
+    pub fn new(width: u32, height: u32) -> Self {
+        let mut buffers: [*mut AHardwareBuffer; 2] = [std::ptr::null_mut(), std::ptr::null_mut()];
+        let desc = AHardwareBuffer_Desc {
+            width,
+            height,
+            layers: 1,
+            format: AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
+            usage: AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN | AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
+            stride: 0,
+            rfu0: 0,
+            rfu1: 0,
+        };
+
+        for slot in &mut buffers {
+            let mut out: *mut AHardwareBuffer = std::ptr::null_mut();
+            let res = unsafe { AHardwareBuffer_allocate(&desc as *const _, &mut out as *mut _) };
+            if res != 0 || out.is_null() {
+                panic!("AHardwareBuffer_allocate failed: {res}");
+            }
+            *slot = out;
+        }
+
+        let mut described = AHardwareBuffer_Desc {
+            width: 0,
+            height: 0,
+            layers: 0,
+            format: 0,
+            usage: 0,
+            stride: 0,
+            rfu0: 0,
+            rfu1: 0,
+        };
+        unsafe { AHardwareBuffer_describe(buffers[0] as *const _, &mut described as *mut _) };
+        let pitch_bytes = described.stride as usize * 4;
+
+        Self {
+            buffers,
+            pitch_bytes,
+            gpu_busy: [AtomicBool::new(false), AtomicBool::new(false)],
+            gpu_busy_mu: Mutex::new(()),
+            gpu_busy_cv: Condvar::new(),
+        }
+    }
+
+    pub fn pitch_bytes(&self) -> usize {
+        self.pitch_bytes
+    }
+
+    pub fn buffer(&self, idx: usize) -> *mut AHardwareBuffer {
+        self.buffers[idx]
+    }
+
+    fn wait_gpu_idle(&self, idx: usize) {
+        if !self.gpu_busy[idx].load(Ordering::Acquire) {
+            return;
+        }
+        let mut guard = self.gpu_busy_mu.lock().unwrap();
+        while self.gpu_busy[idx].load(Ordering::Acquire) {
+            guard = self.gpu_busy_cv.wait(guard).unwrap();
+        }
+    }
+
+    fn set_gpu_busy(&self, idx: usize, busy: bool) {
+        self.gpu_busy[idx].store(busy, Ordering::Release);
+        if !busy {
+            self.gpu_busy_cv.notify_all();
+        }
+    }
+
+    fn lock_plane(&self, idx: usize) -> *mut u8 {
+        self.wait_gpu_idle(idx);
+
+        let mut out: *mut c_void = std::ptr::null_mut();
+        let res = unsafe {
+            AHardwareBuffer_lock(
+                self.buffers[idx],
+                AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
+                -1,
+                std::ptr::null(),
+                &mut out as *mut _,
+            )
+        };
+        if res != 0 || out.is_null() {
+            return std::ptr::null_mut();
+        }
+        out as *mut u8
+    }
+
+    fn unlock_plane(&self, idx: usize) {
+        let res = unsafe { AHardwareBuffer_unlock(self.buffers[idx], std::ptr::null_mut()) };
+        if res != 0 {
+            eprintln!("AHardwareBuffer_unlock failed: {res}");
+        }
+    }
+}
+
+impl Drop for AhbSwapchain {
+    fn drop(&mut self) {
+        for b in self.buffers {
+            if !b.is_null() {
+                unsafe { AHardwareBuffer_release(b) };
+            }
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ahb_lock_plane(
+    buffer_index: c_uint,
+    pitch_out: *mut c_uint,
+    user_data: *mut c_void,
+) -> *mut u8 {
+    let Some(pitch_out) = (unsafe { pitch_out.as_mut() }) else {
+        return std::ptr::null_mut();
+    };
+    if user_data.is_null() {
+        return std::ptr::null_mut();
+    }
+    let swapchain = unsafe { &*(user_data as *const AhbSwapchain) };
+    *pitch_out = swapchain.pitch_bytes() as c_uint;
+    swapchain.lock_plane(buffer_index as usize)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ahb_unlock_plane(buffer_index: c_uint, user_data: *mut c_void) {
+    if user_data.is_null() {
+        return;
+    }
+    let swapchain = unsafe { &*(user_data as *const AhbSwapchain) };
+    swapchain.unlock_plane(buffer_index as usize);
+}
 
 /// A process-wide global reference to an Android `Context`.
 ///
@@ -37,6 +247,26 @@ static NDK_CONTEXT_INIT: OnceLock<()> = OnceLock::new();
 ///
 /// Note: the FD is owned by Kotlin (via `ParcelFileDescriptor`) and may be closed during shutdown.
 static FRAME_SIGNAL_FD: AtomicI32 = AtomicI32::new(-1);
+
+struct RustRendererSignal {
+    mu: std::sync::Mutex<u64>,
+    cv: std::sync::Condvar,
+    last_index: std::sync::atomic::AtomicI32,
+}
+
+static RUST_RENDERER_SIGNAL: OnceLock<RustRendererSignal> = OnceLock::new();
+
+fn notify_rust_renderer(buffer_index: u32) {
+    let signal = RUST_RENDERER_SIGNAL.get();
+    if let Some(signal) = signal {
+        signal
+            .last_index
+            .store(buffer_index as i32, Ordering::Release);
+        let mut seq = signal.mu.lock().unwrap();
+        *seq = seq.wrapping_add(1);
+        signal.cv.notify_one();
+    }
+}
 
 /// JNI entry point called from Kotlin.
 ///
@@ -76,12 +306,24 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_init_1android
         println!("[Rust] Android Context initialized via ndk-context");
     });
 
-    // Ensure the runtime is started.
+    // Ensure the runtime is started (video backend must be selected beforehand).
     let runtime = ensure_runtime();
     runtime
         .handle
         .set_frame_ready_callback(Some(android_frame_ready_cb), std::ptr::null_mut())
         .expect("Failed to set frame ready callback");
+}
+
+/// Selects the Android video backend for this process.
+///
+/// Must be called before `init_android_context` triggers runtime initialization.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetVideoBackend(
+    _env: JNIEnv,
+    _class: JClass,
+    mode: jint,
+) {
+    VIDEO_BACKEND.store(mode as i32, Ordering::Release);
 }
 
 /// Stores the write-end FD for the frame signal pipe and makes it non-blocking.
@@ -117,7 +359,7 @@ pub(crate) fn signal_frame_ready() {
         return;
     }
 
-    let seq = frame_handle_ref().frame_seq();
+    let seq = runtime_handle().frame_seq();
     let token = seq.to_le_bytes();
 
     let mut written = 0usize;
@@ -156,7 +398,7 @@ pub(crate) fn signal_frame_ready() {
 }
 
 pub extern "C" fn android_frame_ready_cb(
-    _buffer_index: c_uint,
+    buffer_index: c_uint,
     _width: c_uint,
     _height: c_uint,
     _pitch: c_uint,
@@ -164,6 +406,583 @@ pub extern "C" fn android_frame_ready_cb(
 ) {
     // Must not panic here.
     signal_frame_ready();
+    notify_rust_renderer(buffer_index);
+}
+
+// === Rust EGL/GL renderer (Scheme B) =======================================
+
+#[repr(C)]
+pub struct ANativeWindow {
+    _private: [u8; 0],
+}
+
+#[link(name = "android")]
+unsafe extern "C" {
+    fn ANativeWindow_fromSurface(
+        env: *mut jni::sys::JNIEnv,
+        surface: jobject,
+    ) -> *mut ANativeWindow;
+    fn ANativeWindow_release(window: *mut ANativeWindow);
+}
+
+type EGLDisplay = *mut c_void;
+type EGLContext = *mut c_void;
+type EGLSurface = *mut c_void;
+type EGLConfig = *mut c_void;
+type EGLClientBuffer = *mut c_void;
+type EGLImageKHR = *mut c_void;
+type EGLBoolean = c_int;
+type EGLint = c_int;
+type EGLNativeDisplayType = *mut c_void;
+type EGLNativeWindowType = *mut ANativeWindow;
+
+const EGL_FALSE: EGLBoolean = 0;
+const EGL_TRUE: EGLBoolean = 1;
+const EGL_DEFAULT_DISPLAY: EGLNativeDisplayType = std::ptr::null_mut();
+const EGL_NO_DISPLAY: EGLDisplay = std::ptr::null_mut();
+const EGL_NO_CONTEXT: EGLContext = std::ptr::null_mut();
+const EGL_NO_SURFACE: EGLSurface = std::ptr::null_mut();
+const EGL_NO_IMAGE_KHR: EGLImageKHR = std::ptr::null_mut();
+
+const EGL_NONE: EGLint = 0x3038;
+const EGL_RED_SIZE: EGLint = 0x3024;
+const EGL_GREEN_SIZE: EGLint = 0x3023;
+const EGL_BLUE_SIZE: EGLint = 0x3022;
+const EGL_ALPHA_SIZE: EGLint = 0x3021;
+const EGL_RENDERABLE_TYPE: EGLint = 0x3040;
+const EGL_SURFACE_TYPE: EGLint = 0x3033;
+const EGL_WINDOW_BIT: EGLint = 0x0004;
+const EGL_OPENGL_ES2_BIT: EGLint = 0x0004;
+const EGL_CONTEXT_CLIENT_VERSION: EGLint = 0x3098;
+const EGL_OPENGL_ES_API: EGLint = 0x30A0;
+
+const EGL_NATIVE_BUFFER_ANDROID: EGLint = 0x3140;
+const EGL_IMAGE_PRESERVED_KHR: EGLint = 0x30D2;
+
+#[link(name = "EGL")]
+unsafe extern "C" {
+    fn eglGetDisplay(display_id: EGLNativeDisplayType) -> EGLDisplay;
+    fn eglInitialize(dpy: EGLDisplay, major: *mut EGLint, minor: *mut EGLint) -> EGLBoolean;
+    fn eglTerminate(dpy: EGLDisplay) -> EGLBoolean;
+    fn eglBindAPI(api: EGLint) -> EGLBoolean;
+    fn eglChooseConfig(
+        dpy: EGLDisplay,
+        attrib_list: *const EGLint,
+        configs: *mut EGLConfig,
+        config_size: EGLint,
+        num_config: *mut EGLint,
+    ) -> EGLBoolean;
+    fn eglCreateContext(
+        dpy: EGLDisplay,
+        config: EGLConfig,
+        share_context: EGLContext,
+        attrib_list: *const EGLint,
+    ) -> EGLContext;
+    fn eglDestroyContext(dpy: EGLDisplay, ctx: EGLContext) -> EGLBoolean;
+    fn eglCreateWindowSurface(
+        dpy: EGLDisplay,
+        config: EGLConfig,
+        win: EGLNativeWindowType,
+        attrib_list: *const EGLint,
+    ) -> EGLSurface;
+    fn eglDestroySurface(dpy: EGLDisplay, surface: EGLSurface) -> EGLBoolean;
+    fn eglMakeCurrent(
+        dpy: EGLDisplay,
+        draw: EGLSurface,
+        read: EGLSurface,
+        ctx: EGLContext,
+    ) -> EGLBoolean;
+    fn eglSwapInterval(dpy: EGLDisplay, interval: EGLint) -> EGLBoolean;
+    fn eglSwapBuffers(dpy: EGLDisplay, surface: EGLSurface) -> EGLBoolean;
+    fn eglGetProcAddress(procname: *const c_char) -> *const c_void;
+    fn eglGetError() -> EGLint;
+}
+
+#[link(name = "GLESv2")]
+unsafe extern "C" {
+    fn glDisable(cap: u32);
+    fn glViewport(x: c_int, y: c_int, width: c_int, height: c_int);
+    fn glClearColor(r: f32, g: f32, b: f32, a: f32);
+    fn glClear(mask: u32);
+    fn glGenTextures(n: c_int, textures: *mut u32);
+    fn glBindTexture(target: u32, texture: u32);
+    fn glTexParameteri(target: u32, pname: u32, param: c_int);
+    fn glActiveTexture(texture: u32);
+    fn glCreateShader(ty: u32) -> u32;
+    fn glShaderSource(
+        shader: u32,
+        count: c_int,
+        string: *const *const c_char,
+        length: *const c_int,
+    );
+    fn glCompileShader(shader: u32);
+    fn glGetShaderiv(shader: u32, pname: u32, params: *mut c_int);
+    fn glGetShaderInfoLog(shader: u32, buf_size: c_int, length: *mut c_int, info_log: *mut c_char);
+    fn glCreateProgram() -> u32;
+    fn glAttachShader(program: u32, shader: u32);
+    fn glLinkProgram(program: u32);
+    fn glGetProgramiv(program: u32, pname: u32, params: *mut c_int);
+    fn glGetProgramInfoLog(
+        program: u32,
+        buf_size: c_int,
+        length: *mut c_int,
+        info_log: *mut c_char,
+    );
+    fn glUseProgram(program: u32);
+    fn glGetAttribLocation(program: u32, name: *const c_char) -> c_int;
+    fn glGetUniformLocation(program: u32, name: *const c_char) -> c_int;
+    fn glEnableVertexAttribArray(index: u32);
+    fn glVertexAttribPointer(
+        index: u32,
+        size: c_int,
+        ty: u32,
+        normalized: u8,
+        stride: c_int,
+        pointer: *const c_void,
+    );
+    fn glUniform1i(location: c_int, v0: c_int);
+    fn glDrawArrays(mode: u32, first: c_int, count: c_int);
+    fn glFinish();
+    fn glGetString(name: u32) -> *const u8;
+}
+
+const GL_DITHER: u32 = 0x0BD0;
+const GL_COLOR_BUFFER_BIT: u32 = 0x00004000;
+const GL_TEXTURE_2D: u32 = 0x0DE1;
+const GL_TEXTURE0: u32 = 0x84C0;
+const GL_TEXTURE_MIN_FILTER: u32 = 0x2801;
+const GL_TEXTURE_MAG_FILTER: u32 = 0x2800;
+const GL_TEXTURE_WRAP_S: u32 = 0x2802;
+const GL_TEXTURE_WRAP_T: u32 = 0x2803;
+const GL_NEAREST: c_int = 0x2600;
+const GL_CLAMP_TO_EDGE: c_int = 0x812F;
+const GL_VERTEX_SHADER: u32 = 0x8B31;
+const GL_FRAGMENT_SHADER: u32 = 0x8B30;
+const GL_COMPILE_STATUS: u32 = 0x8B81;
+const GL_LINK_STATUS: u32 = 0x8B82;
+const GL_INFO_LOG_LENGTH: u32 = 0x8B84;
+const GL_TRIANGLE_STRIP: u32 = 0x0005;
+
+const GL_EXTENSIONS: u32 = 0x1F03;
+
+type PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC =
+    unsafe extern "C" fn(buffer: *mut AHardwareBuffer) -> EGLClientBuffer;
+type PFNEGLCREATEIMAGEKHRPROC = unsafe extern "C" fn(
+    dpy: EGLDisplay,
+    ctx: EGLContext,
+    target: EGLint,
+    buffer: EGLClientBuffer,
+    attrib_list: *const EGLint,
+) -> EGLImageKHR;
+type PFNEGLDESTROYIMAGEKHRPROC =
+    unsafe extern "C" fn(dpy: EGLDisplay, image: EGLImageKHR) -> EGLBoolean;
+type PFNGLEGLIMAGETARGETTEXTURE2DOESPROC = unsafe extern "C" fn(target: u32, image: *const c_void);
+
+unsafe fn egl_proc<T>(name: &'static [u8]) -> Option<T> {
+    debug_assert!(name.last() == Some(&0));
+    let ptr = unsafe { eglGetProcAddress(name.as_ptr() as *const c_char) };
+    if ptr.is_null() {
+        return None;
+    }
+    Some(unsafe { std::mem::transmute_copy::<*const c_void, T>(&ptr) })
+}
+
+struct RustRendererHandle {
+    stop: Arc<AtomicBool>,
+    join: std::thread::JoinHandle<()>,
+}
+
+static RUST_RENDERER: OnceLock<Mutex<Option<RustRendererHandle>>> = OnceLock::new();
+
+fn rust_renderer_slot() -> &'static Mutex<Option<RustRendererHandle>> {
+    RUST_RENDERER.get_or_init(|| Mutex::new(None))
+}
+
+fn rust_renderer_signal() -> &'static RustRendererSignal {
+    RUST_RENDERER_SIGNAL.get_or_init(|| RustRendererSignal {
+        mu: Mutex::new(0),
+        cv: Condvar::new(),
+        last_index: AtomicI32::new(-1),
+    })
+}
+
+fn rust_renderer_wake() {
+    let signal = rust_renderer_signal();
+    let mut seq = signal.mu.lock().unwrap();
+    *seq = seq.wrapping_add(1);
+    signal.cv.notify_one();
+}
+
+fn get_ahb_swapchain() -> Option<&'static AhbSwapchain> {
+    // This relies on `RuntimeHolder` keeping the backing store alive for the entire process lifetime.
+    #[allow(clippy::match_wildcard_for_single_variants)]
+    match &ensure_runtime()._video {
+        crate::VideoBacking::Ahb(swapchain) => Some(&**swapchain),
+        _ => None,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRustRenderer(
+    env: JNIEnv,
+    _class: JClass,
+    surface: JObject,
+) {
+    let Some(swapchain) = get_ahb_swapchain() else {
+        eprintln!("nativeStartRustRenderer: AHB swapchain backend not active");
+        return;
+    };
+
+    let env_ptr = env.get_native_interface();
+    let window = unsafe { ANativeWindow_fromSurface(env_ptr, surface.as_raw()) };
+    if window.is_null() {
+        eprintln!("ANativeWindow_fromSurface failed");
+        return;
+    }
+
+    let stop = Arc::new(AtomicBool::new(false));
+    // Closure capture in Rust 2024 may capture tuple struct fields; keep only `usize` / references.
+    let window_ptr = window as usize;
+    let swapchain_ref: &'static AhbSwapchain = swapchain;
+
+    // Replace any existing renderer.
+    Java_io_github_mikai233_nesium_NesiumNative_nativeStopRustRenderer(env, _class);
+
+    let stop_for_thread = stop.clone();
+    let join = std::thread::spawn(move || {
+        let window = window_ptr as *mut ANativeWindow;
+        let res = std::panic::catch_unwind(|| unsafe {
+            run_rust_renderer(window, swapchain_ref, stop_for_thread);
+        });
+        if let Err(_) = res {
+            eprintln!("Rust renderer thread panicked");
+        }
+        unsafe { ANativeWindow_release(window) };
+    });
+
+    *rust_renderer_slot().lock().unwrap() = Some(RustRendererHandle { stop, join });
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStopRustRenderer(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    let handle = rust_renderer_slot().lock().unwrap().take();
+    if let Some(handle) = handle {
+        handle.stop.store(true, Ordering::Release);
+        rust_renderer_wake();
+        let _ = handle.join.join();
+    }
+}
+
+unsafe fn compile_shader(kind: u32, src: &CStr) -> Option<u32> {
+    let shader = glCreateShader(kind);
+    if shader == 0 {
+        return None;
+    }
+    let ptrs = [src.as_ptr()];
+    glShaderSource(shader, 1, ptrs.as_ptr(), std::ptr::null());
+    glCompileShader(shader);
+    let mut ok: c_int = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &mut ok as *mut _);
+    if ok != 0 {
+        return Some(shader);
+    }
+
+    let mut log_len: c_int = 0;
+    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &mut log_len as *mut _);
+    let mut buf = vec![0u8; log_len.max(1) as usize];
+    let mut written: c_int = 0;
+    glGetShaderInfoLog(
+        shader,
+        buf.len() as c_int,
+        &mut written as *mut _,
+        buf.as_mut_ptr() as *mut c_char,
+    );
+    eprintln!("shader compile failed: {}", String::from_utf8_lossy(&buf));
+    None
+}
+
+unsafe fn link_program(vs: u32, fs: u32) -> Option<u32> {
+    let program = glCreateProgram();
+    if program == 0 {
+        return None;
+    }
+    glAttachShader(program, vs);
+    glAttachShader(program, fs);
+    glLinkProgram(program);
+    let mut ok: c_int = 0;
+    glGetProgramiv(program, GL_LINK_STATUS, &mut ok as *mut _);
+    if ok != 0 {
+        return Some(program);
+    }
+
+    let mut log_len: c_int = 0;
+    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &mut log_len as *mut _);
+    let mut buf = vec![0u8; log_len.max(1) as usize];
+    let mut written: c_int = 0;
+    glGetProgramInfoLog(
+        program,
+        buf.len() as c_int,
+        &mut written as *mut _,
+        buf.as_mut_ptr() as *mut c_char,
+    );
+    eprintln!("program link failed: {}", String::from_utf8_lossy(&buf));
+    None
+}
+
+unsafe fn run_rust_renderer(
+    window: *mut ANativeWindow,
+    swapchain: &'static AhbSwapchain,
+    stop: Arc<AtomicBool>,
+) {
+    let dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    if dpy == EGL_NO_DISPLAY {
+        eprintln!("eglGetDisplay failed");
+        return;
+    }
+    let mut major: EGLint = 0;
+    let mut minor: EGLint = 0;
+    if eglInitialize(dpy, &mut major as *mut _, &mut minor as *mut _) == EGL_FALSE {
+        eprintln!("eglInitialize failed: 0x{:x}", eglGetError());
+        return;
+    }
+    if eglBindAPI(EGL_OPENGL_ES_API) == EGL_FALSE {
+        eprintln!("eglBindAPI failed: 0x{:x}", eglGetError());
+    }
+
+    let attribs = [
+        EGL_RENDERABLE_TYPE,
+        EGL_OPENGL_ES2_BIT,
+        EGL_SURFACE_TYPE,
+        EGL_WINDOW_BIT,
+        EGL_RED_SIZE,
+        8,
+        EGL_GREEN_SIZE,
+        8,
+        EGL_BLUE_SIZE,
+        8,
+        EGL_ALPHA_SIZE,
+        8,
+        EGL_NONE,
+    ];
+    let mut config: EGLConfig = std::ptr::null_mut();
+    let mut num: EGLint = 0;
+    if eglChooseConfig(
+        dpy,
+        attribs.as_ptr(),
+        &mut config as *mut _,
+        1,
+        &mut num as *mut _,
+    ) == EGL_FALSE
+        || num <= 0
+    {
+        eprintln!("eglChooseConfig failed: 0x{:x}", eglGetError());
+        eglTerminate(dpy);
+        return;
+    }
+
+    let ctx_attribs = [EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE];
+    let ctx = eglCreateContext(dpy, config, EGL_NO_CONTEXT, ctx_attribs.as_ptr());
+    if ctx == EGL_NO_CONTEXT {
+        eprintln!("eglCreateContext failed: 0x{:x}", eglGetError());
+        eglTerminate(dpy);
+        return;
+    }
+
+    let surf = eglCreateWindowSurface(dpy, config, window, [EGL_NONE].as_ptr());
+    if surf == EGL_NO_SURFACE {
+        eprintln!("eglCreateWindowSurface failed: 0x{:x}", eglGetError());
+        eglDestroyContext(dpy, ctx);
+        eglTerminate(dpy);
+        return;
+    }
+
+    if eglMakeCurrent(dpy, surf, surf, ctx) == EGL_FALSE {
+        eprintln!("eglMakeCurrent failed: 0x{:x}", eglGetError());
+        eglDestroySurface(dpy, surf);
+        eglDestroyContext(dpy, ctx);
+        eglTerminate(dpy);
+        return;
+    }
+
+    let get_native_client_buffer: PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC =
+        match egl_proc(b"eglGetNativeClientBufferANDROID\0") {
+            Some(p) => p,
+            None => {
+                eprintln!("missing eglGetNativeClientBufferANDROID");
+                return;
+            }
+        };
+    let egl_create_image: PFNEGLCREATEIMAGEKHRPROC = match egl_proc(b"eglCreateImageKHR\0") {
+        Some(p) => p,
+        None => {
+            eprintln!("missing eglCreateImageKHR");
+            return;
+        }
+    };
+    let egl_destroy_image: PFNEGLDESTROYIMAGEKHRPROC = match egl_proc(b"eglDestroyImageKHR\0") {
+        Some(p) => p,
+        None => {
+            eprintln!("missing eglDestroyImageKHR");
+            return;
+        }
+    };
+    let gl_egl_image_target_texture: PFNGLEGLIMAGETARGETTEXTURE2DOESPROC =
+        match egl_proc(b"glEGLImageTargetTexture2DOES\0") {
+            Some(p) => p,
+            None => {
+                eprintln!("missing glEGLImageTargetTexture2DOES");
+                return;
+            }
+        };
+
+    // Log extensions once (useful when debugging device compatibility).
+    let ext_ptr = glGetString(GL_EXTENSIONS);
+    if !ext_ptr.is_null() {
+        let ext = CStr::from_ptr(ext_ptr as *const c_char).to_string_lossy();
+        println!("[RustRenderer] GL_EXTENSIONS: {}", ext);
+    }
+
+    glDisable(GL_DITHER);
+    let _ = eglSwapInterval(dpy, 1);
+
+    // Create textures backed by the two AHardwareBuffers.
+    let mut textures = [0u32; 2];
+    glGenTextures(2, textures.as_mut_ptr());
+
+    let mut images = [EGL_NO_IMAGE_KHR; 2];
+    for i in 0..2 {
+        glBindTexture(GL_TEXTURE_2D, textures[i]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        let client_buf = get_native_client_buffer(swapchain.buffer(i));
+        let img_attribs = [EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE];
+        let image = egl_create_image(
+            dpy,
+            EGL_NO_CONTEXT,
+            EGL_NATIVE_BUFFER_ANDROID,
+            client_buf,
+            img_attribs.as_ptr(),
+        );
+        if image == EGL_NO_IMAGE_KHR {
+            eprintln!("eglCreateImageKHR failed: 0x{:x}", eglGetError());
+            continue;
+        }
+        images[i] = image;
+        gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void);
+    }
+
+    let vs_src = CStr::from_bytes_with_nul_unchecked(
+        b"attribute vec4 a_position;\nattribute vec2 a_tex_coord;\nvarying vec2 v_tex_coord;\nvoid main() {\n  gl_Position = a_position;\n  v_tex_coord = a_tex_coord;\n}\n\0",
+    );
+    let fs_src = CStr::from_bytes_with_nul_unchecked(
+        b"precision mediump float;\nuniform sampler2D u_texture;\nvarying vec2 v_tex_coord;\nvoid main() {\n  gl_FragColor = texture2D(u_texture, v_tex_coord);\n}\n\0",
+    );
+    let Some(vs) = compile_shader(GL_VERTEX_SHADER, vs_src) else {
+        return;
+    };
+    let Some(fs) = compile_shader(GL_FRAGMENT_SHADER, fs_src) else {
+        return;
+    };
+    let Some(program) = link_program(vs, fs) else {
+        return;
+    };
+    glUseProgram(program);
+
+    let a_position = glGetAttribLocation(program, b"a_position\0".as_ptr() as *const c_char);
+    let a_tex = glGetAttribLocation(program, b"a_tex_coord\0".as_ptr() as *const c_char);
+    let u_tex = glGetUniformLocation(program, b"u_texture\0".as_ptr() as *const c_char);
+    glUniform1i(u_tex, 0);
+
+    let vertex_data: [f32; 16] = [
+        // X,   Y,   U,   V
+        -1.0, -1.0, 0.0, 1.0, // bottom-left
+        1.0, -1.0, 1.0, 1.0, // bottom-right
+        -1.0, 1.0, 0.0, 0.0, // top-left
+        1.0, 1.0, 1.0, 0.0, // top-right
+    ];
+    let stride = (4 * std::mem::size_of::<f32>()) as c_int;
+    let base_ptr = vertex_data.as_ptr() as *const c_void;
+    glEnableVertexAttribArray(a_position as u32);
+    glVertexAttribPointer(
+        a_position as u32,
+        2,
+        0x1406, /* GL_FLOAT */
+        0,
+        stride,
+        base_ptr,
+    );
+    glEnableVertexAttribArray(a_tex as u32);
+    glVertexAttribPointer(
+        a_tex as u32,
+        2,
+        0x1406, /* GL_FLOAT */
+        0,
+        stride,
+        (vertex_data.as_ptr().add(2)) as *const c_void,
+    );
+
+    // Render loop: wait for frame-ready signals from `android_frame_ready_cb`.
+    let signal = rust_renderer_signal();
+    let mut last_seen = 0u64;
+
+    while !stop.load(Ordering::Acquire) {
+        let mut guard = signal.mu.lock().unwrap();
+        while *guard == last_seen && !stop.load(Ordering::Acquire) {
+            let (g, _) = signal
+                .cv
+                .wait_timeout(guard, Duration::from_millis(500))
+                .unwrap();
+            guard = g;
+        }
+        last_seen = *guard;
+        drop(guard);
+
+        if stop.load(Ordering::Acquire) {
+            break;
+        }
+
+        let idx = signal.last_index.load(Ordering::Acquire);
+        if idx < 0 {
+            continue;
+        }
+        let idx = idx as usize;
+
+        swapchain.set_gpu_busy(idx, true);
+
+        glViewport(0, 0, FRAME_WIDTH as c_int, FRAME_HEIGHT as c_int);
+        glClearColor(0.0, 0.0, 0.0, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textures[idx]);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+        if eglSwapBuffers(dpy, surf) == EGL_FALSE {
+            eprintln!("eglSwapBuffers failed: 0x{:x}", eglGetError());
+            glFinish();
+            swapchain.set_gpu_busy(idx, false);
+            break;
+        }
+        glFinish();
+
+        swapchain.set_gpu_busy(idx, false);
+    }
+
+    for img in images {
+        if img != EGL_NO_IMAGE_KHR {
+            let _ = egl_destroy_image(dpy, img);
+        }
+    }
+    let _ = eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    let _ = eglDestroySurface(dpy, surf);
+    let _ = eglDestroyContext(dpy, ctx);
+    let _ = eglTerminate(dpy);
 }
 
 /// Receives the write-end FD of the Kotlin-created frame signal pipe.
@@ -188,8 +1007,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameSe
     _env: JNIEnv,
     _class: JClass,
 ) -> jlong {
-    let h = frame_handle_ref();
-    h.frame_seq() as jlong
+    runtime_handle().frame_seq() as jlong
 }
 
 /// Begins a front-buffer copy and returns the active plane index.
@@ -200,7 +1018,9 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeBeginFr
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
-    let h = frame_handle_ref();
+    let Some(h) = ensure_runtime().frame_handle.as_ref() else {
+        return -1;
+    };
     h.begin_front_copy() as jint
 }
 
@@ -222,7 +1042,9 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativePlaneBu
         return std::ptr::null_mut();
     }
 
-    let h = frame_handle_ref();
+    let Some(h) = ensure_runtime().frame_handle.as_ref() else {
+        return std::ptr::null_mut();
+    };
     let slice = h.plane_slice(idx as usize);
 
     // DirectByteBuffer enables zero-copy access on the Kotlin side.
@@ -247,8 +1069,9 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeEndFron
     _env: JNIEnv,
     _class: JClass,
 ) {
-    let h = frame_handle_ref();
-    h.end_front_copy();
+    if let Some(h) = ensure_runtime().frame_handle.as_ref() {
+        h.end_front_copy();
+    }
 }
 
 /// Returns the fixed NES framebuffer width in pixels.

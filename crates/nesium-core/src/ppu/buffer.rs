@@ -17,6 +17,10 @@ use std::{
 pub type FrameReadyCallback =
     extern "C" fn(buffer_index: u32, width: u32, height: u32, pitch: u32, user_data: *mut c_void);
 
+pub type SwapchainLockCallback =
+    extern "C" fn(buffer_index: u32, pitch_out: *mut u32, user_data: *mut c_void) -> *mut u8;
+pub type SwapchainUnlockCallback = extern "C" fn(buffer_index: u32, user_data: *mut c_void);
+
 #[derive(Clone, Copy)]
 struct FrameReadyHook {
     cb: FrameReadyCallback,
@@ -89,7 +93,7 @@ impl ColorFormat {
 /// - the **front** plane is exposed for rendering by the frontend
 ///
 /// The `mode` controls whether the planes store palette indices or packed colors.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FrameBuffer {
     /// Index of the **back/write** plane.
     active_index: usize,
@@ -103,7 +107,7 @@ pub struct FrameBuffer {
 /// - `Owned` keeps the planes inside the NES core.
 /// - `External` writes directly into caller-provided memory. This is useful when
 ///   the core runs on a dedicated thread and the frontend owns the pixel buffers.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum FrameBufferStorage {
     Owned([Box<[u8]>; 2]),
     /// Externally owned double buffers shared with the frontend.
@@ -111,6 +115,34 @@ enum FrameBufferStorage {
     /// The PPU writes to the **back** plane (`active_index`). At end-of-frame, `swap()`
     /// publishes the new **front** plane index to the handle.
     External(Arc<ExternalFrameHandle>),
+    /// Swapchain-backed framebuffer where the core obtains writable planes via callbacks.
+    ///
+    /// This is intended for backends where the "framebuffer memory" is owned by a platform-specific
+    /// buffer queue (e.g. Android `AHardwareBuffer`) and CPU pointers are only valid while locked.
+    Swapchain(SwapchainFrameBuffer),
+}
+
+impl Clone for FrameBufferStorage {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Owned(planes) => Self::Owned([planes[0].clone(), planes[1].clone()]),
+            Self::External(handle) => Self::External(Arc::clone(handle)),
+            Self::Swapchain(_) => {
+                panic!("cloning a swapchain-backed FrameBuffer is not supported")
+            }
+        }
+    }
+}
+
+impl Clone for FrameBuffer {
+    fn clone(&self) -> Self {
+        Self {
+            active_index: self.active_index,
+            storage: self.storage.clone(),
+            mode: self.mode,
+            frame_ready_hook: self.frame_ready_hook,
+        }
+    }
 }
 
 /// Shared external framebuffer planes + published front index.
@@ -128,6 +160,7 @@ enum FrameBufferStorage {
 pub struct ExternalFrameHandle {
     planes: [NonNull<u8>; 2],
     len: usize,
+    pitch_bytes: usize,
 
     /// Pixel format used when the framebuffer is in color mode.
     ///
@@ -148,6 +181,12 @@ impl ExternalFrameHandle {
     #[inline]
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    /// Bytes per scanline for the underlying planes.
+    #[inline]
+    pub fn pitch_bytes(&self) -> usize {
+        self.pitch_bytes
     }
 
     /// Returns the active color format when the framebuffer is in color mode.
@@ -281,6 +320,98 @@ pub enum BufferMode {
     Color { format: ColorFormat },
 }
 
+#[derive(Clone, Copy)]
+struct SwapchainHook {
+    lock: SwapchainLockCallback,
+    unlock: SwapchainUnlockCallback,
+    user_data: *mut c_void,
+}
+
+// SAFETY: `SwapchainHook` only carries raw pointers and function pointers.
+unsafe impl Send for SwapchainHook {}
+
+impl fmt::Debug for SwapchainHook {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SwapchainHook")
+            .field("lock", &(self.lock as usize))
+            .field("unlock", &(self.unlock as usize))
+            .field("user_data", &self.user_data)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
+struct SwapchainFrameBuffer {
+    hook: SwapchainHook,
+    // For each plane:
+    // - `ptr[i]` is valid iff `locked[i]` is true
+    // - `pitch_bytes[i]` is valid iff `locked[i]` is true
+    ptr: [*mut u8; 2],
+    pitch_bytes: [usize; 2],
+    locked: [bool; 2],
+}
+
+// SAFETY: `SwapchainFrameBuffer` is owned by the NES runtime thread and never shared concurrently.
+// It only carries raw pointers that are produced/consumed on the same thread via callbacks.
+unsafe impl Send for SwapchainFrameBuffer {}
+
+impl SwapchainFrameBuffer {
+    fn new(
+        lock: SwapchainLockCallback,
+        unlock: SwapchainUnlockCallback,
+        user_data: *mut c_void,
+    ) -> Self {
+        Self {
+            hook: SwapchainHook {
+                lock,
+                unlock,
+                user_data,
+            },
+            ptr: [std::ptr::null_mut(); 2],
+            pitch_bytes: [0, 0],
+            locked: [false, false],
+        }
+    }
+
+    fn ensure_locked(&mut self, index: usize) {
+        debug_assert!(index < 2);
+        if self.locked[index] {
+            return;
+        }
+        let mut pitch = 0u32;
+        let ptr = (self.hook.lock)(index as u32, &mut pitch as *mut u32, self.hook.user_data);
+        assert!(!ptr.is_null(), "swapchain lock callback returned null");
+        assert!(pitch > 0, "swapchain lock callback returned zero pitch");
+        self.ptr[index] = ptr;
+        self.pitch_bytes[index] = pitch as usize;
+        self.locked[index] = true;
+    }
+
+    fn unlock(&mut self, index: usize) {
+        debug_assert!(index < 2);
+        if !self.locked[index] {
+            return;
+        }
+        (self.hook.unlock)(index as u32, self.hook.user_data);
+        self.ptr[index] = std::ptr::null_mut();
+        self.pitch_bytes[index] = 0;
+        self.locked[index] = false;
+    }
+
+    fn pitch_bytes(&self, index: usize) -> usize {
+        debug_assert!(index < 2);
+        self.pitch_bytes[index]
+    }
+
+    unsafe fn plane_slice_mut(&mut self, index: usize) -> &mut [u8] {
+        debug_assert!(index < 2);
+        self.ensure_locked(index);
+        let pitch = self.pitch_bytes[index];
+        let len = pitch * SCREEN_HEIGHT;
+        unsafe { slice::from_raw_parts_mut(self.ptr[index], len) }
+    }
+}
+
 impl FrameBuffer {
     /// Creates a new `FrameBuffer` with the given mode and raw buffer length.
     ///
@@ -321,18 +452,20 @@ impl FrameBuffer {
     /// - the two buffers must not overlap
     pub unsafe fn new_external(
         mode: BufferMode,
-        len: usize,
+        pitch_bytes: usize,
         plane0: *mut u8,
         plane1: *mut u8,
     ) -> (Self, Arc<ExternalFrameHandle>) {
-        if let BufferMode::Color { format } = &mode {
-            let expected = SCREEN_WIDTH * SCREEN_HEIGHT * format.bytes_per_pixel();
-            debug_assert!(
-                len == expected,
-                "FrameBuffer len ({len}) does not match expected pixel buffer size ({expected}) for {:?}",
-                format
-            );
-        }
+        let expected_pitch = match mode {
+            BufferMode::Index => SCREEN_WIDTH,
+            BufferMode::Color { format } => SCREEN_WIDTH * format.bytes_per_pixel(),
+        };
+        assert!(
+            pitch_bytes >= expected_pitch,
+            "pitch_bytes ({pitch_bytes}) must be >= expected pitch ({expected_pitch})"
+        );
+
+        let len = pitch_bytes * SCREEN_HEIGHT;
 
         let planes = [
             NonNull::new(plane0).expect("plane0 must not be null"),
@@ -349,6 +482,7 @@ impl FrameBuffer {
         let handle = Arc::new(ExternalFrameHandle {
             planes,
             len,
+            pitch_bytes,
             color_format,
             front_index: AtomicUsize::new(0),
             frame_seq: AtomicUsize::new(0),
@@ -364,6 +498,30 @@ impl FrameBuffer {
         };
 
         (fb, handle)
+    }
+
+    /// Creates a new swapchain-backed framebuffer.
+    ///
+    /// The core locks/unlocks planes via callbacks and keeps the **back** plane locked while
+    /// rendering a frame, then unlocks it when presenting (`swap`).
+    pub fn new_swapchain(
+        mode: BufferMode,
+        lock: SwapchainLockCallback,
+        unlock: SwapchainUnlockCallback,
+        user_data: *mut c_void,
+    ) -> Self {
+        let mut storage = SwapchainFrameBuffer::new(lock, unlock, user_data);
+
+        // Publish plane 0 as initial front (unlocked), start by writing into plane 1.
+        // Keep the back plane locked so the PPU can write during `run_frame`.
+        storage.ensure_locked(1);
+
+        Self {
+            active_index: 1,
+            storage: FrameBufferStorage::Swapchain(storage),
+            mode,
+            frame_ready_hook: None,
+        }
     }
 
     /// Creates a new index-mode framebuffer sized to the NES screen.
@@ -435,9 +593,11 @@ impl FrameBuffer {
     /// In `Color` mode it is `SCREEN_WIDTH * format.bytes_per_pixel()`.
     #[inline]
     pub fn pitch(&self) -> usize {
-        match &self.mode {
-            BufferMode::Index => SCREEN_WIDTH,
-            BufferMode::Color { format, .. } => SCREEN_WIDTH * format.bytes_per_pixel(),
+        match (&self.storage, &self.mode) {
+            (FrameBufferStorage::External(handle), _) => handle.pitch_bytes(),
+            (FrameBufferStorage::Swapchain(s), _) => s.pitch_bytes(self.active_index),
+            (_, BufferMode::Index) => SCREEN_WIDTH,
+            (_, BufferMode::Color { format, .. }) => SCREEN_WIDTH * format.bytes_per_pixel(),
         }
     }
 
@@ -472,12 +632,13 @@ impl FrameBuffer {
     /// - the previously written (back) plane becomes the render source
     /// - the previously rendered (front) plane becomes the new back plane and is cleared
     pub fn swap(&mut self) {
-        match &self.storage {
+        let pitch_before_swap = self.pitch();
+        match &mut self.storage {
             FrameBufferStorage::Owned(_) => {
                 let finished_back = self.active_index;
                 self.active_index = 1 - self.active_index;
                 if let Some(hook) = self.frame_ready_hook {
-                    hook.call(finished_back, self.pitch());
+                    hook.call(finished_back, pitch_before_swap);
                 }
                 self.write().fill(0);
             }
@@ -490,13 +651,29 @@ impl FrameBuffer {
                 self.active_index = 1 - self.active_index;
 
                 if let Some(hook) = self.frame_ready_hook {
-                    hook.call(finished_back, self.pitch());
+                    hook.call(finished_back, pitch_before_swap);
                 }
 
                 // The new back plane was previously the front plane. If the frontend is
                 // still copying it, wait for the copy to finish before clearing/writing.
                 handle.wait_until_not_reading(self.active_index);
                 self.write().fill(0);
+            }
+            FrameBufferStorage::Swapchain(s) => {
+                let finished_back = self.active_index;
+                let finished_pitch = s.pitch_bytes(finished_back);
+
+                // Unlock the presented plane so the backend can consume it (e.g. GPU sampling).
+                s.unlock(finished_back);
+
+                if let Some(hook) = self.frame_ready_hook {
+                    hook.call(finished_back, finished_pitch);
+                }
+
+                // Switch to the other plane for the next frame and keep it locked for writes.
+                self.active_index = 1 - self.active_index;
+                s.ensure_locked(self.active_index);
+                unsafe { s.plane_slice_mut(self.active_index).fill(0) };
             }
         }
     }
@@ -519,6 +696,15 @@ impl FrameBuffer {
                     };
                 }
             }
+            FrameBufferStorage::Swapchain(s) => {
+                for i in 0..2 {
+                    s.ensure_locked(i);
+                    unsafe { s.plane_slice_mut(i).fill(0) };
+                    s.unlock(i);
+                }
+                // Re-lock the active back plane for the next frame.
+                s.ensure_locked(self.active_index);
+            }
         }
     }
 
@@ -537,7 +723,7 @@ impl FrameBuffer {
     pub fn write_index(&mut self, x: usize, y: usize, index: u8) {
         match &mut self.mode {
             BufferMode::Index => {
-                let idx = y * SCREEN_WIDTH + x;
+                let idx = y * self.pitch() + x;
                 self.write()[idx] = index;
             }
             BufferMode::Color { .. } => {
@@ -555,9 +741,10 @@ impl FrameBuffer {
         match self.mode {
             BufferMode::Index => panic!("write_color called on index framebuffer"),
             BufferMode::Color { format } => {
+                let pitch = self.pitch();
                 let buffer = self.plane_slice_mut(self.active_index);
                 let bpp = format.bytes_per_pixel();
-                let idx = (y * SCREEN_WIDTH + x) * bpp;
+                let idx = y * pitch + x * bpp;
                 debug_assert!(idx + bpp <= buffer.len());
 
                 match format {
@@ -615,6 +802,7 @@ impl FrameBuffer {
         match &self.storage {
             FrameBufferStorage::Owned(planes) => &planes[index],
             FrameBufferStorage::External(handle) => handle.plane_slice(index),
+            FrameBufferStorage::Swapchain(_) => &[],
         }
     }
 
@@ -625,6 +813,7 @@ impl FrameBuffer {
             FrameBufferStorage::External(handle) => unsafe {
                 slice::from_raw_parts_mut(handle.plane_ptr_mut(index), handle.len())
             },
+            FrameBufferStorage::Swapchain(s) => unsafe { s.plane_slice_mut(index) },
         }
     }
 }
