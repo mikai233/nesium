@@ -21,6 +21,12 @@ impl LanguagePack for En {
             MenuEmulationPause => "Pause",
             MenuEmulationResume => "Resume",
 
+            MenuView => "View",
+            MenuViewScale => "Scale",
+            MenuViewScaleSquare => "1:1 (Square pixels)",
+            MenuViewScaleNtsc => "4:3 (NTSC)",
+            MenuViewScaleStretch => "Stretch",
+
             MenuWindow => "Window",
             MenuWindowDebugger => "Debugger",
             MenuWindowTools => "Tools",

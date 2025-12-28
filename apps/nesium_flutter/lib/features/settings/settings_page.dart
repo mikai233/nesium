@@ -453,6 +453,46 @@ class SettingsPage extends ConsumerWidget {
                       }
                     },
                   ),
+                  const SizedBox(height: 12),
+                  InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: l10n.videoAspectRatio,
+                      border: const OutlineInputBorder(),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<NesAspectRatio>(
+                        value: videoSettings.aspectRatio,
+                        isExpanded: true,
+                        items: [
+                          DropdownMenuItem(
+                            value: NesAspectRatio.square,
+                            child: Text(l10n.videoAspectRatioSquare),
+                          ),
+                          DropdownMenuItem(
+                            value: NesAspectRatio.ntsc,
+                            child: Text(l10n.videoAspectRatioNtsc),
+                          ),
+                          DropdownMenuItem(
+                            value: NesAspectRatio.stretch,
+                            child: Text(l10n.videoAspectRatioStretch),
+                          ),
+                        ],
+                        onChanged: (value) async {
+                          if (value == null) return;
+                          try {
+                            await videoController.setAspectRatio(value);
+                          } catch (e, st) {
+                            logWarning(
+                              e,
+                              stackTrace: st,
+                              message: 'setAspectRatio failed',
+                              logger: 'settings_page',
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ),
                   _SliderTile(
                     label: l10n.videoScreenVerticalOffset,
                     value: videoSettings.screenVerticalOffset,

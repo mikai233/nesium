@@ -41,6 +41,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
         final viewport = NesScreenView.computeViewportSize(
           constraints,
           integerScaling: ref.watch(videoSettingsProvider).integerScaling,
+          aspectRatio: ref.watch(videoSettingsProvider).aspectRatio,
         );
         if (viewport == null) return const SizedBox.shrink();
 

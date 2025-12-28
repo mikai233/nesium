@@ -24,13 +24,22 @@ class NesScreenView extends ConsumerStatefulWidget {
   static Size? computeViewportSize(
     BoxConstraints constraints, {
     required bool integerScaling,
+    required NesAspectRatio aspectRatio,
   }) {
     if (constraints.maxWidth <= 0 || constraints.maxHeight <= 0) {
       return null;
     }
 
+    if (aspectRatio == NesAspectRatio.stretch) {
+      return constraints.biggest;
+    }
+
+    final targetWidth = aspectRatio == NesAspectRatio.ntsc
+        ? nesHeight * (4.0 / 3.0)
+        : nesWidth;
+
     final scale = math.min(
-      constraints.maxWidth / nesWidth,
+      constraints.maxWidth / targetWidth,
       constraints.maxHeight / nesHeight,
     );
     final finalScale = scale < 1.0
@@ -38,7 +47,7 @@ class NesScreenView extends ConsumerStatefulWidget {
         : integerScaling
         ? scale.floorToDouble().clamp(1.0, double.infinity)
         : scale;
-    return Size(nesWidth * finalScale, nesHeight * finalScale);
+    return Size(targetWidth * finalScale, nesHeight * finalScale);
   }
 
   @override
@@ -86,7 +95,9 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
 
   @override
   Widget build(BuildContext context) {
-    final integerScaling = ref.watch(videoSettingsProvider).integerScaling;
+    final settings = ref.watch(videoSettingsProvider);
+    final integerScaling = settings.integerScaling;
+    final aspectRatio = settings.aspectRatio;
 
     Widget content;
     if (widget.error != null) {
@@ -113,6 +124,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           final viewport = NesScreenView.computeViewportSize(
             constraints,
             integerScaling: integerScaling,
+            aspectRatio: aspectRatio,
           );
           if (viewport == null) return const SizedBox.shrink();
 

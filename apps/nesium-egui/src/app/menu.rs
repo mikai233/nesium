@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use eframe::egui;
 use egui::{Context as EguiContext, MenuBar, TextWrapMode};
 
-use super::{AppViewport, Language, NesiumApp, TextId, dialogs::pick_file_dialog};
+use super::{AppViewport, AspectRatio, Language, NesiumApp, TextId, dialogs::pick_file_dialog};
 
 #[derive(Default)]
 pub(super) struct AppCommand {
@@ -158,6 +158,52 @@ impl NesiumApp {
                 cmd.eject = true;
                 ui.close();
             }
+        });
+
+        ui.menu_button(self.t(TextId::MenuView), |ui| {
+            ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+
+            ui.menu_button(self.t(TextId::MenuViewScale), |ui| {
+                ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+
+                let current = self.aspect_ratio();
+                if ui
+                    .radio(
+                        current == AspectRatio::Square,
+                        self.t(TextId::MenuViewScaleSquare),
+                    )
+                    .clicked()
+                {
+                    if let Ok(mut s) = self.ui_state.lock() {
+                        s.aspect_ratio = AspectRatio::Square;
+                    }
+                    ui.close();
+                }
+                if ui
+                    .radio(
+                        current == AspectRatio::Ntsc,
+                        self.t(TextId::MenuViewScaleNtsc),
+                    )
+                    .clicked()
+                {
+                    if let Ok(mut s) = self.ui_state.lock() {
+                        s.aspect_ratio = AspectRatio::Ntsc;
+                    }
+                    ui.close();
+                }
+                if ui
+                    .radio(
+                        current == AspectRatio::Stretch,
+                        self.t(TextId::MenuViewScaleStretch),
+                    )
+                    .clicked()
+                {
+                    if let Ok(mut s) = self.ui_state.lock() {
+                        s.aspect_ratio = AspectRatio::Stretch;
+                    }
+                    ui.close();
+                }
+            });
         });
 
         ui.menu_button(self.t(TextId::MenuWindow), |ui| {

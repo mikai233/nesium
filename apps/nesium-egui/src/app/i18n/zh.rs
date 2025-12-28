@@ -17,11 +17,18 @@ impl LanguagePack for Zh {
             MenuFileStopRecording => "停止录制 WAV",
             MenuFileQuit => "退出",
 
-            MenuEmulation => "仿真",
+            MenuEmulation => "模拟",
             MenuEmulationPause => "暂停",
             MenuEmulationResume => "继续",
 
+            MenuView => "视图",
+            MenuViewScale => "比例",
+            MenuViewScaleSquare => "1:1 (方形像素)",
+            MenuViewScaleNtsc => "4:3 (NTSC)",
+            MenuViewScaleStretch => "拉伸",
+
             MenuWindow => "窗口",
+
             MenuWindowDebugger => "调试器",
             MenuWindowTools => "工具箱",
             MenuWindowPalette => "调色板",

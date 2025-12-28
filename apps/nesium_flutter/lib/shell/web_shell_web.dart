@@ -648,6 +648,7 @@ class _WebShellState extends ConsumerState<WebShell> {
                   final viewport = NesScreenView.computeViewportSize(
                     constraints,
                     integerScaling: videoSettings.integerScaling,
+                    aspectRatio: videoSettings.aspectRatio,
                   );
                   if (viewport == null) return const SizedBox.shrink();
 

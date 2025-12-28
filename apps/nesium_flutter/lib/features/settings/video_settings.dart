@@ -10,6 +10,8 @@ import '../../persistence/keys.dart';
 
 enum PaletteMode { builtin, custom }
 
+enum NesAspectRatio { square, ntsc, stretch }
+
 @immutable
 class VideoSettings {
   static const Object _unset = Object();
@@ -18,6 +20,7 @@ class VideoSettings {
     required this.paletteMode,
     required this.builtinPreset,
     required this.integerScaling,
+    required this.aspectRatio,
     required this.screenVerticalOffset,
     this.customPaletteName,
   });
@@ -25,6 +28,7 @@ class VideoSettings {
   final PaletteMode paletteMode;
   final nes_palette.PaletteKind builtinPreset;
   final bool integerScaling;
+  final NesAspectRatio aspectRatio;
   final double screenVerticalOffset;
   final String? customPaletteName;
 
@@ -32,6 +36,7 @@ class VideoSettings {
     PaletteMode? paletteMode,
     nes_palette.PaletteKind? builtinPreset,
     bool? integerScaling,
+    NesAspectRatio? aspectRatio,
     double? screenVerticalOffset,
     Object? customPaletteName = _unset,
   }) {
@@ -39,6 +44,7 @@ class VideoSettings {
       paletteMode: paletteMode ?? this.paletteMode,
       builtinPreset: builtinPreset ?? this.builtinPreset,
       integerScaling: integerScaling ?? this.integerScaling,
+      aspectRatio: aspectRatio ?? this.aspectRatio,
       screenVerticalOffset: screenVerticalOffset ?? this.screenVerticalOffset,
       customPaletteName: identical(customPaletteName, _unset)
           ? this.customPaletteName
@@ -51,6 +57,7 @@ class VideoSettings {
       paletteMode: PaletteMode.builtin,
       builtinPreset: nes_palette.PaletteKind.nesdevNtsc,
       integerScaling: false,
+      aspectRatio: NesAspectRatio.square,
       screenVerticalOffset: 0,
       customPaletteName: null,
     );
@@ -134,6 +141,12 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     await _persist(state);
   }
 
+  Future<void> setAspectRatio(NesAspectRatio value) async {
+    if (value == state.aspectRatio) return;
+    state = state.copyWith(aspectRatio: value);
+    await _persist(state);
+  }
+
   Future<void> setScreenVerticalOffset(double value) async {
     final clamped = value.clamp(-240.0, 240.0).toDouble();
     if (clamped == state.screenVerticalOffset) return;
@@ -176,6 +189,7 @@ Map<String, Object?> _videoSettingsToStorage(VideoSettings value) =>
       'paletteMode': value.paletteMode.name,
       'builtinPreset': value.builtinPreset.name,
       'integerScaling': value.integerScaling,
+      'aspectRatio': value.aspectRatio.name,
       'screenVerticalOffset': value.screenVerticalOffset,
       'customPaletteName': value.customPaletteName,
     };
@@ -211,6 +225,13 @@ VideoSettings? _videoSettingsFromStorage(
       ? map['integerScaling'] as bool
       : defaults.integerScaling;
 
+  NesAspectRatio aspectRatio = defaults.aspectRatio;
+  if (map['aspectRatio'] is String) {
+    try {
+      aspectRatio = NesAspectRatio.values.byName(map['aspectRatio'] as String);
+    } catch (_) {}
+  }
+
   final screenVerticalOffset = map['screenVerticalOffset'] is num
       ? (map['screenVerticalOffset'] as num).toDouble()
       : defaults.screenVerticalOffset;
@@ -219,6 +240,7 @@ VideoSettings? _videoSettingsFromStorage(
     paletteMode: paletteMode,
     builtinPreset: builtinPreset,
     integerScaling: integerScaling,
+    aspectRatio: aspectRatio,
     screenVerticalOffset: screenVerticalOffset,
     customPaletteName: customPaletteName,
   );

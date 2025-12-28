@@ -314,6 +314,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoScreenVerticalOffset => '画面垂直偏移';
 
   @override
+  String get videoAspectRatio => '画面比例';
+
+  @override
+  String get videoAspectRatioSquare => '1:1（方形像素）';
+
+  @override
+  String get videoAspectRatioNtsc => '4:3（NTSC）';
+
+  @override
+  String get videoAspectRatioStretch => '拉伸';
+
+  @override
   String get aboutTitle => '关于 Nesium';
 
   @override

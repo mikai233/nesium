@@ -686,6 +686,30 @@ abstract class AppLocalizations {
   /// **'Screen vertical offset'**
   String get videoScreenVerticalOffset;
 
+  /// No description provided for @videoAspectRatio.
+  ///
+  /// In en, this message translates to:
+  /// **'Aspect ratio'**
+  String get videoAspectRatio;
+
+  /// No description provided for @videoAspectRatioSquare.
+  ///
+  /// In en, this message translates to:
+  /// **'1:1 (Square pixels)'**
+  String get videoAspectRatioSquare;
+
+  /// No description provided for @videoAspectRatioNtsc.
+  ///
+  /// In en, this message translates to:
+  /// **'4:3 (NTSC)'**
+  String get videoAspectRatioNtsc;
+
+  /// No description provided for @videoAspectRatioStretch.
+  ///
+  /// In en, this message translates to:
+  /// **'Stretch'**
+  String get videoAspectRatioStretch;
+
   /// No description provided for @aboutTitle.
   ///
   /// In en, this message translates to:

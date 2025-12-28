@@ -2,7 +2,7 @@ use eframe::egui;
 use egui::{Color32, Context as EguiContext, Vec2};
 use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
-use super::NesiumApp;
+use super::{AspectRatio, NesiumApp};
 
 const CURSOR_HIDE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -15,14 +15,26 @@ impl NesiumApp {
                 let (rect, response) = ui.allocate_exact_size(canvas_size, egui::Sense::hover());
                 ui.painter().rect_filled(rect, 0.0, Color32::BLACK);
 
-                let base = Vec2::new(SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32);
                 let desired_inset: f32 = 12.0;
                 let max_inset = (rect.size().min_elem() * 0.5).max(0.0);
                 let inset = desired_inset.min(max_inset);
                 let inner_rect = rect.shrink(inset);
 
                 if let Some(tex) = &self.frame_texture {
-                    let desired_size = if self.pixel_perfect_scaling() {
+                    let aspect_mode = self.aspect_ratio();
+
+                    let base = match aspect_mode {
+                        AspectRatio::Square => Vec2::new(SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32),
+                        AspectRatio::Ntsc => {
+                            Vec2::new(SCREEN_HEIGHT as f32 * (4.0 / 3.0), SCREEN_HEIGHT as f32)
+                        }
+                        // For stretch, base is irrelevant, but we need a value to compile.
+                        AspectRatio::Stretch => Vec2::ZERO,
+                    };
+
+                    let desired_size = if aspect_mode == AspectRatio::Stretch {
+                        inner_rect.size()
+                    } else if self.pixel_perfect_scaling() {
                         // Pixel-perfect scaling must be computed in physical pixels.
                         // If we only floor the scale in egui "points", fractional DPI scaling
                         // (e.g. 125%) can still produce non-integer pixel mapping and shimmer.

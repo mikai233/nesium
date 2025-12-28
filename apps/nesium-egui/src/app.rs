@@ -50,6 +50,13 @@ pub struct AppConfig {
     pub rom_path: Option<PathBuf>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AspectRatio {
+    Square,
+    Ntsc,
+    Stretch,
+}
+
 pub(super) struct UiState {
     i18n: I18n,
     audio_cfg: AudioBusConfig,
@@ -58,6 +65,7 @@ pub(super) struct UiState {
     controller_presets: [InputPreset; 4],
     active_input_port: usize,
     pixel_perfect_scaling: bool,
+    aspect_ratio: AspectRatio,
     integer_fps_mode: bool,
     palette_builtin_kind: PaletteKind,
     palette_use_external: bool,
@@ -213,6 +221,7 @@ impl NesiumApp {
             controller_presets: [InputPreset::NesStandard; 4],
             active_input_port: 0,
             pixel_perfect_scaling: false,
+            aspect_ratio: AspectRatio::Square,
             integer_fps_mode: false,
             palette_builtin_kind: PaletteKind::default(),
             palette_use_external: false,
@@ -387,6 +396,14 @@ impl NesiumApp {
             .ok()
             .map(|s| s.pixel_perfect_scaling)
             .unwrap_or(false)
+    }
+
+    fn aspect_ratio(&self) -> AspectRatio {
+        self.ui_state
+            .lock()
+            .ok()
+            .map(|s| s.aspect_ratio)
+            .unwrap_or(AspectRatio::Square)
     }
 
     fn show_error_dialog(&mut self, ctx: &EguiContext) {

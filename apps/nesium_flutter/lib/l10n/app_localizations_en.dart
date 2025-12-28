@@ -323,6 +323,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoScreenVerticalOffset => 'Screen vertical offset';
 
   @override
+  String get videoAspectRatio => 'Aspect ratio';
+
+  @override
+  String get videoAspectRatioSquare => '1:1 (Square pixels)';
+
+  @override
+  String get videoAspectRatioNtsc => '4:3 (NTSC)';
+
+  @override
+  String get videoAspectRatioStretch => 'Stretch';
+
+  @override
   String get aboutTitle => 'About Nesium';
 
   @override
