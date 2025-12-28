@@ -18,6 +18,65 @@ type MemBlockStorage<T, const N: usize> = [T; N];
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MemBlock<T, const N: usize>(MemBlockStorage<T, N>);
 
+#[cfg(feature = "savestate-serde")]
+impl<T, const N: usize> serde::Serialize for MemBlock<T, N>
+where
+    T: Copy + Default + serde::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        let slice = self.as_slice();
+        let mut seq = serializer.serialize_seq(Some(slice.len()))?;
+        for item in slice {
+            seq.serialize_element(item)?;
+        }
+        seq.end()
+    }
+}
+
+#[cfg(feature = "savestate-serde")]
+impl<'de, T, const N: usize> serde::Deserialize<'de> for MemBlock<T, N>
+where
+    T: Copy + Default + serde::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor<T, const N: usize>(core::marker::PhantomData<T>);
+
+        impl<'de, T, const N: usize> serde::de::Visitor<'de> for Visitor<T, N>
+        where
+            T: Copy + Default + serde::Deserialize<'de>,
+        {
+            type Value = MemBlock<T, N>;
+
+            fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "a sequence of length {N}")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut out = MemBlock::<T, N>::new();
+                for idx in 0..N {
+                    let Some(value) = seq.next_element::<T>()? else {
+                        return Err(serde::de::Error::invalid_length(idx, &self));
+                    };
+                    out.as_mut_slice()[idx] = value;
+                }
+                Ok(out)
+            }
+        }
+
+        deserializer.deserialize_seq(Visitor::<T, N>(core::marker::PhantomData))
+    }
+}
+
 /// Convenience alias for a `MemBlock` of bytes.
 pub type ByteBlock<const N: usize> = MemBlock<u8, N>;
 

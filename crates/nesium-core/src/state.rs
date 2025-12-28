@@ -5,12 +5,17 @@
 //! serialization format (bincode/serde/json) externally.
 
 pub mod cpu;
+pub mod nes;
 pub mod ppu;
 use std::convert::Infallible;
 
 use crate::{cpu::Cpu, ppu::Ppu};
 
 /// Common metadata attached to full/delta snapshots to aid compatibility checks.
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotMeta {
     /// Version of the snapshot payload (per component).
@@ -38,6 +43,10 @@ impl Default for SnapshotMeta {
 }
 
 /// Simple wrapper bundling snapshot metadata with payload.
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Snapshot<T, M = SnapshotMeta> {
     pub meta: M,

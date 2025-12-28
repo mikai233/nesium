@@ -8,10 +8,9 @@ use crate::bus::{CpuBus, DmcDmaEvent, STACK_ADDR};
 use crate::context::Context;
 use crate::cpu::addressing::Addressing;
 use crate::cpu::instruction::Instruction;
-use crate::cpu::irq::{IrqKind, IrqSource};
+use crate::cpu::irq::IrqKind;
 use crate::cpu::lookup::LOOKUP_TABLE;
 use crate::cpu::mnemonic::Mnemonic;
-use crate::cpu::status::Status;
 use crate::memory::cpu::{IRQ_VECTOR_HI, IRQ_VECTOR_LO, NMI_VECTOR_HI, NMI_VECTOR_LO};
 use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
 use crate::memory::ppu::{self as ppu_mem, Register as PpuRegister};
@@ -39,6 +38,9 @@ mod lookup;
 mod mnemonic;
 mod status;
 mod timing;
+
+pub(crate) use irq::IrqSource;
+pub(crate) use status::Status;
 
 /// Lightweight CPU register snapshot used for tracing/debugging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

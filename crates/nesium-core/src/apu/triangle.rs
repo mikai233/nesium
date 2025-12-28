@@ -2,6 +2,10 @@
 
 use super::{length_counter::LengthCounter, tables::TRIANGLE_SEQUENCE};
 
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(super) struct Triangle {
     control_flag: bool,

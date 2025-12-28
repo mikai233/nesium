@@ -34,14 +34,19 @@ pub(crate) mod pattern_bus;
 mod pending_vram_increment;
 mod ppu_model;
 mod registers;
+pub(crate) mod savestate;
 mod sprite;
 mod sprite_pipeline;
 mod sprite_state;
 
+pub(crate) use pending_vram_increment::PendingVramIncrement;
+pub(crate) use registers::{Control, Mask, Status};
+pub(crate) use sprite_state::SpriteLineBuffers;
+
 use self::{
     background_pipeline::BgPipeline,
     sprite_pipeline::SpritePipeline,
-    sprite_state::{SpriteEvalState, SpriteFetchState, SpriteLineBuffers},
+    sprite_state::{SpriteEvalState, SpriteFetchState},
 };
 
 use core::ffi::c_void;
@@ -59,8 +64,7 @@ use crate::{
         buffer::FrameReadyCallback,
         palette::{Palette, PaletteRam},
         pattern_bus::PatternBus,
-        pending_vram_increment::PendingVramIncrement,
-        registers::{Control, Mask, Registers, Status, VramAddr},
+        registers::{Registers, VramAddr},
         sprite::SpriteView,
     },
     reset_kind::ResetKind,

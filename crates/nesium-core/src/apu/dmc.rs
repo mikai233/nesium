@@ -6,6 +6,10 @@ use super::{
 };
 use crate::bus::{DmcDmaEvent, PendingDma};
 
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct Dmc {
     irq_enable: bool,

@@ -5,6 +5,10 @@
 use crate::mem_block::MemBlock;
 
 /// Button ordering follows the NES shift register bit layout (A first).
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
     A = 0,
@@ -18,6 +22,10 @@ pub enum Button {
 }
 
 /// Serially-readable controller state with latch/strobe behavior.
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Controller {
     strobe: bool,

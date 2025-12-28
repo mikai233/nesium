@@ -79,4 +79,16 @@ impl PpuOpenBus {
     pub(crate) fn sample(&self) -> u8 {
         self.value
     }
+
+    pub(crate) fn save_state(&self) -> crate::ppu::savestate::PpuOpenBusState {
+        crate::ppu::savestate::PpuOpenBusState {
+            value: self.value,
+            decay_stamp: self.decay_stamp,
+        }
+    }
+
+    pub(crate) fn load_state(&mut self, state: crate::ppu::savestate::PpuOpenBusState) {
+        self.value = state.value;
+        self.decay_stamp = state.decay_stamp;
+    }
 }

@@ -40,6 +40,9 @@ use crate::{
 use crate::mem_block::ByteBlock;
 use crate::reset_kind::ResetKind;
 
+#[cfg(feature = "savestate-serde")]
+use serde::{Deserialize, Serialize};
+
 /// PRG-ROM bank size exposed to the CPU (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
@@ -176,6 +179,24 @@ pub struct Mapper4 {
 
 type Mapper4BankRegs = ByteBlock<8>;
 
+#[cfg_attr(feature = "savestate-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mapper4State {
+    pub base_mirroring: u8,
+    pub mirroring: u8,
+    pub bank_select: u8,
+    pub bank_regs: [u8; 8],
+    pub prg_ram_enable: bool,
+    pub prg_ram_write_protect: bool,
+    pub irq_latch: u8,
+    pub irq_counter: u8,
+    pub irq_reload: bool,
+    pub irq_enabled: bool,
+    pub irq_pending: bool,
+    pub last_a12_high: bool,
+    pub last_a12_rise_ppu_cycle: u64,
+}
+
 impl Mapper4 {
     pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
@@ -202,6 +223,44 @@ impl Mapper4 {
             last_a12_high: false,
             last_a12_rise_ppu_cycle: 0,
         }
+    }
+
+    pub(crate) fn save_state(&self) -> Mapper4State {
+        let mut regs = [0u8; 8];
+        regs.copy_from_slice(self.bank_regs.as_slice());
+        Mapper4State {
+            base_mirroring: mirroring_to_u8(self.base_mirroring),
+            mirroring: mirroring_to_u8(self.mirroring),
+            bank_select: self.bank_select,
+            bank_regs: regs,
+            prg_ram_enable: self.prg_ram_enable,
+            prg_ram_write_protect: self.prg_ram_write_protect,
+            irq_latch: self.irq_latch,
+            irq_counter: self.irq_counter,
+            irq_reload: self.irq_reload,
+            irq_enabled: self.irq_enabled,
+            irq_pending: self.irq_pending,
+            last_a12_high: self.last_a12_high,
+            last_a12_rise_ppu_cycle: self.last_a12_rise_ppu_cycle,
+        }
+    }
+
+    pub(crate) fn load_state(&mut self, state: &Mapper4State) {
+        self.base_mirroring = mirroring_from_u8(state.base_mirroring);
+        self.mirroring = mirroring_from_u8(state.mirroring);
+        self.bank_select = state.bank_select;
+        self.bank_regs
+            .as_mut_slice()
+            .copy_from_slice(&state.bank_regs);
+        self.prg_ram_enable = state.prg_ram_enable;
+        self.prg_ram_write_protect = state.prg_ram_write_protect;
+        self.irq_latch = state.irq_latch;
+        self.irq_counter = state.irq_counter;
+        self.irq_reload = state.irq_reload;
+        self.irq_enabled = state.irq_enabled;
+        self.irq_pending = state.irq_pending;
+        self.last_a12_high = state.last_a12_high;
+        self.last_a12_rise_ppu_cycle = state.last_a12_rise_ppu_cycle;
     }
 
     /// Returns true when CHR A12 inversion is active (bank select bit7 set).
@@ -673,5 +732,28 @@ impl Mapper for Mapper4 {
 
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("MMC3")
+    }
+}
+
+fn mirroring_to_u8(m: Mirroring) -> u8 {
+    match m {
+        Mirroring::Horizontal => 0,
+        Mirroring::Vertical => 1,
+        Mirroring::FourScreen => 2,
+        Mirroring::SingleScreenLower => 3,
+        Mirroring::SingleScreenUpper => 4,
+        Mirroring::MapperControlled => 5,
+    }
+}
+
+fn mirroring_from_u8(v: u8) -> Mirroring {
+    match v {
+        0 => Mirroring::Horizontal,
+        1 => Mirroring::Vertical,
+        2 => Mirroring::FourScreen,
+        3 => Mirroring::SingleScreenLower,
+        4 => Mirroring::SingleScreenUpper,
+        5 => Mirroring::MapperControlled,
+        _ => Mirroring::Horizontal,
     }
 }

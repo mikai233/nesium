@@ -2,6 +2,10 @@
 
 use super::{envelope::Envelope, length_counter::LengthCounter, tables::NOISE_PERIOD_TABLE};
 
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct Noise {
     pub(super) envelope: Envelope,

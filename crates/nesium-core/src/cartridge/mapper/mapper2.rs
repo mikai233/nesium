@@ -9,6 +9,9 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+#[cfg(feature = "savestate-serde")]
+use serde::{Deserialize, Serialize};
+
 // Mapper 2 – UxROM simple 16 KiB PRG banking.
 //
 // | Area | Address range     | Behaviour                                  | IRQ/Audio |
@@ -35,6 +38,12 @@ pub struct Mapper2 {
     mirroring: Mirroring,
 }
 
+#[cfg_attr(feature = "savestate-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mapper2State {
+    pub selected_bank: u32,
+}
+
 impl Mapper2 {
     pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
@@ -49,6 +58,21 @@ impl Mapper2 {
             bank_count,
             mirroring: header.mirroring(),
         }
+    }
+
+    pub(crate) fn save_state(&self) -> Mapper2State {
+        Mapper2State {
+            selected_bank: self.selected_bank as u32,
+        }
+    }
+
+    pub(crate) fn load_state(&mut self, state: &Mapper2State) {
+        let bank = state.selected_bank as usize;
+        self.selected_bank = if self.bank_count == 0 {
+            0
+        } else {
+            bank % self.bank_count
+        };
     }
 
     fn fixed_bank(&self) -> usize {

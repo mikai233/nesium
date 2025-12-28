@@ -5,6 +5,7 @@ use crate::{
 
 pub mod cpu;
 pub(crate) mod open_bus;
+pub(crate) mod savestate;
 
 pub use cpu::CpuBus;
 pub(crate) use open_bus::OpenBus;
@@ -31,12 +32,20 @@ pub struct BusDevicesMut<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum DmcDmaEvent {
     Request { addr: u16 },
     Abort,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct PendingDma {
     pub oam_page: Option<u8>,
     pub dmc: Option<DmcDmaEvent>,

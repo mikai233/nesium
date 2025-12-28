@@ -2,6 +2,10 @@
 
 use super::tables::LENGTH_TABLE;
 
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct LengthCounter {
     value: u8,

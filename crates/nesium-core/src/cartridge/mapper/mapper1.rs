@@ -37,6 +37,9 @@ use crate::{
     reset_kind::ResetKind,
 };
 
+#[cfg(feature = "savestate-serde")]
+use serde::{Deserialize, Serialize};
+
 const PRG_BANK_SIZE_16K: usize = 16 * 1024;
 const CHR_BANK_SIZE_4K: usize = 4 * 1024;
 
@@ -75,6 +78,18 @@ pub struct Mapper1 {
     /// Approximation of NESdev consecutive-cycle write ignore.
     /// Stores the CPU cycle of the last serial write so we can ignore back-to-back writes.
     last_serial_cycle: Option<u64>,
+}
+
+#[cfg_attr(feature = "savestate-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mapper1State {
+    pub control: u8,
+    pub chr_bank0: u8,
+    pub chr_bank1: u8,
+    pub prg_bank: u8,
+    pub shift_reg: u8,
+    pub shift_count: u8,
+    pub last_serial_cycle: Option<u64>,
 }
 
 impl Mapper1 {
@@ -117,6 +132,28 @@ impl Mapper1 {
             shift_count: 0,
             last_serial_cycle: None,
         }
+    }
+
+    pub(crate) fn save_state(&self) -> Mapper1State {
+        Mapper1State {
+            control: self.control,
+            chr_bank0: self.chr_bank0,
+            chr_bank1: self.chr_bank1,
+            prg_bank: self.prg_bank,
+            shift_reg: self.shift_reg,
+            shift_count: self.shift_count,
+            last_serial_cycle: self.last_serial_cycle,
+        }
+    }
+
+    pub(crate) fn load_state(&mut self, state: &Mapper1State) {
+        self.control = state.control;
+        self.chr_bank0 = state.chr_bank0;
+        self.chr_bank1 = state.chr_bank1;
+        self.prg_bank = state.prg_bank;
+        self.shift_reg = state.shift_reg;
+        self.shift_count = state.shift_count;
+        self.last_serial_cycle = state.last_serial_cycle;
     }
 
     #[inline]

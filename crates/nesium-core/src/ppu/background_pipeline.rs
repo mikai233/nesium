@@ -160,4 +160,16 @@ impl BgPipeline {
 
         (palette_bits, pattern_bits)
     }
+
+    pub(crate) fn save_state(&self) -> crate::ppu::savestate::BgPipelineState {
+        crate::ppu::savestate::BgPipelineState {
+            pattern: [self.pattern[0].0, self.pattern[1].0],
+            palette: [self.palette[0].0, self.palette[1].0],
+        }
+    }
+
+    pub(crate) fn load_state(&mut self, state: crate::ppu::savestate::BgPipelineState) {
+        self.pattern = [Shift16(state.pattern[0]), Shift16(state.pattern[1])];
+        self.palette = [Shift16(state.palette[0]), Shift16(state.palette[1])];
+    }
 }

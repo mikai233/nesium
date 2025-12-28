@@ -41,6 +41,10 @@ use pulse::Pulse;
 use triangle::Triangle;
 
 /// Light-weight interrupt flags latched by the APU.
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 struct StatusFlags {
     frame_interrupt: bool,
@@ -51,6 +55,10 @@ type LastLevels = crate::mem_block::MemBlock<f32, 5>;
 
 /// Fully modelled NES APU with envelope, sweep, length/linear counters and the
 /// frame sequencer.
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Clone)]
 pub struct Apu {
     registers: RegisterRam,

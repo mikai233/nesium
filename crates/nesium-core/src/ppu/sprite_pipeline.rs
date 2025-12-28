@@ -152,4 +152,34 @@ impl SpritePipeline {
 
         chosen.unwrap_or_default()
     }
+
+    pub(crate) fn save_state(&self) -> crate::ppu::savestate::SpritePipelineState {
+        let mut slots = [crate::ppu::savestate::SpriteSlotState::default(); 8];
+        for (idx, slot) in self.slots.iter().enumerate() {
+            slots[idx] = crate::ppu::savestate::SpriteSlotState {
+                pattern_low: slot.pattern_low,
+                pattern_high: slot.pattern_high,
+                attributes: slot.attributes.bits(),
+                x_counter: slot.x_counter,
+                sprite0: slot.sprite0,
+            };
+        }
+        crate::ppu::savestate::SpritePipelineState {
+            active_count: self.active_count,
+            slots,
+        }
+    }
+
+    pub(crate) fn load_state(&mut self, state: crate::ppu::savestate::SpritePipelineState) {
+        self.active_count = state.active_count.min(8);
+        for (idx, slot_state) in state.slots.iter().enumerate() {
+            self.slots[idx] = SpriteSlot {
+                pattern_low: slot_state.pattern_low,
+                pattern_high: slot_state.pattern_high,
+                attributes: SpriteAttributes::from_bits_retain(slot_state.attributes),
+                x_counter: slot_state.x_counter,
+                sprite0: slot_state.sprite0,
+            };
+        }
+    }
 }

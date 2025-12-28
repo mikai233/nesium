@@ -1,5 +1,9 @@
 //! Envelope unit shared by pulse and noise channels.
 
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct Envelope {
     loop_flag: bool,

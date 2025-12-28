@@ -9,6 +9,9 @@ use crate::{
     memory::cpu as cpu_mem,
 };
 
+#[cfg(feature = "savestate-serde")]
+use serde::{Deserialize, Serialize};
+
 // Mapper 3 – CnROM 8 KiB CHR banking.
 //
 // | Area | Address range     | Behaviour                                  | IRQ/Audio |
@@ -31,6 +34,12 @@ pub struct Mapper3 {
     mirroring: Mirroring,
 }
 
+#[cfg_attr(feature = "savestate-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mapper3State {
+    pub chr_bank: u32,
+}
+
 impl Mapper3 {
     pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
@@ -50,6 +59,21 @@ impl Mapper3 {
             chr_bank_count,
             mirroring: header.mirroring(),
         }
+    }
+
+    pub(crate) fn save_state(&self) -> Mapper3State {
+        Mapper3State {
+            chr_bank: self.chr_bank as u32,
+        }
+    }
+
+    pub(crate) fn load_state(&mut self, state: &Mapper3State) {
+        let bank = state.chr_bank as usize;
+        self.chr_bank = if self.chr_bank_count == 0 {
+            0
+        } else {
+            bank % self.chr_bank_count
+        };
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {

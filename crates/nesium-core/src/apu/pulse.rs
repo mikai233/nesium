@@ -2,12 +2,20 @@
 
 use super::{envelope::Envelope, length_counter::LengthCounter, tables::PULSE_DUTY_TABLE};
 
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum PulseChannel {
     Pulse1,
     Pulse2,
 }
 
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct Sweep {
     enabled: bool,
@@ -81,6 +89,10 @@ impl Sweep {
     }
 }
 
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct Pulse {
     duty: u8,

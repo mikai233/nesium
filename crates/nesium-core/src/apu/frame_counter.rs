@@ -2,6 +2,10 @@
 //! sweep units at quarter- and half-frame intervals.
 
 /// Frame sequencer timing mode.
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum FrameCounterMode {
     #[default]
@@ -10,6 +14,10 @@ pub enum FrameCounterMode {
 }
 
 /// Internal frame counter state.
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct FrameCounter {
     mode: FrameCounterMode,
@@ -25,6 +33,10 @@ pub(super) struct FrameCounter {
 }
 
 /// Indicates which frame units should be clocked after a frame counter tick.
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct FrameTick {
     pub(super) quarter: bool,
@@ -33,6 +45,10 @@ pub(super) struct FrameTick {
 }
 
 /// Frame sequencer reset side effects applied after writing `$4017`.
+#[cfg_attr(
+    feature = "savestate-serde",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct FrameResetAction {
     pub(super) immediate_quarter: bool,
