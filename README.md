@@ -33,6 +33,26 @@ This emulator’s design and implementation draw heavily from the excellent Mese
 - Active development with ongoing improvements to accuracy, performance, and compatibility.
 - Still in the early stages, but several key components are already functional.
 
+## Roadmap
+
+The long-term vision for Nesium focuses on precision, tooling, and extensibility:
+
+- [ ] **Accurate NES Emulation**:  
+    Achieve cycle-perfect accuracy across CPU, PPU, and APU components. The goal is to pass all standard compliance suites (including tricky edge cases in `blargg`'s tests and `nes-test-roms`) and support "unlicensed" or hardware-quirk-dependent titles correctly.
+
+- [ ] **Advanced Debugging Suite**:  
+    Implement a comprehensive debugger within the frontend. Planned features include:
+    - Real-time disassembly and stepping.
+    - Memory inspection/editing (RAM, VRAM, OAM).
+    - Nametable, Pattern Table, and Palette viewers.
+    - Breakpoint management (execution, read/write, IRQ).
+
+- [ ] **Lua Scripting Integration**:  
+    Embed a Lua runtime to enable powerful automation and analysis. This will support:
+    - Tool-Assisted Speedrun (TAS) workflows.
+    - Custom HUDs and overlays for training or streaming.
+    - Automated regression testing scripts.
+
 ## UI frontends
 
 This repository currently ships **two** UI frontends:
