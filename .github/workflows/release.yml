@@ -81,7 +81,87 @@ jobs:
         secrets: inherit
 
     # ------------------------------------------------------------------
-    # [Job 4] Release: Publish to GitHub
+    # [Job 4] Web: Build + Deploy to GitHub Pages
+    # ------------------------------------------------------------------
+    deploy-web-pages:
+        name: Deploy Web (GitHub Pages)
+        if: ${{ needs.setup.outputs.publish_release == 'true' || needs.setup.outputs.mode == 'test' }}
+        needs: setup
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            pages: write
+            id-token: write
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Setup Rust
+              uses: dtolnay/rust-toolchain@master
+              with:
+                  toolchain: stable
+
+            - name: Install wasm-pack
+              uses: jetli/wasm-pack-action@v0.4.0
+
+            - name: Cache cargo artifacts
+              uses: Swatinem/rust-cache@v2
+
+            - name: Setup Flutter
+              uses: subosito/flutter-action@v2
+              with:
+                  channel: stable
+                  cache: true
+
+            - name: Pub get
+              working-directory: apps/nesium_flutter
+              shell: bash
+              run: flutter pub get
+
+            - name: Build wasm (web runtime)
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  wasm-pack build crates/nesium-wasm --release --target web --out-dir apps/nesium_flutter/web/nes/pkg
+
+            - name: Compute base href
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  BASE_HREF="${{ vars.PAGES_BASE_HREF }}"
+                  if [ -z "${BASE_HREF}" ]; then
+                    BASE_HREF="/${{ github.event.repository.name }}/"
+                  fi
+                  case "${BASE_HREF}" in
+                    */) ;;
+                    *) BASE_HREF="${BASE_HREF}/" ;;
+                  esac
+                  echo "BASE_HREF=${BASE_HREF}" >> "$GITHUB_ENV"
+                  echo "Using BASE_HREF=${BASE_HREF}"
+
+            - name: Build Flutter web
+              working-directory: apps/nesium_flutter
+              shell: bash
+              run: flutter build web --release --no-wasm-dry-run --base-href "${BASE_HREF}"
+
+            - name: Configure Pages
+              uses: actions/configure-pages@v5
+
+            - name: Upload Pages artifact
+              uses: actions/upload-pages-artifact@v3
+              with:
+                  path: apps/nesium_flutter/build/web
+
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
+
+    # ------------------------------------------------------------------
+    # [Job 5] Release: Publish to GitHub
     # ------------------------------------------------------------------
     create-release:
         name: Publish to GitHub Release

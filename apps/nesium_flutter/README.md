@@ -52,6 +52,16 @@ Options:
 
 > Desktop builds may require platform toolchains (Xcode for macOS, MSVC Build Tools for Windows, etc.).
 
+## Web (CI + GitHub Pages)
+
+- CI builds Flutter Web and runs `wasm-pack` to generate `web/nes/pkg` in `.github/workflows/flutter.yml`.
+- Releases deploy the Web build to GitHub Pages from `.github/workflows/release.yml`.
+- `mode=test` in the Release Controller workflow also deploys to GitHub Pages (no GitHub Release is created).
+
+Setup (once, in GitHub repo settings):
+- `Settings → Pages → Build and deployment → Source: GitHub Actions`
+- Optional: set repository variable `PAGES_BASE_HREF` (e.g. `/nesium/` for project pages, `/` for user pages).
+
 ## Notes
 
 - The UI communicates with the Rust core through the `crates/nesium-flutter` dynamic library and its platform bindings.
