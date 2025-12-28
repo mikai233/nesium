@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     ffi::{CStr, c_char, c_int, c_uint, c_void},
     os::unix::io::RawFd,
     sync::{
@@ -22,11 +23,13 @@ use libc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
 pub enum AndroidVideoBackend {
+    #[allow(dead_code)]
     Upload = 0,
     AhbSwapchain = 1,
 }
 
 static VIDEO_BACKEND: AtomicI32 = AtomicI32::new(AndroidVideoBackend::AhbSwapchain as i32);
+static LOW_LATENCY_VIDEO: AtomicBool = AtomicBool::new(false);
 
 pub fn use_ahb_video_backend() -> bool {
     VIDEO_BACKEND.load(Ordering::Acquire) == AndroidVideoBackend::AhbSwapchain as i32
@@ -190,7 +193,7 @@ impl AhbSwapchain {
     fn lock_plane(&self, idx: usize) -> *mut u8 {
         self.wait_gpu_idle(idx);
 
-        let mut out: *mut c_void = std::ptr::null_mut();
+        let mut out: *mut c_void;
         let mut last_err: c_int = 0;
         for attempt in 0..6u32 {
             out = std::ptr::null_mut();
@@ -306,27 +309,52 @@ static NDK_CONTEXT_INIT: OnceLock<()> = OnceLock::new();
 /// Note: the FD is owned by Kotlin (via `ParcelFileDescriptor`) and may be closed during shutdown.
 static FRAME_SIGNAL_FD: AtomicI32 = AtomicI32::new(-1);
 
+struct RustRendererSignalState {
+    queue: VecDeque<u32>,
+    renderer_active: bool,
+}
+
 struct RustRendererSignal {
-    mu: std::sync::Mutex<u64>,
+    mu: std::sync::Mutex<RustRendererSignalState>,
     cv: std::sync::Condvar,
-    last_index: std::sync::atomic::AtomicI32,
 }
 
 static RUST_RENDERER_SIGNAL: OnceLock<RustRendererSignal> = OnceLock::new();
 
 fn notify_rust_renderer(buffer_index: u32) {
-    let signal = RUST_RENDERER_SIGNAL.get();
-    if let Some(signal) = signal {
-        signal
-            .last_index
-            .store(buffer_index as i32, Ordering::Release);
-        let mut seq = match signal.mu.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        *seq = seq.wrapping_add(1);
-        signal.cv.notify_one();
+    let signal = rust_renderer_signal();
+    let low_latency = LOW_LATENCY_VIDEO.load(Ordering::Acquire);
+
+    let mut state = match signal.mu.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    if !state.renderer_active {
+        return;
     }
+
+    if low_latency {
+        // Strict sync: keep at most 1 queued frame. If the renderer can't keep up, block the NES
+        // thread here (backpressure) instead of dropping frames.
+        const MAX_QUEUE: usize = 1;
+        while state.queue.len() >= MAX_QUEUE && state.renderer_active {
+            let (g, _) = match signal.cv.wait_timeout(state, Duration::from_millis(250)) {
+                Ok(res) => res,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            state = g;
+        }
+        if !state.renderer_active {
+            return;
+        }
+    } else {
+        // Latest-only: keep only the most recent frame.
+        state.queue.clear();
+    }
+
+    state.queue.push_back(buffer_index);
+    signal.cv.notify_one();
 }
 
 /// JNI entry point called from Kotlin.
@@ -385,6 +413,18 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetVide
     mode: jint,
 ) {
     VIDEO_BACKEND.store(mode as i32, Ordering::Release);
+}
+
+/// Enables or disables the "low latency video" mode for the Rust renderer on Android.
+///
+/// Intended to be set before `init_android_context` during process startup.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetLowLatencyVideo(
+    _env: JNIEnv,
+    _class: JClass,
+    enabled: jint,
+) {
+    LOW_LATENCY_VIDEO.store(enabled != 0, Ordering::Release);
 }
 
 /// Stores the write-end FD for the frame signal pipe and makes it non-blocking.
@@ -681,20 +721,30 @@ fn rust_renderer_slot() -> &'static Mutex<Option<RustRendererHandle>> {
 
 fn rust_renderer_signal() -> &'static RustRendererSignal {
     RUST_RENDERER_SIGNAL.get_or_init(|| RustRendererSignal {
-        mu: Mutex::new(0),
+        mu: Mutex::new(RustRendererSignalState {
+            queue: VecDeque::new(),
+            renderer_active: false,
+        }),
         cv: Condvar::new(),
-        last_index: AtomicI32::new(-1),
     })
 }
 
 fn rust_renderer_wake() {
     let signal = rust_renderer_signal();
-    let mut seq = match signal.mu.lock() {
+    signal.cv.notify_all();
+}
+
+fn set_rust_renderer_active(active: bool) {
+    let signal = rust_renderer_signal();
+    let mut state = match signal.mu.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
     };
-    *seq = seq.wrapping_add(1);
-    signal.cv.notify_one();
+    state.renderer_active = active;
+    if !active {
+        state.queue.clear();
+    }
+    signal.cv.notify_all();
 }
 
 fn get_ahb_swapchain() -> Option<&'static AhbSwapchain> {
@@ -749,6 +799,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
 
     // Replace any existing renderer.
     Java_io_github_mikai233_nesium_NesiumNative_nativeStopRustRenderer(env, _class);
+    set_rust_renderer_active(true);
 
     let stop_for_thread = stop.clone();
     let join = std::thread::spawn(move || {
@@ -759,6 +810,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
         if let Err(_) = res {
             eprintln!("Rust renderer thread panicked");
         }
+        set_rust_renderer_active(false);
         unsafe { ANativeWindow_release(window) };
     });
 
@@ -774,6 +826,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStopRus
     _env: JNIEnv,
     _class: JClass,
 ) {
+    set_rust_renderer_active(false);
     let handle = {
         let mut slot = match rust_renderer_slot().lock() {
             Ok(guard) => guard,
@@ -788,60 +841,64 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStopRus
     }
 }
 
-unsafe fn compile_shader(kind: u32, src: &CStr) -> Option<u32> {
-    let shader = glCreateShader(kind);
-    if shader == 0 {
-        return None;
-    }
-    let ptrs = [src.as_ptr()];
-    glShaderSource(shader, 1, ptrs.as_ptr(), std::ptr::null());
-    glCompileShader(shader);
-    let mut ok: c_int = 0;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &mut ok as *mut _);
-    if ok != 0 {
-        return Some(shader);
-    }
+fn compile_shader(kind: u32, src: &CStr) -> Option<u32> {
+    unsafe {
+        let shader = glCreateShader(kind);
+        if shader == 0 {
+            return None;
+        }
+        let ptrs = [src.as_ptr()];
+        glShaderSource(shader, 1, ptrs.as_ptr(), std::ptr::null());
+        glCompileShader(shader);
+        let mut ok: c_int = 0;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &mut ok as *mut _);
+        if ok != 0 {
+            return Some(shader);
+        }
 
-    let mut log_len: c_int = 0;
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &mut log_len as *mut _);
-    let mut buf = vec![0u8; log_len.max(1) as usize];
-    let mut written: c_int = 0;
-    glGetShaderInfoLog(
-        shader,
-        buf.len() as c_int,
-        &mut written as *mut _,
-        buf.as_mut_ptr() as *mut c_char,
-    );
-    eprintln!("shader compile failed: {}", String::from_utf8_lossy(&buf));
-    None
+        let mut log_len: c_int = 0;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &mut log_len as *mut _);
+        let mut buf = vec![0u8; log_len.max(1) as usize];
+        let mut written: c_int = 0;
+        glGetShaderInfoLog(
+            shader,
+            buf.len() as c_int,
+            &mut written as *mut _,
+            buf.as_mut_ptr() as *mut c_char,
+        );
+        eprintln!("shader compile failed: {}", String::from_utf8_lossy(&buf));
+        None
+    }
 }
 
-unsafe fn link_program(vs: u32, fs: u32) -> Option<u32> {
-    let program = glCreateProgram();
-    if program == 0 {
-        return None;
-    }
-    glAttachShader(program, vs);
-    glAttachShader(program, fs);
-    glLinkProgram(program);
-    let mut ok: c_int = 0;
-    glGetProgramiv(program, GL_LINK_STATUS, &mut ok as *mut _);
-    if ok != 0 {
-        return Some(program);
-    }
+fn link_program(vs: u32, fs: u32) -> Option<u32> {
+    unsafe {
+        let program = glCreateProgram();
+        if program == 0 {
+            return None;
+        }
+        glAttachShader(program, vs);
+        glAttachShader(program, fs);
+        glLinkProgram(program);
+        let mut ok: c_int = 0;
+        glGetProgramiv(program, GL_LINK_STATUS, &mut ok as *mut _);
+        if ok != 0 {
+            return Some(program);
+        }
 
-    let mut log_len: c_int = 0;
-    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &mut log_len as *mut _);
-    let mut buf = vec![0u8; log_len.max(1) as usize];
-    let mut written: c_int = 0;
-    glGetProgramInfoLog(
-        program,
-        buf.len() as c_int,
-        &mut written as *mut _,
-        buf.as_mut_ptr() as *mut c_char,
-    );
-    eprintln!("program link failed: {}", String::from_utf8_lossy(&buf));
-    None
+        let mut log_len: c_int = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &mut log_len as *mut _);
+        let mut buf = vec![0u8; log_len.max(1) as usize];
+        let mut written: c_int = 0;
+        glGetProgramInfoLog(
+            program,
+            buf.len() as c_int,
+            &mut written as *mut _,
+            buf.as_mut_ptr() as *mut c_char,
+        );
+        eprintln!("program link failed: {}", String::from_utf8_lossy(&buf));
+        None
+    }
 }
 
 struct EglCleanup {
@@ -905,7 +962,7 @@ unsafe fn run_rust_renderer(
 ) {
     let mut egl = EglCleanup::new();
 
-    let dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    let dpy = unsafe { eglGetDisplay(EGL_DEFAULT_DISPLAY) };
     if dpy == EGL_NO_DISPLAY {
         eprintln!("eglGetDisplay failed");
         return;
@@ -913,13 +970,13 @@ unsafe fn run_rust_renderer(
     egl.dpy = dpy;
     let mut major: EGLint = 0;
     let mut minor: EGLint = 0;
-    if eglInitialize(dpy, &mut major as *mut _, &mut minor as *mut _) == EGL_FALSE {
-        eprintln!("eglInitialize failed: 0x{:x}", eglGetError());
+    if unsafe { eglInitialize(dpy, &mut major as *mut _, &mut minor as *mut _) } == EGL_FALSE {
+        eprintln!("eglInitialize failed: 0x{:x}", unsafe { eglGetError() });
         return;
     }
     egl.initialized = true;
-    if eglBindAPI(EGL_OPENGL_ES_API) == EGL_FALSE {
-        eprintln!("eglBindAPI failed: 0x{:x}", eglGetError());
+    if unsafe { eglBindAPI(EGL_OPENGL_ES_API) } == EGL_FALSE {
+        eprintln!("eglBindAPI failed: 0x{:x}", unsafe { eglGetError() });
     }
 
     let attribs = [
@@ -939,63 +996,69 @@ unsafe fn run_rust_renderer(
     ];
     let mut config: EGLConfig = std::ptr::null_mut();
     let mut num: EGLint = 0;
-    if eglChooseConfig(
-        dpy,
-        attribs.as_ptr(),
-        &mut config as *mut _,
-        1,
-        &mut num as *mut _,
-    ) == EGL_FALSE
+    if unsafe {
+        eglChooseConfig(
+            dpy,
+            attribs.as_ptr(),
+            &mut config as *mut _,
+            1,
+            &mut num as *mut _,
+        )
+    } == EGL_FALSE
         || num <= 0
     {
-        eprintln!("eglChooseConfig failed: 0x{:x}", eglGetError());
+        eprintln!("eglChooseConfig failed: 0x{:x}", unsafe { eglGetError() });
         return;
     }
 
     let ctx_attribs = [EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE];
-    let ctx = eglCreateContext(dpy, config, EGL_NO_CONTEXT, ctx_attribs.as_ptr());
+    let ctx = unsafe { eglCreateContext(dpy, config, EGL_NO_CONTEXT, ctx_attribs.as_ptr()) };
     if ctx == EGL_NO_CONTEXT {
-        eprintln!("eglCreateContext failed: 0x{:x}", eglGetError());
+        eprintln!("eglCreateContext failed: 0x{:x}", unsafe { eglGetError() });
         return;
     }
     egl.ctx = ctx;
 
-    let surf = eglCreateWindowSurface(dpy, config, window, [EGL_NONE].as_ptr());
+    let surf = unsafe { eglCreateWindowSurface(dpy, config, window, [EGL_NONE].as_ptr()) };
     if surf == EGL_NO_SURFACE {
-        eprintln!("eglCreateWindowSurface failed: 0x{:x}", eglGetError());
+        eprintln!("eglCreateWindowSurface failed: 0x{:x}", unsafe {
+            eglGetError()
+        });
         return;
     }
     egl.surf = surf;
 
-    if eglMakeCurrent(dpy, surf, surf, ctx) == EGL_FALSE {
-        eprintln!("eglMakeCurrent failed: 0x{:x}", eglGetError());
+    if unsafe { eglMakeCurrent(dpy, surf, surf, ctx) } == EGL_FALSE {
+        eprintln!("eglMakeCurrent failed: 0x{:x}", unsafe { eglGetError() });
         return;
     }
 
     let get_native_client_buffer: PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC =
-        match egl_proc(b"eglGetNativeClientBufferANDROID\0") {
+        match unsafe { egl_proc(b"eglGetNativeClientBufferANDROID\0") } {
             Some(p) => p,
             None => {
                 eprintln!("missing eglGetNativeClientBufferANDROID");
                 return;
             }
         };
-    let egl_create_image: PFNEGLCREATEIMAGEKHRPROC = match egl_proc(b"eglCreateImageKHR\0") {
-        Some(p) => p,
-        None => {
-            eprintln!("missing eglCreateImageKHR");
-            return;
-        }
-    };
-    let egl_destroy_image: PFNEGLDESTROYIMAGEKHRPROC = match egl_proc(b"eglDestroyImageKHR\0") {
-        Some(p) => p,
-        None => {
-            eprintln!("missing eglDestroyImageKHR");
-            return;
-        }
-    };
+    let egl_create_image: PFNEGLCREATEIMAGEKHRPROC =
+        match unsafe { egl_proc(b"eglCreateImageKHR\0") } {
+            Some(p) => p,
+            None => {
+                eprintln!("missing eglCreateImageKHR");
+                return;
+            }
+        };
+    let egl_destroy_image: PFNEGLDESTROYIMAGEKHRPROC =
+        match unsafe { egl_proc(b"eglDestroyImageKHR\0") } {
+            Some(p) => p,
+            None => {
+                eprintln!("missing eglDestroyImageKHR");
+                return;
+            }
+        };
     let gl_egl_image_target_texture: PFNGLEGLIMAGETARGETTEXTURE2DOESPROC =
-        match egl_proc(b"glEGLImageTargetTexture2DOES\0") {
+        match unsafe { egl_proc(b"glEGLImageTargetTexture2DOES\0") } {
             Some(p) => p,
             None => {
                 eprintln!("missing glEGLImageTargetTexture2DOES");
@@ -1004,9 +1067,9 @@ unsafe fn run_rust_renderer(
         };
 
     let fence_sync_procs = match (
-        egl_proc::<PFNEGLCREATESYNCKHRPROC>(b"eglCreateSyncKHR\0"),
-        egl_proc::<PFNEGLDESTROYSYNCKHRPROC>(b"eglDestroySyncKHR\0"),
-        egl_proc::<PFNEGLCLIENTWAITSYNCKHRPROC>(b"eglClientWaitSyncKHR\0"),
+        unsafe { egl_proc::<PFNEGLCREATESYNCKHRPROC>(b"eglCreateSyncKHR\0") },
+        unsafe { egl_proc::<PFNEGLDESTROYSYNCKHRPROC>(b"eglDestroySyncKHR\0") },
+        unsafe { egl_proc::<PFNEGLCLIENTWAITSYNCKHRPROC>(b"eglClientWaitSyncKHR\0") },
     ) {
         (Some(create), Some(destroy), Some(wait)) => Some((create, destroy, wait)),
         _ => None,
@@ -1032,42 +1095,46 @@ unsafe fn run_rust_renderer(
     };
 
     // Log extensions once (useful when debugging device compatibility).
-    let ext_ptr = glGetString(GL_EXTENSIONS);
+    let ext_ptr = unsafe { glGetString(GL_EXTENSIONS) };
     if !ext_ptr.is_null() {
-        let ext = CStr::from_ptr(ext_ptr as *const c_char).to_string_lossy();
+        let ext = unsafe { CStr::from_ptr(ext_ptr as *const c_char) }.to_string_lossy();
         println!("[RustRenderer] GL_EXTENSIONS: {}", ext);
     }
 
-    glDisable(GL_DITHER);
-    let _ = eglSwapInterval(dpy, 1);
+    unsafe { glDisable(GL_DITHER) };
+    let _ = unsafe { eglSwapInterval(dpy, 1) };
 
     // Create textures backed by the two AHardwareBuffers.
     let mut textures = [0u32; 2];
-    glGenTextures(2, textures.as_mut_ptr());
+    unsafe { glGenTextures(2, textures.as_mut_ptr()) };
 
     let mut images = [EGL_NO_IMAGE_KHR; 2];
     for i in 0..2 {
-        glBindTexture(GL_TEXTURE_2D, textures[i]);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        unsafe {
+            glBindTexture(GL_TEXTURE_2D, textures[i]);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
 
-        let client_buf = get_native_client_buffer(swapchain.buffer(i));
+        let client_buf = unsafe { get_native_client_buffer(swapchain.buffer(i)) };
         let img_attribs = [EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE];
-        let image = egl_create_image(
-            dpy,
-            EGL_NO_CONTEXT,
-            EGL_NATIVE_BUFFER_ANDROID,
-            client_buf,
-            img_attribs.as_ptr(),
-        );
+        let image = unsafe {
+            egl_create_image(
+                dpy,
+                EGL_NO_CONTEXT,
+                EGL_NATIVE_BUFFER_ANDROID,
+                client_buf,
+                img_attribs.as_ptr(),
+            )
+        };
         if image == EGL_NO_IMAGE_KHR {
-            eprintln!("eglCreateImageKHR failed: 0x{:x}", eglGetError());
+            eprintln!("eglCreateImageKHR failed: 0x{:x}", unsafe { eglGetError() });
             continue;
         }
         images[i] = image;
-        gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void);
+        unsafe { gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void) };
     }
 
     let _images_cleanup = EglImagesCleanup {
@@ -1076,12 +1143,14 @@ unsafe fn run_rust_renderer(
         images,
     };
 
-    let vs_src = CStr::from_bytes_with_nul_unchecked(
+    let vs_src = CStr::from_bytes_with_nul(
         b"attribute vec4 a_position;\nattribute vec2 a_tex_coord;\nvarying vec2 v_tex_coord;\nvoid main() {\n  gl_Position = a_position;\n  v_tex_coord = a_tex_coord;\n}\n\0",
-    );
-    let fs_src = CStr::from_bytes_with_nul_unchecked(
+    )
+    .expect("vertex shader source must be NUL-terminated");
+    let fs_src = CStr::from_bytes_with_nul(
         b"precision mediump float;\nuniform sampler2D u_texture;\nvarying vec2 v_tex_coord;\nvoid main() {\n  gl_FragColor = texture2D(u_texture, v_tex_coord);\n}\n\0",
-    );
+    )
+    .expect("fragment shader source must be NUL-terminated");
     let Some(vs) = compile_shader(GL_VERTEX_SHADER, vs_src) else {
         return;
     };
@@ -1091,12 +1160,13 @@ unsafe fn run_rust_renderer(
     let Some(program) = link_program(vs, fs) else {
         return;
     };
-    glUseProgram(program);
+    unsafe { glUseProgram(program) };
 
-    let a_position = glGetAttribLocation(program, b"a_position\0".as_ptr() as *const c_char);
-    let a_tex = glGetAttribLocation(program, b"a_tex_coord\0".as_ptr() as *const c_char);
-    let u_tex = glGetUniformLocation(program, b"u_texture\0".as_ptr() as *const c_char);
-    glUniform1i(u_tex, 0);
+    let a_position =
+        unsafe { glGetAttribLocation(program, b"a_position\0".as_ptr() as *const c_char) };
+    let a_tex = unsafe { glGetAttribLocation(program, b"a_tex_coord\0".as_ptr() as *const c_char) };
+    let u_tex = unsafe { glGetUniformLocation(program, b"u_texture\0".as_ptr() as *const c_char) };
+    unsafe { glUniform1i(u_tex, 0) };
 
     let vertex_data: [f32; 16] = [
         // X,   Y,   U,   V
@@ -1107,66 +1177,76 @@ unsafe fn run_rust_renderer(
     ];
     let stride = (4 * std::mem::size_of::<f32>()) as c_int;
     let base_ptr = vertex_data.as_ptr() as *const c_void;
-    glEnableVertexAttribArray(a_position as u32);
-    glVertexAttribPointer(
-        a_position as u32,
-        2,
-        0x1406, /* GL_FLOAT */
-        0,
-        stride,
-        base_ptr,
-    );
-    glEnableVertexAttribArray(a_tex as u32);
-    glVertexAttribPointer(
-        a_tex as u32,
-        2,
-        0x1406, /* GL_FLOAT */
-        0,
-        stride,
-        (vertex_data.as_ptr().add(2)) as *const c_void,
-    );
+    unsafe {
+        glEnableVertexAttribArray(a_position as u32);
+        glVertexAttribPointer(
+            a_position as u32,
+            2,
+            0x1406, /* GL_FLOAT */
+            0,
+            stride,
+            base_ptr,
+        );
+        glEnableVertexAttribArray(a_tex as u32);
+        glVertexAttribPointer(
+            a_tex as u32,
+            2,
+            0x1406, /* GL_FLOAT */
+            0,
+            stride,
+            (vertex_data.as_ptr().add(2)) as *const c_void,
+        );
+    }
 
     // Render loop: wait for frame-ready signals from `android_frame_ready_cb`.
     let signal = rust_renderer_signal();
-    let mut last_seen = 0u64;
 
     while !stop.load(Ordering::Acquire) {
-        let mut guard = match signal.mu.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        while *guard == last_seen && !stop.load(Ordering::Acquire) {
-            let (g, _) = match signal.cv.wait_timeout(guard, Duration::from_millis(500)) {
-                Ok(res) => res,
+        let msg = {
+            let mut state = match signal.mu.lock() {
+                Ok(guard) => guard,
                 Err(poisoned) => poisoned.into_inner(),
             };
-            guard = g;
-        }
-        last_seen = *guard;
-        drop(guard);
+            while state.queue.is_empty() && !stop.load(Ordering::Acquire) {
+                let (g, _) = match signal.cv.wait_timeout(state, Duration::from_millis(500)) {
+                    Ok(res) => res,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                state = g;
+            }
+            if stop.load(Ordering::Acquire) {
+                None
+            } else {
+                let msg = state.queue.pop_front();
+                // Wake any producer waiting for queue space (low-latency backpressure).
+                if msg.is_some() {
+                    signal.cv.notify_all();
+                }
+                msg
+            }
+        };
 
-        if stop.load(Ordering::Acquire) {
+        let Some(buffer_index) = msg else {
             break;
-        }
-
-        let idx = signal.last_index.load(Ordering::Acquire);
-        if idx < 0 {
-            continue;
-        }
-        let idx = idx as usize;
+        };
+        let idx = buffer_index as usize;
 
         let _busy = GpuBusyGuard::new(swapchain, idx);
 
-        glViewport(0, 0, FRAME_WIDTH as c_int, FRAME_HEIGHT as c_int);
-        glClearColor(0.0, 0.0, 0.0, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT);
+        unsafe {
+            glViewport(0, 0, FRAME_WIDTH as c_int, FRAME_HEIGHT as c_int);
+            glClearColor(0.0, 0.0, 0.0, 1.0);
+            glClear(GL_COLOR_BUFFER_BIT);
+        }
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textures[idx]);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        unsafe {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, textures[idx]);
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        }
 
-        if eglSwapBuffers(dpy, surf) == EGL_FALSE {
-            eprintln!("eglSwapBuffers failed: 0x{:x}", eglGetError());
+        if unsafe { eglSwapBuffers(dpy, surf) } == EGL_FALSE {
+            eprintln!("eglSwapBuffers failed: 0x{:x}", unsafe { eglGetError() });
             wait_for_gpu(dpy);
             break;
         }

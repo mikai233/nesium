@@ -41,7 +41,7 @@ struct VideoBackingStore {
 
 #[cfg(target_os = "android")]
 enum VideoBacking {
-    Cpu(VideoBackingStore),
+    Cpu(#[allow(dead_code)] VideoBackingStore),
     Ahb(Box<android::AhbSwapchain>),
 }
 

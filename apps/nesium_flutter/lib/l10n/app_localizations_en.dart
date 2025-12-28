@@ -306,6 +306,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoBackendRestartHint => 'Takes effect after app restart.';
 
   @override
+  String get videoLowLatencyTitle => 'Low latency video';
+
+  @override
+  String get videoLowLatencySubtitle =>
+      'Synchronize emulation and renderer to reduce jitter. Takes effect after app restart.';
+
+  @override
   String get paletteModeLabel => 'Palette';
 
   @override

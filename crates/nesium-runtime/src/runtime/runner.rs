@@ -46,6 +46,8 @@ pub(crate) struct Runner {
     next_frame_deadline: Instant,
     frame_duration: Duration,
     integer_fps_target: Option<u32>,
+    turbo_prev_masks: [u8; 4],
+    turbo_start_frame: [[u64; 8]; 4],
 }
 
 impl Runner {
@@ -86,6 +88,8 @@ impl Runner {
             next_frame_deadline: Instant::now(),
             frame_duration: FRAME_DURATION_NTSC,
             integer_fps_target: None,
+            turbo_prev_masks: [0; 4],
+            turbo_start_frame: [[0; 8]; 4],
         }
     }
 
@@ -294,7 +298,6 @@ impl Runner {
         let turbo_on_frames = self.state.turbo_on_frames.load(Ordering::Acquire).max(1) as u64;
         let turbo_off_frames = self.state.turbo_off_frames.load(Ordering::Acquire).max(1) as u64;
         let turbo_cycle = turbo_on_frames + turbo_off_frames;
-        let turbo_on = (frame % turbo_cycle) < turbo_on_frames;
         let buttons = [
             Button::A,
             Button::B,
@@ -310,12 +313,35 @@ impl Runner {
         for pad in 0..4 {
             let mask = self.state.pad_masks[pad].load(Ordering::Acquire);
             let turbo_mask = self.state.turbo_masks[pad].load(Ordering::Acquire);
+            let prev_turbo_mask = self.turbo_prev_masks[pad];
+            let rising = turbo_mask & !prev_turbo_mask;
+            if rising != 0 {
+                for button in buttons {
+                    let bit = button_bit(button) as usize;
+                    let flag = 1u8 << bit;
+                    if (rising & flag) != 0 {
+                        // Anchor turbo to the moment the turbo bit is first enabled so the first
+                        // press is immediate instead of depending on a global frame phase.
+                        self.turbo_start_frame[pad][bit] = frame;
+                    }
+                }
+            }
+            self.turbo_prev_masks[pad] = turbo_mask;
 
             for button in buttons {
                 let bit = 1u8 << button_bit(button);
                 let normal_pressed = (mask & bit) != 0;
                 let turbo_pressed = (turbo_mask & bit) != 0;
-                let pressed = normal_pressed || (turbo_pressed && turbo_on);
+                let turbo_on = if turbo_pressed {
+                    let bit_idx = button_bit(button) as usize;
+                    let start = self.turbo_start_frame[pad][bit_idx];
+                    let rel = frame.wrapping_sub(start);
+                    let phase = rel % turbo_cycle;
+                    phase < turbo_on_frames
+                } else {
+                    false
+                };
+                let pressed = normal_pressed || turbo_on;
                 self.nes.set_button(pad, button, pressed);
             }
         }

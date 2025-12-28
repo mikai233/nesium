@@ -124,6 +124,8 @@
   "videoBackendHardware": "Hardware (AHardwareBuffer)",
   "videoBackendUpload": "Compatibility (CPU upload)",
   "videoBackendRestartHint": "Takes effect after app restart.",
+  "videoLowLatencyTitle": "Low latency video",
+  "videoLowLatencySubtitle": "Synchronize emulation and renderer to reduce jitter. Takes effect after app restart.",
   "paletteModeLabel": "Palette",
   "paletteModeBuiltin": "Built-in",
   "paletteModeCustom": "Custom…",

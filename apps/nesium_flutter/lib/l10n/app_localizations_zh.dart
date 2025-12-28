@@ -298,6 +298,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoBackendRestartHint => '重启后生效。';
 
   @override
+  String get videoLowLatencyTitle => '低延迟视频';
+
+  @override
+  String get videoLowLatencySubtitle => '同步模拟与渲染以减少抖动。重启后生效。';
+
+  @override
   String get paletteModeLabel => '调色板';
 
   @override

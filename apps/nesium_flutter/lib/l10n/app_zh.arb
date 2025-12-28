@@ -95,6 +95,8 @@
   "videoBackendHardware": "硬件（AHardwareBuffer）",
   "videoBackendUpload": "兼容（CPU 上传）",
   "videoBackendRestartHint": "重启后生效。",
+  "videoLowLatencyTitle": "低延迟视频",
+  "videoLowLatencySubtitle": "同步模拟与渲染以减少抖动。重启后生效。",
   "paletteModeLabel": "调色板",
   "paletteModeBuiltin": "内置",
   "paletteModeCustom": "自定义…",

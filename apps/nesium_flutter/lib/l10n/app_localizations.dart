@@ -656,6 +656,18 @@ abstract class AppLocalizations {
   /// **'Takes effect after app restart.'**
   String get videoBackendRestartHint;
 
+  /// No description provided for @videoLowLatencyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Low latency video'**
+  String get videoLowLatencyTitle;
+
+  /// No description provided for @videoLowLatencySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Synchronize emulation and renderer to reduce jitter. Takes effect after app restart.'**
+  String get videoLowLatencySubtitle;
+
   /// No description provided for @paletteModeLabel.
   ///
   /// In en, this message translates to:

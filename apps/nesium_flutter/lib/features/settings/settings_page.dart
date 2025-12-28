@@ -10,6 +10,7 @@ import '../../platform/platform_capabilities.dart';
 import '../controls/input_settings.dart';
 import '../controls/turbo_settings.dart';
 import '../controls/virtual_controls_settings.dart';
+import 'android_low_latency_video_settings.dart';
 import 'android_video_backend_settings.dart';
 import 'emulation_settings.dart';
 import 'language_settings.dart';
@@ -111,6 +112,11 @@ class SettingsPage extends ConsumerWidget {
     final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
     final androidBackendController = ref.read(
       androidVideoBackendSettingsProvider.notifier,
+    );
+
+    final lowLatency = ref.watch(androidLowLatencyVideoSettingsProvider);
+    final lowLatencyController = ref.read(
+      androidLowLatencyVideoSettingsProvider.notifier,
     );
 
     final language = ref.watch(appLanguageProvider);
@@ -488,6 +494,27 @@ class SettingsPage extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    if (androidBackend.backend == AndroidVideoBackend.hardware)
+                      const SizedBox(height: 12),
+                    if (androidBackend.backend == AndroidVideoBackend.hardware)
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: lowLatency.enabled,
+                        title: Text(l10n.videoLowLatencyTitle),
+                        subtitle: Text(l10n.videoLowLatencySubtitle),
+                        onChanged: (value) async {
+                          try {
+                            await lowLatencyController.setEnabled(value);
+                          } catch (e, st) {
+                            logWarning(
+                              e,
+                              stackTrace: st,
+                              message: 'setLowLatencyVideo failed',
+                              logger: 'settings_page',
+                            );
+                          }
+                        },
+                      ),
                   ],
                   const SizedBox(height: 12),
                   if (videoSettings.paletteMode == PaletteMode.builtin)
