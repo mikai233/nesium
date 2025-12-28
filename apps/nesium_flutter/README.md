@@ -57,6 +57,7 @@ Options:
 - CI builds Flutter Web and runs `wasm-pack` to generate `web/nes/pkg` in `.github/workflows/flutter.yml`.
 - Releases deploy the Web build to GitHub Pages from `.github/workflows/release.yml`.
 - `mode=test` in the Release Controller workflow also deploys to GitHub Pages (no GitHub Release is created).
+- GitHub Pages deployments run the same icon generation pipeline (Rust `nesium-icon` + `flutter_launcher_icons`) so the web favicon/manifest icons stay in sync with desktop/mobile.
 
 Setup (once, in GitHub repo settings):
 - `Settings → Pages → Build and deployment → Source: GitHub Actions`
