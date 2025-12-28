@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../bridge/api/palette.dart' as nes_palette;
 import '../../logging/app_logger.dart';
-import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
@@ -47,7 +46,7 @@ class VideoSettings {
     return VideoSettings(
       paletteMode: PaletteMode.builtin,
       builtinPreset: nes_palette.PaletteKind.nesdevNtsc,
-      integerScaling: isNativeMobile,
+      integerScaling: false,
       customPaletteName: null,
     );
   }
