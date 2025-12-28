@@ -1,5 +1,20 @@
 # <img src="icon.svg" width="48" align="center" /> Nesium
 
+<div align="center">
+
+[![Rust](https://github.com/mikai233/nesium/actions/workflows/rust.yml/badge.svg)](https://github.com/mikai233/nesium/actions/workflows/rust.yml)
+[![Flutter](https://github.com/mikai233/nesium/actions/workflows/flutter.yml/badge.svg)](https://github.com/mikai233/nesium/actions/workflows/flutter.yml)
+[![Web Demo](https://img.shields.io/website?label=play%20online&url=https%3A%2F%2Fmikai233.github.io%2Fnesium%2F)](https://mikai233.github.io/nesium/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.md)
+
+<p>
+  <img src="https://img.shields.io/badge/rust-%23000000.svg?style=flat&logo=rust&logoColor=white" alt="Rust" />
+  <img src="https://img.shields.io/badge/Flutter-%2302569B.svg?style=flat&logo=Flutter&logoColor=white" alt="Flutter" />
+  <img src="https://img.shields.io/badge/WebAssembly-654FF0.svg?style=flat&logo=webassembly&logoColor=white" alt="Wasm" />
+</p>
+
+</div>
+
 A cycle-accurate NES emulator written in Rust, designed to faithfully replicate the behavior of the Nintendo Entertainment System hardware. This project strives to provide precise emulation of the CPU, PPU, APU, and other critical components, ensuring that every game runs as it would on the original hardware.
 
 This emulator’s design and implementation draw heavily from the excellent Mesen2 project. Mesen2’s documentation, code structure, and many of its implementation ideas (especially around timing, open-bus behaviour, and audio mixing) have been an invaluable reference. Huge thanks to the Mesen2 authors and contributors for making such a high‑quality emulator available.
