@@ -11,7 +11,9 @@ use crate::ring::draw_dashed_ring;
 use crate::save::save_surface;
 use skia_safe::image::CachingHint;
 use skia_safe::surfaces::raster_n32_premul;
-use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
+use skia_safe::{AlphaType, ColorType, ImageInfo, Rect, Surface, svg};
+use std::fs::File;
+use std::io::Write;
 
 /// Default render dimension (square).
 pub const DEFAULT_ICON_SIZE: u32 = WIDTH as u32;
@@ -80,6 +82,23 @@ pub fn render_rgba_unpremul(size: u32) -> Vec<u8> {
 pub fn render_png(path: &str) -> Result<(), String> {
     let mut surface = render_base_surface()?;
     save_surface(&mut surface, path)
+}
+
+/// Convenience helper for the binary: renders the base icon and saves an SVG.
+pub fn render_svg(path: &str) -> Result<(), String> {
+    let bounds = Rect::from_wh(WIDTH as f32, HEIGHT as f32);
+    let mut canvas = svg::Canvas::new(bounds, None);
+
+    draw_background(&mut canvas);
+    draw_dashed_ring(&mut canvas);
+    draw_controller(&mut canvas);
+
+    let data = canvas.end();
+    let mut file = File::create(path).map_err(|e| e.to_string())?;
+    file.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+
+    println!("Successfully generated: {}", path);
+    Ok(())
 }
 
 /// Save background + foreground layers as separate PNGs.

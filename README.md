@@ -1,4 +1,4 @@
-# NES Emulator in Rust
+# <img src="icon.svg" width="48" align="center" /> Nesium
 
 A cycle-accurate NES emulator written in Rust, designed to faithfully replicate the behavior of the Nintendo Entertainment System hardware. This project strives to provide precise emulation of the CPU, PPU, APU, and other critical components, ensuring that every game runs as it would on the original hardware.
 

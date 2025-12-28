@@ -5,6 +5,6 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-skia-safe = { workspace = true, features = ["gl"] }
+skia-safe = { workspace = true, features = ["gl", "svg"] }
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
