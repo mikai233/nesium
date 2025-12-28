@@ -58,8 +58,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd "${GITHUB_WORKSPACE}"
-          wasm-pack build crates/nesium-wasm --release --target web --out-dir apps/nesium_flutter/web/nes/pkg
+          OUT_DIR="${GITHUB_WORKSPACE}/apps/nesium_flutter/web/nes/pkg"
+          mkdir -p "${OUT_DIR}"
+          pushd crates/nesium-wasm >/dev/null
+          wasm-pack build --release --target web --out-dir "${OUT_DIR}"
+          popd >/dev/null
 
       - name: Build web (release)
         run: flutter build web --release --no-wasm-dry-run
