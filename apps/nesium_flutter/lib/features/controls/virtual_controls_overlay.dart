@@ -1422,6 +1422,7 @@ class _DpadCluster extends StatelessWidget {
       child: _VirtualDpad(
         discDiameter: disc,
         deadzoneRatio: settings.dpadDeadzoneRatio,
+        boundaryDeadzoneRatio: settings.dpadBoundaryDeadzoneRatio,
         hapticsEnabled: settings.hapticsEnabled,
         baseColor: baseColor,
         surfaceColor: surfaceColor,
@@ -1440,6 +1441,7 @@ class _VirtualDpad extends StatefulWidget {
   const _VirtualDpad({
     required this.discDiameter,
     required this.deadzoneRatio,
+    required this.boundaryDeadzoneRatio,
     required this.hapticsEnabled,
     required this.baseColor,
     required this.surfaceColor,
@@ -1448,6 +1450,7 @@ class _VirtualDpad extends StatefulWidget {
 
   final double discDiameter;
   final double deadzoneRatio;
+  final double boundaryDeadzoneRatio;
   final bool hapticsEnabled;
   final Color baseColor;
   final Color surfaceColor;
@@ -1474,41 +1477,34 @@ class _VirtualDpadState extends State<_VirtualDpad> {
     final delta = localPosition - center;
     final discRadius = widget.discDiameter / 2;
     final deadzone = discRadius * widget.deadzoneRatio.clamp(0.0, 0.9);
+    final boundary = widget.boundaryDeadzoneRatio.clamp(0.25, 0.95);
 
     final dist = delta.distance;
     Set<PadButton> next;
     if (dist <= deadzone) {
       next = const {};
     } else {
-      final angle = math.atan2(-delta.dy, delta.dx);
-      final sector = ((angle / (math.pi / 4)).round() + 8) % 8;
-      switch (sector) {
-        case 0:
-          next = {PadButton.right};
-          break;
-        case 1:
-          next = {PadButton.right, PadButton.up};
-          break;
-        case 2:
-          next = {PadButton.up};
-          break;
-        case 3:
-          next = {PadButton.up, PadButton.left};
-          break;
-        case 4:
-          next = {PadButton.left};
-          break;
-        case 5:
-          next = {PadButton.left, PadButton.down};
-          break;
-        case 6:
-          next = {PadButton.down};
-          break;
-        case 7:
-          next = {PadButton.down, PadButton.right};
-          break;
-        default:
-          next = const {};
+      final dx = delta.dx;
+      final dy = delta.dy;
+      final ax = dx.abs();
+      final ay = dy.abs();
+
+      if (ax < 1e-6 && ay < 1e-6) {
+        next = const {};
+      } else {
+        final horizontal = dx >= 0 ? PadButton.right : PadButton.left;
+        final vertical = dy >= 0 ? PadButton.down : PadButton.up;
+
+        // "Boundary deadzone" shrinks the diagonal region so cardinal directions
+        // are easier to hit and less likely to accidentally include a neighbor.
+        final ratio = ax < 1e-6 ? double.infinity : (ay / ax);
+        if (ratio < boundary) {
+          next = {horizontal};
+        } else if (ratio > 1 / boundary) {
+          next = {vertical};
+        } else {
+          next = {horizontal, vertical};
+        }
       }
     }
 

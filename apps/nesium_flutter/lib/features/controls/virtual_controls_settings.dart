@@ -16,6 +16,7 @@ class VirtualControlsSettings {
     required this.hitboxScale,
     required this.hapticsEnabled,
     required this.dpadDeadzoneRatio,
+    required this.dpadBoundaryDeadzoneRatio,
     required this.portraitDpadOffset,
     required this.portraitButtonsOffset,
     required this.portraitSystemOffset,
@@ -60,6 +61,7 @@ class VirtualControlsSettings {
   final double hitboxScale;
   final bool hapticsEnabled;
   final double dpadDeadzoneRatio;
+  final double dpadBoundaryDeadzoneRatio;
 
   final Offset portraitDpadOffset;
   final Offset portraitButtonsOffset;
@@ -106,6 +108,7 @@ class VirtualControlsSettings {
     double? hitboxScale,
     bool? hapticsEnabled,
     double? dpadDeadzoneRatio,
+    double? dpadBoundaryDeadzoneRatio,
     Offset? portraitDpadOffset,
     Offset? portraitButtonsOffset,
     Offset? portraitSystemOffset,
@@ -150,6 +153,8 @@ class VirtualControlsSettings {
       hitboxScale: hitboxScale ?? this.hitboxScale,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       dpadDeadzoneRatio: dpadDeadzoneRatio ?? this.dpadDeadzoneRatio,
+      dpadBoundaryDeadzoneRatio:
+          dpadBoundaryDeadzoneRatio ?? this.dpadBoundaryDeadzoneRatio,
       portraitDpadOffset: portraitDpadOffset ?? this.portraitDpadOffset,
       portraitButtonsOffset:
           portraitButtonsOffset ?? this.portraitButtonsOffset,
@@ -203,6 +208,7 @@ class VirtualControlsSettings {
     hitboxScale: 1.25,
     hapticsEnabled: false,
     dpadDeadzoneRatio: 0.16,
+    dpadBoundaryDeadzoneRatio: 0.70,
     portraitDpadOffset: Offset.zero,
     portraitButtonsOffset: Offset.zero,
     portraitSystemOffset: Offset.zero,
@@ -262,6 +268,8 @@ class VirtualControlsSettingsController
       _set(state.copyWith(hapticsEnabled: value));
   void setDpadDeadzoneRatio(double value) =>
       _set(state.copyWith(dpadDeadzoneRatio: value));
+  void setDpadBoundaryDeadzoneRatio(double value) =>
+      _set(state.copyWith(dpadBoundaryDeadzoneRatio: value));
 
   void setPortraitDpadOffset(Offset value) =>
       _set(state.copyWith(portraitDpadOffset: value));
@@ -323,6 +331,7 @@ Map<String, Object?> _virtualControlsToStorage(VirtualControlsSettings value) {
     'hitboxScale': value.hitboxScale,
     'hapticsEnabled': value.hapticsEnabled,
     'dpadDeadzoneRatio': value.dpadDeadzoneRatio,
+    'dpadBoundaryDeadzoneRatio': value.dpadBoundaryDeadzoneRatio,
     'portraitDpadOffset': offset(value.portraitDpadOffset),
     'portraitButtonsOffset': offset(value.portraitButtonsOffset),
     'portraitSystemOffset': offset(value.portraitSystemOffset),
@@ -383,6 +392,10 @@ VirtualControlsSettings? _virtualControlsFromStorage(Object? value) {
     hitboxScale: d(map['hitboxScale'], defaults.hitboxScale),
     hapticsEnabled: b(map['hapticsEnabled'], defaults.hapticsEnabled),
     dpadDeadzoneRatio: d(map['dpadDeadzoneRatio'], defaults.dpadDeadzoneRatio),
+    dpadBoundaryDeadzoneRatio: d(
+      map['dpadBoundaryDeadzoneRatio'],
+      defaults.dpadBoundaryDeadzoneRatio,
+    ),
     portraitDpadOffset: o(
       map['portraitDpadOffset'],
       defaults.portraitDpadOffset,

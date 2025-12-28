@@ -147,6 +147,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get virtualControlsDpadDeadzone => 'D-pad deadzone';
 
   @override
+  String get virtualControlsDpadDeadzoneHelp =>
+      'Center deadzone: touching near the center won’t trigger any direction.';
+
+  @override
+  String get virtualControlsDpadBoundaryDeadzone => 'D-pad boundary deadzone';
+
+  @override
+  String get virtualControlsDpadBoundaryDeadzoneHelp =>
+      'Boundary deadzone: higher values make diagonals harder to trigger, reducing accidental neighbor presses.';
+
+  @override
   String get virtualControlsTurboFramesPerToggle => 'Turbo frames per toggle';
 
   @override

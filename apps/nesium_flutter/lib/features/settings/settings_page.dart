@@ -703,6 +703,33 @@ class SettingsPage extends ConsumerWidget {
                       onChanged: controller.setDpadDeadzoneRatio,
                       valueLabel: settings.dpadDeadzoneRatio.toStringAsFixed(2),
                     ),
+                    Text(
+                      l10n.virtualControlsDpadDeadzoneHelp,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.75),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _SliderTile(
+                      label: l10n.virtualControlsDpadBoundaryDeadzone,
+                      value: settings.dpadBoundaryDeadzoneRatio,
+                      min: 0.35,
+                      max: 0.90,
+                      divisions: 55,
+                      onChanged: controller.setDpadBoundaryDeadzoneRatio,
+                      valueLabel: settings.dpadBoundaryDeadzoneRatio
+                          .toStringAsFixed(2),
+                    ),
+                    Text(
+                      l10n.virtualControlsDpadBoundaryDeadzoneHelp,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.75),
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       l10n.tipAdjustButtonsInDrawer,

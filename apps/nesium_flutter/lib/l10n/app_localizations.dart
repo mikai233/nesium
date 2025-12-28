@@ -362,6 +362,24 @@ abstract class AppLocalizations {
   /// **'D-pad deadzone'**
   String get virtualControlsDpadDeadzone;
 
+  /// No description provided for @virtualControlsDpadDeadzoneHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Center deadzone: touching near the center won’t trigger any direction.'**
+  String get virtualControlsDpadDeadzoneHelp;
+
+  /// No description provided for @virtualControlsDpadBoundaryDeadzone.
+  ///
+  /// In en, this message translates to:
+  /// **'D-pad boundary deadzone'**
+  String get virtualControlsDpadBoundaryDeadzone;
+
+  /// No description provided for @virtualControlsDpadBoundaryDeadzoneHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Boundary deadzone: higher values make diagonals harder to trigger, reducing accidental neighbor presses.'**
+  String get virtualControlsDpadBoundaryDeadzoneHelp;
+
   /// No description provided for @virtualControlsTurboFramesPerToggle.
   ///
   /// In en, this message translates to:

@@ -143,6 +143,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get virtualControlsDpadDeadzone => '方向键死区';
 
   @override
+  String get virtualControlsDpadDeadzoneHelp => '中心死区：触点靠近中心时不会触发任何方向。';
+
+  @override
+  String get virtualControlsDpadBoundaryDeadzone => '方向键边界死区';
+
+  @override
+  String get virtualControlsDpadBoundaryDeadzoneHelp =>
+      '边界死区：数值越大越不容易触发斜方向，减少误触相邻方向。';
+
+  @override
   String get virtualControlsTurboFramesPerToggle => '连发切换帧数';
 
   @override
