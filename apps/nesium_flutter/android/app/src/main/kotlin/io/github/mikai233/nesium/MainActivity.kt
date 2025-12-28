@@ -8,6 +8,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.view.TextureRegistry
+import androidx.core.content.edit
 
 
 class MainActivity : FlutterActivity() {
@@ -16,15 +17,12 @@ class MainActivity : FlutterActivity() {
     private var rustRendererSurface: Surface? = null
     private var rustTextureEntry: TextureRegistry.SurfaceTextureEntry? = null
     private var videoBackend: Int = 1 // default to hardware (Scheme B)
-    private var lowLatencyVideo: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
         videoBackend = prefs.getInt("video_backend", 1)
-        lowLatencyVideo = prefs.getBoolean("low_latency_video", false)
         NesiumNative.nativeSetVideoBackend(videoBackend)
-        NesiumNative.nativeSetLowLatencyVideo(if (lowLatencyVideo) 1 else 0)
         // Pass a stable application context to Rust.
         NesiumNative.init_android_context(applicationContext)
     }
@@ -85,19 +83,7 @@ class MainActivity : FlutterActivity() {
                         }
                         // Persist preference; it will take effect on next cold start.
                         val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
-                        prefs.edit().putInt("video_backend", mode).apply()
-                        result.success(null)
-                    }
-
-                    "setLowLatencyVideo" -> {
-                        val enabled = call.argument<Boolean>("enabled")
-                        if (enabled == null) {
-                            result.error("bad_args", "enabled must be a boolean", null)
-                            return@setMethodCallHandler
-                        }
-                        // Persist preference; it will take effect on next cold start.
-                        val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
-                        prefs.edit().putBoolean("low_latency_video", enabled).apply()
+                        prefs.edit { putInt("video_backend", mode) }
                         result.success(null)
                     }
 

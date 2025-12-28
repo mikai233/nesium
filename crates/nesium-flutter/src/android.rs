@@ -29,7 +29,6 @@ pub enum AndroidVideoBackend {
 }
 
 static VIDEO_BACKEND: AtomicI32 = AtomicI32::new(AndroidVideoBackend::AhbSwapchain as i32);
-static LOW_LATENCY_VIDEO: AtomicBool = AtomicBool::new(false);
 
 pub fn use_ahb_video_backend() -> bool {
     VIDEO_BACKEND.load(Ordering::Acquire) == AndroidVideoBackend::AhbSwapchain as i32
@@ -323,7 +322,6 @@ static RUST_RENDERER_SIGNAL: OnceLock<RustRendererSignal> = OnceLock::new();
 
 fn notify_rust_renderer(buffer_index: u32) {
     let signal = rust_renderer_signal();
-    let low_latency = LOW_LATENCY_VIDEO.load(Ordering::Acquire);
 
     let mut state = match signal.mu.lock() {
         Ok(guard) => guard,
@@ -334,24 +332,8 @@ fn notify_rust_renderer(buffer_index: u32) {
         return;
     }
 
-    if low_latency {
-        // Strict sync: keep at most 1 queued frame. If the renderer can't keep up, block the NES
-        // thread here (backpressure) instead of dropping frames.
-        const MAX_QUEUE: usize = 1;
-        while state.queue.len() >= MAX_QUEUE && state.renderer_active {
-            let (g, _) = match signal.cv.wait_timeout(state, Duration::from_millis(250)) {
-                Ok(res) => res,
-                Err(poisoned) => poisoned.into_inner(),
-            };
-            state = g;
-        }
-        if !state.renderer_active {
-            return;
-        }
-    } else {
-        // Latest-only: keep only the most recent frame.
-        state.queue.clear();
-    }
+    // Latest-only: keep only the most recent frame.
+    state.queue.clear();
 
     state.queue.push_back(buffer_index);
     signal.cv.notify_one();
@@ -415,18 +397,6 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetVide
     VIDEO_BACKEND.store(mode as i32, Ordering::Release);
 }
 
-/// Enables or disables the "low latency video" mode for the Rust renderer on Android.
-///
-/// Intended to be set before `init_android_context` during process startup.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetLowLatencyVideo(
-    _env: JNIEnv,
-    _class: JClass,
-    enabled: jint,
-) {
-    LOW_LATENCY_VIDEO.store(enabled != 0, Ordering::Release);
-}
-
 /// Stores the write-end FD for the frame signal pipe and makes it non-blocking.
 fn set_frame_signal_fd(fd: RawFd) {
     if fd < 0 {
@@ -434,8 +404,6 @@ fn set_frame_signal_fd(fd: RawFd) {
         return;
     }
 
-    // Best-effort: make the pipe write FD non-blocking so the producer thread never stalls.
-    // If this fails, we still store the FD; writes may block if the pipe becomes full.
     unsafe {
         let flags = libc::fcntl(fd, libc::F_GETFL);
         if flags >= 0 {
@@ -1217,12 +1185,7 @@ unsafe fn run_rust_renderer(
             if stop.load(Ordering::Acquire) {
                 None
             } else {
-                let msg = state.queue.pop_front();
-                // Wake any producer waiting for queue space (low-latency backpressure).
-                if msg.is_some() {
-                    signal.cv.notify_all();
-                }
-                msg
+                state.queue.pop_front()
             }
         };
 

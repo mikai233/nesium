@@ -31,17 +31,6 @@ object NesiumNative {
     external fun nativeSetVideoBackend(mode: Int)
 
     /**
-     * Enables or disables the low-latency video mode (Android + Rust renderer only).
-     *
-     * Must be called before [init_android_context] triggers runtime initialization.
-     *
-     * 0 = disabled
-     * 1 = enabled
-     */
-    @JvmStatic
-    external fun nativeSetLowLatencyVideo(enabled: Int)
-
-    /**
      * Starts the Rust-side EGL/GL renderer that presents into the given [Surface].
      *
      * Only used when `nativeSetVideoBackend(1)` was selected.

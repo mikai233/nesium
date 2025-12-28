@@ -18,10 +18,4 @@ class NesTextureService {
   /// Note: takes effect on next app restart.
   Future<void> setVideoBackend(int mode) =>
       _channel.invokeMethod<void>('setVideoBackend', {'mode': mode});
-
-  /// Enables or disables the Android low-latency video mode.
-  ///
-  /// Note: takes effect on next app restart.
-  Future<void> setLowLatencyVideo(bool enabled) =>
-      _channel.invokeMethod<void>('setLowLatencyVideo', {'enabled': enabled});
 }
