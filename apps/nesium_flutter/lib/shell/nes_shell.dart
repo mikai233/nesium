@@ -18,6 +18,7 @@ import '../features/controls/turbo_settings.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
+import '../features/about/about_page.dart';
 import '../l10n/app_localizations.dart';
 import '../logging/app_logger.dart';
 import '../platform/desktop_window_manager.dart';
@@ -280,6 +281,13 @@ class _NesShellState extends ConsumerState<NesShell>
     ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
   }
 
+  Future<void> _openAbout() async {
+    if (!mounted) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const AboutPage()));
+  }
+
   Future<void> _openDebugger() async {
     final languageCode = ref.read(appLanguageProvider).languageCode;
     await _desktopWindowManager.openDebuggerWindow(languageCode: languageCode);
@@ -301,6 +309,7 @@ class _NesShellState extends ConsumerState<NesShell>
       eject: _ejectConsole,
       togglePause: _togglePause,
       openSettings: _openSettings,
+      openAbout: _openAbout,
       openDebugger: _openDebugger,
       openTools: _openTools,
     );

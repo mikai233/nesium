@@ -228,6 +228,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuPreferences => '偏好设置…';
 
   @override
+  String get menuAbout => '关于';
+
+  @override
   String get menuDebugger => '调试器';
 
   @override
@@ -309,6 +312,38 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoScreenVerticalOffset => '画面垂直偏移';
+
+  @override
+  String get aboutTitle => '关于 Nesium';
+
+  @override
+  String get aboutLead => 'Nesium：基于 nesium-core 的 Rust NES/FC 前端。';
+
+  @override
+  String get aboutIntro =>
+      'Flutter 前端复用 Rust 核心进行模拟；Web 版本通过 Flutter Web + Web Worker + WASM 在浏览器中运行。';
+
+  @override
+  String get aboutLinksHeading => '链接';
+
+  @override
+  String get aboutGitHubLabel => 'GitHub';
+
+  @override
+  String get aboutWebDemoLabel => '在线游玩';
+
+  @override
+  String get aboutComponentsHeading => '开源组件';
+
+  @override
+  String get aboutComponentsHint => '点击条目可复制链接。';
+
+  @override
+  String get aboutLicenseHeading => '许可证';
+
+  @override
+  String get aboutLicenseBody =>
+      'Nesium 使用 GPL-3.0-or-later 授权。详见仓库根目录的 LICENSE.md。';
 
   @override
   String get videoBackendLabel => 'Android 渲染后端';

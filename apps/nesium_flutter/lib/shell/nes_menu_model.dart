@@ -9,6 +9,7 @@ enum NesMenuItemId {
   eject,
   togglePause,
   settings,
+  about,
   debugger,
   tools,
 }
@@ -26,6 +27,7 @@ class NesMenuItemSpec {
     NesMenuItemId.eject => l10n.menuEject,
     NesMenuItemId.togglePause => l10n.menuPauseResume,
     NesMenuItemId.settings => l10n.menuPreferences,
+    NesMenuItemId.about => l10n.menuAbout,
     NesMenuItemId.debugger => l10n.menuDebugger,
     NesMenuItemId.tools => l10n.menuTools,
   };
@@ -78,6 +80,11 @@ class NesMenus {
     icon: Icons.settings_outlined,
   );
 
+  static const NesMenuItemSpec about = NesMenuItemSpec(
+    id: NesMenuItemId.about,
+    icon: Icons.info_outline,
+  );
+
   static const NesMenuItemSpec debugger = NesMenuItemSpec(
     id: NesMenuItemId.debugger,
     icon: Icons.bug_report_outlined,
@@ -97,6 +104,7 @@ class NesMenus {
     debugger,
     tools,
     settings,
+    about,
   ];
 
   static const List<NesMenuSectionSpec> desktopMenuSections = [
@@ -105,7 +113,7 @@ class NesMenus {
       id: NesMenuSectionId.emulation,
       items: [togglePause, reset, powerReset, eject],
     ),
-    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
+    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings, about]),
     NesMenuSectionSpec(id: NesMenuSectionId.windows, items: [debugger, tools]),
   ];
 
@@ -116,6 +124,6 @@ class NesMenus {
       id: NesMenuSectionId.emulation,
       items: [togglePause, reset, powerReset],
     ),
-    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
+    NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings, about]),
   ];
 }

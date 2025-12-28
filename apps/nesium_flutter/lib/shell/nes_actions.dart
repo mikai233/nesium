@@ -8,6 +8,7 @@ class NesActions {
     required this.eject,
     required this.togglePause,
     required this.openSettings,
+    required this.openAbout,
     required this.openDebugger,
     required this.openTools,
   });
@@ -18,6 +19,7 @@ class NesActions {
   final AsyncCallback eject;
   final AsyncCallback togglePause;
   final AsyncCallback openSettings;
+  final AsyncCallback openAbout;
   final AsyncCallback openDebugger;
   final AsyncCallback openTools;
 }

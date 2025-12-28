@@ -8,6 +8,7 @@ import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_editor.dart';
 import '../features/controls/virtual_controls_overlay.dart';
 import '../features/controls/virtual_controls_settings.dart';
+import '../features/about/about_page.dart';
 import '../features/debugger/debugger_panel.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/tools/tools_panel.dart';
@@ -234,6 +235,9 @@ class _MobileDrawer extends StatelessWidget {
       case NesMenuItemId.settings:
         closeDrawer();
         unawaited(actions.openSettings());
+        break;
+      case NesMenuItemId.about:
+        unawaited(openPage(const AboutPage()));
         break;
       case NesMenuItemId.debugger:
         unawaited(

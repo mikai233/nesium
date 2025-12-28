@@ -518,6 +518,12 @@ abstract class AppLocalizations {
   /// **'Preferences...'**
   String get menuPreferences;
 
+  /// No description provided for @menuAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get menuAbout;
+
   /// No description provided for @menuDebugger.
   ///
   /// In en, this message translates to:
@@ -679,6 +685,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Screen vertical offset'**
   String get videoScreenVerticalOffset;
+
+  /// No description provided for @aboutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'About Nesium'**
+  String get aboutTitle;
+
+  /// No description provided for @aboutLead.
+  ///
+  /// In en, this message translates to:
+  /// **'Nesium: Rust NES/FC emulator frontend built on nesium-core.'**
+  String get aboutLead;
+
+  /// No description provided for @aboutIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'This Flutter frontend reuses the Rust core for emulation. The web build runs in the browser via Flutter Web + Web Worker + WASM.'**
+  String get aboutIntro;
+
+  /// No description provided for @aboutLinksHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'Links'**
+  String get aboutLinksHeading;
+
+  /// No description provided for @aboutGitHubLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub'**
+  String get aboutGitHubLabel;
+
+  /// No description provided for @aboutWebDemoLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Web demo'**
+  String get aboutWebDemoLabel;
+
+  /// No description provided for @aboutComponentsHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'Open-source components'**
+  String get aboutComponentsHeading;
+
+  /// No description provided for @aboutComponentsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap an item to copy the link.'**
+  String get aboutComponentsHint;
+
+  /// No description provided for @aboutLicenseHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'License'**
+  String get aboutLicenseHeading;
+
+  /// No description provided for @aboutLicenseBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Nesium is licensed under GPL-3.0-or-later. See LICENSE.md in the repository root.'**
+  String get aboutLicenseBody;
 
   /// No description provided for @videoBackendLabel.
   ///

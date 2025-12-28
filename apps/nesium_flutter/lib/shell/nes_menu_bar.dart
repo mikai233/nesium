@@ -91,6 +91,9 @@ class NesMenuBar extends StatelessWidget {
       case NesMenuItemId.settings:
         unawaited(actions.openSettings());
         break;
+      case NesMenuItemId.about:
+        unawaited(actions.openAbout());
+        break;
       case NesMenuItemId.debugger:
         unawaited(actions.openDebugger());
         break;

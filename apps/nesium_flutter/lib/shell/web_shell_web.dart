@@ -16,6 +16,7 @@ import '../features/controls/virtual_controls_editor.dart';
 import '../features/controls/turbo_settings.dart';
 import '../features/controls/virtual_controls_overlay.dart';
 import '../features/controls/virtual_controls_settings.dart';
+import '../features/about/about_page.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/settings/settings_page.dart';
@@ -571,6 +572,12 @@ class _WebShellState extends ConsumerState<WebShell> {
           context,
         ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
       },
+      openAbout: () async {
+        if (!mounted) return;
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => const AboutPage()));
+      },
       openDebugger: () async {},
       openTools: () async {},
     );
@@ -947,6 +954,9 @@ class _WebShellState extends ConsumerState<WebShell> {
         break;
       case NesMenuItemId.settings:
         unawaited(actions.openSettings());
+        break;
+      case NesMenuItemId.about:
+        unawaited(actions.openAbout());
         break;
       case NesMenuItemId.debugger:
         unawaited(actions.openDebugger());

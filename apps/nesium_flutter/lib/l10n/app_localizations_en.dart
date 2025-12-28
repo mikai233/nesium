@@ -234,6 +234,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuPreferences => 'Preferences...';
 
   @override
+  String get menuAbout => 'About';
+
+  @override
   String get menuDebugger => 'Debugger';
 
   @override
@@ -318,6 +321,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoScreenVerticalOffset => 'Screen vertical offset';
+
+  @override
+  String get aboutTitle => 'About Nesium';
+
+  @override
+  String get aboutLead =>
+      'Nesium: Rust NES/FC emulator frontend built on nesium-core.';
+
+  @override
+  String get aboutIntro =>
+      'This Flutter frontend reuses the Rust core for emulation. The web build runs in the browser via Flutter Web + Web Worker + WASM.';
+
+  @override
+  String get aboutLinksHeading => 'Links';
+
+  @override
+  String get aboutGitHubLabel => 'GitHub';
+
+  @override
+  String get aboutWebDemoLabel => 'Web demo';
+
+  @override
+  String get aboutComponentsHeading => 'Open-source components';
+
+  @override
+  String get aboutComponentsHint => 'Tap an item to copy the link.';
+
+  @override
+  String get aboutLicenseHeading => 'License';
+
+  @override
+  String get aboutLicenseBody =>
+      'Nesium is licensed under GPL-3.0-or-later. See LICENSE.md in the repository root.';
 
   @override
   String get videoBackendLabel => 'Android renderer backend';
