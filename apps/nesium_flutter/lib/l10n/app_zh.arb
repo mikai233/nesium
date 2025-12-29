@@ -47,6 +47,7 @@
   "virtualControlsDpadDeadzoneHelp": "中心死区：触点靠近中心时不会触发任何方向。",
   "virtualControlsDpadBoundaryDeadzone": "方向键边界死区",
   "virtualControlsDpadBoundaryDeadzoneHelp": "边界死区：数值越大越不容易触发斜方向，减少误触相邻方向。",
+  "virtualControlsReset": "重置布局",
   "virtualControlsTurboFramesPerToggle": "连发切换帧数",
   "virtualControlsTurboOnFrames": "连发按下帧数",
   "virtualControlsTurboOffFrames": "连发抬起帧数",

@@ -380,6 +380,12 @@ abstract class AppLocalizations {
   /// **'Boundary deadzone: higher values make diagonals harder to trigger, reducing accidental neighbor presses.'**
   String get virtualControlsDpadBoundaryDeadzoneHelp;
 
+  /// No description provided for @virtualControlsReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset layout'**
+  String get virtualControlsReset;
+
   /// No description provided for @virtualControlsTurboFramesPerToggle.
   ///
   /// In en, this message translates to:

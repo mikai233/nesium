@@ -775,6 +775,12 @@ class SettingsPage extends ConsumerWidget {
                       l10n.tipAdjustButtonsInDrawer,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.restore),
+                      title: Text(l10n.virtualControlsReset),
+                      onTap: controller.resetToDefault,
+                    ),
                   ],
                 ),
               ),

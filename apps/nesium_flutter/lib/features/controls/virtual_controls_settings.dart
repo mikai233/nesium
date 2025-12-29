@@ -297,6 +297,8 @@ class VirtualControlsSettingsController
   void setLandscapeSystemScale(double value) =>
       _set(state.copyWith(landscapeSystemScale: value));
 
+  void resetToDefault() => _set(VirtualControlsSettings.defaults);
+
   void _set(VirtualControlsSettings next) {
     state = next;
     _persist(next);

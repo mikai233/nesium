@@ -158,6 +158,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Boundary deadzone: higher values make diagonals harder to trigger, reducing accidental neighbor presses.';
 
   @override
+  String get virtualControlsReset => 'Reset layout';
+
+  @override
   String get virtualControlsTurboFramesPerToggle => 'Turbo frames per toggle';
 
   @override

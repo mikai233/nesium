@@ -153,6 +153,9 @@ class AppLocalizationsZh extends AppLocalizations {
       '边界死区：数值越大越不容易触发斜方向，减少误触相邻方向。';
 
   @override
+  String get virtualControlsReset => '重置布局';
+
+  @override
   String get virtualControlsTurboFramesPerToggle => '连发切换帧数';
 
   @override
