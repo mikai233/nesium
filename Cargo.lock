@@ -4408,9 +4408,9 @@ dependencies = [
 
 [[package]]
 name = "skia-safe"
-version = "0.91.0"
+version = "0.91.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f97f791b2d9d915947b424d76f212dc2d1c47c09a18e30546ab0edf0a8af89f"
+checksum = "2c13e5913d17403753fd8cc2c15402e8d9ba8278d1b82a12aa7264a63f9c6325"
 dependencies = [
  "base64",
  "bitflags 2.10.0",
