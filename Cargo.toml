@@ -14,9 +14,11 @@ members = [
   "crates/nesium-netplay",
   "crates/nesium-netd",
   "crates/nesium-netproto",
+  "apps/nesium-tui",
 ]
 default-members = [
   "apps/nesium-egui",
+  "apps/nesium-tui",
   "crates/nesium-core",
   "crates/libretro-bridge",
   "crates/nesium-libretro",
@@ -95,3 +97,4 @@ jni = "0.21.1"
 ndk-context = "0.1.1"
 libc = "0.2.178"
 crossbeam-channel = "0.5.15"
+ratatui = "0.30.0"
