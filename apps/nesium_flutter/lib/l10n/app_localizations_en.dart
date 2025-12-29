@@ -137,6 +137,20 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get rewindEnabledTitle => 'Rewind';
+
+  @override
+  String get rewindEnabledSubtitle => 'Enable real-time rewind support.';
+
+  @override
+  String get rewindSecondsTitle => 'Rewind Duration';
+
+  @override
+  String rewindSecondsValue(int seconds) {
+    return '$seconds seconds';
+  }
+
+  @override
   String get autoSlotLabel => 'Auto Slot';
 
   @override

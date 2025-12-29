@@ -29,6 +29,7 @@ let nextFrameAt = 0;
 const EXACT_NTSC_FPS = 60.0988;
 let targetFps = EXACT_NTSC_FPS;
 let integerFpsMode = false;
+let rewinding = false;
 
 // Input
 let padBaseMasks = new Map(); // port -> bits
@@ -95,16 +96,19 @@ function computeEffectivePadBits(port) {
 
 function applyPad(port) {
     const bits = computeEffectivePadBits(port);
+    if (bits !== 0 && rewinding) {
+        // Any button press stops rewind
+        rewinding = false;
+        if (typeof nes.set_rewinding === "function") {
+            nes.set_rewinding(false);
+        }
+    }
     nes.set_pad(port, bits);
 }
 
 function applyAllPads() {
-    if (padBaseMasks.size === 0 && padTurboMasks.size === 0) return;
-    // NES has two controller ports (0 and 1). Avoid per-frame allocations.
+    // NES has two controller ports (0 and 1).
     for (let port = 0; port < 2; port += 1) {
-        const base = padBaseMasks.get(port) ?? 0;
-        const turbo = padTurboMasks.get(port) ?? 0;
-        if (((base | turbo) & 0xff) === 0) continue;
         applyPad(port);
     }
 }
@@ -132,14 +136,23 @@ function recomputeHasTurboInput() {
 
 // Render one frame (and optionally send audio)
 function tick() {
-    if (!running) return;
+    if (!running && !rewinding) {
+        stopLoop();
+        return;
+    }
 
     try {
-        if (hasTurboInput) {
-            advanceTurboPhase();
+        if (!rewinding) {
+            // Always sync pads during forward simulation to avoid ghost inputs 
+            // restored from snapshots.
             applyAllPads();
+            if (hasTurboInput) {
+                advanceTurboPhase();
+            }
         }
-        nes.run_frame(emitAudio);
+        
+        // WASM nes.run_frame handles internal state management based on its own internal 'rewinding' flag.
+        nes.run_frame(emitAudio && !rewinding);
 
         // ----- Video: copy RGBA bytes from WASM memory into ImageData -----
         const fptr = nes.frame_ptr();
@@ -151,7 +164,7 @@ function tick() {
         ctx2d.putImageData(imageData, 0, 0);
 
         // ----- Audio: post interleaved stereo f32 -----
-        if (emitAudio) {
+        if (emitAudio && !rewinding) {
             const aptr = nes.audio_ptr();
             const alen = nes.audio_len();
 
@@ -295,6 +308,36 @@ onmessage = async (ev) => {
                         success: true, 
                         requestId: msg.requestId 
                     });
+                    break;
+                }
+
+                case "setRewindConfig": {
+                    const enabled = !!msg.enabled;
+                    const capacity = Number(msg.capacity);
+                    if (typeof nes.set_rewind_config !== "function") {
+                        throw new Error("Missing wasm export: set_rewind_config. Rebuild `web/nes/pkg`.");
+                    }
+                    nes.set_rewind_config(enabled, capacity);
+                    break;
+                }
+
+                case "setRewinding": {
+                    const nextRewinding = !!msg.rewinding;
+                    if (typeof nes.set_rewinding !== "function") {
+                        throw new Error("Missing wasm export: set_rewinding. Rebuild `web/nes/pkg`.");
+                    }
+                    nes.set_rewinding(nextRewinding);
+                    
+                    if (nextRewinding !== rewinding) {
+                        nextFrameAt = 0; // Reset pacing to avoid delay
+                        if (nextRewinding) {
+                            if (!timer) tick(); // Wake up the loop
+                        } else {
+                            // Exiting rewind: force immediate input sync to clear restored state
+                            applyAllPads();
+                        }
+                    }
+                    rewinding = nextRewinding;
                     break;
                 }
 

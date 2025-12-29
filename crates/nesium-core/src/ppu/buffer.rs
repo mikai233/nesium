@@ -577,6 +577,31 @@ impl FrameBuffer {
         self.plane_slice(1 - self.active_index)
     }
 
+    /// Copies the current front buffer pixels into the provided destination slice.
+    ///
+    /// This is more robust than `render()` for backends like Android's Swapchain
+    /// where pointers are only valid while locked.
+    pub fn copy_render_buffer(&mut self, dst: &mut [u8]) {
+        let front_idx = 1 - self.active_index;
+        match &mut self.storage {
+            FrameBufferStorage::Owned(planes) => {
+                dst.copy_from_slice(&planes[front_idx]);
+            }
+            FrameBufferStorage::External(handle) => {
+                dst.copy_from_slice(handle.plane_slice(front_idx));
+            }
+            FrameBufferStorage::Swapchain(s) => {
+                // Temporarily lock the front buffer to copy its content.
+                s.ensure_locked(front_idx);
+                let pitch = s.pitch_bytes(front_idx);
+                let len = pitch * SCREEN_HEIGHT;
+                let src = unsafe { slice::from_raw_parts(s.ptr[front_idx], len) };
+                dst.copy_from_slice(src);
+                s.unlock(front_idx);
+            }
+        }
+    }
+
     /// Returns a read-only view of the given plane by index.
     ///
     /// This is a low-level accessor intended for bridge layers (e.g. FFI to
@@ -599,6 +624,12 @@ impl FrameBuffer {
             (_, BufferMode::Index) => SCREEN_WIDTH,
             (_, BufferMode::Color { format, .. }) => SCREEN_WIDTH * format.bytes_per_pixel(),
         }
+    }
+
+    /// Total size of a single plane in bytes.
+    #[inline]
+    pub fn len_bytes(&self) -> usize {
+        self.pitch() * SCREEN_HEIGHT
     }
 
     pub fn set_frame_ready_callback(
@@ -802,7 +833,11 @@ impl FrameBuffer {
         match &self.storage {
             FrameBufferStorage::Owned(planes) => &planes[index],
             FrameBufferStorage::External(handle) => handle.plane_slice(index),
-            FrameBufferStorage::Swapchain(_) => &[],
+            FrameBufferStorage::Swapchain(_) => {
+                panic!(
+                    "Direct plane access is not supported for Swapchain-backed framebuffers. Use copy_render_buffer instead."
+                )
+            }
         }
     }
 

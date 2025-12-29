@@ -1,7 +1,7 @@
 use core::ffi::c_void;
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::Ordering},
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -378,5 +378,22 @@ impl RuntimeHandle {
             SAVE_STATE_REPLY_TIMEOUT,
             |reply| ControlMessage::LoadStateFromMemory(data, reply),
         )
+    }
+
+    pub fn set_rewind_config(&self, enabled: bool, capacity: u64) {
+        self.inner
+            .state
+            .rewind_enabled
+            .store(enabled, Ordering::Release);
+        self.inner
+            .state
+            .rewind_capacity
+            .store(capacity, Ordering::Release);
+    }
+
+    pub fn set_rewinding(&self, rewinding: bool) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_rewinding", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetRewinding(rewinding, reply)
+        })
     }
 }

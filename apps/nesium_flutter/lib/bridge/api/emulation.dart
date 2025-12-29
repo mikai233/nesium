@@ -20,3 +20,14 @@ Future<Uint8List> saveStateToMemory() =>
 
 Future<void> loadStateFromMemory({required List<int> data}) =>
     RustLib.instance.api.crateApiEmulationLoadStateFromMemory(data: data);
+
+Future<void> setRewindConfig({
+  required bool enabled,
+  required BigInt capacity,
+}) => RustLib.instance.api.crateApiEmulationSetRewindConfig(
+  enabled: enabled,
+  capacity: capacity,
+);
+
+Future<void> setRewinding({required bool rewinding}) =>
+    RustLib.instance.api.crateApiEmulationSetRewinding(rewinding: rewinding);

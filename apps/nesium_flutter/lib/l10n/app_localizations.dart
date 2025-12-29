@@ -338,6 +338,30 @@ abstract class AppLocalizations {
   /// **'{minutes} minutes'**
   String autoSaveIntervalValue(int minutes);
 
+  /// No description provided for @rewindEnabledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind'**
+  String get rewindEnabledTitle;
+
+  /// No description provided for @rewindEnabledSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable real-time rewind support.'**
+  String get rewindEnabledSubtitle;
+
+  /// No description provided for @rewindSecondsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind Duration'**
+  String get rewindSecondsTitle;
+
+  /// No description provided for @rewindSecondsValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} seconds'**
+  String rewindSecondsValue(int seconds);
+
   /// No description provided for @autoSlotLabel.
   ///
   /// In en, this message translates to:

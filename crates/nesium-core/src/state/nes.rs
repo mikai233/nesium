@@ -199,7 +199,7 @@ impl SaveState for Nes {
                 apu: self.apu.clone(),
                 ram: self.ram.as_slice().to_vec(),
                 cartridge: cartridge_to_state(cart)?,
-                controllers: self.controllers.clone(),
+                controllers: self.controllers,
                 last_frame: self.last_frame,
                 dot_counter: self.dot_counter,
                 master_clock: self.master_clock,
@@ -248,7 +248,7 @@ impl SaveState for Nes {
             apply_cartridge_state(cart, &state.cartridge)?;
         }
 
-        self.controllers = state.controllers.clone();
+        self.controllers = state.controllers;
         self.last_frame = state.last_frame;
         self.dot_counter = state.dot_counter;
         self.master_clock = state.master_clock;

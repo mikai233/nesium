@@ -28,6 +28,7 @@ pub(crate) enum ControlMessage {
     LoadState(PathBuf, ControlReplySender),
     SaveStateToMemory(Sender<Result<Vec<u8>, RuntimeError>>),
     LoadStateFromMemory(Vec<u8>, ControlReplySender),
+    SetRewinding(bool, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

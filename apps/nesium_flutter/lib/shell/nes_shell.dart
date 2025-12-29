@@ -86,6 +86,25 @@ class _NesShellState extends ConsumerState<NesShell>
     super.dispose();
   }
 
+  void _startRewinding() {
+    final emulationSettings = ref.read(emulationSettingsProvider);
+    if (!emulationSettings.rewindEnabled) return;
+
+    unawaitedLogged(
+      nes_emulation.setRewinding(rewinding: true),
+      message: 'setRewinding(true)',
+      logger: 'nes_shell',
+    );
+  }
+
+  void _stopRewinding() {
+    unawaitedLogged(
+      nes_emulation.setRewinding(rewinding: false),
+      message: 'setRewinding(false)',
+      logger: 'nes_shell',
+    );
+  }
+
   void _startRuntimeEvents() {
     if (!mounted) return;
     if (_runtimeNotificationsSub != null) return;
@@ -353,6 +372,15 @@ class _NesShellState extends ConsumerState<NesShell>
     final pressed = event is KeyDownEvent || event is KeyRepeatEvent;
     final key = event.logicalKey;
 
+    if (key == LogicalKeyboardKey.backspace) {
+      if (pressed) {
+        _startRewinding();
+      } else {
+        _stopRewinding();
+      }
+      return KeyEventResult.handled;
+    }
+
     final inputSettings = ref.read(inputSettingsProvider);
     if (inputSettings.device != InputDevice.keyboard) {
       return KeyEventResult.ignored;
@@ -360,6 +388,10 @@ class _NesShellState extends ConsumerState<NesShell>
 
     final action = inputSettings.resolveKeyboardBindings()[key];
     if (action == null) return KeyEventResult.ignored;
+
+    if (pressed) {
+      _stopRewinding();
+    }
 
     final input = ref.read(nesInputMasksProvider.notifier);
     switch (action) {

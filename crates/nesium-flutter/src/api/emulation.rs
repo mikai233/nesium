@@ -35,3 +35,16 @@ pub async fn load_state_from_memory(data: Vec<u8>) -> Result<(), String> {
         .load_state_from_memory(data)
         .map_err(|e| e.to_string())
 }
+
+#[frb]
+pub fn set_rewind_config(enabled: bool, capacity: u64) -> Result<(), String> {
+    crate::runtime_handle().set_rewind_config(enabled, capacity);
+    Ok(())
+}
+
+#[frb]
+pub fn set_rewinding(rewinding: bool) -> Result<(), String> {
+    crate::runtime_handle()
+        .set_rewinding(rewinding)
+        .map_err(|e| e.to_string())
+}

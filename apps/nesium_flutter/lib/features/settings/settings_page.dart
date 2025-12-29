@@ -390,6 +390,28 @@ class SettingsPage extends ConsumerWidget {
                           .setAutoSaveIntervalInMinutes(v.toInt()),
                     ),
                   ),
+                const Divider(),
+                SwitchListTile(
+                  title: Text(l10n.rewindEnabledTitle),
+                  subtitle: Text(l10n.rewindEnabledSubtitle),
+                  value: emulationSettings.rewindEnabled,
+                  onChanged: emulationController.setRewindEnabled,
+                ),
+                if (emulationSettings.rewindEnabled)
+                  ListTile(
+                    title: Text(l10n.rewindSecondsTitle),
+                    trailing: Text(
+                      l10n.rewindSecondsValue(emulationSettings.rewindSeconds),
+                    ),
+                    subtitle: Slider(
+                      value: emulationSettings.rewindSeconds.toDouble(),
+                      min: 1,
+                      max: 60,
+                      divisions: 59,
+                      onChanged: (v) =>
+                          emulationController.setRewindSeconds(v.toInt()),
+                    ),
+                  ),
               ],
             ),
           ),

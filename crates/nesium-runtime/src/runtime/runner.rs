@@ -1,4 +1,5 @@
 use sha1::{Digest, Sha1};
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::{
     path::PathBuf,
@@ -7,17 +8,19 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError};
+use nesium_core::state::SnapshotMeta;
+use nesium_core::state::nes::NesSnapshot;
+use nesium_core::{Nes, controller::Button, ppu::buffer::FrameBuffer};
+
+use crate::audio::NesAudioPlayer;
+
 use super::{
     control::ControlMessage,
     state::RuntimeState,
     types::{AudioMode, NTSC_FPS_EXACT, RuntimeError, RuntimeNotification},
     util::button_bit,
 };
-use crate::audio::NesAudioPlayer;
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError};
-use nesium_core::state::SnapshotMeta;
-use nesium_core::state::nes::NesSnapshot;
-use nesium_core::{Nes, controller::Button, ppu::buffer::FrameBuffer};
 
 enum WaitOutcome {
     /// Runtime thread should exit (channel disconnected or Stop received).
@@ -40,6 +43,11 @@ const SPIN_YIELD_EVERY: u32 = 512;
 // Allow frames to start slightly early to reduce the chance of missing the deadline.
 const FRAME_LEAD: Duration = Duration::from_micros(50);
 
+struct RewindEntry {
+    snapshot: NesSnapshot,
+    pixels: Vec<u8>,
+}
+
 pub(crate) struct Runner {
     nes: Nes,
     audio: Option<NesAudioPlayer>,
@@ -50,6 +58,7 @@ pub(crate) struct Runner {
     integer_fps_target: Option<u32>,
     turbo_prev_masks: [u8; 4],
     turbo_start_frame: [[u64; 8]; 4],
+    rewind_buffer: VecDeque<RewindEntry>,
 }
 
 impl Runner {
@@ -91,11 +100,13 @@ impl Runner {
             integer_fps_target: None,
             turbo_prev_masks: [0; 4],
             turbo_start_frame: [[0; 8]; 4],
+            rewind_buffer: VecDeque::new(),
         }
     }
 
     pub(crate) fn run(&mut self) {
         let mut last_paused = self.state.paused.load(Ordering::Acquire);
+        let mut last_rewinding = self.state.rewinding.load(Ordering::Acquire);
 
         loop {
             while let Ok(msg) = self.ctrl_rx.try_recv() {
@@ -105,12 +116,15 @@ impl Runner {
             }
 
             let paused = self.state.paused.load(Ordering::Acquire);
-            if paused != last_paused && !paused {
+            let rewinding = self.state.rewinding.load(Ordering::Acquire);
+
+            if (paused != last_paused && !paused) || (rewinding != last_rewinding) {
                 self.next_frame_deadline = Instant::now();
             }
             last_paused = paused;
+            last_rewinding = rewinding;
 
-            if self.nes.get_cartridge().is_none() || paused {
+            if self.nes.get_cartridge().is_none() || (paused && !rewinding) {
                 match self.ctrl_rx.recv_timeout(Duration::from_millis(10)) {
                     Ok(msg) => {
                         if self.handle_control(msg) {
@@ -130,11 +144,15 @@ impl Runner {
             }
 
             let mut frames_run: u32 = 0;
-            while !self.state.paused.load(Ordering::Acquire)
+            while (rewinding || !paused)
                 && Instant::now() + FRAME_LEAD >= self.next_frame_deadline
                 && frames_run < 3
             {
-                self.step_frame();
+                if self.state.rewinding.load(Ordering::Acquire) {
+                    self.rewind_one_frame();
+                } else {
+                    self.step_frame();
+                }
                 self.next_frame_deadline += self.frame_duration;
                 frames_run += 1;
             }
@@ -195,7 +213,7 @@ impl Runner {
 
                 std::hint::spin_loop();
                 spins = spins.wrapping_add(1);
-                if spins % SPIN_YIELD_EVERY == 0 {
+                if spins.is_multiple_of(SPIN_YIELD_EVERY) {
                     thread::yield_now();
                 }
             }
@@ -225,6 +243,8 @@ impl Runner {
                                 if let Some(audio) = &self.audio {
                                     audio.clear();
                                 }
+                                self.rewind_buffer.clear();
+                                self.state.rewinding.store(false, Ordering::Release);
                                 let _ = reply.send(Ok(()));
                             }
                             Err(e) => {
@@ -254,6 +274,8 @@ impl Runner {
                     if let Some(audio) = &self.audio {
                         audio.clear();
                     }
+                    self.rewind_buffer.clear();
+                    self.state.rewinding.store(false, Ordering::Release);
                     self.state.paused.store(false, Ordering::Release);
                     self.next_frame_deadline = Instant::now();
                 }
@@ -270,6 +292,8 @@ impl Runner {
                 if let Some(audio) = &self.audio {
                     audio.clear();
                 }
+                self.rewind_buffer.clear();
+                self.state.rewinding.store(false, Ordering::Release);
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::SetAudioConfig(cfg, reply) => {
@@ -310,7 +334,7 @@ impl Runner {
                     }));
                 }
                 Some(cart) => {
-                    let baseline_id = self.state.baseline_id.load(Ordering::Relaxed);
+                    let baseline_id = self.state.baseline_id.fetch_add(1, Ordering::Relaxed);
                     let rom_hash = *self.state.rom_hash.lock().unwrap();
                     let header = cart.header();
                     let mapper = Some((header.mapper(), header.submapper()));
@@ -346,7 +370,7 @@ impl Runner {
                         Err(e) => {
                             let _ = reply.send(Err(RuntimeError::SaveStateFailed {
                                 path,
-                                error: e.to_string(),
+                                error: format!("{:?}", e),
                             }));
                         }
                     }
@@ -375,9 +399,9 @@ impl Runner {
                                             let current_hash = *self.state.rom_hash.lock().unwrap();
                                             if Some(expected_hash) != current_hash {
                                                 let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                                                    path,
-                                                    error: "ROM hash mismatch: this save belongs to a different game".to_string(),
-                                                }));
+                                                path,
+                                                error: "ROM hash mismatch: this save belongs to a different game".to_string(),
+                                            }));
                                                 return false;
                                             }
                                         }
@@ -390,7 +414,7 @@ impl Runner {
                                                 let _ = reply.send(Err(
                                                     RuntimeError::LoadStateFailed {
                                                         path,
-                                                        error: e.to_string(),
+                                                        error: format!("{:?}", e),
                                                     },
                                                 ));
                                             }
@@ -428,7 +452,7 @@ impl Runner {
                     }));
                 }
                 Some(cart) => {
-                    let baseline_id = self.state.baseline_id.load(Ordering::Relaxed);
+                    let baseline_id = self.state.baseline_id.fetch_add(1, Ordering::Relaxed);
                     let rom_hash = *self.state.rom_hash.lock().unwrap();
                     let header = cart.header();
                     let mapper = Some((header.mapper(), header.submapper()));
@@ -456,7 +480,7 @@ impl Runner {
                         Err(e) => {
                             let _ = reply.send(Err(RuntimeError::SaveStateFailed {
                                 path: PathBuf::from("memory"),
-                                error: e.to_string(),
+                                error: format!("{:?}", e),
                             }));
                         }
                     }
@@ -497,7 +521,7 @@ impl Runner {
                                     Err(e) => {
                                         let _ = reply.send(Err(RuntimeError::LoadStateFailed {
                                             path: PathBuf::from("memory"),
-                                            error: e.to_string(),
+                                            error: format!("{:?}", e),
                                         }));
                                     }
                                 }
@@ -518,13 +542,55 @@ impl Runner {
                     }
                 }
             }
+            ControlMessage::SetRewinding(rewinding, reply) => {
+                self.state.rewinding.store(rewinding, Ordering::Release);
+                let _ = reply.send(Ok(()));
+            }
         }
 
         false
     }
 
+    fn rewind_one_frame(&mut self) {
+        if let Some(entry) = self.rewind_buffer.pop_back()
+            && self.nes.load_snapshot(&entry.snapshot).is_ok()
+        {
+            // Refresh framebuffer with the saved pixels.
+            let fb = self.nes.ppu.framebuffer_mut();
+            let back = fb.write();
+            if back.len() == entry.pixels.len() {
+                back.copy_from_slice(&entry.pixels);
+                // Increment frame_seq BEFORE swap so the Android signal pipe carries the new sequence.
+                self.state.frame_seq.fetch_add(1, Ordering::Release);
+                fb.swap();
+            }
+            if let Some(audio) = &self.audio {
+                audio.clear();
+            }
+        }
+    }
+
     fn step_frame(&mut self) {
-        use std::sync::atomic::Ordering;
+        if self.state.rewind_enabled.load(Ordering::Acquire) {
+            let meta = SnapshotMeta {
+                tick: self.nes.master_clock(),
+                baseline_id: self.state.baseline_id.fetch_add(1, Ordering::Relaxed),
+                ..Default::default()
+            };
+            if let Ok(snap) = self.nes.save_snapshot(meta) {
+                let mut pixels = vec![0u8; self.nes.ppu.framebuffer_mut().len_bytes()];
+                self.nes.copy_render_buffer(&mut pixels);
+                self.rewind_buffer.push_back(RewindEntry {
+                    snapshot: snap,
+                    pixels,
+                });
+                let cap = self.state.rewind_capacity.load(Ordering::Acquire) as usize;
+                while self.rewind_buffer.len() > cap {
+                    self.rewind_buffer.pop_front();
+                }
+            }
+        }
+
         let frame = self.state.frame_seq.load(Ordering::Relaxed);
         let turbo_on_frames = self.state.turbo_on_frames.load(Ordering::Acquire).max(1) as u64;
         let turbo_off_frames = self.state.turbo_off_frames.load(Ordering::Acquire).max(1) as u64;
@@ -543,6 +609,9 @@ impl Runner {
         // Sync Inputs (atomic bitmasks, no channel).
         for pad in 0..4 {
             let mask = self.state.pad_masks[pad].load(Ordering::Acquire);
+            if mask != 0 {
+                self.state.rewinding.store(false, Ordering::Release);
+            }
             let turbo_mask = self.state.turbo_masks[pad].load(Ordering::Acquire);
             let prev_turbo_mask = self.turbo_prev_masks[pad];
             let rising = turbo_mask & !prev_turbo_mask;

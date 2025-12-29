@@ -323,6 +323,11 @@ impl Ppu {
         self.framebuffer.render()
     }
 
+    /// Copies the current front buffer pixels into the provided destination slice.
+    pub fn copy_render_buffer(&mut self, dst: &mut [u8]) {
+        self.framebuffer.copy_render_buffer(dst);
+    }
+
     pub fn set_frame_ready_callback(
         &mut self,
         cb: Option<FrameReadyCallback>,
@@ -346,9 +351,14 @@ impl Ppu {
         self.palette = palette;
     }
 
-    /// Returns a reference to the active master system palette.
+    /// Master system palette used to map palette indices to RGB colors.
     pub fn palette(&self) -> &Palette {
         &self.palette
+    }
+
+    /// Mutable reference to the internal framebuffer.
+    pub fn framebuffer_mut(&mut self) -> &mut FrameBuffer {
+        &mut self.framebuffer
     }
 
     /// Copies CHR ROM/RAM contents into the pattern table window (`$0000-$1FFF`).

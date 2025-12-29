@@ -30,6 +30,7 @@ import '../l10n/app_localizations.dart';
 import '../logging/app_logger.dart';
 import '../platform/platform_capabilities.dart';
 import '../platform/web_cmd_sender.dart';
+import '../platform/nes_emulation.dart';
 import 'nes_actions.dart';
 import 'nes_menu_bar.dart';
 import 'nes_menu_model.dart';
@@ -685,6 +686,15 @@ class _WebShellState extends ConsumerState<WebShell> {
     final pressed = event is KeyDownEvent || event is KeyRepeatEvent;
     final key = event.logicalKey;
 
+    if (key == LogicalKeyboardKey.backspace) {
+      unawaitedLogged(
+        setRewinding(rewinding: pressed),
+        message: 'setRewinding ($pressed)',
+        logger: 'web_shell',
+      );
+      return KeyEventResult.handled;
+    }
+
     final inputSettings = ref.read(inputSettingsProvider);
     if (inputSettings.device != InputDevice.keyboard) {
       return KeyEventResult.ignored;
@@ -736,6 +746,7 @@ class _WebShellState extends ConsumerState<WebShell> {
     if (value is num) return value.toJS;
     if (value is String) return value.toJS;
     if (value is Uint8List) return value.toJS;
+    if (value is BigInt) return value.toInt().toJS;
     throw ArgumentError.value(value, 'value', 'Unsupported JS interop value');
   }
 

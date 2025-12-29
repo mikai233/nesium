@@ -133,6 +133,20 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get rewindEnabledTitle => '倒带';
+
+  @override
+  String get rewindEnabledSubtitle => '开启实时倒带功能。';
+
+  @override
+  String get rewindSecondsTitle => '倒带时长';
+
+  @override
+  String rewindSecondsValue(int seconds) {
+    return '$seconds 秒';
+  }
+
+  @override
   String get autoSlotLabel => '自动存档位';
 
   @override

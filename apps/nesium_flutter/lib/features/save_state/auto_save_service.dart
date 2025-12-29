@@ -23,6 +23,7 @@ class AutoSaveService {
     });
   }
 
+  String? _lastRomHash;
   DateTime? _lastSaveTime;
 
   Future<void> _checkAndPerformSave() async {
@@ -30,7 +31,18 @@ class AutoSaveService {
     if (!settings.autoSaveEnabled) return;
 
     final romHash = ref.read(nesControllerProvider).romHash;
-    if (romHash == null) return;
+    if (romHash == null) {
+      _lastRomHash = null;
+      _lastSaveTime = null;
+      return;
+    }
+
+    // Reset timer if we switched games
+    if (romHash != _lastRomHash) {
+      _lastRomHash = romHash;
+      _lastSaveTime = DateTime.now();
+      return;
+    }
 
     final interval = Duration(minutes: settings.autoSaveIntervalInMinutes);
     final now = DateTime.now();

@@ -8,7 +8,10 @@ import 'package:flutter/services.dart';
 import '../../l10n/app_localizations.dart';
 import '../../domain/nes_input_masks.dart';
 import '../../domain/pad_button.dart';
+import '../../logging/app_logger.dart';
+import '../../platform/nes_emulation.dart' as frb_emulation;
 import '../screen/nes_screen_view.dart';
+import '../settings/emulation_settings.dart';
 import '../settings/video_settings.dart';
 import 'input_settings.dart';
 import 'virtual_controls_editor.dart';
@@ -17,13 +20,40 @@ import 'virtual_controls_settings.dart';
 final Path _kDpadCrossPath24 = _buildDpadCrossPath24();
 const Rect _kDpadCrossBounds24 = Rect.fromLTWH(2, 2, 20, 20);
 
-class VirtualControlsOverlay extends ConsumerWidget {
+class VirtualControlsOverlay extends ConsumerStatefulWidget {
   const VirtualControlsOverlay({super.key, required this.isLandscape});
 
   final bool isLandscape;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VirtualControlsOverlay> createState() =>
+      _VirtualControlsOverlayState();
+}
+
+class _VirtualControlsOverlayState
+    extends ConsumerState<VirtualControlsOverlay> {
+  void _startRewinding() {
+    final emulationSettings = ref.read(emulationSettingsProvider);
+    if (!emulationSettings.rewindEnabled) return;
+
+    unawaitedLogged(
+      frb_emulation.setRewinding(rewinding: true),
+      message: 'setRewinding(true)',
+      logger: 'nes_shell',
+    );
+  }
+
+  void _stopRewinding() {
+    unawaitedLogged(
+      frb_emulation.setRewinding(rewinding: false),
+      message: 'setRewinding(false)',
+      logger: 'nes_shell',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final editor = ref.watch(virtualControlsEditorProvider);
     final isEditing = editor.enabled;
     final liveSettings = ref.watch(virtualControlsSettingsProvider);
@@ -47,11 +77,13 @@ class VirtualControlsOverlay extends ConsumerWidget {
         if (viewport == null) return const SizedBox.shrink();
 
         final available = constraints.biggest;
+        final isLandscape = widget.isLandscape;
 
         final base = _basePositions(
           settings,
           isLandscape: isLandscape,
           available: available,
+          safeInsets: safeInsets,
         );
 
         final dpadBaseSize = _dpadClusterSize(settings);
@@ -102,6 +134,9 @@ class VirtualControlsOverlay extends ConsumerWidget {
         final startOffset = isLandscape
             ? settings.landscapeStartOffset
             : settings.portraitStartOffset;
+        final rewindOffset = isLandscape
+            ? settings.landscapeRewindOffset
+            : settings.portraitRewindOffset;
 
         final aScale = isLandscape
             ? settings.landscapeAScale
@@ -121,6 +156,9 @@ class VirtualControlsOverlay extends ConsumerWidget {
         final startScale = isLandscape
             ? settings.landscapeStartScale
             : settings.portraitStartScale;
+        final rewindScale = isLandscape
+            ? settings.landscapeRewindScale
+            : settings.portraitRewindScale;
 
         const frameGap = 2.0;
 
@@ -163,6 +201,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
         final turboBTotalScale = buttonsScale * turboBScale;
         final selectTotalScale = systemScale * selectScale;
         final startTotalScale = systemScale * startScale;
+        final rewindTotalScale = systemScale * rewindScale;
 
         final aSize = Size(
           mainButtonBaseSize.width * aTotalScale,
@@ -188,6 +227,10 @@ class VirtualControlsOverlay extends ConsumerWidget {
           systemButtonBaseSize.width * startTotalScale,
           systemButtonBaseSize.height * startTotalScale,
         );
+        final rewindSize = Size(
+          mainButtonBaseSize.width * rewindTotalScale,
+          mainButtonBaseSize.height * rewindTotalScale,
+        );
 
         var aPos = buttonsGroupPos + buttonsLocal.a * buttonsScale + aOffset;
         var bPos = buttonsGroupPos + buttonsLocal.b * buttonsScale + bOffset;
@@ -198,6 +241,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
 
         var selectPos = base.select + systemOffset + selectOffset;
         var startPos = base.start + systemOffset + startOffset;
+        var rewindPos = base.rewind + systemOffset + rewindOffset;
 
         aPos = _clampPositionForFrame(
           aPos,
@@ -243,6 +287,14 @@ class VirtualControlsOverlay extends ConsumerWidget {
           startPos,
           size: startSize,
           frameInsets: _scaleInsets(systemFrameInsets, startTotalScale),
+          frameGap: frameGap,
+          available: available,
+          safeInsets: safeInsets,
+        );
+        rewindPos = _clampPositionForFrame(
+          rewindPos,
+          size: rewindSize,
+          frameInsets: _scaleInsets(mainFrameInsets, rewindTotalScale),
           frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
@@ -298,6 +350,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
                           available: available,
                           topLeft: topLeft,
                           scale: scale,
+                          safeInsets: safeInsets,
                         ),
                       );
                 },
@@ -318,7 +371,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
                 top: safeInsets.top + 12,
                 child: FloatingActionButton.small(
                   heroTag: 'virtual_controls_reset',
-                  tooltip: AppLocalizations.of(context)!.menuReset,
+                  tooltip: l10n.menuReset,
                   onPressed: () => ref
                       .read(virtualControlsEditorProvider.notifier)
                       .resetDraft(),
@@ -364,6 +417,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
                           available: available,
                           topLeft: topLeft,
                           scale: scale,
+                          safeInsets: safeInsets,
                         ),
                       );
                 },
@@ -406,6 +460,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
                           available: available,
                           topLeft: topLeft,
                           scale: scale,
+                          safeInsets: safeInsets,
                         ),
                       );
                 },
@@ -448,6 +503,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
                           available: available,
                           topLeft: topLeft,
                           scale: scale,
+                          safeInsets: safeInsets,
                         ),
                       );
                 },
@@ -489,6 +545,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
                           available: available,
                           topLeft: topLeft,
                           scale: scale,
+                          safeInsets: safeInsets,
                         ),
                       );
                 },
@@ -530,6 +587,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
                           available: available,
                           topLeft: topLeft,
                           scale: scale,
+                          safeInsets: safeInsets,
                         ),
                       );
                 },
@@ -571,6 +629,7 @@ class VirtualControlsOverlay extends ConsumerWidget {
                           available: available,
                           topLeft: topLeft,
                           scale: scale,
+                          safeInsets: safeInsets,
                         ),
                       );
                 },
@@ -585,6 +644,54 @@ class VirtualControlsOverlay extends ConsumerWidget {
                 ),
               ),
             ),
+            if (isEditing || ref.watch(emulationSettingsProvider).rewindEnabled)
+              Positioned(
+                left: rewindPos.dx,
+                top: rewindPos.dy,
+                width: rewindSize.width,
+                height: rewindSize.height,
+                child: _EditableCluster(
+                  enabled: isEditing,
+                  baseSize: mainButtonBaseSize,
+                  frameInsets: mainFrameInsets,
+                  scale: rewindTotalScale,
+                  topLeft: rewindPos,
+                  available: available,
+                  safeInsets: safeInsets,
+                  gridSnapEnabled: editor.gridSnapEnabled,
+                  gridSpacing: editor.gridSpacing,
+                  onTransform: (topLeft, scale) {
+                    if (!isEditing) return;
+                    ref
+                        .read(virtualControlsEditorProvider.notifier)
+                        .updateDraft(
+                          (draft) => _applyElementTransform(
+                            draft,
+                            element: _VirtualControlElement.rewind,
+                            isLandscape: isLandscape,
+                            available: available,
+                            topLeft: topLeft,
+                            scale: scale,
+                            safeInsets: safeInsets,
+                          ),
+                        );
+                  },
+                  child: IgnorePointer(
+                    ignoring: isEditing,
+                    child: _RewindButton(
+                      settings: settings,
+                      baseColor: chromeBase,
+                      onRewindChanged: (pressed) {
+                        if (pressed) {
+                          _startRewinding();
+                        } else {
+                          _stopRewinding();
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },
@@ -592,7 +699,16 @@ class VirtualControlsOverlay extends ConsumerWidget {
   }
 }
 
-enum _VirtualControlElement { dpad, a, b, turboA, turboB, select, start }
+enum _VirtualControlElement {
+  dpad,
+  a,
+  b,
+  turboA,
+  turboB,
+  select,
+  start,
+  rewind,
+}
 
 const double _clusterScaleMin = 0.6;
 const double _clusterScaleMax = 1.8;
@@ -604,6 +720,7 @@ VirtualControlsSettings _applyElementTransform(
   required Size available,
   required Offset topLeft,
   required double scale,
+  required EdgeInsets safeInsets,
 }) {
   final nextTotalScale = scale
       .clamp(_clusterScaleMin, _clusterScaleMax)
@@ -684,12 +801,23 @@ VirtualControlsSettings _applyElementTransform(
           ? draft.copyWith(landscapeStartScale: next)
           : draft.copyWith(portraitStartScale: next);
       break;
+    case _VirtualControlElement.rewind:
+      final groupScale =
+          (isLandscape ? draft.landscapeSystemScale : draft.portraitSystemScale)
+              .clamp(_clusterScaleMin, _clusterScaleMax)
+              .toDouble();
+      final next = nextTotalScale / (groupScale == 0 ? 1 : groupScale);
+      withScale = isLandscape
+          ? draft.copyWith(landscapeRewindScale: next)
+          : draft.copyWith(portraitRewindScale: next);
+      break;
   }
 
   final base = _basePositions(
     withScale,
     isLandscape: isLandscape,
     available: available,
+    safeInsets: safeInsets,
   );
 
   final buttonsOffset = isLandscape
@@ -744,18 +872,26 @@ VirtualControlsSettings _applyElementTransform(
       return isLandscape
           ? withScale.copyWith(landscapeStartOffset: topLeft - baseline)
           : withScale.copyWith(portraitStartOffset: topLeft - baseline);
+    case _VirtualControlElement.rewind:
+      final baseline = base.rewind + systemOffset;
+      return isLandscape
+          ? withScale.copyWith(landscapeRewindOffset: topLeft - baseline)
+          : withScale.copyWith(portraitRewindOffset: topLeft - baseline);
   }
 }
 
-({Offset dpad, Offset buttons, Offset select, Offset start}) _basePositions(
+({Offset dpad, Offset buttons, Offset select, Offset start, Offset rewind})
+_basePositions(
   VirtualControlsSettings settings, {
   required bool isLandscape,
   required Size available,
+  required EdgeInsets safeInsets,
 }) {
   final basePadding = 8.0;
 
   final dpadBaseSize = _dpadClusterSize(settings);
   final buttonsBaseSize = _abClusterSize(settings);
+  final mainButtonBaseSize = _mainButtonHitboxSize(settings);
   final systemButtonBaseSize = _systemButtonHitboxSize(settings);
 
   final dpadScale = isLandscape
@@ -781,6 +917,14 @@ VirtualControlsSettings _applyElementTransform(
     systemButtonBaseSize.height * systemScale,
   );
 
+  final rewindScale = isLandscape
+      ? settings.landscapeRewindScale
+      : settings.portraitRewindScale;
+  final rewindSize = Size(
+    mainButtonBaseSize.width * systemScale * rewindScale,
+    mainButtonBaseSize.height * systemScale * rewindScale,
+  );
+
   final dpadPos = Offset(
     basePadding,
     available.height - dpadSize.height - basePadding,
@@ -792,6 +936,15 @@ VirtualControlsSettings _applyElementTransform(
 
   final Offset selectPos;
   final Offset startPos;
+  final Offset rewindPos;
+
+  // Editor's Save button (✅) is at top: safeInsets.top + 12, right: 12.
+  // It's a small FAB with a standard size of 40x40.
+  const fabSize = 40.0;
+  final fabCenter = Offset(
+    available.width - 12.0 - fabSize / 2.0,
+    safeInsets.top + 12.0 + fabSize / 2.0,
+  );
 
   if (isLandscape) {
     final y = available.height * 0.3;
@@ -799,6 +952,11 @@ VirtualControlsSettings _applyElementTransform(
     startPos = Offset(
       available.width - basePadding - systemButtonSize.width,
       y,
+    );
+    // Align horizontally to the left of ✅, vertically centered with ✅
+    rewindPos = Offset(
+      fabCenter.dx - fabSize / 2.0 - basePadding * 2.0 - rewindSize.width,
+      fabCenter.dy - rewindSize.height / 2.0,
     );
   } else {
     final y =
@@ -813,6 +971,11 @@ VirtualControlsSettings _applyElementTransform(
       buttonsPos.dx + (buttonsSize.width - systemButtonSize.width) / 2,
       y,
     );
+    // Align vertically below ✅, horizontally centered with ✅
+    rewindPos = Offset(
+      fabCenter.dx - rewindSize.width / 2.0,
+      fabCenter.dy + fabSize / 2.0 + basePadding * 2.0,
+    );
   }
 
   return (
@@ -820,6 +983,7 @@ VirtualControlsSettings _applyElementTransform(
     buttons: buttonsPos,
     select: selectPos,
     start: startPos,
+    rewind: rewindPos,
   );
 }
 
@@ -1952,6 +2116,41 @@ class _TurboButton extends StatelessWidget {
         child: Text(label, style: labelStyle),
       ),
       onToggle: (enabled) => onTurboChanged(button, enabled),
+    );
+  }
+}
+
+class _RewindButton extends StatelessWidget {
+  const _RewindButton({
+    required this.settings,
+    required this.baseColor,
+    required this.onRewindChanged,
+  });
+
+  final VirtualControlsSettings settings;
+  final Color baseColor;
+  final ValueChanged<bool> onRewindChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = settings.buttonSize;
+    final visualSize = Size.square(s * 0.85);
+
+    return _VirtualToggleButton(
+      visualSize: visualSize,
+      hitboxScale: settings.hitboxScale,
+      hapticsEnabled: settings.hapticsEnabled,
+      visualBuilder: (pressed) => _roundVisual(
+        base: baseColor.withValues(alpha: pressed ? 0.85 : 0.65),
+        pressed: pressed,
+        ringColor: Colors.blueAccent.withValues(alpha: 0.75),
+        child: Icon(
+          Icons.history,
+          color: Colors.white.withValues(alpha: 0.9),
+          size: visualSize.width * 0.6,
+        ),
+      ),
+      onToggle: onRewindChanged,
     );
   }
 }

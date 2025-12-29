@@ -582,6 +582,11 @@ impl Nes {
         self.ppu.render_buffer()
     }
 
+    /// Copies the current front buffer pixels into the provided destination slice.
+    pub fn copy_render_buffer(&mut self, dst: &mut [u8]) {
+        self.ppu.copy_render_buffer(dst);
+    }
+
     pub fn set_frame_ready_callback(
         &mut self,
         cb: Option<FrameReadyCallback>,

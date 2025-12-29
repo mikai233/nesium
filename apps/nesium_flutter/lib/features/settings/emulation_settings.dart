@@ -16,18 +16,24 @@ class EmulationSettings {
     required this.pauseInBackground,
     required this.autoSaveEnabled,
     required this.autoSaveIntervalInMinutes,
+    required this.rewindEnabled,
+    required this.rewindSeconds,
   });
 
   final bool integerFpsMode;
   final bool pauseInBackground;
   final bool autoSaveEnabled;
   final int autoSaveIntervalInMinutes;
+  final bool rewindEnabled;
+  final int rewindSeconds;
 
   EmulationSettings copyWith({
     bool? integerFpsMode,
     bool? pauseInBackground,
     bool? autoSaveEnabled,
     int? autoSaveIntervalInMinutes,
+    bool? rewindEnabled,
+    int? rewindSeconds,
   }) {
     return EmulationSettings(
       integerFpsMode: integerFpsMode ?? this.integerFpsMode,
@@ -35,6 +41,8 @@ class EmulationSettings {
       autoSaveEnabled: autoSaveEnabled ?? this.autoSaveEnabled,
       autoSaveIntervalInMinutes:
           autoSaveIntervalInMinutes ?? this.autoSaveIntervalInMinutes,
+      rewindEnabled: rewindEnabled ?? this.rewindEnabled,
+      rewindSeconds: rewindSeconds ?? this.rewindSeconds,
     );
   }
 
@@ -44,6 +52,8 @@ class EmulationSettings {
       pauseInBackground: isNativeMobile,
       autoSaveEnabled: true,
       autoSaveIntervalInMinutes: 1,
+      rewindEnabled: true,
+      rewindSeconds: 10,
     );
   }
 }
@@ -57,7 +67,10 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
       defaults: defaults,
     );
     final settings = loaded ?? defaults;
-    scheduleMicrotask(() => applyToRuntime());
+    scheduleMicrotask(() {
+      applyToRuntime();
+      _applyRewindConfig();
+    });
     return settings;
   }
 
@@ -67,6 +80,7 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
       message: 'setIntegerFpsMode (apply)',
       logger: 'emulation_settings',
     );
+    _applyRewindConfig();
   }
 
   void setIntegerFpsMode(bool enabled) {
@@ -99,6 +113,32 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     _persist(state);
   }
 
+  void setRewindEnabled(bool enabled) {
+    if (enabled == state.rewindEnabled) return;
+    state = state.copyWith(rewindEnabled: enabled);
+    _applyRewindConfig();
+    _persist(state);
+  }
+
+  void setRewindSeconds(int seconds) {
+    final clamped = seconds.clamp(1, 60);
+    if (clamped == state.rewindSeconds) return;
+    state = state.copyWith(rewindSeconds: clamped);
+    _applyRewindConfig();
+    _persist(state);
+  }
+
+  void _applyRewindConfig() {
+    unawaitedLogged(
+      nes_emulation.setRewindConfig(
+        enabled: state.rewindEnabled,
+        capacity: BigInt.from(state.rewindSeconds * 60),
+      ),
+      message: 'setRewindConfig',
+      logger: 'emulation_settings',
+    );
+  }
+
   void _persist(EmulationSettings value) {
     unawaitedLogged(
       Future<void>.sync(
@@ -126,6 +166,8 @@ Map<String, Object?> _emulationSettingsToStorage(EmulationSettings value) =>
       'pauseInBackground': value.pauseInBackground,
       'autoSaveEnabled': value.autoSaveEnabled,
       'autoSaveIntervalInMinutes': value.autoSaveIntervalInMinutes,
+      'rewindEnabled': value.rewindEnabled,
+      'rewindSeconds': value.rewindSeconds,
     };
 
 EmulationSettings? _emulationSettingsFromStorage(
@@ -146,12 +188,19 @@ EmulationSettings? _emulationSettingsFromStorage(
   final autoSaveIntervalInMinutes = map['autoSaveIntervalInMinutes'] is int
       ? map['autoSaveIntervalInMinutes'] as int
       : null;
-
+  final rewindEnabled = map['rewindEnabled'] is bool
+      ? map['rewindEnabled'] as bool
+      : null;
+  final rewindSeconds = map['rewindSeconds'] is int
+      ? map['rewindSeconds'] as int
+      : null;
   return defaults.copyWith(
     integerFpsMode: integerFpsMode ?? defaults.integerFpsMode,
     pauseInBackground: pauseInBackground ?? defaults.pauseInBackground,
     autoSaveEnabled: autoSaveEnabled ?? defaults.autoSaveEnabled,
     autoSaveIntervalInMinutes:
         autoSaveIntervalInMinutes ?? defaults.autoSaveIntervalInMinutes,
+    rewindEnabled: rewindEnabled ?? defaults.rewindEnabled,
+    rewindSeconds: rewindSeconds ?? defaults.rewindSeconds,
   );
 }

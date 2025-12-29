@@ -6,6 +6,19 @@ Future<void> setIntegerFpsMode({required bool enabled}) async {
   webPostCmd('setIntegerFpsMode', {'enabled': enabled});
 }
 
+Future<void> setRewindConfig({
+  required bool enabled,
+  required BigInt capacity,
+}) async {
+  if (!isWebNesReady) return;
+  webPostCmd('setRewindConfig', {'enabled': enabled, 'capacity': capacity});
+}
+
+Future<void> setRewinding({required bool rewinding}) async {
+  if (!isWebNesReady) return;
+  webPostCmd('setRewinding', {'rewinding': rewinding});
+}
+
 Future<void> saveState({required String path}) async {
   // handled in web_shell_web
 }

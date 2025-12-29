@@ -54,6 +54,17 @@
       }
     }
   },
+  "rewindEnabledTitle": "Rewind",
+  "rewindEnabledSubtitle": "Enable real-time rewind support.",
+  "rewindSecondsTitle": "Rewind Duration",
+  "rewindSecondsValue": "{seconds} seconds",
+  "@rewindSecondsValue": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
   "autoSlotLabel": "Auto Slot",
   "menuAutoSave": "Auto Save...",
   "stateAutoSaved": "Auto save created",

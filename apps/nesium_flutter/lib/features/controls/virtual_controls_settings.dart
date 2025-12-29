@@ -53,6 +53,10 @@ class VirtualControlsSettings {
     required this.landscapeTurboBScale,
     required this.landscapeSelectScale,
     required this.landscapeStartScale,
+    required this.portraitRewindOffset,
+    required this.landscapeRewindOffset,
+    required this.portraitRewindScale,
+    required this.landscapeRewindScale,
   });
 
   final double buttonSize;
@@ -101,6 +105,11 @@ class VirtualControlsSettings {
   final double landscapeSelectScale;
   final double landscapeStartScale;
 
+  final Offset portraitRewindOffset;
+  final Offset landscapeRewindOffset;
+  final double portraitRewindScale;
+  final double landscapeRewindScale;
+
   VirtualControlsSettings copyWith({
     double? buttonSize,
     double? gap,
@@ -145,6 +154,10 @@ class VirtualControlsSettings {
     double? landscapeTurboBScale,
     double? landscapeSelectScale,
     double? landscapeStartScale,
+    Offset? portraitRewindOffset,
+    Offset? landscapeRewindOffset,
+    double? portraitRewindScale,
+    double? landscapeRewindScale,
   }) {
     return VirtualControlsSettings(
       buttonSize: buttonSize ?? this.buttonSize,
@@ -198,6 +211,11 @@ class VirtualControlsSettings {
       landscapeTurboBScale: landscapeTurboBScale ?? this.landscapeTurboBScale,
       landscapeSelectScale: landscapeSelectScale ?? this.landscapeSelectScale,
       landscapeStartScale: landscapeStartScale ?? this.landscapeStartScale,
+      portraitRewindOffset: portraitRewindOffset ?? this.portraitRewindOffset,
+      landscapeRewindOffset:
+          landscapeRewindOffset ?? this.landscapeRewindOffset,
+      portraitRewindScale: portraitRewindScale ?? this.portraitRewindScale,
+      landscapeRewindScale: landscapeRewindScale ?? this.landscapeRewindScale,
     );
   }
 
@@ -245,6 +263,10 @@ class VirtualControlsSettings {
     landscapeTurboBScale: 1.0,
     landscapeSelectScale: 1.0,
     landscapeStartScale: 1.0,
+    portraitRewindOffset: Offset.zero,
+    landscapeRewindOffset: Offset.zero,
+    portraitRewindScale: 1.0,
+    landscapeRewindScale: 1.0,
   );
 }
 
@@ -296,6 +318,15 @@ class VirtualControlsSettingsController
       _set(state.copyWith(landscapeButtonsScale: value));
   void setLandscapeSystemScale(double value) =>
       _set(state.copyWith(landscapeSystemScale: value));
+
+  void setPortraitRewindOffset(Offset value) =>
+      _set(state.copyWith(portraitRewindOffset: value));
+  void setLandscapeRewindOffset(Offset value) =>
+      _set(state.copyWith(landscapeRewindOffset: value));
+  void setPortraitRewindScale(double value) =>
+      _set(state.copyWith(portraitRewindScale: value));
+  void setLandscapeRewindScale(double value) =>
+      _set(state.copyWith(landscapeRewindScale: value));
 
   void resetToDefault() => _set(VirtualControlsSettings.defaults);
 
@@ -370,6 +401,10 @@ Map<String, Object?> _virtualControlsToStorage(VirtualControlsSettings value) {
     'landscapeTurboBScale': value.landscapeTurboBScale,
     'landscapeSelectScale': value.landscapeSelectScale,
     'landscapeStartScale': value.landscapeStartScale,
+    'portraitRewindOffset': offset(value.portraitRewindOffset),
+    'landscapeRewindOffset': offset(value.landscapeRewindOffset),
+    'portraitRewindScale': value.portraitRewindScale,
+    'landscapeRewindScale': value.landscapeRewindScale,
   };
 }
 
@@ -514,6 +549,22 @@ VirtualControlsSettings? _virtualControlsFromStorage(Object? value) {
     landscapeStartScale: d(
       map['landscapeStartScale'],
       defaults.landscapeStartScale,
+    ),
+    portraitRewindOffset: o(
+      map['portraitRewindOffset'],
+      defaults.portraitRewindOffset,
+    ),
+    landscapeRewindOffset: o(
+      map['landscapeRewindOffset'],
+      defaults.landscapeRewindOffset,
+    ),
+    portraitRewindScale: d(
+      map['portraitRewindScale'],
+      defaults.portraitRewindScale,
+    ),
+    landscapeRewindScale: d(
+      map['landscapeRewindScale'],
+      defaults.landscapeRewindScale,
     ),
   );
 }

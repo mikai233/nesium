@@ -47,6 +47,17 @@
       }
     }
   },
+  "rewindEnabledTitle": "倒带",
+  "rewindEnabledSubtitle": "开启实时倒带功能。",
+  "rewindSecondsTitle": "倒带时长",
+  "rewindSecondsValue": "{seconds} 秒",
+  "@rewindSecondsValue": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
   "autoSlotLabel": "自动存档位",
   "menuAutoSave": "自动存档…",
   "stateAutoSaved": "自动存档已创建",
