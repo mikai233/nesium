@@ -41,44 +41,53 @@ class MobileShell extends ConsumerWidget {
         : 0.0;
     final screenOffsetY = videoSettings.screenVerticalOffset + autoOffsetY;
 
-    return Scaffold(
-      appBar: isLandscape ? null : AppBar(title: Text(l10n.appName)),
-      drawer: _MobileDrawer(actions: actions),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(
-            child: NesScreenView(
-              error: state.error,
-              textureId: state.textureId,
-              screenVerticalOffset: screenOffsetY,
+    return PopScope(
+      canPop: !editor.enabled,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (editor.enabled) {
+          ref.read(virtualControlsEditorProvider.notifier).setEnabled(false);
+        }
+      },
+      child: Scaffold(
+        appBar: isLandscape ? null : AppBar(title: Text(l10n.appName)),
+        drawer: _MobileDrawer(actions: actions),
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned.fill(
+              child: NesScreenView(
+                error: state.error,
+                textureId: state.textureId,
+                screenVerticalOffset: screenOffsetY,
+              ),
             ),
-          ),
-          if (isLandscape)
-            Positioned(
-              left: 0,
-              top: 0,
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Builder(
-                    builder: (context) => Material(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(12),
-                      clipBehavior: Clip.antiAlias,
-                      child: IconButton(
-                        onPressed: () => Scaffold.of(context).openDrawer(),
-                        icon: const Icon(Icons.menu),
-                        color: Colors.white,
-                        tooltip: l10n.menuTooltip,
+            if (isLandscape)
+              Positioned(
+                left: 0,
+                top: 0,
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Builder(
+                      builder: (context) => Material(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(12),
+                        clipBehavior: Clip.antiAlias,
+                        child: IconButton(
+                          onPressed: () => Scaffold.of(context).openDrawer(),
+                          icon: const Icon(Icons.menu),
+                          color: Colors.white,
+                          tooltip: l10n.menuTooltip,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          VirtualControlsOverlay(isLandscape: isLandscape),
-        ],
+            VirtualControlsOverlay(isLandscape: isLandscape),
+          ],
+        ),
       ),
     );
   }

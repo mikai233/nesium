@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../domain/nes_input_masks.dart';
 import '../../domain/pad_button.dart';
 import '../screen/nes_screen_view.dart';
@@ -313,13 +314,26 @@ class VirtualControlsOverlay extends ConsumerWidget {
             ),
             if (isEditing)
               Positioned(
+                left: safeInsets.left + 12,
+                top: safeInsets.top + 12,
+                child: FloatingActionButton.small(
+                  heroTag: 'virtual_controls_reset',
+                  tooltip: AppLocalizations.of(context)!.menuReset,
+                  onPressed: () => ref
+                      .read(virtualControlsEditorProvider.notifier)
+                      .resetDraft(),
+                  child: const Icon(Icons.restore),
+                ),
+              ),
+            if (isEditing)
+              Positioned(
                 right: 12,
                 top: safeInsets.top + 12,
                 child: FloatingActionButton.small(
+                  heroTag: 'virtual_controls_save',
                   tooltip: MaterialLocalizations.of(context).okButtonLabel,
-                  onPressed: () => ref
-                      .read(virtualControlsEditorProvider.notifier)
-                      .setEnabled(false),
+                  onPressed: () =>
+                      ref.read(virtualControlsEditorProvider.notifier).save(),
                   child: const Icon(Icons.check),
                 ),
               ),

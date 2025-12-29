@@ -57,11 +57,22 @@ class VirtualControlsEditorController
       return;
     }
 
-    final draft = state.draft;
-    if (draft != null) {
-      ref.read(virtualControlsSettingsProvider.notifier).replace(draft);
-    }
+    // Discard changes when disabling without saving.
     state = state.copyWith(enabled: false, draft: null);
+  }
+
+  void save() {
+    final draft = state.draft;
+    if (!state.enabled || draft == null) return;
+
+    ref.read(virtualControlsSettingsProvider.notifier).replace(draft);
+    state = state.copyWith(enabled: false, draft: null);
+  }
+
+  void resetDraft() {
+    if (!state.enabled) return;
+    final current = ref.read(virtualControlsSettingsProvider);
+    state = state.copyWith(draft: current);
   }
 
   void setGridSnapEnabled(bool enabled) {
