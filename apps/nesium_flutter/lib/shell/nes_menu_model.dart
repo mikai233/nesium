@@ -231,6 +231,11 @@ class NesMenus {
           icon: Icons.file_open,
           children: _buildLoadStateChildren(),
         ),
+        NesMenuItemSpec(
+          id: NesMenuItemId.autoSave,
+          icon: Icons.history,
+          children: _buildAutoSaveChildren(),
+        ),
       ],
     ),
     const NesMenuSectionSpec(

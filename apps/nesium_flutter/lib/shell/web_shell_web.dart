@@ -20,6 +20,7 @@ import '../features/controls/turbo_settings.dart';
 import '../features/controls/virtual_controls_overlay.dart';
 import '../features/controls/virtual_controls_settings.dart';
 import '../features/about/about_page.dart';
+import '../features/save_state/auto_save_service.dart';
 import '../features/save_state/save_state_dialog.dart';
 import '../features/save_state/save_state_repository.dart';
 import '../features/screen/nes_screen_view.dart';
@@ -758,6 +759,7 @@ class _WebShellState extends ConsumerState<WebShell> {
     final hasRom = ref.watch(
       nesControllerProvider.select((s) => s.romHash != null),
     );
+    ref.watch(autoSaveServiceProvider); // Keep auto-save timer running on web
     final actions = NesActions(
       openRom: _pickAndLoadRom,
       saveState: _saveState,
@@ -1091,13 +1093,15 @@ class _WebShellState extends ConsumerState<WebShell> {
               ListTile(
                 enabled:
                     (item.id != NesMenuItemId.saveState &&
-                        item.id != NesMenuItemId.loadState) ||
+                        item.id != NesMenuItemId.loadState &&
+                        item.id != NesMenuItemId.autoSave) ||
                     hasRom,
                 leading: Icon(item.icon),
                 title: Text(item.label(l10n)),
                 onTap:
                     ((item.id != NesMenuItemId.saveState &&
-                            item.id != NesMenuItemId.loadState) ||
+                            item.id != NesMenuItemId.loadState &&
+                            item.id != NesMenuItemId.autoSave) ||
                         hasRom)
                     ? () {
                         closeDrawer();
