@@ -360,11 +360,36 @@ class SettingsPage extends ConsumerWidget {
                   onChanged: emulationController.setIntegerFpsMode,
                 ),
                 SwitchListTile(
-                  value: emulationSettings.pauseInBackground,
                   title: Text(l10n.pauseInBackgroundTitle),
                   subtitle: Text(l10n.pauseInBackgroundSubtitle),
+                  value: emulationSettings.pauseInBackground,
                   onChanged: emulationController.setPauseInBackground,
                 ),
+                const Divider(),
+                SwitchListTile(
+                  title: Text(l10n.autoSaveEnabledTitle),
+                  subtitle: Text(l10n.autoSaveEnabledSubtitle),
+                  value: emulationSettings.autoSaveEnabled,
+                  onChanged: emulationController.setAutoSaveEnabled,
+                ),
+                if (emulationSettings.autoSaveEnabled)
+                  ListTile(
+                    title: Text(l10n.autoSaveIntervalTitle),
+                    trailing: Text(
+                      l10n.autoSaveIntervalValue(
+                        emulationSettings.autoSaveIntervalInMinutes,
+                      ),
+                    ),
+                    subtitle: Slider(
+                      value: emulationSettings.autoSaveIntervalInMinutes
+                          .toDouble(),
+                      min: 1,
+                      max: 60,
+                      divisions: 59,
+                      onChanged: (v) => emulationController
+                          .setAutoSaveIntervalInMinutes(v.toInt()),
+                    ),
+                  ),
               ],
             ),
           ),

@@ -226,7 +226,8 @@ class _MobileDrawer extends StatelessWidget {
   ) {
     bool enabled = true;
     if (item.id == NesMenuItemId.saveState ||
-        item.id == NesMenuItemId.loadState) {
+        item.id == NesMenuItemId.loadState ||
+        item.id == NesMenuItemId.autoSave) {
       enabled = hasRom;
     }
 
@@ -264,6 +265,10 @@ class _MobileDrawer extends StatelessWidget {
       case NesMenuItemId.loadState:
         closeDrawer();
         unawaited(actions.loadState?.call());
+        break;
+      case NesMenuItemId.autoSave:
+        closeDrawer();
+        unawaited(actions.openAutoSave?.call());
         break;
       case NesMenuItemId.reset:
         closeDrawer();
@@ -308,6 +313,7 @@ class _MobileDrawer extends StatelessWidget {
           ),
         );
         break;
+      case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:
       case NesMenuItemId.loadStateSlot:
       case NesMenuItemId.saveStateFile:

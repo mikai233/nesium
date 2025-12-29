@@ -14,15 +14,27 @@ class EmulationSettings {
   const EmulationSettings({
     required this.integerFpsMode,
     required this.pauseInBackground,
+    required this.autoSaveEnabled,
+    required this.autoSaveIntervalInMinutes,
   });
 
   final bool integerFpsMode;
   final bool pauseInBackground;
+  final bool autoSaveEnabled;
+  final int autoSaveIntervalInMinutes;
 
-  EmulationSettings copyWith({bool? integerFpsMode, bool? pauseInBackground}) {
+  EmulationSettings copyWith({
+    bool? integerFpsMode,
+    bool? pauseInBackground,
+    bool? autoSaveEnabled,
+    int? autoSaveIntervalInMinutes,
+  }) {
     return EmulationSettings(
       integerFpsMode: integerFpsMode ?? this.integerFpsMode,
       pauseInBackground: pauseInBackground ?? this.pauseInBackground,
+      autoSaveEnabled: autoSaveEnabled ?? this.autoSaveEnabled,
+      autoSaveIntervalInMinutes:
+          autoSaveIntervalInMinutes ?? this.autoSaveIntervalInMinutes,
     );
   }
 
@@ -30,6 +42,8 @@ class EmulationSettings {
     return EmulationSettings(
       integerFpsMode: false,
       pauseInBackground: isNativeMobile,
+      autoSaveEnabled: true,
+      autoSaveIntervalInMinutes: 1,
     );
   }
 }
@@ -72,6 +86,19 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     _persist(state);
   }
 
+  void setAutoSaveEnabled(bool enabled) {
+    if (enabled == state.autoSaveEnabled) return;
+    state = state.copyWith(autoSaveEnabled: enabled);
+    _persist(state);
+  }
+
+  void setAutoSaveIntervalInMinutes(int minutes) {
+    final clamped = minutes.clamp(1, 60);
+    if (clamped == state.autoSaveIntervalInMinutes) return;
+    state = state.copyWith(autoSaveIntervalInMinutes: clamped);
+    _persist(state);
+  }
+
   void _persist(EmulationSettings value) {
     unawaitedLogged(
       Future<void>.sync(
@@ -97,6 +124,8 @@ Map<String, Object?> _emulationSettingsToStorage(EmulationSettings value) =>
     <String, Object?>{
       'integerFpsMode': value.integerFpsMode,
       'pauseInBackground': value.pauseInBackground,
+      'autoSaveEnabled': value.autoSaveEnabled,
+      'autoSaveIntervalInMinutes': value.autoSaveIntervalInMinutes,
     };
 
 EmulationSettings? _emulationSettingsFromStorage(
@@ -111,8 +140,18 @@ EmulationSettings? _emulationSettingsFromStorage(
   final pauseInBackground = map['pauseInBackground'] is bool
       ? map['pauseInBackground'] as bool
       : null;
+  final autoSaveEnabled = map['autoSaveEnabled'] is bool
+      ? map['autoSaveEnabled'] as bool
+      : null;
+  final autoSaveIntervalInMinutes = map['autoSaveIntervalInMinutes'] is int
+      ? map['autoSaveIntervalInMinutes'] as int
+      : null;
+
   return defaults.copyWith(
     integerFpsMode: integerFpsMode ?? defaults.integerFpsMode,
     pauseInBackground: pauseInBackground ?? defaults.pauseInBackground,
+    autoSaveEnabled: autoSaveEnabled ?? defaults.autoSaveEnabled,
+    autoSaveIntervalInMinutes:
+        autoSaveIntervalInMinutes ?? defaults.autoSaveIntervalInMinutes,
   );
 }

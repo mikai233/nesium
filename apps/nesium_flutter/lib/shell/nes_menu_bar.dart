@@ -78,7 +78,8 @@ class NesMenuBar extends StatelessWidget {
     if (item.children != null && item.children!.isNotEmpty) {
       final bool isSaveLoad =
           item.id == NesMenuItemId.saveState ||
-          item.id == NesMenuItemId.loadState;
+          item.id == NesMenuItemId.loadState ||
+          item.id == NesMenuItemId.autoSave;
       return SubmenuButton(
         menuChildren: isSaveLoad && !hasRom
             ? []
@@ -93,7 +94,8 @@ class NesMenuBar extends StatelessWidget {
     bool enabled = true;
 
     if (item.id == NesMenuItemId.saveStateSlot ||
-        item.id == NesMenuItemId.loadStateSlot) {
+        item.id == NesMenuItemId.loadStateSlot ||
+        item.id == NesMenuItemId.autoSaveSlot) {
       leading = Icon(
         hasData ? Icons.save : Icons.check_box_outline_blank,
         size: 16,
@@ -101,7 +103,9 @@ class NesMenuBar extends StatelessWidget {
 
       if (!hasRom) {
         enabled = false;
-      } else if (item.id == NesMenuItemId.loadStateSlot && !hasData) {
+      } else if ((item.id == NesMenuItemId.loadStateSlot ||
+              item.id == NesMenuItemId.autoSaveSlot) &&
+          !hasData) {
         enabled = false;
       }
     } else if (item.id == NesMenuItemId.saveStateFile ||
@@ -125,11 +129,11 @@ class NesMenuBar extends StatelessWidget {
         unawaited(actions.openRom());
         break;
       case NesMenuItemId.saveState:
-        // Desktop uses submenu, but if triggered (e.g. mobile drawer fallback)
-        // unawaited(actions.saveState?.call());
-        // Note: actions.saveState was removed in previous step, will fix soon.
         break;
       case NesMenuItemId.loadState:
+        break;
+      case NesMenuItemId.autoSave:
+        unawaited(actions.openAutoSave?.call());
         break;
       case NesMenuItemId.saveStateSlot:
         if (item.slotIndex != null) {
@@ -137,6 +141,7 @@ class NesMenuBar extends StatelessWidget {
         }
         break;
       case NesMenuItemId.loadStateSlot:
+      case NesMenuItemId.autoSaveSlot:
         if (item.slotIndex != null) {
           unawaited(actions.loadStateSlot?.call(item.slotIndex!));
         }

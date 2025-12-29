@@ -18,6 +18,7 @@ import '../domain/nes_state.dart';
 import '../domain/pad_button.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/turbo_settings.dart';
+import '../features/save_state/auto_save_service.dart';
 import '../features/save_state/save_state_dialog.dart';
 import '../features/save_state/save_state_repository.dart';
 import '../features/settings/emulation_settings.dart';
@@ -227,6 +228,13 @@ class _NesShellState extends ConsumerState<NesShell>
     );
   }
 
+  Future<void> _openAutoSaveDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const SaveStateDialog(isSaving: false, isAutoSave: true),
+    );
+  }
+
   Future<void> _saveToSlot(int slot) async {
     final l10n = AppLocalizations.of(context)!;
     final repository = ref.read(saveStateRepositoryProvider.notifier);
@@ -430,11 +438,13 @@ class _NesShellState extends ConsumerState<NesShell>
   @override
   Widget build(BuildContext context) {
     final NesState state = ref.watch(nesControllerProvider);
+    ref.watch(autoSaveServiceProvider); // Keep auto-save timer running
 
     final actions = NesActions(
       openRom: _promptAndLoadRom,
       saveState: _saveState,
       loadState: _loadState,
+      openAutoSave: _openAutoSaveDialog,
       saveStateSlot: _saveToSlot,
       loadStateSlot: _loadFromSlot,
       saveStateFile: _saveToFile,

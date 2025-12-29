@@ -567,6 +567,13 @@ class _WebShellState extends ConsumerState<WebShell> {
     );
   }
 
+  Future<void> _openAutoSaveDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const SaveStateDialog(isSaving: false, isAutoSave: true),
+    );
+  }
+
   Future<void> _saveToSlot(int slot) async {
     final l10n = AppLocalizations.of(context)!;
     final repository = ref.read(saveStateRepositoryProvider.notifier);
@@ -744,6 +751,7 @@ class _WebShellState extends ConsumerState<WebShell> {
       openRom: _pickAndLoadRom,
       saveState: _saveState,
       loadState: _loadState,
+      openAutoSave: _openAutoSaveDialog,
       saveStateSlot: _saveToSlot,
       loadStateSlot: _loadFromSlot,
       saveStateFile: _saveToFile,
@@ -1159,6 +1167,9 @@ class _WebShellState extends ConsumerState<WebShell> {
       case NesMenuItemId.loadState:
         unawaited(actions.loadState?.call());
         break;
+      case NesMenuItemId.autoSave:
+        unawaited(actions.openAutoSave?.call());
+        break;
       case NesMenuItemId.reset:
         unawaited(actions.reset());
         break;
@@ -1183,6 +1194,7 @@ class _WebShellState extends ConsumerState<WebShell> {
       case NesMenuItemId.tools:
         unawaited(actions.openTools());
         break;
+      case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:
       case NesMenuItemId.loadStateSlot:
       case NesMenuItemId.saveStateFile:

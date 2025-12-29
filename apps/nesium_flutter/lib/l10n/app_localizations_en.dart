@@ -122,6 +122,30 @@ class AppLocalizationsEn extends AppLocalizations {
       'Automatically pauses the emulator when the app is not active.';
 
   @override
+  String get autoSaveEnabledTitle => 'Auto Save';
+
+  @override
+  String get autoSaveEnabledSubtitle =>
+      'Periodically save game state to a dedicated slot.';
+
+  @override
+  String get autoSaveIntervalTitle => 'Auto Save Interval';
+
+  @override
+  String autoSaveIntervalValue(int minutes) {
+    return '$minutes minutes';
+  }
+
+  @override
+  String get autoSlotLabel => 'Auto Slot';
+
+  @override
+  String get menuAutoSave => 'Auto Save...';
+
+  @override
+  String get stateAutoSaved => 'Auto save created';
+
+  @override
   String get virtualControlsTitle => 'Virtual Controls';
 
   @override

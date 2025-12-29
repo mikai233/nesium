@@ -314,6 +314,48 @@ abstract class AppLocalizations {
   /// **'Automatically pauses the emulator when the app is not active.'**
   String get pauseInBackgroundSubtitle;
 
+  /// No description provided for @autoSaveEnabledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Save'**
+  String get autoSaveEnabledTitle;
+
+  /// No description provided for @autoSaveEnabledSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Periodically save game state to a dedicated slot.'**
+  String get autoSaveEnabledSubtitle;
+
+  /// No description provided for @autoSaveIntervalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Save Interval'**
+  String get autoSaveIntervalTitle;
+
+  /// No description provided for @autoSaveIntervalValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} minutes'**
+  String autoSaveIntervalValue(int minutes);
+
+  /// No description provided for @autoSlotLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Slot'**
+  String get autoSlotLabel;
+
+  /// No description provided for @menuAutoSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Save...'**
+  String get menuAutoSave;
+
+  /// No description provided for @stateAutoSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto save created'**
+  String get stateAutoSaved;
+
   /// No description provided for @virtualControlsTitle.
   ///
   /// In en, this message translates to:

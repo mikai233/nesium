@@ -43,6 +43,20 @@
   "integerFpsSubtitle": "Reduces scrolling judder on 60Hz displays. PAL will be added later.",
   "pauseInBackgroundTitle": "Pause in background",
   "pauseInBackgroundSubtitle": "Automatically pauses the emulator when the app is not active.",
+  "autoSaveEnabledTitle": "Auto Save",
+  "autoSaveEnabledSubtitle": "Periodically save game state to a dedicated slot.",
+  "autoSaveIntervalTitle": "Auto Save Interval",
+  "autoSaveIntervalValue": "{minutes} minutes",
+  "@autoSaveIntervalValue": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "autoSlotLabel": "Auto Slot",
+  "menuAutoSave": "Auto Save...",
+  "stateAutoSaved": "Auto save created",
   "virtualControlsTitle": "Virtual Controls",
   "virtualControlsSwitchInputTip": "Switch input to \"Virtual controller\" to use these settings.",
   "virtualControlsButtonSize": "Button size",

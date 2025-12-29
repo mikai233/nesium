@@ -36,6 +36,20 @@
   "integerFpsSubtitle": "在 60Hz 屏幕上减少滚动抖动。PAL 之后支持。",
   "pauseInBackgroundTitle": "后台暂停",
   "pauseInBackgroundSubtitle": "应用不在前台时自动暂停模拟器。",
+  "autoSaveEnabledTitle": "自动存档",
+  "autoSaveEnabledSubtitle": "定期自动将游戏状态保存到专用槽位。",
+  "autoSaveIntervalTitle": "自动存档间隔",
+  "autoSaveIntervalValue": "{minutes} 分钟",
+  "@autoSaveIntervalValue": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "autoSlotLabel": "自动存档位",
+  "menuAutoSave": "自动存档…",
+  "stateAutoSaved": "自动存档已创建",
   "virtualControlsTitle": "虚拟按键",
   "virtualControlsSwitchInputTip": "切换输入设备为“虚拟手柄”后才能调整。",
   "virtualControlsButtonSize": "按键大小",

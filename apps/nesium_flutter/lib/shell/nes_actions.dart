@@ -7,6 +7,7 @@ class NesActions {
     required this.openRom,
     this.saveState,
     this.loadState,
+    this.openAutoSave,
     this.saveStateSlot,
     this.loadStateSlot,
     this.saveStateFile,
@@ -24,6 +25,7 @@ class NesActions {
   final AsyncCallback openRom;
   final AsyncCallback? saveState;
   final AsyncCallback? loadState;
+  final AsyncCallback? openAutoSave;
   final NesSlotCallback? saveStateSlot;
   final NesSlotCallback? loadStateSlot;
   final AsyncCallback? saveStateFile;

@@ -14,16 +14,24 @@ import '../../platform/platform_capabilities.dart';
 import 'save_state_repository.dart';
 
 class SaveStateDialog extends ConsumerWidget {
-  const SaveStateDialog({super.key, required this.isSaving});
+  const SaveStateDialog({
+    super.key,
+    required this.isSaving,
+    this.isAutoSave = false,
+  });
 
   final bool isSaving;
+  final bool isAutoSave;
 
   static const int _numSlots = 10;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final title = isSaving ? l10n.menuSaveState : l10n.menuLoadState;
+    String title = isSaving ? l10n.menuSaveState : l10n.menuLoadState;
+    if (isAutoSave) {
+      title = l10n.menuAutoSave;
+    }
     final hasRom = ref.watch(
       nesControllerProvider.select((s) => s.romHash != null),
     );
@@ -37,18 +45,26 @@ class SaveStateDialog extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               for (int i = 1; i <= _numSlots; i++)
-                _buildSlotTile(context, ref, i, l10n, enabled: hasRom),
-              const Divider(),
-              ListTile(
-                enabled: hasRom,
-                leading: const Icon(Icons.folder_open),
-                title: Text(
-                  isSaving
-                      ? l10n.saveToExternalFile
-                      : l10n.loadFromExternalFile,
+                _buildSlotTile(
+                  context,
+                  ref,
+                  isAutoSave ? i + 10 : i,
+                  l10n,
+                  enabled: hasRom,
                 ),
-                onTap: () => _handleExternalFile(context, ref, l10n),
-              ),
+              if (!isAutoSave) ...[
+                const Divider(),
+                ListTile(
+                  enabled: hasRom,
+                  leading: const Icon(Icons.folder_open),
+                  title: Text(
+                    isSaving
+                        ? l10n.saveToExternalFile
+                        : l10n.loadFromExternalFile,
+                  ),
+                  onTap: () => _handleExternalFile(context, ref, l10n),
+                ),
+              ],
             ],
           ),
         ),
@@ -80,17 +96,25 @@ class SaveStateDialog extends ConsumerWidget {
       subtitle = l10n.slotEmpty;
     }
 
+    final bool isAutoSlot = slotIndex > 10;
+    final int displayIndex = isAutoSlot ? slotIndex - 10 : slotIndex;
+    final String labelPrefix = isAutoSlot ? l10n.autoSlotLabel : l10n.slotLabel;
+
     final bool canInteract = enabled && (isSaving || hasData);
 
     return ListTile(
       enabled: canInteract,
-      leading: Icon(hasData ? Icons.save : Icons.check_box_outline_blank),
-      title: Text('${l10n.slotLabel} $slotIndex'),
+      leading: Icon(
+        hasData
+            ? (isAutoSlot ? Icons.history : Icons.save)
+            : Icons.check_box_outline_blank,
+      ),
+      title: Text('$labelPrefix $displayIndex'),
       subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
       onTap: canInteract
           ? () => _handleSlot(context, ref, slotIndex, l10n)
           : null,
-      trailing: hasData && isSaving && enabled
+      trailing: hasData && isSaving && enabled && !isAutoSlot
           ? IconButton(
               icon: const Icon(Icons.delete),
               onPressed: () => _handleDeleteSlot(context, ref, slotIndex, l10n),

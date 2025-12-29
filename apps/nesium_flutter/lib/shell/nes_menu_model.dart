@@ -6,8 +6,10 @@ enum NesMenuItemId {
   openRom,
   saveState,
   loadState,
+  autoSave,
   saveStateSlot,
   loadStateSlot,
+  autoSaveSlot,
   saveStateFile,
   loadStateFile,
   reset,
@@ -35,11 +37,14 @@ class NesMenuItemSpec {
 
   String label(AppLocalizations l10n, {DateTime? timestamp}) {
     if ((id == NesMenuItemId.saveStateSlot ||
-            id == NesMenuItemId.loadStateSlot) &&
+            id == NesMenuItemId.loadStateSlot ||
+            id == NesMenuItemId.autoSaveSlot) &&
         slotIndex != null) {
-      final base = '${l10n.slotLabel} $slotIndex';
+      final bool isAuto = id == NesMenuItemId.autoSaveSlot || (slotIndex! > 10);
+      final displayIndex = isAuto ? slotIndex! - 10 : slotIndex;
+      final base =
+          '${isAuto ? l10n.autoSlotLabel : l10n.slotLabel} $displayIndex';
       if (timestamp != null) {
-        // Format: "Slot 1 (2025-12-29 10:00:00)"
         final timeStr = timestamp.toLocal().toString().split('.')[0];
         return '$base ($timeStr)';
       }
@@ -50,8 +55,10 @@ class NesMenuItemSpec {
       NesMenuItemId.openRom => l10n.menuOpenRom,
       NesMenuItemId.saveState => l10n.menuSaveState,
       NesMenuItemId.loadState => l10n.menuLoadState,
+      NesMenuItemId.autoSave => l10n.menuAutoSave,
       NesMenuItemId.saveStateSlot ||
-      NesMenuItemId.loadStateSlot => '${l10n.slotLabel} $slotIndex', // Fallback
+      NesMenuItemId.loadStateSlot ||
+      NesMenuItemId.autoSaveSlot => 'Slot $slotIndex', // Fallback
       NesMenuItemId.saveStateFile => l10n.saveToExternalFile,
       NesMenuItemId.loadStateFile => l10n.loadFromExternalFile,
       NesMenuItemId.reset => l10n.menuReset,
@@ -88,57 +95,46 @@ class NesMenus {
     id: NesMenuItemId.openRom,
     icon: Icons.upload_file,
   );
-
   static const NesMenuItemSpec saveState = NesMenuItemSpec(
     id: NesMenuItemId.saveState,
     icon: Icons.save,
   );
-
   static const NesMenuItemSpec loadState = NesMenuItemSpec(
     id: NesMenuItemId.loadState,
     icon: Icons.file_open,
   );
-
   static const NesMenuItemSpec reset = NesMenuItemSpec(
     id: NesMenuItemId.reset,
     icon: Icons.restart_alt,
   );
-
   static const NesMenuItemSpec powerReset = NesMenuItemSpec(
     id: NesMenuItemId.powerReset,
     icon: Icons.power_settings_new,
   );
-
   static const NesMenuItemSpec eject = NesMenuItemSpec(
     id: NesMenuItemId.eject,
     icon: Icons.eject,
   );
-
   static const NesMenuItemSpec togglePause = NesMenuItemSpec(
     id: NesMenuItemId.togglePause,
     icon: Icons.pause_circle_outline,
   );
-
   static const NesMenuItemSpec settings = NesMenuItemSpec(
     id: NesMenuItemId.settings,
     icon: Icons.settings_outlined,
   );
-
   static const NesMenuItemSpec about = NesMenuItemSpec(
     id: NesMenuItemId.about,
     icon: Icons.info_outline,
   );
-
   static const NesMenuItemSpec debugger = NesMenuItemSpec(
     id: NesMenuItemId.debugger,
     icon: Icons.bug_report_outlined,
   );
-
   static const NesMenuItemSpec tools = NesMenuItemSpec(
     id: NesMenuItemId.tools,
     icon: Icons.analytics_outlined,
   );
-
   static List<NesMenuItemSpec> _buildSaveStateChildren() => [
     for (int i = 1; i <= 10; i++)
       NesMenuItemSpec(
@@ -151,7 +147,6 @@ class NesMenus {
       icon: Icons.file_upload,
     ),
   ];
-
   static List<NesMenuItemSpec> _buildLoadStateChildren() => [
     for (int i = 1; i <= 10; i++)
       NesMenuItemSpec(
@@ -164,11 +159,19 @@ class NesMenus {
       icon: Icons.file_download,
     ),
   ];
-
+  static List<NesMenuItemSpec> _buildAutoSaveChildren() => [
+    for (int i = 11; i <= 20; i++)
+      NesMenuItemSpec(
+        id: NesMenuItemId.autoSaveSlot,
+        icon: Icons.history,
+        slotIndex: i,
+      ),
+  ];
   static const List<NesMenuItemSpec> mobileDrawerItems = [
     openRom,
-    saveState, // Mobile still uses dialog
-    loadState, // Mobile still uses dialog
+    saveState,
+    loadState,
+    NesMenuItemSpec(id: NesMenuItemId.autoSave, icon: Icons.history),
     reset,
     powerReset,
     eject,
@@ -178,7 +181,6 @@ class NesMenus {
     settings,
     about,
   ];
-
   static List<NesMenuSectionSpec> desktopMenuSections() => [
     NesMenuSectionSpec(
       id: NesMenuSectionId.file,
@@ -193,6 +195,11 @@ class NesMenus {
           id: NesMenuItemId.loadState,
           icon: Icons.file_open,
           children: _buildLoadStateChildren(),
+        ),
+        NesMenuItemSpec(
+          id: NesMenuItemId.autoSave,
+          icon: Icons.history,
+          children: _buildAutoSaveChildren(),
         ),
       ],
     ),

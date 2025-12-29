@@ -119,6 +119,29 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pauseInBackgroundSubtitle => '应用不在前台时自动暂停模拟器。';
 
   @override
+  String get autoSaveEnabledTitle => '自动存档';
+
+  @override
+  String get autoSaveEnabledSubtitle => '定期自动将游戏状态保存到专用槽位。';
+
+  @override
+  String get autoSaveIntervalTitle => '自动存档间隔';
+
+  @override
+  String autoSaveIntervalValue(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String get autoSlotLabel => '自动存档位';
+
+  @override
+  String get menuAutoSave => '自动存档…';
+
+  @override
+  String get stateAutoSaved => '自动存档已创建';
+
+  @override
   String get virtualControlsTitle => '虚拟按键';
 
   @override

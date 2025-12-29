@@ -15,13 +15,14 @@ class SaveStateRepository extends Notifier<Map<int, DateTime?>> {
 
     final results = <int, DateTime?>{};
     if (romHash == null) {
-      for (int i = 1; i <= 10; i++) {
+      for (int i = 1; i <= 20; i++) {
+        // 1-10: manual, 11-20: auto
         results[i] = null;
       }
       return results;
     }
 
-    for (int i = 1; i <= 10; i++) {
+    for (int i = 1; i <= 20; i++) {
       final meta = storage.get(_metaKey(romHash, i));
       if (meta is int) {
         results[i] = DateTime.fromMillisecondsSinceEpoch(meta);
@@ -51,6 +52,30 @@ class SaveStateRepository extends Notifier<Map<int, DateTime?>> {
     await storage.put(_metaKey(romHash, index), now.millisecondsSinceEpoch);
 
     state = {...state, index: now};
+  }
+
+  Future<void> performAutoSave(Uint8List data) async {
+    final romHash = ref.read(nesControllerProvider).romHash;
+    if (romHash == null) return;
+
+    // Slots 11-20 are reserved for auto-save.
+    // Find the oldest slot among 11-20 or the first empty one.
+    int targetSlot = 11;
+    DateTime? oldestTime;
+
+    for (int i = 11; i <= 20; i++) {
+      final time = state[i];
+      if (time == null) {
+        targetSlot = i;
+        break;
+      }
+      if (oldestTime == null || time.isBefore(oldestTime)) {
+        oldestTime = time;
+        targetSlot = i;
+      }
+    }
+
+    await saveState(targetSlot, data);
   }
 
   Future<Uint8List?> loadState(int index) async {
