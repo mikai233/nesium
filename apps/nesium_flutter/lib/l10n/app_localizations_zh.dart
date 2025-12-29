@@ -136,7 +136,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get rewindEnabledTitle => '倒带';
 
   @override
-  String get rewindEnabledSubtitle => '开启实时倒带功能。';
+  String get rewindEnabledSubtitle => '开启实时倒带功能（桌面端长按退格键 Backspace 触发）。';
 
   @override
   String get rewindSecondsTitle => '倒带时长';

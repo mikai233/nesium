@@ -347,7 +347,7 @@ abstract class AppLocalizations {
   /// No description provided for @rewindEnabledSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Enable real-time rewind support.'**
+  /// **'Enable real-time rewind support (Long-press Backspace on Desktop).'**
   String get rewindEnabledSubtitle;
 
   /// No description provided for @rewindSecondsTitle.

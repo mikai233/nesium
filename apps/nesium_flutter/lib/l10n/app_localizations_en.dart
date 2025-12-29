@@ -140,7 +140,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get rewindEnabledTitle => 'Rewind';
 
   @override
-  String get rewindEnabledSubtitle => 'Enable real-time rewind support.';
+  String get rewindEnabledSubtitle =>
+      'Enable real-time rewind support (Long-press Backspace on Desktop).';
 
   @override
   String get rewindSecondsTitle => 'Rewind Duration';
