@@ -3,12 +3,15 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'dart:ui_web' as ui_web;
 
+import 'package:file_selector/file_selector.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web/web.dart' as web;
 
+import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
 import '../domain/pad_button.dart';
 import '../features/controls/input_settings.dart';
@@ -17,6 +20,8 @@ import '../features/controls/turbo_settings.dart';
 import '../features/controls/virtual_controls_overlay.dart';
 import '../features/controls/virtual_controls_settings.dart';
 import '../features/about/about_page.dart';
+import '../features/save_state/save_state_dialog.dart';
+import '../features/save_state/save_state_repository.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/settings/settings_page.dart';
@@ -151,6 +156,7 @@ class _WebShellState extends ConsumerState<WebShell> {
     final worker = _createModuleWorker('nes/nes_worker.js');
     _worker = worker;
     setWebCmdSender((cmd, extra) => _postCmd(cmd, extra));
+    setWebRequestSender(_requestWorker);
     worker.onmessage = ((web.MessageEvent e) => _onWorkerMessage(e)).toJS;
     worker.onerror = ((web.Event e) {
       final details = _formatWorkerErrorEvent(e);
@@ -271,12 +277,30 @@ class _WebShellState extends ConsumerState<WebShell> {
     }
   }
 
+  final Map<String, Completer<Object?>> _pendingRequests = {};
+  int _requestIdCounter = 0;
+
   void _postCmd(String cmd, [Map<String, Object?>? extra]) {
     final payload = JSObject()
       ..['type'] = 'cmd'.toJS
       ..['cmd'] = cmd.toJS;
     extra?.forEach((k, v) => payload[k] = _toJsAny(v));
     _worker?.postMessage(payload);
+  }
+
+  Future<T> _requestWorker<T>(String cmd, [Map<String, Object?>? extra]) {
+    final id = 'req_${_requestIdCounter++}';
+    final completer = Completer<T>();
+    _pendingRequests[id] = completer;
+
+    final payload = JSObject()
+      ..['type'] = 'cmd'.toJS
+      ..['cmd'] = cmd.toJS
+      ..['requestId'] = id.toJS;
+    extra?.forEach((k, v) => payload[k] = _toJsAny(v));
+    _worker?.postMessage(payload);
+
+    return completer.future;
   }
 
   void _onWorkerMessage(web.MessageEvent event) {
@@ -292,6 +316,53 @@ class _WebShellState extends ConsumerState<WebShell> {
         // Useful when the worker errors before it can post a structured error.
         // ignore: avoid_print
         print('[nes_worker] $message');
+      }
+      return;
+    }
+
+    if (type == 'romLoaded') {
+      final hashList = (data['hash'] as JSArray?)?.toDart;
+      if (hashList != null) {
+        final bytes = Uint8List.fromList(
+          hashList.map((e) => (e as JSNumber).toDartInt).toList(),
+        );
+        final hashStr = bytes
+            .map((b) => b.toRadixString(16).padLeft(2, '0'))
+            .join();
+        ref.read(nesControllerProvider.notifier).updateRomHash(hashStr);
+      } else {
+        ref.read(nesControllerProvider.notifier).updateRomHash(null);
+      }
+      return;
+    }
+
+    if (type == 'saveStateResult') {
+      final requestId = (data['requestId'] as JSString?)?.toDart;
+      final buffer = data['data'];
+      if (requestId != null && _pendingRequests.containsKey(requestId)) {
+        if (buffer != null) {
+          final bytes = (buffer as JSArrayBuffer).toDart.asUint8List();
+          _pendingRequests.remove(requestId)!.complete(bytes);
+        } else {
+          _pendingRequests
+              .remove(requestId)!
+              .completeError(StateError('Save state failed'));
+        }
+      }
+      return;
+    }
+
+    if (type == 'loadStateResult') {
+      final requestId = (data['requestId'] as JSString?)?.toDart;
+      final success = (data['success'] as JSBoolean?)?.toDart ?? false;
+      if (requestId != null && _pendingRequests.containsKey(requestId)) {
+        if (success) {
+          _pendingRequests.remove(requestId)!.complete(null);
+        } else {
+          _pendingRequests
+              .remove(requestId)!
+              .completeError(StateError('Load state failed'));
+        }
       }
       return;
     }
@@ -433,8 +504,11 @@ class _WebShellState extends ConsumerState<WebShell> {
       return;
     }
 
+    final name = p.basenameWithoutExtension(file.name);
+
     try {
       await _ensureInitialized();
+      ref.read(nesControllerProvider.notifier).updateRomInfo(name: name);
       final u8 = bytes.toJS;
       final arrayBuffer = (u8 as JSObject)['buffer'] as JSArrayBuffer;
       final payload = JSObject()
@@ -476,6 +550,113 @@ class _WebShellState extends ConsumerState<WebShell> {
       _postCmd(powerOn ? 'powerOnReset' : 'softReset');
     } catch (e) {
       _reportError(e.toString());
+    }
+  }
+
+  Future<void> _saveState() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const SaveStateDialog(isSaving: true),
+    );
+  }
+
+  Future<void> _loadState() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const SaveStateDialog(isSaving: false),
+    );
+  }
+
+  Future<void> _saveToSlot(int slot) async {
+    final l10n = AppLocalizations.of(context)!;
+    final repository = ref.read(saveStateRepositoryProvider.notifier);
+    try {
+      final data = await _requestWorker<Uint8List>('saveState');
+      await repository.saveState(slot, data);
+      if (mounted) {
+        _showSnack(l10n.stateSavedToSlot(slot));
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('${l10n.commandFailed('Save to slot $slot')}: $e');
+      }
+    }
+  }
+
+  Future<void> _loadFromSlot(int slot) async {
+    final l10n = AppLocalizations.of(context)!;
+    final repository = ref.read(saveStateRepositoryProvider.notifier);
+    try {
+      if (!repository.hasSave(slot)) return;
+      final data = await repository.loadState(slot);
+      if (data != null) {
+        await _requestWorker<void>('loadState', {'data': data});
+        if (mounted) {
+          _showSnack(l10n.stateLoadedFromSlot(slot));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('${l10n.commandFailed('Load from slot $slot')}: $e');
+      }
+    }
+  }
+
+  Future<void> _saveToFile() async {
+    final l10n = AppLocalizations.of(context)!;
+    const XTypeGroup typeGroup = XTypeGroup(
+      label: 'Nesium State',
+      extensions: <String>['nesium'],
+    );
+
+    try {
+      final data = await _requestWorker<Uint8List>('saveState');
+      final romName = ref.read(nesControllerProvider).romName ?? 'save';
+      final suggestedName = '$romName.nesium';
+
+      final FileSaveLocation? result = await getSaveLocation(
+        acceptedTypeGroups: <XTypeGroup>[typeGroup],
+        suggestedName: suggestedName,
+      );
+
+      if (result != null) {
+        final file = XFile.fromData(
+          data,
+          name: suggestedName,
+          mimeType: 'application/octet-stream',
+        );
+        await file.saveTo(result.path);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('${l10n.commandFailed('Save to file')}: $e');
+      }
+    }
+  }
+
+  Future<void> _loadFromFile() async {
+    final l10n = AppLocalizations.of(context)!;
+    const XTypeGroup typeGroup = XTypeGroup(
+      label: 'Nesium State',
+      extensions: <String>['nesium'],
+    );
+
+    try {
+      final XFile? result = await openFile(
+        acceptedTypeGroups: <XTypeGroup>[typeGroup],
+      );
+
+      if (result != null) {
+        final bytes = await result.readAsBytes();
+        await _requestWorker<void>('loadState', {'data': bytes});
+        if (mounted) {
+          _showSnack(l10n.commandSucceeded('Load from file'));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('${l10n.commandFailed('Load from file')}: $e');
+      }
     }
   }
 
@@ -555,8 +736,18 @@ class _WebShellState extends ConsumerState<WebShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final lastError = _lastError;
+    final slotStates = ref.watch(saveStateRepositoryProvider);
+    final hasRom = ref.watch(
+      nesControllerProvider.select((s) => s.romHash != null),
+    );
     final actions = NesActions(
       openRom: _pickAndLoadRom,
+      saveState: _saveState,
+      loadState: _loadState,
+      saveStateSlot: _saveToSlot,
+      loadStateSlot: _loadFromSlot,
+      saveStateFile: _saveToFile,
+      loadStateFile: _loadFromFile,
       reset: () => _reset(powerOn: false),
       powerReset: () => _reset(powerOn: true),
       eject: () async {
@@ -602,7 +793,7 @@ class _WebShellState extends ConsumerState<WebShell> {
             )
           : null,
       drawer: useDrawerMenu
-          ? Drawer(child: _buildDrawer(context, actions))
+          ? Drawer(child: _buildDrawer(context, actions, hasRom))
           : null,
       body: Focus(
         focusNode: _focusNode,
@@ -613,18 +804,23 @@ class _WebShellState extends ConsumerState<WebShell> {
             if (!useDrawerMenu)
               NesMenuBar(
                 actions: actions,
-                sections: NesMenus.webMenuSections,
-                trailing: lastError == null
-                    ? null
-                    : Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: IconButton(
-                          iconSize: 18,
+                sections: NesMenus.webMenuSections(),
+                slotStates: slotStates,
+                hasRom: hasRom,
+                trailing: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: lastError != null
+                      ? IconButton(
                           tooltip: l10n.menuLastError,
+                          icon: const Icon(
+                            Icons.error_outline,
+                            color: Colors.red,
+                            size: 18,
+                          ),
                           onPressed: _showLastErrorDialog,
-                          icon: const Icon(Icons.error_outline),
-                        ),
-                      ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ),
             Expanded(
               child: LayoutBuilder(
@@ -770,7 +966,14 @@ class _WebShellState extends ConsumerState<WebShell> {
     }
 
     _lastError = message;
-    if (persistent && mounted) setState(() => _error = message);
+    _lastSnackMessage = message;
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _handleFatalWorkerFailure(
@@ -837,7 +1040,7 @@ class _WebShellState extends ConsumerState<WebShell> {
     );
   }
 
-  Widget _buildDrawer(BuildContext context, NesActions actions) {
+  Widget _buildDrawer(BuildContext context, NesActions actions, bool hasRom) {
     final l10n = AppLocalizations.of(context)!;
     void closeDrawer() => Navigator.of(context).pop();
 
@@ -857,7 +1060,7 @@ class _WebShellState extends ConsumerState<WebShell> {
               child: Text(l10n.appName, style: const TextStyle(fontSize: 24)),
             ),
           ),
-          for (final section in NesMenus.webMenuSections) ...[
+          for (final section in NesMenus.webMenuSections()) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Text(
@@ -867,12 +1070,21 @@ class _WebShellState extends ConsumerState<WebShell> {
             ),
             for (final item in section.items)
               ListTile(
+                enabled:
+                    (item.id != NesMenuItemId.saveState &&
+                        item.id != NesMenuItemId.loadState) ||
+                    hasRom,
                 leading: Icon(item.icon),
                 title: Text(item.label(l10n)),
-                onTap: () {
-                  closeDrawer();
-                  _dispatchDrawerAction(item.id, actions);
-                },
+                onTap:
+                    ((item.id != NesMenuItemId.saveState &&
+                            item.id != NesMenuItemId.loadState) ||
+                        hasRom)
+                    ? () {
+                        closeDrawer();
+                        _dispatchDrawerAction(item.id, actions);
+                      }
+                    : null,
               ),
             const Divider(height: 1),
           ],
@@ -941,6 +1153,12 @@ class _WebShellState extends ConsumerState<WebShell> {
       case NesMenuItemId.openRom:
         unawaited(actions.openRom());
         break;
+      case NesMenuItemId.saveState:
+        unawaited(actions.saveState?.call());
+        break;
+      case NesMenuItemId.loadState:
+        unawaited(actions.loadState?.call());
+        break;
       case NesMenuItemId.reset:
         unawaited(actions.reset());
         break;
@@ -964,6 +1182,11 @@ class _WebShellState extends ConsumerState<WebShell> {
         break;
       case NesMenuItemId.tools:
         unawaited(actions.openTools());
+        break;
+      case NesMenuItemId.saveStateSlot:
+      case NesMenuItemId.loadStateSlot:
+      case NesMenuItemId.saveStateFile:
+      case NesMenuItemId.loadStateFile:
         break;
     }
   }

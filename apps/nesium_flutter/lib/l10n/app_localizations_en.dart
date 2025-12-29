@@ -234,10 +234,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuEject => 'Eject';
 
   @override
+  String get menuSaveState => 'Save State...';
+
+  @override
+  String get menuLoadState => 'Load State...';
+
+  @override
   String get menuPauseResume => 'Pause / Resume';
 
   @override
   String get menuPreferences => 'Preferences...';
+
+  @override
+  String get saveToExternalFile => 'Save to file...';
+
+  @override
+  String get loadFromExternalFile => 'Load from file...';
+
+  @override
+  String get slotLabel => 'Slot';
+
+  @override
+  String get slotEmpty => 'Empty';
+
+  @override
+  String get slotHasData => 'Saved';
+
+  @override
+  String stateSavedToSlot(int index) {
+    return 'State saved to slot $index';
+  }
+
+  @override
+  String stateLoadedFromSlot(int index) {
+    return 'State loaded from slot $index';
+  }
+
+  @override
+  String slotCleared(int index) {
+    return 'Slot $index cleared';
+  }
 
   @override
   String get menuAbout => 'About';

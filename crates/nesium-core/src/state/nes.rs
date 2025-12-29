@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     Nes,
     bus::PendingDma,
@@ -18,6 +20,20 @@ pub enum NesSaveStateError {
     UnsupportedMapper { mapper_id: u16 },
     CorruptState(&'static str),
 }
+
+impl Display for NesSaveStateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NesSaveStateError::NoCartridge => write!(f, "no cartridge loaded"),
+            NesSaveStateError::UnsupportedMapper { mapper_id } => {
+                write!(f, "unsupported mapper ID: {}", mapper_id)
+            }
+            NesSaveStateError::CorruptState(msg) => write!(f, "corrupt state: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for NesSaveStateError {}
 
 /// Serializable snapshot of the CPU core.
 #[cfg_attr(feature = "savestate-serde", derive(Serialize, Deserialize))]
@@ -207,6 +223,17 @@ impl SaveState for Nes {
         if self.cartridge.is_none() {
             return Err(NesSaveStateError::NoCartridge);
         }
+
+        // Validate mapper compatibility if metadata is present.
+        if let Some((expected_mapper, _)) = snapshot.meta.mapper {
+            let current_mapper = self.cartridge.as_ref().unwrap().header().mapper();
+            if expected_mapper != current_mapper {
+                return Err(NesSaveStateError::CorruptState(
+                    "mapper mismatch between snapshot and loaded ROM",
+                ));
+            }
+        }
+
         let state = &snapshot.data;
 
         state_to_cpu(&mut self.cpu, &state.cpu);

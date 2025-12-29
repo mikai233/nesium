@@ -22,7 +22,7 @@ use super::{
     state::RuntimeState,
     types::{
         CONTROL_REPLY_TIMEOUT, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError,
-        RuntimeNotification, VideoConfig,
+        RuntimeNotification, SAVE_STATE_REPLY_TIMEOUT, VideoConfig,
     },
     util::button_bit,
 };
@@ -188,6 +188,10 @@ impl RuntimeHandle {
             .load(std::sync::atomic::Ordering::Acquire)
     }
 
+    pub fn rom_hash(&self) -> Option<[u8; 32]> {
+        *self.inner.state.rom_hash.lock().unwrap()
+    }
+
     pub fn set_pad_mask(&self, pad: usize, mask: u8) {
         if let Some(slot) = self.inner.state.pad_masks.get(pad) {
             slot.store(mask, std::sync::atomic::Ordering::Release);
@@ -333,5 +337,46 @@ impl RuntimeHandle {
         self.send_with_reply("set_palette", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::SetPalette(palette, reply)
         })
+    }
+
+    pub fn save_state(&self, path: impl Into<PathBuf>) -> Result<(), RuntimeError> {
+        let path = path.into();
+        self.send_with_reply("save_state", SAVE_STATE_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SaveState(path, reply)
+        })
+    }
+
+    pub fn load_state(&self, path: impl Into<PathBuf>) -> Result<(), RuntimeError> {
+        let path = path.into();
+        self.send_with_reply("load_state", SAVE_STATE_REPLY_TIMEOUT, |reply| {
+            ControlMessage::LoadState(path, reply)
+        })
+    }
+
+    pub fn save_state_to_memory(&self) -> Result<Vec<u8>, RuntimeError> {
+        let (reply_tx, reply_rx) = bounded::<Result<Vec<u8>, RuntimeError>>(1);
+        self.inner
+            .ctrl_tx
+            .send(ControlMessage::SaveStateToMemory(reply_tx))
+            .map_err(|_| RuntimeError::ControlChannelDisconnected)?;
+        match reply_rx.recv_timeout(SAVE_STATE_REPLY_TIMEOUT) {
+            Ok(res) => res,
+            Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                Err(RuntimeError::ControlTimeout {
+                    op: "save_state_to_memory",
+                })
+            }
+            Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                Err(RuntimeError::ControlChannelDisconnected)
+            }
+        }
+    }
+
+    pub fn load_state_from_memory(&self, data: Vec<u8>) -> Result<(), RuntimeError> {
+        self.send_with_reply(
+            "load_state_from_memory",
+            SAVE_STATE_REPLY_TIMEOUT,
+            |reply| ControlMessage::LoadStateFromMemory(data, reply),
+        )
     }
 }

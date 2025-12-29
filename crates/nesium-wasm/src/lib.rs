@@ -12,7 +12,9 @@ use nesium_core::{
     ppu::buffer::ColorFormat,
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
+    state::{SnapshotMeta, nes::NesSnapshot},
 };
+use sha1::{Digest, Sha1};
 
 /// NES output resolution (visible area).
 const WIDTH: usize = 256;
@@ -61,6 +63,12 @@ pub struct WasmNes {
     /// Note: if WASM memory grows, JS must recreate its `Float32Array` view using
     /// the latest `memory.buffer`.
     audio: Vec<f32>,
+
+    /// Currently loaded ROM hash (SHA-1).
+    rom_hash: Option<[u8; 32]>,
+
+    /// Incremental ID for snapshots captured in this session.
+    baseline_id: u64,
 }
 
 #[wasm_bindgen]
@@ -90,6 +98,8 @@ impl WasmNes {
             nes,
             rgba: vec![0u8; RGBA_FRAME_LEN].into_boxed_slice(),
             audio: Vec::with_capacity(2048),
+            rom_hash: None,
+            baseline_id: 1,
         }
     }
 
@@ -107,8 +117,13 @@ impl WasmNes {
     ///
     /// On success, the cartridge is inserted into the emulator.
     pub fn load_rom(&mut self, rom: &[u8]) -> Result<(), JsValue> {
+        let hash = self.get_rom_hash(rom);
+        let mut full_hash = [0u8; 32];
+        full_hash[..hash.len()].copy_from_slice(&hash);
+
         let cartridge = load_cartridge(rom).map_err(js_err)?;
         self.nes.insert_cartridge(cartridge);
+        self.rom_hash = Some(full_hash);
         Ok(())
     }
 
@@ -191,6 +206,68 @@ impl WasmNes {
     /// Disables integer-FPS audio stretching and restores the default resampler input rate.
     pub fn reset_audio_integer_fps_scale(&mut self) {
         self.nes.reset_audio_integer_fps_scale();
+    }
+
+    /// Captures a full snapshot of the emulator state as a Postcard-serialized blob.
+    pub fn save_state(&mut self) -> Result<Vec<u8>, JsValue> {
+        let cart = self
+            .nes
+            .get_cartridge()
+            .ok_or_else(|| JsValue::from_str("No cartridge loaded"))?;
+
+        let header = cart.header();
+        let mapper = Some((header.mapper(), header.submapper()));
+
+        let meta = SnapshotMeta {
+            tick: self.nes.master_clock(),
+            baseline_id: self.baseline_id,
+            rom_hash: self.rom_hash,
+            mapper,
+            format_version: 1, // Matches SaveState::FORMAT_VERSION
+        };
+
+        self.baseline_id += 1;
+
+        let snap = self.nes.save_snapshot(meta).map_err(js_err)?;
+        snap.to_postcard_bytes().map_err(js_err)
+    }
+
+    /// Restores the emulator state from a Postcard-serialized blob.
+    pub fn load_state(&mut self, data: &[u8]) -> Result<(), JsValue> {
+        let snap = NesSnapshot::from_postcard_bytes(data).map_err(js_err)?;
+
+        let cartridge = self
+            .nes
+            .get_cartridge()
+            .ok_or_else(|| JsValue::from_str("No cartridge loaded"))?;
+
+        // Validate ROM Mapper
+        if let Some((mapper, submapper)) = snap.meta.mapper {
+            if mapper != cartridge.header().mapper() || submapper != cartridge.header().submapper()
+            {
+                return Err(JsValue::from_str(
+                    "ROM mapper mismatch: this save belongs to a different game",
+                ));
+            }
+        }
+
+        // Validate ROM Hash
+        if let Some(expected_hash) = snap.meta.rom_hash {
+            if Some(expected_hash) != self.rom_hash {
+                return Err(JsValue::from_str(
+                    "ROM hash mismatch: this save belongs to a different game",
+                ));
+            }
+        }
+
+        self.nes.load_snapshot(&snap).map_err(js_err)
+    }
+
+    /// Computes the SHA-1 hash of the currently loaded ROM.
+    pub fn get_rom_hash(&self, rom_bytes: &[u8]) -> Vec<u8> {
+        let mut hasher = Sha1::new();
+        hasher.update(rom_bytes);
+        hasher.finalize().to_vec()
     }
 
     /// Pointer to the stable RGBA buffer.

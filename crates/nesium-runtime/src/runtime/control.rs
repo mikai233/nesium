@@ -24,6 +24,10 @@ pub(crate) enum ControlMessage {
     SetPalette(Palette, ControlReplySender),
     /// None = exact NTSC FPS, Some(60) = integer FPS (PAL reserved for future).
     SetIntegerFpsTarget(Option<u32>, ControlReplySender),
+    SaveState(PathBuf, ControlReplySender),
+    LoadState(PathBuf, ControlReplySender),
+    SaveStateToMemory(Sender<Result<Vec<u8>, RuntimeError>>),
+    LoadStateFromMemory(Vec<u8>, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

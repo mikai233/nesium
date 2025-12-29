@@ -305,6 +305,10 @@ impl Nes {
         self.reset(ResetKind::PowerOn);
     }
 
+    pub fn get_cartridge(&self) -> Option<&Cartridge> {
+        self.cartridge.as_ref()
+    }
+
     /// Internal helper that applies either a power-on style reset or a warm reset
     /// depending on `kind`. This drives CPU/PPU/APU, RAM, mixer, and mapper state
     /// in a way that mirrors Mesen2's reset sequencing.
@@ -616,6 +620,11 @@ impl Nes {
     /// Internal timing counter (PPU dots since power-on). Exposed for tests/debug.
     pub fn dot_counter(&self) -> u64 {
         self.dot_counter
+    }
+
+    /// Master clock counter (total master ticks since power-on).
+    pub fn master_clock(&self) -> u64 {
+        self.master_clock
     }
 
     /// Executes the next instruction (advancing CPU/PPU/APU as needed).

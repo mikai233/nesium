@@ -100,8 +100,39 @@
   "menuReset": "Reset",
   "menuPowerReset": "Power Reset",
   "menuEject": "Eject",
+  "menuSaveState": "Save State...",
+  "menuLoadState": "Load State...",
   "menuPauseResume": "Pause / Resume",
   "menuPreferences": "Preferences...",
+  "saveToExternalFile": "Save to file...",
+  "loadFromExternalFile": "Load from file...",
+  "slotLabel": "Slot",
+  "slotEmpty": "Empty",
+  "slotHasData": "Saved",
+  "stateSavedToSlot": "State saved to slot {index}",
+  "@stateSavedToSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "stateLoadedFromSlot": "State loaded from slot {index}",
+  "@stateLoadedFromSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "slotCleared": "Slot {index} cleared",
+  "@slotCleared": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
   "menuAbout": "About",
   "menuDebugger": "Debugger",
   "menuTools": "Tools",

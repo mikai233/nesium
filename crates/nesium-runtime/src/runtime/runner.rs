@@ -1,13 +1,11 @@
+use sha1::{Digest, Sha1};
+use std::sync::atomic::Ordering;
 use std::{
+    path::PathBuf,
     sync::Arc,
     thread,
     time::{Duration, Instant},
 };
-
-use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError};
-use nesium_core::{Nes, controller::Button, ppu::buffer::FrameBuffer};
-
-use crate::audio::NesAudioPlayer;
 
 use super::{
     control::ControlMessage,
@@ -15,6 +13,11 @@ use super::{
     types::{AudioMode, NTSC_FPS_EXACT, RuntimeError, RuntimeNotification},
     util::button_bit,
 };
+use crate::audio::NesAudioPlayer;
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError};
+use nesium_core::state::SnapshotMeta;
+use nesium_core::state::nes::NesSnapshot;
+use nesium_core::{Nes, controller::Button, ppu::buffer::FrameBuffer};
 
 enum WaitOutcome {
     /// Runtime thread should exit (channel disconnected or Stop received).
@@ -42,7 +45,6 @@ pub(crate) struct Runner {
     audio: Option<NesAudioPlayer>,
     ctrl_rx: Receiver<ControlMessage>,
     state: Arc<RuntimeState>,
-    has_cartridge: bool,
     next_frame_deadline: Instant,
     frame_duration: Duration,
     integer_fps_target: Option<u32>,
@@ -84,7 +86,6 @@ impl Runner {
             audio,
             ctrl_rx,
             state,
-            has_cartridge: false,
             next_frame_deadline: Instant::now(),
             frame_duration: FRAME_DURATION_NTSC,
             integer_fps_target: None,
@@ -94,7 +95,6 @@ impl Runner {
     }
 
     pub(crate) fn run(&mut self) {
-        use std::sync::atomic::Ordering;
         let mut last_paused = self.state.paused.load(Ordering::Acquire);
 
         loop {
@@ -110,7 +110,7 @@ impl Runner {
             }
             last_paused = paused;
 
-            if !self.has_cartridge || paused {
+            if self.nes.get_cartridge().is_none() || paused {
                 match self.ctrl_rx.recv_timeout(Duration::from_millis(10)) {
                     Ok(msg) => {
                         if self.handle_control(msg) {
@@ -205,29 +205,45 @@ impl Runner {
     }
 
     fn handle_control(&mut self, msg: ControlMessage) -> bool {
-        use std::sync::atomic::Ordering;
         match msg {
             ControlMessage::Stop => return true,
             ControlMessage::LoadRom(path, reply) => {
-                match self.nes.load_cartridge_from_file(&path) {
-                    Ok(_) => {
-                        self.has_cartridge = true;
-                        self.state.paused.store(false, Ordering::Release);
-                        self.next_frame_deadline = Instant::now();
-                        if let Some(audio) = &self.audio {
-                            audio.clear();
+                match std::fs::read(&path) {
+                    Ok(bytes) => {
+                        let mut hasher = Sha1::new();
+                        hasher.update(&bytes);
+                        let hash: [u8; 20] = hasher.finalize().into();
+                        // Pad to 32 bytes for the internal representation
+                        let mut full_hash = [0u8; 32];
+                        full_hash[..20].copy_from_slice(&hash);
+
+                        match self.nes.load_cartridge_from_file(&path) {
+                            Ok(_) => {
+                                *self.state.rom_hash.lock().unwrap() = Some(full_hash);
+                                self.state.paused.store(false, Ordering::Release);
+                                self.next_frame_deadline = Instant::now();
+                                if let Some(audio) = &self.audio {
+                                    audio.clear();
+                                }
+                                let _ = reply.send(Ok(()));
+                            }
+                            Err(e) => {
+                                *self.state.rom_hash.lock().unwrap() = None;
+                                let error = e.to_string();
+                                let _ =
+                                    reply.send(Err(RuntimeError::LoadRomFailed { path, error }));
+                            }
                         }
-                        let _ = reply.send(Ok(()));
                     }
                     Err(e) => {
-                        self.has_cartridge = false;
+                        *self.state.rom_hash.lock().unwrap() = None;
                         let error = e.to_string();
                         let _ = reply.send(Err(RuntimeError::LoadRomFailed { path, error }));
                     }
                 }
             }
             ControlMessage::Reset(kind, reply) => {
-                if self.has_cartridge {
+                if self.nes.get_cartridge().is_some() {
                     self.nes.reset(kind);
                     for mask in &self.state.pad_masks {
                         mask.store(0, Ordering::Release);
@@ -245,7 +261,6 @@ impl Runner {
             }
             ControlMessage::Eject(reply) => {
                 self.nes.eject_cartridge();
-                self.has_cartridge = false;
                 for mask in &self.state.pad_masks {
                     mask.store(0, Ordering::Release);
                 }
@@ -286,6 +301,222 @@ impl Runner {
             ControlMessage::SetPalette(palette, reply) => {
                 self.nes.set_palette(palette);
                 let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SaveState(path, reply) => match self.nes.get_cartridge() {
+                None => {
+                    let _ = reply.send(Err(RuntimeError::SaveStateFailed {
+                        path,
+                        error: "no cartridge loaded".to_string(),
+                    }));
+                }
+                Some(cart) => {
+                    let baseline_id = self.state.baseline_id.load(Ordering::Relaxed);
+                    let rom_hash = *self.state.rom_hash.lock().unwrap();
+                    let header = cart.header();
+                    let mapper = Some((header.mapper(), header.submapper()));
+
+                    let meta = SnapshotMeta {
+                        tick: self.nes.master_clock(),
+                        baseline_id,
+                        rom_hash,
+                        mapper,
+                        ..Default::default()
+                    };
+
+                    match self.nes.save_snapshot(meta) {
+                        Ok(snap) => match snap.to_postcard_bytes() {
+                            Ok(bytes) => match std::fs::write(&path, bytes) {
+                                Ok(_) => {
+                                    let _ = reply.send(Ok(()));
+                                }
+                                Err(e) => {
+                                    let _ = reply.send(Err(RuntimeError::SaveStateFailed {
+                                        path,
+                                        error: e.to_string(),
+                                    }));
+                                }
+                            },
+                            Err(e) => {
+                                let _ = reply.send(Err(RuntimeError::SaveStateFailed {
+                                    path,
+                                    error: e.to_string(),
+                                }));
+                            }
+                        },
+                        Err(e) => {
+                            let _ = reply.send(Err(RuntimeError::SaveStateFailed {
+                                path,
+                                error: e.to_string(),
+                            }));
+                        }
+                    }
+                }
+            },
+            ControlMessage::LoadState(path, reply) => {
+                match self.nes.get_cartridge() {
+                    Some(cartridge) => {
+                        match std::fs::read(&path) {
+                            Ok(bytes) => {
+                                match NesSnapshot::from_postcard_bytes(&bytes) {
+                                    Ok(snap) => {
+                                        // Validate ROM Mapper
+                                        if let Some((mapper, submapper)) = snap.meta.mapper
+                                            && (mapper != cartridge.header().mapper()
+                                                || submapper != cartridge.header().submapper())
+                                        {
+                                            let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                                                path,
+                                                error: "ROM mappper mismatch: this save belongs to a different game".to_string(),
+                                            }));
+                                            return false;
+                                        }
+                                        // Validate ROM Hash
+                                        if let Some(expected_hash) = snap.meta.rom_hash {
+                                            let current_hash = *self.state.rom_hash.lock().unwrap();
+                                            if Some(expected_hash) != current_hash {
+                                                let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                                                    path,
+                                                    error: "ROM hash mismatch: this save belongs to a different game".to_string(),
+                                                }));
+                                                return false;
+                                            }
+                                        }
+
+                                        match self.nes.load_snapshot(&snap) {
+                                            Ok(_) => {
+                                                let _ = reply.send(Ok(()));
+                                            }
+                                            Err(e) => {
+                                                let _ = reply.send(Err(
+                                                    RuntimeError::LoadStateFailed {
+                                                        path,
+                                                        error: e.to_string(),
+                                                    },
+                                                ));
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                                            path,
+                                            error: e.to_string(),
+                                        }));
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                                    path,
+                                    error: e.to_string(),
+                                }));
+                            }
+                        }
+                    }
+                    None => {
+                        let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                            path,
+                            error: "no cartridge loaded".to_string(),
+                        }));
+                    }
+                }
+            }
+            ControlMessage::SaveStateToMemory(reply) => match self.nes.get_cartridge() {
+                None => {
+                    let _ = reply.send(Err(RuntimeError::SaveStateFailed {
+                        path: PathBuf::from("memory"),
+                        error: "no cartridge loaded".to_string(),
+                    }));
+                }
+                Some(cart) => {
+                    let baseline_id = self.state.baseline_id.load(Ordering::Relaxed);
+                    let rom_hash = *self.state.rom_hash.lock().unwrap();
+                    let header = cart.header();
+                    let mapper = Some((header.mapper(), header.submapper()));
+
+                    let meta = SnapshotMeta {
+                        tick: self.nes.master_clock(),
+                        baseline_id,
+                        rom_hash,
+                        mapper,
+                        ..Default::default()
+                    };
+
+                    match self.nes.save_snapshot(meta) {
+                        Ok(snap) => match snap.to_postcard_bytes() {
+                            Ok(bytes) => {
+                                let _ = reply.send(Ok(bytes));
+                            }
+                            Err(e) => {
+                                let _ = reply.send(Err(RuntimeError::SaveStateFailed {
+                                    path: PathBuf::from("memory"),
+                                    error: e.to_string(),
+                                }));
+                            }
+                        },
+                        Err(e) => {
+                            let _ = reply.send(Err(RuntimeError::SaveStateFailed {
+                                path: PathBuf::from("memory"),
+                                error: e.to_string(),
+                            }));
+                        }
+                    }
+                }
+            },
+            ControlMessage::LoadStateFromMemory(bytes, reply) => {
+                match self.nes.get_cartridge() {
+                    Some(cartridge) => {
+                        match NesSnapshot::from_postcard_bytes(&bytes) {
+                            Ok(snap) => {
+                                // Validate ROM Mapper
+                                if let Some((mapper, submapper)) = snap.meta.mapper
+                                    && (mapper != cartridge.header().mapper()
+                                        || submapper != cartridge.header().submapper())
+                                {
+                                    let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                                        path: PathBuf::from("memory"),
+                                        error: "ROM mappper mismatch: this save belongs to a different game".to_string(),
+                                    }));
+                                    return false;
+                                }
+                                // Validate ROM Hash
+                                if let Some(expected_hash) = snap.meta.rom_hash {
+                                    let current_hash = *self.state.rom_hash.lock().unwrap();
+                                    if Some(expected_hash) != current_hash {
+                                        let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                                            path: PathBuf::from("memory"),
+                                            error: "ROM hash mismatch".to_string(),
+                                        }));
+                                        return false;
+                                    }
+                                }
+
+                                match self.nes.load_snapshot(&snap) {
+                                    Ok(_) => {
+                                        let _ = reply.send(Ok(()));
+                                    }
+                                    Err(e) => {
+                                        let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                                            path: PathBuf::from("memory"),
+                                            error: e.to_string(),
+                                        }));
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                                    path: PathBuf::from("memory"),
+                                    error: e.to_string(),
+                                }));
+                            }
+                        }
+                    }
+                    None => {
+                        let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                            path: PathBuf::from("memory"),
+                            error: "no cartridge loaded".to_string(),
+                        }));
+                    }
+                }
             }
         }
 

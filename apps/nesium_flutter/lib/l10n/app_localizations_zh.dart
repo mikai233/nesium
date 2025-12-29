@@ -228,10 +228,46 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuEject => '弹出';
 
   @override
+  String get menuSaveState => '保存存档…';
+
+  @override
+  String get menuLoadState => '读取存档…';
+
+  @override
   String get menuPauseResume => '暂停 / 继续';
 
   @override
   String get menuPreferences => '偏好设置…';
+
+  @override
+  String get saveToExternalFile => '保存到外部文件…';
+
+  @override
+  String get loadFromExternalFile => '从外部文件加载…';
+
+  @override
+  String get slotLabel => '槽位';
+
+  @override
+  String get slotEmpty => '空';
+
+  @override
+  String get slotHasData => '已保存';
+
+  @override
+  String stateSavedToSlot(int index) {
+    return '存档已保存至槽位 $index';
+  }
+
+  @override
+  String stateLoadedFromSlot(int index) {
+    return '已从槽位 $index 读取存档';
+  }
+
+  @override
+  String slotCleared(int index) {
+    return '槽位 $index 已清除';
+  }
 
   @override
   String get menuAbout => '关于';

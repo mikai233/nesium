@@ -1,13 +1,16 @@
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/events.dart' as nes_events;
 import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 import 'package:nesium_flutter/bridge/api/pause.dart' as nes_pause;
+import 'package:nesium_flutter/bridge/api/emulation.dart' as nes_emulation;
 
 import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
@@ -15,6 +18,8 @@ import '../domain/nes_state.dart';
 import '../domain/pad_button.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/turbo_settings.dart';
+import '../features/save_state/save_state_dialog.dart';
+import '../features/save_state/save_state_repository.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
@@ -177,10 +182,17 @@ class _NesShellState extends ConsumerState<NesShell>
 
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
-    await _runRustCommand(
-      l10n.actionLoadRom,
-      () => nes_api.loadRom(path: path),
-    );
+    await _runRustCommand(l10n.actionLoadRom, () async {
+      await nes_api.loadRom(path: path);
+      final name = p.basenameWithoutExtension(path);
+      await ref.read(nesControllerProvider.notifier).refreshRomHash();
+      ref
+          .read(nesControllerProvider.notifier)
+          .updateRomInfo(
+            hash: ref.read(nesControllerProvider).romHash,
+            name: name,
+          );
+    });
   }
 
   Future<void> _resetConsole() async {
@@ -195,7 +207,124 @@ class _NesShellState extends ConsumerState<NesShell>
 
   Future<void> _ejectConsole() async {
     final l10n = AppLocalizations.of(context)!;
-    await _runRustCommand(l10n.actionEjectNes, nes_api.ejectConsole);
+    await _runRustCommand(l10n.actionEjectNes, () async {
+      await nes_api.ejectConsole();
+      await ref.read(nesControllerProvider.notifier).refreshRomHash();
+    });
+  }
+
+  Future<void> _saveState() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const SaveStateDialog(isSaving: true),
+    );
+  }
+
+  Future<void> _loadState() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const SaveStateDialog(isSaving: false),
+    );
+  }
+
+  Future<void> _saveToSlot(int slot) async {
+    final l10n = AppLocalizations.of(context)!;
+    final repository = ref.read(saveStateRepositoryProvider.notifier);
+    try {
+      final data = await nes_emulation.saveStateToMemory();
+      await repository.saveState(slot, data);
+      if (mounted) {
+        _showSnack(l10n.stateSavedToSlot(slot));
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('${l10n.commandFailed('Save to slot $slot')}: $e');
+      }
+    }
+  }
+
+  Future<void> _loadFromSlot(int slot) async {
+    final l10n = AppLocalizations.of(context)!;
+    final repository = ref.read(saveStateRepositoryProvider.notifier);
+    try {
+      if (!repository.hasSave(slot)) return;
+      final data = await repository.loadState(slot);
+      if (data != null) {
+        await nes_emulation.loadStateFromMemory(data: data);
+        if (mounted) {
+          _showSnack(l10n.stateLoadedFromSlot(slot));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('${l10n.commandFailed('Load from slot $slot')}: $e');
+      }
+    }
+  }
+
+  Future<void> _saveToFile() async {
+    final l10n = AppLocalizations.of(context)!;
+    const XTypeGroup typeGroup = XTypeGroup(
+      label: 'Nesium State',
+      extensions: <String>['nesium'],
+    );
+
+    try {
+      String? path;
+      final romName = ref.read(nesControllerProvider).romName ?? 'save';
+      final suggestedName = '$romName.nesium';
+
+      if (isNativeMobile) {
+        final String? directoryPath = await getDirectoryPath(
+          confirmButtonText: 'Save here',
+        );
+        if (directoryPath != null) {
+          path = p.join(directoryPath, suggestedName);
+        }
+      } else {
+        final FileSaveLocation? result = await getSaveLocation(
+          acceptedTypeGroups: <XTypeGroup>[typeGroup],
+          suggestedName: suggestedName,
+        );
+        path = result?.path;
+      }
+
+      if (path != null) {
+        await _runRustCommand(
+          'Save to file',
+          () => nes_emulation.saveState(path: path!),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('${l10n.commandFailed('Save to file')}: $e');
+      }
+    }
+  }
+
+  Future<void> _loadFromFile() async {
+    final l10n = AppLocalizations.of(context)!;
+    const XTypeGroup typeGroup = XTypeGroup(
+      label: 'Nesium State',
+      extensions: <String>['nesium'],
+    );
+
+    try {
+      final XFile? result = await openFile(
+        acceptedTypeGroups: <XTypeGroup>[typeGroup],
+      );
+
+      if (result != null) {
+        await _runRustCommand(
+          'Load from file',
+          () => nes_emulation.loadState(path: result.path),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnack('${l10n.commandFailed('Load from file')}: $e');
+      }
+    }
   }
 
   KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent event) {
@@ -304,6 +433,12 @@ class _NesShellState extends ConsumerState<NesShell>
 
     final actions = NesActions(
       openRom: _promptAndLoadRom,
+      saveState: _saveState,
+      loadState: _loadState,
+      saveStateSlot: _saveToSlot,
+      loadStateSlot: _loadFromSlot,
+      saveStateFile: _saveToFile,
+      loadStateFile: _loadFromFile,
       reset: _resetConsole,
       powerReset: _powerResetConsole,
       eject: _ejectConsole,

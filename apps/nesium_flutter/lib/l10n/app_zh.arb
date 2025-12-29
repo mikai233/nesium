@@ -71,8 +71,39 @@
   "menuReset": "重置",
   "menuPowerReset": "电源重置",
   "menuEject": "弹出",
+  "menuSaveState": "保存存档…",
+  "menuLoadState": "读取存档…",
   "menuPauseResume": "暂停 / 继续",
   "menuPreferences": "偏好设置…",
+  "saveToExternalFile": "保存到外部文件…",
+  "loadFromExternalFile": "从外部文件加载…",
+  "slotLabel": "槽位",
+  "slotEmpty": "空",
+  "slotHasData": "已保存",
+  "stateSavedToSlot": "存档已保存至槽位 {index}",
+  "@stateSavedToSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "stateLoadedFromSlot": "已从槽位 {index} 读取存档",
+  "@stateLoadedFromSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "slotCleared": "槽位 {index} 已清除",
+  "@slotCleared": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
   "menuAbout": "关于",
   "menuDebugger": "调试器",
   "menuTools": "工具",

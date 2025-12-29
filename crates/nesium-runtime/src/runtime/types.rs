@@ -82,8 +82,13 @@ pub enum RuntimeError {
     InvalidPaletteData { error: String },
     #[error("failed to load palette: {path}: {error}")]
     LoadPaletteFailed { path: PathBuf, error: String },
+    #[error("failed to save state: {path}: {error}")]
+    SaveStateFailed { path: PathBuf, error: String },
+    #[error("failed to load state: {path}: {error}")]
+    LoadStateFailed { path: PathBuf, error: String },
 }
 
 pub(crate) const NTSC_FPS_EXACT: f64 = 60.098_811_862_348_4;
 pub(crate) const CONTROL_REPLY_TIMEOUT: Duration = Duration::from_secs(2);
 pub(crate) const LOAD_ROM_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const SAVE_STATE_REPLY_TIMEOUT: Duration = Duration::from_secs(5);

@@ -8,3 +8,15 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 Future<void> setIntegerFpsMode({required bool enabled}) =>
     RustLib.instance.api.crateApiEmulationSetIntegerFpsMode(enabled: enabled);
+
+Future<void> saveState({required String path}) =>
+    RustLib.instance.api.crateApiEmulationSaveState(path: path);
+
+Future<void> loadState({required String path}) =>
+    RustLib.instance.api.crateApiEmulationLoadState(path: path);
+
+Future<Uint8List> saveStateToMemory() =>
+    RustLib.instance.api.crateApiEmulationSaveStateToMemory();
+
+Future<void> loadStateFromMemory({required List<int> data}) =>
+    RustLib.instance.api.crateApiEmulationLoadStateFromMemory(data: data);

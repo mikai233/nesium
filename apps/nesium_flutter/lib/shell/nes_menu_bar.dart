@@ -11,11 +11,15 @@ class NesMenuBar extends StatelessWidget {
     super.key,
     required this.actions,
     required this.sections,
+    this.slotStates = const {},
+    this.hasRom = false,
     this.trailing,
   });
 
   final NesActions actions;
   final List<NesMenuSectionSpec> sections;
+  final Map<int, DateTime?> slotStates;
+  final bool hasRom;
   final Widget? trailing;
 
   @override
@@ -41,19 +45,13 @@ class NesMenuBar extends StatelessWidget {
               ),
               children: sections
                   .map(
-                    (section) => _buildMenu(section.title(l10n), [
-                      ...section.items.map(
-                        (item) => MenuItemButton(
-                          onPressed: () => _dispatch(item.id),
-                          child: Text(item.label(l10n)),
-                        ),
-                      ),
-                      if (section.id == NesMenuSectionId.settings)
-                        MenuItemButton(
-                          onPressed: null,
-                          child: Text(l10n.menuInputMappingComingSoon),
-                        ),
-                    ], textStyle),
+                    (section) => _buildSubmenu(
+                      section.title(l10n),
+                      section.items
+                          .map((item) => _buildMenuItem(item, l10n))
+                          .toList(),
+                      textStyle,
+                    ),
                   )
                   .toList(growable: false),
             ),
@@ -64,17 +62,90 @@ class NesMenuBar extends StatelessWidget {
     );
   }
 
-  Widget _buildMenu(String title, List<Widget> items, TextStyle? textStyle) {
+  Widget _buildSubmenu(String title, List<Widget> items, TextStyle? textStyle) {
     return SubmenuButton(
       menuChildren: items,
       child: Text(title, style: textStyle, textAlign: TextAlign.center),
     );
   }
 
-  void _dispatch(NesMenuItemId id) {
+  Widget _buildMenuItem(NesMenuItemSpec item, AppLocalizations l10n) {
+    final timestamp = item.slotIndex != null
+        ? slotStates[item.slotIndex]
+        : null;
+    final hasData = timestamp != null;
+
+    if (item.children != null && item.children!.isNotEmpty) {
+      final bool isSaveLoad =
+          item.id == NesMenuItemId.saveState ||
+          item.id == NesMenuItemId.loadState;
+      return SubmenuButton(
+        menuChildren: isSaveLoad && !hasRom
+            ? []
+            : item.children!
+                  .map((child) => _buildMenuItem(child, l10n))
+                  .toList(),
+        child: Text(item.label(l10n)),
+      );
+    }
+
+    Widget? leading;
+    bool enabled = true;
+
+    if (item.id == NesMenuItemId.saveStateSlot ||
+        item.id == NesMenuItemId.loadStateSlot) {
+      leading = Icon(
+        hasData ? Icons.save : Icons.check_box_outline_blank,
+        size: 16,
+      );
+
+      if (!hasRom) {
+        enabled = false;
+      } else if (item.id == NesMenuItemId.loadStateSlot && !hasData) {
+        enabled = false;
+      }
+    } else if (item.id == NesMenuItemId.saveStateFile ||
+        item.id == NesMenuItemId.loadStateFile) {
+      if (!hasRom) {
+        enabled = false;
+      }
+    }
+
+    return MenuItemButton(
+      onPressed: enabled ? () => _dispatch(item) : null,
+      leadingIcon: leading,
+      child: Text(item.label(l10n, timestamp: timestamp)),
+    );
+  }
+
+  void _dispatch(NesMenuItemSpec item) {
+    final id = item.id;
     switch (id) {
       case NesMenuItemId.openRom:
         unawaited(actions.openRom());
+        break;
+      case NesMenuItemId.saveState:
+        // Desktop uses submenu, but if triggered (e.g. mobile drawer fallback)
+        // unawaited(actions.saveState?.call());
+        // Note: actions.saveState was removed in previous step, will fix soon.
+        break;
+      case NesMenuItemId.loadState:
+        break;
+      case NesMenuItemId.saveStateSlot:
+        if (item.slotIndex != null) {
+          unawaited(actions.saveStateSlot?.call(item.slotIndex!));
+        }
+        break;
+      case NesMenuItemId.loadStateSlot:
+        if (item.slotIndex != null) {
+          unawaited(actions.loadStateSlot?.call(item.slotIndex!));
+        }
+        break;
+      case NesMenuItemId.saveStateFile:
+        unawaited(actions.saveStateFile?.call());
+        break;
+      case NesMenuItemId.loadStateFile:
+        unawaited(actions.loadStateFile?.call());
         break;
       case NesMenuItemId.reset:
         unawaited(actions.reset());

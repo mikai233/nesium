@@ -20,3 +20,6 @@ Future<void> powerResetConsole() =>
 
 Future<void> ejectConsole() =>
     RustLib.instance.api.crateApiLoadRomEjectConsole();
+
+Future<Uint8List?> getRomHash() =>
+    RustLib.instance.api.crateApiLoadRomGetRomHash();

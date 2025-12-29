@@ -3103,6 +3103,7 @@ dependencies = [
  "crossbeam-channel",
  "nesium-core",
  "ringbuf",
+ "sha1",
  "thiserror 2.0.17",
 ]
 
@@ -3112,6 +3113,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "nesium-core",
+ "sha1",
  "wasm-bindgen",
 ]
 

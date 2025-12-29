@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/nes_controller.dart';
 import '../domain/nes_state.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_editor.dart';
@@ -118,6 +119,10 @@ class _MobileDrawer extends StatelessWidget {
         final editor = ref.watch(virtualControlsEditorProvider);
         final editorCtrl = ref.read(virtualControlsEditorProvider.notifier);
 
+        final hasRom = ref.watch(
+          nesControllerProvider.select((s) => s.romHash != null),
+        );
+
         return Drawer(
           child: SafeArea(
             child: ListView(
@@ -137,15 +142,13 @@ class _MobileDrawer extends StatelessWidget {
                       item.id == NesMenuItemId.debugger) ...[
                     const Divider(),
                   ],
-                  ListTile(
-                    leading: Icon(item.icon),
-                    title: Text(item.label(l10n)),
-                    onTap: () => _dispatch(
-                      context,
-                      item.id,
-                      closeDrawer: closeDrawer,
-                      openPage: openPage,
-                    ),
+                  _buildDrawerTile(
+                    context,
+                    item,
+                    l10n,
+                    hasRom,
+                    closeDrawer,
+                    openPage,
                   ),
                 ],
                 const Divider(),
@@ -213,6 +216,35 @@ class _MobileDrawer extends StatelessWidget {
     );
   }
 
+  Widget _buildDrawerTile(
+    BuildContext context,
+    NesMenuItemSpec item,
+    AppLocalizations l10n,
+    bool hasRom,
+    VoidCallback closeDrawer,
+    Future<void> Function(Widget page) openPage,
+  ) {
+    bool enabled = true;
+    if (item.id == NesMenuItemId.saveState ||
+        item.id == NesMenuItemId.loadState) {
+      enabled = hasRom;
+    }
+
+    return ListTile(
+      leading: Icon(item.icon),
+      title: Text(item.label(l10n)),
+      enabled: enabled,
+      onTap: enabled
+          ? () => _dispatch(
+              context,
+              item.id,
+              closeDrawer: closeDrawer,
+              openPage: openPage,
+            )
+          : null,
+    );
+  }
+
   void _dispatch(
     BuildContext context,
     NesMenuItemId id, {
@@ -224,6 +256,14 @@ class _MobileDrawer extends StatelessWidget {
       case NesMenuItemId.openRom:
         closeDrawer();
         unawaited(actions.openRom());
+        break;
+      case NesMenuItemId.saveState:
+        closeDrawer();
+        unawaited(actions.saveState?.call());
+        break;
+      case NesMenuItemId.loadState:
+        closeDrawer();
+        unawaited(actions.loadState?.call());
         break;
       case NesMenuItemId.reset:
         closeDrawer();
@@ -267,6 +307,12 @@ class _MobileDrawer extends StatelessWidget {
             ),
           ),
         );
+        break;
+      case NesMenuItemId.saveStateSlot:
+      case NesMenuItemId.loadStateSlot:
+      case NesMenuItemId.saveStateFile:
+      case NesMenuItemId.loadStateFile:
+        // Desktop submenus, not used in mobile drawer currently
         break;
     }
   }

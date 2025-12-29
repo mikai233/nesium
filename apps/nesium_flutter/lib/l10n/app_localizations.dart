@@ -518,6 +518,18 @@ abstract class AppLocalizations {
   /// **'Eject'**
   String get menuEject;
 
+  /// No description provided for @menuSaveState.
+  ///
+  /// In en, this message translates to:
+  /// **'Save State...'**
+  String get menuSaveState;
+
+  /// No description provided for @menuLoadState.
+  ///
+  /// In en, this message translates to:
+  /// **'Load State...'**
+  String get menuLoadState;
+
   /// No description provided for @menuPauseResume.
   ///
   /// In en, this message translates to:
@@ -529,6 +541,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preferences...'**
   String get menuPreferences;
+
+  /// No description provided for @saveToExternalFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to file...'**
+  String get saveToExternalFile;
+
+  /// No description provided for @loadFromExternalFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Load from file...'**
+  String get loadFromExternalFile;
+
+  /// No description provided for @slotLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Slot'**
+  String get slotLabel;
+
+  /// No description provided for @slotEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Empty'**
+  String get slotEmpty;
+
+  /// No description provided for @slotHasData.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get slotHasData;
+
+  /// No description provided for @stateSavedToSlot.
+  ///
+  /// In en, this message translates to:
+  /// **'State saved to slot {index}'**
+  String stateSavedToSlot(int index);
+
+  /// No description provided for @stateLoadedFromSlot.
+  ///
+  /// In en, this message translates to:
+  /// **'State loaded from slot {index}'**
+  String stateLoadedFromSlot(int index);
+
+  /// No description provided for @slotCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'Slot {index} cleared'**
+  String slotCleared(int index);
 
   /// No description provided for @menuAbout.
   ///

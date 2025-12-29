@@ -260,7 +260,41 @@ onmessage = async (ev) => {
                     // msg.rom is ArrayBuffer
                     const romBytes = new Uint8Array(msg.rom);
                     nes.load_rom(romBytes);
-                    postMessage({ type: "romLoaded" });
+                    
+                    let hash = null;
+                    if (typeof nes.get_rom_hash === "function") {
+                        const hashBytes = nes.get_rom_hash(romBytes);
+                        hash = Array.from(hashBytes);
+                    }
+                    
+                    postMessage({ type: "romLoaded", hash: hash });
+                    break;
+                }
+
+                case "saveState": {
+                    if (typeof nes.save_state !== "function") {
+                        throw new Error("Missing wasm export: save_state. Rebuild `web/nes/pkg`.");
+                    }
+                    const data = nes.save_state();
+                    postMessage({ 
+                        type: "saveStateResult", 
+                        data: data.buffer, 
+                        requestId: msg.requestId 
+                    }, [data.buffer]);
+                    break;
+                }
+
+                case "loadState": {
+                    if (typeof nes.load_state !== "function") {
+                        throw new Error("Missing wasm export: load_state. Rebuild `web/nes/pkg`.");
+                    }
+                    const bytes = new Uint8Array(msg.data);
+                    nes.load_state(bytes);
+                    postMessage({ 
+                        type: "loadStateResult", 
+                        success: true, 
+                        requestId: msg.requestId 
+                    });
                     break;
                 }
 

@@ -35,3 +35,8 @@ pub fn power_reset_console() -> Result<(), String> {
 pub fn eject_console() -> Result<(), String> {
     crate::runtime_handle().eject().map_err(|e| e.to_string())
 }
+
+#[frb]
+pub fn get_rom_hash() -> Option<Vec<u8>> {
+    crate::runtime_handle().rom_hash().map(|h| h.to_vec())
+}
