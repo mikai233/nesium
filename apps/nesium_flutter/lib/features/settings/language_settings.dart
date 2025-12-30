@@ -49,7 +49,14 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
     if (stored is String) {
       try {
         return AppLanguage.values.byName(stored);
-      } catch (_) {}
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'Failed to lookup language by name: $stored',
+          logger: 'language_settings',
+        );
+      }
     }
     return AppLanguage.system;
   }
@@ -77,7 +84,14 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
           if (decoded is Map && decoded['lang'] is String) {
             _applyIncomingLanguage(decoded['lang'] as String);
           }
-        } catch (_) {}
+        } catch (e, st) {
+          logWarning(
+            e,
+            stackTrace: st,
+            message: 'Failed to decode window arguments',
+            logger: 'language_settings',
+          );
+        }
       }
 
       await controller.setWindowMethodHandler((call) async {
@@ -92,7 +106,14 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
         }
         return null;
       });
-    } catch (_) {}
+    } catch (e, st) {
+      logError(
+        e,
+        stackTrace: st,
+        message: 'Failed to initialize language messaging',
+        logger: 'language_settings',
+      );
+    }
   }
 
   void _applyIncomingLanguage(String? languageCode) {
@@ -129,7 +150,14 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
           window.invokeMethod<void>('setLanguage', language.languageCode),
         );
       }
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to broadcast language change',
+        logger: 'language_settings',
+      );
+    }
   }
 }
 

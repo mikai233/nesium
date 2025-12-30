@@ -422,7 +422,14 @@ InputSettings? _inputSettingsFromStorage(
     if (raw is String) {
       try {
         return values.byName(raw);
-      } catch (_) {}
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'Failed to lookup enum $T by name: $raw',
+          logger: 'input_settings',
+        );
+      }
     }
     return fallback;
   }

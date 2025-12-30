@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart' show kDebugMode, kProfileMode;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../logging/app_logger.dart';
+
 /// macOS-only: hide the native splash overlay after Flutter renders the first frame.
 ///
 /// If this fails and we silently ignore it, the splash may stay forever and the app
@@ -64,8 +66,13 @@ Future<bool> _isMainWindow(List<String> args) async {
     if (route != null) {
       return route == 'main';
     }
-  } catch (_) {
-    // If we can't determine the window kind, assume main.
+  } catch (e, st) {
+    logWarning(
+      e,
+      stackTrace: st,
+      message: 'Failed to determine window kind',
+      logger: 'macos_splash',
+    );
   }
   return true;
 }
@@ -77,6 +84,13 @@ String? _parseRoute(String? payload) {
     if (data is Map && data['route'] is String) {
       return data['route'] as String;
     }
-  } catch (_) {}
+  } catch (e, st) {
+    logWarning(
+      e,
+      stackTrace: st,
+      message: 'Failed to parse route from payload',
+      logger: 'macos_splash',
+    );
+  }
   return null;
 }

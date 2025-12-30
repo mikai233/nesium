@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 
+import '../logging/app_logger.dart';
 import '../windows/window_routing.dart';
 import 'platform_capabilities.dart';
 
@@ -17,7 +18,14 @@ class DesktopWindowManager {
       if (data is Map && data['route'] is String) {
         return data['route'] as String;
       }
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to parse route from args',
+        logger: 'desktop_window_manager',
+      );
+    }
     return null;
   }
 

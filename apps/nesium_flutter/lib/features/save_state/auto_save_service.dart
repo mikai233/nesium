@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/emulation.dart' as nes_emulation;
 
 import '../../domain/nes_controller.dart';
+import '../../logging/app_logger.dart';
 import '../../platform/web_cmd_sender.dart';
 import '../settings/emulation_settings.dart';
 import 'save_state_repository.dart';
@@ -62,8 +62,13 @@ class AutoSaveService {
             .read(saveStateRepositoryProvider.notifier)
             .performAutoSave(data);
         _lastSaveTime = now;
-      } catch (_) {
-        // Silent failure for background auto-save
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'Auto save failed',
+          logger: 'auto_save',
+        );
       }
     }
   }

@@ -130,7 +130,14 @@ class VideoSettingsController extends Notifier<VideoSettings> {
         StorageKeys.settingsVideoCustomPaletteBytes,
         Uint8List.fromList(data),
       );
-    } catch (_) {}
+    } catch (e, st) {
+      logError(
+        e,
+        stackTrace: st,
+        message: 'Failed to persist custom palette bytes',
+        logger: 'video_settings',
+      );
+    }
     await _persist(state);
     await nes_palette.setPalettePalData(data: data);
   }
@@ -175,7 +182,14 @@ class VideoSettingsController extends Notifier<VideoSettings> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsVideo, _videoSettingsToStorage(value));
-    } catch (_) {}
+    } catch (e, st) {
+      logError(
+        e,
+        stackTrace: st,
+        message: 'Failed to persist video settings',
+        logger: 'video_settings',
+      );
+    }
   }
 }
 
@@ -205,7 +219,14 @@ VideoSettings? _videoSettingsFromStorage(
   if (map['paletteMode'] is String) {
     try {
       paletteMode = PaletteMode.values.byName(map['paletteMode'] as String);
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to lookup PaletteMode by name',
+        logger: 'video_settings',
+      );
+    }
   }
 
   nes_palette.PaletteKind builtinPreset = defaults.builtinPreset;
@@ -214,7 +235,14 @@ VideoSettings? _videoSettingsFromStorage(
       builtinPreset = nes_palette.PaletteKind.values.byName(
         map['builtinPreset'] as String,
       );
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to lookup PaletteKind by name',
+        logger: 'video_settings',
+      );
+    }
   }
 
   final customPaletteName = map['customPaletteName'] is String
@@ -229,7 +257,14 @@ VideoSettings? _videoSettingsFromStorage(
   if (map['aspectRatio'] is String) {
     try {
       aspectRatio = NesAspectRatio.values.byName(map['aspectRatio'] as String);
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to lookup NesAspectRatio by name',
+        logger: 'video_settings',
+      );
+    }
   }
 
   final screenVerticalOffset = map['screenVerticalOffset'] is num

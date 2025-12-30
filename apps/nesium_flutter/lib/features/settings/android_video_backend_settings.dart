@@ -54,7 +54,14 @@ class AndroidVideoBackendSettingsController
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsAndroidVideoBackend, backend.mode);
-    } catch (_) {}
+    } catch (e, st) {
+      logError(
+        e,
+        stackTrace: st,
+        message: 'Failed to persist android video backend settings',
+        logger: 'android_video_backend_settings',
+      );
+    }
 
     final isAndroid =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
