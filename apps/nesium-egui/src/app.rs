@@ -640,13 +640,13 @@ impl eframe::App for NesiumApp {
 
         // 4. Handle Drag & Drop
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
-        if let Some(path) = dropped.iter().filter_map(|f| f.path.clone()).next_back() {
-            if let Err(err) = self.load_rom(&path) {
-                self.error_dialog = Some(match self.language() {
-                    Language::English => format!("Load failed:\n{err}"),
-                    Language::ChineseSimplified => format!("加载失败：\n{err}"),
-                });
-            }
+        if let Some(path) = dropped.iter().filter_map(|f| f.path.clone()).next_back()
+            && let Err(err) = self.load_rom(&path)
+        {
+            self.error_dialog = Some(match self.language() {
+                Language::English => format!("Load failed:\n{err}"),
+                Language::ChineseSimplified => format!("加载失败：\n{err}"),
+            });
         }
 
         // 5. Update FPS

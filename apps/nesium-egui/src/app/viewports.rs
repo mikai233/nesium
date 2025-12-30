@@ -221,7 +221,7 @@ impl NesiumApp {
                         )
                     };
 
-                    let close_requested = show_viewport_content(ctx, class, title, |ui| {
+                    show_viewport_content(ctx, class, title, |ui| {
                         egui::ScrollArea::vertical()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
@@ -298,8 +298,7 @@ impl NesiumApp {
                                         }
                                     });
                             });
-                    });
-                    close_requested
+                    })
                 },
             );
         }
@@ -320,7 +319,8 @@ impl NesiumApp {
                     let mut ui_state = ui_state.lock().unwrap();
                     let title = ui_state.i18n.text(TextId::MenuWindowPalette);
                     let heading = ui_state.i18n.text(TextId::PaletteHeading);
-                    let close_requested = show_viewport_content(ctx, class, title, |ui| {
+
+                    show_viewport_content(ctx, class, title, |ui| {
                         ui.heading(heading);
                         ui.add_space(6.0);
 
@@ -392,29 +392,28 @@ impl NesiumApp {
                             }
                         }
 
-                        if ui_state.palette_use_external {
-                            if let Some(path) = &ui_state.palette_external_path {
-                                ui.label(format!(
-                                    "{} {}",
-                                    ui_state.i18n.text(TextId::PaletteCustomActive),
-                                    path.display()
-                                ));
-                            }
+                        if ui_state.palette_use_external
+                            && let Some(path) = &ui_state.palette_external_path
+                        {
+                            ui.label(format!(
+                                "{} {}",
+                                ui_state.i18n.text(TextId::PaletteCustomActive),
+                                path.display()
+                            ));
                         }
 
                         if ui
                             .button(ui_state.i18n.text(TextId::PaletteCustomLoad))
                             .clicked()
+                            && let Some(path) = pick_palette_dialog()
                         {
-                            if let Some(path) = pick_palette_dialog() {
-                                ui_state.palette_error = runtime_handle
-                                    .set_palette_from_pal_file(&path)
-                                    .err()
-                                    .map(|e| e.to_string());
-                                if ui_state.palette_error.is_none() {
-                                    ui_state.palette_external_path = Some(path);
-                                    ui_state.palette_use_external = true;
-                                }
+                            ui_state.palette_error = runtime_handle
+                                .set_palette_from_pal_file(&path)
+                                .err()
+                                .map(|e| e.to_string());
+                            if ui_state.palette_error.is_none() {
+                                ui_state.palette_external_path = Some(path);
+                                ui_state.palette_use_external = true;
                             }
                         }
 
@@ -442,8 +441,7 @@ impl NesiumApp {
                                 ui.colored_label(Color32::LIGHT_RED, err);
                             });
                         }
-                    });
-                    close_requested
+                    })
                 },
             );
         }
@@ -478,7 +476,7 @@ impl NesiumApp {
                         );
                     }
 
-                    let close_requested = show_viewport_content(ctx, class, title, |ui| {
+                    show_viewport_content(ctx, class, title, |ui| {
                         ui.heading(ui_state.i18n.text(TextId::InputHeading));
 
                         egui::ScrollArea::vertical()
@@ -1043,8 +1041,7 @@ impl NesiumApp {
                                     },
                                 );
                             });
-                    });
-                    close_requested
+                    })
                 },
             );
         }
@@ -1237,10 +1234,8 @@ impl NesiumApp {
                         }
                     });
 
-                    if changed {
-                        if let Ok(mut ui_state) = ui_state.lock() {
-                            ui_state.audio_cfg = cfg;
-                        }
+                    if changed && let Ok(mut ui_state) = ui_state.lock() {
+                        ui_state.audio_cfg = cfg;
                     }
                     close_requested
                 },

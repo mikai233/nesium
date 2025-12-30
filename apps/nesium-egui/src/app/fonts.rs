@@ -13,10 +13,10 @@ pub fn install_cjk_font(ctx: &Context) -> bool {
     db.load_system_fonts();
 
     let mut candidates: Vec<Cow<'static, str>> = Vec::new();
-    if let Ok(name) = std::env::var("NESIUM_EGUI_FONT") {
-        if !name.trim().is_empty() {
-            candidates.push(Cow::Owned(name));
-        }
+    if let Ok(name) = std::env::var("NESIUM_EGUI_FONT")
+        && !name.trim().is_empty()
+    {
+        candidates.push(Cow::Owned(name));
     }
     candidates.extend(default_candidates().into_iter().map(Cow::Borrowed));
 
@@ -78,7 +78,7 @@ fn default_candidates() -> Vec<&'static str> {
 
     #[cfg(target_os = "macos")]
     {
-        return vec!["PingFang SC", "Hiragino Sans GB", "Heiti SC", "Songti SC"];
+        vec!["PingFang SC", "Hiragino Sans GB", "Heiti SC", "Songti SC"]
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
