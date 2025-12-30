@@ -580,7 +580,10 @@ impl Runner {
             ..Default::default()
         };
 
-        let snap = self.nes.save_snapshot(meta).map_err(|e| format!("{:?}", e))?;
+        let snap = self
+            .nes
+            .save_snapshot(meta)
+            .map_err(|e| format!("{:?}", e))?;
         let bytes = snap.to_postcard_bytes().map_err(|e| e.to_string())?;
         Ok(compress_prepend_size(&bytes))
     }
