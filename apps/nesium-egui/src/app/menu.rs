@@ -74,36 +74,6 @@ impl NesiumApp {
                 }
                 ui.close();
             }
-            if ui
-                .add_enabled(
-                    self.rom_path.is_some(),
-                    egui::Button::new(self.t(TextId::MenuFileReset)),
-                )
-                .clicked()
-            {
-                cmd.reset = true;
-                ui.close();
-            }
-            if ui
-                .add_enabled(
-                    self.rom_path.is_some(),
-                    egui::Button::new(self.t(TextId::MenuFilePowerReset)),
-                )
-                .clicked()
-            {
-                cmd.power_reset = true;
-                ui.close();
-            }
-            if ui
-                .add_enabled(
-                    self.rom_path.is_some(),
-                    egui::Button::new(self.t(TextId::MenuFileEject)),
-                )
-                .clicked()
-            {
-                cmd.eject = true;
-                ui.close();
-            }
             ui.separator();
             if ui.button(self.t(TextId::MenuFileQuit)).clicked() {
                 cmd.quit = true;
