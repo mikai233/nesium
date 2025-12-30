@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/emulation.dart' as nes_emulation;
 
 import '../../domain/nes_controller.dart';
+import '../../platform/web_cmd_sender.dart';
 import '../settings/emulation_settings.dart';
 import 'save_state_repository.dart';
 
@@ -49,7 +52,12 @@ class AutoSaveService {
 
     if (_lastSaveTime == null || now.difference(_lastSaveTime!) >= interval) {
       try {
-        final data = await nes_emulation.saveStateToMemory();
+        final Uint8List data;
+        if (kIsWeb) {
+          data = await webRequest<Uint8List>('saveState');
+        } else {
+          data = await nes_emulation.saveStateToMemory();
+        }
         await ref
             .read(saveStateRepositoryProvider.notifier)
             .performAutoSave(data);
