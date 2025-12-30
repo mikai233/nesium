@@ -1,5 +1,4 @@
 use sha1::{Digest, Sha1};
-use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::{
     path::PathBuf,
@@ -17,6 +16,7 @@ use crate::audio::NesAudioPlayer;
 
 use super::{
     control::ControlMessage,
+    rewind_delta::RewindState,
     state::RuntimeState,
     types::{AudioMode, NTSC_FPS_EXACT, RuntimeError, RuntimeNotification},
     util::button_bit,
@@ -43,11 +43,6 @@ const SPIN_YIELD_EVERY: u32 = 512;
 // Allow frames to start slightly early to reduce the chance of missing the deadline.
 const FRAME_LEAD: Duration = Duration::from_micros(50);
 
-struct RewindEntry {
-    snapshot: NesSnapshot,
-    pixels: Vec<u8>,
-}
-
 pub(crate) struct Runner {
     nes: Nes,
     audio: Option<NesAudioPlayer>,
@@ -58,7 +53,7 @@ pub(crate) struct Runner {
     integer_fps_target: Option<u32>,
     turbo_prev_masks: [u8; 4],
     turbo_start_frame: [[u64; 8]; 4],
-    rewind_buffer: VecDeque<RewindEntry>,
+    rewind: RewindState,
 }
 
 impl Runner {
@@ -100,7 +95,7 @@ impl Runner {
             integer_fps_target: None,
             turbo_prev_masks: [0; 4],
             turbo_start_frame: [[0; 8]; 4],
-            rewind_buffer: VecDeque::new(),
+            rewind: RewindState::new(),
         }
     }
 
@@ -243,7 +238,7 @@ impl Runner {
                                 if let Some(audio) = &self.audio {
                                     audio.clear();
                                 }
-                                self.rewind_buffer.clear();
+                                self.rewind.clear();
                                 self.state.rewinding.store(false, Ordering::Release);
                                 let _ = reply.send(Ok(()));
                             }
@@ -274,7 +269,7 @@ impl Runner {
                     if let Some(audio) = &self.audio {
                         audio.clear();
                     }
-                    self.rewind_buffer.clear();
+                    self.rewind.clear();
                     self.state.rewinding.store(false, Ordering::Release);
                     self.state.paused.store(false, Ordering::Release);
                     self.next_frame_deadline = Instant::now();
@@ -292,7 +287,7 @@ impl Runner {
                 if let Some(audio) = &self.audio {
                     audio.clear();
                 }
-                self.rewind_buffer.clear();
+                self.rewind.clear();
                 self.state.rewinding.store(false, Ordering::Release);
                 let _ = reply.send(Ok(()));
             }
@@ -552,14 +547,14 @@ impl Runner {
     }
 
     fn rewind_one_frame(&mut self) {
-        if let Some(entry) = self.rewind_buffer.pop_back()
-            && self.nes.load_snapshot(&entry.snapshot).is_ok()
+        if let Some((snapshot, pixels)) = self.rewind.rewind_one_frame()
+            && self.nes.load_snapshot(&snapshot).is_ok()
         {
             // Refresh framebuffer with the saved pixels.
             let fb = self.nes.ppu.framebuffer_mut();
             let back = fb.write();
-            if back.len() == entry.pixels.len() {
-                back.copy_from_slice(&entry.pixels);
+            if back.len() == pixels.len() {
+                back.copy_from_slice(&pixels);
                 // Increment frame_seq BEFORE swap so the Android signal pipe carries the new sequence.
                 self.state.frame_seq.fetch_add(1, Ordering::Release);
                 fb.swap();
@@ -580,14 +575,8 @@ impl Runner {
             if let Ok(snap) = self.nes.save_snapshot(meta) {
                 let mut pixels = vec![0u8; self.nes.ppu.framebuffer_mut().len_bytes()];
                 self.nes.copy_render_buffer(&mut pixels);
-                self.rewind_buffer.push_back(RewindEntry {
-                    snapshot: snap,
-                    pixels,
-                });
                 let cap = self.state.rewind_capacity.load(Ordering::Acquire) as usize;
-                while self.rewind_buffer.len() > cap {
-                    self.rewind_buffer.pop_front();
-                }
+                self.rewind.push_frame(&snap, pixels, cap);
             }
         }
 

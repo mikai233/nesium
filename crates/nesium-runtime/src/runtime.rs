@@ -1,5 +1,6 @@
 mod control;
 mod handle;
+mod rewind_delta;
 mod runner;
 mod state;
 mod types;
