@@ -163,6 +163,7 @@ pub struct NesFullState {
     pub pending_dma: PendingDma,
     pub open_bus: crate::bus::savestate::OpenBusState,
     pub cycles: u64,
+    pub mixer: crate::audio::mixer::MixerState,
 }
 
 /// Delta snapshots are not yet optimized; we currently store full snapshots for rewind.
@@ -209,6 +210,7 @@ impl SaveState for Nes {
                 pending_dma: self.pending_dma,
                 open_bus: crate::bus::savestate::OpenBusState::from_open_bus(self.open_bus),
                 cycles: self.cycles,
+                mixer: self.mixer.save_state(),
             };
             Ok(Snapshot { meta, data: state })
         } else {
@@ -259,8 +261,7 @@ impl SaveState for Nes {
         state.open_bus.apply_to(&mut self.open_bus);
         self.cycles = state.cycles;
 
-        // Host-side audio buffers are not deterministic emulator state; flush them.
-        self.mixer.reset();
+        self.mixer.load_state(state.mixer.clone());
         self.sound_bus.reset();
         self.mixer_frame_buffer.clear();
         Ok(())

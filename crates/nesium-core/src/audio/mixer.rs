@@ -8,13 +8,22 @@ use crate::audio::{
     settings::MixerSettings,
 };
 
+#[cfg(feature = "savestate-serde")]
+use serde::{Deserialize, Serialize};
+
+/// Serializable snapshot of the mixer state.
+#[cfg_attr(feature = "savestate-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq)]
+pub struct MixerState {
+    pub channel_levels: Vec<f32>,
+    pub mixed_left: f32,
+    pub mixed_right: f32,
+}
+
 /// Band-limited NES mixer that accepts per-channel amplitude deltas tagged
 /// with the CPU/APU clock time and produces filtered PCM at the host sample
 /// rate.
 //
-// TODO(mesen2): Integrate mixer state into save-states (similar to NesSoundMixer::Serialize),
-// so loading a state restores filter history and per-channel levels without
-// transient pops or phase jumps.
 // TODO(mesen2): Model VS DualSystem audio mixing (ProcessVsDualSystemAudio) once
 // multi-console support exists, so main/sub console audio routing matches Mesen2.
 // TODO(mesen2): Audit clocking/rate updates against Mesen2's UpdateRates() path
@@ -142,6 +151,29 @@ impl NesSoundMixer {
         self.stereo_delay_state = StereoDelayState::default();
         self.stereo_panning_state = StereoPanningState::default();
         self.stereo_comb_state = StereoCombState::default();
+    }
+
+    pub fn save_state(&self) -> MixerState {
+        MixerState {
+            channel_levels: self.channel_levels.as_slice().to_vec(),
+            mixed_left: self.mixed_left,
+            mixed_right: self.mixed_right,
+        }
+    }
+
+    pub fn load_state(&mut self, state: MixerState) {
+        // We reset the blip buffers because we cannot easily restore their internal state
+        // (they contain a ring buffer of pending deltas). However, by restoring
+        // `channel_levels` and `mixed_left/right`, we ensure that subsequent deltas
+        // added by the APU (which relies on `last_levels`) will be calculated correctly
+        // relative to the mixer's state.
+        self.reset();
+
+        self.channel_levels
+            .as_mut_slice()
+            .copy_from_slice(&state.channel_levels);
+        self.mixed_left = state.mixed_left;
+        self.mixed_right = state.mixed_right;
     }
 
     /// Update internal clock/sample rates, mirroring Mesen2's
