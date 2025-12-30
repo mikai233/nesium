@@ -652,7 +652,7 @@ impl FrameBuffer {
 }
 
 /// Helper to pack a single line of indices into a destination buffer.
-unsafe fn pack_line(indices: &[u8], dst: *mut u8, format: ColorFormat, palette: &[Color; 64]) {
+pub unsafe fn pack_line(indices: &[u8], dst: *mut u8, format: ColorFormat, palette: &[Color; 64]) {
     let bpp = format.bytes_per_pixel();
     for (x, &idx) in indices.iter().enumerate() {
         let color = palette[(idx & 0x3F) as usize];

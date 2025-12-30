@@ -548,22 +548,31 @@ impl Runner {
     }
 
     fn rewind_one_frame(&mut self) {
-        if let Some((snapshot, pixels)) = self.rewind.rewind_one_frame()
+        if let Some((snapshot, indices)) = self.rewind.rewind_one_frame()
             && self.nes.load_snapshot(&snapshot).is_ok()
         {
             // Copy the palette array to avoid borrow checker issues.
             let palette = *self.nes.ppu.palette().as_colors();
-            // Refresh framebuffer with the saved indices.
+            // Refresh the framebuffer with the saved palette indices.
+            //
+            // The rewind history stores the canonical index plane (one byte per pixel).
+            // We write it into the back index plane and present it as a full frame.
             let fb = self.nes.ppu.framebuffer_mut();
-            let back = fb.write();
-            if back.len() == pixels.len() {
-                back.copy_from_slice(&pixels);
-                // Increment frame_seq BEFORE present so the Android signal pipe carries the new sequence.
-                self.state.frame_seq.fetch_add(1, Ordering::Release);
-                fb.present(&palette);
+            let back_indices = fb.write();
+
+            if back_indices.len() != indices.len() {
+                // A size mismatch indicates an incompatible framebuffer configuration.
+                // Keep the current frame rather than presenting corrupted data.
+                return;
             }
-            // Also rebuild the front packed buffer from the now-restored front index buffer.
-            fb.rebuild_packed(&palette);
+
+            back_indices.copy_from_slice(&indices);
+
+            // Increment `frame_seq` BEFORE present so the Android signal pipe carries the new sequence.
+            self.state.frame_seq.fetch_add(1, Ordering::Release);
+
+            // Present converts indices to packed pixels once and swaps the presented plane.
+            fb.present(&palette);
 
             if let Some(audio) = &self.audio {
                 audio.clear();
@@ -578,10 +587,10 @@ impl Runner {
                 ..Default::default()
             };
             if let Ok(snap) = self.nes.save_snapshot(meta) {
-                let mut pixels = vec![0u8; SCREEN_SIZE];
-                self.nes.copy_render_index_buffer(&mut pixels);
+                let mut indices = vec![0u8; SCREEN_SIZE];
+                self.nes.copy_render_index_buffer(&mut indices);
                 let cap = self.state.rewind_capacity.load(Ordering::Acquire) as usize;
-                self.rewind.push_frame(&snap, pixels, cap);
+                self.rewind.push_frame(&snap, indices, cap);
             }
         }
 

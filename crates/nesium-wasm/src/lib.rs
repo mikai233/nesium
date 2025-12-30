@@ -2,6 +2,9 @@
 //!
 //! This crate exposes a small, JS-friendly API for running the emulator in a
 //! Web Worker and reading back a stable RGBA8888 framebuffer.
+//!
+//! Internally, rewind history stores the framebuffer as palette indices
+//! (one byte per pixel) to keep memory usage low.
 
 use wasm_bindgen::prelude::*;
 
@@ -9,7 +12,7 @@ use nesium_core::{
     Nes,
     cartridge::load_cartridge,
     config::region::Region,
-    ppu::buffer::ColorFormat,
+    ppu::buffer::{ColorFormat, pack_line},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
     state::{SnapshotMeta, nes::NesSnapshot},
@@ -23,6 +26,9 @@ const HEIGHT: usize = 240;
 
 /// Bytes per pixel for the exported framebuffer.
 const BYTES_PER_PIXEL: usize = 4;
+
+/// Framebuffer index plane length in bytes (one byte per pixel).
+const INDEX_FRAME_LEN: usize = WIDTH * HEIGHT;
 
 /// RGBA8888 framebuffer size in bytes.
 const RGBA_FRAME_LEN: usize = WIDTH * HEIGHT * BYTES_PER_PIXEL;
@@ -176,11 +182,12 @@ impl WasmNes {
                 ..Default::default()
             };
             if let Ok(snap) = self.nes.save_snapshot(meta) {
-                let mut pixels = vec![0u8; RGBA_FRAME_LEN];
-                self.nes.copy_render_buffer(&mut pixels);
+                // Rewind stores the canonical index plane (one byte per pixel).
+                let mut indices = vec![0u8; INDEX_FRAME_LEN];
+                self.nes.copy_render_index_buffer(&mut indices);
 
                 // Keep the same rewind buffering behavior as desktop.
-                self.rewind.push_frame(&snap, pixels, self.rewind_capacity);
+                self.rewind.push_frame(&snap, indices, self.rewind_capacity);
             }
         }
 
@@ -210,12 +217,13 @@ impl WasmNes {
     fn rewind_one_frame(&mut self) -> Result<(), JsValue> {
         self.audio.clear();
 
-        if let Some((snapshot, pixels)) = self.rewind.rewind_one_frame() {
+        if let Some((snapshot, indices)) = self.rewind.rewind_one_frame() {
             self.nes.load_snapshot(&snapshot).map_err(js_err)?;
 
-            // For WASM, refresh the exported RGBA buffer from the saved pixel data.
-            if pixels.len() == RGBA_FRAME_LEN {
-                self.rgba.copy_from_slice(&pixels);
+            // The rewind buffer returns the framebuffer as palette indices.
+            // Convert indices to RGBA8888 directly into the exported buffer.
+            if indices.len() == INDEX_FRAME_LEN {
+                self.blit_indices_to_rgba(&indices);
             }
         }
 
@@ -387,9 +395,10 @@ fn parse_palette_kind(kind: &str) -> Option<PaletteKind> {
 }
 
 impl WasmNes {
-    /// Copy RGBA8888 bytes from the core render buffer into the exported framebuffer.
+    /// Copies RGBA8888 bytes from the core render buffer into the exported framebuffer.
     ///
-    /// Assumes `Nes::render_buffer()` returns RGBA8888 in row-major order.
+    /// The core is configured to render RGBA8888 for WASM so the exported frame
+    /// can be consumed directly by the frontend.
     fn copy_rgba_from_core(&mut self) -> Result<(), JsValue> {
         let src = self.nes.render_buffer();
 
@@ -403,5 +412,34 @@ impl WasmNes {
 
         self.rgba.copy_from_slice(src);
         Ok(())
+    }
+
+    /// Converts a palette index plane (one byte per pixel) into RGBA8888.
+    ///
+    /// This is used for rewind: the history stores indices to minimize memory,
+    /// and the exported frame is rebuilt on demand.
+    fn blit_indices_to_rgba(&mut self, indices: &[u8]) {
+        debug_assert!(indices.len() == INDEX_FRAME_LEN);
+        debug_assert!(self.rgba.len() == RGBA_FRAME_LEN);
+
+        // The core owns the active palette. We query it here to keep rewind
+        // output consistent with the current frontend-selected palette.
+        //
+        // `as_colors()` returns a fixed `[Color; 64]` table indexed by the
+        // palette entry (0..=63).
+        let palette = self.nes.palette();
+        let colors = palette.as_colors();
+
+        // The exported framebuffer is tightly packed RGBA8888.
+        let pitch = WIDTH * BYTES_PER_PIXEL;
+
+        for y in 0..HEIGHT {
+            let src = &indices[y * WIDTH..(y + 1) * WIDTH];
+            let dst = unsafe { self.rgba.as_mut_ptr().add(y * pitch) };
+
+            // Safety: `dst` points to a writable scanline of length `WIDTH * 4`,
+            // and `src` contains exactly `WIDTH` index bytes.
+            unsafe { pack_line(src, dst, ColorFormat::Rgba8888, &colors) };
+        }
     }
 }
