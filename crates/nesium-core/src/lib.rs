@@ -160,7 +160,7 @@ impl NesBuilder {
             Some(buf) => buf,
             None => {
                 let format = self.format.unwrap_or(ColorFormat::Rgb555);
-                FrameBuffer::new_color(format)
+                FrameBuffer::new(format)
             }
         };
 
@@ -582,9 +582,18 @@ impl Nes {
         self.ppu.render_buffer()
     }
 
+    pub fn render_index_buffer(&self) -> &[u8] {
+        self.ppu.render_index_buffer()
+    }
+
     /// Copies the current front buffer pixels into the provided destination slice.
     pub fn copy_render_buffer(&mut self, dst: &mut [u8]) {
         self.ppu.copy_render_buffer(dst);
+    }
+
+    /// Copies the current front index buffer into the provided destination slice.
+    pub fn copy_render_index_buffer(&self, dst: &mut [u8]) {
+        self.ppu.copy_render_index_buffer(dst);
     }
 
     pub fn set_frame_ready_callback(

@@ -323,9 +323,18 @@ impl Ppu {
         self.framebuffer.render()
     }
 
+    pub fn render_index_buffer(&self) -> &[u8] {
+        self.framebuffer.render_index()
+    }
+
     /// Copies the current front buffer pixels into the provided destination slice.
     pub fn copy_render_buffer(&mut self, dst: &mut [u8]) {
         self.framebuffer.copy_render_buffer(dst);
+    }
+
+    /// Copies the current front index buffer into the provided destination slice.
+    pub fn copy_render_index_buffer(&self, dst: &mut [u8]) {
+        self.framebuffer.copy_render_index_buffer(dst);
     }
 
     pub fn set_frame_ready_callback(
@@ -886,7 +895,7 @@ impl Ppu {
             // Finished processing the last visible scanline for this frame; present the
             // freshly rendered back buffer before moving into post-render/vblank.
             if self.scanline == (SCREEN_HEIGHT as i16 - 1) {
-                self.framebuffer.swap();
+                self.framebuffer.present(self.palette.as_colors());
             }
 
             self.scanline += 1;
@@ -995,15 +1004,7 @@ impl Ppu {
             color_index &= 0x30;
         }
 
-        if self.framebuffer.is_index_mode() {
-            // Index mode: store palette index directly for debugging/inspection.
-            self.framebuffer.write_index(x, y, color_index);
-        } else {
-            // Color mode: resolve index through the master palette and write
-            // packed RGB/RGBA pixels into the framebuffer.
-            let color = self.palette.color(color_index);
-            self.framebuffer.write_color(x, y, color);
-        }
+        self.framebuffer.write_index(x, y, color_index);
     }
 
     /// Emulates the $2000/$2005/$2006 scroll glitch when writes land on

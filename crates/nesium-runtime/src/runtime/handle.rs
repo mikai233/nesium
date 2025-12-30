@@ -11,7 +11,7 @@ use nesium_core::{
     audio::bus::AudioBusConfig,
     controller::Button,
     ppu::buffer::FrameReadyCallback,
-    ppu::buffer::{BufferMode, ExternalFrameHandle, FrameBuffer},
+    ppu::buffer::{ExternalFrameHandle, FrameBuffer},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
 };
@@ -61,9 +61,7 @@ impl Runtime {
                 );
                 let (fb, handle) = unsafe {
                     FrameBuffer::new_external(
-                        BufferMode::Color {
-                            format: video.color_format,
-                        },
+                        video.color_format,
                         video.pitch_bytes,
                         video.plane0,
                         video.plane1,
@@ -73,9 +71,7 @@ impl Runtime {
             }
             VideoConfig::Swapchain(video) => {
                 let fb = FrameBuffer::new_swapchain(
-                    BufferMode::Color {
-                        format: video.color_format,
-                    },
+                    video.color_format,
                     video.lock,
                     video.unlock,
                     video.user_data,

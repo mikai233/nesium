@@ -5,7 +5,7 @@ use std::{fs, path::Path, time::Instant};
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose};
 use nesium_core::memory::cpu as cpu_mem;
-use nesium_core::ppu::buffer::FrameBuffer;
+use nesium_core::ppu::buffer::{ColorFormat, FrameBuffer};
 use nesium_core::{Nes, reset_kind::ResetKind};
 use quick_xml::{Reader, events::Event};
 use sha1::{Digest, Sha1};
@@ -183,7 +183,9 @@ pub fn run_rom_tv_sha1(rom_rel_path: &str, preferred_testnotes: Option<&str>) ->
     }
 
     // Use an index-mode framebuffer so we hash palette indices directly.
-    let mut nes = Nes::builder().framebuffer(FrameBuffer::new_index()).build();
+    let mut nes = Nes::builder()
+        .framebuffer(FrameBuffer::new(ColorFormat::Rgba8888))
+        .build();
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
@@ -197,12 +199,12 @@ pub fn run_rom_tv_sha1(rom_rel_path: &str, preferred_testnotes: Option<&str>) ->
         nes.run_frame(false);
     }
 
-    let mut actual_hash = compute_tv_sha1(nes.render_buffer());
+    let mut actual_hash = compute_tv_sha1(nes.render_index_buffer());
     if actual_hash != expected_hash && frames_to_run > frames {
         for _ in frames..frames_to_run {
             nes.run_frame(false);
         }
-        actual_hash = compute_tv_sha1(nes.render_buffer());
+        actual_hash = compute_tv_sha1(nes.render_index_buffer());
     }
 
     if actual_hash != expected_hash {

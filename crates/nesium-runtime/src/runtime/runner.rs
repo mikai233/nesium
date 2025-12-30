@@ -11,7 +11,11 @@ use std::{
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError};
 use nesium_core::state::SnapshotMeta;
 use nesium_core::state::nes::NesSnapshot;
-use nesium_core::{Nes, controller::Button, ppu::buffer::FrameBuffer};
+use nesium_core::{
+    Nes,
+    controller::Button,
+    ppu::buffer::{FrameBuffer, SCREEN_SIZE},
+};
 
 use crate::audio::NesAudioPlayer;
 
@@ -547,15 +551,20 @@ impl Runner {
         if let Some((snapshot, pixels)) = self.rewind.rewind_one_frame()
             && self.nes.load_snapshot(&snapshot).is_ok()
         {
-            // Refresh framebuffer with the saved pixels.
+            // Copy the palette array to avoid borrow checker issues.
+            let palette = *self.nes.ppu.palette().as_colors();
+            // Refresh framebuffer with the saved indices.
             let fb = self.nes.ppu.framebuffer_mut();
             let back = fb.write();
             if back.len() == pixels.len() {
                 back.copy_from_slice(&pixels);
-                // Increment frame_seq BEFORE swap so the Android signal pipe carries the new sequence.
+                // Increment frame_seq BEFORE present so the Android signal pipe carries the new sequence.
                 self.state.frame_seq.fetch_add(1, Ordering::Release);
-                fb.swap();
+                fb.present(&palette);
             }
+            // Also rebuild the front packed buffer from the now-restored front index buffer.
+            fb.rebuild_packed(&palette);
+
             if let Some(audio) = &self.audio {
                 audio.clear();
             }
@@ -569,8 +578,8 @@ impl Runner {
                 ..Default::default()
             };
             if let Ok(snap) = self.nes.save_snapshot(meta) {
-                let mut pixels = vec![0u8; self.nes.ppu.framebuffer_mut().len_bytes()];
-                self.nes.copy_render_buffer(&mut pixels);
+                let mut pixels = vec![0u8; SCREEN_SIZE];
+                self.nes.copy_render_index_buffer(&mut pixels);
                 let cap = self.state.rewind_capacity.load(Ordering::Acquire) as usize;
                 self.rewind.push_frame(&snap, pixels, cap);
             }
