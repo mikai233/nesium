@@ -12,6 +12,13 @@ mod android;
 pub mod api;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 
+#[cfg(all(
+    feature = "mimalloc",
+    any(target_os = "android", target_os = "windows", target_os = "linux")
+))]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use std::{
     os::raw::{c_uint, c_void},
     sync::{Arc, OnceLock},
