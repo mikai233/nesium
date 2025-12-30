@@ -3,7 +3,6 @@
 //! This crate exposes a small, JS-friendly API for running the emulator in a
 //! Web Worker and reading back a stable RGBA8888 framebuffer.
 
-use std::collections::VecDeque;
 use wasm_bindgen::prelude::*;
 
 use nesium_core::{
@@ -15,6 +14,7 @@ use nesium_core::{
     reset_kind::ResetKind,
     state::{SnapshotMeta, nes::NesSnapshot},
 };
+use nesium_rewind::RewindState;
 use sha1::{Digest, Sha1};
 
 /// NES output resolution (visible area).
@@ -44,10 +44,6 @@ fn js_err<E: ToString>(e: E) -> JsValue {
 /// - Keep `nesium-core` unchanged.
 /// - Run the emulator inside a Worker (JS side).
 /// - Expose a stable RGBA buffer pointer for JS to read from WASM memory.
-struct RewindEntry {
-    snapshot: NesSnapshot,
-    pixels: Vec<u8>,
-}
 
 #[wasm_bindgen]
 pub struct WasmNes {
@@ -73,8 +69,11 @@ pub struct WasmNes {
     /// Currently loaded ROM hash (SHA-1).
     rom_hash: Option<[u8; 32]>,
 
-    /// Memory buffer for rewind states.
-    rewind_buffer: VecDeque<RewindEntry>,
+    /// Rewind state buffer.
+    ///
+    /// This is shared with desktop runtimes so the rewind behavior and memory
+    /// model stay consistent across platforms.
+    rewind: RewindState,
 
     /// Whether rewind is active.
     rewind_enabled: bool,
@@ -114,7 +113,7 @@ impl WasmNes {
             rgba: vec![0u8; RGBA_FRAME_LEN].into_boxed_slice(),
             audio: Vec::with_capacity(2048),
             rom_hash: None,
-            rewind_buffer: VecDeque::new(),
+            rewind: RewindState::new(),
             rewind_enabled: false,
             rewind_capacity: 600,
             rewinding: false,
@@ -179,13 +178,9 @@ impl WasmNes {
             if let Ok(snap) = self.nes.save_snapshot(meta) {
                 let mut pixels = vec![0u8; RGBA_FRAME_LEN];
                 self.nes.copy_render_buffer(&mut pixels);
-                self.rewind_buffer.push_back(RewindEntry {
-                    snapshot: snap,
-                    pixels,
-                });
-                while self.rewind_buffer.len() > self.rewind_capacity {
-                    self.rewind_buffer.pop_front();
-                }
+
+                // Keep the same rewind buffering behavior as desktop.
+                self.rewind.push_frame(&snap, pixels, self.rewind_capacity);
             }
         }
 
@@ -197,7 +192,8 @@ impl WasmNes {
         self.rewind_enabled = enabled;
         self.rewind_capacity = capacity as usize;
         if !enabled {
-            self.rewind_buffer.clear();
+            // Reset the buffer when rewind is turned off.
+            self.rewind = RewindState::new();
         }
     }
 
@@ -213,14 +209,16 @@ impl WasmNes {
 
     fn rewind_one_frame(&mut self) -> Result<(), JsValue> {
         self.audio.clear();
-        if let Some(entry) = self.rewind_buffer.pop_back() {
-            self.nes.load_snapshot(&entry.snapshot).map_err(js_err)?;
 
-            // For WASM, we manually refresh the RGBA buffer from the saved pixel data
-            if entry.pixels.len() == RGBA_FRAME_LEN {
-                self.rgba.copy_from_slice(&entry.pixels);
+        if let Some((snapshot, pixels)) = self.rewind.rewind_one_frame() {
+            self.nes.load_snapshot(&snapshot).map_err(js_err)?;
+
+            // For WASM, refresh the exported RGBA buffer from the saved pixel data.
+            if pixels.len() == RGBA_FRAME_LEN {
+                self.rgba.copy_from_slice(&pixels);
             }
         }
+
         Ok(())
     }
 

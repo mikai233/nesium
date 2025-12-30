@@ -1,3 +1,4 @@
+use nesium_rewind::RewindState;
 use sha1::{Digest, Sha1};
 use std::sync::atomic::Ordering;
 use std::{
@@ -16,7 +17,6 @@ use crate::audio::NesAudioPlayer;
 
 use super::{
     control::ControlMessage,
-    rewind_delta::RewindState,
     state::RuntimeState,
     types::{AudioMode, NTSC_FPS_EXACT, RuntimeError, RuntimeNotification},
     util::button_bit,

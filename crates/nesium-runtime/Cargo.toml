@@ -6,10 +6,10 @@ license.workspace = true
 
 [dependencies]
 nesium-core = { workspace = true, features = ["savestate-postcard"] }
+nesium-rewind.workspace = true
 anyhow.workspace = true
 cpal.workspace = true
 sha1.workspace = true
 ringbuf.workspace = true
 crossbeam-channel.workspace = true
 thiserror.workspace = true
-lz4_flex = "0.11"
