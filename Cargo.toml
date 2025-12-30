@@ -48,6 +48,8 @@ strip = "symbols"
 
 [workspace.package]
 license = "GPL-3.0-or-later"
+description = "Nesium - a cross-platform NES emulator"
+repository = "https://github.com/mikai233/nesium"
 
 [workspace.dependencies]
 libretro-bridge = { path = "crates/libretro-bridge" }
