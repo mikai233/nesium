@@ -121,7 +121,7 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
   }
 
   void setRewindSeconds(int seconds) {
-    final clamped = seconds.clamp(1, 60);
+    final clamped = seconds.clamp(10, 300);
     if (clamped == state.rewindSeconds) return;
     state = state.copyWith(rewindSeconds: clamped);
     _applyRewindConfig();

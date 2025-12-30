@@ -405,9 +405,9 @@ class SettingsPage extends ConsumerWidget {
                     ),
                     subtitle: Slider(
                       value: emulationSettings.rewindSeconds.toDouble(),
-                      min: 1,
-                      max: 60,
-                      divisions: 59,
+                      min: 10,
+                      max: 300,
+                      divisions: 29,
                       onChanged: (v) =>
                           emulationController.setRewindSeconds(v.toInt()),
                     ),
