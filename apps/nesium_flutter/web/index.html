@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -27,12 +28,231 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png" />
 
   <title>Nesium</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #000;
+      font-family: 'Courier New', Courier, monospace;
+    }
+
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #101010;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: opacity 0.5s ease-out;
+    }
+
+    /* === CRT Scanline Effect (Attached to #loading now) === */
+    #loading::before {
+      content: " ";
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      z-index: 2;
+      background-size: 100% 2px, 3px 100%;
+      pointer-events: none;
+    }
+
+    /* === CSS NES Controller === */
+    .nes-pad {
+      width: 180px;
+      height: 76px;
+      background-color: #dcdcdc;
+      border-radius: 4px;
+      position: relative;
+      box-shadow: 4px 4px 0px #000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 15px;
+      margin-bottom: 30px;
+      z-index: 1;
+      /* Ensure controller is under scanlines but visible */
+    }
+
+    /* Dark area styling helper */
+    .nes-pad::before {
+      content: "";
+      position: absolute;
+      top: 15px;
+      left: 10px;
+      right: 10px;
+      bottom: 15px;
+      background: #333;
+      border-radius: 2px;
+      z-index: 0;
+    }
+
+    .d-pad {
+      width: 50px;
+      height: 50px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .d-pad div {
+      background-color: #111;
+      position: absolute;
+    }
+
+    .d-pad .h {
+      width: 50px;
+      height: 16px;
+      top: 17px;
+      left: 0;
+      border-radius: 2px;
+    }
+
+    .d-pad .v {
+      width: 16px;
+      height: 50px;
+      top: 0;
+      left: 17px;
+      border-radius: 2px;
+    }
+
+    .middle-btns {
+      display: flex;
+      gap: 10px;
+      z-index: 1;
+      margin-top: 20px;
+    }
+
+    .pill {
+      width: 20px;
+      height: 6px;
+      background: #111;
+      border-radius: 4px;
+      transform: rotate(-25deg);
+      border: 1px solid #555;
+    }
+
+    .action-btns {
+      display: flex;
+      gap: 10px;
+      z-index: 1;
+      margin-top: 10px;
+    }
+
+    .btn {
+      width: 22px;
+      height: 22px;
+      background-color: #cc0000;
+      border-radius: 50%;
+      box-shadow: 1px 1px 0 #550000;
+      position: relative;
+    }
+
+    /* Animation: Pressing Buttons */
+    .btn.a {
+      animation: press 0.8s infinite alternate;
+    }
+
+    .btn.b {
+      animation: press 0.8s infinite alternate-reverse;
+    }
+
+    @keyframes press {
+
+      0%,
+      40% {
+        transform: translateY(0);
+        box-shadow: 1px 1px 0 #550000;
+        background-color: #cc0000;
+      }
+
+      50%,
+      100% {
+        transform: translateY(1px);
+        box-shadow: 0px 0px 0 #550000;
+        background-color: #aa0000;
+      }
+    }
+
+    /* === Retro Text === */
+    .loading-text {
+      color: #fff;
+      font-size: 14px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      animation: blink 1s step-end infinite;
+      text-shadow: 2px 2px 0px #000;
+      font-weight: bold;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0;
+      }
+    }
+  </style>
 </head>
+
 <body>
+  <div id="loading">
+    <div class="nes-pad">
+      <div class="d-pad">
+        <div class="h"></div>
+        <div class="v"></div>
+      </div>
+      <div class="middle-btns">
+        <div class="pill"></div>
+        <div class="pill"></div>
+      </div>
+      <div class="action-btns">
+        <div class="btn b"></div>
+        <div class="btn a"></div>
+      </div>
+    </div>
+    <div class="loading-text">System Loading...</div>
+  </div>
+
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // Fallback: If flutter_bootstrap.js doesn't remove it automatically (it usually doesn't),
+    // we can try to listen for the first frame or remove it after a delay if needed.
+    // Ideally, Flutter calls out to JS, but for a simple fix:
+    // We observe the body for the addition of the flutter-view.
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.tagName === 'FLUTTER-VIEW') {
+            const loader = document.getElementById('loading');
+            if (loader) {
+              loader.style.opacity = '0';
+              setTimeout(() => loader.remove(), 500);
+              observer.disconnect();
+            }
+          }
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true });
+  </script>
 </body>
+
 </html>
