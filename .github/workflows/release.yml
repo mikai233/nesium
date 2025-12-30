@@ -1,261 +1,272 @@
 name: Release Controller
 
 on:
-    workflow_dispatch:
-        inputs:
-            mode:
-                description: "Run mode"
-                required: true
-                type: choice
-                default: test
-                options:
-                    - test
-                    - prerelease
-                    - release
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode"
+        required: true
+        type: choice
+        default: test
+        options:
+          - test
+          - prerelease
+          - release
 
 jobs:
-    # ------------------------------------------------------------------
-    # [Job 1] Setup: Calculate Version Tag
-    # ------------------------------------------------------------------
-    setup:
-        name: Setup Metadata
-        runs-on: ubuntu-latest
-        outputs:
-            release_tag: ${{ steps.get_tag.outputs.tag }}
-            publish_release: ${{ steps.get_tag.outputs.publish_release }}
-            prerelease: ${{ steps.get_tag.outputs.prerelease }}
-            mode: ${{ steps.get_tag.outputs.mode }}
-        steps:
-            - name: Determine Tag
-              id: get_tag
-              shell: bash
-              run: |
-                  set -euo pipefail
+  # ------------------------------------------------------------------
+  # [Job 1] Setup: Calculate Version Tag
+  # ------------------------------------------------------------------
+  setup:
+    name: Setup Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.get_tag.outputs.tag }}
+      publish_release: ${{ steps.get_tag.outputs.publish_release }}
+      prerelease: ${{ steps.get_tag.outputs.prerelease }}
+      mode: ${{ steps.get_tag.outputs.mode }}
+    steps:
+      - name: Determine Tag
+        id: get_tag
+        shell: bash
+        run: |
+          set -euo pipefail
 
-                  MODE="${{ github.event.inputs.mode }}"
-                  echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
+          MODE="${{ github.event.inputs.mode }}"
+          echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
 
-                  SHORT_SHA="${GITHUB_SHA::7}"
-                  DATE_UTC="$(date -u +%Y%m%d)"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          DATE_UTC="$(date -u +%Y%m%d)"
 
-                  if [ "${MODE}" = "test" ]; then
-                    # Test builds: no GitHub Release, only artifacts with a generated external tag.
-                    echo "tag=dev-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-                    echo "publish_release=false" >> "$GITHUB_OUTPUT"
-                    echo "prerelease=false" >> "$GITHUB_OUTPUT"
-                  elif [ "${MODE}" = "prerelease" ]; then
-                    # Pre-release: create a GitHub Release marked as prerelease.
-                    echo "tag=pre-${DATE_UTC}-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-                    echo "publish_release=true" >> "$GITHUB_OUTPUT"
-                    echo "prerelease=true" >> "$GITHUB_OUTPUT"
-                  elif [ "${MODE}" = "release" ]; then
-                    # Release: create a GitHub Release (not prerelease).
-                    echo "tag=rel-${DATE_UTC}-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-                    echo "publish_release=true" >> "$GITHUB_OUTPUT"
-                    echo "prerelease=false" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "ERROR: unknown mode=${MODE}" >&2
-                    exit 1
-                  fi
+          if [ "${MODE}" = "test" ]; then
+            # Test builds: no GitHub Release, only artifacts with a generated external tag.
+            echo "tag=dev-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "publish_release=false" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          elif [ "${MODE}" = "prerelease" ]; then
+            # Pre-release: create a GitHub Release marked as prerelease.
+            echo "tag=pre-${DATE_UTC}-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "publish_release=true" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          elif [ "${MODE}" = "release" ]; then
+            # Release: create a GitHub Release (not prerelease).
+            echo "tag=rel-${DATE_UTC}-${GITHUB_RUN_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "publish_release=true" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ERROR: unknown mode=${MODE}" >&2
+            exit 1
+          fi
 
-    # ------------------------------------------------------------------
-    # [Job 2] Call Native Build (Rust/Egui)
-    # ------------------------------------------------------------------
-    call-build-native:
-        needs: setup
-        uses: ./.github/workflows/build-native.yml
+  # ------------------------------------------------------------------
+  # [Job 2] Call Native Build (Rust/Egui)
+  # ------------------------------------------------------------------
+  call-build-native:
+    needs: setup
+    uses: ./.github/workflows/build-native.yml
+    with:
+      release_tag: ${{ needs.setup.outputs.release_tag }}
+      mode: ${{ needs.setup.outputs.mode }}
+    secrets: inherit
+
+  # ------------------------------------------------------------------
+  # [Job 3] Call Flutter Build
+  # ------------------------------------------------------------------
+  call-build-flutter:
+    needs: setup
+    uses: ./.github/workflows/build-flutter.yml
+    with:
+      release_tag: ${{ needs.setup.outputs.release_tag }}
+      mode: ${{ needs.setup.outputs.mode }}
+    secrets: inherit
+
+  # ------------------------------------------------------------------
+  # [Job 4] Web: Build + Deploy to GitHub Pages
+  # ------------------------------------------------------------------
+  deploy-web-pages:
+    name: Deploy Web (GitHub Pages)
+    if: ${{ needs.setup.outputs.publish_release == 'true' || needs.setup.outputs.mode == 'test' }}
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
         with:
-            release_tag: ${{ needs.setup.outputs.release_tag }}
-            mode: ${{ needs.setup.outputs.mode }}
-        secrets: inherit
+          submodules: recursive
 
-    # ------------------------------------------------------------------
-    # [Job 3] Call Flutter Build
-    # ------------------------------------------------------------------
-    call-build-flutter:
-        needs: setup
-        uses: ./.github/workflows/build-flutter.yml
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
         with:
-            release_tag: ${{ needs.setup.outputs.release_tag }}
-            mode: ${{ needs.setup.outputs.mode }}
-        secrets: inherit
+          toolchain: stable
 
-    # ------------------------------------------------------------------
-    # [Job 4] Web: Build + Deploy to GitHub Pages
-    # ------------------------------------------------------------------
-    deploy-web-pages:
-        name: Deploy Web (GitHub Pages)
-        if: ${{ needs.setup.outputs.publish_release == 'true' || needs.setup.outputs.mode == 'test' }}
-        needs: setup
-        runs-on: ubuntu-latest
-        permissions:
-            contents: read
-            pages: write
-            id-token: write
-        environment:
-            name: github-pages
-            url: ${{ steps.deployment.outputs.page_url }}
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
 
-            - name: Setup Rust
-              uses: dtolnay/rust-toolchain@master
-              with:
-                  toolchain: stable
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
 
-            - name: Install wasm-pack
-              uses: jetli/wasm-pack-action@v0.4.0
+      - name: Install Linux deps for nesium-icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libfreetype6-dev libfontconfig1-dev binaryen
 
-            - name: Cache cargo artifacts
-              uses: Swatinem/rust-cache@v2
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
-            - name: Install Linux deps for nesium-icon
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  sudo apt-get update
-                  sudo apt-get install -y pkg-config libfreetype6-dev libfontconfig1-dev
+      - name: Pub get
+        working-directory: apps/nesium_flutter
+        shell: bash
+        run: flutter pub get
 
-            - name: Setup Flutter
-              uses: subosito/flutter-action@v2
-              with:
-                  channel: stable
-                  cache: true
+      - name: Generate icons (Rust + flutter_launcher_icons)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ICON_DIR="apps/nesium_flutter/tool/generated/icons"
+          mkdir -p "$ICON_DIR"
+          cargo run -p nesium-icon -- --out "$ICON_DIR/app_icon_1024.png"
+          cargo run -p nesium-icon -- layers \
+            --bg "$ICON_DIR/app_icon_bg_1024.png" \
+            --fg "$ICON_DIR/app_icon_fg_1024.png"
+          (cd apps/nesium_flutter && dart run flutter_launcher_icons)
 
-            - name: Pub get
-              working-directory: apps/nesium_flutter
-              shell: bash
-              run: flutter pub get
+      - name: Build wasm (web runtime)
+        shell: bash
+        env:
+          # Enable wasm SIMD for better runtime performance on modern browsers.
+          # If you ever need a compatibility build, drop this flag.
+          RUSTFLAGS: "-C target-feature=+simd128"
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}"
+          OUT_DIR="${GITHUB_WORKSPACE}/apps/nesium_flutter/web/nes/pkg"
+          mkdir -p "${OUT_DIR}"
 
-            - name: Generate icons (Rust + flutter_launcher_icons)
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  ICON_DIR="apps/nesium_flutter/tool/generated/icons"
-                  mkdir -p "$ICON_DIR"
-                  cargo run -p nesium-icon -- --out "$ICON_DIR/app_icon_1024.png"
-                  cargo run -p nesium-icon -- layers \
-                    --bg "$ICON_DIR/app_icon_bg_1024.png" \
-                    --fg "$ICON_DIR/app_icon_fg_1024.png"
-                  (cd apps/nesium_flutter && dart run flutter_launcher_icons)
+          pushd crates/nesium-wasm >/dev/null
+          # Build without running wasm-opt so we can control the optimization level.
+          wasm-pack build --release --target web --out-dir "${OUT_DIR}" --no-opt
+          popd >/dev/null
 
-            - name: Build wasm (web runtime)
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  cd "${GITHUB_WORKSPACE}"
-                  OUT_DIR="${GITHUB_WORKSPACE}/apps/nesium_flutter/web/nes/pkg"
-                  mkdir -p "${OUT_DIR}"
-                  pushd crates/nesium-wasm >/dev/null
-                  wasm-pack build --release --target web --out-dir "${OUT_DIR}"
-                  popd >/dev/null
+          # Run Binaryen's optimizer for maximum runtime performance.
+          WASM_FILE="${OUT_DIR}/nesium_wasm_bg.wasm"
+          test -f "${WASM_FILE}"
+          wasm-opt -O3 -o "${WASM_FILE}" "${WASM_FILE}"
 
-            - name: Compute base href
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  BASE_HREF="${{ vars.PAGES_BASE_HREF }}"
-                  if [ -z "${BASE_HREF}" ]; then
-                    BASE_HREF="/${{ github.event.repository.name }}/"
-                  fi
-                  case "${BASE_HREF}" in
-                    */) ;;
-                    *) BASE_HREF="${BASE_HREF}/" ;;
-                  esac
-                  echo "BASE_HREF=${BASE_HREF}" >> "$GITHUB_ENV"
-                  echo "Using BASE_HREF=${BASE_HREF}"
+      - name: Compute base href
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_HREF="${{ vars.PAGES_BASE_HREF }}"
+          if [ -z "${BASE_HREF}" ]; then
+            BASE_HREF="/${{ github.event.repository.name }}/"
+          fi
+          case "${BASE_HREF}" in
+            */) ;;
+            *) BASE_HREF="${BASE_HREF}/" ;;
+          esac
+          echo "BASE_HREF=${BASE_HREF}" >> "$GITHUB_ENV"
+          echo "Using BASE_HREF=${BASE_HREF}"
 
-            - name: Build Flutter web
-              working-directory: apps/nesium_flutter
-              shell: bash
-              run: flutter build web --release --no-wasm-dry-run --base-href "${BASE_HREF}"
+      - name: Build Flutter web
+        working-directory: apps/nesium_flutter
+        shell: bash
+        run: flutter build web --release --no-wasm-dry-run --base-href "${BASE_HREF}"
 
-            - name: Verify web bundle assets
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  test -f apps/nesium_flutter/build/web/nes/nes_worker.js
-                  test -f apps/nesium_flutter/build/web/nes/pkg/nesium_wasm.js
-                  test -f apps/nesium_flutter/build/web/nes/pkg/nesium_wasm_bg.wasm
-                  test -f apps/nesium_flutter/build/web/favicon.png
-                  test -f apps/nesium_flutter/build/web/manifest.json
-                  test -f apps/nesium_flutter/build/web/icons/Icon-192.png
-                  test -f apps/nesium_flutter/build/web/icons/Icon-512.png
-                  ls -la apps/nesium_flutter/build/web/nes/pkg
-                  ls -la apps/nesium_flutter/build/web/favicon.png apps/nesium_flutter/build/web/manifest.json
-                  sha256sum apps/nesium_flutter/build/web/favicon.png apps/nesium_flutter/build/web/manifest.json | cat
+      - name: Verify web bundle assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f apps/nesium_flutter/build/web/nes/nes_worker.js
+          test -f apps/nesium_flutter/build/web/nes/pkg/nesium_wasm.js
+          test -f apps/nesium_flutter/build/web/nes/pkg/nesium_wasm_bg.wasm
+          test -f apps/nesium_flutter/build/web/favicon.png
+          test -f apps/nesium_flutter/build/web/manifest.json
+          test -f apps/nesium_flutter/build/web/icons/Icon-192.png
+          test -f apps/nesium_flutter/build/web/icons/Icon-512.png
+          ls -la apps/nesium_flutter/build/web/nes/pkg
+          ls -la apps/nesium_flutter/build/web/favicon.png apps/nesium_flutter/build/web/manifest.json
+          sha256sum apps/nesium_flutter/build/web/favicon.png apps/nesium_flutter/build/web/manifest.json | cat
 
-            - name: Configure Pages
-              uses: actions/configure-pages@v5
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
 
-            - name: Upload Pages artifact
-              uses: actions/upload-pages-artifact@v3
-              with:
-                  path: apps/nesium_flutter/build/web
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/nesium_flutter/build/web
 
-            - name: Deploy to GitHub Pages
-              id: deployment
-              uses: actions/deploy-pages@v4
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
-    # ------------------------------------------------------------------
-    # [Job 5] Release: Publish to GitHub
-    # ------------------------------------------------------------------
-    create-release:
-        name: Publish to GitHub Release
-        if: ${{ needs.setup.outputs.publish_release == 'true' }}
-        needs: [setup, call-build-native, call-build-flutter]
-        runs-on: ubuntu-latest
-        permissions:
-            contents: write
-        steps:
-            - name: Download all artifacts
-              uses: actions/download-artifact@v4
-              with:
-                  path: artifacts
+  # ------------------------------------------------------------------
+  # [Job 5] Release: Publish to GitHub
+  # ------------------------------------------------------------------
+  create-release:
+    name: Publish to GitHub Release
+    if: ${{ needs.setup.outputs.publish_release == 'true' }}
+    needs: [setup, call-build-native, call-build-flutter]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-            - name: Publish Release
-              uses: softprops/action-gh-release@v2
-              with:
-                  tag_name: ${{ needs.setup.outputs.release_tag }}
-                  prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
-                  generate_release_notes: true
-                  files: |
-                      # --- Nesium Egui (Native) ---
-                      artifacts/**/nesium-egui-*.deb
-                      artifacts/**/nesium-egui-*.msi
-                      artifacts/**/nesium-egui-*.dmg
-                      artifacts/**/nesium-egui-*.AppImage
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.setup.outputs.release_tag }}
+          prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          files: |
+            # --- Nesium Egui (Native) ---
+            artifacts/**/nesium-egui-*.deb
+            artifacts/**/nesium-egui-*.msi
+            artifacts/**/nesium-egui-*.dmg
+            artifacts/**/nesium-egui-*.AppImage
 
-                      # Fixed: Explicit extensions to avoid overlap with *.sha256
-                      artifacts/**/nesium-egui-*-portable.zip
-                      artifacts/**/nesium-egui-*-portable.tar.gz
+            # Fixed: Explicit extensions to avoid overlap with *.sha256
+            artifacts/**/nesium-egui-*-portable.zip
+            artifacts/**/nesium-egui-*-portable.tar.gz
 
-                      # Matches ALL sha256 files (including portable ones)
-                      artifacts/**/nesium-egui-*.sha256
+            # Matches ALL sha256 files (including portable ones)
+            artifacts/**/nesium-egui-*.sha256
 
-                      # --- Nesium Libretro ---
-                      artifacts/**/nesium-libretro-*.zip
-                      artifacts/**/nesium-libretro-*.tar.gz
-                      artifacts/**/nesium-libretro-*.sha256
+            # --- Nesium Libretro ---
+            artifacts/**/nesium-libretro-*.zip
+            artifacts/**/nesium-libretro-*.tar.gz
+            artifacts/**/nesium-libretro-*.sha256
 
-                      # --- Nesium Flutter ---
-                      artifacts/**/nesium-flutter-*.msi
-                      artifacts/**/nesium-flutter-*.msi.sha256
-                      artifacts/**/nesium-flutter-*.dmg
-                      artifacts/**/nesium-flutter-*.dmg.sha256
-                      artifacts/**/nesium-flutter-*-portable.zip
-                      artifacts/**/nesium-flutter-*-portable.zip.sha256
+            # --- Nesium Flutter ---
+            artifacts/**/nesium-flutter-*.msi
+            artifacts/**/nesium-flutter-*.msi.sha256
+            artifacts/**/nesium-flutter-*.dmg
+            artifacts/**/nesium-flutter-*.dmg.sha256
+            artifacts/**/nesium-flutter-*-portable.zip
+            artifacts/**/nesium-flutter-*-portable.zip.sha256
 
-                      artifacts/**/nesium-flutter-*.deb       
-                      artifacts/**/nesium-flutter-*.deb.sha256 
-                      artifacts/**/nesium-flutter-*-portable.tar.gz 
-                      artifacts/**/nesium-flutter-*-portable.tar.gz.sha256
+            artifacts/**/nesium-flutter-*.deb       
+            artifacts/**/nesium-flutter-*.deb.sha256 
+            artifacts/**/nesium-flutter-*-portable.tar.gz 
+            artifacts/**/nesium-flutter-*-portable.tar.gz.sha256
 
-                      artifacts/**/nesium-flutter-*.apk
-                      artifacts/**/nesium-flutter-*.apk.sha256
-                      artifacts/**/nesium-flutter-*.aab
-                      artifacts/**/nesium-flutter-*.aab.sha256
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            artifacts/**/nesium-flutter-*.apk
+            artifacts/**/nesium-flutter-*.apk.sha256
+            artifacts/**/nesium-flutter-*.aab
+            artifacts/**/nesium-flutter-*.aab.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
