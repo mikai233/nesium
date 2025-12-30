@@ -144,6 +144,7 @@ impl Runner {
                 && frames_run < 3
             {
                 if self.state.rewinding.load(Ordering::Acquire) {
+                    println!("rewinding");
                     self.rewind_one_frame();
                 } else {
                     self.step_frame();
@@ -329,14 +330,12 @@ impl Runner {
                     }));
                 }
                 Some(cart) => {
-                    let baseline_id = self.state.baseline_id.fetch_add(1, Ordering::Relaxed);
                     let rom_hash = *self.state.rom_hash.lock().unwrap();
                     let header = cart.header();
                     let mapper = Some((header.mapper(), header.submapper()));
 
                     let meta = SnapshotMeta {
                         tick: self.nes.master_clock(),
-                        baseline_id,
                         rom_hash,
                         mapper,
                         ..Default::default()
@@ -447,14 +446,12 @@ impl Runner {
                     }));
                 }
                 Some(cart) => {
-                    let baseline_id = self.state.baseline_id.fetch_add(1, Ordering::Relaxed);
                     let rom_hash = *self.state.rom_hash.lock().unwrap();
                     let header = cart.header();
                     let mapper = Some((header.mapper(), header.submapper()));
 
                     let meta = SnapshotMeta {
                         tick: self.nes.master_clock(),
-                        baseline_id,
                         rom_hash,
                         mapper,
                         ..Default::default()
@@ -569,7 +566,6 @@ impl Runner {
         if self.state.rewind_enabled.load(Ordering::Acquire) {
             let meta = SnapshotMeta {
                 tick: self.nes.master_clock(),
-                baseline_id: self.state.baseline_id.fetch_add(1, Ordering::Relaxed),
                 ..Default::default()
             };
             if let Ok(snap) = self.nes.save_snapshot(meta) {

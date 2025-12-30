@@ -73,9 +73,6 @@ pub struct WasmNes {
     /// Currently loaded ROM hash (SHA-1).
     rom_hash: Option<[u8; 32]>,
 
-    /// Incremental ID for snapshots captured in this session.
-    baseline_id: u64,
-
     /// Memory buffer for rewind states.
     rewind_buffer: VecDeque<RewindEntry>,
 
@@ -117,7 +114,6 @@ impl WasmNes {
             rgba: vec![0u8; RGBA_FRAME_LEN].into_boxed_slice(),
             audio: Vec::with_capacity(2048),
             rom_hash: None,
-            baseline_id: 1,
             rewind_buffer: VecDeque::new(),
             rewind_enabled: false,
             rewind_capacity: 600,
@@ -178,10 +174,8 @@ impl WasmNes {
         if self.rewind_enabled {
             let meta = SnapshotMeta {
                 tick: self.nes.master_clock(),
-                baseline_id: self.baseline_id,
                 ..Default::default()
             };
-            self.baseline_id += 1;
             if let Ok(snap) = self.nes.save_snapshot(meta) {
                 let mut pixels = vec![0u8; RGBA_FRAME_LEN];
                 self.nes.copy_render_buffer(&mut pixels);
@@ -298,14 +292,10 @@ impl WasmNes {
 
         let meta = SnapshotMeta {
             tick: self.nes.master_clock(),
-            baseline_id: self.baseline_id,
             rom_hash: self.rom_hash,
             mapper,
             format_version: 1, // Matches SaveState::FORMAT_VERSION
         };
-
-        self.baseline_id += 1;
-
         let snap = self.nes.save_snapshot(meta).map_err(js_err)?;
         snap.to_postcard_bytes().map_err(js_err)
     }

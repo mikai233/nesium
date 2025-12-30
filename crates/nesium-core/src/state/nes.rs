@@ -147,7 +147,7 @@ pub enum MapperState {
 /// - PPU framebuffer configuration/planes are preserved; only PPU internal state is restored.
 #[cfg_attr(feature = "savestate-serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
-pub struct NesFullState {
+pub struct NesState {
     pub cpu: CpuState,
     pub ppu: PpuState,
     pub apu: crate::apu::Apu,
@@ -167,34 +167,30 @@ pub struct NesFullState {
 }
 
 /// Delta snapshots are not yet optimized; we currently store full snapshots for rewind.
-pub type NesDeltaState = NesFullState;
+pub type NesDeltaState = NesState;
 
 /// Convenience alias for a full snapshot including metadata.
-pub type NesSnapshot = Snapshot<NesFullState, SnapshotMeta>;
+pub type NesSnapshot = Snapshot<NesState, SnapshotMeta>;
 
 impl Nes {
     pub fn save_snapshot(&self, meta: SnapshotMeta) -> Result<NesSnapshot, NesSaveStateError> {
-        <Self as SaveState>::save_full(self, meta)
+        <Self as SaveState>::save(self, meta)
     }
 
     pub fn load_snapshot(&mut self, snapshot: &NesSnapshot) -> Result<(), NesSaveStateError> {
-        <Self as SaveState>::load_full(self, snapshot)
+        <Self as SaveState>::load(self, snapshot)
     }
 }
 
 impl SaveState for Nes {
-    type Full = NesFullState;
-    type Delta = NesDeltaState;
+    type State = NesState;
     type Error = NesSaveStateError;
     type Meta = SnapshotMeta;
 
-    fn save_full(
-        &self,
-        mut meta: Self::Meta,
-    ) -> Result<Snapshot<Self::Full, Self::Meta>, Self::Error> {
+    fn save(&self, mut meta: Self::Meta) -> Result<Snapshot<Self::State, Self::Meta>, Self::Error> {
         if let Some(cart) = self.cartridge.as_ref() {
             meta.format_version = Self::FORMAT_VERSION;
-            let state = NesFullState {
+            let state = NesState {
                 cpu: cpu_to_state(&self.cpu),
                 ppu: ppu_to_state(&self.ppu),
                 apu: self.apu.clone(),
@@ -218,10 +214,7 @@ impl SaveState for Nes {
         }
     }
 
-    fn load_full(
-        &mut self,
-        snapshot: &Snapshot<Self::Full, Self::Meta>,
-    ) -> Result<(), Self::Error> {
+    fn load(&mut self, snapshot: &Snapshot<Self::State, Self::Meta>) -> Result<(), Self::Error> {
         if self.cartridge.is_none() {
             return Err(NesSaveStateError::NoCartridge);
         }
@@ -447,7 +440,7 @@ fn sprite_line_buffers_from_state(
 }
 
 #[cfg(feature = "savestate-postcard")]
-impl NesFullState {
+impl NesState {
     pub fn to_postcard_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
         postcard::to_stdvec(self)
     }
@@ -458,7 +451,7 @@ impl NesFullState {
 }
 
 #[cfg(feature = "savestate-postcard")]
-impl Snapshot<NesFullState, SnapshotMeta> {
+impl Snapshot<NesState, SnapshotMeta> {
     pub fn to_postcard_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
         postcard::to_stdvec(self)
     }
@@ -502,18 +495,18 @@ mod tests {
             tick: 123,
             ..SnapshotMeta::default()
         };
-        let snap = <crate::Nes as SaveState>::save_full(&nes, meta).expect("save snapshot");
+        let snap = <crate::Nes as SaveState>::save(&nes, meta).expect("save snapshot");
         let bytes = snap.to_postcard_bytes().expect("encode snapshot");
 
         let decoded =
-            Snapshot::<NesFullState, SnapshotMeta>::from_postcard_bytes(&bytes).expect("decode");
+            Snapshot::<NesState, SnapshotMeta>::from_postcard_bytes(&bytes).expect("decode");
 
         let mut nes2 = crate::Nes::new(ColorFormat::Rgb555);
         nes2.insert_cartridge(cart);
-        <crate::Nes as SaveState>::load_full(&mut nes2, &decoded).expect("load snapshot");
+        <crate::Nes as SaveState>::load(&mut nes2, &decoded).expect("load snapshot");
 
         let snap2 =
-            <crate::Nes as SaveState>::save_full(&nes2, decoded.meta.clone()).expect("save again");
+            <crate::Nes as SaveState>::save(&nes2, decoded.meta.clone()).expect("save again");
         let bytes2 = snap2.to_postcard_bytes().expect("encode again");
         assert_eq!(bytes, bytes2);
     }

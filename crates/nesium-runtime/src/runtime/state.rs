@@ -12,7 +12,6 @@ pub(crate) struct RuntimeState {
     pub(crate) turbo_off_frames: AtomicU8,
     pub(crate) frame_seq: AtomicU64,
     pub(crate) rom_hash: Mutex<Option<[u8; 32]>>,
-    pub(crate) baseline_id: AtomicU64,
     pub(crate) rewind_enabled: AtomicBool,
     pub(crate) rewind_capacity: AtomicU64,
     pub(crate) rewinding: AtomicBool,
@@ -28,7 +27,6 @@ impl RuntimeState {
             turbo_off_frames: AtomicU8::new(TURBO_OFF_FRAMES_DEFAULT),
             frame_seq: AtomicU64::new(0),
             rom_hash: Mutex::new(None),
-            baseline_id: AtomicU64::new(1),
             rewind_enabled: AtomicBool::new(false),
             rewind_capacity: AtomicU64::new(600), // Default 10s @ 60fps
             rewinding: AtomicBool::new(false),

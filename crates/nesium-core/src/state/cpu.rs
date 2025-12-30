@@ -9,22 +9,16 @@ use crate::state::{SaveState, Snapshot};
 /// Replace with a smaller snapshot or diff-based approach once a concrete
 /// format is chosen.
 impl SaveState for Cpu {
-    type Full = Cpu;
-    type Delta = Cpu;
+    type State = Cpu;
     type Error = Infallible;
     type Meta = crate::state::SnapshotMeta;
 
-    fn save_full(&self, meta: Self::Meta) -> Result<Snapshot<Self::Full, Self::Meta>, Self::Error> {
+    fn save(&self, meta: Self::Meta) -> Result<Snapshot<Self::State, Self::Meta>, Self::Error> {
         Ok(Snapshot { meta, data: *self })
     }
 
-    fn load_full(
-        &mut self,
-        snapshot: &Snapshot<Self::Full, Self::Meta>,
-    ) -> Result<(), Self::Error> {
+    fn load(&mut self, snapshot: &Snapshot<Self::State, Self::Meta>) -> Result<(), Self::Error> {
         *self = snapshot.data;
         Ok(())
     }
-
-    // Default delta behaviour (full copy) is sufficient for now.
 }

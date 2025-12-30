@@ -6,22 +6,32 @@
 //! # Design
 //! - Each frame stores the machine snapshot as postcard bytes.
 //! - The latest snapshot bytes are kept uncompressed in `current_full_bytes`.
-//! - For each new frame after the first, we store an XOR diff against the
-//!   previous frame (`diff = cur ^ prev`), compressed with LZ4.
+//! - For each new frame after the first, we store a *reverse patch* that can
+//!   reconstruct the previous frame from the current frame.
 //!
-//! # Why XOR deltas?
-//! If `diff = cur ^ prev`, then `prev = cur ^ diff`. Rewinding one frame is
-//! therefore an LZ4 decompression plus a byte-wise XOR.
+//! # Reverse patch format
+//! For two byte strings `prev` and `cur`, define:
+//! - `min_len = min(prev.len(), cur.len())`
+//! - `xor_prefix[i] = prev[i] ^ cur[i]` for `i < min_len`
+//! - `prev_tail = prev[min_len..]` (only present when `prev.len() > min_len`)
 //!
-//! # Invariants
-//! - `current_full_bytes` always represents the snapshot bytes of the *latest*
-//!   frame currently selected at the end of the history.
-//! - All snapshots in a chain must serialize to the same byte length.
-//!   If the length changes unexpectedly, the history is cleared.
+//! Given `cur`, we can recover `prev` as:
+//! - `prev_prefix[i] = cur[i] ^ xor_prefix[i]` for `i < min_len`
+//! - If `prev.len() < cur.len()`, truncate to `prev.len()`.
+//! - If `prev.len() > cur.len()`, append `prev_tail`.
+//!
+//! The patch is stored as:
+//! ```text
+//! [prev_len: u32 LE][cur_len: u32 LE][xor_prefix: min_len bytes][prev_tail: prev_len-min_len bytes]
+//! ```
+//! and compressed with LZ4.
+//!
+//! This format intentionally allows *variable-length* snapshots, which avoids
+//! requiring fixed-width integer encoding in the snapshot serializer.
 //!
 //! # Failure handling
-//! Any decompression or decoding failure is treated as corruption. The history
-//! is cleared to avoid propagating inconsistent state.
+//! Any decompression/decoding failure is treated as corruption. The history is
+//! cleared to avoid propagating inconsistent state.
 
 use std::collections::VecDeque;
 
@@ -29,10 +39,10 @@ use lz4_flex::{compress_prepend_size, decompress_size_prepended};
 use nesium_core::state::nes::NesSnapshot;
 
 struct RewindFrame {
-    /// LZ4-compressed XOR diff (`cur ^ prev`).
+    /// LZ4-compressed reverse patch for stepping back one frame.
     ///
-    /// The first frame in a chain has no diff, because there is no previous
-    /// snapshot to diff against.
+    /// The first frame in a chain has no patch, because there is no previous
+    /// snapshot to reconstruct.
     delta: Option<Vec<u8>>,
 
     /// Frame pixels for display. This is kept uncompressed for now.
@@ -89,26 +99,32 @@ impl RewindState {
             return;
         }
 
-        // If the serialized length changed, XOR diffs are no longer valid.
-        if self.current_full_bytes.len() != full_bytes.len() {
-            self.clear();
+        // Build a reverse patch that reconstructs `prev` (the current bytes)
+        // from `cur` (the new bytes).
+        let prev = &self.current_full_bytes;
+        let cur = &full_bytes;
 
-            self.current_full_bytes = full_bytes;
-            self.frames.push_back(RewindFrame {
-                delta: None,
-                pixels,
-            });
-            self.trim_to_capacity(capacity);
-            return;
+        let prev_len = prev.len();
+        let cur_len = cur.len();
+        let min_len = prev_len.min(cur_len);
+
+        // Patch layout:
+        // [prev_len u32][cur_len u32][xor_prefix min_len][prev_tail prev_len-min_len]
+        let mut patch = Vec::with_capacity(8 + min_len + (prev_len - min_len));
+        patch.extend_from_slice(&(prev_len as u32).to_le_bytes());
+        patch.extend_from_slice(&(cur_len as u32).to_le_bytes());
+
+        // xor_prefix
+        for i in 0..min_len {
+            patch.push(prev[i] ^ cur[i]);
         }
 
-        // Delta frame: XOR diff against the previous frame's state.
-        let mut diff = vec![0u8; full_bytes.len()];
-        for (i, b) in full_bytes.iter().enumerate() {
-            diff[i] = *b ^ self.current_full_bytes[i];
+        // prev_tail (only needed when previous snapshot is longer)
+        if prev_len > min_len {
+            patch.extend_from_slice(&prev[min_len..]);
         }
 
-        let compressed = compress_prepend_size(&diff);
+        let compressed = compress_prepend_size(&patch);
 
         self.current_full_bytes = full_bytes;
         self.frames.push_back(RewindFrame {
@@ -128,20 +144,54 @@ impl RewindState {
             return None;
         }
 
-        // Remove the current/latest frame. Its delta describes how to go from
+        // Remove the current/latest frame. Its patch describes how to go from
         // the previous frame to the current frame.
         let current = self.frames.pop_back()?;
         let compressed = current.delta?;
 
-        let diff_bytes = decompress_size_prepended(&compressed).ok()?;
-        if diff_bytes.len() != self.current_full_bytes.len() {
+        let patch = decompress_size_prepended(&compressed).ok()?;
+        if patch.len() < 8 {
             self.clear();
             return None;
         }
 
-        // `prev = cur ^ diff`
-        for (i, d) in diff_bytes.iter().enumerate() {
-            self.current_full_bytes[i] ^= *d;
+        let prev_len = u32::from_le_bytes(patch[0..4].try_into().ok()?) as usize;
+        let cur_len = u32::from_le_bytes(patch[4..8].try_into().ok()?) as usize;
+
+        // The patch must match the currently selected bytes.
+        if self.current_full_bytes.len() != cur_len {
+            self.clear();
+            return None;
+        }
+
+        let min_len = prev_len.min(cur_len);
+        let xor_prefix_off = 8;
+        let xor_prefix_end = xor_prefix_off + min_len;
+        if patch.len() < xor_prefix_end {
+            self.clear();
+            return None;
+        }
+
+        let prev_tail_len = prev_len.saturating_sub(min_len);
+        let prev_tail_off = xor_prefix_end;
+        let prev_tail_end = prev_tail_off + prev_tail_len;
+        if patch.len() != prev_tail_end {
+            // The patch must contain exactly the declared tail bytes.
+            self.clear();
+            return None;
+        }
+
+        // `prev_prefix[i] = cur[i] ^ xor_prefix[i]`
+        for i in 0..min_len {
+            self.current_full_bytes[i] ^= patch[xor_prefix_off + i];
+        }
+
+        // Adjust the length to `prev_len`.
+        if prev_len < cur_len {
+            self.current_full_bytes.truncate(prev_len);
+        } else if prev_len > cur_len {
+            self.current_full_bytes
+                .extend_from_slice(&patch[prev_tail_off..prev_tail_end]);
         }
 
         // The new "current" is now the last frame in the deque.

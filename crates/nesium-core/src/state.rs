@@ -1,17 +1,21 @@
 //! Abstract save/load interfaces for emulator components.
 //!
-//! This module only defines the trait surface; concrete subsystems (CPU/PPU/APU,
-//! mappers, etc.) can implement it when ready. Callers can choose any backing
-//! serialization format (bincode/serde/json) externally.
+//! This module defines a minimal trait surface for capturing and restoring
+//! component state as a *full* snapshot.
+//!
+//! Incremental/typed deltas are intentionally *not* part of this API.
+//! For rewind and rollback use-cases, prefer storing serialized snapshot bytes
+//! using external compression/diffing (e.g., XOR + LZ4) at the runtime layer.
 
 pub mod cpu;
 pub mod nes;
 pub mod ppu;
+
 use std::convert::Infallible;
 
 use crate::{cpu::Cpu, ppu::Ppu};
 
-/// Common metadata attached to full/delta snapshots to aid compatibility checks.
+/// Common metadata attached to snapshots to aid compatibility checks.
 #[cfg_attr(
     feature = "savestate-serde",
     derive(serde::Serialize, serde::Deserialize)
@@ -20,8 +24,6 @@ use crate::{cpu::Cpu, ppu::Ppu};
 pub struct SnapshotMeta {
     /// Version of the snapshot payload (per component).
     pub format_version: u32,
-    /// Identifier of the baseline full snapshot this delta depends on.
-    pub baseline_id: u64,
     /// Global tick/frame counter when this snapshot was captured.
     pub tick: u64,
     /// Optional ROM hash (e.g., SHA-256) for compatibility checks.
@@ -34,7 +36,6 @@ impl Default for SnapshotMeta {
     fn default() -> Self {
         Self {
             format_version: 1,
-            baseline_id: 0,
             tick: 0,
             rom_hash: None,
             mapper: None,
@@ -53,10 +54,13 @@ pub struct Snapshot<T, M = SnapshotMeta> {
     pub data: T,
 }
 
-/// Minimal save/load contract with full and incremental variants.
+/// Minimal save/load contract using full snapshots.
+///
+/// The snapshot payload type is left to implementers. Callers are expected to
+/// serialize snapshots externally (e.g., postcard/bincode/serde) and can apply
+/// compression or diffing at higher layers.
 pub trait SaveState {
-    type Full;
-    type Delta;
+    type State;
     type Error;
     type Meta: Clone;
 
@@ -66,73 +70,28 @@ pub trait SaveState {
 
     /// Capture a full snapshot of the component state.
     ///
-    /// Callers provide metadata (e.g., tick, baseline id, rom hash); the
-    /// implementation may adjust `meta.format_version` as needed.
-    fn save_full(&self, meta: Self::Meta) -> Result<Snapshot<Self::Full, Self::Meta>, Self::Error>;
-
-    /// Capture an incremental snapshot relative to a previously captured full
-    /// snapshot. Implementations decide how to encode the delta.
-    ///
-    /// Default: fall back to a full snapshot when `Delta` can be constructed
-    /// from `Full`.
-    fn save_delta(
-        &self,
-        baseline: &Snapshot<Self::Full, Self::Meta>,
-    ) -> Result<Snapshot<Self::Delta, Self::Meta>, Self::Error>
-    where
-        Self::Delta: From<Self::Full>,
-    {
-        let meta = baseline.meta.clone();
-        self.save_full(meta).map(|snap| Snapshot {
-            meta: snap.meta,
-            data: Self::Delta::from(snap.data),
-        })
-    }
+    /// Callers provide metadata (e.g., tick, rom hash); the implementation may
+    /// adjust `meta.format_version` as needed.
+    fn save(&self, meta: Self::Meta) -> Result<Snapshot<Self::State, Self::Meta>, Self::Error>;
 
     /// Restore the component from a full snapshot.
-    fn load_full(&mut self, snapshot: &Snapshot<Self::Full, Self::Meta>)
-    -> Result<(), Self::Error>;
-
-    /// Apply an incremental snapshot.
-    ///
-    /// Default: convert the delta back into a full snapshot when possible.
-    fn load_delta(&mut self, delta: &Snapshot<Self::Delta, Self::Meta>) -> Result<(), Self::Error>
-    where
-        Self::Delta: Clone + Into<Self::Full>,
-    {
-        let full: Self::Full = delta.data.clone().into();
-        self.load_full(&Snapshot {
-            meta: delta.meta.clone(),
-            data: full,
-        })
-    }
+    fn load(&mut self, snapshot: &Snapshot<Self::State, Self::Meta>) -> Result<(), Self::Error>;
 }
 
 /// Optional extension that allows implementers to expose borrowed views instead
 /// of owned copies. This is useful for large buffers (RAM/VRAM) where a
 /// zero-copy write-out is preferable.
 pub trait SaveStateBorrowed: SaveState {
-    type BorrowedFull<'a>: 'a
-    where
-        Self: 'a;
-    type BorrowedDelta<'a>: 'a
+    type BorrowedState<'a>: 'a
     where
         Self: 'a;
 
     /// Borrow a full snapshot view. Callers can choose to serialize this view
     /// directly without cloning.
-    fn borrow_full<'a>(
+    fn borrow<'a>(
         &'a self,
         meta: Self::Meta,
-    ) -> Result<Snapshot<Self::BorrowedFull<'a>, Self::Meta>, Self::Error>;
-
-    /// Borrow a delta view relative to a baseline.
-    fn borrow_delta<'a>(
-        &'a self,
-        baseline: &Snapshot<Self::Full, Self::Meta>,
-    ) -> Result<Snapshot<Self::BorrowedDelta<'a>, Self::Meta>, Self::Error>
-    where
-        Self::Delta: From<Self::Full>;
+    ) -> Result<Snapshot<Self::BorrowedState<'a>, Self::Meta>, Self::Error>;
 }
 
 /// Fallback borrowed implementation: uses owned copies when a true borrowed
@@ -140,38 +99,19 @@ pub trait SaveStateBorrowed: SaveState {
 impl<T> SaveStateBorrowed for T
 where
     T: SaveState,
-    T::Full: Clone,
-    T::Delta: Clone,
+    T::State: Clone,
 {
-    type BorrowedFull<'a>
-        = T::Full
+    type BorrowedState<'a>
+        = T::State
     where
         T: 'a,
-        T::Full: 'a;
-    type BorrowedDelta<'a>
-        = T::Delta
-    where
-        T: 'a,
-        T::Delta: 'a;
+        T::State: 'a;
 
-    fn borrow_full<'a>(
+    fn borrow<'a>(
         &'a self,
         meta: Self::Meta,
-    ) -> Result<Snapshot<Self::BorrowedFull<'a>, Self::Meta>, Self::Error> {
-        self.save_full(meta).map(|snap| Snapshot {
-            meta: snap.meta,
-            data: snap.data,
-        })
-    }
-
-    fn borrow_delta<'a>(
-        &'a self,
-        baseline: &Snapshot<Self::Full, Self::Meta>,
-    ) -> Result<Snapshot<Self::BorrowedDelta<'a>, Self::Meta>, Self::Error>
-    where
-        Self::Delta: From<Self::Full>,
-    {
-        self.save_delta(baseline).map(|snap| Snapshot {
+    ) -> Result<Snapshot<Self::BorrowedState<'a>, Self::Meta>, Self::Error> {
+        self.save(meta).map(|snap| Snapshot {
             meta: snap.meta,
             data: snap.data,
         })
@@ -179,30 +119,18 @@ where
 }
 
 /// Aggregates component save states into a single NES snapshot that callers can
-/// serialize with any format (e.g., serde/bincode) and later restore.
+/// serialize with any format and later restore.
 pub trait StateComposer {
     type FullState;
-    type DeltaState;
     type Error;
 
-    fn capture_full(&mut self, meta: SnapshotMeta) -> Result<Self::FullState, Self::Error>;
-    fn capture_delta(
-        &mut self,
-        baseline: &Self::FullState,
-    ) -> Result<Self::DeltaState, Self::Error>;
-    fn apply_full(&mut self, state: &Self::FullState) -> Result<(), Self::Error>;
-    fn apply_delta(&mut self, delta: &Self::DeltaState) -> Result<(), Self::Error>;
+    fn capture(&mut self, meta: SnapshotMeta) -> Result<Self::FullState, Self::Error>;
+    fn apply(&mut self, state: &Self::FullState) -> Result<(), Self::Error>;
 }
 
 /// Simple aggregate of CPU/PPU snapshots (demo; extend with APU/mapper/RAM later).
 #[derive(Debug, Clone)]
 pub struct DefaultNesFullState<M = SnapshotMeta> {
-    pub cpu: Snapshot<Cpu, M>,
-    pub ppu: Snapshot<Ppu, M>,
-}
-
-#[derive(Debug, Clone)]
-pub struct DefaultNesDeltaState<M = SnapshotMeta> {
     pub cpu: Snapshot<Cpu, M>,
     pub ppu: Snapshot<Ppu, M>,
 }
@@ -227,49 +155,23 @@ impl From<Infallible> for DefaultComposeError {
 
 impl<'a> StateComposer for DefaultNesComposer<'a> {
     type FullState = DefaultNesFullState;
-    type DeltaState = DefaultNesDeltaState;
     type Error = DefaultComposeError;
 
-    fn capture_full(&mut self, meta: SnapshotMeta) -> Result<Self::FullState, Self::Error> {
+    fn capture(&mut self, meta: SnapshotMeta) -> Result<Self::FullState, Self::Error> {
         let cpu = self
             .cpu
-            .save_full(meta.clone())
+            .save(meta.clone())
             .map_err(DefaultComposeError::Cpu)?;
-        let ppu = self.ppu.save_full(meta).map_err(DefaultComposeError::Ppu)?;
+        let ppu = self.ppu.save(meta).map_err(DefaultComposeError::Ppu)?;
         Ok(DefaultNesFullState { cpu, ppu })
     }
 
-    fn capture_delta(
-        &mut self,
-        baseline: &Self::FullState,
-    ) -> Result<Self::DeltaState, Self::Error> {
-        let cpu = self
-            .cpu
-            .save_delta(&baseline.cpu)
-            .map_err(DefaultComposeError::Cpu)?;
-        let ppu = self
-            .ppu
-            .save_delta(&baseline.ppu)
-            .map_err(DefaultComposeError::Ppu)?;
-        Ok(DefaultNesDeltaState { cpu, ppu })
-    }
-
-    fn apply_full(&mut self, state: &Self::FullState) -> Result<(), Self::Error> {
+    fn apply(&mut self, state: &Self::FullState) -> Result<(), Self::Error> {
         self.cpu
-            .load_full(&state.cpu)
+            .load(&state.cpu)
             .map_err(DefaultComposeError::Cpu)?;
         self.ppu
-            .load_full(&state.ppu)
-            .map_err(DefaultComposeError::Ppu)?;
-        Ok(())
-    }
-
-    fn apply_delta(&mut self, delta: &Self::DeltaState) -> Result<(), Self::Error> {
-        self.cpu
-            .load_delta(&delta.cpu)
-            .map_err(DefaultComposeError::Cpu)?;
-        self.ppu
-            .load_delta(&delta.ppu)
+            .load(&state.ppu)
             .map_err(DefaultComposeError::Ppu)?;
         Ok(())
     }
