@@ -9,6 +9,7 @@ use std::{
 };
 
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError};
+use lz4_flex::{compress_prepend_size, decompress_size_prepended};
 use nesium_core::state::SnapshotMeta;
 use nesium_core::state::nes::NesSnapshot;
 use nesium_core::{
@@ -347,17 +348,20 @@ impl Runner {
 
                     match self.nes.save_snapshot(meta) {
                         Ok(snap) => match snap.to_postcard_bytes() {
-                            Ok(bytes) => match std::fs::write(&path, bytes) {
-                                Ok(_) => {
-                                    let _ = reply.send(Ok(()));
+                            Ok(bytes) => {
+                                let compressed = compress_prepend_size(&bytes);
+                                match std::fs::write(&path, compressed) {
+                                    Ok(_) => {
+                                        let _ = reply.send(Ok(()));
+                                    }
+                                    Err(e) => {
+                                        let _ = reply.send(Err(RuntimeError::SaveStateFailed {
+                                            path,
+                                            error: e.to_string(),
+                                        }));
+                                    }
                                 }
-                                Err(e) => {
-                                    let _ = reply.send(Err(RuntimeError::SaveStateFailed {
-                                        path,
-                                        error: e.to_string(),
-                                    }));
-                                }
-                            },
+                            }
                             Err(e) => {
                                 let _ = reply.send(Err(RuntimeError::SaveStateFailed {
                                     path,
@@ -379,7 +383,8 @@ impl Runner {
                     Some(cartridge) => {
                         match std::fs::read(&path) {
                             Ok(bytes) => {
-                                match NesSnapshot::from_postcard_bytes(&bytes) {
+                                let decoded = decompress_size_prepended(&bytes).unwrap_or(bytes);
+                                match NesSnapshot::from_postcard_bytes(&decoded) {
                                     Ok(snap) => {
                                         // Validate ROM Mapper
                                         if let Some((mapper, submapper)) = snap.meta.mapper
@@ -464,7 +469,8 @@ impl Runner {
                     match self.nes.save_snapshot(meta) {
                         Ok(snap) => match snap.to_postcard_bytes() {
                             Ok(bytes) => {
-                                let _ = reply.send(Ok(bytes));
+                                let compressed = compress_prepend_size(&bytes);
+                                let _ = reply.send(Ok(compressed));
                             }
                             Err(e) => {
                                 let _ = reply.send(Err(RuntimeError::SaveStateFailed {
@@ -485,7 +491,8 @@ impl Runner {
             ControlMessage::LoadStateFromMemory(bytes, reply) => {
                 match self.nes.get_cartridge() {
                     Some(cartridge) => {
-                        match NesSnapshot::from_postcard_bytes(&bytes) {
+                        let decoded = decompress_size_prepended(&bytes).unwrap_or(bytes);
+                        match NesSnapshot::from_postcard_bytes(&decoded) {
                             Ok(snap) => {
                                 // Validate ROM Mapper
                                 if let Some((mapper, submapper)) = snap.meta.mapper

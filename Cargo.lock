@@ -3138,6 +3138,7 @@ dependencies = [
  "anyhow",
  "cpal",
  "crossbeam-channel",
+ "lz4_flex",
  "nesium-core",
  "nesium-rewind",
  "ringbuf",
