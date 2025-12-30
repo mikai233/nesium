@@ -492,121 +492,39 @@ impl Runner {
 
     /// Captures the NES state, compresses it with LZ4, and saves it to a file.
     fn handle_save_state(&mut self, path: PathBuf, reply: ControlReplySender) {
-        match self.nes.get_cartridge() {
-            None => {
-                let _ = reply.send(Err(RuntimeError::SaveStateFailed {
-                    path,
-                    error: "no cartridge loaded".to_string(),
-                }));
-            }
-            Some(cart) => {
-                let rom_hash = *self.state.rom_hash.lock().unwrap();
-                let header = cart.header();
-                let mapper = Some((header.mapper(), header.submapper()));
-
-                let meta = SnapshotMeta {
-                    tick: self.nes.master_clock(),
-                    rom_hash,
-                    mapper,
-                    ..Default::default()
-                };
-
-                match self.nes.save_snapshot(meta) {
-                    Ok(snap) => match snap.to_postcard_bytes() {
-                        Ok(bytes) => {
-                            let compressed = compress_prepend_size(&bytes);
-                            match std::fs::write(&path, compressed) {
-                                Ok(_) => {
-                                    let _ = reply.send(Ok(()));
-                                }
-                                Err(e) => {
-                                    let _ = reply.send(Err(RuntimeError::SaveStateFailed {
-                                        path,
-                                        error: e.to_string(),
-                                    }));
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let _ = reply.send(Err(RuntimeError::SaveStateFailed {
-                                path,
-                                error: e.to_string(),
-                            }));
-                        }
-                    },
-                    Err(e) => {
-                        let _ = reply.send(Err(RuntimeError::SaveStateFailed {
-                            path,
-                            error: format!("{:?}", e),
-                        }));
-                    }
+        match self.capture_compressed_snapshot() {
+            Ok(compressed) => match std::fs::write(&path, compressed) {
+                Ok(_) => {
+                    let _ = reply.send(Ok(()));
                 }
+                Err(e) => {
+                    let _ = reply.send(Err(RuntimeError::SaveStateFailed {
+                        path,
+                        error: e.to_string(),
+                    }));
+                }
+            },
+            Err(error) => {
+                let _ = reply.send(Err(RuntimeError::SaveStateFailed { path, error }));
             }
         }
     }
 
     /// Reads a save state from a file, decompresses it, and restores the machine state.
     fn handle_load_state(&mut self, path: PathBuf, reply: ControlReplySender) {
-        match self.nes.get_cartridge() {
-            Some(cartridge) => match std::fs::read(&path) {
-                Ok(bytes) => {
-                    let decoded = decompress_size_prepended(&bytes).unwrap_or(bytes);
-                    match NesSnapshot::from_postcard_bytes(&decoded) {
-                        Ok(snap) => {
-                            // Validate ROM Mapper.
-                            if let Some((mapper, submapper)) = snap.meta.mapper
-                                && (mapper != cartridge.header().mapper()
-                                    || submapper != cartridge.header().submapper())
-                            {
-                                let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                                    path,
-                                    error: "ROM mappper mismatch: this save belongs to a different game".to_string(),
-                                }));
-                                return;
-                            }
-                            // Validate ROM Hash.
-                            if let Some(expected_hash) = snap.meta.rom_hash {
-                                let current_hash = *self.state.rom_hash.lock().unwrap();
-                                if Some(expected_hash) != current_hash {
-                                    let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                                        path,
-                                        error: "ROM hash mismatch: this save belongs to a different game".to_string(),
-                                    }));
-                                    return;
-                                }
-                            }
-
-                            match self.nes.load_snapshot(&snap) {
-                                Ok(_) => {
-                                    let _ = reply.send(Ok(()));
-                                }
-                                Err(e) => {
-                                    let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                                        path,
-                                        error: format!("{:?}", e),
-                                    }));
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                                path,
-                                error: e.to_string(),
-                            }));
-                        }
-                    }
+        match std::fs::read(&path) {
+            Ok(bytes) => match self.apply_compressed_snapshot(bytes) {
+                Ok(_) => {
+                    let _ = reply.send(Ok(()));
                 }
-                Err(e) => {
-                    let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                        path,
-                        error: e.to_string(),
-                    }));
+                Err(error) => {
+                    let _ = reply.send(Err(RuntimeError::LoadStateFailed { path, error }));
                 }
             },
-            None => {
+            Err(e) => {
                 let _ = reply.send(Err(RuntimeError::LoadStateFailed {
                     path,
-                    error: "no cartridge loaded".to_string(),
+                    error: e.to_string(),
                 }));
             }
         }
@@ -614,105 +532,29 @@ impl Runner {
 
     /// Captures the NES state, compresses it, and sends the bytes via the reply channel.
     fn handle_save_state_to_memory(&mut self, reply: Sender<Result<Vec<u8>, RuntimeError>>) {
-        match self.nes.get_cartridge() {
-            None => {
+        match self.capture_compressed_snapshot() {
+            Ok(bytes) => {
+                let _ = reply.send(Ok(bytes));
+            }
+            Err(error) => {
                 let _ = reply.send(Err(RuntimeError::SaveStateFailed {
                     path: PathBuf::from("memory"),
-                    error: "no cartridge loaded".to_string(),
+                    error,
                 }));
-            }
-            Some(cart) => {
-                let rom_hash = *self.state.rom_hash.lock().unwrap();
-                let header = cart.header();
-                let mapper = Some((header.mapper(), header.submapper()));
-
-                let meta = SnapshotMeta {
-                    tick: self.nes.master_clock(),
-                    rom_hash,
-                    mapper,
-                    ..Default::default()
-                };
-
-                match self.nes.save_snapshot(meta) {
-                    Ok(snap) => match snap.to_postcard_bytes() {
-                        Ok(bytes) => {
-                            let compressed = compress_prepend_size(&bytes);
-                            let _ = reply.send(Ok(compressed));
-                        }
-                        Err(e) => {
-                            let _ = reply.send(Err(RuntimeError::SaveStateFailed {
-                                path: PathBuf::from("memory"),
-                                error: e.to_string(),
-                            }));
-                        }
-                    },
-                    Err(e) => {
-                        let _ = reply.send(Err(RuntimeError::SaveStateFailed {
-                            path: PathBuf::from("memory"),
-                            error: format!("{:?}", e),
-                        }));
-                    }
-                }
             }
         }
     }
 
     /// Restores the NES state from a byte buffer, with decompression.
     fn handle_load_state_from_memory(&mut self, bytes: Vec<u8>, reply: ControlReplySender) {
-        match self.nes.get_cartridge() {
-            Some(cartridge) => {
-                let decoded = decompress_size_prepended(&bytes).unwrap_or(bytes);
-                match NesSnapshot::from_postcard_bytes(&decoded) {
-                    Ok(snap) => {
-                        // Validate ROM Mapper.
-                        if let Some((mapper, submapper)) = snap.meta.mapper
-                            && (mapper != cartridge.header().mapper()
-                                || submapper != cartridge.header().submapper())
-                        {
-                            let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                                path: PathBuf::from("memory"),
-                                error:
-                                    "ROM mappper mismatch: this save belongs to a different game"
-                                        .to_string(),
-                            }));
-                            return;
-                        }
-                        // Validate ROM Hash.
-                        if let Some(expected_hash) = snap.meta.rom_hash {
-                            let current_hash = *self.state.rom_hash.lock().unwrap();
-                            if Some(expected_hash) != current_hash {
-                                let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                                    path: PathBuf::from("memory"),
-                                    error: "ROM hash mismatch".to_string(),
-                                }));
-                                return;
-                            }
-                        }
-
-                        match self.nes.load_snapshot(&snap) {
-                            Ok(_) => {
-                                let _ = reply.send(Ok(()));
-                            }
-                            Err(e) => {
-                                let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                                    path: PathBuf::from("memory"),
-                                    error: format!("{:?}", e),
-                                }));
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let _ = reply.send(Err(RuntimeError::LoadStateFailed {
-                            path: PathBuf::from("memory"),
-                            error: e.to_string(),
-                        }));
-                    }
-                }
+        match self.apply_compressed_snapshot(bytes) {
+            Ok(_) => {
+                let _ = reply.send(Ok(()));
             }
-            None => {
+            Err(error) => {
                 let _ = reply.send(Err(RuntimeError::LoadStateFailed {
                     path: PathBuf::from("memory"),
-                    error: "no cartridge loaded".to_string(),
+                    error,
                 }));
             }
         }
@@ -722,5 +564,51 @@ impl Runner {
     fn handle_set_rewinding(&mut self, rewinding: bool, reply: ControlReplySender) {
         self.state.rewinding.store(rewinding, Ordering::Release);
         let _ = reply.send(Ok(()));
+    }
+
+    /// Captures the current NES state as a postcard-serialized, LZ4-compressed byte buffer.
+    fn capture_compressed_snapshot(&mut self) -> Result<Vec<u8>, String> {
+        let cart = self.nes.get_cartridge().ok_or("no cartridge loaded")?;
+        let rom_hash = *self.state.rom_hash.lock().unwrap();
+        let header = cart.header();
+        let mapper = Some((header.mapper(), header.submapper()));
+
+        let meta = SnapshotMeta {
+            tick: self.nes.master_clock(),
+            rom_hash,
+            mapper,
+            ..Default::default()
+        };
+
+        let snap = self.nes.save_snapshot(meta).map_err(|e| format!("{:?}", e))?;
+        let bytes = snap.to_postcard_bytes().map_err(|e| e.to_string())?;
+        Ok(compress_prepend_size(&bytes))
+    }
+
+    /// Decompresses and applies a snapshot buffer to the NES instance, validating ROM compatibility.
+    fn apply_compressed_snapshot(&mut self, bytes: Vec<u8>) -> Result<(), String> {
+        let cartridge = self.nes.get_cartridge().ok_or("no cartridge loaded")?;
+        let decoded = decompress_size_prepended(&bytes).unwrap_or(bytes);
+        let snap = NesSnapshot::from_postcard_bytes(&decoded).map_err(|e| e.to_string())?;
+
+        // Validate ROM Mapper.
+        if let Some((mapper, submapper)) = snap.meta.mapper
+            && (mapper != cartridge.header().mapper()
+                || submapper != cartridge.header().submapper())
+        {
+            return Err("ROM mapper mismatch: this save belongs to a different game".to_string());
+        }
+        // Validate ROM Hash.
+        if let Some(expected_hash) = snap.meta.rom_hash {
+            let current_hash = *self.state.rom_hash.lock().unwrap();
+            if Some(expected_hash) != current_hash {
+                return Err("ROM hash mismatch: this save belongs to a different game".to_string());
+            }
+        }
+
+        self.nes
+            .load_snapshot(&snap)
+            .map_err(|e| format!("{:?}", e))?;
+        Ok(())
     }
 }
