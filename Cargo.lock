@@ -3124,14 +3124,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nesium-rewind"
-version = "0.1.0"
-dependencies = [
- "lz4_flex",
- "nesium-core",
-]
-
-[[package]]
 name = "nesium-runtime"
 version = "0.1.0"
 dependencies = [
@@ -3140,10 +3132,18 @@ dependencies = [
  "crossbeam-channel",
  "lz4_flex",
  "nesium-core",
- "nesium-rewind",
+ "nesium-support",
  "ringbuf",
  "sha1",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "nesium-support"
+version = "0.1.0"
+dependencies = [
+ "lz4_flex",
+ "nesium-core",
 ]
 
 [[package]]
@@ -3152,7 +3152,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "nesium-core",
- "nesium-rewind",
+ "nesium-support",
  "sha1",
  "wasm-bindgen",
 ]

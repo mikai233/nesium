@@ -17,7 +17,7 @@ use nesium_core::{
     reset_kind::ResetKind,
     state::{SnapshotMeta, nes::NesSnapshot},
 };
-use nesium_rewind::RewindState;
+use nesium_support::rewind::RewindState;
 use sha1::{Digest, Sha1};
 
 /// NES output resolution (visible area).

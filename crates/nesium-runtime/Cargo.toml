@@ -6,7 +6,7 @@ license.workspace = true
 
 [dependencies]
 nesium-core = { workspace = true, features = ["savestate-postcard"] }
-nesium-rewind.workspace = true
+nesium-support.workspace = true
 anyhow.workspace = true
 cpal.workspace = true
 sha1.workspace = true

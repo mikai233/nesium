@@ -79,6 +79,12 @@ pub struct RewindState {
     current_index_bytes: Vec<u8>,
 }
 
+impl Default for RewindState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RewindState {
     /// Creates an empty rewind history.
     pub fn new() -> Self {

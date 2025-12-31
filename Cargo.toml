@@ -14,7 +14,7 @@ members = [
   "crates/nesium-netplay",
   "crates/nesium-netd",
   "crates/nesium-netproto",
-  "crates/nesium-rewind",
+  "crates/nesium-support",
 ]
 default-members = [
   "apps/nesium-egui",
@@ -28,7 +28,7 @@ default-members = [
   "crates/nesium-netplay",
   "crates/nesium-netd",
   "crates/nesium-netproto",
-  "crates/nesium-rewind",
+  "crates/nesium-support",
 ]
 
 [profile.test]
@@ -55,7 +55,7 @@ repository = "https://github.com/mikai233/nesium"
 libretro-bridge = { path = "crates/libretro-bridge" }
 nesium-blip = { path = "crates/nesium-blip" }
 nesium-core = { path = "crates/nesium-core" }
-nesium-rewind = { path = "crates/nesium-rewind" }
+nesium-support = { path = "crates/nesium-support" }
 nesium-icon = { path = "crates/nesium-icon" }
 nesium-runtime = { path = "crates/nesium-runtime" }
 nesium-netproto = { path = "crates/nesium-netproto" }

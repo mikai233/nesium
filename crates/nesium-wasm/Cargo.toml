@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 nesium-core = { workspace = true, features = ["savestate-postcard"] }
-nesium-rewind.workspace = true
+nesium-support.workspace = true
 wasm-bindgen.workspace = true
 console_error_panic_hook.workspace = true
 sha1.workspace = true

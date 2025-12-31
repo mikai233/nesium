@@ -1,4 +1,4 @@
-use nesium_rewind::RewindState;
+use nesium_support::rewind::RewindState;
 use sha1::{Digest, Sha1};
 use std::sync::atomic::Ordering;
 use std::{
