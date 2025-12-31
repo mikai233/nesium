@@ -127,6 +127,17 @@ pub enum TextId {
     AudioEqSection,
     AudioEnableEq,
     AudioEqGlobalGain,
+
+    // Debugger viewport
+    DebuggerNoRomTitle,
+    DebuggerNoRomSubtitle,
+    DebuggerCpuRegisters,
+    DebuggerPpuState,
+    DebuggerCpuStatusTooltip,
+    DebuggerPpuCtrlTooltip,
+    DebuggerPpuMaskTooltip,
+    DebuggerPpuStatusTooltip,
+    DebuggerScanlineTooltip,
 }
 
 pub trait LanguagePack {

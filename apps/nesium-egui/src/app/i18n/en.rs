@@ -126,6 +126,27 @@ impl LanguagePack for En {
             AudioEqSection => "Equalizer (EQ)",
             AudioEnableEq => "Enable EQ",
             AudioEqGlobalGain => "Global gain (dB)",
+
+            // Debugger viewport
+            DebuggerNoRomTitle => "No ROM Loaded",
+            DebuggerNoRomSubtitle => "Load a ROM to see debug status",
+            DebuggerCpuRegisters => "CPU Registers",
+            DebuggerPpuState => "PPU State",
+            DebuggerCpuStatusTooltip => {
+                "CPU Status Register (P)\nN: Negative - Set if bit 7 of result is set\nV: Overflow - Set if signed overflow occurred\nB: Break - Set by BRK instruction\nD: Decimal - Binary Coded Decimal (Ignored on NES)\nI: Interrupt Disable - Prevents IRQs\nZ: Zero - Set if result is zero\nC: Carry - Set if unsigned overflow occurred\n\nUppercase=Set, Lowercase=Clear"
+            }
+            DebuggerPpuCtrlTooltip => {
+                "PPU Control Register ($2000)\nV: NMI Enable\nP: PPU Master/Slave (Unused)\nH: Sprite Height (0=8x8, 1=8x16)\nB: Background Pattern Table Address\nS: Sprite Pattern Table Address\nI: VRAM Address Increment (0=1, 1=32)\nNN: Base Nametable Address\n\nUppercase=Set, Lowercase=Clear"
+            }
+            DebuggerPpuMaskTooltip => {
+                "PPU Mask Register ($2001)\nBGR: Color Emphasis Bits\ns: Show Sprites\nb: Show Background\nM: Show Sprites in Leftmost 8 Pixels\nm: Show Background in Leftmost 8 Pixels\ng: Grayscale\n\nUppercase=Set, Lowercase=Clear"
+            }
+            DebuggerPpuStatusTooltip => {
+                "PPU Status Register ($2002)\nV: VBlank Started\nS: Sprite 0 Hit\nO: Sprite Overflow\n\nUppercase=Set, Lowercase=Clear"
+            }
+            DebuggerScanlineTooltip => {
+                "Scanline Information:\n0-239: Visible (Rendering)\n240: Post-render (Idle)\n241-260: VBlank\n-1: Pre-render"
+            }
         }
     }
 }

@@ -1,7 +1,5 @@
 pub mod fm2;
 
-use std::default;
-
 use bitflags::bitflags;
 
 /// Unified internal Movie IR used to drive the emulator.

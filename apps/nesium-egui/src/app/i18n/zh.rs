@@ -123,6 +123,27 @@ impl LanguagePack for Zh {
             AudioEqSection => "均衡器 (EQ)",
             AudioEnableEq => "启用 EQ",
             AudioEqGlobalGain => "全局增益 (dB)",
+
+            // Debugger viewport
+            DebuggerNoRomTitle => "未加载 ROM",
+            DebuggerNoRomSubtitle => "加载 ROM 后显示调试状态",
+            DebuggerCpuRegisters => "CPU 寄存器",
+            DebuggerPpuState => "PPU 状态",
+            DebuggerCpuStatusTooltip => {
+                "CPU 状态寄存器 (P)\nN: 负数标志 - 结果第7位为1时置位\nV: 溢出标志 - 有符号溢出时置位\nB: 中断标志 - BRK指令设置\nD: 十进制模式 - BCD模式（NES忽略）\nI: 中断禁用 - 阻止IRQ\nZ: 零标志 - 结果为零时置位\nC: 进位标志 - 无符号溢出时置位\n\n大写=置位, 小写=清除"
+            }
+            DebuggerPpuCtrlTooltip => {
+                "PPU 控制寄存器 ($2000)\nV: NMI使能\nP: PPU主/从（未使用）\nH: 精灵高度（0=8x8, 1=8x16）\nB: 背景图案表地址\nS: 精灵图案表地址\nI: VRAM地址增量（0=1, 1=32）\nNN: 基础名称表地址\n\n大写=置位, 小写=清除"
+            }
+            DebuggerPpuMaskTooltip => {
+                "PPU 掩码寄存器 ($2001)\nBGR: 颜色强调位\ns: 显示精灵\nb: 显示背景\nM: 左8像素显示精灵\nm: 左8像素显示背景\ng: 灰度模式\n\n大写=置位, 小写=清除"
+            }
+            DebuggerPpuStatusTooltip => {
+                "PPU 状态寄存器 ($2002)\nV: VBlank已开始\nS: 精灵0命中\nO: 精灵溢出\n\n大写=置位, 小写=清除"
+            }
+            DebuggerScanlineTooltip => {
+                "扫描线说明：\n0-239: 可见区域 (渲染)\n240: post-render (空闲)\n241-260: VBlank (垂直消隐)\n-1: pre-render (预渲染扫描线)"
+            }
         }
     }
 }

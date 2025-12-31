@@ -7,6 +7,7 @@ use eframe::egui;
 use egui::{Color32, Context as EguiContext, ViewportBuilder, ViewportClass, ViewportId};
 use gilrs::Button as GilrsButton;
 use nesium_core::{controller::Button, ppu::palette::PaletteKind};
+use nesium_runtime::DebugState;
 
 use super::{
     AppViewport, NesiumApp, TextId, controller,
@@ -90,7 +91,12 @@ fn show_viewport_content(
 }
 
 impl NesiumApp {
-    pub(super) fn show_viewports(&mut self, ctx: &EguiContext) {
+    pub(super) fn show_viewports(
+        &mut self,
+        ctx: &EguiContext,
+        has_rom: bool,
+        debug_state: Option<&DebugState>,
+    ) {
         for viewport in AppViewport::ALL {
             let id = viewport.id();
             let close_flag = self.viewports.close_flag(viewport);
@@ -100,19 +106,239 @@ impl NesiumApp {
         if self.viewports.is_open(AppViewport::Debugger) {
             let builder = ViewportBuilder::default()
                 .with_title("Debugger")
-                .with_inner_size([420.0, 320.0]);
+                .with_inner_size([420.0, 480.0]);
+
+            let close_flag = self.viewports.close_flag(AppViewport::Debugger);
+            let debug_copy = debug_state.cloned();
+
+            if has_rom {
+                ctx.request_repaint_of(AppViewport::Debugger.id());
+            }
+
+            let ui_state = self.ui_state.clone();
+
             show_viewport_with_close(
                 ctx,
                 AppViewport::Debugger.id(),
                 builder,
-                self.viewports.close_flag(AppViewport::Debugger),
+                close_flag,
                 move |ctx, class| {
-                    show_viewport_content(ctx, class, "Debugger", |ui| {
-                        ui.heading("CPU Snapshot");
-                        ui.label("Debugger is currently unavailable in multi-threaded mode.");
-                        ui.label(
-                            "Full debugger implementation via state snapshots is coming soon.",
-                        );
+                    if has_rom {
+                        ctx.request_repaint();
+                    }
+
+                    // Pre-fetch localized strings to avoid locking inside UI closure if possible,
+                    // or just lock once here.
+                    let (
+                        title,
+                        no_rom_title,
+                        no_rom_subtitle,
+                        cpu_registers_label,
+                        ppu_state_label,
+                        cpu_status_tooltip,
+                        ppu_ctrl_tooltip,
+                        ppu_mask_tooltip,
+                        ppu_status_tooltip,
+                        scanline_tooltip,
+                    ) = {
+                        let state = ui_state.lock().unwrap();
+                        (
+                            state.i18n.text(TextId::MenuWindowDebugger),
+                            state.i18n.text(TextId::DebuggerNoRomTitle),
+                            state.i18n.text(TextId::DebuggerNoRomSubtitle),
+                            state.i18n.text(TextId::DebuggerCpuRegisters),
+                            state.i18n.text(TextId::DebuggerPpuState),
+                            state.i18n.text(TextId::DebuggerCpuStatusTooltip),
+                            state.i18n.text(TextId::DebuggerPpuCtrlTooltip),
+                            state.i18n.text(TextId::DebuggerPpuMaskTooltip),
+                            state.i18n.text(TextId::DebuggerPpuStatusTooltip),
+                            state.i18n.text(TextId::DebuggerScanlineTooltip),
+                        )
+                    };
+
+                    show_viewport_content(ctx, class, title, |ui| {
+                        if !has_rom {
+                            ui.centered_and_justified(|ui| {
+                                ui.vertical_centered(|ui| {
+                                    ui.heading(no_rom_title);
+                                    ui.label(no_rom_subtitle);
+                                });
+                            });
+                        } else if let Some(debug) = &debug_copy {
+                            // FIXME: Tooltips are not appearing in the debugger despite using explicit interaction areas
+                            // with stable, persistent IDs (ui.make_persistent_id). The hover effect works (text highlighting),
+                            // but the tooltip pop-up does not show. This might be due to an interaction with egui::Grid
+                            // or how frame updates interact with hover state in this specific layout.
+                            let register_row =
+                                |ui: &mut egui::Ui,
+                                 label: &str,
+                                 val: u8,
+                                 flags: Option<(&str, &str)>,
+                                 tooltip: Option<&str>| {
+                                    // Row ID base - use persistent ID for stability
+                                    let row_id = ui.make_persistent_id(label);
+
+                                    // Col 1: Label
+                                    let label_resp = ui.label(label);
+                                    let label_interact = ui.interact(
+                                        label_resp.rect,
+                                        row_id.with("lbl"),
+                                        egui::Sense::hover(),
+                                    );
+                                    if let Some(tt) = tooltip {
+                                        label_interact.on_hover_text(tt);
+                                    }
+
+                                    // Col 2: Value + Flags (Horizontal layout within the second grid cell)
+                                    ui.horizontal(|ui| {
+                                        // Hex value
+                                        let hex_text = egui::RichText::new(format!("${:02X}", val))
+                                            .monospace();
+                                        let hex_resp = ui.label(hex_text);
+                                        let hex_interact = ui.interact(
+                                            hex_resp.rect,
+                                            row_id.with("hex"),
+                                            egui::Sense::hover(),
+                                        );
+                                        hex_interact.on_hover_text(format!("Binary: {:08b}", val));
+
+                                        if let Some((layout, active_chars)) = flags {
+                                            let mut decoded = String::with_capacity(8);
+                                            for (i, c) in layout.chars().enumerate() {
+                                                if c == '-' || c == ' ' {
+                                                    decoded.push(c);
+                                                } else {
+                                                    let bit = 7 - i;
+                                                    let is_set = (val >> bit) & 1 == 1;
+                                                    if is_set {
+                                                        let active_char = active_chars
+                                                            .chars()
+                                                            .nth(i)
+                                                            .unwrap_or(c);
+                                                        decoded.push(active_char);
+                                                    } else {
+                                                        decoded.push('.');
+                                                    }
+                                                }
+                                            }
+                                            // Decoded flags
+                                            let decoded_text =
+                                                egui::RichText::new(decoded).monospace();
+                                            let decoded_resp = ui.label(decoded_text);
+                                            let decoded_interact = ui.interact(
+                                                decoded_resp.rect,
+                                                row_id.with("flags"),
+                                                egui::Sense::hover(),
+                                            );
+                                            if let Some(tt) = tooltip {
+                                                decoded_interact.on_hover_text(tt);
+                                            } else {
+                                                decoded_interact
+                                                    .on_hover_text(format!("Binary: {:08b}", val));
+                                            }
+                                        }
+                                    });
+                                    ui.end_row();
+                                };
+
+                            ui.heading(cpu_registers_label);
+                            egui::Grid::new("cpu_debug_grid")
+                                .num_columns(2)
+                                .spacing([40.0, 4.0])
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    ui.label("PC:");
+                                    ui.monospace(format!("${:04X}", debug.cpu.pc));
+                                    ui.end_row();
+
+                                    register_row(ui, "A:", debug.cpu.a, None, None);
+                                    register_row(ui, "X:", debug.cpu.x, None, None);
+                                    register_row(ui, "Y:", debug.cpu.y, None, None);
+                                    register_row(ui, "SP:", debug.cpu.sp, None, None);
+
+                                    // Status: "NV-BDIZC"
+                                    // Note: Bit 5 is unused/always 1 in some contexts, bit 4 is B.
+                                    // Standard 6502 P: N V - B D I Z C
+                                    register_row(
+                                        ui,
+                                        "Status:",
+                                        debug.cpu.status,
+                                        Some(("NV-BDIZC", "NV-BDIZC")),
+                                        Some(cpu_status_tooltip),
+                                    );
+
+                                    ui.label("Cycle:");
+                                    ui.monospace(debug.cpu.cycle.to_string());
+                                    ui.end_row();
+                                });
+
+                            ui.separator();
+                            ui.heading(ppu_state_label);
+                            egui::Grid::new("ppu_debug_grid")
+                                .num_columns(2)
+                                .spacing([40.0, 4.0])
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    // Use Button with frame(false) to ensure interaction and tooltip work reliably.
+                                    // Explicit interaction for robustness
+                                    ui.push_id("scanline", |ui| {
+                                        let resp = ui.label("Scanline:");
+                                        ui.interact(
+                                            resp.rect,
+                                            ui.id().with("lbl"),
+                                            egui::Sense::hover(),
+                                        )
+                                        .on_hover_text(scanline_tooltip);
+                                    });
+                                    ui.monospace(debug.ppu.scanline.to_string());
+                                    ui.end_row();
+
+                                    ui.label("Cycle:");
+                                    ui.monospace(debug.ppu.cycle.to_string());
+                                    ui.end_row();
+
+                                    ui.label("Frame:");
+                                    ui.monospace(debug.ppu.frame.to_string());
+                                    ui.end_row();
+
+                                    // Ctrl: VPHB SINN
+                                    register_row(
+                                        ui,
+                                        "Ctrl:",
+                                        debug.ppu.ctrl,
+                                        Some(("VPHBSINN", "VPHBSINN")),
+                                        Some(ppu_ctrl_tooltip),
+                                    );
+
+                                    // Mask: BGRs bMmG
+                                    register_row(
+                                        ui,
+                                        "Mask:",
+                                        debug.ppu.mask,
+                                        Some(("BGRsbMmG", "BGRsbMmG")),
+                                        Some(ppu_mask_tooltip),
+                                    );
+
+                                    // Status: VSO- ----
+                                    register_row(
+                                        ui,
+                                        "Status:",
+                                        debug.ppu.status,
+                                        Some(("VSO-----", "VSO-----")),
+                                        Some(ppu_status_tooltip),
+                                    );
+
+                                    ui.label("VRAM Addr:");
+                                    ui.monospace(format!("${:04X}", debug.ppu.vram_addr));
+                                    ui.end_row();
+                                });
+                        } else {
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(20.0);
+                                ui.spinner();
+                                ui.label("Waiting for debug data...");
+                            });
+                        }
                     })
                 },
             );

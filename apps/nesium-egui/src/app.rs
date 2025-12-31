@@ -18,7 +18,7 @@ mod menu;
 mod viewports;
 
 use anyhow::Result;
-use crossbeam_channel::{Sender, unbounded};
+use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
 use eframe::egui;
 use egui::{
     ColorImage, Context as EguiContext, TextureHandle, TextureOptions, ViewportId, Visuals,
@@ -32,7 +32,7 @@ use nesium_core::{
     reset_kind::ResetKind,
 };
 use nesium_runtime::{
-    AudioMode, DebugState, Event, NotificationEvent, Receiver, Runtime, RuntimeConfig,
+    AudioMode, DebugState, Event, EventTopic, NotificationEvent, Runtime, RuntimeConfig,
     RuntimeEventSender, RuntimeHandle, VideoConfig, VideoExternalConfig,
 };
 
@@ -48,32 +48,36 @@ use self::{
     i18n::{I18n, Language, TextId},
 };
 
-#[derive(Debug)]
-pub enum EguiAppEvent {
-    Notification(NotificationEvent),
-    DebugState(DebugState),
+#[derive(Debug, Clone)]
+struct EguiNotificationSender {
+    tx: Sender<NotificationEvent>,
 }
 
-struct EguiEventSender {
-    tx: Sender<EguiAppEvent>,
-}
-
-impl RuntimeEventSender for EguiEventSender {
+impl RuntimeEventSender for EguiNotificationSender {
     fn send(&self, event: Box<dyn Event>) -> bool {
         let any: Box<dyn Any> = event;
-        let any = match any.downcast::<NotificationEvent>() {
-            Ok(n) => {
-                let _ = self.tx.send(EguiAppEvent::Notification(*n));
-                return true;
-            }
-            Err(original) => original,
-        };
-
-        if let Ok(d) = any.downcast::<DebugState>() {
-            let _ = self.tx.send(EguiAppEvent::DebugState(*d));
+        if let Ok(notification) = any.downcast::<NotificationEvent>() {
+            let _ = self.tx.send(*notification);
             return true;
         }
+        false
+    }
+}
 
+#[derive(Debug, Clone)]
+struct EguiDebugEventSender {
+    tx: Sender<DebugState>,
+}
+
+impl RuntimeEventSender for EguiDebugEventSender {
+    fn send(&self, event: Box<dyn Event>) -> bool {
+        let any: Box<dyn Any> = event;
+        if let Ok(state) = any.downcast::<DebugState>() {
+            // Use try_send to avoid blocking and drop if full.
+            // For debug state, we only care about the latest anyway.
+            let _ = self.tx.try_send(*state);
+            return true;
+        }
         false
     }
 }
@@ -184,7 +188,9 @@ pub struct NesiumApp {
     _video_backing: VideoBackingStore,
     runtime_handle: RuntimeHandle,
     _runtime: Runtime,
-    event_rx: Receiver<EguiAppEvent>,
+    notification_rx: Receiver<NotificationEvent>,
+    debug_rx: Option<Receiver<DebugState>>,
+    last_debug_state: Option<DebugState>,
     frame_texture: Option<TextureHandle>,
     frame_image: Option<Arc<ColorImage>>,
     last_frame_seq: u64,
@@ -202,6 +208,7 @@ pub struct NesiumApp {
     fps_accum_frames: u32,
     fps_last_update: Instant,
     gamepads: Option<GamepadManager>,
+    debugger_was_open: bool,
 }
 
 impl NesiumApp {
@@ -220,8 +227,10 @@ impl NesiumApp {
 
         // SAFETY: `video_backing` keeps the two planes alive for the lifetime of the app.
         // The planes do not overlap and are sized to the NES framebuffer.
-        let (event_tx, event_rx) = unbounded();
-        let sender = Box::new(EguiEventSender { tx: event_tx }) as Box<dyn RuntimeEventSender>;
+        let (notification_tx, notification_rx) = unbounded();
+        let sender = Box::new(EguiNotificationSender {
+            tx: notification_tx,
+        });
         let runtime = Runtime::start_with_sender(
             RuntimeConfig {
                 video: VideoConfig::External(VideoExternalConfig {
@@ -276,7 +285,9 @@ impl NesiumApp {
             _video_backing: video_backing,
             runtime_handle,
             _runtime: runtime,
-            event_rx,
+            notification_rx,
+            debug_rx: None,
+            last_debug_state: None,
             frame_texture: None,
             frame_image: None,
             last_frame_seq: 0,
@@ -294,8 +305,8 @@ impl NesiumApp {
             fps_accum_frames: 0,
             fps_last_update: Instant::now(),
             gamepads,
+            debugger_was_open: false,
         };
-
         if let Some(path) = config.rom_path
             && let Err(err) = app.load_rom(&path)
         {
@@ -361,6 +372,7 @@ impl NesiumApp {
                 ctrl.release_all();
             }
         }
+        self.last_debug_state = None;
         self.fps = 0.0;
         self.fps_accum_frames = 0;
     }
@@ -605,16 +617,40 @@ impl eframe::App for NesiumApp {
         }
 
         // 1. Process Events from Runtime thread
-        while let Ok(event) = self.event_rx.try_recv() {
+        while let Ok(event) = self.notification_rx.try_recv() {
             match event {
-                EguiAppEvent::Notification(NotificationEvent::AudioInitFailed { error }) => {
+                NotificationEvent::AudioInitFailed { error } => {
                     let msg = format!("Audio init failed: {error}");
                     tracing::error!("{msg}");
                     self.error_dialog = Some(msg);
                 }
-                EguiAppEvent::DebugState(_) => {
-                    // Debug state is handled by dedicated debug UI, not here.
-                }
+            }
+        }
+
+        // Manage Debug Subscription
+        let debugger_open = self.viewports.is_open(AppViewport::Debugger);
+        if debugger_open != self.debugger_was_open {
+            if debugger_open {
+                // We only need the latest debug state, so a small capacity is fine.
+                let (tx, rx) = bounded(1);
+                let _ = self.runtime_handle.subscribe_event(
+                    EventTopic::DebugState,
+                    Box::new(EguiDebugEventSender { tx }),
+                );
+                self.debug_rx = Some(rx);
+            } else {
+                let _ = self
+                    .runtime_handle
+                    .unsubscribe_event(EventTopic::DebugState);
+                self.debug_rx = None;
+            }
+            self.debugger_was_open = debugger_open;
+        }
+
+        // Drain Debug Channel into persistent state
+        if let Some(rx) = &self.debug_rx {
+            while let Ok(state) = rx.try_recv() {
+                self.last_debug_state = Some(state);
             }
         }
 
@@ -710,7 +746,10 @@ impl eframe::App for NesiumApp {
         }
 
         self.draw_main_view(ctx);
-        self.show_viewports(ctx);
+
+        let has_rom = self.has_rom();
+        let debug_state = self.last_debug_state.clone();
+        self.show_viewports(ctx, has_rom, debug_state.as_ref());
         self.show_error_dialog(ctx);
     }
 }
