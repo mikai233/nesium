@@ -34,3 +34,8 @@ Future<Uint8List> saveStateToMemory() async {
 Future<void> loadStateFromMemory({required Uint8List data}) async {
   return webRequest<void>('loadState', {'data': data});
 }
+
+Future<void> loadTasMovie({required String data}) async {
+  if (!isWebNesReady) return;
+  webPostCmd('loadTasMovie', {'data': data});
+}

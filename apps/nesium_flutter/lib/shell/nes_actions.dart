@@ -12,6 +12,7 @@ class NesActions {
     this.loadStateSlot,
     this.saveStateFile,
     this.loadStateFile,
+    this.loadTasMovie,
     required this.reset,
     required this.powerReset,
     required this.eject,
@@ -30,6 +31,7 @@ class NesActions {
   final NesSlotCallback? loadStateSlot;
   final AsyncCallback? saveStateFile;
   final AsyncCallback? loadStateFile;
+  final AsyncCallback? loadTasMovie;
   final AsyncCallback reset;
   final AsyncCallback powerReset;
   final AsyncCallback eject;

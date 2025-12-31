@@ -354,6 +354,27 @@ class _NesShellState extends ConsumerState<NesShell>
     }
   }
 
+  Future<void> _loadTasMovie() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['fm2'],
+      withData: true,
+      withReadStream: false,
+    );
+    final file = result?.files.single;
+    if (file == null) return;
+
+    final bytes = file.bytes;
+    if (bytes == null) return;
+
+    final data = String.fromCharCodes(bytes);
+
+    if (!mounted) return;
+    await _runRustCommand('Load TAS Movie', () async {
+      await nes_emulation.loadTasMovie(data: data);
+    });
+  }
+
   KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent event) {
     // Avoid sending key events to the emulator when a different route (e.g. settings)
     // is on top.
@@ -481,6 +502,7 @@ class _NesShellState extends ConsumerState<NesShell>
       loadStateSlot: _loadFromSlot,
       saveStateFile: _saveToFile,
       loadStateFile: _loadFromFile,
+      loadTasMovie: _loadTasMovie,
       reset: _resetConsole,
       powerReset: _powerResetConsole,
       eject: _ejectConsole,

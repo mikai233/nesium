@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1460160878;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2102738803;
 
 // Section: executor
 
@@ -304,6 +304,39 @@ fn wire__crate__api__emulation__load_state_from_memory_impl(
                     })()
                     .await,
                 )
+            }
+        },
+    )
+}
+fn wire__crate__api__emulation__load_tas_movie_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "load_tas_movie",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::emulation::load_tas_movie(api_data)?;
+                    Ok(output_ok)
+                })())
             }
         },
     )
@@ -1097,47 +1130,48 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__palette__palette_presets_impl(port, ptr, rust_vec_len, data_len),
-        10 => {
+        9 => wire__crate__api__emulation__load_tas_movie_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__palette__palette_presets_impl(port, ptr, rust_vec_len, data_len),
+        11 => {
             wire__crate__api__load_rom__power_reset_console_impl(port, ptr, rust_vec_len, data_len)
         }
-        11 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
-        12 => {
+        12 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
+        13 => {
             wire__crate__api__events__runtime_notifications_impl(port, ptr, rust_vec_len, data_len)
         }
-        13 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__emulation__save_state_to_memory_impl(
+        14 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__emulation__save_state_to_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__emulation__set_integer_fps_mode_impl(
+        16 => wire__crate__api__emulation__set_integer_fps_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
-        17 => {
+        17 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
+        18 => {
             wire__crate__api__palette__set_palette_pal_data_impl(port, ptr, rust_vec_len, data_len)
         }
-        18 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
-        20 => {
+        19 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
+        21 => {
             wire__crate__api__emulation__set_rewind_config_impl(port, ptr, rust_vec_len, data_len)
         }
-        21 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
+        22 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

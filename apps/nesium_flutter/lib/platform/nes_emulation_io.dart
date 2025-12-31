@@ -10,3 +10,6 @@ Future<void> setRewindConfig({
 
 Future<void> setRewinding({required bool rewinding}) =>
     frb_emulation.setRewinding(rewinding: rewinding);
+
+Future<void> loadTasMovie({required String data}) =>
+    frb_emulation.loadTasMovie(data: data);

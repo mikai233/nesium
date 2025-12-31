@@ -198,7 +198,7 @@ impl RewindState {
     ///
     /// This performs an LZ4 decompression and a byte-wise XOR. On any decoding
     /// error, the rewind history is cleared and `None` is returned.
-    pub fn rewind_one_frame(&mut self) -> Option<(NesSnapshot, Vec<u8>)> {
+    pub fn rewind_frame(&mut self) -> Option<(NesSnapshot, Vec<u8>)> {
         if !self.can_rewind() {
             return None;
         }

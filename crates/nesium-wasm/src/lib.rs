@@ -89,6 +89,10 @@ pub struct WasmNes {
 
     /// Whether the emulator is currently in rewind mode.
     rewinding: bool,
+
+    /// TAS movie playback.
+    movie: Option<nesium_support::tas::Movie>,
+    movie_frame: usize,
 }
 
 #[wasm_bindgen]
@@ -123,7 +127,26 @@ impl WasmNes {
             rewind_enabled: false,
             rewind_capacity: 600,
             rewinding: false,
+            movie: None,
+            movie_frame: 0,
         }
+    }
+
+    /// Load a TAS movie from an FM2 string.
+    pub fn load_tas_movie(&mut self, data: &str) -> Result<(), JsValue> {
+        let movie = nesium_support::tas::fm2::parse_str(data).map_err(js_err)?;
+
+        // FCEUX logic: fully reload the game/power cycle before playing any movie.
+        self.nes.reset(ResetKind::PowerOn);
+
+        if let Some(savestate) = &movie.savestate {
+            // If the movie starts from a savestate, apply it now.
+            self.load_state(savestate)?;
+        }
+
+        self.movie = Some(movie);
+        self.movie_frame = 0;
+        Ok(())
     }
 
     /// Output width.
@@ -168,12 +191,40 @@ impl WasmNes {
             return self.rewind_one_frame();
         }
 
+        // Apply movie inputs if active.
+        if let Some(movie) = &self.movie {
+            if let Some(frame) = movie.frames.get(self.movie_frame) {
+                let flags = frame.commands;
+                // Apply reset flags from movie frame.
+                if flags.contains(nesium_support::tas::FrameFlags::POWER) {
+                    self.nes.reset(ResetKind::PowerOn);
+                } else if flags.contains(nesium_support::tas::FrameFlags::RESET) {
+                    self.nes.reset(ResetKind::Soft);
+                }
+
+                // Apply port inputs.
+                for (i, &mask) in frame.ports.iter().enumerate() {
+                    if let Some(controller) = self.nes.controllers.get_mut(i) {
+                        controller.set_state(mask);
+                    }
+                }
+            }
+        }
+
         let samples = self.nes.run_frame(emit_audio);
         self.copy_rgba_from_core()?;
 
         self.audio.clear();
         if emit_audio {
             self.audio.extend_from_slice(&samples);
+        }
+
+        // Advance movie frame.
+        if let Some(movie) = &self.movie {
+            self.movie_frame += 1;
+            if self.movie_frame >= movie.frames.len() {
+                self.movie = None;
+            }
         }
 
         if self.rewind_enabled {
@@ -217,7 +268,7 @@ impl WasmNes {
     fn rewind_one_frame(&mut self) -> Result<(), JsValue> {
         self.audio.clear();
 
-        if let Some((snapshot, indices)) = self.rewind.rewind_one_frame() {
+        if let Some((snapshot, indices)) = self.rewind.rewind_frame() {
             self.nes.load_snapshot(&snapshot).map_err(js_err)?;
 
             // The rewind buffer returns the framebuffer as palette indices.

@@ -1,4 +1,5 @@
 use nesium_support::rewind::RewindState;
+use nesium_support::tas::{FrameFlags, InputFrame};
 use sha1::{Digest, Sha1};
 use std::sync::atomic::Ordering;
 use std::{
@@ -51,6 +52,21 @@ const SPIN_YIELD_EVERY: u32 = 512;
 // Allow frames to start slightly early to reduce the chance of missing the deadline.
 const FRAME_LEAD: Duration = Duration::from_micros(50);
 
+/// The canonical NES controller button order used by the runtime.
+///
+/// The bit positions are defined by `button_bit()` and must stay in sync with the
+/// TAS/movie parsers and the UI input layer.
+const BUTTONS: [Button; 8] = [
+    Button::A,
+    Button::B,
+    Button::Select,
+    Button::Start,
+    Button::Up,
+    Button::Down,
+    Button::Left,
+    Button::Right,
+];
+
 pub(crate) struct Runner {
     nes: Nes,
     audio: Option<NesAudioPlayer>,
@@ -62,6 +78,8 @@ pub(crate) struct Runner {
     turbo_prev_masks: [u8; 4],
     turbo_start_frame: [[u64; 8]; 4],
     rewind: RewindState,
+    movie: Option<nesium_support::tas::Movie>,
+    movie_frame: usize,
 }
 
 impl Runner {
@@ -104,6 +122,8 @@ impl Runner {
             turbo_prev_masks: [0; 4],
             turbo_start_frame: [[0; 8]; 4],
             rewind: RewindState::new(),
+            movie: None,
+            movie_frame: 0,
         }
     }
 
@@ -152,8 +172,7 @@ impl Runner {
                 && frames_run < 3
             {
                 if self.state.rewinding.load(Ordering::Acquire) {
-                    println!("rewinding");
-                    self.rewind_one_frame();
+                    self.rewind_frame();
                 } else {
                     self.step_frame();
                 }
@@ -252,13 +271,14 @@ impl Runner {
             ControlMessage::SetRewinding(rewinding, reply) => {
                 self.handle_set_rewinding(rewinding, reply)
             }
+            ControlMessage::LoadMovie(movie, reply) => self.handle_load_movie(movie, reply),
         }
 
         false
     }
 
-    fn rewind_one_frame(&mut self) {
-        if let Some((snapshot, indices)) = self.rewind.rewind_one_frame()
+    fn rewind_frame(&mut self) {
+        if let Some((snapshot, indices)) = self.rewind.rewind_frame()
             && self.nes.load_snapshot(&snapshot).is_ok()
         {
             // Copy the palette array to avoid borrow checker issues.
@@ -291,72 +311,47 @@ impl Runner {
     }
 
     fn step_frame(&mut self) {
-        if self.state.rewind_enabled.load(Ordering::Acquire) {
-            let meta = SnapshotMeta {
-                tick: self.nes.master_clock(),
-                ..Default::default()
-            };
-            if let Ok(snap) = self.nes.save_snapshot(meta) {
-                let mut indices = vec![0u8; SCREEN_SIZE];
-                self.nes.copy_render_index_buffer(&mut indices);
-                let cap = self.state.rewind_capacity.load(Ordering::Acquire) as usize;
-                self.rewind.push_frame(&snap, indices, cap);
-            }
+        self.maybe_capture_rewind_history();
+
+        // If a TAS movie is active, we treat it as the sole input source.
+        // User input and turbo are ignored during playback.
+        let movie_frame = self.current_movie_frame();
+        if let Some(frame) = movie_frame.as_ref() {
+            // TAS playback and interactive rewind are mutually exclusive.
+            self.state.rewinding.store(false, Ordering::Release);
+            // Apply reset markers before sampling inputs for the frame.
+            self.apply_movie_resets(frame);
         }
 
-        let frame = self.state.frame_seq.load(Ordering::Relaxed);
+        let frame_seq = self.state.frame_seq.load(Ordering::Relaxed);
         let turbo_on_frames = self.state.turbo_on_frames.load(Ordering::Acquire).max(1) as u64;
         let turbo_off_frames = self.state.turbo_off_frames.load(Ordering::Acquire).max(1) as u64;
         let turbo_cycle = turbo_on_frames + turbo_off_frames;
-        let buttons = [
-            Button::A,
-            Button::B,
-            Button::Select,
-            Button::Start,
-            Button::Up,
-            Button::Down,
-            Button::Left,
-            Button::Right,
-        ];
 
-        // Sync Inputs (atomic bitmasks, no channel).
+        let mut any_input = false;
+
+        // Sync inputs (atomic bitmasks, no channel).
         for pad in 0..4 {
-            let mask = self.state.pad_masks[pad].load(Ordering::Acquire);
-            if mask != 0 {
-                self.state.rewinding.store(false, Ordering::Release);
-            }
-            let turbo_mask = self.state.turbo_masks[pad].load(Ordering::Acquire);
-            let prev_turbo_mask = self.turbo_prev_masks[pad];
-            let rising = turbo_mask & !prev_turbo_mask;
-            if rising != 0 {
-                for button in buttons {
-                    let bit = button_bit(button) as usize;
-                    let flag = 1u8 << bit;
-                    if (rising & flag) != 0 {
-                        // Anchor turbo to the moment the turbo bit is first enabled so the first
-                        // press is immediate instead of depending on a global frame phase.
-                        self.turbo_start_frame[pad][bit] = frame;
-                    }
-                }
-            }
-            self.turbo_prev_masks[pad] = turbo_mask;
+            let mask = if let Some(frame) = movie_frame.as_ref() {
+                // TAS: feed the recorded button mask as-is.
+                frame.ports[pad]
+            } else {
+                // Live input: base mask plus optional turbo overlay.
+                let base = self.state.pad_masks[pad].load(Ordering::Acquire);
+                self.apply_turbo_to_mask(pad, base, frame_seq, turbo_on_frames, turbo_cycle)
+            };
 
-            for button in buttons {
-                let bit = 1u8 << button_bit(button);
-                let normal_pressed = (mask & bit) != 0;
-                let turbo_pressed = (turbo_mask & bit) != 0;
-                let turbo_on = if turbo_pressed {
-                    let bit_idx = button_bit(button) as usize;
-                    let start = self.turbo_start_frame[pad][bit_idx];
-                    let rel = frame.wrapping_sub(start);
-                    let phase = rel % turbo_cycle;
-                    phase < turbo_on_frames
-                } else {
-                    false
-                };
-                let pressed = normal_pressed || turbo_on;
-                self.nes.set_button(pad, button, pressed);
+            if mask != 0 {
+                any_input = true;
             }
+
+            self.apply_pad_mask(pad, mask);
+        }
+
+        // Any input (including TAS input) should cancel rewind.
+        // This prevents the runtime from getting stuck in a rewind-only loop.
+        if any_input {
+            self.state.rewinding.store(false, Ordering::Release);
         }
 
         let samples = self.nes.run_frame(self.audio.is_some());
@@ -367,6 +362,135 @@ impl Runner {
         }
 
         self.state.frame_seq.fetch_add(1, Ordering::Relaxed);
+
+        // Advance the TAS timeline AFTER the frame has been executed.
+        if movie_frame.is_some() {
+            self.advance_movie_after_frame();
+        }
+    }
+
+    /// Captures rewind history (snapshot + render index plane) when enabled.
+    fn maybe_capture_rewind_history(&mut self) {
+        if !self.state.rewind_enabled.load(Ordering::Acquire) {
+            return;
+        }
+
+        let meta = SnapshotMeta {
+            tick: self.nes.master_clock(),
+            ..Default::default()
+        };
+
+        if let Ok(snap) = self.nes.save_snapshot(meta) {
+            let mut indices = vec![0u8; SCREEN_SIZE];
+            self.nes.copy_render_index_buffer(&mut indices);
+            let cap = self.state.rewind_capacity.load(Ordering::Acquire) as usize;
+            self.rewind.push_frame(&snap, indices, cap);
+        }
+    }
+
+    /// Returns the current TAS frame if playback is active.
+    ///
+    /// If the movie is exhausted (or otherwise inconsistent), playback is stopped.
+    fn current_movie_frame(&mut self) -> Option<InputFrame> {
+        let Some(movie) = self.movie.as_ref() else {
+            return None;
+        };
+
+        let len = movie.frames.len();
+        if self.movie_frame >= len {
+            // Do not silently fall back to live input when the movie ends.
+            // A finished movie is an explicit state transition.
+            self.movie = None;
+            println!("[Runner] TAS playback finished");
+            return None;
+        }
+
+        // Safe: `movie_frame < len`.
+        self.movie
+            .as_ref()
+            .and_then(|m| m.frames.get(self.movie_frame))
+            .copied()
+    }
+
+    /// Applies reset flags embedded in a TAS frame.
+    ///
+    /// These markers are processed before input is sampled for the frame.
+    fn apply_movie_resets(&mut self, frame: &InputFrame) {
+        let flags = frame.commands;
+        if flags.contains(FrameFlags::POWER) {
+            self.nes.reset(ResetKind::PowerOn);
+        } else if flags.contains(FrameFlags::RESET) {
+            self.nes.reset(ResetKind::Soft);
+        }
+    }
+
+    /// Overlays turbo behavior onto a live input mask.
+    fn apply_turbo_to_mask(
+        &mut self,
+        pad: usize,
+        base_mask: u8,
+        frame_seq: u64,
+        turbo_on_frames: u64,
+        turbo_cycle: u64,
+    ) -> u8 {
+        let turbo_mask = self.state.turbo_masks[pad].load(Ordering::Acquire);
+        let prev_turbo_mask = self.turbo_prev_masks[pad];
+        let rising = turbo_mask & !prev_turbo_mask;
+
+        if rising != 0 {
+            for button in BUTTONS {
+                let bit_idx = button_bit(button) as usize;
+                let flag = 1u8 << bit_idx;
+                if (rising & flag) != 0 {
+                    // Anchor turbo to the moment the turbo bit is first enabled so the first
+                    // press is immediate instead of depending on a global frame phase.
+                    self.turbo_start_frame[pad][bit_idx] = frame_seq;
+                }
+            }
+        }
+
+        self.turbo_prev_masks[pad] = turbo_mask;
+
+        let mut mask = base_mask;
+        for button in BUTTONS {
+            let bit = 1u8 << button_bit(button);
+            if (turbo_mask & bit) == 0 {
+                continue;
+            }
+
+            let bit_idx = button_bit(button) as usize;
+            let start = self.turbo_start_frame[pad][bit_idx];
+            let rel = frame_seq.wrapping_sub(start);
+            let phase = rel % turbo_cycle;
+            if phase < turbo_on_frames {
+                mask |= bit;
+            }
+        }
+
+        mask
+    }
+
+    /// Applies a resolved button mask to a controller port.
+    fn apply_pad_mask(&mut self, pad: usize, mask: u8) {
+        for button in BUTTONS {
+            let bit = 1u8 << button_bit(button);
+            let pressed = (mask & bit) != 0;
+            self.nes.set_button(pad, button, pressed);
+        }
+    }
+
+    /// Advances TAS playback by one frame and stops playback at end-of-movie.
+    fn advance_movie_after_frame(&mut self) {
+        let Some(movie) = self.movie.as_ref() else {
+            return;
+        };
+
+        let len = movie.frames.len();
+        self.movie_frame = self.movie_frame.saturating_add(1);
+        if self.movie_frame >= len {
+            self.movie = None;
+            println!("[Runner] TAS playback finished");
+        }
     }
 
     /// Loads a ROM from the specified path, calculates its SHA-1 hash, and initializes the NES state.
@@ -563,6 +687,41 @@ impl Runner {
     /// Enables or disables real-time rewind support.
     fn handle_set_rewinding(&mut self, rewinding: bool, reply: ControlReplySender) {
         self.state.rewinding.store(rewinding, Ordering::Release);
+        let _ = reply.send(Ok(()));
+    }
+
+    /// Loads a TAS movie and initializes playback by resetting the console.
+    fn handle_load_movie(&mut self, movie: nesium_support::tas::Movie, reply: ControlReplySender) {
+        if self.nes.get_cartridge().is_some() {
+            // FCEUX logic: fully reload the game/power cycle before playing any movie.
+            self.nes.reset(nesium_core::reset_kind::ResetKind::PowerOn);
+
+            if let Some(savestate) = &movie.savestate {
+                // If the movie contains an embedded savestate, apply it to initialize the system state.
+                if let Err(e) = self.apply_compressed_snapshot(savestate.clone()) {
+                    let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                        path: PathBuf::from("movie_embedded"),
+                        error: e,
+                    }));
+                    return;
+                }
+            }
+
+            // Clear transient states.
+            for mask in &self.state.pad_masks {
+                mask.store(0, Ordering::Release);
+            }
+            if let Some(audio) = &self.audio {
+                audio.clear();
+            }
+            self.rewind.clear();
+            self.state.rewinding.store(false, Ordering::Release);
+            self.state.paused.store(false, Ordering::Release);
+            self.next_frame_deadline = Instant::now();
+
+            self.movie = Some(movie);
+            self.movie_frame = 0;
+        }
         let _ = reply.send(Ok(()));
     }
 

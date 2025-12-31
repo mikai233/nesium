@@ -229,6 +229,8 @@ class _MobileDrawer extends StatelessWidget {
         item.id == NesMenuItemId.loadState ||
         item.id == NesMenuItemId.autoSave) {
       enabled = hasRom;
+    } else if (item.id == NesMenuItemId.loadTasMovie) {
+      enabled = false;
     }
 
     return ListTile(
@@ -252,7 +254,6 @@ class _MobileDrawer extends StatelessWidget {
     required VoidCallback closeDrawer,
     required Future<void> Function(Widget page) openPage,
   }) {
-    final l10n = AppLocalizations.of(context)!;
     switch (id) {
       case NesMenuItemId.openRom:
         closeDrawer();
@@ -286,14 +287,12 @@ class _MobileDrawer extends StatelessWidget {
         closeDrawer();
         unawaited(actions.togglePause());
         break;
-      case NesMenuItemId.settings:
+      case NesMenuItemId.loadTasMovie:
         closeDrawer();
-        unawaited(actions.openSettings());
-        break;
-      case NesMenuItemId.about:
-        unawaited(openPage(const AboutPage()));
+        unawaited(actions.loadTasMovie?.call());
         break;
       case NesMenuItemId.debugger:
+        final l10n = AppLocalizations.of(context)!;
         unawaited(
           openPage(
             _MobilePage(
@@ -304,6 +303,7 @@ class _MobileDrawer extends StatelessWidget {
         );
         break;
       case NesMenuItemId.tools:
+        final l10n = AppLocalizations.of(context)!;
         unawaited(
           openPage(
             _MobilePage(
@@ -313,12 +313,19 @@ class _MobileDrawer extends StatelessWidget {
           ),
         );
         break;
+      case NesMenuItemId.settings:
+        closeDrawer();
+        unawaited(actions.openSettings());
+        break;
+      case NesMenuItemId.about:
+        unawaited(openPage(const AboutPage()));
+        break;
       case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:
       case NesMenuItemId.loadStateSlot:
       case NesMenuItemId.saveStateFile:
       case NesMenuItemId.loadStateFile:
-        // Desktop submenus, not used in mobile drawer currently
+        // Desktop submenus, not used in mobile drawer currently.
         break;
     }
   }

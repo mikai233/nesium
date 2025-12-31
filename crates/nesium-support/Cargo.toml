@@ -5,5 +5,8 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-nesium-core.workspace = true
+nesium-core = { workspace = true, features = ["savestate-postcard"] }
 lz4_flex.workspace = true
+bitflags.workspace = true
+thiserror.workspace = true
+hex = "0.4.3"

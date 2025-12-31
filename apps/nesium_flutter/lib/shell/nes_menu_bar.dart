@@ -113,6 +113,8 @@ class NesMenuBar extends StatelessWidget {
       if (!hasRom) {
         enabled = false;
       }
+    } else if (item.id == NesMenuItemId.loadTasMovie) {
+      enabled = false;
     }
 
     return MenuItemButton(
@@ -163,6 +165,9 @@ class NesMenuBar extends StatelessWidget {
         break;
       case NesMenuItemId.togglePause:
         unawaited(actions.togglePause());
+        break;
+      case NesMenuItemId.loadTasMovie:
+        unawaited(actions.loadTasMovie?.call());
         break;
       case NesMenuItemId.settings:
         unawaited(actions.openSettings());

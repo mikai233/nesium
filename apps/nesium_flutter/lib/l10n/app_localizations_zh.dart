@@ -274,6 +274,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuPauseResume => '暂停 / 继续';
 
   @override
+  String get menuLoadTasMovie => '加载 TAS 录像…';
+
+  @override
   String get menuPreferences => '偏好设置…';
 
   @override

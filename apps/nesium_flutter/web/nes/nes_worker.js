@@ -311,6 +311,17 @@ onmessage = async (ev) => {
                     break;
                 }
 
+                case "loadTasMovie": {
+                    if (typeof nes.load_tas_movie !== "function") {
+                        throw new Error("Missing wasm export: load_tas_movie. Rebuild `web/nes/pkg`.");
+                    }
+                    nes.load_tas_movie(msg.data);
+                    // Match native behavior: reset pacing and wake loop
+                    nextFrameAt = 0;
+                    if (!timer) tick();
+                    break;
+                }
+
                 case "setRewindConfig": {
                     const enabled = !!msg.enabled;
                     const capacity = Number(msg.capacity);

@@ -602,6 +602,12 @@ abstract class AppLocalizations {
   /// **'Pause / Resume'**
   String get menuPauseResume;
 
+  /// No description provided for @menuLoadTasMovie.
+  ///
+  /// In en, this message translates to:
+  /// **'Load TAS Movie...'**
+  String get menuLoadTasMovie;
+
   /// No description provided for @menuPreferences.
   ///
   /// In en, this message translates to:
