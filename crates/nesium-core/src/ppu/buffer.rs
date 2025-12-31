@@ -157,22 +157,27 @@ impl ExternalFrameHandle {
     pub fn len(&self) -> usize {
         self.len
     }
+
     #[inline]
     pub fn pitch_bytes(&self) -> usize {
         self.pitch_bytes
     }
+
     #[inline]
     pub fn color_format(&self) -> ColorFormat {
         self.color_format
     }
+
     #[inline]
     pub fn bytes_per_pixel(&self) -> usize {
         self.color_format.bytes_per_pixel()
     }
+
     #[inline]
     pub fn front_index(&self) -> usize {
         self.front_index.load(Ordering::Acquire)
     }
+
     #[inline]
     pub fn frame_seq(&self) -> usize {
         self.frame_seq.load(Ordering::Acquire)
@@ -613,7 +618,7 @@ impl FrameBuffer {
 
     /// Returns a mutable view of the **back** index plane for PPU writes.
     pub fn write(&mut self) -> &mut [u8] {
-        &mut *self.index_planes[self.active_index]
+        &mut self.index_planes[self.active_index]
     }
 
     /// Clears both index planes and any accessible packed planes.

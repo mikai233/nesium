@@ -1,7 +1,6 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-
 use flutter_rust_bridge::frb;
-use nesium_runtime::RuntimeNotification as CoreRuntimeNotification;
+use nesium_runtime::runtime::EventTopic;
+use nesium_runtime::{RuntimeEvent, RuntimeEventSender};
 
 use crate::frb_generated::StreamSink;
 
@@ -10,51 +9,62 @@ pub enum RuntimeNotificationKind {
     AudioInitFailed,
 }
 
+impl RuntimeNotificationKind {
+    pub fn from_event(event: &RuntimeEvent) -> Self {
+        match event {
+            RuntimeEvent::AudioInitFailed { .. } => Self::AudioInitFailed,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RuntimeNotification {
     pub kind: RuntimeNotificationKind,
     pub error: Option<String>,
 }
 
-impl From<CoreRuntimeNotification> for RuntimeNotification {
-    fn from(value: CoreRuntimeNotification) -> Self {
-        match value {
-            CoreRuntimeNotification::AudioInitFailed { error } => RuntimeNotification {
-                kind: RuntimeNotificationKind::AudioInitFailed,
-                error: Some(error),
+impl From<RuntimeEvent> for RuntimeNotification {
+    fn from(value: RuntimeEvent) -> Self {
+        RuntimeNotification {
+            kind: RuntimeNotificationKind::from_event(&value),
+            error: match value {
+                RuntimeEvent::AudioInitFailed { error } => Some(error),
             },
         }
     }
 }
 
-static NOTIFICATION_STREAM_STARTED: AtomicBool = AtomicBool::new(false);
+pub struct FlutterRuntimeEventSender {
+    sink: StreamSink<RuntimeNotification>,
+}
+
+impl FlutterRuntimeEventSender {
+    pub fn new(sink: StreamSink<RuntimeNotification>) -> Self {
+        Self { sink }
+    }
+}
+
+impl RuntimeEventSender for FlutterRuntimeEventSender {
+    fn send(&self, event: RuntimeEvent) -> bool {
+        let _: Result<_, _> = self.sink.add(RuntimeNotification::from(event));
+        true // Always return true to avoid being pruned by RuntimePubSub
+    }
+}
 
 /// Runtime notification stream.
 ///
-/// This blocks on the runtime notification receiver and forwards notifications to Dart.
+/// This registers the sink directly with the runtime.
 #[frb]
 pub async fn runtime_notifications(sink: StreamSink<RuntimeNotification>) -> Result<(), String> {
-    if NOTIFICATION_STREAM_STARTED.swap(true, Ordering::AcqRel) {
-        let _ = sink.add_error("runtime notification stream already started".to_string());
-        return Ok(());
-    }
+    // If the runtime is already running, subscribe.
+    // runtime_handle() returns &'static Handle, so it is valid if ensure_runtime has been called (which usually happens on app start).
+    let handle = crate::runtime_handle();
+    let sender = FlutterRuntimeEventSender::new(sink);
 
-    let Some(handle) = crate::try_runtime_handle() else {
-        NOTIFICATION_STREAM_STARTED.store(false, Ordering::Release);
-        return Err("runtime not started".to_string());
-    };
-    let handle = handle.clone();
-    std::thread::spawn(move || {
-        loop {
-            let Some(notification) = handle.recv_notification_blocking() else {
-                break;
-            };
-            if sink.add(RuntimeNotification::from(notification)).is_err() {
-                break;
-            }
-        }
-        NOTIFICATION_STREAM_STARTED.store(false, Ordering::Release);
-    });
+    // Subscribe to relevant topics
+    handle
+        .subscribe_event(EventTopic::Notification, sender)
+        .map_err(|e| format!("Failed to subscribe to Notification events: {}", e))?;
 
     Ok(())
 }

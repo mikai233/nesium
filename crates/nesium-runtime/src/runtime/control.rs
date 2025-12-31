@@ -9,11 +9,11 @@ use nesium_core::{
     reset_kind::ResetKind,
 };
 
-use super::types::RuntimeError;
+use super::types::{EventTopic, RuntimeError, RuntimeEventSender};
 
 pub(crate) type ControlReplySender = Sender<Result<(), RuntimeError>>;
 
-pub(crate) enum ControlMessage {
+pub(crate) enum ControlMessage<S: RuntimeEventSender> {
     Stop,
     LoadRom(PathBuf, ControlReplySender),
     Reset(ResetKind, ControlReplySender),
@@ -30,8 +30,9 @@ pub(crate) enum ControlMessage {
     LoadStateFromMemory(Vec<u8>, ControlReplySender),
     SetRewinding(bool, ControlReplySender),
     LoadMovie(nesium_support::tas::Movie, ControlReplySender),
+    SubscribeEvent(EventTopic, S, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without
 // dereferencing on the sending thread; the receiver owns and uses them.
-unsafe impl Send for ControlMessage {}
+unsafe impl<S: RuntimeEventSender> Send for ControlMessage<S> {}

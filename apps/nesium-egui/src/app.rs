@@ -30,7 +30,7 @@ use nesium_core::{
     reset_kind::ResetKind,
 };
 use nesium_runtime::{
-    AudioMode, Runtime, RuntimeConfig, RuntimeHandle, RuntimeNotification, VideoConfig,
+    AudioMode, Receiver, Runtime, RuntimeConfig, RuntimeEvent, RuntimeHandle, VideoConfig,
     VideoExternalConfig,
 };
 
@@ -150,8 +150,9 @@ impl Viewports {
 
 pub struct NesiumApp {
     _video_backing: VideoBackingStore,
-    runtime_handle: RuntimeHandle,
-    _runtime: Runtime,
+    runtime_handle: RuntimeHandle<nesium_runtime::Sender<RuntimeEvent>>,
+    _runtime: Runtime<nesium_runtime::Sender<RuntimeEvent>>,
+    event_rx: Receiver<RuntimeEvent>,
     frame_texture: Option<TextureHandle>,
     frame_image: Option<Arc<ColorImage>>,
     last_frame_seq: u64,
@@ -187,7 +188,7 @@ impl NesiumApp {
 
         // SAFETY: `video_backing` keeps the two planes alive for the lifetime of the app.
         // The planes do not overlap and are sized to the NES framebuffer.
-        let runtime = Runtime::start(RuntimeConfig {
+        let (runtime, event_rx) = Runtime::start(RuntimeConfig {
             video: VideoConfig::External(VideoExternalConfig {
                 color_format: ColorFormat::Rgba8888,
                 pitch_bytes: SCREEN_WIDTH * ColorFormat::Rgba8888.bytes_per_pixel(),
@@ -238,6 +239,7 @@ impl NesiumApp {
             _video_backing: video_backing,
             runtime_handle,
             _runtime: runtime,
+            event_rx,
             frame_texture: None,
             frame_image: None,
             last_frame_seq: 0,
@@ -566,9 +568,9 @@ impl eframe::App for NesiumApp {
         }
 
         // 1. Process Events from Runtime thread
-        while let Some(notification) = self.runtime_handle.try_recv_notification() {
-            match notification {
-                RuntimeNotification::AudioInitFailed { error } => {
+        while let Ok(event) = self.event_rx.try_recv() {
+            match event {
+                RuntimeEvent::AudioInitFailed { error } => {
                     let msg = format!("Audio init failed: {error}");
                     tracing::error!("{msg}");
                     self.error_dialog = Some(msg);

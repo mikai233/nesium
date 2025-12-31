@@ -57,9 +57,9 @@ struct RuntimeHolder {
     _video: VideoBacking,
     #[cfg(not(target_os = "android"))]
     _video: VideoBackingStore,
-    handle: RuntimeHandle,
+    handle: RuntimeHandle<api::events::FlutterRuntimeEventSender>,
     frame_handle: Option<Arc<ExternalFrameHandle>>,
-    _runtime: Runtime,
+    _runtime: Runtime<api::events::FlutterRuntimeEventSender>,
 }
 
 static RUNTIME: OnceLock<RuntimeHolder> = OnceLock::new();
@@ -148,11 +148,13 @@ fn ensure_runtime() -> &'static RuntimeHolder {
         // SAFETY:
         // - CPU backend: `video_backing` keeps the two planes alive for the lifetime of the process.
         // - AHB backend: the swapchain callbacks manage per-frame locking and pointer validity.
-        let runtime = Runtime::start(RuntimeConfig {
-            video: video_cfg,
-            audio: AudioMode::Auto,
-        })
-        .expect("failed to start nesium runtime");
+
+        let runtime =
+            Runtime::<api::events::FlutterRuntimeEventSender>::start_pending(RuntimeConfig {
+                video: video_cfg,
+                audio: AudioMode::Auto,
+            })
+            .expect("failed to start nesium runtime");
 
         let handle = runtime.handle();
         #[cfg(target_os = "android")]
@@ -178,12 +180,8 @@ fn ensure_runtime() -> &'static RuntimeHolder {
     })
 }
 
-pub(crate) fn runtime_handle() -> &'static RuntimeHandle {
+pub(crate) fn runtime_handle() -> &'static RuntimeHandle<api::events::FlutterRuntimeEventSender> {
     &ensure_runtime().handle
-}
-
-pub(crate) fn try_runtime_handle() -> Option<&'static RuntimeHandle> {
-    RUNTIME.get().map(|holder| &holder.handle)
 }
 
 fn frame_handle_ref() -> &'static ExternalFrameHandle {

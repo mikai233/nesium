@@ -11,8 +11,9 @@ use std::{
 
 use super::{
     control::{ControlMessage, ControlReplySender},
+    pubsub::RuntimePubSub,
     state::RuntimeState,
-    types::{AudioMode, NTSC_FPS_EXACT, RuntimeError, RuntimeNotification},
+    types::{AudioMode, NTSC_FPS_EXACT, RuntimeError, RuntimeEvent, RuntimeEventSender},
     util::button_bit,
 };
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -67,10 +68,11 @@ const BUTTONS: [Button; 8] = [
     Button::Right,
 ];
 
-pub(crate) struct Runner {
+pub(crate) struct Runner<S: RuntimeEventSender> {
     nes: Nes,
     audio: Option<NesAudioPlayer>,
-    ctrl_rx: Receiver<ControlMessage>,
+    ctrl_rx: Receiver<ControlMessage<S>>,
+    pubsub: RuntimePubSub<S>,
     state: Arc<RuntimeState>,
     next_frame_deadline: Instant,
     frame_duration: Duration,
@@ -82,11 +84,11 @@ pub(crate) struct Runner {
     movie_frame: usize,
 }
 
-impl Runner {
+impl<S: RuntimeEventSender> Runner<S> {
     pub(crate) fn new(
         audio_mode: AudioMode,
-        ctrl_rx: Receiver<ControlMessage>,
-        event_tx: Sender<RuntimeNotification>,
+        ctrl_rx: Receiver<ControlMessage<S>>,
+        mut pubsub: RuntimePubSub<S>,
         framebuffer: FrameBuffer,
         state: Arc<RuntimeState>,
     ) -> Self {
@@ -98,7 +100,7 @@ impl Runner {
                     (Some(player), sr)
                 }
                 Err(e) => {
-                    let _ = event_tx.send(RuntimeNotification::AudioInitFailed {
+                    pubsub.broadcast(RuntimeEvent::AudioInitFailed {
                         error: e.to_string(),
                     });
                     (None, 48_000)
@@ -115,6 +117,7 @@ impl Runner {
             nes,
             audio,
             ctrl_rx,
+            pubsub,
             state,
             next_frame_deadline: Instant::now(),
             frame_duration: FRAME_DURATION_NTSC,
@@ -245,7 +248,7 @@ impl Runner {
         }
     }
 
-    fn handle_control(&mut self, msg: ControlMessage) -> bool {
+    fn handle_control(&mut self, msg: ControlMessage<S>) -> bool {
         match msg {
             ControlMessage::Stop => return true,
             ControlMessage::LoadRom(path, reply) => self.handle_load_rom(path, reply),
@@ -272,6 +275,10 @@ impl Runner {
                 self.handle_set_rewinding(rewinding, reply)
             }
             ControlMessage::LoadMovie(movie, reply) => self.handle_load_movie(movie, reply),
+            ControlMessage::SubscribeEvent(topic, sender, reply) => {
+                self.pubsub.subscribe(topic, sender);
+                let _ = reply.send(Ok(()));
+            }
         }
 
         false
@@ -392,10 +399,7 @@ impl Runner {
     ///
     /// If the movie is exhausted (or otherwise inconsistent), playback is stopped.
     fn current_movie_frame(&mut self) -> Option<InputFrame> {
-        let Some(movie) = self.movie.as_ref() else {
-            return None;
-        };
-
+        let movie = self.movie.as_ref()?;
         let len = movie.frames.len();
         if self.movie_frame >= len {
             // Do not silently fall back to live input when the movie ends.

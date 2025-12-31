@@ -1,5 +1,7 @@
 pub mod fm2;
 
+use std::default;
+
 use bitflags::bitflags;
 
 /// Unified internal Movie IR used to drive the emulator.
@@ -23,17 +25,12 @@ pub struct Movie {
 }
 
 /// Represents different TAS format data.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum TasData {
     Fm2(fm2::Fm2Header),
     // Future: Bk2(bk2::Bk2Header),
+    #[default]
     Unknown,
-}
-
-impl Default for TasData {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

@@ -75,7 +75,7 @@ pub fn parse<R: BufRead>(mut reader: R) -> Result<Movie, SupportError> {
                 if is_rec_char {
                     let mut line_buf = Vec::new();
                     line_buf.push(byte);
-                    while let Some(res) = bytes_iter.next() {
+                    for res in bytes_iter.by_ref() {
                         let b = res.map_err(SupportError::Io)?;
                         if b == b'\n' || b == b'\r' {
                             break;

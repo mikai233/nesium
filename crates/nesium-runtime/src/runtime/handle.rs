@@ -1,12 +1,12 @@
 use core::ffi::c_void;
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex, atomic::Ordering},
+    sync::{Arc, atomic::Ordering},
     thread::{self, JoinHandle},
     time::Duration,
 };
 
-use crossbeam_channel::{Receiver, Sender, TryRecvError, bounded, unbounded};
+use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
 use nesium_core::{
     audio::bus::AudioBusConfig,
     controller::Button,
@@ -18,36 +18,53 @@ use nesium_core::{
 
 use super::{
     control::{ControlMessage, ControlReplySender},
+    pubsub::RuntimePubSub,
     runner::Runner,
     state::RuntimeState,
     types::{
-        CONTROL_REPLY_TIMEOUT, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError,
-        RuntimeNotification, SAVE_STATE_REPLY_TIMEOUT, VideoConfig,
+        CONTROL_REPLY_TIMEOUT, EventTopic, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError,
+        RuntimeEvent, RuntimeEventSender, SAVE_STATE_REPLY_TIMEOUT, VideoConfig,
     },
     util::button_bit,
 };
 
-struct RuntimeInner {
-    ctrl_tx: Sender<ControlMessage>,
-    notifications_rx: Mutex<Receiver<RuntimeNotification>>,
+struct RuntimeInner<S: RuntimeEventSender> {
+    ctrl_tx: Sender<ControlMessage<S>>,
     frame_handle: Option<Arc<ExternalFrameHandle>>,
     state: Arc<RuntimeState>,
 }
 
-pub struct Runtime {
-    inner: Arc<RuntimeInner>,
+pub struct Runtime<S: RuntimeEventSender> {
+    inner: Arc<RuntimeInner<S>>,
     join: Option<JoinHandle<()>>,
 }
 
 #[derive(Clone)]
-pub struct RuntimeHandle {
-    inner: Arc<RuntimeInner>,
+pub struct RuntimeHandle<S: RuntimeEventSender> {
+    inner: Arc<RuntimeInner<S>>,
 }
 
-impl Runtime {
-    pub fn start(config: RuntimeConfig) -> Result<Self, RuntimeError> {
-        let (ctrl_tx, ctrl_rx) = unbounded::<ControlMessage>();
-        let (event_tx, event_rx) = unbounded::<RuntimeNotification>();
+impl Runtime<Sender<RuntimeEvent>> {
+    pub fn start(config: RuntimeConfig) -> Result<(Self, Receiver<RuntimeEvent>), RuntimeError> {
+        let (event_tx, event_rx) = unbounded::<RuntimeEvent>();
+        Ok((Self::start_internal(config, Some(event_tx))?, event_rx))
+    }
+}
+
+impl<S: RuntimeEventSender> Runtime<S> {
+    pub fn start_with_sender(config: RuntimeConfig, sender: S) -> Result<Self, RuntimeError> {
+        Self::start_internal(config, Some(sender))
+    }
+
+    pub fn start_pending(config: RuntimeConfig) -> Result<Self, RuntimeError> {
+        Self::start_internal(config, None)
+    }
+
+    fn start_internal(
+        config: RuntimeConfig,
+        event_sender: Option<S>,
+    ) -> Result<Self, RuntimeError> {
+        let (ctrl_tx, ctrl_rx) = unbounded::<ControlMessage<S>>();
 
         let (framebuffer, frame_handle) = match config.video {
             VideoConfig::External(video) => {
@@ -84,14 +101,19 @@ impl Runtime {
         let thread_state = Arc::clone(&state);
         let audio_mode = config.audio;
 
+        let mut pubsub = RuntimePubSub::new();
+        if let Some(sender) = event_sender {
+            // By default, a monolithic sender subscribes to everything we know about.
+            pubsub.subscribe(EventTopic::Notification, sender);
+        }
+
         let join = thread::spawn(move || {
-            let mut runner = Runner::new(audio_mode, ctrl_rx, event_tx, framebuffer, thread_state);
+            let mut runner = Runner::new(audio_mode, ctrl_rx, pubsub, framebuffer, thread_state);
             runner.run();
         });
 
         let inner = Arc::new(RuntimeInner {
             ctrl_tx,
-            notifications_rx: Mutex::new(event_rx),
             frame_handle,
             state,
         });
@@ -102,14 +124,14 @@ impl Runtime {
         })
     }
 
-    pub fn handle(&self) -> RuntimeHandle {
+    pub fn handle(&self) -> RuntimeHandle<S> {
         RuntimeHandle {
             inner: Arc::clone(&self.inner),
         }
     }
 }
 
-impl Drop for Runtime {
+impl<S: RuntimeEventSender> Drop for Runtime<S> {
     fn drop(&mut self) {
         let _ = self.inner.ctrl_tx.send(ControlMessage::Stop);
         if let Some(join) = self.join.take() {
@@ -118,12 +140,12 @@ impl Drop for Runtime {
     }
 }
 
-impl RuntimeHandle {
+impl<S: RuntimeEventSender> RuntimeHandle<S> {
     fn send_with_reply(
         &self,
         op: &'static str,
         timeout: Duration,
-        build: impl FnOnce(ControlReplySender) -> ControlMessage,
+        build: impl FnOnce(ControlReplySender) -> ControlMessage<S>,
     ) -> Result<(), RuntimeError> {
         let (reply_tx, reply_rx) = bounded::<Result<(), RuntimeError>>(1);
         self.inner
@@ -141,6 +163,12 @@ impl RuntimeHandle {
         }
     }
 
+    pub fn subscribe_event(&self, topic: EventTopic, sender: S) -> Result<(), RuntimeError> {
+        self.send_with_reply("subscribe_event", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SubscribeEvent(topic, sender, reply)
+        })
+    }
+
     pub fn frame_handle(&self) -> Option<&Arc<ExternalFrameHandle>> {
         self.inner.frame_handle.as_ref()
     }
@@ -150,24 +178,6 @@ impl RuntimeHandle {
             .state
             .frame_seq
             .load(std::sync::atomic::Ordering::Relaxed)
-    }
-
-    pub fn try_recv_notification(&self) -> Option<RuntimeNotification> {
-        let rx = self.inner.notifications_rx.lock().ok()?;
-        match rx.try_recv() {
-            Ok(ev) => Some(ev),
-            Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => None,
-        }
-    }
-
-    /// Blocks until a runtime notification is available or the channel is disconnected.
-    ///
-    /// Note: this holds the internal receiver mutex while blocking, so it should only be used
-    /// when you have a single consumer (e.g. a dedicated notification stream thread).
-    pub fn recv_notification_blocking(&self) -> Option<RuntimeNotification> {
-        let rx = self.inner.notifications_rx.lock().ok()?;
-        rx.recv().ok()
     }
 
     pub fn set_paused(&self, paused: bool) {

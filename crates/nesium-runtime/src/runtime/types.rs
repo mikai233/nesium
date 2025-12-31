@@ -56,10 +56,23 @@ pub struct RuntimeConfig {
 }
 
 #[derive(Debug, Clone)]
-pub enum RuntimeNotification {
+pub enum RuntimeEvent {
     /// Out-of-band notification emitted by the runtime thread (not a direct response
     /// to a control command).
     AudioInitFailed { error: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EventTopic {
+    Notification,
+}
+
+impl RuntimeEvent {
+    pub fn topic(&self) -> EventTopic {
+        match self {
+            RuntimeEvent::AudioInitFailed { .. } => EventTopic::Notification,
+        }
+    }
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -92,3 +105,25 @@ pub(crate) const NTSC_FPS_EXACT: f64 = 60.098_811_862_348_4;
 pub(crate) const CONTROL_REPLY_TIMEOUT: Duration = Duration::from_secs(2);
 pub(crate) const LOAD_ROM_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const SAVE_STATE_REPLY_TIMEOUT: Duration = Duration::from_secs(5);
+
+pub trait RuntimeEventSender: Send + Sync + 'static {
+    fn send(&self, event: RuntimeEvent) -> bool;
+}
+
+impl RuntimeEventSender for crossbeam_channel::Sender<RuntimeEvent> {
+    fn send(&self, event: RuntimeEvent) -> bool {
+        self.send(event).is_ok()
+    }
+}
+
+impl<T: RuntimeEventSender + ?Sized> RuntimeEventSender for Box<T> {
+    fn send(&self, event: RuntimeEvent) -> bool {
+        (**self).send(event)
+    }
+}
+
+impl<T: RuntimeEventSender + ?Sized> RuntimeEventSender for std::sync::Arc<T> {
+    fn send(&self, event: RuntimeEvent) -> bool {
+        (**self).send(event)
+    }
+}
