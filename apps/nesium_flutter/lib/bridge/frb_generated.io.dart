@@ -28,6 +28,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  RustStreamSink<DebugStateNotification>
+  dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<RuntimeNotification>
   dco_decode_StreamSink_runtime_notification_Sse(dynamic raw);
 
@@ -36,6 +40,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  DebugStateNotification dco_decode_debug_state_notification(dynamic raw);
+
+  @protected
+  int dco_decode_i_16(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
@@ -68,6 +78,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RuntimeNotificationKind dco_decode_runtime_notification_kind(dynamic raw);
 
   @protected
+  int dco_decode_u_16(dynamic raw);
+
+  @protected
+  int dco_decode_u_32(dynamic raw);
+
+  @protected
   BigInt dco_decode_u_64(dynamic raw);
 
   @protected
@@ -80,6 +96,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<DebugStateNotification>
+  sse_decode_StreamSink_debug_state_notification_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<RuntimeNotification>
   sse_decode_StreamSink_runtime_notification_Sse(SseDeserializer deserializer);
 
@@ -88,6 +110,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  DebugStateNotification sse_decode_debug_state_notification(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int sse_decode_i_16(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -128,6 +158,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  int sse_decode_u_16(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
   BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
@@ -143,6 +179,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_debug_state_notification_Sse(
+    RustStreamSink<DebugStateNotification> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_runtime_notification_Sse(
     RustStreamSink<RuntimeNotification> self,
     SseSerializer serializer,
@@ -153,6 +195,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_debug_state_notification(
+    DebugStateNotification self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_i_16(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
@@ -201,6 +252,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     RuntimeNotificationKind self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_64(BigInt self, SseSerializer serializer);

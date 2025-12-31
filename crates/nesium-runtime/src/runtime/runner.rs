@@ -13,7 +13,10 @@ use super::{
     control::{ControlMessage, ControlReplySender},
     pubsub::RuntimePubSub,
     state::RuntimeState,
-    types::{AudioMode, NTSC_FPS_EXACT, RuntimeError, RuntimeEvent, RuntimeEventSender},
+    types::{
+        AudioMode, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT, NotificationEvent,
+        PpuDebugState, RuntimeError,
+    },
     util::button_bit,
 };
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -68,11 +71,11 @@ const BUTTONS: [Button; 8] = [
     Button::Right,
 ];
 
-pub(crate) struct Runner<S: RuntimeEventSender> {
+pub(crate) struct Runner {
     nes: Nes,
     audio: Option<NesAudioPlayer>,
-    ctrl_rx: Receiver<ControlMessage<S>>,
-    pubsub: RuntimePubSub<S>,
+    ctrl_rx: Receiver<ControlMessage>,
+    pubsub: RuntimePubSub,
     state: Arc<RuntimeState>,
     next_frame_deadline: Instant,
     frame_duration: Duration,
@@ -84,11 +87,11 @@ pub(crate) struct Runner<S: RuntimeEventSender> {
     movie_frame: usize,
 }
 
-impl<S: RuntimeEventSender> Runner<S> {
+impl Runner {
     pub(crate) fn new(
         audio_mode: AudioMode,
-        ctrl_rx: Receiver<ControlMessage<S>>,
-        mut pubsub: RuntimePubSub<S>,
+        ctrl_rx: Receiver<ControlMessage>,
+        mut pubsub: RuntimePubSub,
         framebuffer: FrameBuffer,
         state: Arc<RuntimeState>,
     ) -> Self {
@@ -100,9 +103,12 @@ impl<S: RuntimeEventSender> Runner<S> {
                     (Some(player), sr)
                 }
                 Err(e) => {
-                    pubsub.broadcast(RuntimeEvent::AudioInitFailed {
-                        error: e.to_string(),
-                    });
+                    pubsub.broadcast(
+                        EventTopic::Notification,
+                        Box::new(NotificationEvent::AudioInitFailed {
+                            error: e.to_string(),
+                        }),
+                    );
                     (None, 48_000)
                 }
             },
@@ -248,7 +254,7 @@ impl<S: RuntimeEventSender> Runner<S> {
         }
     }
 
-    fn handle_control(&mut self, msg: ControlMessage<S>) -> bool {
+    fn handle_control(&mut self, msg: ControlMessage) -> bool {
         match msg {
             ControlMessage::Stop => return true,
             ControlMessage::LoadRom(path, reply) => self.handle_load_rom(path, reply),
@@ -277,6 +283,10 @@ impl<S: RuntimeEventSender> Runner<S> {
             ControlMessage::LoadMovie(movie, reply) => self.handle_load_movie(movie, reply),
             ControlMessage::SubscribeEvent(topic, sender, reply) => {
                 self.pubsub.subscribe(topic, sender);
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::UnsubscribeEvent(topic, reply) => {
+                self.pubsub.unsubscribe(topic);
                 let _ = reply.send(Ok(()));
             }
         }
@@ -374,6 +384,9 @@ impl<S: RuntimeEventSender> Runner<S> {
         if movie_frame.is_some() {
             self.advance_movie_after_frame();
         }
+
+        // Broadcast debug state if there's a subscriber.
+        self.maybe_broadcast_debug_state();
     }
 
     /// Captures rewind history (snapshot + render index plane) when enabled.
@@ -495,6 +508,44 @@ impl<S: RuntimeEventSender> Runner<S> {
             self.movie = None;
             println!("[Runner] TAS playback finished");
         }
+    }
+
+    /// Broadcasts debug state to subscribers if someone is listening.
+    fn maybe_broadcast_debug_state(&mut self) {
+        if !self.pubsub.has_subscriber(EventTopic::DebugState) {
+            return;
+        }
+
+        let cpu_snap = self.nes.debug_state();
+        let (scanline, cycle, frame, ctrl, mask, status, oam_addr, vram_addr, temp_addr, fine_x) =
+            self.nes.ppu_debug_state();
+
+        let debug = DebugState {
+            cpu: CpuDebugState {
+                pc: cpu_snap.pc,
+                a: cpu_snap.a,
+                x: cpu_snap.x,
+                y: cpu_snap.y,
+                sp: cpu_snap.s,
+                status: cpu_snap.p,
+                cycle: self.nes.master_clock() / 3, // Approximate CPU cycles (NTSC)
+            },
+            ppu: PpuDebugState {
+                scanline,
+                cycle,
+                frame,
+                ctrl,
+                mask,
+                status,
+                oam_addr,
+                vram_addr,
+                temp_addr,
+                fine_x,
+            },
+        };
+
+        self.pubsub
+            .broadcast(EventTopic::DebugState, Box::new(debug));
     }
 
     /// Loads a ROM from the specified path, calculates its SHA-1 hash, and initializes the NES state.

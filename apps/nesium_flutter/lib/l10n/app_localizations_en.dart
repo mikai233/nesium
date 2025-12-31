@@ -516,4 +516,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dialogOk => 'OK';
+
+  @override
+  String get debuggerNoRomTitle => 'No ROM Running';
+
+  @override
+  String get debuggerNoRomSubtitle => 'Load a ROM to see debug state';
+
+  @override
+  String get debuggerCpuRegisters => 'CPU Registers';
+
+  @override
+  String get debuggerPpuState => 'PPU State';
+
+  @override
+  String get debuggerCpuStatusTooltip =>
+      'CPU Status Register (P)\nN: Negative - set if result bit 7 is set\nV: Overflow - set on signed overflow\nB: Break - set by BRK instruction\nD: Decimal - BCD mode (ignored on NES)\nI: Interrupt Disable - blocks IRQ\nZ: Zero - set if result is zero\nC: Carry - set on unsigned overflow\n\nUppercase = set, lowercase = clear';
+
+  @override
+  String get debuggerPpuCtrlTooltip =>
+      'PPU Control Register (\$2000)\nV: NMI enable\nP: PPU master/slave (unused)\nH: Sprite height (0=8x8, 1=8x16)\nB: Background pattern table address\nS: Sprite pattern table address\nI: VRAM address increment (0=1, 1=32)\nNN: Base nametable address\n\nUppercase = set, lowercase = clear';
+
+  @override
+  String get debuggerPpuMaskTooltip =>
+      'PPU Mask Register (\$2001)\nBGR: Color emphasis bits\ns: Show sprites\nb: Show background\nM: Show sprites in leftmost 8 pixels\nm: Show background in leftmost 8 pixels\ng: Greyscale\n\nUppercase = set, lowercase = clear';
+
+  @override
+  String get debuggerPpuStatusTooltip =>
+      'PPU Status Register (\$2002)\nV: VBlank has started\nS: Sprite 0 hit\nO: Sprite overflow\n\nUppercase = set, lowercase = clear';
+
+  @override
+  String get debuggerScanlineTooltip =>
+      'Scanline Numbers:\n0-239: Visible (Render)\n240: Post-render (Idle)\n241-260: VBlank (Vertical Blanking)\n-1: Pre-render (Dummy scanline)';
 }

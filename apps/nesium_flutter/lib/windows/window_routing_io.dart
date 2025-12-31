@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 
-import '../l10n/app_localizations.dart';
 import '../platform/platform_capabilities.dart';
 import '../shell/nes_shell.dart';
 import 'secondary_window.dart';
@@ -96,15 +95,9 @@ class _WindowRouterState extends State<WindowRouter> {
       case WindowKind.main:
         return const NesShell();
       case WindowKind.debugger:
-        return SecondaryWindow(
-          title: AppLocalizations.of(context)!.windowDebuggerTitle,
-          child: const SecondaryDebuggerContent(),
-        );
+        return const SecondaryWindow(child: SecondaryDebuggerContent());
       case WindowKind.tools:
-        return SecondaryWindow(
-          title: AppLocalizations.of(context)!.windowToolsTitle,
-          child: const SecondaryToolsContent(),
-        );
+        return const SecondaryWindow(child: SecondaryToolsContent());
     }
   }
 }

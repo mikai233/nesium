@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -17,6 +18,7 @@ mod menu;
 mod viewports;
 
 use anyhow::Result;
+use crossbeam_channel::{Sender, unbounded};
 use eframe::egui;
 use egui::{
     ColorImage, Context as EguiContext, TextureHandle, TextureOptions, ViewportId, Visuals,
@@ -30,8 +32,8 @@ use nesium_core::{
     reset_kind::ResetKind,
 };
 use nesium_runtime::{
-    AudioMode, Receiver, Runtime, RuntimeConfig, RuntimeEvent, RuntimeHandle, VideoConfig,
-    VideoExternalConfig,
+    AudioMode, DebugState, Event, NotificationEvent, Receiver, Runtime, RuntimeConfig,
+    RuntimeEventSender, RuntimeHandle, VideoConfig, VideoExternalConfig,
 };
 
 struct VideoBackingStore {
@@ -45,6 +47,36 @@ use self::{
     gamepad::GamepadManager,
     i18n::{I18n, Language, TextId},
 };
+
+#[derive(Debug)]
+pub enum EguiAppEvent {
+    Notification(NotificationEvent),
+    DebugState(DebugState),
+}
+
+struct EguiEventSender {
+    tx: Sender<EguiAppEvent>,
+}
+
+impl RuntimeEventSender for EguiEventSender {
+    fn send(&self, event: Box<dyn Event>) -> bool {
+        let any: Box<dyn Any> = event;
+        let any = match any.downcast::<NotificationEvent>() {
+            Ok(n) => {
+                let _ = self.tx.send(EguiAppEvent::Notification(*n));
+                return true;
+            }
+            Err(original) => original,
+        };
+
+        if let Ok(d) = any.downcast::<DebugState>() {
+            let _ = self.tx.send(EguiAppEvent::DebugState(*d));
+            return true;
+        }
+
+        false
+    }
+}
 
 pub struct AppConfig {
     pub rom_path: Option<PathBuf>,
@@ -150,9 +182,9 @@ impl Viewports {
 
 pub struct NesiumApp {
     _video_backing: VideoBackingStore,
-    runtime_handle: RuntimeHandle<nesium_runtime::Sender<RuntimeEvent>>,
-    _runtime: Runtime<nesium_runtime::Sender<RuntimeEvent>>,
-    event_rx: Receiver<RuntimeEvent>,
+    runtime_handle: RuntimeHandle,
+    _runtime: Runtime,
+    event_rx: Receiver<EguiAppEvent>,
     frame_texture: Option<TextureHandle>,
     frame_image: Option<Arc<ColorImage>>,
     last_frame_seq: u64,
@@ -188,15 +220,20 @@ impl NesiumApp {
 
         // SAFETY: `video_backing` keeps the two planes alive for the lifetime of the app.
         // The planes do not overlap and are sized to the NES framebuffer.
-        let (runtime, event_rx) = Runtime::start(RuntimeConfig {
-            video: VideoConfig::External(VideoExternalConfig {
-                color_format: ColorFormat::Rgba8888,
-                pitch_bytes: SCREEN_WIDTH * ColorFormat::Rgba8888.bytes_per_pixel(),
-                plane0: video_backing._plane0.as_mut_ptr(),
-                plane1: video_backing._plane1.as_mut_ptr(),
-            }),
-            audio: AudioMode::Auto,
-        })
+        let (event_tx, event_rx) = unbounded();
+        let sender = Box::new(EguiEventSender { tx: event_tx }) as Box<dyn RuntimeEventSender>;
+        let runtime = Runtime::start_with_sender(
+            RuntimeConfig {
+                video: VideoConfig::External(VideoExternalConfig {
+                    color_format: ColorFormat::Rgba8888,
+                    pitch_bytes: SCREEN_WIDTH * ColorFormat::Rgba8888.bytes_per_pixel(),
+                    plane0: video_backing._plane0.as_mut_ptr(),
+                    plane1: video_backing._plane1.as_mut_ptr(),
+                }),
+                audio: AudioMode::Auto,
+            },
+            sender,
+        )
         .expect("failed to start nesium runtime");
         let runtime_handle = runtime.handle();
 
@@ -570,10 +607,13 @@ impl eframe::App for NesiumApp {
         // 1. Process Events from Runtime thread
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
-                RuntimeEvent::AudioInitFailed { error } => {
+                EguiAppEvent::Notification(NotificationEvent::AudioInitFailed { error }) => {
                     let msg = format!("Audio init failed: {error}");
                     tracing::error!("{msg}");
                     self.error_dialog = Some(msg);
+                }
+                EguiAppEvent::DebugState(_) => {
+                    // Debug state is handled by dedicated debug UI, not here.
                 }
             }
         }

@@ -1,5 +1,5 @@
 use core::ffi::c_void;
-use std::{path::PathBuf, time::Duration};
+use std::{any::Any, path::PathBuf, time::Duration};
 
 use nesium_core::ppu::{
     SCREEN_HEIGHT, SCREEN_WIDTH,
@@ -55,22 +55,63 @@ pub struct RuntimeConfig {
     pub audio: AudioMode,
 }
 
+pub trait Event: Any + Send + Sync + std::fmt::Debug {}
+
 #[derive(Debug, Clone)]
-pub enum RuntimeEvent {
+pub enum NotificationEvent {
     /// Out-of-band notification emitted by the runtime thread (not a direct response
     /// to a control command).
     AudioInitFailed { error: String },
 }
 
+impl Event for NotificationEvent {}
+
+/// CPU register snapshot for debugging.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CpuDebugState {
+    pub pc: u16,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub sp: u8,
+    pub status: u8,
+    pub cycle: u64,
+}
+
+/// PPU state snapshot for debugging.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PpuDebugState {
+    pub scanline: i16,
+    pub cycle: u16,
+    pub frame: u32,
+    pub ctrl: u8,
+    pub mask: u8,
+    pub status: u8,
+    pub oam_addr: u8,
+    pub vram_addr: u16,
+    pub temp_addr: u16,
+    pub fine_x: u8,
+}
+
+/// Complete debug state (sent per-frame when subscribed).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DebugState {
+    pub cpu: CpuDebugState,
+    pub ppu: PpuDebugState,
+}
+
+impl Event for DebugState {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventTopic {
     Notification,
+    DebugState,
 }
 
-impl RuntimeEvent {
+impl NotificationEvent {
     pub fn topic(&self) -> EventTopic {
         match self {
-            RuntimeEvent::AudioInitFailed { .. } => EventTopic::Notification,
+            NotificationEvent::AudioInitFailed { .. } => EventTopic::Notification,
         }
     }
 }
@@ -107,23 +148,17 @@ pub(crate) const LOAD_ROM_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const SAVE_STATE_REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub trait RuntimeEventSender: Send + Sync + 'static {
-    fn send(&self, event: RuntimeEvent) -> bool;
-}
-
-impl RuntimeEventSender for crossbeam_channel::Sender<RuntimeEvent> {
-    fn send(&self, event: RuntimeEvent) -> bool {
-        self.send(event).is_ok()
-    }
+    fn send(&self, event: Box<dyn Event>) -> bool;
 }
 
 impl<T: RuntimeEventSender + ?Sized> RuntimeEventSender for Box<T> {
-    fn send(&self, event: RuntimeEvent) -> bool {
+    fn send(&self, event: Box<dyn Event>) -> bool {
         (**self).send(event)
     }
 }
 
 impl<T: RuntimeEventSender + ?Sized> RuntimeEventSender for std::sync::Arc<T> {
-    fn send(&self, event: RuntimeEvent) -> bool {
+    fn send(&self, event: Box<dyn Event>) -> bool {
         (**self).send(event)
     }
 }

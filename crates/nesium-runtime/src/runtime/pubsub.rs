@@ -1,25 +1,31 @@
 use std::collections::HashMap;
 
-use crate::RuntimeEvent;
-use crate::runtime::types::{EventTopic, RuntimeEventSender};
+use crate::runtime::types::{Event, EventTopic, RuntimeEventSender};
 
-pub struct RuntimePubSub<S: RuntimeEventSender> {
-    subscribers: HashMap<EventTopic, S>,
+pub struct RuntimePubSub {
+    subscribers: HashMap<EventTopic, Box<dyn RuntimeEventSender>>,
 }
 
-impl<S: RuntimeEventSender> RuntimePubSub<S> {
+impl RuntimePubSub {
     pub fn new() -> Self {
         Self {
             subscribers: HashMap::new(),
         }
     }
 
-    pub fn subscribe(&mut self, topic: EventTopic, sender: S) {
+    pub fn subscribe(&mut self, topic: EventTopic, sender: Box<dyn RuntimeEventSender>) {
         self.subscribers.insert(topic, sender);
     }
 
-    pub fn broadcast(&mut self, event: RuntimeEvent) {
-        let topic = event.topic();
+    pub fn unsubscribe(&mut self, topic: EventTopic) {
+        self.subscribers.remove(&topic);
+    }
+
+    pub fn has_subscriber(&self, topic: EventTopic) -> bool {
+        self.subscribers.contains_key(&topic)
+    }
+
+    pub fn broadcast(&mut self, topic: EventTopic, event: Box<dyn Event>) {
         if let Some(subscriber) = self.subscribers.get(&topic) {
             let active = subscriber.send(event);
             if !active {

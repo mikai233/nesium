@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2102738803;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1413116886;
 
 // Section: executor
 
@@ -45,6 +45,45 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__api__events__debug_state_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "debug_state_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_sink = <StreamSink<
+                crate::api::events::DebugStateNotification,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::events::debug_state_stream(api_sink).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__load_rom__eject_console_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -946,6 +985,41 @@ fn wire__crate__api__pause__toggle_pause_impl(
         },
     )
 }
+fn wire__crate__api__events__unsubscribe_debug_state_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "unsubscribe_debug_state",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::events::unsubscribe_debug_state().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 
 // Section: dart2rust
 
@@ -954,6 +1028,19 @@ impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <String>::sse_decode(deserializer);
         return flutter_rust_bridge::for_generated::anyhow::anyhow!("{}", inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<
+        crate::api::events::DebugStateNotification,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
     }
 }
 
@@ -982,6 +1069,47 @@ impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_u8().unwrap() != 0
+    }
+}
+
+impl SseDecode for crate::api::events::DebugStateNotification {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_cpuPc = <u16>::sse_decode(deserializer);
+        let mut var_cpuA = <u8>::sse_decode(deserializer);
+        let mut var_cpuX = <u8>::sse_decode(deserializer);
+        let mut var_cpuY = <u8>::sse_decode(deserializer);
+        let mut var_cpuSp = <u8>::sse_decode(deserializer);
+        let mut var_cpuStatus = <u8>::sse_decode(deserializer);
+        let mut var_cpuCycle = <u64>::sse_decode(deserializer);
+        let mut var_ppuScanline = <i16>::sse_decode(deserializer);
+        let mut var_ppuCycle = <u16>::sse_decode(deserializer);
+        let mut var_ppuFrame = <u32>::sse_decode(deserializer);
+        let mut var_ppuCtrl = <u8>::sse_decode(deserializer);
+        let mut var_ppuMask = <u8>::sse_decode(deserializer);
+        let mut var_ppuStatus = <u8>::sse_decode(deserializer);
+        return crate::api::events::DebugStateNotification {
+            cpu_pc: var_cpuPc,
+            cpu_a: var_cpuA,
+            cpu_x: var_cpuX,
+            cpu_y: var_cpuY,
+            cpu_sp: var_cpuSp,
+            cpu_status: var_cpuStatus,
+            cpu_cycle: var_cpuCycle,
+            ppu_scanline: var_ppuScanline,
+            ppu_cycle: var_ppuCycle,
+            ppu_frame: var_ppuFrame,
+            ppu_ctrl: var_ppuCtrl,
+            ppu_mask: var_ppuMask,
+            ppu_status: var_ppuStatus,
+        };
+    }
+}
+
+impl SseDecode for i16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_i16::<NativeEndian>().unwrap()
     }
 }
 
@@ -1090,6 +1218,20 @@ impl SseDecode for crate::api::events::RuntimeNotificationKind {
     }
 }
 
+impl SseDecode for u16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u16::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for u32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u32::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for u64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1118,60 +1260,67 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__api__load_rom__eject_console_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__load_rom__get_rom_hash_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__pause__is_paused_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__load_rom__load_rom_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__emulation__load_state_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__emulation__load_state_from_memory_impl(
+        1 => wire__crate__api__events__debug_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__load_rom__eject_console_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__load_rom__get_rom_hash_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__pause__is_paused_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__load_rom__load_rom_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__emulation__load_state_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__emulation__load_state_from_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__emulation__load_tas_movie_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__palette__palette_presets_impl(port, ptr, rust_vec_len, data_len),
-        11 => {
+        10 => wire__crate__api__emulation__load_tas_movie_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__palette__palette_presets_impl(port, ptr, rust_vec_len, data_len),
+        12 => {
             wire__crate__api__load_rom__power_reset_console_impl(port, ptr, rust_vec_len, data_len)
         }
-        12 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
-        13 => {
+        13 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
+        14 => {
             wire__crate__api__events__runtime_notifications_impl(port, ptr, rust_vec_len, data_len)
         }
-        14 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__emulation__save_state_to_memory_impl(
+        15 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__emulation__save_state_to_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__api__emulation__set_integer_fps_mode_impl(
+        17 => wire__crate__api__emulation__set_integer_fps_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
-        18 => {
+        18 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
+        19 => {
             wire__crate__api__palette__set_palette_pal_data_impl(port, ptr, rust_vec_len, data_len)
         }
-        19 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
-        21 => {
+        20 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
+        22 => {
             wire__crate__api__emulation__set_rewind_config_impl(port, ptr, rust_vec_len, data_len)
         }
-        22 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
+        23 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__events__unsubscribe_debug_state_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         _ => unreachable!(),
     }
 }
@@ -1184,13 +1333,45 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        3 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
 
 // Section: rust2dart
 
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::events::DebugStateNotification {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.cpu_pc.into_into_dart().into_dart(),
+            self.cpu_a.into_into_dart().into_dart(),
+            self.cpu_x.into_into_dart().into_dart(),
+            self.cpu_y.into_into_dart().into_dart(),
+            self.cpu_sp.into_into_dart().into_dart(),
+            self.cpu_status.into_into_dart().into_dart(),
+            self.cpu_cycle.into_into_dart().into_dart(),
+            self.ppu_scanline.into_into_dart().into_dart(),
+            self.ppu_cycle.into_into_dart().into_dart(),
+            self.ppu_frame.into_into_dart().into_dart(),
+            self.ppu_ctrl.into_into_dart().into_dart(),
+            self.ppu_mask.into_into_dart().into_dart(),
+            self.ppu_status.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::events::DebugStateNotification
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::events::DebugStateNotification>
+    for crate::api::events::DebugStateNotification
+{
+    fn into_into_dart(self) -> crate::api::events::DebugStateNotification {
+        self
+    }
+}
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::palette::PaletteKind {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -1287,6 +1468,18 @@ impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
 
 impl SseEncode
     for StreamSink<
+        crate::api::events::DebugStateNotification,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
+    for StreamSink<
         crate::api::events::RuntimeNotification,
         flutter_rust_bridge::for_generated::SseCodec,
     >
@@ -1308,6 +1501,32 @@ impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u8(self as _).unwrap();
+    }
+}
+
+impl SseEncode for crate::api::events::DebugStateNotification {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u16>::sse_encode(self.cpu_pc, serializer);
+        <u8>::sse_encode(self.cpu_a, serializer);
+        <u8>::sse_encode(self.cpu_x, serializer);
+        <u8>::sse_encode(self.cpu_y, serializer);
+        <u8>::sse_encode(self.cpu_sp, serializer);
+        <u8>::sse_encode(self.cpu_status, serializer);
+        <u64>::sse_encode(self.cpu_cycle, serializer);
+        <i16>::sse_encode(self.ppu_scanline, serializer);
+        <u16>::sse_encode(self.ppu_cycle, serializer);
+        <u32>::sse_encode(self.ppu_frame, serializer);
+        <u8>::sse_encode(self.ppu_ctrl, serializer);
+        <u8>::sse_encode(self.ppu_mask, serializer);
+        <u8>::sse_encode(self.ppu_status, serializer);
+    }
+}
+
+impl SseEncode for i16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_i16::<NativeEndian>(self).unwrap();
     }
 }
 
@@ -1405,6 +1624,20 @@ impl SseEncode for crate::api::events::RuntimeNotificationKind {
             },
             serializer,
         );
+    }
+}
+
+impl SseEncode for u16 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u16::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for u32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u32::<NativeEndian>(self).unwrap();
     }
 }
 

@@ -6,13 +6,94 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
 
 /// Runtime notification stream.
 ///
-/// This blocks on the runtime notification receiver and forwards notifications to Dart.
+/// This registers the sink directly with the runtime.
 Stream<RuntimeNotification> runtimeNotifications() =>
     RustLib.instance.api.crateApiEventsRuntimeNotifications();
+
+/// Subscribes to debug state updates (CPU/PPU registers per frame).
+///
+/// Call this when opening the debug panel. The stream will receive updates
+/// every frame until cancelled.
+Stream<DebugStateNotification> debugStateStream() =>
+    RustLib.instance.api.crateApiEventsDebugStateStream();
+
+/// Unsubscribes from debug state updates.
+///
+/// Call this when closing the debug panel to stop unnecessary computation.
+Future<void> unsubscribeDebugState() =>
+    RustLib.instance.api.crateApiEventsUnsubscribeDebugState();
+
+/// Debug state notification sent per-frame when subscribed.
+class DebugStateNotification {
+  final int cpuPc;
+  final int cpuA;
+  final int cpuX;
+  final int cpuY;
+  final int cpuSp;
+  final int cpuStatus;
+  final BigInt cpuCycle;
+  final int ppuScanline;
+  final int ppuCycle;
+  final int ppuFrame;
+  final int ppuCtrl;
+  final int ppuMask;
+  final int ppuStatus;
+
+  const DebugStateNotification({
+    required this.cpuPc,
+    required this.cpuA,
+    required this.cpuX,
+    required this.cpuY,
+    required this.cpuSp,
+    required this.cpuStatus,
+    required this.cpuCycle,
+    required this.ppuScanline,
+    required this.ppuCycle,
+    required this.ppuFrame,
+    required this.ppuCtrl,
+    required this.ppuMask,
+    required this.ppuStatus,
+  });
+
+  @override
+  int get hashCode =>
+      cpuPc.hashCode ^
+      cpuA.hashCode ^
+      cpuX.hashCode ^
+      cpuY.hashCode ^
+      cpuSp.hashCode ^
+      cpuStatus.hashCode ^
+      cpuCycle.hashCode ^
+      ppuScanline.hashCode ^
+      ppuCycle.hashCode ^
+      ppuFrame.hashCode ^
+      ppuCtrl.hashCode ^
+      ppuMask.hashCode ^
+      ppuStatus.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DebugStateNotification &&
+          runtimeType == other.runtimeType &&
+          cpuPc == other.cpuPc &&
+          cpuA == other.cpuA &&
+          cpuX == other.cpuX &&
+          cpuY == other.cpuY &&
+          cpuSp == other.cpuSp &&
+          cpuStatus == other.cpuStatus &&
+          cpuCycle == other.cpuCycle &&
+          ppuScanline == other.ppuScanline &&
+          ppuCycle == other.ppuCycle &&
+          ppuFrame == other.ppuFrame &&
+          ppuCtrl == other.ppuCtrl &&
+          ppuMask == other.ppuMask &&
+          ppuStatus == other.ppuStatus;
+}
 
 class RuntimeNotification {
   final RuntimeNotificationKind kind;

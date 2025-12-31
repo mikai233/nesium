@@ -11,6 +11,7 @@
 mod android;
 pub mod api;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
+mod senders;
 
 #[cfg(all(
     feature = "mimalloc",
@@ -57,9 +58,9 @@ struct RuntimeHolder {
     _video: VideoBacking,
     #[cfg(not(target_os = "android"))]
     _video: VideoBackingStore,
-    handle: RuntimeHandle<api::events::FlutterRuntimeEventSender>,
+    handle: RuntimeHandle,
     frame_handle: Option<Arc<ExternalFrameHandle>>,
-    _runtime: Runtime<api::events::FlutterRuntimeEventSender>,
+    _runtime: Runtime,
 }
 
 static RUNTIME: OnceLock<RuntimeHolder> = OnceLock::new();
@@ -149,12 +150,11 @@ fn ensure_runtime() -> &'static RuntimeHolder {
         // - CPU backend: `video_backing` keeps the two planes alive for the lifetime of the process.
         // - AHB backend: the swapchain callbacks manage per-frame locking and pointer validity.
 
-        let runtime =
-            Runtime::<api::events::FlutterRuntimeEventSender>::start_pending(RuntimeConfig {
-                video: video_cfg,
-                audio: AudioMode::Auto,
-            })
-            .expect("failed to start nesium runtime");
+        let runtime = Runtime::start_pending(RuntimeConfig {
+            video: video_cfg,
+            audio: AudioMode::Auto,
+        })
+        .expect("failed to start nesium runtime");
 
         let handle = runtime.handle();
         #[cfg(target_os = "android")]
@@ -180,7 +180,7 @@ fn ensure_runtime() -> &'static RuntimeHolder {
     })
 }
 
-pub(crate) fn runtime_handle() -> &'static RuntimeHandle<api::events::FlutterRuntimeEventSender> {
+pub(crate) fn runtime_handle() -> &'static RuntimeHandle {
     &ensure_runtime().handle
 }
 

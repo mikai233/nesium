@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
+use crossbeam_channel::{Sender, bounded, unbounded};
 use nesium_core::{
     audio::bus::AudioBusConfig,
     controller::Button,
@@ -23,36 +23,38 @@ use super::{
     state::RuntimeState,
     types::{
         CONTROL_REPLY_TIMEOUT, EventTopic, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError,
-        RuntimeEvent, RuntimeEventSender, SAVE_STATE_REPLY_TIMEOUT, VideoConfig,
+        RuntimeEventSender, SAVE_STATE_REPLY_TIMEOUT, VideoConfig,
     },
     util::button_bit,
 };
 
-struct RuntimeInner<S: RuntimeEventSender> {
-    ctrl_tx: Sender<ControlMessage<S>>,
+struct RuntimeInner {
+    ctrl_tx: Sender<ControlMessage>,
     frame_handle: Option<Arc<ExternalFrameHandle>>,
     state: Arc<RuntimeState>,
 }
 
-pub struct Runtime<S: RuntimeEventSender> {
-    inner: Arc<RuntimeInner<S>>,
+pub struct Runtime {
+    inner: Arc<RuntimeInner>,
     join: Option<JoinHandle<()>>,
 }
 
 #[derive(Clone)]
-pub struct RuntimeHandle<S: RuntimeEventSender> {
-    inner: Arc<RuntimeInner<S>>,
+pub struct RuntimeHandle {
+    inner: Arc<RuntimeInner>,
 }
 
-impl Runtime<Sender<RuntimeEvent>> {
-    pub fn start(config: RuntimeConfig) -> Result<(Self, Receiver<RuntimeEvent>), RuntimeError> {
-        let (event_tx, event_rx) = unbounded::<RuntimeEvent>();
-        Ok((Self::start_internal(config, Some(event_tx))?, event_rx))
+impl Runtime {
+    pub fn start(config: RuntimeConfig) -> Result<Self, RuntimeError> {
+        Self::start_internal(config, None)
     }
 }
 
-impl<S: RuntimeEventSender> Runtime<S> {
-    pub fn start_with_sender(config: RuntimeConfig, sender: S) -> Result<Self, RuntimeError> {
+impl Runtime {
+    pub fn start_with_sender(
+        config: RuntimeConfig,
+        sender: Box<dyn RuntimeEventSender>,
+    ) -> Result<Self, RuntimeError> {
         Self::start_internal(config, Some(sender))
     }
 
@@ -62,9 +64,9 @@ impl<S: RuntimeEventSender> Runtime<S> {
 
     fn start_internal(
         config: RuntimeConfig,
-        event_sender: Option<S>,
+        event_sender: Option<Box<dyn RuntimeEventSender>>,
     ) -> Result<Self, RuntimeError> {
-        let (ctrl_tx, ctrl_rx) = unbounded::<ControlMessage<S>>();
+        let (ctrl_tx, ctrl_rx) = unbounded::<ControlMessage>();
 
         let (framebuffer, frame_handle) = match config.video {
             VideoConfig::External(video) => {
@@ -124,14 +126,14 @@ impl<S: RuntimeEventSender> Runtime<S> {
         })
     }
 
-    pub fn handle(&self) -> RuntimeHandle<S> {
+    pub fn handle(&self) -> RuntimeHandle {
         RuntimeHandle {
             inner: Arc::clone(&self.inner),
         }
     }
 }
 
-impl<S: RuntimeEventSender> Drop for Runtime<S> {
+impl Drop for Runtime {
     fn drop(&mut self) {
         let _ = self.inner.ctrl_tx.send(ControlMessage::Stop);
         if let Some(join) = self.join.take() {
@@ -140,12 +142,12 @@ impl<S: RuntimeEventSender> Drop for Runtime<S> {
     }
 }
 
-impl<S: RuntimeEventSender> RuntimeHandle<S> {
+impl RuntimeHandle {
     fn send_with_reply(
         &self,
         op: &'static str,
         timeout: Duration,
-        build: impl FnOnce(ControlReplySender) -> ControlMessage<S>,
+        build: impl FnOnce(ControlReplySender) -> ControlMessage,
     ) -> Result<(), RuntimeError> {
         let (reply_tx, reply_rx) = bounded::<Result<(), RuntimeError>>(1);
         self.inner
@@ -163,9 +165,19 @@ impl<S: RuntimeEventSender> RuntimeHandle<S> {
         }
     }
 
-    pub fn subscribe_event(&self, topic: EventTopic, sender: S) -> Result<(), RuntimeError> {
+    pub fn subscribe_event(
+        &self,
+        topic: EventTopic,
+        sender: Box<dyn RuntimeEventSender>,
+    ) -> Result<(), RuntimeError> {
         self.send_with_reply("subscribe_event", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::SubscribeEvent(topic, sender, reply)
+        })
+    }
+
+    pub fn unsubscribe_event(&self, topic: EventTopic) -> Result<(), RuntimeError> {
+        self.send_with_reply("unsubscribe_event", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::UnsubscribeEvent(topic, reply)
         })
     }
 

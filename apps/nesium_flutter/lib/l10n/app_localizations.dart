@@ -1027,6 +1027,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'OK'**
   String get dialogOk;
+
+  /// No description provided for @debuggerNoRomTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No ROM Running'**
+  String get debuggerNoRomTitle;
+
+  /// No description provided for @debuggerNoRomSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Load a ROM to see debug state'**
+  String get debuggerNoRomSubtitle;
+
+  /// No description provided for @debuggerCpuRegisters.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU Registers'**
+  String get debuggerCpuRegisters;
+
+  /// No description provided for @debuggerPpuState.
+  ///
+  /// In en, this message translates to:
+  /// **'PPU State'**
+  String get debuggerPpuState;
+
+  /// No description provided for @debuggerCpuStatusTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU Status Register (P)\nN: Negative - set if result bit 7 is set\nV: Overflow - set on signed overflow\nB: Break - set by BRK instruction\nD: Decimal - BCD mode (ignored on NES)\nI: Interrupt Disable - blocks IRQ\nZ: Zero - set if result is zero\nC: Carry - set on unsigned overflow\n\nUppercase = set, lowercase = clear'**
+  String get debuggerCpuStatusTooltip;
+
+  /// No description provided for @debuggerPpuCtrlTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'PPU Control Register (\$2000)\nV: NMI enable\nP: PPU master/slave (unused)\nH: Sprite height (0=8x8, 1=8x16)\nB: Background pattern table address\nS: Sprite pattern table address\nI: VRAM address increment (0=1, 1=32)\nNN: Base nametable address\n\nUppercase = set, lowercase = clear'**
+  String get debuggerPpuCtrlTooltip;
+
+  /// No description provided for @debuggerPpuMaskTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'PPU Mask Register (\$2001)\nBGR: Color emphasis bits\ns: Show sprites\nb: Show background\nM: Show sprites in leftmost 8 pixels\nm: Show background in leftmost 8 pixels\ng: Greyscale\n\nUppercase = set, lowercase = clear'**
+  String get debuggerPpuMaskTooltip;
+
+  /// No description provided for @debuggerPpuStatusTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'PPU Status Register (\$2002)\nV: VBlank has started\nS: Sprite 0 hit\nO: Sprite overflow\n\nUppercase = set, lowercase = clear'**
+  String get debuggerPpuStatusTooltip;
+
+  /// No description provided for @debuggerScanlineTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanline Numbers:\n0-239: Visible (Render)\n240: Post-render (Idle)\n241-260: VBlank (Vertical Blanking)\n-1: Pre-render (Dummy scanline)'**
+  String get debuggerScanlineTooltip;
 }
 
 class _AppLocalizationsDelegate

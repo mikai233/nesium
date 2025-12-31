@@ -679,6 +679,34 @@ impl Nes {
         self.serial_log.drain()
     }
 
+    /// Returns a snapshot of CPU and PPU state for debugging.
+    pub fn debug_state(&self) -> CpuSnapshot {
+        CpuSnapshot {
+            pc: self.cpu.pc,
+            a: self.cpu.a,
+            x: self.cpu.x,
+            y: self.cpu.y,
+            s: self.cpu.s,
+            p: self.cpu.p.bits(),
+        }
+    }
+
+    /// Returns a detailed PPU state snapshot for debugging.
+    pub fn ppu_debug_state(&self) -> (i16, u16, u32, u8, u8, u8, u8, u16, u16, u8) {
+        (
+            self.ppu.scanline,
+            self.ppu.cycle,
+            self.ppu.frame,
+            self.ppu.registers.control.bits(),
+            self.ppu.registers.mask.bits(),
+            self.ppu.registers.status.bits(),
+            self.ppu.registers.oam_addr,
+            self.ppu.registers.vram.v.raw(),
+            self.ppu.registers.vram.t.raw(),
+            self.ppu.registers.vram.x,
+        )
+    }
+
     fn build_interceptor() -> EmuInterceptor {
         let layers: Vec<Box<dyn Interceptor>> = vec![Box::new(LogInterceptor)];
         EmuInterceptor::from_layers(layers)

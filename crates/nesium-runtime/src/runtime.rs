@@ -9,6 +9,6 @@ mod util;
 pub use crossbeam_channel::{Receiver, Sender};
 pub use handle::{Runtime, RuntimeHandle};
 pub use types::{
-    AudioMode, EventTopic, RuntimeConfig, RuntimeError, RuntimeEvent, RuntimeEventSender,
-    VideoConfig, VideoExternalConfig, VideoSwapchainConfig,
+    AudioMode, DebugState, Event, EventTopic, NotificationEvent, RuntimeConfig, RuntimeError,
+    RuntimeEventSender, VideoConfig, VideoExternalConfig, VideoSwapchainConfig,
 };
