@@ -128,6 +128,7 @@
   "menuSaveState": "Save State...",
   "menuLoadState": "Load State...",
   "menuPauseResume": "Pause / Resume",
+  "menuLoadTasMovie": "Load TAS Movie...",
   "menuPreferences": "Preferences...",
   "saveToExternalFile": "Save to file...",
   "loadFromExternalFile": "Load from file...",

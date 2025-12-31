@@ -282,6 +282,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuPauseResume => 'Pause / Resume';
 
   @override
+  String get menuLoadTasMovie => 'Load TAS Movie...';
+
+  @override
   String get menuPreferences => 'Preferences...';
 
   @override

@@ -392,4 +392,10 @@ impl RuntimeHandle {
             ControlMessage::SetRewinding(rewinding, reply)
         })
     }
+
+    pub fn load_movie(&self, movie: nesium_support::tas::Movie) -> Result<(), RuntimeError> {
+        self.send_with_reply("load_movie", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::LoadMovie(movie, reply)
+        })
+    }
 }

@@ -16,6 +16,7 @@ enum NesMenuItemId {
   powerReset,
   eject,
   togglePause,
+  loadTasMovie,
   settings,
   about,
   debugger,
@@ -65,6 +66,7 @@ class NesMenuItemSpec {
       NesMenuItemId.powerReset => l10n.menuPowerReset,
       NesMenuItemId.eject => l10n.menuEject,
       NesMenuItemId.togglePause => l10n.menuPauseResume,
+      NesMenuItemId.loadTasMovie => l10n.menuLoadTasMovie,
       NesMenuItemId.settings => l10n.menuPreferences,
       NesMenuItemId.about => l10n.menuAbout,
       NesMenuItemId.debugger => l10n.menuDebugger,
@@ -118,6 +120,10 @@ class NesMenus {
   static const NesMenuItemSpec togglePause = NesMenuItemSpec(
     id: NesMenuItemId.togglePause,
     icon: Icons.pause_circle_outline,
+  );
+  static const NesMenuItemSpec loadTasMovie = NesMenuItemSpec(
+    id: NesMenuItemId.loadTasMovie,
+    icon: Icons.movie_outlined,
   );
   static const NesMenuItemSpec settings = NesMenuItemSpec(
     id: NesMenuItemId.settings,
@@ -205,7 +211,7 @@ class NesMenus {
     ),
     const NesMenuSectionSpec(
       id: NesMenuSectionId.emulation,
-      items: [togglePause, reset, powerReset, eject],
+      items: [togglePause, loadTasMovie, reset, powerReset, eject],
     ),
     const NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
     const NesMenuSectionSpec(
@@ -240,7 +246,7 @@ class NesMenus {
     ),
     const NesMenuSectionSpec(
       id: NesMenuSectionId.emulation,
-      items: [togglePause, reset, powerReset],
+      items: [togglePause, loadTasMovie, reset, powerReset],
     ),
     const NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
     const NesMenuSectionSpec(id: NesMenuSectionId.help, items: [about]),

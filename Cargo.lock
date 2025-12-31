@@ -3072,6 +3072,7 @@ dependencies = [
  "ndk-context",
  "nesium-core",
  "nesium-runtime",
+ "nesium-support",
 ]
 
 [[package]]
@@ -3142,8 +3143,11 @@ dependencies = [
 name = "nesium-support"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.10.0",
+ "hex",
  "lz4_flex",
  "nesium-core",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

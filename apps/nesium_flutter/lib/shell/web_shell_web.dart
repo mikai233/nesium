@@ -31,7 +31,7 @@ import '../l10n/app_localizations.dart';
 import '../logging/app_logger.dart';
 import '../platform/platform_capabilities.dart';
 import '../platform/web_cmd_sender.dart';
-import '../platform/nes_emulation.dart';
+import '../platform/nes_emulation.dart' as nes_emulation;
 import 'nes_actions.dart';
 import 'nes_menu_bar.dart';
 import 'nes_menu_model.dart';
@@ -669,6 +669,27 @@ class _WebShellState extends ConsumerState<WebShell> {
     }
   }
 
+  Future<void> _loadTasMovie() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['fm2'],
+      withData: true,
+      withReadStream: false,
+    );
+    final file = result?.files.single;
+    if (file == null) return;
+
+    final bytes = file.bytes;
+    if (bytes == null) return;
+
+    final data = String.fromCharCodes(bytes);
+
+    if (!mounted) return;
+    await _runRustCommand('Load TAS Movie', () async {
+      await nes_emulation.loadTasMovie(data: data);
+    });
+  }
+
   KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent event) {
     // Avoid sending key events to the emulator when a different route (e.g. settings)
     // is on top.
@@ -689,7 +710,7 @@ class _WebShellState extends ConsumerState<WebShell> {
 
     if (key == LogicalKeyboardKey.backspace) {
       unawaitedLogged(
-        setRewinding(rewinding: pressed),
+        nes_emulation.setRewinding(rewinding: pressed),
         message: 'setRewinding ($pressed)',
         logger: 'web_shell',
       );
@@ -769,6 +790,7 @@ class _WebShellState extends ConsumerState<WebShell> {
       loadStateSlot: _loadFromSlot,
       saveStateFile: _saveToFile,
       loadStateFile: _loadFromFile,
+      loadTasMovie: _loadTasMovie,
       reset: () => _reset(powerOn: false),
       powerReset: () => _reset(powerOn: true),
       eject: () async {
@@ -997,6 +1019,19 @@ class _WebShellState extends ConsumerState<WebShell> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _runRustCommand(
+    String label,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (e) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      _showSnack('${l10n.commandFailed(label)}: $e');
+    }
+  }
+
   void _handleFatalWorkerFailure(
     String message, {
     Object? error,
@@ -1092,17 +1127,19 @@ class _WebShellState extends ConsumerState<WebShell> {
             for (final item in section.items)
               ListTile(
                 enabled:
-                    (item.id != NesMenuItemId.saveState &&
-                        item.id != NesMenuItemId.loadState &&
-                        item.id != NesMenuItemId.autoSave) ||
-                    hasRom,
+                    ((item.id != NesMenuItemId.saveState &&
+                            item.id != NesMenuItemId.loadState &&
+                            item.id != NesMenuItemId.autoSave) ||
+                        hasRom) &&
+                    item.id != NesMenuItemId.loadTasMovie,
                 leading: Icon(item.icon),
                 title: Text(item.label(l10n)),
                 onTap:
                     ((item.id != NesMenuItemId.saveState &&
-                            item.id != NesMenuItemId.loadState &&
-                            item.id != NesMenuItemId.autoSave) ||
-                        hasRom)
+                                item.id != NesMenuItemId.loadState &&
+                                item.id != NesMenuItemId.autoSave) ||
+                            hasRom) &&
+                        item.id != NesMenuItemId.loadTasMovie
                     ? () {
                         closeDrawer();
                         _dispatchDrawerAction(item.id, actions);
@@ -1196,6 +1233,9 @@ class _WebShellState extends ConsumerState<WebShell> {
         break;
       case NesMenuItemId.togglePause:
         unawaited(actions.togglePause());
+        break;
+      case NesMenuItemId.loadTasMovie:
+        unawaited(actions.loadTasMovie?.call());
         break;
       case NesMenuItemId.settings:
         unawaited(actions.openSettings());

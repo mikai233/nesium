@@ -29,6 +29,7 @@ pub(crate) enum ControlMessage {
     SaveStateToMemory(Sender<Result<Vec<u8>, RuntimeError>>),
     LoadStateFromMemory(Vec<u8>, ControlReplySender),
     SetRewinding(bool, ControlReplySender),
+    LoadMovie(nesium_support::tas::Movie, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

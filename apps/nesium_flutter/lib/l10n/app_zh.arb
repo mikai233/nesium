@@ -99,6 +99,7 @@
   "menuSaveState": "保存存档…",
   "menuLoadState": "读取存档…",
   "menuPauseResume": "暂停 / 继续",
+  "menuLoadTasMovie": "加载 TAS 录像…",
   "menuPreferences": "偏好设置…",
   "saveToExternalFile": "保存到外部文件…",
   "loadFromExternalFile": "从外部文件加载…",
