@@ -7,7 +7,7 @@ import '../platform/platform_capabilities.dart';
 import '../shell/nes_shell.dart';
 import 'secondary_window.dart';
 
-enum WindowKind { main, debugger, tools }
+enum WindowKind { main, debugger, tools, tilemap }
 
 String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
   switch (kind) {
@@ -26,6 +26,11 @@ String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
         'route': 'tools',
         if (languageCode != null) 'lang': languageCode,
       });
+    case WindowKind.tilemap:
+      return jsonEncode({
+        'route': 'tilemap',
+        if (languageCode != null) 'lang': languageCode,
+      });
   }
 }
 
@@ -42,6 +47,8 @@ WindowKind _parseWindowKindFromArguments(String? arguments) {
           return WindowKind.debugger;
         case 'tools':
           return WindowKind.tools;
+        case 'tilemap':
+          return WindowKind.tilemap;
       }
     }
   } catch (_) {
@@ -98,6 +105,8 @@ class _WindowRouterState extends State<WindowRouter> {
         return const SecondaryWindow(child: SecondaryDebuggerContent());
       case WindowKind.tools:
         return const SecondaryWindow(child: SecondaryToolsContent());
+      case WindowKind.tilemap:
+        return const SecondaryWindow(child: SecondaryTilemapContent());
     }
   }
 }

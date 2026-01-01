@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../features/debugger/debugger_panel.dart';
+import '../features/debugger/tilemap_viewer.dart';
 import '../features/tools/tools_panel.dart';
 
 class SecondaryWindow extends StatelessWidget {
@@ -33,5 +34,14 @@ class SecondaryToolsContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const ToolsPanel();
+  }
+}
+
+class SecondaryTilemapContent extends StatelessWidget {
+  const SecondaryTilemapContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const TilemapViewer();
   }
 }

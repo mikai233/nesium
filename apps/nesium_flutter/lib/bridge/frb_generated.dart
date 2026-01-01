@@ -72,7 +72,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1413116886;
+  int get rustContentHash => 948040592;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -143,9 +143,13 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiLoadRomStartNesRuntime();
 
+  Future<void> crateApiEventsSubscribeTilemapTexture();
+
   Future<bool> crateApiPauseTogglePause();
 
   Future<void> crateApiEventsUnsubscribeDebugState();
+
+  Future<void> crateApiEventsUnsubscribeTilemapTexture();
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -946,7 +950,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "start_nes_runtime", argNames: []);
 
   @override
-  Future<bool> crateApiPauseTogglePause() {
+  Future<void> crateApiEventsSubscribeTilemapTexture() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -955,6 +959,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             generalizedFrbRustBinding,
             serializer,
             funcId: 28,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSubscribeTilemapTextureConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSubscribeTilemapTextureConstMeta =>
+      const TaskConstMeta(debugName: "subscribe_tilemap_texture", argNames: []);
+
+  @override
+  Future<bool> crateApiPauseTogglePause() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 29,
             port: port_,
           );
         },
@@ -981,7 +1012,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -998,6 +1029,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiEventsUnsubscribeDebugStateConstMeta =>
       const TaskConstMeta(debugName: "unsubscribe_debug_state", argNames: []);
+
+  @override
+  Future<void> crateApiEventsUnsubscribeTilemapTexture() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 31,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsUnsubscribeTilemapTextureConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsUnsubscribeTilemapTextureConstMeta =>
+      const TaskConstMeta(
+        debugName: "unsubscribe_tilemap_texture",
+        argNames: [],
+      );
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {

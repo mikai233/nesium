@@ -548,4 +548,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get debuggerScanlineTooltip =>
       'Scanline Numbers:\n0-239: Visible (Render)\n240: Post-render (Idle)\n241-260: VBlank (Vertical Blanking)\n-1: Pre-render (Dummy scanline)';
+
+  @override
+  String get menuTilemapViewer => 'Tilemap Viewer';
 }

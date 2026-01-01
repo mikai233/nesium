@@ -21,6 +21,7 @@ enum NesMenuItemId {
   about,
   debugger,
   tools,
+  tilemapViewer,
 }
 
 class NesMenuItemSpec {
@@ -71,6 +72,7 @@ class NesMenuItemSpec {
       NesMenuItemId.about => l10n.menuAbout,
       NesMenuItemId.debugger => l10n.menuDebugger,
       NesMenuItemId.tools => l10n.menuTools,
+      NesMenuItemId.tilemapViewer => l10n.menuTilemapViewer,
     };
   }
 }
@@ -140,6 +142,9 @@ class NesMenus {
   static const NesMenuItemSpec tools = NesMenuItemSpec(
     id: NesMenuItemId.tools,
     icon: Icons.analytics_outlined,
+    children: [
+      NesMenuItemSpec(id: NesMenuItemId.tilemapViewer, icon: Icons.grid_on),
+    ],
   );
   static List<NesMenuItemSpec> _buildSaveStateChildren() => [
     for (int i = 1; i <= 10; i++)

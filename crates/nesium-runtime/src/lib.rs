@@ -3,6 +3,6 @@ pub mod runtime;
 
 pub use runtime::{
     AudioMode, DebugState, Event, EventTopic, NotificationEvent, Receiver, Runtime, RuntimeConfig,
-    RuntimeError, RuntimeEventSender, RuntimeHandle, Sender, VideoConfig, VideoExternalConfig,
-    VideoSwapchainConfig,
+    RuntimeError, RuntimeEventSender, RuntimeHandle, Sender, TilemapState, VideoConfig,
+    VideoExternalConfig, VideoSwapchainConfig,
 };

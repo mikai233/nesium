@@ -707,6 +707,39 @@ impl Nes {
         )
     }
 
+    /// Returns the raw data needed for the tilemap viewer:
+    /// (VRAM, Palette, CHR, Mirroring, BgPatternBase)
+    pub fn debug_tilemap_data(&mut self) -> (Vec<u8>, [u8; 32], Vec<u8>, u8, u16) {
+        let mut chr = vec![0u8; 0x2000];
+        // Create a temporary PatternBus to read CHR data.
+        // using cycle 0 is arbitrary but safe for debug logic.
+        {
+            let mut pattern = ppu::pattern_bus::PatternBus::new(self.cartridge.as_mut(), 0);
+            let ctx = crate::cartridge::mapper::PpuVramAccessContext {
+                ppu_cycle: 0,
+                cpu_cycle: 0,
+                kind: crate::cartridge::mapper::PpuVramAccessKind::Other,
+            };
+            for i in 0..0x2000 {
+                chr[i] = pattern.read(i as u16, ctx).unwrap_or(0);
+            }
+        }
+        let vram = self.ppu.vram.to_vec();
+        let palette = *self
+            .ppu
+            .palette_ram
+            .as_slice()
+            .try_into()
+            .unwrap_or(&[0; 32]);
+        let mirroring = self
+            .cartridge
+            .as_ref()
+            .map(|c| c.mirroring() as u8)
+            .unwrap_or(0);
+        let bg_pattern_base = self.ppu.registers.control.background_pattern_table();
+        (vram, palette, chr, mirroring, bg_pattern_base)
+    }
+
     fn build_interceptor() -> EmuInterceptor {
         let layers: Vec<Box<dyn Interceptor>> = vec![Box::new(LogInterceptor)];
         EmuInterceptor::from_layers(layers)

@@ -102,10 +102,38 @@ pub struct DebugState {
 
 impl Event for DebugState {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TilemapState {
+    pub vram: Vec<u8>,
+    pub palette: [u8; 32],
+    pub chr: Vec<u8>,
+    pub mirroring: u8,
+    /// 64-entry BGRA palette for aux texture rendering (matches CVPixelBuffer format).
+    pub bgra_palette: [[u8; 4]; 64],
+    /// Background pattern table base address ($0000 or $1000).
+    pub bg_pattern_base: u16,
+}
+
+impl Default for TilemapState {
+    fn default() -> Self {
+        Self {
+            vram: Vec::new(),
+            palette: [0; 32],
+            chr: Vec::new(),
+            mirroring: 0,
+            bgra_palette: [[0; 4]; 64],
+            bg_pattern_base: 0,
+        }
+    }
+}
+
+impl Event for TilemapState {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventTopic {
     Notification,
     DebugState,
+    Tilemap,
 }
 
 impl NotificationEvent {

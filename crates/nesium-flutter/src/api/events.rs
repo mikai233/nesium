@@ -85,3 +85,35 @@ pub async fn unsubscribe_debug_state() -> Result<(), String> {
 
     Ok(())
 }
+
+// =============================================================================
+// Tilemap Texture Subscription
+// =============================================================================
+
+/// Subscribes to tilemap texture updates.
+///
+/// This enables per-frame rendering of the tilemap to the auxiliary texture.
+/// The actual pixel data is written directly to the texture buffer, not sent via stream.
+#[frb]
+pub async fn subscribe_tilemap_texture() -> Result<(), String> {
+    let handle = crate::runtime_handle();
+    let sender = Box::new(crate::senders::TilemapTextureSender);
+
+    handle
+        .subscribe_event(EventTopic::Tilemap, sender)
+        .map_err(|e| format!("Failed to subscribe to Tilemap events: {}", e))?;
+
+    Ok(())
+}
+
+/// Unsubscribes from tilemap texture updates.
+#[frb]
+pub async fn unsubscribe_tilemap_texture() -> Result<(), String> {
+    let handle = crate::runtime_handle();
+
+    handle
+        .unsubscribe_event(EventTopic::Tilemap)
+        .map_err(|e| format!("Failed to unsubscribe from Tilemap events: {}", e))?;
+
+    Ok(())
+}

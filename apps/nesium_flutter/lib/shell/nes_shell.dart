@@ -32,6 +32,7 @@ import '../platform/platform_capabilities.dart';
 import 'desktop_shell.dart';
 import 'nes_actions.dart';
 import 'mobile_shell.dart';
+import '../features/debugger/tilemap_viewer.dart';
 
 class NesShell extends ConsumerStatefulWidget {
   const NesShell({super.key});
@@ -488,6 +489,18 @@ class _NesShellState extends ConsumerState<NesShell>
     await _desktopWindowManager.openToolsWindow(languageCode: languageCode);
   }
 
+  Future<void> _openTilemapViewer() async {
+    if (_isDesktop) {
+      final languageCode = ref.read(appLanguageProvider).languageCode;
+      await _desktopWindowManager.openTilemapWindow(languageCode: languageCode);
+    } else {
+      if (!mounted) return;
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const TilemapViewer()));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final NesState state = ref.watch(nesControllerProvider);
@@ -511,6 +524,7 @@ class _NesShellState extends ConsumerState<NesShell>
       openAbout: _openAbout,
       openDebugger: _openDebugger,
       openTools: _openTools,
+      openTilemapViewer: _openTilemapViewer,
     );
 
     final shell = _isDesktop

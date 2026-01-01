@@ -4,6 +4,7 @@ import desktop_multi_window
 
 class MainFlutterWindow: NSWindow {
   private var nesiumManager: NesiumTextureManager?
+  private var auxManager: NesiumAuxTextureManager?
 
   // A native splash overlay to mask the brief background transitions
   // (transparent -> black -> Flutter first frame) during startup.
@@ -42,11 +43,6 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
-    // Ensure plugins are registered for newly created secondary windows.
-    FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
-      RegisterGeneratedPlugins(registry: controller)
-    }
-
     // Set up a MethodChannel and NesiumTextureManager to bridge the NES
     // renderer into a Flutter Texture widget on macOS.
     //
@@ -80,6 +76,32 @@ class MainFlutterWindow: NSWindow {
 
     channel.setMethodCallHandler { call, result in
       nesiumManager.handle(call: call, result: result)
+    }
+
+    // --- Auxiliary Texture Manager ---
+    // Separate channel for debug/tool textures (Tilemap, Pattern, etc.)
+    let auxChannel = FlutterMethodChannel(name: "nesium_aux", binaryMessenger: messenger)
+    let auxManager = NesiumAuxTextureManager(textureRegistry: textures)
+    self.auxManager = auxManager
+    auxChannel.setMethodCallHandler { call, result in
+      auxManager.handle(call: call, result: result)
+    }
+
+    // Ensure plugins are registered for newly created secondary windows.
+    // Each secondary window needs its own NesiumAuxTextureManager because
+    // Flutter's texture registry is per-engine (per-window).
+    FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
+      RegisterGeneratedPlugins(registry: controller)
+      
+      // Create a dedicated aux texture manager for this secondary window.
+      let secondaryRegistrar = controller.registrar(forPlugin: "NesiumAuxTexturePlugin")
+      let secondaryTextures = secondaryRegistrar.textures
+      let secondaryAuxManager = NesiumAuxTextureManager(textureRegistry: secondaryTextures)
+      
+      let secondaryAuxChannel = FlutterMethodChannel(name: "nesium_aux", binaryMessenger: secondaryRegistrar.messenger)
+      secondaryAuxChannel.setMethodCallHandler { call, result in
+        secondaryAuxManager.handle(call: call, result: result)
+      }
     }
 
     super.awakeFromNib()

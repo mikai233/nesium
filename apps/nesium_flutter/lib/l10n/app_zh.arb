@@ -207,5 +207,6 @@
   "debuggerPpuCtrlTooltip": "PPU 控制寄存器 ($2000)\nV: NMI使能\nP: PPU主/从（未使用）\nH: 精灵高度（0=8x8, 1=8x16）\nB: 背景图案表地址\nS: 精灵图案表地址\nI: VRAM地址增量（0=1, 1=32）\nNN: 基础名称表地址\n\n大写=置位, 小写=清除",
   "debuggerPpuMaskTooltip": "PPU 掩码寄存器 ($2001)\nBGR: 颜色强调位\ns: 显示精灵\nb: 显示背景\nM: 左8像素显示精灵\nm: 左8像素显示背景\ng: 灰度模式\n\n大写=置位, 小写=清除",
   "debuggerPpuStatusTooltip": "PPU 状态寄存器 ($2002)\nV: VBlank已开始\nS: 精灵0命中\nO: 精灵溢出\n\n大写=置位, 小写=清除",
-  "debuggerScanlineTooltip": "扫描线说明：\n0-239: 可见区域 (渲染)\n240: post-render (空闲)\n241-260: VBlank (垂直消隐)\n-1: pre-render (预渲染扫描线)"
+  "debuggerScanlineTooltip": "扫描线说明：\n0-239: 可见区域 (渲染)\n240: post-render (空闲)\n241-260: VBlank (垂直消隐)\n-1: pre-render (预渲染扫描线)",
+  "menuTilemapViewer": "Tilemap 查看器"
 }

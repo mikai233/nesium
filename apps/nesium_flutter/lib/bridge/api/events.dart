@@ -27,6 +27,17 @@ Stream<DebugStateNotification> debugStateStream() =>
 Future<void> unsubscribeDebugState() =>
     RustLib.instance.api.crateApiEventsUnsubscribeDebugState();
 
+/// Subscribes to tilemap texture updates.
+///
+/// This enables per-frame rendering of the tilemap to the auxiliary texture.
+/// The actual pixel data is written directly to the texture buffer, not sent via stream.
+Future<void> subscribeTilemapTexture() =>
+    RustLib.instance.api.crateApiEventsSubscribeTilemapTexture();
+
+/// Unsubscribes from tilemap texture updates.
+Future<void> unsubscribeTilemapTexture() =>
+    RustLib.instance.api.crateApiEventsUnsubscribeTilemapTexture();
+
 /// Debug state notification sent per-frame when subscribed.
 class DebugStateNotification {
   final int cpuPc;

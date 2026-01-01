@@ -181,6 +181,9 @@ class NesMenuBar extends StatelessWidget {
       case NesMenuItemId.tools:
         unawaited(actions.openTools());
         break;
+      case NesMenuItemId.tilemapViewer:
+        unawaited(actions.openTilemapViewer());
+        break;
     }
   }
 }

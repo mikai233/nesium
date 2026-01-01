@@ -535,4 +535,7 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get debuggerScanlineTooltip =>
       '扫描线说明：\n0-239: 可见区域 (渲染)\n240: post-render (空闲)\n241-260: VBlank (垂直消隐)\n-1: pre-render (预渲染扫描线)';
+
+  @override
+  String get menuTilemapViewer => 'Tilemap 查看器';
 }

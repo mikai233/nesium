@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 /// Handles platform channel for creating the external NES texture.
 class NesTextureService {
   static const MethodChannel _channel = MethodChannel('nesium');
+  static const MethodChannel _auxChannel = MethodChannel('nesium_aux');
 
   Future<int?> createTexture() =>
       _channel.invokeMethod<int>('createNesTexture');
@@ -18,4 +19,24 @@ class NesTextureService {
   /// Note: takes effect on next app restart.
   Future<void> setVideoBackend(int mode) =>
       _channel.invokeMethod<void>('setVideoBackend', {'mode': mode});
+
+  // ---------------------------------------------------------------------------
+  // Auxiliary Textures (Tilemap, Pattern, etc.)
+  // ---------------------------------------------------------------------------
+
+  /// Creates an auxiliary texture with the given ID and dimensions.
+  /// Returns the Flutter texture ID to use with a [Texture] widget.
+  Future<int?> createAuxTexture({
+    required int id,
+    required int width,
+    required int height,
+  }) => _auxChannel.invokeMethod<int>('createAuxTexture', {
+    'id': id,
+    'width': width,
+    'height': height,
+  });
+
+  /// Disposes an auxiliary texture.
+  Future<void> disposeAuxTexture(int id) =>
+      _auxChannel.invokeMethod<void>('disposeAuxTexture', {'id': id});
 }

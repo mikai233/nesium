@@ -72,4 +72,13 @@ class DesktopWindowManager {
     );
     await window.invokeMethod<void>('setLanguage', languageCode);
   }
+
+  Future<void> openTilemapWindow({String? languageCode}) async {
+    if (!isSupported) return;
+    final window = await _openOrCreate(
+      WindowKind.tilemap,
+      languageCode: languageCode,
+    );
+    await window.invokeMethod<void>('setLanguage', languageCode);
+  }
 }

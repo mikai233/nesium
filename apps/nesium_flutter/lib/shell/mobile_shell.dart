@@ -320,6 +320,10 @@ class _MobileDrawer extends StatelessWidget {
       case NesMenuItemId.about:
         unawaited(openPage(const AboutPage()));
         break;
+      case NesMenuItemId.tilemapViewer:
+        closeDrawer();
+        unawaited(actions.openTilemapViewer());
+        break;
       case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:
       case NesMenuItemId.loadStateSlot:

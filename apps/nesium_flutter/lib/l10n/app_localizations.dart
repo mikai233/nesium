@@ -1081,6 +1081,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Scanline Numbers:\n0-239: Visible (Render)\n240: Post-render (Idle)\n241-260: VBlank (Vertical Blanking)\n-1: Pre-render (Dummy scanline)'**
   String get debuggerScanlineTooltip;
+
+  /// No description provided for @menuTilemapViewer.
+  ///
+  /// In en, this message translates to:
+  /// **'Tilemap Viewer'**
+  String get menuTilemapViewer;
 }
 
 class _AppLocalizationsDelegate

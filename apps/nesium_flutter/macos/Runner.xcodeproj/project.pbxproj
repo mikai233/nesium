@@ -33,6 +33,7 @@
 		A55318FE2ED9AEFA009257FA /* NesiumTextureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55318FD2ED9AEF6009257FA /* NesiumTextureManager.swift */; };
 		A55319002ED9BD95009257FA /* NesiumTexture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55318FF2ED9BD8E009257FA /* NesiumTexture.swift */; };
 		A55319022ED9CF39009257FA /* NesiumRustBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55319012ED9CF35009257FA /* NesiumRustBridge.swift */; };
+		A55319082EF4C00000000001 /* NesiumAuxTextureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A55319082EF4C00000000002 /* NesiumAuxTextureManager.swift */; };
 		A56B99B22EDAD6A8005F2CD4 /* libnesium_flutter.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = A538FA6C2EDAD57300B481D2 /* libnesium_flutter.dylib */; };
 		F4A8E552B6B61F1E36D05643 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6302FD14D9A5EFC7DD2835D /* Pods_RunnerTests.framework */; };
 /* End PBXBuildFile section */
@@ -96,6 +97,7 @@
 		A55318FD2ED9AEF6009257FA /* NesiumTextureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NesiumTextureManager.swift; sourceTree = "<group>"; };
 		A55318FF2ED9BD8E009257FA /* NesiumTexture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NesiumTexture.swift; sourceTree = "<group>"; };
 		A55319012ED9CF35009257FA /* NesiumRustBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NesiumRustBridge.swift; sourceTree = "<group>"; };
+		A55319082EF4C00000000002 /* NesiumAuxTextureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NesiumAuxTextureManager.swift; sourceTree = "<group>"; };
 		A55319032ED9D287009257FA /* libnesium_flutter.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libnesium_flutter.a; path = ../../../target/release/libnesium_flutter.a; sourceTree = "<group>"; };
 		A55319052ED9D3C4009257FA /* libnesium_flutter.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libnesium_flutter.a; path = Frameworks/libnesium_flutter.a; sourceTree = "<group>"; };
 		B97C60FD0DA4CADB3D6D4B81 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -195,6 +197,7 @@
 				A55318FD2ED9AEF6009257FA /* NesiumTextureManager.swift */,
 				A55318FF2ED9BD8E009257FA /* NesiumTexture.swift */,
 				A55319012ED9CF35009257FA /* NesiumRustBridge.swift */,
+				A55319082EF4C00000000002 /* NesiumAuxTextureManager.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -485,6 +488,7 @@
 				A55318FE2ED9AEFA009257FA /* NesiumTextureManager.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 				A55319022ED9CF39009257FA /* NesiumRustBridge.swift in Sources */,
+				A55319082EF4C00000000001 /* NesiumAuxTextureManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

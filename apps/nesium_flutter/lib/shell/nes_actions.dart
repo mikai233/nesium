@@ -21,6 +21,7 @@ class NesActions {
     required this.openAbout,
     required this.openDebugger,
     required this.openTools,
+    required this.openTilemapViewer,
   });
 
   final AsyncCallback openRom;
@@ -40,4 +41,5 @@ class NesActions {
   final AsyncCallback openAbout;
   final AsyncCallback openDebugger;
   final AsyncCallback openTools;
+  final AsyncCallback openTilemapViewer;
 }

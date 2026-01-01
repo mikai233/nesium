@@ -387,6 +387,7 @@ impl Runner {
 
         // Broadcast debug state if there's a subscriber.
         self.maybe_broadcast_debug_state();
+        self.maybe_broadcast_tilemap_state();
     }
 
     /// Captures rewind history (snapshot + render index plane) when enabled.
@@ -546,6 +547,31 @@ impl Runner {
 
         self.pubsub
             .broadcast(EventTopic::DebugState, Box::new(debug));
+    }
+
+    /// Broadcasts tilemap state to subscribers if someone is listening.
+    fn maybe_broadcast_tilemap_state(&mut self) {
+        if self.pubsub.has_subscriber(EventTopic::Tilemap) {
+            let (vram, palette, chr, mirroring, bg_pattern_base) = self.nes.debug_tilemap_data();
+
+            // Convert current NES palette (RGB) to BGRA for aux texture rendering.
+            let nes_palette = self.nes.palette();
+            let mut bgra_palette = [[0u8; 4]; 64];
+            for (i, color) in nes_palette.as_colors().iter().enumerate() {
+                bgra_palette[i] = [color.b, color.g, color.r, 0xFF];
+            }
+
+            let tilemap = crate::runtime::types::TilemapState {
+                vram,
+                palette,
+                chr,
+                mirroring,
+                bgra_palette,
+                bg_pattern_base,
+            };
+            self.pubsub
+                .broadcast(EventTopic::Tilemap, Box::new(tilemap));
+        }
     }
 
     /// Loads a ROM from the specified path, calculates its SHA-1 hash, and initializes the NES state.
