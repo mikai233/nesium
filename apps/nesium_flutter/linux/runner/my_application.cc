@@ -106,9 +106,13 @@ static void my_application_activate(GApplication *application) {
               // In Flutter Linux, the view is usually the child of the window.
               FlView *view = fl_plugin_registrar_get_view(
                   static_cast<FlPluginRegistrar *>(user_data));
-              GtkWindow *window =
-                  GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(view)));
-              gtk_window_set_title(window, title);
+              if (view != nullptr) {
+                GtkWindow *window =
+                    GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+                if (window != nullptr && GTK_IS_WINDOW(window)) {
+                  gtk_window_set_title(window, title);
+                }
+              }
               fl_method_call_respond(
                   method_call,
                   FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr)),

@@ -91,6 +91,12 @@ target_link_libraries(${BINARY_NAME} PRIVATE rust_lib)
 # Standard Flutter dependencies
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
+
+# Link X11 for XInitThreads support (required for multi-engine desktop apps)
+pkg_check_modules(X11 REQUIRED x11)
+target_link_libraries(${BINARY_NAME} PRIVATE ${X11_LIBRARIES})
+target_include_directories(${BINARY_NAME} PRIVATE ${X11_INCLUDE_DIRS})
+
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 
