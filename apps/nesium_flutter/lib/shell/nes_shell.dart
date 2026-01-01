@@ -481,21 +481,47 @@ class _NesShellState extends ConsumerState<NesShell>
     ).push(MaterialPageRoute<void>(builder: (_) => const AboutPage()));
   }
 
+  NesActions _buildActions() {
+    return NesActions(
+      openRom: _promptAndLoadRom,
+      saveState: _saveState,
+      loadState: _loadState,
+      openAutoSave: _openAutoSaveDialog,
+      saveStateSlot: _saveToSlot,
+      loadStateSlot: _loadFromSlot,
+      saveStateFile: _saveToFile,
+      loadStateFile: _loadFromFile,
+      loadTasMovie: _loadTasMovie,
+      reset: _resetConsole,
+      powerReset: _powerResetConsole,
+      eject: _ejectConsole,
+      togglePause: _togglePause,
+      openSettings: _openSettings,
+      openAbout: _openAbout,
+      openDebugger: _openDebugger,
+      openTools: _openTools,
+      openTilemapViewer: _openTilemapViewer,
+    );
+  }
+
   Future<void> _openDebugger() async {
     if (_desktopWindowManager.isSupported) {
       final languageCode = ref.read(appLanguageProvider).languageCode;
       await _desktopWindowManager.openDebuggerWindow(
         languageCode: languageCode,
       );
-    } else if (_isDesktop) {
-      // Fallback to in-app navigation for platforms where multi-window is not supported
+    } else {
+      // Mobile: always use in-app navigation
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: Text(l10n.menuDebugger)),
-            body: const DebuggerPanel(),
+          builder: (_) => ProviderScope(
+            overrides: [nesActionsProvider.overrideWithValue(_buildActions())],
+            child: Scaffold(
+              appBar: AppBar(title: Text(l10n.windowDebuggerTitle)),
+              body: const DebuggerPanel(),
+            ),
           ),
         ),
       );
@@ -506,15 +532,18 @@ class _NesShellState extends ConsumerState<NesShell>
     if (_desktopWindowManager.isSupported) {
       final languageCode = ref.read(appLanguageProvider).languageCode;
       await _desktopWindowManager.openToolsWindow(languageCode: languageCode);
-    } else if (_isDesktop) {
-      // Fallback to in-app navigation for platforms where multi-window is not supported
+    } else {
+      // Mobile: always use in-app navigation (or fallback for desktop)
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: Text(l10n.menuTools)),
-            body: const ToolsPanel(),
+          builder: (_) => ProviderScope(
+            overrides: [nesActionsProvider.overrideWithValue(_buildActions())],
+            child: Scaffold(
+              appBar: AppBar(title: Text(l10n.windowToolsTitle)),
+              body: const ToolsPanel(),
+            ),
           ),
         ),
       );
@@ -544,9 +573,18 @@ class _NesShellState extends ConsumerState<NesShell>
     } else {
       // Mobile: always use in-app navigation
       if (!mounted) return;
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const TilemapViewer()));
+      final l10n = AppLocalizations.of(context)!;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ProviderScope(
+            overrides: [nesActionsProvider.overrideWithValue(_buildActions())],
+            child: Scaffold(
+              appBar: AppBar(title: Text(l10n.menuTilemapViewer)),
+              body: const TilemapViewer(),
+            ),
+          ),
+        ),
+      );
     }
   }
 
@@ -555,36 +593,20 @@ class _NesShellState extends ConsumerState<NesShell>
     final NesState state = ref.watch(nesControllerProvider);
     ref.watch(autoSaveServiceProvider); // Keep auto-save timer running
 
-    final actions = NesActions(
-      openRom: _promptAndLoadRom,
-      saveState: _saveState,
-      loadState: _loadState,
-      openAutoSave: _openAutoSaveDialog,
-      saveStateSlot: _saveToSlot,
-      loadStateSlot: _loadFromSlot,
-      saveStateFile: _saveToFile,
-      loadStateFile: _loadFromFile,
-      loadTasMovie: _loadTasMovie,
-      reset: _resetConsole,
-      powerReset: _powerResetConsole,
-      eject: _ejectConsole,
-      togglePause: _togglePause,
-      openSettings: _openSettings,
-      openAbout: _openAbout,
-      openDebugger: _openDebugger,
-      openTools: _openTools,
-      openTilemapViewer: _openTilemapViewer,
-    );
+    final actions = _buildActions();
 
     final shell = _isDesktop
         ? DesktopShell(state: state, actions: actions)
         : MobileShell(state: state, actions: actions);
 
-    return Focus(
-      focusNode: _focusNode,
-      autofocus: true,
-      onKeyEvent: _handleKeyEvent,
-      child: shell,
+    return ProviderScope(
+      overrides: [nesActionsProvider.overrideWithValue(actions)],
+      child: Focus(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKeyEvent: _handleKeyEvent,
+        child: shell,
+      ),
     );
   }
 }

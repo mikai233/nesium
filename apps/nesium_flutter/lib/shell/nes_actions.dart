@@ -1,10 +1,15 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 typedef NesSlotCallback = Future<void> Function(int slot);
 
+final nesActionsProvider = Provider<NesActions>((ref) {
+  throw UnimplementedError('nesActionsProvider must be overridden');
+});
+
 class NesActions {
   const NesActions({
-    required this.openRom,
+    this.openRom,
     this.saveState,
     this.loadState,
     this.openAutoSave,
@@ -13,18 +18,18 @@ class NesActions {
     this.saveStateFile,
     this.loadStateFile,
     this.loadTasMovie,
-    required this.reset,
-    required this.powerReset,
-    required this.eject,
-    required this.togglePause,
-    required this.openSettings,
-    required this.openAbout,
-    required this.openDebugger,
-    required this.openTools,
-    required this.openTilemapViewer,
+    this.reset,
+    this.powerReset,
+    this.eject,
+    this.togglePause,
+    this.openSettings,
+    this.openAbout,
+    this.openDebugger,
+    this.openTools,
+    this.openTilemapViewer,
   });
 
-  final AsyncCallback openRom;
+  final AsyncCallback? openRom;
   final AsyncCallback? saveState;
   final AsyncCallback? loadState;
   final AsyncCallback? openAutoSave;
@@ -33,13 +38,13 @@ class NesActions {
   final AsyncCallback? saveStateFile;
   final AsyncCallback? loadStateFile;
   final AsyncCallback? loadTasMovie;
-  final AsyncCallback reset;
-  final AsyncCallback powerReset;
-  final AsyncCallback eject;
-  final AsyncCallback togglePause;
-  final AsyncCallback openSettings;
-  final AsyncCallback openAbout;
-  final AsyncCallback openDebugger;
-  final AsyncCallback openTools;
-  final AsyncCallback openTilemapViewer;
+  final AsyncCallback? reset;
+  final AsyncCallback? powerReset;
+  final AsyncCallback? eject;
+  final AsyncCallback? togglePause;
+  final AsyncCallback? openSettings;
+  final AsyncCallback? openAbout;
+  final AsyncCallback? openDebugger;
+  final AsyncCallback? openTools;
+  final AsyncCallback? openTilemapViewer;
 }

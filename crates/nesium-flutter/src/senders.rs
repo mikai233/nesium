@@ -227,9 +227,18 @@ fn render_nametable(
                     let idx = (screen_y * pitch + screen_x) * 4;
 
                     if idx + 3 < rgba.len() {
-                        rgba[idx] = bgra[0]; // B
-                        rgba[idx + 1] = bgra[1]; // G
-                        rgba[idx + 2] = bgra[2]; // R
+                        #[cfg(any(target_os = "macos", target_os = "ios"))]
+                        {
+                            rgba[idx] = bgra[0]; // B
+                            rgba[idx + 1] = bgra[1]; // G
+                            rgba[idx + 2] = bgra[2]; // R
+                        }
+                        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+                        {
+                            rgba[idx] = bgra[2]; // R
+                            rgba[idx + 1] = bgra[1]; // G
+                            rgba[idx + 2] = bgra[0]; // B
+                        }
                         rgba[idx + 3] = bgra[3]; // A
                     }
                 }

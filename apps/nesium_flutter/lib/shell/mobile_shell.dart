@@ -10,9 +10,7 @@ import '../features/controls/virtual_controls_editor.dart';
 import '../features/controls/virtual_controls_overlay.dart';
 import '../features/controls/virtual_controls_settings.dart';
 import '../features/about/about_page.dart';
-import '../features/debugger/debugger_panel.dart';
 import '../features/screen/nes_screen_view.dart';
-import '../features/tools/tools_panel.dart';
 import '../features/settings/video_settings.dart';
 import '../l10n/app_localizations.dart';
 import 'nes_actions.dart';
@@ -257,7 +255,7 @@ class _MobileDrawer extends StatelessWidget {
     switch (id) {
       case NesMenuItemId.openRom:
         closeDrawer();
-        unawaited(actions.openRom());
+        unawaited(actions.openRom?.call());
         break;
       case NesMenuItemId.saveState:
         closeDrawer();
@@ -273,56 +271,40 @@ class _MobileDrawer extends StatelessWidget {
         break;
       case NesMenuItemId.reset:
         closeDrawer();
-        unawaited(actions.reset());
+        unawaited(actions.reset?.call());
         break;
       case NesMenuItemId.powerReset:
         closeDrawer();
-        unawaited(actions.powerReset());
+        unawaited(actions.powerReset?.call());
         break;
       case NesMenuItemId.eject:
         closeDrawer();
-        unawaited(actions.eject());
+        unawaited(actions.eject?.call());
         break;
       case NesMenuItemId.togglePause:
         closeDrawer();
-        unawaited(actions.togglePause());
+        unawaited(actions.togglePause?.call());
         break;
       case NesMenuItemId.loadTasMovie:
         closeDrawer();
         unawaited(actions.loadTasMovie?.call());
         break;
       case NesMenuItemId.debugger:
-        final l10n = AppLocalizations.of(context)!;
-        unawaited(
-          openPage(
-            _MobilePage(
-              title: l10n.windowDebuggerTitle,
-              child: const DebuggerPanel(),
-            ),
-          ),
-        );
+        unawaited(actions.openDebugger?.call());
         break;
       case NesMenuItemId.tools:
-        final l10n = AppLocalizations.of(context)!;
-        unawaited(
-          openPage(
-            _MobilePage(
-              title: l10n.windowToolsTitle,
-              child: const ToolsPanel(),
-            ),
-          ),
-        );
+        unawaited(actions.openTools?.call());
         break;
       case NesMenuItemId.settings:
         closeDrawer();
-        unawaited(actions.openSettings());
+        unawaited(actions.openSettings?.call());
         break;
       case NesMenuItemId.about:
         unawaited(openPage(const AboutPage()));
         break;
       case NesMenuItemId.tilemapViewer:
         closeDrawer();
-        unawaited(actions.openTilemapViewer());
+        unawaited(actions.openTilemapViewer?.call());
         break;
       case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:
@@ -332,20 +314,5 @@ class _MobileDrawer extends StatelessWidget {
         // Desktop submenus, not used in mobile drawer currently.
         break;
     }
-  }
-}
-
-class _MobilePage extends StatelessWidget {
-  const _MobilePage({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: child,
-    );
   }
 }

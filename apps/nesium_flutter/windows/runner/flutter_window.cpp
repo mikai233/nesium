@@ -54,8 +54,18 @@ bool FlutterWindow::OnCreate() {
         static_cast<flutter::FlutterViewController *>(controller_ptr);
     auto messenger = controller->engine()->messenger();
 
-    // Use shared_ptr instead of unique_ptr to allow lambda to be copyable
-    // (required by MSVC 14.44+ for SetMethodCallHandler)
+    // 1. Register generated plugins (multi_window, file_selector, etc.) for the
+    // new window's engine.
+    RegisterPlugins(controller->engine());
+
+    // 2. Register our custom Nesium-specific auxiliary texture plugin.
+    // Each window (engine) must have its own plugin instance to manage its
+    // local textures.
+    NesiumAuxTexturePluginRegisterWithRegistrar(
+        controller->engine()->GetRegistrarForPlugin("NesiumAuxTexturePlugin"));
+
+    // 3. Set up the window control channel (e.g. for setWindowTitle).
+    // Use shared_ptr to ensure the channel lives as long as the handlers.
     auto channel =
         std::make_shared<flutter::MethodChannel<flutter::EncodableValue>>(
             messenger, "nesium/window",

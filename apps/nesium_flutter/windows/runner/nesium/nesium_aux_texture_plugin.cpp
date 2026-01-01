@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <windows.h>
 
@@ -145,6 +146,10 @@ private:
       DisposeAuxTexture(call, std::move(result));
       return;
     }
+    if (call.method_name() == "pauseAuxTexture") {
+      PauseAuxTexture(call, std::move(result));
+      return;
+    }
     result->NotImplemented();
   }
 
@@ -229,6 +234,36 @@ private:
       texture_registrar_->UnregisterTexture(it->second.flutter_id);
       textures_.erase(it);
     }
+    paused_ids_.erase(id);
+
+    result->Success(flutter::EncodableValue());
+  }
+
+  void PauseAuxTexture(
+      const flutter::MethodCall<flutter::EncodableValue> &call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+    const auto *args = std::get_if<flutter::EncodableMap>(call.arguments());
+    if (!args) {
+      result->Error("BAD_ARGS", "Missing arguments");
+      return;
+    }
+
+    auto id_it = args->find(flutter::EncodableValue("id"));
+    if (id_it == args->end()) {
+      result->Error("BAD_ARGS", "Missing id");
+      return;
+    }
+
+    const auto *id_val = std::get_if<int32_t>(&id_it->second);
+    if (!id_val) {
+      result->Error("BAD_ARGS", "Invalid id type");
+      return;
+    }
+
+    const uint32_t id = static_cast<uint32_t>(*id_val);
+
+    std::lock_guard<std::mutex> lock(textures_mutex_);
+    paused_ids_.insert(id);
 
     result->Success(flutter::EncodableValue());
   }
@@ -241,6 +276,9 @@ private:
       {
         std::lock_guard<std::mutex> lock(textures_mutex_);
         for (auto &[id, tex_info] : textures_) {
+          // Skip paused textures.
+          if (paused_ids_.count(id) > 0)
+            continue;
           tex_info.entry->UpdateFromRust();
           texture_registrar_->MarkTextureFrameAvailable(tex_info.flutter_id);
         }
@@ -262,6 +300,7 @@ private:
 
   std::mutex textures_mutex_;
   std::map<uint32_t, TextureInfo> textures_;
+  std::set<uint32_t> paused_ids_;
 
   std::atomic<bool> shutting_down_{false};
   std::thread update_thread_;

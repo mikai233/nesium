@@ -11,7 +11,7 @@ use std::{
 
 use jni::{
     JNIEnv,
-    objects::{GlobalRef, JClass, JObject},
+    objects::{GlobalRef, JByteBuffer, JClass, JObject},
     sys::{jint, jlong, jobject},
 };
 
@@ -1332,4 +1332,58 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameHe
     _class: JClass,
 ) -> jint {
     FRAME_HEIGHT as jint
+}
+
+// --- Auxiliary Texture System ---
+
+/// Creates an auxiliary texture with a specific ID and dimensions.
+///
+/// Kotlin: `NesiumNative.nesiumAuxCreate(id: Int, width: Int, height: Int)`
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nesiumAuxCreate(
+    _env: JNIEnv,
+    _class: JClass,
+    id: jint,
+    width: jint,
+    height: jint,
+) {
+    crate::aux_texture::aux_create(id as u32, width as u32, height as u32);
+}
+
+/// Copies the latest complete frame from an auxiliary texture into a direct ByteBuffer.
+///
+/// Returns the number of bytes copied.
+///
+/// Kotlin: `NesiumNative.nesiumAuxCopy(id: Int, dst: ByteBuffer, dstPitch: Int, dstHeight: Int): Int`
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nesiumAuxCopy(
+    mut env: JNIEnv,
+    _class: JClass,
+    id: jint,
+    dst: jobject,
+    dst_pitch: jint,
+    dst_height: jint,
+) -> jint {
+    let Ok(ptr) = env.get_direct_buffer_address(&unsafe { JByteBuffer::from_raw(dst) }) else {
+        return 0;
+    };
+    if ptr.is_null() {
+        return 0;
+    }
+
+    let len = (dst_pitch as usize) * (dst_height as usize);
+    let slice = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+    crate::aux_texture::aux_copy(id as u32, slice, dst_pitch as usize) as jint
+}
+
+/// Destroys an auxiliary texture and releases its memory.
+///
+/// Kotlin: `NesiumNative.nesiumAuxDestroy(id: Int)`
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nesiumAuxDestroy(
+    _env: JNIEnv,
+    _class: JClass,
+    id: jint,
+) {
+    crate::aux_texture::aux_destroy(id as u32);
 }

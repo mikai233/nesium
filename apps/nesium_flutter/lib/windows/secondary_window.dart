@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../shell/nes_actions.dart';
+import '../platform/desktop_window_manager.dart';
 
 import '../features/debugger/debugger_panel.dart';
 import '../features/debugger/tilemap_viewer.dart';
@@ -52,7 +56,18 @@ class SecondaryToolsContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ToolsPanel();
+    return ProviderScope(
+      overrides: [
+        nesActionsProvider.overrideWithValue(
+          NesActions(
+            openTilemapViewer: () async {
+              await DesktopWindowManager().openTilemapWindow();
+            },
+          ),
+        ),
+      ],
+      child: const ToolsPanel(),
+    );
   }
 }
 

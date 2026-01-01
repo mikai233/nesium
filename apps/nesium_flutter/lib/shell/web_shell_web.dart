@@ -1212,7 +1212,7 @@ class _WebShellState extends ConsumerState<WebShell> {
   void _dispatchDrawerAction(NesMenuItemId id, NesActions actions) {
     switch (id) {
       case NesMenuItemId.openRom:
-        unawaited(actions.openRom());
+        unawaited(actions.openRom?.call());
         break;
       case NesMenuItemId.saveState:
         unawaited(actions.saveState?.call());
@@ -1224,31 +1224,31 @@ class _WebShellState extends ConsumerState<WebShell> {
         unawaited(actions.openAutoSave?.call());
         break;
       case NesMenuItemId.reset:
-        unawaited(actions.reset());
+        unawaited(actions.reset?.call());
         break;
       case NesMenuItemId.powerReset:
-        unawaited(actions.powerReset());
+        unawaited(actions.powerReset?.call());
         break;
       case NesMenuItemId.eject:
-        unawaited(actions.eject());
+        unawaited(actions.eject?.call());
         break;
       case NesMenuItemId.togglePause:
-        unawaited(actions.togglePause());
+        unawaited(actions.togglePause?.call());
         break;
       case NesMenuItemId.loadTasMovie:
         unawaited(actions.loadTasMovie?.call());
         break;
       case NesMenuItemId.settings:
-        unawaited(actions.openSettings());
+        unawaited(actions.openSettings?.call());
         break;
       case NesMenuItemId.about:
-        unawaited(actions.openAbout());
+        unawaited(actions.openAbout?.call());
         break;
       case NesMenuItemId.debugger:
-        unawaited(actions.openDebugger());
+        unawaited(actions.openDebugger?.call());
         break;
       case NesMenuItemId.tools:
-        unawaited(actions.openTools());
+        unawaited(actions.openTools?.call());
         break;
       case NesMenuItemId.tilemapViewer:
       case NesMenuItemId.autoSaveSlot:

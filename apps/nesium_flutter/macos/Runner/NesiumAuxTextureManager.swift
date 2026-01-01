@@ -118,6 +118,7 @@ final class NesiumAuxTextureManager {
     
     /// Map from aux texture ID to (FlutterTextureId, AuxTextureEntry).
     private var textures: [UInt32: (flutterTextureId: Int64, entry: AuxTextureEntry)] = [:]
+    private var pausedIds: Set<UInt32> = []
     
     private var displayLink: CVDisplayLink?
     private let updateQueue = DispatchQueue(label: "Nesium.AuxTexture", qos: .userInitiated)
@@ -146,6 +147,14 @@ final class NesiumAuxTextureManager {
             }
             disposeAuxTexture(id: UInt32(id), result: result)
             
+        case "pauseAuxTexture":
+            guard let args = call.arguments as? [String: Any],
+                  let id = args["id"] as? Int else {
+                result(FlutterError(code: "BAD_ARGS", message: "Missing id", details: nil))
+                return
+            }
+            pauseAuxTexture(id: UInt32(id), result: result)
+            
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -170,11 +179,17 @@ final class NesiumAuxTextureManager {
         if let existing = textures.removeValue(forKey: id) {
             textureRegistry.unregisterTexture(existing.flutterTextureId)
         }
+        pausedIds.remove(id)
         
         if textures.isEmpty {
             stopDisplayLink()
         }
         
+        result(nil)
+    }
+    
+    private func pauseAuxTexture(id: UInt32, result: @escaping FlutterResult) {
+        pausedIds.insert(id)
         result(nil)
     }
     
@@ -214,7 +229,8 @@ final class NesiumAuxTextureManager {
     }
     
     private func updateAllTextures() {
-        for (_, (flutterTextureId, entry)) in textures {
+        for (id, (flutterTextureId, entry)) in textures {
+            guard !pausedIds.contains(id) else { continue }
             entry.updateFromRust()
             DispatchQueue.main.async { [weak self] in
                 self?.textureRegistry.textureFrameAvailable(flutterTextureId)

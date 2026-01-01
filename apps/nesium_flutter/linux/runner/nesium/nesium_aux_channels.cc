@@ -5,6 +5,7 @@
 #include <atomic>
 #include <map>
 #include <memory>
+#include <set>
 #include <thread>
 
 #include "nesium_aux_texture.h"
@@ -12,6 +13,7 @@
 static constexpr const char *kChannelName = "nesium_aux";
 static constexpr const char *kMethodCreate = "createAuxTexture";
 static constexpr const char *kMethodDispose = "disposeAuxTexture";
+static constexpr const char *kMethodPause = "pauseAuxTexture";
 
 struct TextureEntry {
   FlTexture *texture = nullptr;
@@ -24,6 +26,9 @@ struct _NesiumAuxChannels {
 
   // Map from aux texture ID to Flutter texture.
   std::map<uint32_t, TextureEntry> textures;
+
+  // Set of paused texture IDs.
+  std::set<uint32_t> paused_ids;
 
   // Update thread: periodically updates all textures from Rust buffers.
   std::thread update_thread;
@@ -57,6 +62,10 @@ static void update_worker_main(NesiumAuxChannels *self) {
     // Update all textures from Rust buffers.
     for (auto &[id, entry] : self->textures) {
       if (entry.texture == nullptr)
+        continue;
+
+      // Skip paused textures.
+      if (self->paused_ids.count(id) > 0)
         continue;
 
       auto *tex = NESIUM_AUX_TEXTURE(entry.texture);
@@ -172,12 +181,34 @@ static void handle_dispose_aux_texture(NesiumAuxChannels *self,
     }
     self->textures.erase(it);
   }
+  self->paused_ids.erase(id);
 
   // Stop update thread if no textures remain.
   if (self->textures.empty() && self->update_thread.joinable()) {
     self->stop.store(true, std::memory_order_release);
     self->update_thread.join();
   }
+
+  fl_method_call_respond(call, make_ok_null(), nullptr);
+}
+
+static void handle_pause_aux_texture(NesiumAuxChannels *self,
+                                     FlMethodCall *call) {
+  FlValue *args = fl_method_call_get_args(call);
+  if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+    fl_method_call_respond(call, make_error("BAD_ARGS", "Missing arguments"),
+                           nullptr);
+    return;
+  }
+
+  FlValue *id_value = fl_value_lookup_string(args, "id");
+  if (id_value == nullptr) {
+    fl_method_call_respond(call, make_error("BAD_ARGS", "Missing id"), nullptr);
+    return;
+  }
+
+  const uint32_t id = static_cast<uint32_t>(fl_value_get_int(id_value));
+  self->paused_ids.insert(id);
 
   fl_method_call_respond(call, make_ok_null(), nullptr);
 }
@@ -194,6 +225,11 @@ static void method_call_cb(FlMethodChannel * /*channel*/, FlMethodCall *call,
 
   if (g_strcmp0(name, kMethodDispose) == 0) {
     handle_dispose_aux_texture(self, call);
+    return;
+  }
+
+  if (g_strcmp0(name, kMethodPause) == 0) {
+    handle_pause_aux_texture(self, call);
     return;
   }
 

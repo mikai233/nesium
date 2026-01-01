@@ -36,6 +36,11 @@ class NesTextureService {
     'height': height,
   });
 
+  /// Pauses updates for an auxiliary texture.
+  /// Call this before dispose to prevent race conditions.
+  Future<void> pauseAuxTexture(int id) =>
+      _auxChannel.invokeMethod<void>('pauseAuxTexture', {'id': id});
+
   /// Disposes an auxiliary texture.
   Future<void> disposeAuxTexture(int id) =>
       _auxChannel.invokeMethod<void>('disposeAuxTexture', {'id': id});

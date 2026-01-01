@@ -62,9 +62,15 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
 
   @override
   void dispose() {
-    // Unsubscribe from tilemap texture updates.
+    // 1. Pause updates immediately (stops platform layer from accessing texture)
+    _textureService.pauseAuxTexture(_tilemapTextureId);
+
+    // 2. Unsubscribe from Rust tilemap events (async, but updates are paused)
     bridge.unsubscribeTilemapTexture();
+
+    // 3. Dispose texture (safe now that updates are paused)
     _textureService.disposeAuxTexture(_tilemapTextureId);
+
     super.dispose();
   }
 
