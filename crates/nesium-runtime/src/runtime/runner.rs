@@ -554,11 +554,24 @@ impl Runner {
         if self.pubsub.has_subscriber(EventTopic::Tilemap) {
             let (vram, palette, chr, mirroring, bg_pattern_base) = self.nes.debug_tilemap_data();
 
-            // Convert current NES palette (RGB) to BGRA for aux texture rendering.
+            // Convert current NES palette to platform-specific format for aux texture rendering.
+            // Use nesium_flutter's platform_color_format() for consistency with main screen.
             let nes_palette = self.nes.palette();
             let mut bgra_palette = [[0u8; 4]; 64];
-            for (i, color) in nes_palette.as_colors().iter().enumerate() {
-                bgra_palette[i] = [color.b, color.g, color.r, 0xFF];
+
+            // Note: bgra_palette field name is historical - it contains platform-specific format.
+            // This is determined at compile time by nesium-flutter's platform_color_format().
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            {
+                for (i, color) in nes_palette.as_colors().iter().enumerate() {
+                    bgra_palette[i] = [color.b, color.g, color.r, 0xFF]; // BGRA
+                }
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+            {
+                for (i, color) in nes_palette.as_colors().iter().enumerate() {
+                    bgra_palette[i] = [color.r, color.g, color.b, 0xFF]; // RGBA
+                }
             }
 
             let tilemap = crate::runtime::types::TilemapState {

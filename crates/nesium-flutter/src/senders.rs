@@ -220,26 +220,17 @@ fn render_nametable(
                     };
                     let nes_color = nes_color & 0x3F;
 
-                    let bgra = state.bgra_palette[nes_color];
-
                     let screen_x = offset_x + tile_x * 8 + px;
                     let screen_y = offset_y + tile_y * 8 + py;
                     let idx = (screen_y * pitch + screen_x) * 4;
 
                     if idx + 3 < rgba.len() {
-                        // Use platform_color_format() to determine pixel layout
-                        use nesium_core::ppu::buffer::ColorFormat;
-                        let format = crate::platform_color_format();
-                        if format == ColorFormat::Bgra8888 {
-                            rgba[idx] = bgra[0]; // B
-                            rgba[idx + 1] = bgra[1]; // G
-                            rgba[idx + 2] = bgra[2]; // R
-                        } else {
-                            rgba[idx] = bgra[2]; // R
-                            rgba[idx + 1] = bgra[1]; // G
-                            rgba[idx + 2] = bgra[0]; // B
-                        }
-                        rgba[idx + 3] = bgra[3]; // A
+                        // Palette is already in platform-specific format (set in runner.rs)
+                        let pixel = state.bgra_palette[nes_color];
+                        rgba[idx] = pixel[0];
+                        rgba[idx + 1] = pixel[1];
+                        rgba[idx + 2] = pixel[2];
+                        rgba[idx + 3] = pixel[3];
                     }
                 }
             }
