@@ -1,5 +1,6 @@
 #include "my_application.h"
 
+#include <desktop_multi_window/desktop_multi_window_plugin.h>
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
@@ -7,28 +8,28 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
-#include "nesium/nesium_texture.h"
 #include "nesium/nesium_channels.h"
+#include "nesium/nesium_texture.h"
 
 struct _MyApplication {
   GtkApplication parent_instance;
-  char** dart_entrypoint_arguments;
+  char **dart_entrypoint_arguments;
 
   // Owns the Linux method channel + external texture bridge.
-  NesiumChannels* nesium_channels;
+  NesiumChannels *nesium_channels;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 // Called when first Flutter frame received.
-static void first_frame_cb(MyApplication* self, FlView* view) {
+static void first_frame_cb(MyApplication *self, FlView *view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
 // Implements GApplication::activate.
-static void my_application_activate(GApplication* application) {
-  MyApplication* self = MY_APPLICATION(application);
-  GtkWindow* window =
+static void my_application_activate(GApplication *application) {
+  MyApplication *self = MY_APPLICATION(application);
+  GtkWindow *window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
   // Use a header bar when running in GNOME as this is the common style used
@@ -40,16 +41,16 @@ static void my_application_activate(GApplication* application) {
   // if future cases occur).
   gboolean use_header_bar = TRUE;
 #ifdef GDK_WINDOWING_X11
-  GdkScreen* screen = gtk_window_get_screen(window);
+  GdkScreen *screen = gtk_window_get_screen(window);
   if (GDK_IS_X11_SCREEN(screen)) {
-    const gchar* wm_name = gdk_x11_screen_get_window_manager_name(screen);
+    const gchar *wm_name = gdk_x11_screen_get_window_manager_name(screen);
     if (g_strcmp0(wm_name, "GNOME Shell") != 0) {
       use_header_bar = FALSE;
     }
   }
 #endif
   if (use_header_bar) {
-    GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
+    GtkHeaderBar *header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
     gtk_header_bar_set_title(header_bar, "Nesium");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
@@ -64,7 +65,7 @@ static void my_application_activate(GApplication* application) {
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
 
-  FlView* view = fl_view_new(project);
+  FlView *view = fl_view_new(project);
   GdkRGBA background_color;
   // Background defaults to black, override it here if necessary, e.g. #00000000
   // for transparent.
@@ -81,17 +82,66 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
-  // Initialize Nesium Linux platform bridge (method channel + external texture).
+  // Register a callback for secondary windows created by the
+  // desktop_multi_window plugin.
+  desktop_multi_window_plugin_set_window_created_callback([](FlPluginRegistry
+                                                                 *registry) {
+    g_autoptr(FlPluginRegistrar) registrar =
+        fl_plugin_registry_get_registrar_for_plugin(registry,
+                                                    "NesiumWindowPlugin");
+    FlMethodChannel *channel = fl_method_channel_new(
+        fl_plugin_registrar_get_messenger(registrar), "nesium/window",
+        FL_METHOD_CODEC(fl_standard_method_codec_new()));
+
+    fl_method_channel_set_method_call_handler(
+        channel,
+        [](FlMethodChannel *channel, FlMethodCall *method_call,
+           gpointer user_data) {
+          const gchar *method = fl_method_call_get_name(method_call);
+          if (strcmp(method, "setWindowTitle") == 0) {
+            FlValue *args = fl_method_call_get_args(method_call);
+            if (fl_value_get_type(args) == FL_VALUE_TYPE_STRING) {
+              const gchar *title = fl_value_get_string(args);
+              // Find the window for this registry.
+              // In Flutter Linux, the view is usually the child of the window.
+              FlView *view = fl_plugin_registrar_get_view(
+                  static_cast<FlPluginRegistrar *>(user_data));
+              GtkWindow *window =
+                  GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+              gtk_window_set_title(window, title);
+              fl_method_call_respond(
+                  method_call,
+                  FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr)),
+                  nullptr);
+            } else {
+              fl_method_call_respond(
+                  method_call,
+                  FL_METHOD_RESPONSE(fl_method_error_response_new(
+                      "INVALID_ARGUMENT", "Title must be a string", nullptr)),
+                  nullptr);
+            }
+          } else {
+            fl_method_call_respond(
+                method_call,
+                FL_METHOD_RESPONSE(fl_method_not_implemented_response_new()),
+                nullptr);
+          }
+        },
+        g_object_ref(registrar), g_object_unref);
+  });
+
+  // Initialize Nesium Linux platform bridge (method channel + external
+  // texture).
   self->nesium_channels = nesium_channels_new(view);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
 
 // Implements GApplication::local_command_line.
-static gboolean my_application_local_command_line(GApplication* application,
-                                                  gchar*** arguments,
-                                                  int* exit_status) {
-  MyApplication* self = MY_APPLICATION(application);
+static gboolean my_application_local_command_line(GApplication *application,
+                                                  gchar ***arguments,
+                                                  int *exit_status) {
+  MyApplication *self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
   self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
 
@@ -109,7 +159,7 @@ static gboolean my_application_local_command_line(GApplication* application,
 }
 
 // Implements GApplication::startup.
-static void my_application_startup(GApplication* application) {
+static void my_application_startup(GApplication *application) {
   // MyApplication* self = MY_APPLICATION(object);
 
   // Perform any actions required at application startup.
@@ -118,7 +168,7 @@ static void my_application_startup(GApplication* application) {
 }
 
 // Implements GApplication::shutdown.
-static void my_application_shutdown(GApplication* application) {
+static void my_application_shutdown(GApplication *application) {
   // MyApplication* self = MY_APPLICATION(object);
 
   // Perform any actions required at application shutdown.
@@ -127,8 +177,8 @@ static void my_application_shutdown(GApplication* application) {
 }
 
 // Implements GObject::dispose.
-static void my_application_dispose(GObject* object) {
-  MyApplication* self = MY_APPLICATION(object);
+static void my_application_dispose(GObject *object) {
+  MyApplication *self = MY_APPLICATION(object);
 
   if (self->nesium_channels != nullptr) {
     nesium_channels_free(self->nesium_channels);
@@ -139,7 +189,7 @@ static void my_application_dispose(GObject* object) {
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 
-static void my_application_class_init(MyApplicationClass* klass) {
+static void my_application_class_init(MyApplicationClass *klass) {
   G_APPLICATION_CLASS(klass)->activate = my_application_activate;
   G_APPLICATION_CLASS(klass)->local_command_line =
       my_application_local_command_line;
@@ -148,11 +198,11 @@ static void my_application_class_init(MyApplicationClass* klass) {
   G_OBJECT_CLASS(klass)->dispose = my_application_dispose;
 }
 
-static void my_application_init(MyApplication* self) {
+static void my_application_init(MyApplication *self) {
   self->nesium_channels = nullptr;
 }
 
-MyApplication* my_application_new() {
+MyApplication *my_application_new() {
   // Set the program name to the application ID, which helps various systems
   // like GTK and desktop environments map this running application to its
   // corresponding .desktop file. This ensures better integration by allowing

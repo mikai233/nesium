@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/events.dart' as bridge;
 import 'package:nesium_flutter/domain/nes_texture_service.dart';
-import 'package:nesium_flutter/l10n/app_localizations.dart';
 
 /// Tilemap Viewer that displays NES nametables via a Flutter Texture.
 class TilemapViewer extends ConsumerStatefulWidget {
@@ -71,11 +70,7 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.menuTilemapViewer)),
-      body: _buildBody(),
-    );
+    return _buildBody();
   }
 
   Widget _buildBody() {

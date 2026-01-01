@@ -6,14 +6,29 @@ import 'l10n/app_localizations.dart';
 import 'windows/window_routing.dart';
 
 class NesiumApp extends ConsumerWidget {
-  const NesiumApp({super.key});
+  const NesiumApp({super.key, required this.windowKind});
+
+  final WindowKind windowKind;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(appLanguageProvider);
     return MaterialApp(
-      onGenerateTitle: (context) =>
-          AppLocalizations.of(context)?.appName ?? 'Nesium',
+      onGenerateTitle: (context) {
+        final l10n = AppLocalizations.of(context);
+        if (l10n == null) return 'Nesium';
+
+        switch (windowKind) {
+          case WindowKind.debugger:
+            return l10n.menuDebugger;
+          case WindowKind.tools:
+            return l10n.menuTools;
+          case WindowKind.tilemap:
+            return l10n.menuTilemapViewer;
+          case WindowKind.main:
+            return l10n.appName;
+        }
+      },
       locale: language.locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

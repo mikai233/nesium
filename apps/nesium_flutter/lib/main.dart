@@ -7,6 +7,7 @@ import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/persistence/app_storage.dart';
 import 'package:nesium_flutter/platform/rust_runtime.dart';
 import 'package:nesium_flutter/startup/macos_splash.dart';
+import 'package:nesium_flutter/windows/window_routing.dart';
 
 import 'app.dart';
 
@@ -33,8 +34,9 @@ Future<void> main(List<String> args) async {
 
       await initAppStorage();
       await initRustRuntime();
+      final kind = await resolveWindowKind();
 
-      runApp(const ProviderScope(child: NesiumApp()));
+      runApp(ProviderScope(child: NesiumApp(windowKind: kind)));
       unawaited(hideMacOsSplashAfterFirstFrame(args: args));
     },
     (error, stack) {

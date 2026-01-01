@@ -9,10 +9,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:nesium_flutter/app.dart';
+import 'package:nesium_flutter/windows/window_types.dart';
 
 void main() {
   testWidgets('Nesium app builds', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: NesiumApp()));
+    await tester.pumpWidget(
+      const ProviderScope(child: NesiumApp(windowKind: WindowKind.main)),
+    );
 
     await tester.pump();
 

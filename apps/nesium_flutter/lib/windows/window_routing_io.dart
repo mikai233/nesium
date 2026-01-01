@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../platform/platform_capabilities.dart';
 import '../shell/nes_shell.dart';
 import 'secondary_window.dart';
-
-enum WindowKind { main, debugger, tools, tilemap }
+import 'window_types.dart';
 
 String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
   switch (kind) {
@@ -57,6 +57,19 @@ WindowKind _parseWindowKindFromArguments(String? arguments) {
   return WindowKind.main;
 }
 
+Future<WindowKind> resolveWindowKind() async {
+  if (!isNativeDesktop) {
+    return WindowKind.main;
+  }
+
+  try {
+    final controller = await WindowController.fromCurrentEngine();
+    return _parseWindowKindFromArguments(controller.arguments);
+  } catch (_) {
+    return WindowKind.main;
+  }
+}
+
 class WindowRouter extends StatefulWidget {
   const WindowRouter({super.key});
 
@@ -98,15 +111,25 @@ class _WindowRouterState extends State<WindowRouter> {
       return const Material(child: Center(child: CircularProgressIndicator()));
     }
 
+    final l10n = AppLocalizations.of(context)!;
     switch (kind) {
       case WindowKind.main:
         return const NesShell();
       case WindowKind.debugger:
-        return const SecondaryWindow(child: SecondaryDebuggerContent());
+        return SecondaryWindow(
+          title: l10n.menuDebugger,
+          child: const SecondaryDebuggerContent(),
+        );
       case WindowKind.tools:
-        return const SecondaryWindow(child: SecondaryToolsContent());
+        return SecondaryWindow(
+          title: l10n.menuTools,
+          child: const SecondaryToolsContent(),
+        );
       case WindowKind.tilemap:
-        return const SecondaryWindow(child: SecondaryTilemapContent());
+        return SecondaryWindow(
+          title: l10n.menuTilemapViewer,
+          child: const SecondaryTilemapContent(),
+        );
     }
   }
 }

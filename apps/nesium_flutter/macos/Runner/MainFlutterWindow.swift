@@ -102,6 +102,31 @@ class MainFlutterWindow: NSWindow {
       secondaryAuxChannel.setMethodCallHandler { call, result in
         secondaryAuxManager.handle(call: call, result: result)
       }
+
+      // --- Window Control Channel ---
+      // Allows Flutter to control native window properties (like title).
+      let secondaryWindowChannel = FlutterMethodChannel(name: "nesium/window", binaryMessenger: secondaryRegistrar.messenger)
+      
+      // We need to find the NSWindow associated with this controller.
+      // desktop_multi_window doesn't directly expose the NSWindow in the callback,
+      // but we can find it via the controller's view.
+      secondaryWindowChannel.setMethodCallHandler { call, result in
+        guard let window = controller.view.window else {
+          result(FlutterError(code: "NO_WINDOW", message: "Window not found for controller", details: nil))
+          return
+        }
+
+        if call.method == "setWindowTitle" {
+          if let title = call.arguments as? String {
+            window.title = title
+            result(nil)
+          } else {
+            result(FlutterError(code: "INVALID_ARGUMENT", message: "Title must be a string", details: nil))
+          }
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
     }
 
     super.awakeFromNib()
