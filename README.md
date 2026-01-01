@@ -53,6 +53,9 @@ The long-term vision for Nesium focuses on precision, tooling, and extensibility
     - Custom HUDs and overlays for training or streaming.
     - Automated regression testing scripts.
 
+- [ ] **Netplay**:
+    Implement networked multiplayer support for two-player games over the internet.
+
 ## UI frontends
 
 This repository currently ships **two** UI frontends:
