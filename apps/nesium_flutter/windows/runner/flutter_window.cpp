@@ -4,6 +4,7 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+#include "nesium/nesium_aux_texture_plugin.h"
 #include "nesium/nesium_texture_plugin.h"
 #include "utils.h"
 #include <desktop_multi_window/desktop_multi_window_plugin.h>
@@ -34,6 +35,9 @@ bool FlutterWindow::OnCreate() {
   NesiumTexturePluginRegisterWithRegistrar(
       flutter_controller_->engine()->GetRegistrarForPlugin(
           "NesiumTexturePlugin"));
+  NesiumAuxTexturePluginRegisterWithRegistrar(
+      flutter_controller_->engine()->GetRegistrarForPlugin(
+          "NesiumAuxTexturePlugin"));
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() { this->Show(); });

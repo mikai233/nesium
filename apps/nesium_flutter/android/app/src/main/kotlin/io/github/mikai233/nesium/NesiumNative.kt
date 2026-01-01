@@ -68,4 +68,16 @@ object NesiumNative {
 
     @JvmStatic
     external fun nativeSetFrameSignalFd(fd: Int)
+
+    // --- Auxiliary Texture API ---
+    // Maps to Rust's nesium_aux_create/copy/destroy C ABI
+
+    @JvmStatic
+    external fun nesiumAuxCreate(id: Int, width: Int, height: Int)
+
+    @JvmStatic
+    external fun nesiumAuxCopy(id: Int, dst: ByteBuffer, dstPitch: Int, dstHeight: Int): Int
+
+    @JvmStatic
+    external fun nesiumAuxDestroy(id: Int)
 }

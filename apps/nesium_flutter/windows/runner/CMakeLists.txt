@@ -15,6 +15,7 @@ add_executable(${BINARY_NAME} WIN32
   "Runner.rc"
   "runner.exe.manifest"
   "nesium/nesium_texture_plugin.cpp"
+  "nesium/nesium_aux_texture_plugin.cpp"
 )
 
 # Apply the standard set of build settings. This can be removed for applications

@@ -17,6 +17,7 @@ class MainActivity : FlutterActivity() {
     private var rustRendererSurface: Surface? = null
     private var rustTextureEntry: TextureRegistry.SurfaceTextureEntry? = null
     private var videoBackend: Int = 1 // default to hardware (Scheme B)
+    private var auxPlugin: NesiumAuxTexturePlugin? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +40,11 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Register auxiliary texture plugin
+        val auxPlugin = NesiumAuxTexturePlugin(flutterEngine)
+        auxPlugin.register()
+        this.auxPlugin = auxPlugin
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
             .setMethodCallHandler { call, result ->
@@ -94,6 +100,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         disposeTextureInternal()
+        auxPlugin?.dispose()
+        auxPlugin = null
         super.onDestroy()
     }
 }

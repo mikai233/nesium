@@ -4,6 +4,7 @@ import UIKit
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private var nesiumManager: NesiumTextureManager?
+  private var auxManager: NesiumAuxTextureManager?
 
   override func application(
     _ application: UIApplication,
@@ -22,6 +23,15 @@ import UIKit
 
       channel.setMethodCallHandler { call, result in
         manager.handle(call: call, result: result)
+      }
+      
+      // --- Auxiliary Texture Manager ---
+      // Separate channel for debug/tool textures (Tilemap, Pattern, etc.)
+      let auxChannel = FlutterMethodChannel(name: "nesium_aux", binaryMessenger: messenger)
+      let auxManager = NesiumAuxTextureManager(textureRegistry: textures)
+      self.auxManager = auxManager
+      auxChannel.setMethodCallHandler { call, result in
+        auxManager.handle(call: call, result: result)
       }
     }
 

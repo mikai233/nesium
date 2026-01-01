@@ -71,6 +71,8 @@ add_executable(${BINARY_NAME}
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
   "nesium/nesium_channels.cc"
   "nesium/nesium_texture.cc"
+  "nesium/nesium_aux_channels.cc"
+  "nesium/nesium_aux_texture.cc"
 )
 
 # Ensure Cargo runs before linking C++
