@@ -1,16 +1,34 @@
-# Nesium Libretro Demo
+# Nesium Libretro Core
 
-This crate builds a small showcase libretro core powered by the reusable [`libretro-bridge`](../libretro-bridge) crate. It renders a colourful gradient and plays a simple sine wave so RetroArch users can verify that the bindings work end-to-end.
+This crate provides a fully functional [Libretro](https://www.libretro.com/) core for **Nesium**, allowing you to play NES games in frontends like RetroArch. It wraps the cycle-accurate [`nesium-core`](../nesium-core) engine using the [`libretro-bridge`](../libretro-bridge) API.
+
+## Features
+
+- **Accurate Emulation**: Leverages `nesium-core` for cycle-accurate CPU, PPU, and APU emulation.
+- **Audio/Video**: Outputs correct NES aspect ratio and full APU sound mixing.
+- **Input**: Supports standard NES controllers for Player 1 and Player 2.
+- **Mapper Support**: Compatible with all mappers supported by the main emulator (see [Mapper Support](../../README.md#mapper-support)).
 
 ## Building
 
-```
+To build the core dynamic library:
+
+```bash
 cargo build -p nesium-libretro --profile release
 ```
 
-The resulting dynamic library is located under `target/release/` (with the OS-specific extension). Drop it into RetroArch’s `cores/` directory and load it as an “Nesium Demo Core”. The core does not expect real game content; launching it with “No Core Information Available” is fine.
+The resulting artifact will be located in `target/release/` with a reliable system-specific extension (e.g., `.dll` on Windows, `.so` on Linux, `.dylib` on macOS).
 
-## Caveats
+## Installation
 
-* The demo is intentionally minimal and only exercises video/audio output along with the required lifecycle callbacks.
-* Save states, input handling, and serialization APIs are not implemented.
+1. Copy the generated library file to your RetroArch `cores/` directory.
+2. Launch RetroArch.
+3. Select **Load Core** and choose **Nesium Core**.
+4. Load your favorite NES ROM.
+
+## Limitations
+
+This core is production-ready for gameplay but currently lacks some advanced Libretro integration features:
+- **Save States**: Serialization support is planned but not yet implemented.
+- **Cheats**: Libretro cheat code API is not yet wired up.
+- **Controller Expansion**: Only standard controllers are currently supported (no Zapper/Four Score yet).
