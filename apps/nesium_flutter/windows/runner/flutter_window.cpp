@@ -50,15 +50,15 @@ bool FlutterWindow::OnCreate() {
         static_cast<flutter::FlutterViewController *>(controller_ptr);
     auto messenger = controller->engine()->messenger();
 
+    // Use shared_ptr instead of unique_ptr to allow lambda to be copyable
+    // (required by MSVC 14.44+ for SetMethodCallHandler)
     auto channel =
-        std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+        std::make_shared<flutter::MethodChannel<flutter::EncodableValue>>(
             messenger, "nesium/window",
             &flutter::StandardMethodCodec::GetInstance());
 
-    auto *channel_ptr = channel.get();
-    channel_ptr->SetMethodCallHandler(
-        [controller, channel = std::move(channel)](const auto &call,
-                                                   auto result) {
+    channel->SetMethodCallHandler(
+        [controller, channel](const auto &call, auto result) {
           if (call.method_name() == "setWindowTitle") {
             if (std::holds_alternative<std::string>(*call.arguments())) {
               std::string title = std::get<std::string>(*call.arguments());
