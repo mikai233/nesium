@@ -66,35 +66,25 @@ struct RuntimeHolder {
 
 static RUNTIME: OnceLock<RuntimeHolder> = OnceLock::new();
 
+/// Returns the platform-specific pixel format for Flutter textures.
+///
+/// - macOS/iOS: BGRA (CVPixelBuffer)
+/// - Android/Windows/Linux: RGBA (OpenGL/FlPixelBufferTexture)
+#[inline]
+pub fn platform_color_format() -> ColorFormat {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        ColorFormat::Bgra8888
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    {
+        ColorFormat::Rgba8888
+    }
+}
+
 fn ensure_runtime() -> &'static RuntimeHolder {
     RUNTIME.get_or_init(|| {
-        // Platform-specific framebuffer pixel format.
-        //
-        // Flutter desktop pixel-buffer textures expect tightly packed RGBA bytes.
-        // Apple CVPixelBuffer paths prefer BGRA.
-        let color_format = {
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
-            {
-                ColorFormat::Bgra8888
-            }
-            #[cfg(target_os = "windows")]
-            {
-                ColorFormat::Rgba8888
-            }
-            #[cfg(target_os = "android")]
-            {
-                ColorFormat::Rgba8888
-            }
-            #[cfg(not(any(
-                target_os = "macos",
-                target_os = "ios",
-                target_os = "windows",
-                target_os = "android"
-            )))]
-            {
-                ColorFormat::Rgba8888
-            }
-        };
+        let color_format = platform_color_format();
         #[cfg(target_os = "android")]
         let (video_cfg, video_backing): (VideoConfig, VideoBacking) = {
             if android::use_ahb_video_backend() {
