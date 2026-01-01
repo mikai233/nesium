@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 
@@ -9,7 +10,11 @@ import 'platform_capabilities.dart';
 class DesktopWindowManager {
   const DesktopWindowManager();
 
-  bool get isSupported => isNativeDesktop;
+  // Multi-window support is disabled on Linux due to persistent EGL crashes
+  // with desktop_multi_window plugin. Linux will use in-app page navigation until
+  // Flutter's official multi-window support is available.
+  // See: https://github.com/flutter/flutter/issues/...
+  bool get isSupported => isNativeDesktop && !Platform.isLinux;
 
   String? _routeFromArgs(String args) {
     if (args.isEmpty) return null;

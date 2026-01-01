@@ -1,6 +1,5 @@
 #include "my_application.h"
 
-#include <desktop_multi_window/desktop_multi_window_plugin.h>
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
@@ -81,58 +80,6 @@ static void my_application_activate(GApplication *application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
-
-  // Register a callback for secondary windows created by the
-  // desktop_multi_window plugin.
-  desktop_multi_window_plugin_set_window_created_callback([](FlPluginRegistry
-                                                                 *registry) {
-    g_autoptr(FlPluginRegistrar) registrar =
-        fl_plugin_registry_get_registrar_for_plugin(registry,
-                                                    "NesiumWindowPlugin");
-    FlMethodChannel *channel = fl_method_channel_new(
-        fl_plugin_registrar_get_messenger(registrar), "nesium/window",
-        FL_METHOD_CODEC(fl_standard_method_codec_new()));
-
-    fl_method_channel_set_method_call_handler(
-        channel,
-        [](FlMethodChannel *channel, FlMethodCall *method_call,
-           gpointer user_data) {
-          const gchar *method = fl_method_call_get_name(method_call);
-          if (strcmp(method, "setWindowTitle") == 0) {
-            FlValue *args = fl_method_call_get_args(method_call);
-            if (fl_value_get_type(args) == FL_VALUE_TYPE_STRING) {
-              const gchar *title = fl_value_get_string(args);
-              // Find the window for this registry.
-              // In Flutter Linux, the view is usually the child of the window.
-              FlView *view = fl_plugin_registrar_get_view(
-                  static_cast<FlPluginRegistrar *>(user_data));
-              if (view != nullptr) {
-                GtkWindow *window =
-                    GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(view)));
-                if (window != nullptr && GTK_IS_WINDOW(window)) {
-                  gtk_window_set_title(window, title);
-                }
-              }
-              fl_method_call_respond(
-                  method_call,
-                  FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr)),
-                  nullptr);
-            } else {
-              fl_method_call_respond(
-                  method_call,
-                  FL_METHOD_RESPONSE(fl_method_error_response_new(
-                      "INVALID_ARGUMENT", "Title must be a string", nullptr)),
-                  nullptr);
-            }
-          } else {
-            fl_method_call_respond(
-                method_call,
-                FL_METHOD_RESPONSE(fl_method_not_implemented_response_new()),
-                nullptr);
-          }
-        },
-        g_object_ref(registrar), g_object_unref);
-  });
 
   // Initialize Nesium Linux platform bridge (method channel + external
   // texture).

@@ -32,7 +32,9 @@ import '../platform/platform_capabilities.dart';
 import 'desktop_shell.dart';
 import 'nes_actions.dart';
 import 'mobile_shell.dart';
+import '../features/debugger/debugger_panel.dart';
 import '../features/debugger/tilemap_viewer.dart';
+import '../features/tools/tools_panel.dart';
 
 class NesShell extends ConsumerStatefulWidget {
   const NesShell({super.key});
@@ -480,20 +482,67 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   Future<void> _openDebugger() async {
-    final languageCode = ref.read(appLanguageProvider).languageCode;
-    await _desktopWindowManager.openDebuggerWindow(languageCode: languageCode);
+    if (_desktopWindowManager.isSupported) {
+      final languageCode = ref.read(appLanguageProvider).languageCode;
+      await _desktopWindowManager.openDebuggerWindow(
+        languageCode: languageCode,
+      );
+    } else if (_isDesktop) {
+      // Fallback to in-app navigation for platforms where multi-window is not supported
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: Text(l10n.menuDebugger)),
+            body: const DebuggerPanel(),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openTools() async {
-    final languageCode = ref.read(appLanguageProvider).languageCode;
-    await _desktopWindowManager.openToolsWindow(languageCode: languageCode);
+    if (_desktopWindowManager.isSupported) {
+      final languageCode = ref.read(appLanguageProvider).languageCode;
+      await _desktopWindowManager.openToolsWindow(languageCode: languageCode);
+    } else if (_isDesktop) {
+      // Fallback to in-app navigation for platforms where multi-window is not supported
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: Text(l10n.menuTools)),
+            body: const ToolsPanel(),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openTilemapViewer() async {
     if (_isDesktop) {
-      final languageCode = ref.read(appLanguageProvider).languageCode;
-      await _desktopWindowManager.openTilemapWindow(languageCode: languageCode);
+      if (_desktopWindowManager.isSupported) {
+        final languageCode = ref.read(appLanguageProvider).languageCode;
+        await _desktopWindowManager.openTilemapWindow(
+          languageCode: languageCode,
+        );
+      } else {
+        // Fallback to in-app navigation for platforms where multi-window is not supported
+        if (!mounted) return;
+        final l10n = AppLocalizations.of(context)!;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: Text(l10n.menuTilemapViewer)),
+              body: const TilemapViewer(),
+            ),
+          ),
+        );
+      }
     } else {
+      // Mobile: always use in-app navigation
       if (!mounted) return;
       await Navigator.of(
         context,
