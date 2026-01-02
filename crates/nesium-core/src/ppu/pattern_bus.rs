@@ -1,4 +1,7 @@
-use crate::cartridge::{Cartridge, mapper::NametableTarget};
+use crate::cartridge::{
+    Cartridge,
+    mapper::{NametableTarget, PpuVramAccessContext},
+};
 
 /// Temporary view that lets the PPU reach the cartridge CHR space without storing a raw pointer.
 ///
@@ -22,11 +25,7 @@ impl<'a> PpuBus<'a> {
         self.cpu_cycle
     }
 
-    pub fn read(
-        &mut self,
-        addr: u16,
-        ctx: crate::cartridge::mapper::PpuVramAccessContext,
-    ) -> Option<u8> {
+    pub fn read(&mut self, addr: u16, ctx: PpuVramAccessContext) -> Option<u8> {
         if let Some(cart) = self.cartridge.as_deref_mut() {
             cart.ppu_vram_access(addr, ctx);
             cart.ppu_read(addr)
@@ -35,12 +34,7 @@ impl<'a> PpuBus<'a> {
         }
     }
 
-    pub fn write(
-        &mut self,
-        addr: u16,
-        value: u8,
-        ctx: crate::cartridge::mapper::PpuVramAccessContext,
-    ) -> bool {
+    pub fn write(&mut self, addr: u16, value: u8, ctx: PpuVramAccessContext) -> bool {
         if let Some(cart) = self.cartridge.as_deref_mut() {
             cart.ppu_vram_access(addr, ctx);
             cart.ppu_write(addr, value);
@@ -51,11 +45,7 @@ impl<'a> PpuBus<'a> {
     }
 
     /// CHR bus read convenience method that always returns a byte.
-    pub fn chr_read(
-        &mut self,
-        addr: u16,
-        ctx: crate::cartridge::mapper::PpuVramAccessContext,
-    ) -> u8 {
+    pub fn chr_read(&mut self, addr: u16, ctx: PpuVramAccessContext) -> u8 {
         if let Some(cart) = self.cartridge.as_deref_mut() {
             cart.ppu_vram_access(addr, ctx);
             cart.chr_read(addr)
@@ -65,12 +55,7 @@ impl<'a> PpuBus<'a> {
     }
 
     /// CHR bus write convenience method for CHR RAM mappers.
-    pub fn chr_write(
-        &mut self,
-        addr: u16,
-        value: u8,
-        ctx: crate::cartridge::mapper::PpuVramAccessContext,
-    ) {
+    pub fn chr_write(&mut self, addr: u16, value: u8, ctx: PpuVramAccessContext) {
         if let Some(cart) = self.cartridge.as_deref_mut() {
             cart.ppu_vram_access(addr, ctx);
             cart.chr_write(addr, value);

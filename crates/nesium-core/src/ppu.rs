@@ -54,7 +54,7 @@ use core::fmt;
 
 use crate::{
     bus::CpuBus,
-    cartridge::mapper::PpuVramAccessKind,
+    cartridge::mapper::{NametableTarget, PpuVramAccessContext, PpuVramAccessKind},
     context::Context,
     cpu::Cpu,
     mem_block::ppu::{Ciram, SecondaryOamRam},
@@ -62,6 +62,7 @@ use crate::{
     ppu::{
         buffer::FrameBuffer,
         buffer::FrameReadyCallback,
+        open_bus::PpuOpenBus,
         palette::{Palette, PaletteRam},
         pattern_bus::PpuBus,
         registers::{Registers, VramAddr},
@@ -69,7 +70,6 @@ use crate::{
     },
     reset_kind::ResetKind,
 };
-use crate::{cartridge::mapper::NametableTarget, ppu::open_bus::PpuOpenBus};
 
 pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
@@ -1272,14 +1272,14 @@ impl Ppu {
             let _ = self.read_vram(
                 ppu_bus,
                 self.nametable_addr(),
-                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                PpuVramAccessKind::RenderingFetch,
             );
         }
         if sub == 2 {
             let _ = self.read_vram(
                 ppu_bus,
                 self.attribute_addr(),
-                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                PpuVramAccessKind::RenderingFetch,
             );
         }
 
@@ -1364,15 +1364,11 @@ impl Ppu {
         // Mesen2: perform both pattern reads during the same sub-step (case 4),
         // as an approximation of the 8-step internal fetch pipeline.
         if sub == 4 {
-            let pattern_low = self.read_vram(
-                ppu_bus,
-                addr,
-                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
-            );
+            let pattern_low = self.read_vram(ppu_bus, addr, PpuVramAccessKind::RenderingFetch);
             let pattern_high = self.read_vram(
                 ppu_bus,
                 addr.wrapping_add(8),
-                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
+                PpuVramAccessKind::RenderingFetch,
             );
             self.sprite_line_next.set_pattern_low(i, pattern_low);
             self.sprite_line_next.set_pattern_high(i, pattern_high);
@@ -1534,11 +1530,7 @@ impl Ppu {
             // As on the NES, $2007 returns the previous value from an internal
             // read buffer and then refreshes that buffer with the new VRAM
             // data fetched from the mapper.
-            let data = self.read_vram(
-                ppu_bus,
-                addr,
-                crate::cartridge::mapper::PpuVramAccessKind::CpuRead,
-            );
+            let data = self.read_vram(ppu_bus, addr, PpuVramAccessKind::CpuRead);
             let buffered = self.registers.vram_buffer;
             self.registers.vram_buffer = data;
 
@@ -1583,10 +1575,10 @@ impl Ppu {
         // Pattern tables ($0000-$1FFF): delegate to mapper CHR path.
         // Unlike the old design, there is no fallback to internal VRAM.
         if addr < ppu_mem::NAMETABLE_BASE {
-            let ctx = crate::cartridge::mapper::PpuVramAccessContext {
+            let ctx = PpuVramAccessContext {
                 ppu_cycle: self.current_ppu_cycle(),
                 cpu_cycle: ppu_bus.cpu_cycle(),
-                kind: crate::cartridge::mapper::PpuVramAccessKind::CpuWrite,
+                kind: PpuVramAccessKind::CpuWrite,
             };
             let _ = ppu_bus.write(addr, value, ctx);
             return;
@@ -1622,7 +1614,7 @@ impl Ppu {
         // Pattern tables ($0000-$1FFF): always delegate to mapper.
         // Unlike the old design, there is no fallback to internal storage.
         if addr < ppu_mem::NAMETABLE_BASE {
-            let ctx = crate::cartridge::mapper::PpuVramAccessContext {
+            let ctx = PpuVramAccessContext {
                 ppu_cycle: self.current_ppu_cycle(),
                 cpu_cycle: ppu_bus.cpu_cycle(),
                 kind,
@@ -1656,11 +1648,8 @@ impl Ppu {
         let v = self.registers.vram.v;
         let base_nt = ppu_mem::NAMETABLE_BASE + (v.nametable() as u16 * ppu_mem::NAMETABLE_SIZE);
         let tile_index_addr = base_nt + (v.coarse_y() as u16 * 32) + (v.coarse_x() as u16);
-        let tile_index = self.read_vram(
-            ppu_bus,
-            tile_index_addr,
-            crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
-        );
+        let tile_index =
+            self.read_vram(ppu_bus, tile_index_addr, PpuVramAccessKind::RenderingFetch);
 
         let fine_y = v.fine_y() as u16;
         let pattern_base = if self.registers.control.contains(Control::BACKGROUND_TABLE) {
@@ -1670,11 +1659,7 @@ impl Ppu {
         };
         let pattern_addr = pattern_base + (tile_index as u16 * 16) + fine_y;
         let tile_pattern = [
-            self.read_vram(
-                ppu_bus,
-                pattern_addr,
-                crate::cartridge::mapper::PpuVramAccessKind::RenderingFetch,
-            ),
+            self.read_vram(ppu_bus, pattern_addr, PpuVramAccessKind::RenderingFetch),
             self.read_vram(ppu_bus, pattern_addr + 8, PpuVramAccessKind::RenderingFetch),
         ];
 

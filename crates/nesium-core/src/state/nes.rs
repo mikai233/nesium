@@ -2,10 +2,21 @@ use std::fmt::Display;
 
 use crate::{
     Nes,
-    bus::PendingDma,
+    apu::Apu,
+    audio::mixer::MixerState,
+    bus::{PendingDma, savestate::OpenBusState},
     cartridge::{
         Cartridge,
-        mapper::{mapper_downcast_mut, mapper_downcast_ref},
+        mapper::{Mapper1, Mapper2, Mapper3, Mapper4, mapper_downcast_mut, mapper_downcast_ref},
+    },
+    controller::ControllerPorts,
+    cpu::{Cpu, IrqSource, Status as CpuStatus},
+    ppu::{
+        Control, Mask, PendingVramIncrement, Ppu, SpriteLineBuffers, Status,
+        savestate::{
+            BgPipelineState, PendingVramIncrementState, PpuOpenBusState, SpriteEvalState,
+            SpriteFetchState, SpriteLineBuffersState, SpritePipelineState,
+        },
     },
     state::{SaveState, Snapshot, SnapshotMeta},
 };
@@ -97,18 +108,18 @@ pub struct PpuState {
     pub scanline: i16,
     pub frame: u32,
     pub master_clock: u64,
-    pub bg_pipeline: crate::ppu::savestate::BgPipelineState,
-    pub sprite_pipeline: crate::ppu::savestate::SpritePipelineState,
+    pub bg_pipeline: BgPipelineState,
+    pub sprite_pipeline: SpritePipelineState,
     pub nmi_level: bool,
     pub prevent_vblank_flag: bool,
-    pub open_bus: crate::ppu::savestate::PpuOpenBusState,
+    pub open_bus: PpuOpenBusState,
     pub ignore_vram_read: u8,
     pub oam_copybuffer: u8,
-    pub pending_vram_increment: crate::ppu::savestate::PendingVramIncrementState,
+    pub pending_vram_increment: PendingVramIncrementState,
     pub secondary_oam: Vec<u8>,
-    pub sprite_eval: crate::ppu::savestate::SpriteEvalState,
-    pub sprite_fetch: crate::ppu::savestate::SpriteFetchState,
-    pub sprite_line_next: crate::ppu::savestate::SpriteLineBuffersState,
+    pub sprite_eval: SpriteEvalState,
+    pub sprite_fetch: SpriteFetchState,
+    pub sprite_line_next: SpriteLineBuffersState,
     pub render_enabled: bool,
     pub prev_render_enabled: bool,
     pub oam_addr_disable_glitch_pending: bool,
@@ -150,10 +161,10 @@ pub enum MapperState {
 pub struct NesState {
     pub cpu: CpuState,
     pub ppu: PpuState,
-    pub apu: crate::apu::Apu,
+    pub apu: Apu,
     pub ram: Vec<u8>,
     pub cartridge: CartridgeState,
-    pub controllers: crate::controller::ControllerPorts,
+    pub controllers: ControllerPorts,
     pub last_frame: u32,
     pub dot_counter: u64,
     pub master_clock: u64,
@@ -161,9 +172,9 @@ pub struct NesState {
     pub clock_start_count: u8,
     pub clock_end_count: u8,
     pub pending_dma: PendingDma,
-    pub open_bus: crate::bus::savestate::OpenBusState,
+    pub open_bus: OpenBusState,
     pub cycles: u64,
-    pub mixer: crate::audio::mixer::MixerState,
+    pub mixer: MixerState,
 }
 
 /// Delta snapshots are not yet optimized; we currently store full snapshots for rewind.
@@ -204,7 +215,7 @@ impl SaveState for Nes {
                 clock_start_count: self.clock_start_count,
                 clock_end_count: self.clock_end_count,
                 pending_dma: self.pending_dma,
-                open_bus: crate::bus::savestate::OpenBusState::from_open_bus(self.open_bus),
+                open_bus: OpenBusState::from_open_bus(self.open_bus),
                 cycles: self.cycles,
                 mixer: self.mixer.save_state(),
             };
@@ -261,7 +272,7 @@ impl SaveState for Nes {
     }
 }
 
-fn ppu_to_state(ppu: &crate::ppu::Ppu) -> PpuState {
+fn ppu_to_state(ppu: &Ppu) -> PpuState {
     let regs = &ppu.registers;
     PpuState {
         control: regs.control.bits(),
@@ -290,18 +301,12 @@ fn ppu_to_state(ppu: &crate::ppu::Ppu) -> PpuState {
         ignore_vram_read: ppu.ignore_vram_read,
         oam_copybuffer: ppu.oam_copybuffer,
         pending_vram_increment: match ppu.pending_vram_increment {
-            crate::ppu::PendingVramIncrement::None => {
-                crate::ppu::savestate::PendingVramIncrementState::none()
-            }
-            crate::ppu::PendingVramIncrement::By1 => {
-                crate::ppu::savestate::PendingVramIncrementState::by1()
-            }
-            crate::ppu::PendingVramIncrement::By32 => {
-                crate::ppu::savestate::PendingVramIncrementState::by32()
-            }
+            PendingVramIncrement::None => PendingVramIncrementState::none(),
+            PendingVramIncrement::By1 => PendingVramIncrementState::by1(),
+            PendingVramIncrement::By32 => PendingVramIncrementState::by32(),
         },
         secondary_oam: ppu.secondary_oam.as_slice().to_vec(),
-        sprite_eval: crate::ppu::savestate::SpriteEvalState {
+        sprite_eval: SpriteEvalState {
             sprite_addr_h: ppu.sprite_eval.sprite_addr_h,
             sprite_addr_l: ppu.sprite_eval.sprite_addr_l,
             secondary_oam_addr: ppu.sprite_eval.secondary_oam_addr,
@@ -311,7 +316,7 @@ fn ppu_to_state(ppu: &crate::ppu::Ppu) -> PpuState {
             sprite0_in_range_next: ppu.sprite_eval.sprite0_in_range_next,
             count: ppu.sprite_eval.count,
         },
-        sprite_fetch: crate::ppu::savestate::SpriteFetchState {
+        sprite_fetch: SpriteFetchState {
             i: ppu.sprite_fetch.i,
             sub: ppu.sprite_fetch.sub,
         },
@@ -324,10 +329,10 @@ fn ppu_to_state(ppu: &crate::ppu::Ppu) -> PpuState {
     }
 }
 
-fn state_to_ppu(ppu: &mut crate::ppu::Ppu, state: &PpuState) -> Result<(), NesSaveStateError> {
-    ppu.registers.control = crate::ppu::Control::from_bits_retain(state.control);
-    ppu.registers.mask = crate::ppu::Mask::from_bits_retain(state.mask);
-    ppu.registers.status = crate::ppu::Status::from_bits_retain(state.status);
+fn state_to_ppu(ppu: &mut Ppu, state: &PpuState) -> Result<(), NesSaveStateError> {
+    ppu.registers.control = Control::from_bits_retain(state.control);
+    ppu.registers.mask = Mask::from_bits_retain(state.mask);
+    ppu.registers.status = Status::from_bits_retain(state.status);
     ppu.registers.oam_addr = state.oam_addr;
     if ppu.registers.oam.as_slice().len() != state.oam.len() {
         return Err(NesSaveStateError::CorruptState("ppu oam size mismatch"));
@@ -368,9 +373,9 @@ fn state_to_ppu(ppu: &mut crate::ppu::Ppu, state: &PpuState) -> Result<(), NesSa
     ppu.ignore_vram_read = state.ignore_vram_read;
     ppu.oam_copybuffer = state.oam_copybuffer;
     ppu.pending_vram_increment = match state.pending_vram_increment.0 {
-        1 => crate::ppu::PendingVramIncrement::By1,
-        32 => crate::ppu::PendingVramIncrement::By32,
-        _ => crate::ppu::PendingVramIncrement::None,
+        1 => PendingVramIncrement::By1,
+        32 => PendingVramIncrement::By32,
+        _ => PendingVramIncrement::None,
     };
 
     if ppu.secondary_oam.as_slice().len() != state.secondary_oam.len() {
@@ -404,10 +409,8 @@ fn state_to_ppu(ppu: &mut crate::ppu::Ppu, state: &PpuState) -> Result<(), NesSa
     Ok(())
 }
 
-fn sprite_line_buffers_to_state(
-    buffers: &crate::ppu::SpriteLineBuffers,
-) -> crate::ppu::savestate::SpriteLineBuffersState {
-    let mut state = crate::ppu::savestate::SpriteLineBuffersState::default();
+fn sprite_line_buffers_to_state(buffers: &SpriteLineBuffers) -> SpriteLineBuffersState {
+    let mut state = SpriteLineBuffersState::default();
     state.y.copy_from_slice(buffers.y.as_slice());
     state.tile.copy_from_slice(buffers.tile.as_slice());
     state.attr.copy_from_slice(buffers.attr.as_slice());
@@ -421,10 +424,7 @@ fn sprite_line_buffers_to_state(
     state
 }
 
-fn sprite_line_buffers_from_state(
-    buffers: &mut crate::ppu::SpriteLineBuffers,
-    state: &crate::ppu::savestate::SpriteLineBuffersState,
-) {
+fn sprite_line_buffers_from_state(buffers: &mut SpriteLineBuffers, state: &SpriteLineBuffersState) {
     buffers.y.as_mut_slice().copy_from_slice(&state.y);
     buffers.tile.as_mut_slice().copy_from_slice(&state.tile);
     buffers.attr.as_mut_slice().copy_from_slice(&state.attr);
@@ -464,7 +464,7 @@ impl Snapshot<NesState, SnapshotMeta> {
 #[cfg(all(test, feature = "savestate-postcard"))]
 mod tests {
     use super::*;
-    use crate::{cartridge, ppu::buffer::ColorFormat};
+    use crate::{cartridge, controller::Button, ppu::buffer::ColorFormat};
 
     fn dummy_nrom_rom() -> Vec<u8> {
         // iNES header + 16 KiB PRG + 8 KiB CHR.
@@ -487,7 +487,7 @@ mod tests {
         let mut nes = crate::Nes::new(ColorFormat::Rgb555);
         nes.insert_cartridge(cart.clone());
 
-        nes.set_button(0, crate::controller::Button::A, true);
+        nes.set_button(0, Button::A, true);
         nes.run_frame(false);
         nes.run_frame(false);
 
@@ -512,7 +512,7 @@ mod tests {
     }
 }
 
-fn cpu_to_state(cpu: &crate::cpu::Cpu) -> CpuState {
+fn cpu_to_state(cpu: &Cpu) -> CpuState {
     CpuState {
         a: cpu.a,
         x: cpu.x,
@@ -546,21 +546,21 @@ fn cpu_to_state(cpu: &crate::cpu::Cpu) -> CpuState {
     }
 }
 
-fn state_to_cpu(cpu: &mut crate::cpu::Cpu, state: &CpuState) {
+fn state_to_cpu(cpu: &mut Cpu, state: &CpuState) {
     cpu.a = state.a;
     cpu.x = state.x;
     cpu.y = state.y;
     cpu.s = state.s;
-    cpu.p = crate::cpu::Status::from_bits_retain(state.p);
+    cpu.p = CpuStatus::from_bits_retain(state.p);
     cpu.pc = state.pc;
     cpu.opcode_in_flight = state.opcode_in_flight;
     cpu.step = state.step;
     cpu.tmp = state.tmp;
     cpu.effective_addr = state.effective_addr;
-    cpu.irq_latch = crate::cpu::IrqSource::from_bits_retain(state.irq_latch);
+    cpu.irq_latch = IrqSource::from_bits_retain(state.irq_latch);
     cpu.prev_irq_active = state.prev_irq_active;
     cpu.irq_active = state.irq_active;
-    cpu.irq_enable_mask = crate::cpu::IrqSource::from_bits_retain(state.irq_enable_mask);
+    cpu.irq_enable_mask = IrqSource::from_bits_retain(state.irq_enable_mask);
     cpu.prev_nmi_level = state.prev_nmi_level;
     cpu.nmi_latch = state.nmi_latch;
     cpu.prev_nmi_latch = state.prev_nmi_latch;
@@ -584,22 +584,22 @@ fn cartridge_to_state(cart: &Cartridge) -> Result<CartridgeState, NesSaveStateEr
     let mapper_state = match mapper_id {
         0 => MapperState::Mapper0,
         1 => MapperState::Mapper1(
-            mapper_downcast_ref::<crate::cartridge::mapper::Mapper1>(mapper)
+            mapper_downcast_ref::<Mapper1>(mapper)
                 .ok_or(NesSaveStateError::UnsupportedMapper { mapper_id })?
                 .save_state(),
         ),
         2 => MapperState::Mapper2(
-            mapper_downcast_ref::<crate::cartridge::mapper::Mapper2>(mapper)
+            mapper_downcast_ref::<Mapper2>(mapper)
                 .ok_or(NesSaveStateError::UnsupportedMapper { mapper_id })?
                 .save_state(),
         ),
         3 => MapperState::Mapper3(
-            mapper_downcast_ref::<crate::cartridge::mapper::Mapper3>(mapper)
+            mapper_downcast_ref::<Mapper3>(mapper)
                 .ok_or(NesSaveStateError::UnsupportedMapper { mapper_id })?
                 .save_state(),
         ),
         4 => MapperState::Mapper4(
-            mapper_downcast_ref::<crate::cartridge::mapper::Mapper4>(mapper)
+            mapper_downcast_ref::<Mapper4>(mapper)
                 .ok_or(NesSaveStateError::UnsupportedMapper { mapper_id })?
                 .save_state(),
         ),
@@ -673,25 +673,25 @@ fn apply_cartridge_state(
     match &state.mapper {
         MapperState::Mapper0 => Ok(()),
         MapperState::Mapper1(s) => {
-            mapper_downcast_mut::<crate::cartridge::mapper::Mapper1>(mapper)
+            mapper_downcast_mut::<Mapper1>(mapper)
                 .ok_or(NesSaveStateError::CorruptState("mapper downcast failed"))?
                 .load_state(s);
             Ok(())
         }
         MapperState::Mapper2(s) => {
-            mapper_downcast_mut::<crate::cartridge::mapper::Mapper2>(mapper)
+            mapper_downcast_mut::<Mapper2>(mapper)
                 .ok_or(NesSaveStateError::CorruptState("mapper downcast failed"))?
                 .load_state(s);
             Ok(())
         }
         MapperState::Mapper3(s) => {
-            mapper_downcast_mut::<crate::cartridge::mapper::Mapper3>(mapper)
+            mapper_downcast_mut::<Mapper3>(mapper)
                 .ok_or(NesSaveStateError::CorruptState("mapper downcast failed"))?
                 .load_state(s);
             Ok(())
         }
         MapperState::Mapper4(s) => {
-            mapper_downcast_mut::<crate::cartridge::mapper::Mapper4>(mapper)
+            mapper_downcast_mut::<Mapper4>(mapper)
                 .ok_or(NesSaveStateError::CorruptState("mapper downcast failed"))?
                 .load_state(s);
             Ok(())

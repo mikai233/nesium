@@ -15,7 +15,7 @@ use super::{
     state::RuntimeState,
     types::{
         AudioMode, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT, NotificationEvent,
-        PpuDebugState, RuntimeError,
+        PpuDebugState, RuntimeError, TilemapState,
     },
     util::button_bit,
 };
@@ -574,7 +574,7 @@ impl Runner {
                 }
             }
 
-            let tilemap = crate::runtime::types::TilemapState {
+            let tilemap = TilemapState {
                 ciram,
                 palette,
                 chr,

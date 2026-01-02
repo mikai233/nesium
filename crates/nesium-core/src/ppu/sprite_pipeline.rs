@@ -1,3 +1,4 @@
+use super::savestate::{SpritePipelineState, SpriteSlotState};
 use super::sprite::SpriteAttributes;
 use crate::mem_block::MemBlock;
 
@@ -153,10 +154,10 @@ impl SpritePipeline {
         chosen.unwrap_or_default()
     }
 
-    pub(crate) fn save_state(&self) -> crate::ppu::savestate::SpritePipelineState {
-        let mut slots = [crate::ppu::savestate::SpriteSlotState::default(); 8];
+    pub(crate) fn save_state(&self) -> SpritePipelineState {
+        let mut slots = [SpriteSlotState::default(); 8];
         for (idx, slot) in self.slots.iter().enumerate() {
-            slots[idx] = crate::ppu::savestate::SpriteSlotState {
+            slots[idx] = SpriteSlotState {
                 pattern_low: slot.pattern_low,
                 pattern_high: slot.pattern_high,
                 attributes: slot.attributes.bits(),
@@ -164,13 +165,13 @@ impl SpritePipeline {
                 sprite0: slot.sprite0,
             };
         }
-        crate::ppu::savestate::SpritePipelineState {
+        SpritePipelineState {
             active_count: self.active_count,
             slots,
         }
     }
 
-    pub(crate) fn load_state(&mut self, state: crate::ppu::savestate::SpritePipelineState) {
+    pub(crate) fn load_state(&mut self, state: SpritePipelineState) {
         self.active_count = state.active_count.min(8);
         for (idx, slot_state) in state.slots.iter().enumerate() {
             self.slots[idx] = SpriteSlot {

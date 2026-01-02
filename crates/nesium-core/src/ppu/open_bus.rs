@@ -1,3 +1,4 @@
+use super::savestate::PpuOpenBusState;
 /// PPU-local open-bus latch with per-bit decay.
 ///
 /// Mirrors Mesen2's `_openBus` / `_openBusDecayStamp` behaviour, using the
@@ -80,14 +81,14 @@ impl PpuOpenBus {
         self.value
     }
 
-    pub(crate) fn save_state(&self) -> crate::ppu::savestate::PpuOpenBusState {
-        crate::ppu::savestate::PpuOpenBusState {
+    pub(crate) fn save_state(&self) -> PpuOpenBusState {
+        PpuOpenBusState {
             value: self.value,
             decay_stamp: self.decay_stamp,
         }
     }
 
-    pub(crate) fn load_state(&mut self, state: crate::ppu::savestate::PpuOpenBusState) {
+    pub(crate) fn load_state(&mut self, state: PpuOpenBusState) {
         self.value = state.value;
         self.decay_stamp = state.decay_stamp;
     }
