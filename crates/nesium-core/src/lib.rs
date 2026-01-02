@@ -5,23 +5,21 @@ use crate::{
     apu::Apu,
     audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
     bus::{OpenBus, PendingDma, cpu::CpuBus},
-    cartridge::{
-        Cartridge, Provider,
-        header::Mirroring,
-        mapper::{PpuVramAccessContext, PpuVramAccessKind},
-    },
+    cartridge::{Cartridge, Provider},
     config::region::Region,
     context::Context,
     controller::{Button, ControllerPorts},
     cpu::Cpu,
     error::Error,
-    interceptor::{EmuInterceptor, Interceptor, log_interceptor::LogInterceptor},
+    interceptor::tilemap_capture_interceptor::{
+        DebugTilemapData, TilemapCaptureInterceptor, TilemapCapturePoint,
+    },
+    interceptor::{EmuInterceptor, log_interceptor::LogInterceptor},
     mem_block::cpu as cpu_ram,
     ppu::{
         Ppu,
         buffer::{ColorFormat, FrameBuffer, FrameReadyCallback},
         palette::{Palette, PaletteKind},
-        pattern_bus::PpuBus,
     },
     reset_kind::ResetKind,
 };
@@ -716,44 +714,23 @@ impl Nes {
         )
     }
 
-    /// Returns the raw data needed for the tilemap viewer:
-    /// (CIRAM, Palette, CHR, Mirroring, BgPatternBase)
-    pub fn debug_tilemap_data(&mut self) -> (Vec<u8>, [u8; 32], Vec<u8>, Mirroring, u16) {
-        use crate::memory::ppu as ppu_mem;
-        let mut chr = vec![0u8; ppu_mem::CHR_SIZE];
-        // Create a temporary PpuBus to read CHR data.
-        // using cycle 0 is arbitrary but safe for debug logic.
-        {
-            let mut pattern = PpuBus::new(self.cartridge.as_mut(), 0);
-            let ctx = PpuVramAccessContext {
-                ppu_cycle: 0,
-                cpu_cycle: 0,
-                kind: PpuVramAccessKind::Other,
-            };
-            for i in 0..ppu_mem::CHR_SIZE {
-                chr[i] = pattern.read(i as u16, ctx).unwrap_or(0);
-            }
+    pub fn set_tilemap_capture_point(&mut self, point: TilemapCapturePoint) {
+        if let Some(layer) = self.interceptor.layer_mut::<TilemapCaptureInterceptor>() {
+            layer.set_capture_point(point);
         }
-        // Return CIRAM (2 KiB nametable RAM)
-        let ciram = self.ppu.ciram.to_vec();
-        let palette = *self
-            .ppu
-            .palette_ram
-            .as_slice()
-            .try_into()
-            .unwrap_or(&[0; 32]);
-        let mirroring = self
-            .cartridge
-            .as_ref()
-            .map(|c| c.mirroring())
-            .unwrap_or(Mirroring::Horizontal);
-        let bg_pattern_base = self.ppu.registers.control.background_pattern_table();
-        (ciram, palette, chr, mirroring, bg_pattern_base)
+    }
+
+    pub fn take_tilemap_capture_snapshot(&mut self) -> Option<DebugTilemapData> {
+        self.interceptor
+            .layer_mut::<TilemapCaptureInterceptor>()
+            .and_then(|layer| layer.take_snapshot())
     }
 
     fn build_interceptor() -> EmuInterceptor {
-        let layers: Vec<Box<dyn Interceptor>> = vec![Box::new(LogInterceptor)];
-        EmuInterceptor::from_layers(layers)
+        let mut interceptor = EmuInterceptor::new();
+        interceptor.add(LogInterceptor);
+        interceptor.add(TilemapCaptureInterceptor::new());
+        interceptor
     }
 }
 

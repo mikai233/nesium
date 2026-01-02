@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Runtime notification stream.
 ///
@@ -37,6 +37,37 @@ Future<void> subscribeTilemapTexture() =>
 /// Unsubscribes from tilemap texture updates.
 Future<void> unsubscribeTilemapTexture() =>
     RustLib.instance.api.crateApiEventsUnsubscribeTilemapTexture();
+
+/// Subscribes to tilemap state updates.
+///
+/// This also refreshes the tilemap auxiliary texture, so the UI can use a single subscription.
+Stream<TilemapSnapshot> tilemapStateStream() =>
+    RustLib.instance.api.crateApiEventsTilemapStateStream();
+
+/// Use the PPU frame start (scanline 0, cycle 0) as the tilemap capture point.
+Future<void> setTilemapCaptureFrameStart() =>
+    RustLib.instance.api.crateApiEventsSetTilemapCaptureFrameStart();
+
+/// Use the PPU VBlank start (scanline 241, cycle 1) as the tilemap capture point.
+Future<void> setTilemapCaptureVblankStart() =>
+    RustLib.instance.api.crateApiEventsSetTilemapCaptureVblankStart();
+
+/// Use a specific scanline and dot as the tilemap capture point.
+Future<void> setTilemapCaptureScanline({
+  required int scanline,
+  required int dot,
+}) => RustLib.instance.api.crateApiEventsSetTilemapCaptureScanline(
+  scanline: scanline,
+  dot: dot,
+);
+
+/// Sets the render mode for the tilemap auxiliary texture.
+///
+/// - `0`: Default
+/// - `1`: Grayscale
+/// - `2`: Attribute view
+Future<void> setTilemapDisplayMode({required int mode}) =>
+    RustLib.instance.api.crateApiEventsSetTilemapDisplayMode(mode: mode);
 
 /// Debug state notification sent per-frame when subscribed.
 class DebugStateNotification {
@@ -125,3 +156,62 @@ class RuntimeNotification {
 }
 
 enum RuntimeNotificationKind { audioInitFailed }
+
+enum TilemapMirroring {
+  horizontal,
+  vertical,
+  fourScreen,
+  singleScreenLower,
+  singleScreenUpper,
+  mapperControlled,
+}
+
+/// Tilemap snapshot for UI inspection (hover/selection, tile preview, etc).
+///
+/// Note: `rgba_palette` is ALWAYS RGBA regardless of platform, so Flutter can render it easily.
+class TilemapSnapshot {
+  final Uint8List ciram;
+  final Uint8List palette;
+  final Uint8List chr;
+  final TilemapMirroring mirroring;
+  final int bgPatternBase;
+  final Uint8List rgbaPalette;
+  final int vramAddr;
+  final int fineX;
+
+  const TilemapSnapshot({
+    required this.ciram,
+    required this.palette,
+    required this.chr,
+    required this.mirroring,
+    required this.bgPatternBase,
+    required this.rgbaPalette,
+    required this.vramAddr,
+    required this.fineX,
+  });
+
+  @override
+  int get hashCode =>
+      ciram.hashCode ^
+      palette.hashCode ^
+      chr.hashCode ^
+      mirroring.hashCode ^
+      bgPatternBase.hashCode ^
+      rgbaPalette.hashCode ^
+      vramAddr.hashCode ^
+      fineX.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TilemapSnapshot &&
+          runtimeType == other.runtimeType &&
+          ciram == other.ciram &&
+          palette == other.palette &&
+          chr == other.chr &&
+          mirroring == other.mirroring &&
+          bgPatternBase == other.bgPatternBase &&
+          rgbaPalette == other.rgbaPalette &&
+          vramAddr == other.vramAddr &&
+          fineX == other.fineX;
+}

@@ -1082,6 +1082,318 @@ abstract class AppLocalizations {
   /// **'Scanline Numbers:\n0-239: Visible (Render)\n240: Post-render (Idle)\n241-260: VBlank (Vertical Blanking)\n-1: Pre-render (Dummy scanline)'**
   String get debuggerScanlineTooltip;
 
+  /// No description provided for @tilemapSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get tilemapSettings;
+
+  /// No description provided for @tilemapOverlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay'**
+  String get tilemapOverlay;
+
+  /// No description provided for @tilemapDisplayMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Display mode'**
+  String get tilemapDisplayMode;
+
+  /// No description provided for @tilemapDisplayModeDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get tilemapDisplayModeDefault;
+
+  /// No description provided for @tilemapDisplayModeGrayscale.
+  ///
+  /// In en, this message translates to:
+  /// **'Grayscale'**
+  String get tilemapDisplayModeGrayscale;
+
+  /// No description provided for @tilemapDisplayModeAttributeView.
+  ///
+  /// In en, this message translates to:
+  /// **'Attribute view'**
+  String get tilemapDisplayModeAttributeView;
+
+  /// No description provided for @tilemapTileGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile Grid (8×8)'**
+  String get tilemapTileGrid;
+
+  /// No description provided for @tilemapAttrGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'Attr Grid (16×16)'**
+  String get tilemapAttrGrid;
+
+  /// No description provided for @tilemapAttrGrid32.
+  ///
+  /// In en, this message translates to:
+  /// **'Attr Grid (32×32)'**
+  String get tilemapAttrGrid32;
+
+  /// No description provided for @tilemapNtBounds.
+  ///
+  /// In en, this message translates to:
+  /// **'NT Bounds'**
+  String get tilemapNtBounds;
+
+  /// No description provided for @tilemapScrollOverlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Scroll Overlay'**
+  String get tilemapScrollOverlay;
+
+  /// No description provided for @tilemapPanelDisplay.
+  ///
+  /// In en, this message translates to:
+  /// **'Display'**
+  String get tilemapPanelDisplay;
+
+  /// No description provided for @tilemapPanelTilemap.
+  ///
+  /// In en, this message translates to:
+  /// **'Tilemap'**
+  String get tilemapPanelTilemap;
+
+  /// No description provided for @tilemapPanelSelectedTile.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected Tile'**
+  String get tilemapPanelSelectedTile;
+
+  /// No description provided for @tilemapHidePanel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide panel'**
+  String get tilemapHidePanel;
+
+  /// No description provided for @tilemapShowPanel.
+  ///
+  /// In en, this message translates to:
+  /// **'Show panel'**
+  String get tilemapShowPanel;
+
+  /// No description provided for @tilemapInfoSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get tilemapInfoSize;
+
+  /// No description provided for @tilemapInfoSizePx.
+  ///
+  /// In en, this message translates to:
+  /// **'Size (px)'**
+  String get tilemapInfoSizePx;
+
+  /// No description provided for @tilemapInfoTilemapAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Tilemap Address'**
+  String get tilemapInfoTilemapAddress;
+
+  /// No description provided for @tilemapInfoTilesetAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Tileset Address'**
+  String get tilemapInfoTilesetAddress;
+
+  /// No description provided for @tilemapInfoMirroring.
+  ///
+  /// In en, this message translates to:
+  /// **'Mirroring'**
+  String get tilemapInfoMirroring;
+
+  /// No description provided for @tilemapInfoTileFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile Format'**
+  String get tilemapInfoTileFormat;
+
+  /// No description provided for @tilemapInfoTileFormat2bpp.
+  ///
+  /// In en, this message translates to:
+  /// **'2 bpp'**
+  String get tilemapInfoTileFormat2bpp;
+
+  /// No description provided for @tilemapMirroringHorizontal.
+  ///
+  /// In en, this message translates to:
+  /// **'Horizontal'**
+  String get tilemapMirroringHorizontal;
+
+  /// No description provided for @tilemapMirroringVertical.
+  ///
+  /// In en, this message translates to:
+  /// **'Vertical'**
+  String get tilemapMirroringVertical;
+
+  /// No description provided for @tilemapMirroringFourScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Four-screen'**
+  String get tilemapMirroringFourScreen;
+
+  /// No description provided for @tilemapMirroringSingleScreenLower.
+  ///
+  /// In en, this message translates to:
+  /// **'Single-screen (Lower)'**
+  String get tilemapMirroringSingleScreenLower;
+
+  /// No description provided for @tilemapMirroringSingleScreenUpper.
+  ///
+  /// In en, this message translates to:
+  /// **'Single-screen (Upper)'**
+  String get tilemapMirroringSingleScreenUpper;
+
+  /// No description provided for @tilemapMirroringMapperControlled.
+  ///
+  /// In en, this message translates to:
+  /// **'Mapper-controlled'**
+  String get tilemapMirroringMapperControlled;
+
+  /// No description provided for @tilemapLabelColumnRow.
+  ///
+  /// In en, this message translates to:
+  /// **'Column, Row'**
+  String get tilemapLabelColumnRow;
+
+  /// No description provided for @tilemapLabelXY.
+  ///
+  /// In en, this message translates to:
+  /// **'X, Y'**
+  String get tilemapLabelXY;
+
+  /// No description provided for @tilemapLabelSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get tilemapLabelSize;
+
+  /// No description provided for @tilemapLabelTilemapAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Tilemap address'**
+  String get tilemapLabelTilemapAddress;
+
+  /// No description provided for @tilemapLabelTileIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile index'**
+  String get tilemapLabelTileIndex;
+
+  /// No description provided for @tilemapLabelTileAddressPpu.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile address (PPU)'**
+  String get tilemapLabelTileAddressPpu;
+
+  /// No description provided for @tilemapLabelPaletteIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette index'**
+  String get tilemapLabelPaletteIndex;
+
+  /// No description provided for @tilemapLabelPaletteAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette address'**
+  String get tilemapLabelPaletteAddress;
+
+  /// No description provided for @tilemapLabelAttributeAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Attribute address'**
+  String get tilemapLabelAttributeAddress;
+
+  /// No description provided for @tilemapLabelAttributeData.
+  ///
+  /// In en, this message translates to:
+  /// **'Attribute data'**
+  String get tilemapLabelAttributeData;
+
+  /// No description provided for @tilemapSelectedTileTilemap.
+  ///
+  /// In en, this message translates to:
+  /// **'Tilemap'**
+  String get tilemapSelectedTileTilemap;
+
+  /// No description provided for @tilemapSelectedTileTileIdx.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile idx'**
+  String get tilemapSelectedTileTileIdx;
+
+  /// No description provided for @tilemapSelectedTileTilePpu.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile (PPU)'**
+  String get tilemapSelectedTileTilePpu;
+
+  /// No description provided for @tilemapSelectedTilePalette.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette'**
+  String get tilemapSelectedTilePalette;
+
+  /// No description provided for @tilemapSelectedTileAttr.
+  ///
+  /// In en, this message translates to:
+  /// **'Attr'**
+  String get tilemapSelectedTileAttr;
+
+  /// No description provided for @tilemapCapture.
+  ///
+  /// In en, this message translates to:
+  /// **'Capture'**
+  String get tilemapCapture;
+
+  /// No description provided for @tilemapCaptureFrameStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Frame Start'**
+  String get tilemapCaptureFrameStart;
+
+  /// No description provided for @tilemapCaptureVblankStart.
+  ///
+  /// In en, this message translates to:
+  /// **'VBlank Start'**
+  String get tilemapCaptureVblankStart;
+
+  /// No description provided for @tilemapCaptureManual.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get tilemapCaptureManual;
+
+  /// No description provided for @tilemapScanline.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanline'**
+  String get tilemapScanline;
+
+  /// No description provided for @tilemapDot.
+  ///
+  /// In en, this message translates to:
+  /// **'Dot'**
+  String get tilemapDot;
+
+  /// No description provided for @tilemapError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error: {error}'**
+  String tilemapError(String error);
+
+  /// No description provided for @tilemapRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get tilemapRetry;
+
   /// No description provided for @menuTilemapViewer.
   ///
   /// In en, this message translates to:

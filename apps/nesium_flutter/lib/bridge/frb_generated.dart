@@ -72,7 +72,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 948040592;
+  int get rustContentHash => -1914230977;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -132,6 +132,17 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiEmulationSetRewinding({required bool rewinding});
 
+  Future<void> crateApiEventsSetTilemapCaptureFrameStart();
+
+  Future<void> crateApiEventsSetTilemapCaptureScanline({
+    required int scanline,
+    required int dot,
+  });
+
+  Future<void> crateApiEventsSetTilemapCaptureVblankStart();
+
+  Future<void> crateApiEventsSetTilemapDisplayMode({required int mode});
+
   Future<void> crateApiInputSetTurboFramesPerToggle({required int frames});
 
   Future<void> crateApiInputSetTurboMask({required int pad, required int mask});
@@ -144,6 +155,8 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiLoadRomStartNesRuntime();
 
   Future<void> crateApiEventsSubscribeTilemapTexture();
+
+  Stream<TilemapSnapshot> crateApiEventsTilemapStateStream();
 
   Future<bool> crateApiPauseTogglePause();
 
@@ -823,6 +836,132 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "set_rewinding", argNames: ["rewinding"]);
 
   @override
+  Future<void> crateApiEventsSetTilemapCaptureFrameStart() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 24,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetTilemapCaptureFrameStartConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetTilemapCaptureFrameStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_tilemap_capture_frame_start",
+        argNames: [],
+      );
+
+  @override
+  Future<void> crateApiEventsSetTilemapCaptureScanline({
+    required int scanline,
+    required int dot,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_32(scanline, serializer);
+          sse_encode_i_32(dot, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 25,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetTilemapCaptureScanlineConstMeta,
+        argValues: [scanline, dot],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetTilemapCaptureScanlineConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_tilemap_capture_scanline",
+        argNames: ["scanline", "dot"],
+      );
+
+  @override
+  Future<void> crateApiEventsSetTilemapCaptureVblankStart() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 26,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetTilemapCaptureVblankStartConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetTilemapCaptureVblankStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_tilemap_capture_vblank_start",
+        argNames: [],
+      );
+
+  @override
+  Future<void> crateApiEventsSetTilemapDisplayMode({required int mode}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_8(mode, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 27,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetTilemapDisplayModeConstMeta,
+        argValues: [mode],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetTilemapDisplayModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_tilemap_display_mode",
+        argNames: ["mode"],
+      );
+
+  @override
   Future<void> crateApiInputSetTurboFramesPerToggle({required int frames}) {
     return handler.executeNormal(
       NormalTask(
@@ -832,7 +971,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 28,
             port: port_,
           );
         },
@@ -867,7 +1006,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 29,
             port: port_,
           );
         },
@@ -901,7 +1040,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 30,
             port: port_,
           );
         },
@@ -931,7 +1070,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 31,
             port: port_,
           );
         },
@@ -958,7 +1097,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 32,
             port: port_,
           );
         },
@@ -977,6 +1116,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "subscribe_tilemap_texture", argNames: []);
 
   @override
+  Stream<TilemapSnapshot> crateApiEventsTilemapStateStream() {
+    final sink = RustStreamSink<TilemapSnapshot>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_StreamSink_tilemap_snapshot_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 33,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_String,
+          ),
+          constMeta: kCrateApiEventsTilemapStateStreamConstMeta,
+          argValues: [sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiEventsTilemapStateStreamConstMeta =>
+      const TaskConstMeta(
+        debugName: "tilemap_state_stream",
+        argNames: ["sink"],
+      );
+
+  @override
   Future<bool> crateApiPauseTogglePause() {
     return handler.executeNormal(
       NormalTask(
@@ -985,7 +1159,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 34,
             port: port_,
           );
         },
@@ -1012,7 +1186,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1039,7 +1213,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1076,6 +1250,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   RustStreamSink<RuntimeNotification>
   dco_decode_StreamSink_runtime_notification_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
+
+  @protected
+  RustStreamSink<TilemapSnapshot> dco_decode_StreamSink_tilemap_snapshot_Sse(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     throw UnimplementedError();
   }
@@ -1194,6 +1376,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TilemapMirroring dco_decode_tilemap_mirroring(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TilemapMirroring.values[raw as int];
+  }
+
+  @protected
+  TilemapSnapshot dco_decode_tilemap_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return TilemapSnapshot(
+      ciram: dco_decode_list_prim_u_8_strict(arr[0]),
+      palette: dco_decode_list_prim_u_8_strict(arr[1]),
+      chr: dco_decode_list_prim_u_8_strict(arr[2]),
+      mirroring: dco_decode_tilemap_mirroring(arr[3]),
+      bgPatternBase: dco_decode_u_16(arr[4]),
+      rgbaPalette: dco_decode_list_prim_u_8_strict(arr[5]),
+      vramAddr: dco_decode_u_16(arr[6]),
+      fineX: dco_decode_u_8(arr[7]),
+    );
+  }
+
+  @protected
   int dco_decode_u_16(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -1242,6 +1448,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   RustStreamSink<RuntimeNotification>
   sse_decode_StreamSink_runtime_notification_Sse(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
+  RustStreamSink<TilemapSnapshot> sse_decode_StreamSink_tilemap_snapshot_Sse(
+    SseDeserializer deserializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     throw UnimplementedError('Unreachable ()');
   }
@@ -1393,6 +1607,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TilemapMirroring sse_decode_tilemap_mirroring(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TilemapMirroring.values[inner];
+  }
+
+  @protected
+  TilemapSnapshot sse_decode_tilemap_snapshot(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ciram = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_palette = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_chr = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_mirroring = sse_decode_tilemap_mirroring(deserializer);
+    var var_bgPatternBase = sse_decode_u_16(deserializer);
+    var var_rgbaPalette = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_vramAddr = sse_decode_u_16(deserializer);
+    var var_fineX = sse_decode_u_8(deserializer);
+    return TilemapSnapshot(
+      ciram: var_ciram,
+      palette: var_palette,
+      chr: var_chr,
+      mirroring: var_mirroring,
+      bgPatternBase: var_bgPatternBase,
+      rgbaPalette: var_rgbaPalette,
+      vramAddr: var_vramAddr,
+      fineX: var_fineX,
+    );
+  }
+
+  @protected
   int sse_decode_u_16(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint16();
@@ -1457,6 +1701,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self.setupAndSerialize(
         codec: SseCodec(
           decodeSuccessData: sse_decode_runtime_notification,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_StreamSink_tilemap_snapshot_Sse(
+    RustStreamSink<TilemapSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_tilemap_snapshot,
           decodeErrorData: sse_decode_AnyhowException,
         ),
       ),
@@ -1599,6 +1860,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_tilemap_mirroring(
+    TilemapMirroring self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_tilemap_snapshot(
+    TilemapSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.ciram, serializer);
+    sse_encode_list_prim_u_8_strict(self.palette, serializer);
+    sse_encode_list_prim_u_8_strict(self.chr, serializer);
+    sse_encode_tilemap_mirroring(self.mirroring, serializer);
+    sse_encode_u_16(self.bgPatternBase, serializer);
+    sse_encode_list_prim_u_8_strict(self.rgbaPalette, serializer);
+    sse_encode_u_16(self.vramAddr, serializer);
+    sse_encode_u_8(self.fineX, serializer);
   }
 
   @protected

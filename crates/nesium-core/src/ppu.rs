@@ -57,6 +57,7 @@ use crate::{
     cartridge::mapper::{NametableTarget, PpuVramAccessContext, PpuVramAccessKind},
     context::Context,
     cpu::Cpu,
+    interceptor::Interceptor,
     mem_block::ppu::{Ciram, SecondaryOamRam},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
     ppu::{
@@ -462,7 +463,7 @@ impl Ppu {
     /// This is the main timing entry: it performs background/sprite pipeline
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
-    pub fn step(bus: &mut CpuBus, _cpu: &mut Cpu, _ctx: &mut Context) {
+    pub fn step(bus: &mut CpuBus, cpu: &mut Cpu, ctx: &mut Context) {
         // let cpu_cycle = bus.cycles();
         // if cpu_cycle > 16_000_000 && cpu_cycle < 20_000_000 {
         //     let cpu_master_clock = bus.master_clock();
@@ -518,244 +519,263 @@ impl Ppu {
         // This ensures scanline/cycle reflect the state *after* this cycle is processed
         // for synchronization purposes, aligning with Mesen's interpretation.
         let cpu_cycle = bus.cycles();
-        let mut devices = bus.devices_mut();
-        let mut ppu_bus = PpuBus::new(devices.cartridge.as_deref_mut(), cpu_cycle);
-        let ppu = &mut devices.ppu;
-        ppu.advance_cycle();
+        let (scanline, dot, at_frame_start, at_vblank_start) = {
+            let mut devices = bus.devices_mut();
+            let mut ppu_bus = PpuBus::new(devices.cartridge.as_deref_mut(), cpu_cycle);
+            let ppu = &mut devices.ppu;
+            ppu.advance_cycle();
 
-        if ppu.oam_addr_disable_glitch_pending {
-            ppu.registers.oam_addr = ppu.registers.oam_addr.wrapping_add(1);
-            ppu.oam_addr_disable_glitch_pending = false;
-        }
-
-        let rendering_enabled = ppu.render_enabled;
-        ppu.step_pending_vram_addr();
-
-        if ppu.ignore_vram_read > 0 {
-            ppu.ignore_vram_read -= 1;
-        }
-
-        if ppu.pending_vram_increment.is_pending() {
-            // Mesen2 / hardware: the simple "+1 or +32" VRAM increment after
-            // a $2007 access only applies when rendering is disabled or during
-            // VBlank/post-render scanlines. While rendering is active on the
-            // prerender/visible scanlines, VRAM address progression is driven
-            // by the scroll increment logic (coarse/fine X/Y) instead.
-            if ppu.scanline >= 240 || !rendering_enabled {
-                let step = ppu.pending_vram_increment.amount();
-                if step != 0 {
-                    ppu.registers.vram.v.increment(step);
-                }
+            if ppu.oam_addr_disable_glitch_pending {
+                ppu.registers.oam_addr = ppu.registers.oam_addr.wrapping_add(1);
+                ppu.oam_addr_disable_glitch_pending = false;
             }
-            ppu.pending_vram_increment = PendingVramIncrement::None;
-        }
 
-        // NOTE: We clear VBlank and drop NMI output at dot 1 of prerender.
-        // Dot 0 should NOT clear VBlank on normal frames (avoids early NMI fall).
+            let rendering_enabled = ppu.render_enabled;
+            ppu.step_pending_vram_addr();
 
-        // Load sprite shifters for the new scanline before rendering begins.
-        if ppu.cycle == 1 && (0..=239).contains(&ppu.scanline) {
-            let sprite_count = ppu.sprite_eval.count.min(8);
+            if ppu.ignore_vram_read > 0 {
+                ppu.ignore_vram_read -= 1;
+            }
 
-            // Take slices once so we can both log and pass them to the pipeline.
-            let attrs = ppu.sprite_line_next.attr_slice();
-            let xs = ppu.sprite_line_next.x_slice();
-            let pats_lo = ppu.sprite_line_next.pattern_low_slice();
-            let pats_hi = ppu.sprite_line_next.pattern_high_slice();
-
-            ppu.sprite_pipeline.load_scanline(
-                sprite_count,
-                ppu.sprite_eval.sprite0_in_range_next,
-                attrs,
-                xs,
-                pats_lo,
-                pats_hi,
-            );
-        }
-
-        // If rendering is disabled, keep pipelines idle to avoid stale data.
-        if !rendering_enabled {
-            ppu.bg_pipeline.clear();
-            ppu.sprite_pipeline.clear();
-            ppu.sprite_line_next.clear();
-        }
-
-        match (ppu.scanline, ppu.cycle) {
-            // ----------------------
-            // Pre-render scanline (-1)
-            // ----------------------
-            // Dot 0 has no special side effects (prerender clears happen at dot 1).
-            (_, 0) => {}
-
-            // Background pipeline ticks during prerender dots 1..=256 when rendering is enabled.
-            (-1, 1..=256) => {
-                if ppu.cycle == 1 {
-                    // Clear vblank/sprite flags at dot 1 of prerender.
-                    ppu.registers.status.remove(Status::VERTICAL_BLANK);
-                    ppu.registers
-                        .status
-                        .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
-                    // Mesen2: sprite evaluation does not run on the pre-render line,
-                    // so ensure scanline 0 starts with 0 active sprites.
-                    ppu.sprite_eval.count = 0;
-                    ppu.sprite_eval.sprite0_in_range_next = false;
-                }
-                if rendering_enabled {
-                    // Mesen2: OAMADDR bug on prerender, cycles 1..=8.
-                    // If OAMADDR >= 8 when rendering starts, the 8 bytes starting at
-                    // OAMADDR & 0xF8 are copied to the first 8 bytes of OAM.
-                    if ppu.cycle < 9 && ppu.registers.oam_addr >= 0x08 {
-                        let src_base = ppu.registers.oam_addr & 0xF8;
-                        let dst = (ppu.cycle - 1) as u8;
-                        let src = src_base.wrapping_add(dst);
-                        ppu.registers.oam[dst as usize] = ppu.registers.oam[src as usize];
-                    }
-
-                    // Shift background shifters each dot.
-                    let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
-                    // Fetch/reload background data at tile boundaries.
-                    ppu.fetch_background_data(&mut ppu_bus);
-
-                    if ppu.cycle == 256 {
-                        ppu.increment_scroll_y();
+            if ppu.pending_vram_increment.is_pending() {
+                // Mesen2 / hardware: the simple "+1 or +32" VRAM increment after
+                // a $2007 access only applies when rendering is disabled or during
+                // VBlank/post-render scanlines. While rendering is active on the
+                // prerender/visible scanlines, VRAM address progression is driven
+                // by the scroll increment logic (coarse/fine X/Y) instead.
+                if ppu.scanline >= 240 || !rendering_enabled {
+                    let step = ppu.pending_vram_increment.amount();
+                    if step != 0 {
+                        ppu.registers.vram.v.increment(step);
                     }
                 }
+                ppu.pending_vram_increment = PendingVramIncrement::None;
             }
 
-            // Dot 257: copy horizontal scroll bits from t -> v.
-            (-1, 257) => {
-                if rendering_enabled {
-                    ppu.copy_horizontal_scroll();
-                    // NESdev/Mesen2: during sprite tile loading (257..=320) the PPU
-                    // forces OAMADDR to 0. This also means OAMADDR is 0 after a
-                    // normal rendered frame.
-                    ppu.registers.oam_addr = 0;
-                    // Mesen2: sprite tile loading also performs a garbage NT fetch on dot 257.
-                    ppu.sprite_pipeline_fetch_tick(&mut ppu_bus);
-                }
+            // NOTE: We clear VBlank and drop NMI output at dot 1 of prerender.
+            // Dot 0 should NOT clear VBlank on normal frames (avoids early NMI fall).
+
+            // Load sprite shifters for the new scanline before rendering begins.
+            if ppu.cycle == 1 && (0..=239).contains(&ppu.scanline) {
+                let sprite_count = ppu.sprite_eval.count.min(8);
+
+                // Take slices once so we can both log and pass them to the pipeline.
+                let attrs = ppu.sprite_line_next.attr_slice();
+                let xs = ppu.sprite_line_next.x_slice();
+                let pats_lo = ppu.sprite_line_next.pattern_low_slice();
+                let pats_hi = ppu.sprite_line_next.pattern_high_slice();
+
+                ppu.sprite_pipeline.load_scanline(
+                    sprite_count,
+                    ppu.sprite_eval.sprite0_in_range_next,
+                    attrs,
+                    xs,
+                    pats_lo,
+                    pats_hi,
+                );
             }
 
-            // Dots 258..=320: sprite pattern fetches for scanline 0.
-            // During dots 280..=304, vertical scroll bits are also copied from t -> v.
-            (-1, 258..=320) => {
-                if rendering_enabled {
-                    if (280..=304).contains(&ppu.cycle) {
-                        ppu.copy_vertical_scroll();
+            // If rendering is disabled, keep pipelines idle to avoid stale data.
+            if !rendering_enabled {
+                ppu.bg_pipeline.clear();
+                ppu.sprite_pipeline.clear();
+                ppu.sprite_line_next.clear();
+            }
+
+            match (ppu.scanline, ppu.cycle) {
+                // ----------------------
+                // Pre-render scanline (-1)
+                // ----------------------
+                // Dot 0 has no special side effects (prerender clears happen at dot 1).
+                (_, 0) => {}
+
+                // Background pipeline ticks during prerender dots 1..=256 when rendering is enabled.
+                (-1, 1..=256) => {
+                    if ppu.cycle == 1 {
+                        // Clear vblank/sprite flags at dot 1 of prerender.
+                        ppu.registers.status.remove(Status::VERTICAL_BLANK);
+                        ppu.registers
+                            .status
+                            .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+                        // Mesen2: sprite evaluation does not run on the pre-render line,
+                        // so ensure scanline 0 starts with 0 active sprites.
+                        ppu.sprite_eval.count = 0;
+                        ppu.sprite_eval.sprite0_in_range_next = false;
                     }
-                    ppu.sprite_pipeline_fetch_tick(&mut ppu_bus);
-                }
-            }
+                    if rendering_enabled {
+                        // Mesen2: OAMADDR bug on prerender, cycles 1..=8.
+                        // If OAMADDR >= 8 when rendering starts, the 8 bytes starting at
+                        // OAMADDR & 0xF8 are copied to the first 8 bytes of OAM.
+                        if ppu.cycle < 9 && ppu.registers.oam_addr >= 0x08 {
+                            let src_base = ppu.registers.oam_addr & 0xF8;
+                            let dst = (ppu.cycle - 1) as u8;
+                            let src = src_base.wrapping_add(dst);
+                            ppu.registers.oam[dst as usize] = ppu.registers.oam[src as usize];
+                        }
 
-            // Dots 321..=336: prefetch first two background tiles for scanline 0.
-            (-1, 321..=336) => {
-                if rendering_enabled {
-                    if ppu.cycle == 321 {
-                        // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
-                        ppu.oam_copybuffer = ppu.secondary_oam[0];
-                    }
-                    let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
-                    ppu.fetch_background_data(&mut ppu_bus);
-                }
-            }
+                        // Shift background shifters each dot.
+                        let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
+                        // Fetch/reload background data at tile boundaries.
+                        ppu.fetch_background_data(&mut ppu_bus);
 
-            // Dots 337..=340: idle/dummy fetches on prerender.
-            //
-            // On NTSC-like timing, odd frames with rendering enabled are one
-            // PPU tick shorter. Mesen2 implements this by skipping the dot
-            // after scanline -1, cycle 339 ("skip from 339 to 0, going over
-            // 340"). We mirror that behaviour here by forcing the cycle to
-            // the last dot of the scanline when we are on the pre-render
-            // scanline, cycle 339 of an odd frame with rendering enabled.
-            (-1, 337..=340) => {
-                if ppu.cycle == 339 && ppu.frame % 2 == 1 && ppu.render_enabled {
-                    // Force the next `advance_cycle()` call to wrap directly
-                    // to scanline 0, cycle 0, effectively removing dot 340
-                    // from the timeline.
-                    ppu.cycle = CYCLES_PER_SCANLINE - 1; // 340
-                }
-            }
-
-            // ----------------------
-            // Visible scanlines (0..=239)
-            // ----------------------
-            (0..=239, 1..=256) => {
-                // Render current pixel.
-                ppu.render_pixel();
-
-                if rendering_enabled {
-                    // Fetch background data for this dot.
-                    ppu.fetch_background_data(&mut ppu_bus);
-                    // Sprite evaluation for the *next* scanline runs during dots 1..=256.
-                    ppu.sprite_pipeline_eval_tick();
-
-                    if ppu.cycle == 256 {
-                        ppu.increment_scroll_y();
+                        if ppu.cycle == 256 {
+                            ppu.increment_scroll_y();
+                        }
                     }
                 }
-            }
 
-            // Dot 257: copy horizontal scroll bits for next scanline.
-            (0..=239, 257) => {
-                if rendering_enabled {
-                    ppu.copy_horizontal_scroll();
-                    // NESdev/Mesen2: force OAMADDR to 0 for the sprite fetch window.
-                    ppu.registers.oam_addr = 0;
-                    // Mesen2: sprite tile loading also performs a garbage NT fetch on dot 257.
-                    ppu.sprite_pipeline_fetch_tick(&mut ppu_bus);
-                }
-            }
-
-            // Dots 258..=320: sprite pattern fetches for the next scanline.
-            (0..=239, 258..=320) => {
-                if rendering_enabled {
-                    ppu.sprite_pipeline_fetch_tick(&mut ppu_bus);
-                }
-            }
-
-            // Dots 321..=336: prefetch first two background tiles for next scanline.
-            (0..=239, 321..=336) => {
-                if rendering_enabled {
-                    if ppu.cycle == 321 {
-                        // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
-                        ppu.oam_copybuffer = ppu.secondary_oam[0];
+                // Dot 257: copy horizontal scroll bits from t -> v.
+                (-1, 257) => {
+                    if rendering_enabled {
+                        ppu.copy_horizontal_scroll();
+                        // NESdev/Mesen2: during sprite tile loading (257..=320) the PPU
+                        // forces OAMADDR to 0. This also means OAMADDR is 0 after a
+                        // normal rendered frame.
+                        ppu.registers.oam_addr = 0;
+                        // Mesen2: sprite tile loading also performs a garbage NT fetch on dot 257.
+                        ppu.sprite_pipeline_fetch_tick(&mut ppu_bus);
                     }
-                    // Visible scanline prefetch window: keep BG shifters advancing
-                    // here as well so that the prefetched tiles for the *next*
-                    // scanline are aligned with dots 0 and 8 when rendering resumes.
-                    let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
-                    ppu.fetch_background_data(&mut ppu_bus);
                 }
+
+                // Dots 258..=320: sprite pattern fetches for scanline 0.
+                // During dots 280..=304, vertical scroll bits are also copied from t -> v.
+                (-1, 258..=320) => {
+                    if rendering_enabled {
+                        if (280..=304).contains(&ppu.cycle) {
+                            ppu.copy_vertical_scroll();
+                        }
+                        ppu.sprite_pipeline_fetch_tick(&mut ppu_bus);
+                    }
+                }
+
+                // Dots 321..=336: prefetch first two background tiles for scanline 0.
+                (-1, 321..=336) => {
+                    if rendering_enabled {
+                        if ppu.cycle == 321 {
+                            // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
+                            ppu.oam_copybuffer = ppu.secondary_oam[0];
+                        }
+                        let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
+                        ppu.fetch_background_data(&mut ppu_bus);
+                    }
+                }
+
+                // Dots 337..=340: idle/dummy fetches on prerender.
+                //
+                // On NTSC-like timing, odd frames with rendering enabled are one
+                // PPU tick shorter. Mesen2 implements this by skipping the dot
+                // after scanline -1, cycle 339 ("skip from 339 to 0, going over
+                // 340"). We mirror that behaviour here by forcing the cycle to
+                // the last dot of the scanline when we are on the pre-render
+                // scanline, cycle 339 of an odd frame with rendering enabled.
+                (-1, 337..=340) => {
+                    if ppu.cycle == 339 && ppu.frame % 2 == 1 && ppu.render_enabled {
+                        // Force the next `advance_cycle()` call to wrap directly
+                        // to scanline 0, cycle 0, effectively removing dot 340
+                        // from the timeline.
+                        ppu.cycle = CYCLES_PER_SCANLINE - 1; // 340
+                    }
+                }
+
+                // ----------------------
+                // Visible scanlines (0..=239)
+                // ----------------------
+                (0..=239, 1..=256) => {
+                    // Render current pixel.
+                    ppu.render_pixel();
+
+                    if rendering_enabled {
+                        // Fetch background data for this dot.
+                        ppu.fetch_background_data(&mut ppu_bus);
+                        // Sprite evaluation for the *next* scanline runs during dots 1..=256.
+                        ppu.sprite_pipeline_eval_tick();
+
+                        if ppu.cycle == 256 {
+                            ppu.increment_scroll_y();
+                        }
+                    }
+                }
+
+                // Dot 257: copy horizontal scroll bits for next scanline.
+                (0..=239, 257) => {
+                    if rendering_enabled {
+                        ppu.copy_horizontal_scroll();
+                        // NESdev/Mesen2: force OAMADDR to 0 for the sprite fetch window.
+                        ppu.registers.oam_addr = 0;
+                        // Mesen2: sprite tile loading also performs a garbage NT fetch on dot 257.
+                        ppu.sprite_pipeline_fetch_tick(&mut ppu_bus);
+                    }
+                }
+
+                // Dots 258..=320: sprite pattern fetches for the next scanline.
+                (0..=239, 258..=320) => {
+                    if rendering_enabled {
+                        ppu.sprite_pipeline_fetch_tick(&mut ppu_bus);
+                    }
+                }
+
+                // Dots 321..=336: prefetch first two background tiles for next scanline.
+                (0..=239, 321..=336) => {
+                    if rendering_enabled {
+                        if ppu.cycle == 321 {
+                            // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
+                            ppu.oam_copybuffer = ppu.secondary_oam[0];
+                        }
+                        // Visible scanline prefetch window: keep BG shifters advancing
+                        // here as well so that the prefetched tiles for the *next*
+                        // scanline are aligned with dots 0 and 8 when rendering resumes.
+                        let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
+                        ppu.fetch_background_data(&mut ppu_bus);
+                    }
+                }
+
+                // Dots 337..=340: dummy nametable fetches (no visible effect).
+                (0..=239, 337..=340) => {}
+
+                // ----------------------
+                // Post-render scanline (240)
+                // ----------------------
+                (240, _) => {}
+
+                // ----------------------
+                // VBlank scanlines (241..=260)
+                // ----------------------
+                (241, 1) => {
+                    // Enter vblank at scanline 241, dot 1.
+                    // NESdev/2C02 race: if $2002 was read at scanline 241, dot 0,
+                    // the VBlank flag never sets and no NMI edge is generated for this frame.
+                    if !ppu.prevent_vblank_flag {
+                        ppu.registers.status.insert(Status::VERTICAL_BLANK);
+                    }
+                    // Consume the race latch each frame.
+                    ppu.prevent_vblank_flag = false;
+                }
+                (241..=260, _) => {}
+
+                // Any other scanline value indicates a bug in the timing logic.
+                _ => unreachable!("PPU scanline {} out of range", ppu.scanline),
             }
 
-            // Dots 337..=340: dummy nametable fetches (no visible effect).
-            (0..=239, 337..=340) => {}
+            ppu.update_nmi_level();
+            ppu.update_state_latch();
 
-            // ----------------------
-            // Post-render scanline (240)
-            // ----------------------
-            (240, _) => {}
+            (
+                ppu.scanline,
+                ppu.cycle,
+                ppu.scanline == 0 && ppu.cycle == 0,
+                ppu.scanline == 241 && ppu.cycle == 1,
+            )
+        };
 
-            // ----------------------
-            // VBlank scanlines (241..=260)
-            // ----------------------
-            (241, 1) => {
-                // Enter vblank at scanline 241, dot 1.
-                // NESdev/2C02 race: if $2002 was read at scanline 241, dot 0,
-                // the VBlank flag never sets and no NMI edge is generated for this frame.
-                if !ppu.prevent_vblank_flag {
-                    ppu.registers.status.insert(Status::VERTICAL_BLANK);
-                }
-                // Consume the race latch each frame.
-                ppu.prevent_vblank_flag = false;
+        if let Context::Some { interceptor } = ctx {
+            if at_frame_start {
+                interceptor.on_ppu_frame_start(cpu, bus);
             }
-            (241..=260, _) => {}
-
-            // Any other scanline value indicates a bug in the timing logic.
-            _ => unreachable!("PPU scanline {} out of range", ppu.scanline),
+            if at_vblank_start {
+                interceptor.on_ppu_vblank_start(cpu, bus);
+            }
+            interceptor.on_ppu_scanline_dot(cpu, bus, scanline, dot);
         }
-
-        ppu.update_nmi_level();
-        ppu.update_state_latch();
     }
 
     /// Advance the PPU until its master clock reaches `target_master`.

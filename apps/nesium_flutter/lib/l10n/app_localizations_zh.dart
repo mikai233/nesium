@@ -537,5 +537,163 @@ class AppLocalizationsZh extends AppLocalizations {
       '扫描线说明：\n0-239: 可见区域 (渲染)\n240: post-render (空闲)\n241-260: VBlank (垂直消隐)\n-1: pre-render (预渲染扫描线)';
 
   @override
+  String get tilemapSettings => '设置';
+
+  @override
+  String get tilemapOverlay => '叠加层';
+
+  @override
+  String get tilemapDisplayMode => '显示模式';
+
+  @override
+  String get tilemapDisplayModeDefault => '默认';
+
+  @override
+  String get tilemapDisplayModeGrayscale => '灰度';
+
+  @override
+  String get tilemapDisplayModeAttributeView => '属性视图';
+
+  @override
+  String get tilemapTileGrid => 'Tile 网格 (8×8)';
+
+  @override
+  String get tilemapAttrGrid => '属性网格 (16×16)';
+
+  @override
+  String get tilemapAttrGrid32 => '属性网格 (32×32)';
+
+  @override
+  String get tilemapNtBounds => '名称表边界';
+
+  @override
+  String get tilemapScrollOverlay => '滚动叠加';
+
+  @override
+  String get tilemapPanelDisplay => '显示';
+
+  @override
+  String get tilemapPanelTilemap => 'Tilemap';
+
+  @override
+  String get tilemapPanelSelectedTile => '选中 Tile';
+
+  @override
+  String get tilemapHidePanel => '隐藏侧边栏';
+
+  @override
+  String get tilemapShowPanel => '显示侧边栏';
+
+  @override
+  String get tilemapInfoSize => '尺寸';
+
+  @override
+  String get tilemapInfoSizePx => '尺寸 (px)';
+
+  @override
+  String get tilemapInfoTilemapAddress => 'Tilemap 地址';
+
+  @override
+  String get tilemapInfoTilesetAddress => '图案表地址';
+
+  @override
+  String get tilemapInfoMirroring => '镜像';
+
+  @override
+  String get tilemapInfoTileFormat => 'Tile 格式';
+
+  @override
+  String get tilemapInfoTileFormat2bpp => '2 bpp';
+
+  @override
+  String get tilemapMirroringHorizontal => '水平';
+
+  @override
+  String get tilemapMirroringVertical => '垂直';
+
+  @override
+  String get tilemapMirroringFourScreen => '四屏';
+
+  @override
+  String get tilemapMirroringSingleScreenLower => '单屏（下）';
+
+  @override
+  String get tilemapMirroringSingleScreenUpper => '单屏（上）';
+
+  @override
+  String get tilemapMirroringMapperControlled => '由 Mapper 控制';
+
+  @override
+  String get tilemapLabelColumnRow => '列, 行';
+
+  @override
+  String get tilemapLabelXY => 'X, Y';
+
+  @override
+  String get tilemapLabelSize => '尺寸';
+
+  @override
+  String get tilemapLabelTilemapAddress => 'Tilemap 地址';
+
+  @override
+  String get tilemapLabelTileIndex => 'Tile 索引';
+
+  @override
+  String get tilemapLabelTileAddressPpu => 'Tile 地址 (PPU)';
+
+  @override
+  String get tilemapLabelPaletteIndex => '调色板索引';
+
+  @override
+  String get tilemapLabelPaletteAddress => '调色板地址';
+
+  @override
+  String get tilemapLabelAttributeAddress => '属性地址';
+
+  @override
+  String get tilemapLabelAttributeData => '属性数据';
+
+  @override
+  String get tilemapSelectedTileTilemap => 'Tilemap';
+
+  @override
+  String get tilemapSelectedTileTileIdx => 'Tile 索引';
+
+  @override
+  String get tilemapSelectedTileTilePpu => 'Tile (PPU)';
+
+  @override
+  String get tilemapSelectedTilePalette => '调色板';
+
+  @override
+  String get tilemapSelectedTileAttr => '属性';
+
+  @override
+  String get tilemapCapture => '捕获';
+
+  @override
+  String get tilemapCaptureFrameStart => '帧起始';
+
+  @override
+  String get tilemapCaptureVblankStart => 'VBlank 起始';
+
+  @override
+  String get tilemapCaptureManual => '手动';
+
+  @override
+  String get tilemapScanline => '扫描线';
+
+  @override
+  String get tilemapDot => '点';
+
+  @override
+  String tilemapError(String error) {
+    return '错误：$error';
+  }
+
+  @override
+  String get tilemapRetry => '重试';
+
+  @override
   String get menuTilemapViewer => 'Tilemap 查看器';
 }

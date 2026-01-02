@@ -115,6 +115,10 @@ pub struct TilemapState {
     pub bgra_palette: [[u8; 4]; 64],
     /// Background pattern table base address ($0000 or $1000).
     pub bg_pattern_base: u16,
+    /// PPU internal VRAM address (`v` register, 15 bits).
+    pub vram_addr: u16,
+    /// Fine X scroll (`x` register, 0..7).
+    pub fine_x: u8,
 }
 
 impl Default for TilemapState {
@@ -126,6 +130,8 @@ impl Default for TilemapState {
             mirroring: Mirroring::Horizontal,
             bgra_palette: [[0; 4]; 64],
             bg_pattern_base: 0,
+            vram_addr: 0,
+            fine_x: 0,
         }
     }
 }

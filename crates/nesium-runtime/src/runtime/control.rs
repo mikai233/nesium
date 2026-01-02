@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use crossbeam_channel::Sender;
 use nesium_core::{
     audio::bus::AudioBusConfig,
+    interceptor::tilemap_capture_interceptor::TilemapCapturePoint,
     ppu::buffer::FrameReadyCallback,
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
@@ -32,6 +33,7 @@ pub(crate) enum ControlMessage {
     LoadMovie(nesium_support::tas::Movie, ControlReplySender),
     SubscribeEvent(EventTopic, Box<dyn RuntimeEventSender>, ControlReplySender),
     UnsubscribeEvent(EventTopic, ControlReplySender),
+    SetTilemapCapturePoint(TilemapCapturePoint, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

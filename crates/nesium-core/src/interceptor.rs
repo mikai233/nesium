@@ -1,51 +1,57 @@
-use std::{borrow::Cow, fmt::Debug};
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+    fmt::Debug,
+};
 
 use crate::{bus::CpuBus, cpu::Cpu};
 
 pub mod log_interceptor;
+pub mod tilemap_capture_interceptor;
 
-pub trait Interceptor: Send + Debug + 'static {
-    fn name(&self) -> Cow<'static, str>;
-
+pub trait Interceptor: Any + Send + Debug + 'static {
     fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus);
+
+    fn on_ppu_frame_start(&mut self, _cpu: &mut Cpu, _bus: &mut CpuBus) {}
+
+    fn on_ppu_vblank_start(&mut self, _cpu: &mut Cpu, _bus: &mut CpuBus) {}
+
+    fn on_ppu_scanline_dot(
+        &mut self,
+        _cpu: &mut Cpu,
+        _bus: &mut CpuBus,
+        _scanline: i16,
+        _dot: u16,
+    ) {
+    }
 }
 
 #[derive(Debug, Default)]
 pub struct EmuInterceptor {
-    layers: Vec<Box<dyn Interceptor>>,
+    layers: HashMap<TypeId, Box<dyn Interceptor>>,
 }
 
 impl EmuInterceptor {
     /// Create an empty interceptor stack.
     pub fn new() -> Self {
-        Self { layers: Vec::new() }
-    }
-
-    /// Create an interceptor stack from an existing list of layers.
-    pub fn from_layers(layers: Vec<Box<dyn Interceptor>>) -> Self {
-        Self { layers }
-    }
-
-    /// Add a new interceptor to the end of the stack.
-    pub fn add<I>(&mut self, interceptor: I)
-    where
-        I: Interceptor,
-    {
-        self.layers.push(Box::new(interceptor));
-    }
-
-    /// Remove and return the first interceptor whose `name()` matches `name`.
-    pub fn remove_first_by_name(&mut self, name: &str) -> Option<Box<dyn Interceptor>> {
-        if let Some(pos) = self.layers.iter().position(|layer| layer.name() == name) {
-            Some(self.layers.remove(pos))
-        } else {
-            None
+        Self {
+            layers: HashMap::new(),
         }
     }
 
-    /// Remove all interceptors whose `name()` matches `name`.
-    pub fn remove_all_by_name(&mut self, name: &str) {
-        self.layers.retain(|layer| layer.name() != name);
+    /// Add a new interceptor to the end of the stack.
+    pub fn add<I>(&mut self, interceptor: I) -> Option<Box<dyn Interceptor>>
+    where
+        I: Interceptor,
+    {
+        self.layers.insert(TypeId::of::<I>(), Box::new(interceptor))
+    }
+
+    pub fn remove<I>(&mut self) -> Option<Box<dyn Interceptor>>
+    where
+        I: Interceptor,
+    {
+        self.layers.remove(&TypeId::of::<I>())
     }
 
     /// Remove all interceptors from the stack.
@@ -63,20 +69,39 @@ impl EmuInterceptor {
         self.layers.is_empty()
     }
 
-    /// Immutable view of the underlying interceptor list.
-    pub fn layers(&self) -> &[Box<dyn Interceptor>] {
-        &self.layers
+    pub fn layer<T: Interceptor>(&self) -> Option<&T> {
+        let layer = self.layers.get(&TypeId::of::<T>())?;
+        (layer.as_ref() as &dyn Any).downcast_ref::<T>()
+    }
+
+    pub fn layer_mut<T: Interceptor>(&mut self) -> Option<&mut T> {
+        let layer = self.layers.get_mut(&TypeId::of::<T>())?;
+        (layer.as_mut() as &mut dyn Any).downcast_mut::<T>()
     }
 }
 
 impl Interceptor for EmuInterceptor {
-    fn name(&self) -> Cow<'static, str> {
-        Cow::Borrowed(std::any::type_name::<Self>())
+    fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus) {
+        for interceptor in self.layers.values() {
+            interceptor.debug(cpu, bus);
+        }
     }
 
-    fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus) {
-        for interceptor in &self.layers {
-            interceptor.debug(cpu, bus);
+    fn on_ppu_frame_start(&mut self, cpu: &mut Cpu, bus: &mut CpuBus) {
+        for interceptor in self.layers.values_mut() {
+            interceptor.on_ppu_frame_start(cpu, bus);
+        }
+    }
+
+    fn on_ppu_vblank_start(&mut self, cpu: &mut Cpu, bus: &mut CpuBus) {
+        for interceptor in self.layers.values_mut() {
+            interceptor.on_ppu_vblank_start(cpu, bus);
+        }
+    }
+
+    fn on_ppu_scanline_dot(&mut self, cpu: &mut Cpu, bus: &mut CpuBus, scanline: i16, dot: u16) {
+        for interceptor in self.layers.values_mut() {
+            interceptor.on_ppu_scanline_dot(cpu, bus, scanline, dot);
         }
     }
 }

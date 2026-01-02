@@ -10,6 +10,7 @@ use crossbeam_channel::{Sender, bounded, unbounded};
 use nesium_core::{
     audio::bus::AudioBusConfig,
     controller::Button,
+    interceptor::tilemap_capture_interceptor::TilemapCapturePoint,
     ppu::buffer::FrameReadyCallback,
     ppu::buffer::{ExternalFrameHandle, FrameBuffer},
     ppu::palette::{Palette, PaletteKind},
@@ -179,6 +180,17 @@ impl RuntimeHandle {
         self.send_with_reply("unsubscribe_event", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::UnsubscribeEvent(topic, reply)
         })
+    }
+
+    pub fn set_tilemap_capture_point(
+        &self,
+        point: TilemapCapturePoint,
+    ) -> Result<(), RuntimeError> {
+        self.send_with_reply(
+            "set_tilemap_capture_point",
+            CONTROL_REPLY_TIMEOUT,
+            |reply| ControlMessage::SetTilemapCapturePoint(point, reply),
+        )
     }
 
     pub fn frame_handle(&self) -> Option<&Arc<ExternalFrameHandle>> {

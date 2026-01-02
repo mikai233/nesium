@@ -38,6 +38,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_runtime_notification_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<TilemapSnapshot> dco_decode_StreamSink_tilemap_snapshot_Sse(
+    dynamic raw,
+  );
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -80,6 +85,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RuntimeNotificationKind dco_decode_runtime_notification_kind(dynamic raw);
 
   @protected
+  TilemapMirroring dco_decode_tilemap_mirroring(dynamic raw);
+
+  @protected
+  TilemapSnapshot dco_decode_tilemap_snapshot(dynamic raw);
+
+  @protected
   int dco_decode_u_16(dynamic raw);
 
   @protected
@@ -106,6 +117,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   RustStreamSink<RuntimeNotification>
   sse_decode_StreamSink_runtime_notification_Sse(SseDeserializer deserializer);
+
+  @protected
+  RustStreamSink<TilemapSnapshot> sse_decode_StreamSink_tilemap_snapshot_Sse(
+    SseDeserializer deserializer,
+  );
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -160,6 +176,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TilemapMirroring sse_decode_tilemap_mirroring(SseDeserializer deserializer);
+
+  @protected
+  TilemapSnapshot sse_decode_tilemap_snapshot(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_u_16(SseDeserializer deserializer);
 
   @protected
@@ -189,6 +211,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_runtime_notification_Sse(
     RustStreamSink<RuntimeNotification> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_tilemap_snapshot_Sse(
+    RustStreamSink<TilemapSnapshot> self,
     SseSerializer serializer,
   );
 
@@ -252,6 +280,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_runtime_notification_kind(
     RuntimeNotificationKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_tilemap_mirroring(
+    TilemapMirroring self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_tilemap_snapshot(
+    TilemapSnapshot self,
     SseSerializer serializer,
   );
 

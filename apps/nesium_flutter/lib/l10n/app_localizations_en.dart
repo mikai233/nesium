@@ -550,5 +550,163 @@ class AppLocalizationsEn extends AppLocalizations {
       'Scanline Numbers:\n0-239: Visible (Render)\n240: Post-render (Idle)\n241-260: VBlank (Vertical Blanking)\n-1: Pre-render (Dummy scanline)';
 
   @override
+  String get tilemapSettings => 'Settings';
+
+  @override
+  String get tilemapOverlay => 'Overlay';
+
+  @override
+  String get tilemapDisplayMode => 'Display mode';
+
+  @override
+  String get tilemapDisplayModeDefault => 'Default';
+
+  @override
+  String get tilemapDisplayModeGrayscale => 'Grayscale';
+
+  @override
+  String get tilemapDisplayModeAttributeView => 'Attribute view';
+
+  @override
+  String get tilemapTileGrid => 'Tile Grid (8×8)';
+
+  @override
+  String get tilemapAttrGrid => 'Attr Grid (16×16)';
+
+  @override
+  String get tilemapAttrGrid32 => 'Attr Grid (32×32)';
+
+  @override
+  String get tilemapNtBounds => 'NT Bounds';
+
+  @override
+  String get tilemapScrollOverlay => 'Scroll Overlay';
+
+  @override
+  String get tilemapPanelDisplay => 'Display';
+
+  @override
+  String get tilemapPanelTilemap => 'Tilemap';
+
+  @override
+  String get tilemapPanelSelectedTile => 'Selected Tile';
+
+  @override
+  String get tilemapHidePanel => 'Hide panel';
+
+  @override
+  String get tilemapShowPanel => 'Show panel';
+
+  @override
+  String get tilemapInfoSize => 'Size';
+
+  @override
+  String get tilemapInfoSizePx => 'Size (px)';
+
+  @override
+  String get tilemapInfoTilemapAddress => 'Tilemap Address';
+
+  @override
+  String get tilemapInfoTilesetAddress => 'Tileset Address';
+
+  @override
+  String get tilemapInfoMirroring => 'Mirroring';
+
+  @override
+  String get tilemapInfoTileFormat => 'Tile Format';
+
+  @override
+  String get tilemapInfoTileFormat2bpp => '2 bpp';
+
+  @override
+  String get tilemapMirroringHorizontal => 'Horizontal';
+
+  @override
+  String get tilemapMirroringVertical => 'Vertical';
+
+  @override
+  String get tilemapMirroringFourScreen => 'Four-screen';
+
+  @override
+  String get tilemapMirroringSingleScreenLower => 'Single-screen (Lower)';
+
+  @override
+  String get tilemapMirroringSingleScreenUpper => 'Single-screen (Upper)';
+
+  @override
+  String get tilemapMirroringMapperControlled => 'Mapper-controlled';
+
+  @override
+  String get tilemapLabelColumnRow => 'Column, Row';
+
+  @override
+  String get tilemapLabelXY => 'X, Y';
+
+  @override
+  String get tilemapLabelSize => 'Size';
+
+  @override
+  String get tilemapLabelTilemapAddress => 'Tilemap address';
+
+  @override
+  String get tilemapLabelTileIndex => 'Tile index';
+
+  @override
+  String get tilemapLabelTileAddressPpu => 'Tile address (PPU)';
+
+  @override
+  String get tilemapLabelPaletteIndex => 'Palette index';
+
+  @override
+  String get tilemapLabelPaletteAddress => 'Palette address';
+
+  @override
+  String get tilemapLabelAttributeAddress => 'Attribute address';
+
+  @override
+  String get tilemapLabelAttributeData => 'Attribute data';
+
+  @override
+  String get tilemapSelectedTileTilemap => 'Tilemap';
+
+  @override
+  String get tilemapSelectedTileTileIdx => 'Tile idx';
+
+  @override
+  String get tilemapSelectedTileTilePpu => 'Tile (PPU)';
+
+  @override
+  String get tilemapSelectedTilePalette => 'Palette';
+
+  @override
+  String get tilemapSelectedTileAttr => 'Attr';
+
+  @override
+  String get tilemapCapture => 'Capture';
+
+  @override
+  String get tilemapCaptureFrameStart => 'Frame Start';
+
+  @override
+  String get tilemapCaptureVblankStart => 'VBlank Start';
+
+  @override
+  String get tilemapCaptureManual => 'Manual';
+
+  @override
+  String get tilemapScanline => 'Scanline';
+
+  @override
+  String get tilemapDot => 'Dot';
+
+  @override
+  String tilemapError(String error) {
+    return 'Error: $error';
+  }
+
+  @override
+  String get tilemapRetry => 'Retry';
+
+  @override
   String get menuTilemapViewer => 'Tilemap Viewer';
 }

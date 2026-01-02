@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 948040592;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1914230977;
 
 // Section: executor
 
@@ -819,6 +819,154 @@ fn wire__crate__api__emulation__set_rewinding_impl(
         },
     )
 }
+fn wire__crate__api__events__set_tilemap_capture_frame_start_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_tilemap_capture_frame_start",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_tilemap_capture_frame_start().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__events__set_tilemap_capture_scanline_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_tilemap_capture_scanline",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scanline = <i32>::sse_decode(&mut deserializer);
+            let api_dot = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_tilemap_capture_scanline(api_scanline, api_dot)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_tilemap_capture_vblank_start",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_tilemap_capture_vblank_start().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__events__set_tilemap_display_mode_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_tilemap_display_mode",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_mode = <u8>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_tilemap_display_mode(api_mode).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__input__set_turbo_frames_per_toggle_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -988,6 +1136,45 @@ fn wire__crate__api__events__subscribe_tilemap_texture_impl(
         },
     )
 }
+fn wire__crate__api__events__tilemap_state_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tilemap_state_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_sink = <StreamSink<
+                crate::api::events::TilemapSnapshot,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::events::tilemap_state_stream(api_sink).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__pause__toggle_pause_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1117,6 +1304,19 @@ impl SseDecode
 impl SseDecode
     for StreamSink<
         crate::api::events::RuntimeNotification,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<
+        crate::api::events::TilemapSnapshot,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -1288,6 +1488,46 @@ impl SseDecode for crate::api::events::RuntimeNotificationKind {
     }
 }
 
+impl SseDecode for crate::api::events::TilemapMirroring {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::events::TilemapMirroring::Horizontal,
+            1 => crate::api::events::TilemapMirroring::Vertical,
+            2 => crate::api::events::TilemapMirroring::FourScreen,
+            3 => crate::api::events::TilemapMirroring::SingleScreenLower,
+            4 => crate::api::events::TilemapMirroring::SingleScreenUpper,
+            5 => crate::api::events::TilemapMirroring::MapperControlled,
+            _ => unreachable!("Invalid variant for TilemapMirroring: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::events::TilemapSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_ciram = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_palette = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_chr = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_mirroring = <crate::api::events::TilemapMirroring>::sse_decode(deserializer);
+        let mut var_bgPatternBase = <u16>::sse_decode(deserializer);
+        let mut var_rgbaPalette = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_vramAddr = <u16>::sse_decode(deserializer);
+        let mut var_fineX = <u8>::sse_decode(deserializer);
+        return crate::api::events::TilemapSnapshot {
+            ciram: var_ciram,
+            palette: var_palette,
+            chr: var_chr,
+            mirroring: var_mirroring,
+            bg_pattern_base: var_bgPatternBase,
+            rgba_palette: var_rgbaPalette,
+            vram_addr: var_vramAddr,
+            fine_x: var_fineX,
+        };
+    }
+}
+
 impl SseDecode for u16 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1375,29 +1615,56 @@ fn pde_ffi_dispatcher_primary_impl(
             wire__crate__api__emulation__set_rewind_config_impl(port, ptr, rust_vec_len, data_len)
         }
         23 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
+        24 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__events__subscribe_tilemap_texture_impl(
+        25 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__events__unsubscribe_debug_state_impl(
+        26 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
+        27 => wire__crate__api__events__set_tilemap_display_mode_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        28 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        29 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__events__subscribe_tilemap_texture_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        33 => {
+            wire__crate__api__events__tilemap_state_stream_impl(port, ptr, rust_vec_len, data_len)
+        }
+        34 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__events__unsubscribe_debug_state_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        36 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
@@ -1540,6 +1807,58 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::events::RuntimeNotificationKi
         self
     }
 }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::events::TilemapMirroring {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Horizontal => 0.into_dart(),
+            Self::Vertical => 1.into_dart(),
+            Self::FourScreen => 2.into_dart(),
+            Self::SingleScreenLower => 3.into_dart(),
+            Self::SingleScreenUpper => 4.into_dart(),
+            Self::MapperControlled => 5.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::events::TilemapMirroring
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::events::TilemapMirroring>
+    for crate::api::events::TilemapMirroring
+{
+    fn into_into_dart(self) -> crate::api::events::TilemapMirroring {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::events::TilemapSnapshot {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.ciram.into_into_dart().into_dart(),
+            self.palette.into_into_dart().into_dart(),
+            self.chr.into_into_dart().into_dart(),
+            self.mirroring.into_into_dart().into_dart(),
+            self.bg_pattern_base.into_into_dart().into_dart(),
+            self.rgba_palette.into_into_dart().into_dart(),
+            self.vram_addr.into_into_dart().into_dart(),
+            self.fine_x.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::events::TilemapSnapshot
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::events::TilemapSnapshot>
+    for crate::api::events::TilemapSnapshot
+{
+    fn into_into_dart(self) -> crate::api::events::TilemapSnapshot {
+        self
+    }
+}
 
 impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -1563,6 +1882,18 @@ impl SseEncode
 impl SseEncode
     for StreamSink<
         crate::api::events::RuntimeNotification,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
+    for StreamSink<
+        crate::api::events::TilemapSnapshot,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -1706,6 +2037,40 @@ impl SseEncode for crate::api::events::RuntimeNotificationKind {
             },
             serializer,
         );
+    }
+}
+
+impl SseEncode for crate::api::events::TilemapMirroring {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::events::TilemapMirroring::Horizontal => 0,
+                crate::api::events::TilemapMirroring::Vertical => 1,
+                crate::api::events::TilemapMirroring::FourScreen => 2,
+                crate::api::events::TilemapMirroring::SingleScreenLower => 3,
+                crate::api::events::TilemapMirroring::SingleScreenUpper => 4,
+                crate::api::events::TilemapMirroring::MapperControlled => 5,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::events::TilemapSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<u8>>::sse_encode(self.ciram, serializer);
+        <Vec<u8>>::sse_encode(self.palette, serializer);
+        <Vec<u8>>::sse_encode(self.chr, serializer);
+        <crate::api::events::TilemapMirroring>::sse_encode(self.mirroring, serializer);
+        <u16>::sse_encode(self.bg_pattern_base, serializer);
+        <Vec<u8>>::sse_encode(self.rgba_palette, serializer);
+        <u16>::sse_encode(self.vram_addr, serializer);
+        <u8>::sse_encode(self.fine_x, serializer);
     }
 }
 

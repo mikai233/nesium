@@ -27,6 +27,7 @@ use nesium_core::{
     Nes,
     audio::bus::AudioBusConfig,
     controller::Button,
+    interceptor::tilemap_capture_interceptor::TilemapCapturePoint,
     ppu::buffer::{FrameBuffer, FrameReadyCallback, SCREEN_SIZE},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
@@ -283,15 +284,41 @@ impl Runner {
             ControlMessage::LoadMovie(movie, reply) => self.handle_load_movie(movie, reply),
             ControlMessage::SubscribeEvent(topic, sender, reply) => {
                 self.pubsub.subscribe(topic, sender);
+                self.after_subscribe_event(topic);
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::UnsubscribeEvent(topic, reply) => {
                 self.pubsub.unsubscribe(topic);
+                self.after_unsubscribe_event(topic);
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetTilemapCapturePoint(point, reply) => {
+                self.nes.set_tilemap_capture_point(point);
                 let _ = reply.send(Ok(()));
             }
         }
 
         false
+    }
+
+    fn after_subscribe_event(&mut self, topic: EventTopic) {
+        match topic {
+            EventTopic::Tilemap => {
+                self.nes
+                    .set_tilemap_capture_point(TilemapCapturePoint::FrameStart);
+            }
+            _ => {}
+        }
+    }
+
+    fn after_unsubscribe_event(&mut self, topic: EventTopic) {
+        match topic {
+            EventTopic::Tilemap => {
+                self.nes
+                    .set_tilemap_capture_point(TilemapCapturePoint::Disabled);
+            }
+            _ => {}
+        }
     }
 
     fn rewind_frame(&mut self) {
@@ -552,7 +579,18 @@ impl Runner {
     /// Broadcasts tilemap state to subscribers if someone is listening.
     fn maybe_broadcast_tilemap_state(&mut self) {
         if self.pubsub.has_subscriber(EventTopic::Tilemap) {
-            let (ciram, palette, chr, mirroring, bg_pattern_base) = self.nes.debug_tilemap_data();
+            let Some(snap) = self.nes.take_tilemap_capture_snapshot() else {
+                return;
+            };
+            let (ciram, palette, chr, mirroring, bg_pattern_base, vram_addr, fine_x) = (
+                snap.ciram,
+                snap.palette,
+                snap.chr,
+                snap.mirroring,
+                snap.bg_pattern_base,
+                snap.vram_addr,
+                snap.fine_x,
+            );
 
             // Convert current NES palette to platform-specific format for aux texture rendering.
             // Use nesium_flutter's platform_color_format() for consistency with main screen.
@@ -581,6 +619,8 @@ impl Runner {
                 mirroring,
                 bgra_palette,
                 bg_pattern_base,
+                vram_addr,
+                fine_x,
             };
             self.pubsub
                 .broadcast(EventTopic::Tilemap, Box::new(tilemap));
