@@ -58,6 +58,7 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
   _TileCoord? _hoveredTile;
   _TileCoord? _selectedTile;
   Offset? _hoverPosition;
+  Offset? _selectedPosition; // For mobile tooltip positioning
   Size _lastHoverTooltipSize = const Size(320, 240);
   final GlobalKey _hoverTooltipKey = GlobalKey();
   bool _hoverTooltipMeasurePending = false;
@@ -204,20 +205,34 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
       );
     }
 
-    return Stack(
-      children: [
-        tilemap,
-        // Settings button (top-right)
-        Positioned(top: 12, right: 12, child: _buildSettingsButton(context)),
-        // Reset zoom button (bottom-left, only when transformed)
-        if (_isCanvasTransformed)
-          Positioned(
-            bottom: 12,
-            left: 12,
-            child: _buildResetZoomButton(context),
-          ),
-      ],
+    // Mobile layout - wrap in GestureDetector to dismiss tooltip on tap outside
+    return GestureDetector(
+      onTap: _clearSelection,
+      behavior: HitTestBehavior.translucent,
+      child: Stack(
+        children: [
+          tilemap,
+          // Settings button (top-right)
+          Positioned(top: 12, right: 12, child: _buildSettingsButton(context)),
+          // Reset zoom button (bottom-left, only when transformed)
+          if (_isCanvasTransformed)
+            Positioned(
+              bottom: 12,
+              left: 12,
+              child: _buildResetZoomButton(context),
+            ),
+        ],
+      ),
     );
+  }
+
+  void _clearSelection() {
+    if (_selectedTile != null) {
+      setState(() {
+        _selectedTile = null;
+        _selectedPosition = null;
+      });
+    }
   }
 
   Widget _buildResetZoomButton(BuildContext context) {
@@ -262,7 +277,12 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
   Widget _buildTilemapView(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final showTooltip = _hoveredTile != null && _tilemapSnapshot != null;
+    // Desktop: show tooltip on hover
+    final showHoverTooltip =
+        isNativeDesktop && _hoveredTile != null && _tilemapSnapshot != null;
+    // Mobile: show tooltip on tap selection
+    final showSelectedTooltip =
+        !isNativeDesktop && _selectedTile != null && _tilemapSnapshot != null;
     final scrollOverlayRects = _showScrollOverlay && _tilemapSnapshot != null
         ? _scrollOverlayRectsFromSnapshot(_tilemapSnapshot!)
         : const <Rect>[];
@@ -323,8 +343,10 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
                               ),
                               size: Size.infinite,
                             ),
-                            if (isNativeDesktop && showTooltip)
+                            if (showHoverTooltip)
                               _buildHoverTooltip(context, size),
+                            if (showSelectedTooltip)
+                              _buildSelectedTooltip(context, size),
                           ],
                         ),
                       ),
@@ -368,7 +390,10 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
 
   void _handleTap(Offset position, Size size) {
     final tile = _tileAtPosition(position, size);
-    setState(() => _selectedTile = tile);
+    setState(() {
+      _selectedTile = tile;
+      _selectedPosition = position;
+    });
   }
 
   _TileCoord? _tileAtPosition(Offset position, Size size) {
@@ -425,6 +450,45 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
             key: _hoverTooltipKey,
             child: _buildTileHoverCard(snapshot: snap, info: info),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Tooltip for mobile - shows on tap selection
+  Widget _buildSelectedTooltip(BuildContext context, Size size) {
+    final tile = _selectedTile;
+    final snap = _tilemapSnapshot;
+    final pos = _selectedPosition;
+    if (tile == null || snap == null || pos == null) return const SizedBox();
+
+    final info = _computeTileInfo(snap, tile);
+    if (info == null) return const SizedBox();
+
+    const tooltipWidth = 280.0;
+    final maxAllowedHeight = (size.height - 16).clamp(140.0, 380.0);
+    final tooltipHeight = _lastHoverTooltipSize.height.clamp(
+      120.0,
+      maxAllowedHeight,
+    );
+
+    final preferRight = pos.dx < size.width * 0.55;
+    final preferDown = pos.dy < size.height * 0.55;
+
+    final dxCandidate = preferRight ? pos.dx + 16 : pos.dx - tooltipWidth - 16;
+    final dyCandidate = preferDown ? pos.dy + 16 : pos.dy - tooltipHeight - 16;
+
+    final dx = dxCandidate.clamp(8.0, size.width - tooltipWidth - 8.0);
+    final dy = dyCandidate.clamp(8.0, size.height - tooltipHeight - 8.0);
+
+    return Positioned(
+      left: dx,
+      top: dy,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxAllowedHeight),
+        child: SizedBox(
+          width: tooltipWidth,
+          child: _buildTileHoverCard(snapshot: snap, info: info),
         ),
       ),
     );
