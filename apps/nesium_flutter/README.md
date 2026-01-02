@@ -34,6 +34,28 @@ flutter pub get
 flutter run
 ```
 
+## Flutter ↔ Rust bindings (FRB codegen)
+
+This project uses **flutter_rust_bridge** to generate Dart ↔ Rust bindings.
+
+- Do **not** edit generated files by hand:
+  - Dart: `apps/nesium_flutter/lib/bridge/` (e.g. `frb_generated*.dart`, `api/events.dart`)
+  - Rust: `crates/nesium-flutter/src/frb_generated.rs`
+- Edit the Rust API sources instead (annotated with `#[frb]`), under `crates/nesium-flutter/src/api/`.
+- Then regenerate bindings using the config file `apps/nesium_flutter/flutter_rust_bridge.yaml`:
+
+```bash
+cd apps/nesium_flutter
+flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml
+```
+
+For iterative development:
+
+```bash
+cd apps/nesium_flutter
+flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml --watch
+```
+
 ## Web (local)
 
 This project uses a Web Worker + `wasm-pack` build of `crates/nesium-wasm`.
