@@ -708,5 +708,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tilemapRetry => 'Retry';
 
   @override
+  String get tilemapResetZoom => 'Reset Zoom';
+
+  @override
   String get menuTilemapViewer => 'Tilemap Viewer';
 }

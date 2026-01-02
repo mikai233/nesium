@@ -1394,6 +1394,12 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get tilemapRetry;
 
+  /// No description provided for @tilemapResetZoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Zoom'**
+  String get tilemapResetZoom;
+
   /// No description provided for @menuTilemapViewer.
   ///
   /// In en, this message translates to:

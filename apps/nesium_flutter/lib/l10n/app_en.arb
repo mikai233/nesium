@@ -317,5 +317,6 @@
     }
   },
   "tilemapRetry": "Retry",
+  "tilemapResetZoom": "Reset Zoom",
   "menuTilemapViewer": "Tilemap Viewer"
 }

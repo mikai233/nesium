@@ -695,5 +695,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tilemapRetry => '重试';
 
   @override
+  String get tilemapResetZoom => '重置缩放';
+
+  @override
   String get menuTilemapViewer => 'Tilemap 查看器';
 }

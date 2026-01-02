@@ -63,10 +63,31 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
   bool _hoverTooltipMeasurePending = false;
   bool _showSidePanel = true;
 
+  // Zoom and pan state
+  final TransformationController _transformationController =
+      TransformationController();
+  static const double _minScale = 1.0;
+  static const double _maxScale = 5.0;
+  bool _isCanvasTransformed = false;
+
   @override
   void initState() {
     super.initState();
+    _transformationController.addListener(_onTransformChanged);
     _createTexture();
+  }
+
+  void _onTransformChanged() {
+    final matrix = _transformationController.value;
+    // Check if transformation is not identity (default state)
+    final isTransformed = matrix != Matrix4.identity();
+    if (_isCanvasTransformed != isTransformed) {
+      setState(() => _isCanvasTransformed = isTransformed);
+    }
+  }
+
+  void _resetCanvasTransform() {
+    _transformationController.value = Matrix4.identity();
   }
 
   Future<void> _createTexture() async {
@@ -121,6 +142,8 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
     _textureService.disposeAuxTexture(_tilemapTextureId);
     _scanlineController.dispose();
     _dotController.dispose();
+    _transformationController.removeListener(_onTransformChanged);
+    _transformationController.dispose();
     super.dispose();
   }
 
@@ -171,6 +194,12 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
             right: 12,
             child: _buildPanelToggleButton(context),
           ),
+          if (_isCanvasTransformed)
+            Positioned(
+              bottom: 12,
+              left: 12,
+              child: _buildResetZoomButton(context),
+            ),
         ],
       );
     }
@@ -180,7 +209,53 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
         tilemap,
         // Settings button (top-right)
         Positioned(top: 12, right: 12, child: _buildSettingsButton(context)),
+        // Reset zoom button (bottom-left, only when transformed)
+        if (_isCanvasTransformed)
+          Positioned(
+            bottom: 12,
+            left: 12,
+            child: _buildResetZoomButton(context),
+          ),
       ],
+    );
+  }
+
+  Widget _buildResetZoomButton(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    return AnimatedOpacity(
+      opacity: _isCanvasTransformed ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 200),
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(8),
+        elevation: 4,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: _resetCanvasTransform,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.zoom_out_map,
+                  size: 18,
+                  color: theme.colorScheme.onSurface,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  l10n.tilemapResetZoom,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -206,35 +281,53 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final size = constraints.biggest;
-                return MouseRegion(
-                  onHover: (event) => _handleHover(event.localPosition, size),
-                  onExit: (_) => setState(() {
-                    _hoveredTile = null;
-                    _hoverPosition = null;
-                  }),
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (details) =>
-                        _handleTap(details.localPosition, size),
-                    child: Stack(
-                      children: [
-                        Texture(textureId: _flutterTextureId!),
-                        CustomPaint(
-                          painter: _TilemapGridPainter(
-                            showTileGrid: _showTileGrid,
-                            showAttributeGrid: _showAttributeGrid,
-                            showAttributeGrid32: _showAttributeGrid32,
-                            showNametableDelimiters: _showNametableDelimiters,
-                            showScrollOverlay: _showScrollOverlay,
-                            scrollOverlayRects: scrollOverlayRects,
-                            hoveredTile: _hoveredTile,
-                            selectedTile: _selectedTile,
-                          ),
-                          size: Size.infinite,
+                return InteractiveViewer(
+                  transformationController: _transformationController,
+                  minScale: _minScale,
+                  maxScale: _maxScale,
+                  panEnabled: true,
+                  scaleEnabled: true,
+                  // Allow panning beyond boundaries when zoomed in
+                  boundaryMargin: const EdgeInsets.all(double.infinity),
+                  constrained: false,
+                  child: SizedBox(
+                    width: size.width,
+                    height: size.height,
+                    child: MouseRegion(
+                      onHover: (event) =>
+                          _handleHoverWithTransform(event.localPosition, size),
+                      onExit: (_) => setState(() {
+                        _hoveredTile = null;
+                        _hoverPosition = null;
+                      }),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (details) => _handleTapWithTransform(
+                          details.localPosition,
+                          size,
                         ),
-                        if (isNativeDesktop && showTooltip)
-                          _buildHoverTooltip(context, size),
-                      ],
+                        child: Stack(
+                          children: [
+                            Texture(textureId: _flutterTextureId!),
+                            CustomPaint(
+                              painter: _TilemapGridPainter(
+                                showTileGrid: _showTileGrid,
+                                showAttributeGrid: _showAttributeGrid,
+                                showAttributeGrid32: _showAttributeGrid32,
+                                showNametableDelimiters:
+                                    _showNametableDelimiters,
+                                showScrollOverlay: _showScrollOverlay,
+                                scrollOverlayRects: scrollOverlayRects,
+                                hoveredTile: _hoveredTile,
+                                selectedTile: _selectedTile,
+                              ),
+                              size: Size.infinite,
+                            ),
+                            if (isNativeDesktop && showTooltip)
+                              _buildHoverTooltip(context, size),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 );
@@ -244,6 +337,24 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
         ),
       ),
     );
+  }
+
+  /// Transform local position considering zoom/pan transformation
+  Offset _transformPosition(Offset localPosition) {
+    // The localPosition is already in the transformed (zoomed/panned) space
+    // For InteractiveViewer with constrained: false, localPosition is
+    // already relative to the child content
+    return localPosition;
+  }
+
+  void _handleHoverWithTransform(Offset localPosition, Size size) {
+    final transformedPosition = _transformPosition(localPosition);
+    _handleHover(transformedPosition, size);
+  }
+
+  void _handleTapWithTransform(Offset localPosition, Size size) {
+    final transformedPosition = _transformPosition(localPosition);
+    _handleTap(transformedPosition, size);
   }
 
   void _handleHover(Offset position, Size size) {
@@ -1372,8 +1483,9 @@ class _PaletteStrip extends StatelessWidget {
       }
 
       final base = (nes & 0x3F) * 4;
-      if (base + 3 >= snapshot.rgbaPalette.length)
+      if (base + 3 >= snapshot.rgbaPalette.length) {
         return const Color(0xFF000000);
+      }
       return Color.fromARGB(
         snapshot.rgbaPalette[base + 3],
         snapshot.rgbaPalette[base],

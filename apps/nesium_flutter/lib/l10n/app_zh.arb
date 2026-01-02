@@ -267,5 +267,6 @@
     }
   },
   "tilemapRetry": "重试",
+  "tilemapResetZoom": "重置缩放",
   "menuTilemapViewer": "Tilemap 查看器"
 }
