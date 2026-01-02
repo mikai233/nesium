@@ -529,7 +529,7 @@ impl Runner {
                 y: cpu_snap.y,
                 sp: cpu_snap.s,
                 status: cpu_snap.p,
-                cycle: self.nes.master_clock() / 3, // Approximate CPU cycles (NTSC)
+                cycle: self.nes.cpu_cycles(),
             },
             ppu: PpuDebugState {
                 scanline,
@@ -552,7 +552,7 @@ impl Runner {
     /// Broadcasts tilemap state to subscribers if someone is listening.
     fn maybe_broadcast_tilemap_state(&mut self) {
         if self.pubsub.has_subscriber(EventTopic::Tilemap) {
-            let (vram, palette, chr, mirroring, bg_pattern_base) = self.nes.debug_tilemap_data();
+            let (ciram, palette, chr, mirroring, bg_pattern_base) = self.nes.debug_tilemap_data();
 
             // Convert current NES palette to platform-specific format for aux texture rendering.
             // Use nesium_flutter's platform_color_format() for consistency with main screen.
@@ -575,7 +575,7 @@ impl Runner {
             }
 
             let tilemap = crate::runtime::types::TilemapState {
-                vram,
+                ciram,
                 palette,
                 chr,
                 mirroring,

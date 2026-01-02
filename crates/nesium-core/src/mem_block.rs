@@ -92,7 +92,8 @@ pub mod cpu {
 pub mod ppu {
     use crate::memory::ppu as ppu_mem;
 
-    pub type Vram = super::MemBlock<u8, { ppu_mem::VRAM_SIZE }>;
+    /// Character Internal RAM (CIRAM) - the NES's internal 2 KiB nametable RAM.
+    pub type Ciram = super::MemBlock<u8, { ppu_mem::CIRAM_SIZE }>;
     pub type PaletteRam = super::MemBlock<u8, { ppu_mem::PALETTE_RAM_SIZE }>;
     pub type OamRam = super::MemBlock<u8, { ppu_mem::OAM_RAM_SIZE }>;
     pub type SecondaryOamRam = super::MemBlock<u8, { ppu_mem::SECONDARY_OAM_RAM_SIZE }>;

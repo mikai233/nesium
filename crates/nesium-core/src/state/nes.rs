@@ -91,7 +91,7 @@ pub struct PpuState {
     pub vram_buffer: u8,
     pub pending_vram_addr: u16,
     pub pending_vram_delay: u8,
-    pub vram: Vec<u8>,
+    pub ciram: Vec<u8>,
     pub palette_ram: Vec<u8>,
     pub cycle: u16,
     pub scanline: i16,
@@ -276,7 +276,7 @@ fn ppu_to_state(ppu: &crate::ppu::Ppu) -> PpuState {
         vram_buffer: regs.vram_buffer,
         pending_vram_addr: ppu.pending_vram_addr.raw(),
         pending_vram_delay: ppu.pending_vram_delay,
-        vram: ppu.vram.as_slice().to_vec(),
+        ciram: ppu.ciram.as_slice().to_vec(),
         palette_ram: ppu.palette_ram.as_slice().to_vec(),
         cycle: ppu.cycle,
         scanline: ppu.scanline,
@@ -342,10 +342,10 @@ fn state_to_ppu(ppu: &mut crate::ppu::Ppu, state: &PpuState) -> Result<(), NesSa
     ppu.pending_vram_addr.set_raw(state.pending_vram_addr);
     ppu.pending_vram_delay = state.pending_vram_delay;
 
-    if ppu.vram.as_slice().len() != state.vram.len() {
-        return Err(NesSaveStateError::CorruptState("ppu vram size mismatch"));
+    if ppu.ciram.as_slice().len() != state.ciram.len() {
+        return Err(NesSaveStateError::CorruptState("ppu ciram size mismatch"));
     }
-    ppu.vram.as_mut_slice().copy_from_slice(&state.vram);
+    ppu.ciram.as_mut_slice().copy_from_slice(&state.ciram);
     if ppu.palette_ram.as_slice().len() != state.palette_ram.len() {
         return Err(NesSaveStateError::CorruptState(
             "ppu palette ram size mismatch",

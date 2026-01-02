@@ -76,9 +76,13 @@ pub mod ppu {
     /// Mask for decoding register mirrors (`addr & 0x0007`).
     pub const REGISTER_SELECT_MASK: u16 = 0x0007;
 
-    /// Total VRAM space that the PPU maps through `$2007` (16 KiB mirrored).
-    pub const VRAM_SIZE: usize = 0x4000;
-    /// Address mask applied after each VRAM access.
+    /// Size of the internal Character Internal RAM (CIRAM) used for nametables.
+    /// The NES has 2 KiB of CIRAM, which is mapped to the nametable address space
+    /// ($2000-$2FFF) with mirroring controlled by the cartridge.
+    /// Pattern table space ($0000-$1FFF) is provided by the cartridge CHR ROM/RAM.
+    pub const CIRAM_SIZE: usize = 0x0800; // 2 KiB
+
+    /// Address mask applied after each PPU VRAM access to wrap to the 16 KiB space.
     pub const VRAM_MIRROR_MASK: u16 = 0x3FFF;
 
     /// Palette RAM base address (`$3F00`).
@@ -97,6 +101,10 @@ pub mod ppu {
     pub const PATTERN_TABLE_0: u16 = 0x0000;
     /// Pattern table base address for table 1.
     pub const PATTERN_TABLE_1: u16 = 0x1000;
+    /// Size of a single pattern table (4 KiB).
+    pub const PATTERN_TABLE_SIZE: usize = 0x1000;
+    /// Total size of both pattern tables ($0000-$1FFF = 8 KiB).
+    pub const CHR_SIZE: usize = 0x2000;
 
     /// Primary Object Attribute Memory (OAM) byte count.
     pub const OAM_RAM_SIZE: usize = 0x100;

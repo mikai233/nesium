@@ -1,6 +1,7 @@
 use core::ffi::c_void;
 use std::{any::Any, path::PathBuf, time::Duration};
 
+use nesium_core::cartridge::header::Mirroring;
 use nesium_core::ppu::{
     SCREEN_HEIGHT, SCREEN_WIDTH,
     buffer::{ColorFormat, SwapchainLockCallback, SwapchainUnlockCallback},
@@ -104,10 +105,12 @@ impl Event for DebugState {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TilemapState {
-    pub vram: Vec<u8>,
+    /// Character Internal RAM (CIRAM) - 2 KiB nametable data (0-0x7FF).
+    /// Nametable 0 is at offset 0x000, nametable 1 at 0x400.
+    pub ciram: Vec<u8>,
     pub palette: [u8; 32],
     pub chr: Vec<u8>,
-    pub mirroring: u8,
+    pub mirroring: Mirroring,
     /// 64-entry BGRA palette for aux texture rendering (matches CVPixelBuffer format).
     pub bgra_palette: [[u8; 4]; 64],
     /// Background pattern table base address ($0000 or $1000).
@@ -117,10 +120,10 @@ pub struct TilemapState {
 impl Default for TilemapState {
     fn default() -> Self {
         Self {
-            vram: Vec::new(),
+            ciram: Vec::new(),
             palette: [0; 32],
             chr: Vec::new(),
-            mirroring: 0,
+            mirroring: Mirroring::Horizontal,
             bgra_palette: [[0; 4]; 64],
             bg_pattern_base: 0,
         }

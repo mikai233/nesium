@@ -5,7 +5,11 @@ use crate::{
     apu::Apu,
     audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
     bus::{OpenBus, PendingDma, cpu::CpuBus},
-    cartridge::{Cartridge, Provider},
+    cartridge::{
+        Cartridge, Provider,
+        header::Mirroring,
+        mapper::{PpuVramAccessContext, PpuVramAccessKind},
+    },
     config::region::Region,
     context::Context,
     controller::{Button, ControllerPorts},
@@ -17,6 +21,7 @@ use crate::{
         Ppu,
         buffer::{ColorFormat, FrameBuffer, FrameReadyCallback},
         palette::{Palette, PaletteKind},
+        pattern_bus::PpuBus,
     },
     reset_kind::ResetKind,
 };
@@ -290,7 +295,6 @@ impl Nes {
 
     /// Inserts a cartridge that has already been constructed.
     pub fn insert_cartridge(&mut self, cartridge: Cartridge) {
-        self.ppu.attach_cartridge(&cartridge);
         self.cartridge = Some(cartridge);
         // Inserting a new cartridge is effectively a power cycle for the
         // console, so apply a full power-on reset rather than a warm reset.
@@ -641,6 +645,11 @@ impl Nes {
         self.master_clock
     }
 
+    /// CPU cycle counter (CPU cycles since power-on).
+    pub fn cpu_cycles(&self) -> u64 {
+        self.cycles
+    }
+
     /// Executes the next instruction (advancing CPU/PPU/APU as needed).
     pub fn step_instruction(&mut self) {
         let mut seen_active = false;
@@ -708,23 +717,25 @@ impl Nes {
     }
 
     /// Returns the raw data needed for the tilemap viewer:
-    /// (VRAM, Palette, CHR, Mirroring, BgPatternBase)
-    pub fn debug_tilemap_data(&mut self) -> (Vec<u8>, [u8; 32], Vec<u8>, u8, u16) {
-        let mut chr = vec![0u8; 0x2000];
-        // Create a temporary PatternBus to read CHR data.
+    /// (CIRAM, Palette, CHR, Mirroring, BgPatternBase)
+    pub fn debug_tilemap_data(&mut self) -> (Vec<u8>, [u8; 32], Vec<u8>, Mirroring, u16) {
+        use crate::memory::ppu as ppu_mem;
+        let mut chr = vec![0u8; ppu_mem::CHR_SIZE];
+        // Create a temporary PpuBus to read CHR data.
         // using cycle 0 is arbitrary but safe for debug logic.
         {
-            let mut pattern = ppu::pattern_bus::PatternBus::new(self.cartridge.as_mut(), 0);
-            let ctx = crate::cartridge::mapper::PpuVramAccessContext {
+            let mut pattern = PpuBus::new(self.cartridge.as_mut(), 0);
+            let ctx = PpuVramAccessContext {
                 ppu_cycle: 0,
                 cpu_cycle: 0,
-                kind: crate::cartridge::mapper::PpuVramAccessKind::Other,
+                kind: PpuVramAccessKind::Other,
             };
-            for i in 0..0x2000 {
+            for i in 0..ppu_mem::CHR_SIZE {
                 chr[i] = pattern.read(i as u16, ctx).unwrap_or(0);
             }
         }
-        let vram = self.ppu.vram.to_vec();
+        // Return CIRAM (2 KiB nametable RAM)
+        let ciram = self.ppu.ciram.to_vec();
         let palette = *self
             .ppu
             .palette_ram
@@ -734,10 +745,10 @@ impl Nes {
         let mirroring = self
             .cartridge
             .as_ref()
-            .map(|c| c.mirroring() as u8)
-            .unwrap_or(0);
+            .map(|c| c.mirroring())
+            .unwrap_or(Mirroring::Horizontal);
         let bg_pattern_base = self.ppu.registers.control.background_pattern_table();
-        (vram, palette, chr, mirroring, bg_pattern_base)
+        (ciram, palette, chr, mirroring, bg_pattern_base)
     }
 
     fn build_interceptor() -> EmuInterceptor {

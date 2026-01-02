@@ -115,6 +115,16 @@ impl Cartridge {
         self.mapper.ppu_write(addr, data);
     }
 
+    /// Convenience CHR read (`$0000-$1FFF`) that always returns a byte.
+    pub fn chr_read(&self, addr: u16) -> u8 {
+        self.mapper.chr_read(addr)
+    }
+
+    /// Convenience CHR write (`$0000-$1FFF`) for CHR RAM mappers.
+    pub fn chr_write(&mut self, addr: u16, data: u8) {
+        self.mapper.chr_write(addr, data);
+    }
+
     /// Notify the mapper about a PPU VRAM access, including CPU bus timing.
     pub fn ppu_vram_access(
         &mut self,

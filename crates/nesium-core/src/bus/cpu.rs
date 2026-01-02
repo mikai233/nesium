@@ -8,7 +8,7 @@ use crate::{
     cpu::Cpu,
     mem_block::cpu as cpu_ram,
     memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem},
-    ppu::{Ppu, pattern_bus::PatternBus},
+    ppu::{Ppu, pattern_bus::PpuBus},
 };
 
 /// CPU-visible bus that bridges the core to RAM, the PPU, the APU, and the
@@ -190,7 +190,7 @@ impl<'a> CpuBus<'a> {
                 self.read_internal_ram(addr)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
-                let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
+                let mut pattern = PpuBus::new(self.cartridge.as_deref_mut(), *self.cycles);
                 self.ppu.cpu_read(addr, &mut pattern)
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => OpenBus::peek(addr),
@@ -219,7 +219,7 @@ impl<'a> CpuBus<'a> {
                 self.read_internal_ram(addr)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
-                let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
+                let mut pattern = PpuBus::new(self.cartridge.as_deref_mut(), *self.cycles);
                 self.ppu.cpu_read(addr, &mut pattern)
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
@@ -272,7 +272,7 @@ impl<'a> CpuBus<'a> {
                 self.write_internal_ram(addr, data)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
-                let mut pattern = PatternBus::new(self.cartridge.as_deref_mut(), *self.cycles);
+                let mut pattern = PpuBus::new(self.cartridge.as_deref_mut(), *self.cycles);
                 self.ppu.cpu_write(addr, data, &mut pattern)
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {

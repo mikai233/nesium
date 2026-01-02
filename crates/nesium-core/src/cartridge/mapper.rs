@@ -164,6 +164,21 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
 
     fn ppu_write(&mut self, addr: u16, data: u8);
 
+    /// Convenience method for CHR pattern table reads (`$0000-$1FFF`).
+    ///
+    /// Unlike [`ppu_read`], this always returns a byte (no open-bus Option).
+    /// Mappers should return actual CHR data; the default falls back to 0.
+    fn chr_read(&self, addr: u16) -> u8 {
+        self.ppu_read(addr).unwrap_or(0)
+    }
+
+    /// Convenience method for CHR pattern table writes (`$0000-$1FFF`).
+    ///
+    /// Only affects mappers with CHR RAM. CHR ROM mappers should ignore writes.
+    fn chr_write(&mut self, addr: u16, data: u8) {
+        self.ppu_write(addr, data);
+    }
+
     /// Hook invoked on every PPU VRAM access, including pattern and nametable
     /// fetches as well as CPU-driven `$2007` reads/writes. Default
     /// implementation does nothing.

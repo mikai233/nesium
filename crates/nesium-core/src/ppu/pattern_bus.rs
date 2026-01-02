@@ -4,30 +4,16 @@ use crate::cartridge::{Cartridge, mapper::NametableTarget};
 ///
 /// The bus creates one of these per PPU call, so lifetimes remain explicit and borrow-checked.
 #[derive(Default)]
-pub struct PatternBus<'a> {
+pub struct PpuBus<'a> {
     cartridge: Option<&'a mut Cartridge>,
     /// Snapshot of the current CPU bus cycle when this view was created.
     cpu_cycle: u64,
 }
 
-impl<'a> PatternBus<'a> {
+impl<'a> PpuBus<'a> {
     pub fn new(cartridge: Option<&'a mut Cartridge>, cpu_cycle: u64) -> Self {
         Self {
             cartridge,
-            cpu_cycle,
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            cartridge: None,
-            cpu_cycle: 0,
-        }
-    }
-
-    pub fn from_cartridge(cartridge: &'a mut Cartridge, cpu_cycle: u64) -> Self {
-        Self {
-            cartridge: Some(cartridge),
             cpu_cycle,
         }
     }
@@ -61,6 +47,33 @@ impl<'a> PatternBus<'a> {
             true
         } else {
             false
+        }
+    }
+
+    /// CHR bus read convenience method that always returns a byte.
+    pub fn chr_read(
+        &mut self,
+        addr: u16,
+        ctx: crate::cartridge::mapper::PpuVramAccessContext,
+    ) -> u8 {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.ppu_vram_access(addr, ctx);
+            cart.chr_read(addr)
+        } else {
+            0
+        }
+    }
+
+    /// CHR bus write convenience method for CHR RAM mappers.
+    pub fn chr_write(
+        &mut self,
+        addr: u16,
+        value: u8,
+        ctx: crate::cartridge::mapper::PpuVramAccessContext,
+    ) {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.ppu_vram_access(addr, ctx);
+            cart.chr_write(addr, value);
         }
     }
 

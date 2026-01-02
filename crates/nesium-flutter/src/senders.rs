@@ -1,5 +1,6 @@
 use std::any::Any;
 
+use nesium_core::cartridge::header::Mirroring;
 use nesium_runtime::{DebugState, Event, NotificationEvent, RuntimeEventSender};
 
 use crate::api::events::{DebugStateNotification, RuntimeNotification, RuntimeNotificationKind};
@@ -93,89 +94,90 @@ fn render_tilemap_to_aux(state: &nesium_runtime::TilemapState) {
 
     let mut rgba = vec![0u8; WIDTH * HEIGHT * 4];
 
-    // Apply nametable mirroring
-    let nt0 = mirror_nametable_addr(0x2000, state.mirroring);
-    let nt1 = mirror_nametable_addr(0x2400, state.mirroring);
-    let nt2 = mirror_nametable_addr(0x2800, state.mirroring);
-    let nt3 = mirror_nametable_addr(0x2C00, state.mirroring);
+    // Get CIRAM offsets for each logical nametable based on mirroring
+    let nt0 = mirror_nametable_to_ciram_offset(0, state.mirroring);
+    let nt1 = mirror_nametable_to_ciram_offset(1, state.mirroring);
+    let nt2 = mirror_nametable_to_ciram_offset(2, state.mirroring);
+    let nt3 = mirror_nametable_to_ciram_offset(3, state.mirroring);
 
     // Render 4 nametables with mirroring applied
-    render_nametable(state, nt0, 0, 0, &mut rgba, WIDTH); // Top-Left ($2000)
-    render_nametable(state, nt1, 256, 0, &mut rgba, WIDTH); // Top-Right ($2400)
-    render_nametable(state, nt2, 0, 240, &mut rgba, WIDTH); // Bottom-Left ($2800)
-    render_nametable(state, nt3, 256, 240, &mut rgba, WIDTH); // Bottom-Right ($2C00)
+    render_nametable(state, nt0, 0, 0, &mut rgba, WIDTH); // Top-Left (NT0 / $2000)
+    render_nametable(state, nt1, 256, 0, &mut rgba, WIDTH); // Top-Right (NT1 / $2400)
+    render_nametable(state, nt2, 0, 240, &mut rgba, WIDTH); // Bottom-Left (NT2 / $2800)
+    render_nametable(state, nt3, 256, 240, &mut rgba, WIDTH); // Bottom-Right (NT3 / $2C00)
 
     crate::aux_texture::aux_update(TILEMAP_TEXTURE_ID, &rgba);
 }
 
-/// Maps a nametable address ($2000-$2FFF) to its physical location based on mirroring mode.
-/// Mirroring modes: 0=Horizontal, 1=Vertical, 2=FourScreen, 3=SingleScreenLower, 4=SingleScreenUpper
-fn mirror_nametable_addr(addr: usize, mirroring: u8) -> usize {
-    // Convert $2000-$2FFF range to nametable index (0-3)
-    let nt_index = (addr >> 10) & 0x03; // 0=$2000, 1=$2400, 2=$2800, 3=$2C00
-
+/// Maps a logical nametable index (0-3) to its physical CIRAM offset (0 or 0x400) based on mirroring mode.
+fn mirror_nametable_to_ciram_offset(nt_index: usize, mirroring: Mirroring) -> usize {
     let physical_nt = match mirroring {
-        0 => {
-            // Horizontal: $2000=$2400, $2800=$2C00
-            // (0,1 -> 0), (2,3 -> 1) then mapped to $2000, $2800
+        Mirroring::Horizontal => {
+            // Horizontal: NT 0,1 -> CIRAM 0x000; NT 2,3 -> CIRAM 0x400
             match nt_index {
                 0 | 1 => 0,
-                _ => 2,
+                _ => 1,
             }
         }
-        1 => {
-            // Vertical: $2000=$2800, $2400=$2C00
-            // (0,2 -> 0), (1,3 -> 1) then mapped to $2000, $2400
+        Mirroring::Vertical => {
+            // Vertical: NT 0,2 -> CIRAM 0x000; NT 1,3 -> CIRAM 0x400
             match nt_index {
                 0 | 2 => 0,
                 _ => 1,
             }
         }
-        2 => {
-            // FourScreen: all 4 are independent
-            nt_index
+        Mirroring::FourScreen => {
+            // FourScreen: all 4 are independent (needs 4 KiB, but CIRAM only has 2 KiB)
+            // Fall back to identity mapping for first 2 pages
+            nt_index.min(1)
         }
-        3 => {
-            // SingleScreenLower: all map to $2000
+        Mirroring::SingleScreenLower => {
+            // SingleScreenLower: all map to CIRAM 0x000
             0
         }
-        4 => {
-            // SingleScreenUpper: all map to $2400
+        Mirroring::SingleScreenUpper => {
+            // SingleScreenUpper: all map to CIRAM 0x400
             1
         }
-        _ => nt_index, // Mapper controlled or unknown - use as-is
+        Mirroring::MapperControlled => {
+            // Mapper controlled: identity fallback
+            nt_index.min(1)
+        }
     };
 
-    0x2000 + (physical_nt * 0x400)
+    physical_nt * 0x400
 }
 
 /// Renders a single 256x240 nametable into the RGBA buffer at (offset_x, offset_y).
 fn render_nametable(
     state: &nesium_runtime::TilemapState,
-    nt_offset: usize,
+    ciram_offset: usize,
     offset_x: usize,
     offset_y: usize,
     rgba: &mut [u8],
     pitch: usize,
 ) {
-    let vram = &state.vram;
+    let ciram = &state.ciram;
     let chr = &state.chr;
     let palette = &state.palette;
 
     // Nametable is 32x30 tiles, each 8x8 pixels
     for tile_y in 0..30 {
         for tile_x in 0..32 {
-            let nt_addr = nt_offset + tile_y * 32 + tile_x;
-            let tile_index = if nt_addr < vram.len() {
-                vram[nt_addr] as usize
+            // CIRAM offset (0-0x3FF) within this nametable
+            let nt_local_addr = tile_y * 32 + tile_x;
+            let ciram_addr = ciram_offset + nt_local_addr;
+            let tile_index = if ciram_addr < ciram.len() {
+                ciram[ciram_addr] as usize
             } else {
                 0
             };
 
             // Attribute table is at offset 0x3C0 within each nametable
-            let attr_addr = nt_offset + 0x3C0 + (tile_y / 4) * 8 + (tile_x / 4);
-            let attr_byte = if attr_addr < vram.len() {
-                vram[attr_addr]
+            let attr_local_addr = 0x3C0 + (tile_y / 4) * 8 + (tile_x / 4);
+            let attr_ciram_addr = ciram_offset + attr_local_addr;
+            let attr_byte = if attr_ciram_addr < ciram.len() {
+                ciram[attr_ciram_addr]
             } else {
                 0
             };
