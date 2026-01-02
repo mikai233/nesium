@@ -712,4 +712,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuTilemapViewer => 'Tilemap Viewer';
+
+  @override
+  String get menuTileViewer => 'Tile Viewer';
+
+  @override
+  String tileViewerError(String error) {
+    return 'Error: $error';
+  }
+
+  @override
+  String get tileViewerRetry => 'Retry';
+
+  @override
+  String get tileViewerSettings => 'Tile Viewer Settings';
+
+  @override
+  String get tileViewerOverlays => 'Overlays';
+
+  @override
+  String get tileViewerShowGrid => 'Show tile grid';
+
+  @override
+  String get tileViewerPalette => 'Palette';
+
+  @override
+  String tileViewerPaletteBg(int index) {
+    return 'BG $index';
+  }
+
+  @override
+  String tileViewerPaletteSprite(int index) {
+    return 'Sprite $index';
+  }
+
+  @override
+  String get tileViewerClose => 'Close';
 }

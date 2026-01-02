@@ -147,6 +147,7 @@ pub struct TilemapSnapshot {
     pub bg_pattern_base: u16,
     pub rgba_palette: Vec<u8>,
     pub vram_addr: u16,
+    pub temp_addr: u16,
     pub fine_x: u8,
 }
 
@@ -212,5 +213,61 @@ pub async fn set_tilemap_display_mode(mode: u8) -> Result<(), String> {
         return Err(format!("Invalid tilemap display mode: {}", mode));
     }
     crate::senders::set_tilemap_display_mode(mode);
+    Ok(())
+}
+
+// =============================================================================
+// CHR (Tile) Viewer Stream
+// =============================================================================
+
+/// CHR snapshot for UI inspection (tile preview, palette selection, etc).
+///
+/// Note: `rgba_palette` is ALWAYS RGBA regardless of platform, so Flutter can render it easily.
+#[frb]
+#[derive(Debug, Clone)]
+pub struct ChrSnapshot {
+    pub chr: Vec<u8>,
+    pub palette: Vec<u8>,
+    pub rgba_palette: Vec<u8>,
+    pub selected_palette: u8,
+}
+
+/// Subscribes to CHR state updates.
+///
+/// This refreshes the CHR auxiliary texture, so the UI can use a single subscription.
+#[frb]
+pub async fn chr_state_stream(sink: StreamSink<ChrSnapshot>) -> Result<(), String> {
+    let handle = crate::runtime_handle();
+    let sender = Box::new(crate::senders::ChrTextureAndStateSender::new(sink));
+
+    handle
+        .subscribe_event(EventTopic::Chr, sender)
+        .map_err(|e| format!("Failed to subscribe to Chr events: {}", e))?;
+
+    Ok(())
+}
+
+/// Unsubscribes from CHR state updates.
+#[frb]
+pub async fn unsubscribe_chr_state() -> Result<(), String> {
+    let handle = crate::runtime_handle();
+
+    handle
+        .unsubscribe_event(EventTopic::Chr)
+        .map_err(|e| format!("Failed to unsubscribe from Chr events: {}", e))?;
+
+    Ok(())
+}
+
+/// Sets the palette index for CHR rendering.
+///
+/// - `0-3`: Background palettes
+/// - `4-7`: Sprite palettes
+#[frb]
+pub async fn set_chr_palette(palette_index: u8) -> Result<(), String> {
+    if palette_index > 7 {
+        return Err(format!("Invalid palette index: {}", palette_index));
+    }
+    crate::senders::set_chr_palette(palette_index);
     Ok(())
 }

@@ -14,8 +14,8 @@ use super::{
     pubsub::RuntimePubSub,
     state::RuntimeState,
     types::{
-        AudioMode, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT, NotificationEvent,
-        PpuDebugState, RuntimeError, TilemapState,
+        AudioMode, ChrState, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT,
+        NotificationEvent, PpuDebugState, RuntimeError, TilemapState,
     },
     util::button_bit,
 };
@@ -303,7 +303,7 @@ impl Runner {
 
     fn after_subscribe_event(&mut self, topic: EventTopic) {
         match topic {
-            EventTopic::Tilemap => {
+            EventTopic::Tilemap | EventTopic::Chr => {
                 self.nes
                     .set_tilemap_capture_point(TilemapCapturePoint::FrameStart);
             }
@@ -313,9 +313,14 @@ impl Runner {
 
     fn after_unsubscribe_event(&mut self, topic: EventTopic) {
         match topic {
-            EventTopic::Tilemap => {
-                self.nes
-                    .set_tilemap_capture_point(TilemapCapturePoint::Disabled);
+            EventTopic::Tilemap | EventTopic::Chr => {
+                // Only disable capture if neither tilemap nor chr is subscribed
+                if !self.pubsub.has_subscriber(EventTopic::Tilemap)
+                    && !self.pubsub.has_subscriber(EventTopic::Chr)
+                {
+                    self.nes
+                        .set_tilemap_capture_point(TilemapCapturePoint::Disabled);
+                }
             }
             _ => {}
         }
@@ -415,6 +420,7 @@ impl Runner {
         // Broadcast debug state if there's a subscriber.
         self.maybe_broadcast_debug_state();
         self.maybe_broadcast_tilemap_state();
+        self.maybe_broadcast_chr_state();
     }
 
     /// Captures rewind history (snapshot + render index plane) when enabled.
@@ -582,13 +588,14 @@ impl Runner {
             let Some(snap) = self.nes.take_tilemap_capture_snapshot() else {
                 return;
             };
-            let (ciram, palette, chr, mirroring, bg_pattern_base, vram_addr, fine_x) = (
+            let (ciram, palette, chr, mirroring, bg_pattern_base, vram_addr, temp_addr, fine_x) = (
                 snap.ciram,
                 snap.palette,
                 snap.chr,
                 snap.mirroring,
                 snap.bg_pattern_base,
                 snap.vram_addr,
+                snap.temp_addr,
                 snap.fine_x,
             );
 
@@ -620,11 +627,49 @@ impl Runner {
                 bgra_palette,
                 bg_pattern_base,
                 vram_addr,
+                temp_addr,
                 fine_x,
             };
             self.pubsub
                 .broadcast(EventTopic::Tilemap, Box::new(tilemap));
         }
+    }
+
+    /// Broadcasts CHR state to subscribers if someone is listening.
+    fn maybe_broadcast_chr_state(&mut self) {
+        if !self.pubsub.has_subscriber(EventTopic::Chr) {
+            return;
+        }
+
+        let Some(snap) = self.nes.take_tilemap_capture_snapshot() else {
+            return;
+        };
+
+        // Convert current NES palette to platform-specific format
+        let nes_palette = self.nes.palette();
+        let mut bgra_palette = [[0u8; 4]; 64];
+
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            for (i, color) in nes_palette.as_colors().iter().enumerate() {
+                bgra_palette[i] = [color.b, color.g, color.r, 0xFF];
+            }
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        {
+            for (i, color) in nes_palette.as_colors().iter().enumerate() {
+                bgra_palette[i] = [color.r, color.g, color.b, 0xFF];
+            }
+        }
+
+        let chr_state = ChrState {
+            chr: snap.chr,
+            palette: snap.palette,
+            bgra_palette,
+            selected_palette: 0, // Default to first palette, runtime will override via API
+        };
+
+        self.pubsub.broadcast(EventTopic::Chr, Box::new(chr_state));
     }
 
     /// Loads a ROM from the specified path, calculates its SHA-1 hash, and initializes the NES state.

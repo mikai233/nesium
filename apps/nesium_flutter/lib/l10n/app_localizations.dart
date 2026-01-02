@@ -1405,6 +1405,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tilemap Viewer'**
   String get menuTilemapViewer;
+
+  /// No description provided for @menuTileViewer.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile Viewer'**
+  String get menuTileViewer;
+
+  /// No description provided for @tileViewerError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error: {error}'**
+  String tileViewerError(String error);
+
+  /// No description provided for @tileViewerRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get tileViewerRetry;
+
+  /// No description provided for @tileViewerSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile Viewer Settings'**
+  String get tileViewerSettings;
+
+  /// No description provided for @tileViewerOverlays.
+  ///
+  /// In en, this message translates to:
+  /// **'Overlays'**
+  String get tileViewerOverlays;
+
+  /// No description provided for @tileViewerShowGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'Show tile grid'**
+  String get tileViewerShowGrid;
+
+  /// No description provided for @tileViewerPalette.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette'**
+  String get tileViewerPalette;
+
+  /// No description provided for @tileViewerPaletteBg.
+  ///
+  /// In en, this message translates to:
+  /// **'BG {index}'**
+  String tileViewerPaletteBg(int index);
+
+  /// No description provided for @tileViewerPaletteSprite.
+  ///
+  /// In en, this message translates to:
+  /// **'Sprite {index}'**
+  String tileViewerPaletteSprite(int index);
+
+  /// No description provided for @tileViewerClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get tileViewerClose;
 }
 
 class _AppLocalizationsDelegate

@@ -91,8 +91,7 @@
       }
     }
   },
-  "tipAdjustButtonsInDrawer": "Tip: adjust button position/size from the in-game drawer."
-  ,
+  "tipAdjustButtonsInDrawer": "Tip: adjust button position/size from the in-game drawer.",
   "keyCapturePressKeyToBind": "Press a key to bind.",
   "keyCaptureCurrent": "Current: {key}",
   "@keyCaptureCurrent": {
@@ -112,8 +111,7 @@
   },
   "keyCapturePressEscToClear": "Press Escape to clear.",
   "keyBindingsTitle": "Key bindings",
-  "cancel": "Cancel"
-  ,
+  "cancel": "Cancel",
   "appName": "Nesium",
   "menuTooltip": "Menu",
   "menuSectionFile": "File",
@@ -177,8 +175,7 @@
   "gridSnappingTitle": "Grid snapping",
   "gridSpacingLabel": "Grid spacing",
   "debuggerPlaceholderBody": "Space reserved for CPU/PPU monitors, memory viewers, and OAM inspectors. The same widgets can live in a desktop side panel or a mobile sheet.",
-  "toolsPlaceholderBody": "Recording/playback, input mapping, and cheats can share these widgets between desktop side panes and mobile bottom sheets."
-  ,
+  "toolsPlaceholderBody": "Recording/playback, input mapping, and cheats can share these widgets between desktop side panes and mobile bottom sheets.",
   "actionLoadRom": "Load ROM",
   "actionResetNes": "Reset NES",
   "actionPowerResetNes": "Power Reset NES",
@@ -318,5 +315,36 @@
   },
   "tilemapRetry": "Retry",
   "tilemapResetZoom": "Reset Zoom",
-  "menuTilemapViewer": "Tilemap Viewer"
+  "menuTilemapViewer": "Tilemap Viewer",
+  "menuTileViewer": "Tile Viewer",
+  "tileViewerError": "Error: {error}",
+  "@tileViewerError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tileViewerRetry": "Retry",
+  "tileViewerSettings": "Tile Viewer Settings",
+  "tileViewerOverlays": "Overlays",
+  "tileViewerShowGrid": "Show tile grid",
+  "tileViewerPalette": "Palette",
+  "tileViewerPaletteBg": "BG {index}",
+  "@tileViewerPaletteBg": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "tileViewerPaletteSprite": "Sprite {index}",
+  "@tileViewerPaletteSprite": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "tileViewerClose": "Close"
 }

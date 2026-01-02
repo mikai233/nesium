@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Runtime notification stream.
 ///
@@ -68,6 +68,57 @@ Future<void> setTilemapCaptureScanline({
 /// - `2`: Attribute view
 Future<void> setTilemapDisplayMode({required int mode}) =>
     RustLib.instance.api.crateApiEventsSetTilemapDisplayMode(mode: mode);
+
+/// Subscribes to CHR state updates.
+///
+/// This refreshes the CHR auxiliary texture, so the UI can use a single subscription.
+Stream<ChrSnapshot> chrStateStream() =>
+    RustLib.instance.api.crateApiEventsChrStateStream();
+
+/// Unsubscribes from CHR state updates.
+Future<void> unsubscribeChrState() =>
+    RustLib.instance.api.crateApiEventsUnsubscribeChrState();
+
+/// Sets the palette index for CHR rendering.
+///
+/// - `0-3`: Background palettes
+/// - `4-7`: Sprite palettes
+Future<void> setChrPalette({required int paletteIndex}) => RustLib.instance.api
+    .crateApiEventsSetChrPalette(paletteIndex: paletteIndex);
+
+/// CHR snapshot for UI inspection (tile preview, palette selection, etc).
+///
+/// Note: `rgba_palette` is ALWAYS RGBA regardless of platform, so Flutter can render it easily.
+class ChrSnapshot {
+  final Uint8List chr;
+  final Uint8List palette;
+  final Uint8List rgbaPalette;
+  final int selectedPalette;
+
+  const ChrSnapshot({
+    required this.chr,
+    required this.palette,
+    required this.rgbaPalette,
+    required this.selectedPalette,
+  });
+
+  @override
+  int get hashCode =>
+      chr.hashCode ^
+      palette.hashCode ^
+      rgbaPalette.hashCode ^
+      selectedPalette.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChrSnapshot &&
+          runtimeType == other.runtimeType &&
+          chr == other.chr &&
+          palette == other.palette &&
+          rgbaPalette == other.rgbaPalette &&
+          selectedPalette == other.selectedPalette;
+}
 
 /// Debug state notification sent per-frame when subscribed.
 class DebugStateNotification {
@@ -177,6 +228,7 @@ class TilemapSnapshot {
   final int bgPatternBase;
   final Uint8List rgbaPalette;
   final int vramAddr;
+  final int tempAddr;
   final int fineX;
 
   const TilemapSnapshot({
@@ -187,6 +239,7 @@ class TilemapSnapshot {
     required this.bgPatternBase,
     required this.rgbaPalette,
     required this.vramAddr,
+    required this.tempAddr,
     required this.fineX,
   });
 
@@ -199,6 +252,7 @@ class TilemapSnapshot {
       bgPatternBase.hashCode ^
       rgbaPalette.hashCode ^
       vramAddr.hashCode ^
+      tempAddr.hashCode ^
       fineX.hashCode;
 
   @override
@@ -213,5 +267,6 @@ class TilemapSnapshot {
           bgPatternBase == other.bgPatternBase &&
           rgbaPalette == other.rgbaPalette &&
           vramAddr == other.vramAddr &&
+          tempAddr == other.tempAddr &&
           fineX == other.fineX;
 }

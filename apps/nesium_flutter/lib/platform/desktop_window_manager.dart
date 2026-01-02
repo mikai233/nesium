@@ -86,4 +86,13 @@ class DesktopWindowManager {
     );
     await window.invokeMethod<void>('setLanguage', languageCode);
   }
+
+  Future<void> openTileViewerWindow({String? languageCode}) async {
+    if (!isSupported) return;
+    final window = await _openOrCreate(
+      WindowKind.tileViewer,
+      languageCode: languageCode,
+    );
+    await window.invokeMethod<void>('setLanguage', languageCode);
+  }
 }

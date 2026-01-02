@@ -31,6 +31,11 @@ String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
         'route': 'tilemap',
         if (languageCode != null) 'lang': languageCode,
       });
+    case WindowKind.tileViewer:
+      return jsonEncode({
+        'route': 'tileViewer',
+        if (languageCode != null) 'lang': languageCode,
+      });
   }
 }
 
@@ -49,6 +54,8 @@ WindowKind _parseWindowKindFromArguments(String? arguments) {
           return WindowKind.tools;
         case 'tilemap':
           return WindowKind.tilemap;
+        case 'tileViewer':
+          return WindowKind.tileViewer;
       }
     }
   } catch (_) {
@@ -129,6 +136,11 @@ class _WindowRouterState extends State<WindowRouter> {
         return SecondaryWindow(
           title: l10n.menuTilemapViewer,
           child: const SecondaryTilemapContent(),
+        );
+      case WindowKind.tileViewer:
+        return SecondaryWindow(
+          title: l10n.menuTileViewer,
+          child: const SecondaryTileViewerContent(),
         );
     }
   }

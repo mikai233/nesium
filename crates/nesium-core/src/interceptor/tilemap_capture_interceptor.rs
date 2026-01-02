@@ -11,6 +11,7 @@ pub struct DebugTilemapData {
     pub mirroring: Mirroring,
     pub bg_pattern_base: u16,
     pub vram_addr: u16,
+    pub temp_addr: u16,
     pub fine_x: u8,
 }
 
@@ -67,6 +68,7 @@ impl TilemapCaptureInterceptor {
 
         let bg_pattern_base = ppu.registers.control.background_pattern_table();
         let vram_addr = ppu.registers.vram.v.raw();
+        let temp_addr = ppu.registers.vram.t.raw();
         let fine_x = ppu.registers.vram.x;
 
         self.snapshot = Some(DebugTilemapData {
@@ -76,6 +78,7 @@ impl TilemapCaptureInterceptor {
             mirroring,
             bg_pattern_base,
             vram_addr,
+            temp_addr,
             fine_x,
         });
     }

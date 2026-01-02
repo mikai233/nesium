@@ -25,6 +25,8 @@ class NesiumApp extends ConsumerWidget {
             return l10n.menuTools;
           case WindowKind.tilemap:
             return l10n.menuTilemapViewer;
+          case WindowKind.tileViewer:
+            return l10n.menuTileViewer;
           case WindowKind.main:
             return l10n.appName;
         }

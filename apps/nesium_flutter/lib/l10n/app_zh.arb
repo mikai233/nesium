@@ -83,8 +83,7 @@
   "keyCaptureCaptured": "捕获：{key}",
   "keyCapturePressEscToClear": "按 Esc 清除。",
   "keyBindingsTitle": "按键绑定",
-  "cancel": "取消"
-  ,
+  "cancel": "取消",
   "appName": "Nesium",
   "menuTooltip": "菜单",
   "menuSectionFile": "文件",
@@ -148,8 +147,7 @@
   "gridSnappingTitle": "网格吸附",
   "gridSpacingLabel": "网格间距",
   "debuggerPlaceholderBody": "这里预留给 CPU/PPU 监视器、内存查看器、OAM 检视器等。相同的组件可以复用到桌面侧边栏或移动端面板中。",
-  "toolsPlaceholderBody": "录制/回放、按键映射、金手指等功能可以在桌面侧边栏和移动端底部面板中共享这套组件。"
-  ,
+  "toolsPlaceholderBody": "录制/回放、按键映射、金手指等功能可以在桌面侧边栏和移动端底部面板中共享这套组件。",
   "actionLoadRom": "加载 ROM",
   "actionResetNes": "重置 NES",
   "actionPowerResetNes": "电源重置 NES",
@@ -268,5 +266,36 @@
   },
   "tilemapRetry": "重试",
   "tilemapResetZoom": "重置缩放",
-  "menuTilemapViewer": "Tilemap 查看器"
+  "menuTilemapViewer": "Tilemap 查看器",
+  "menuTileViewer": "Tile 查看器",
+  "tileViewerError": "错误：{error}",
+  "@tileViewerError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tileViewerRetry": "重试",
+  "tileViewerSettings": "Tile 查看器设置",
+  "tileViewerOverlays": "覆盖层",
+  "tileViewerShowGrid": "显示图块网格",
+  "tileViewerPalette": "调色板",
+  "tileViewerPaletteBg": "背景 {index}",
+  "@tileViewerPaletteBg": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "tileViewerPaletteSprite": "精灵 {index}",
+  "@tileViewerPaletteSprite": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "tileViewerClose": "关闭"
 }

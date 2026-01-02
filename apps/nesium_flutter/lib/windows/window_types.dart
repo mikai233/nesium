@@ -1,1 +1,1 @@
-enum WindowKind { main, debugger, tools, tilemap }
+enum WindowKind { main, debugger, tools, tilemap, tileViewer }

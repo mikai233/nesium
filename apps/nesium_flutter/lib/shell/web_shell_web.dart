@@ -815,6 +815,7 @@ class _WebShellState extends ConsumerState<WebShell> {
       openDebugger: () async {},
       openTools: () async {},
       openTilemapViewer: () async {},
+      openTileViewer: () async {},
     );
 
     final isLandscape =
@@ -1251,6 +1252,7 @@ class _WebShellState extends ConsumerState<WebShell> {
         unawaited(actions.openTools?.call());
         break;
       case NesMenuItemId.tilemapViewer:
+      case NesMenuItemId.tileViewer:
       case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:
       case NesMenuItemId.loadStateSlot:

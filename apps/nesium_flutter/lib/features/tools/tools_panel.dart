@@ -57,6 +57,9 @@ class ToolsPanel extends ConsumerWidget {
       case NesMenuItemId.tilemapViewer:
         actions?.openTilemapViewer?.call();
         break;
+      case NesMenuItemId.tileViewer:
+        actions?.openTileViewer?.call();
+        break;
       default:
         break;
     }

@@ -117,6 +117,8 @@ pub struct TilemapState {
     pub bg_pattern_base: u16,
     /// PPU internal VRAM address (`v` register, 15 bits).
     pub vram_addr: u16,
+    /// PPU temporary VRAM address (`t` register, 15 bits).
+    pub temp_addr: u16,
     /// Fine X scroll (`x` register, 0..7).
     pub fine_x: u8,
 }
@@ -131,6 +133,7 @@ impl Default for TilemapState {
             bgra_palette: [[0; 4]; 64],
             bg_pattern_base: 0,
             vram_addr: 0,
+            temp_addr: 0,
             fine_x: 0,
         }
     }
@@ -138,11 +141,38 @@ impl Default for TilemapState {
 
 impl Event for TilemapState {}
 
+/// CHR (pattern table) state for Tile Viewer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChrState {
+    /// Full CHR data (up to 8 KiB for pattern tables $0000-$1FFF).
+    pub chr: Vec<u8>,
+    /// 32-byte palette RAM (NES internal palette).
+    pub palette: [u8; 32],
+    /// 64-entry BGRA palette for aux texture rendering.
+    pub bgra_palette: [[u8; 4]; 64],
+    /// Currently selected palette index (0-7: 0-3 for BG, 4-7 for sprites).
+    pub selected_palette: u8,
+}
+
+impl Default for ChrState {
+    fn default() -> Self {
+        Self {
+            chr: Vec::new(),
+            palette: [0; 32],
+            bgra_palette: [[0; 4]; 64],
+            selected_palette: 0,
+        }
+    }
+}
+
+impl Event for ChrState {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventTopic {
     Notification,
     DebugState,
     Tilemap,
+    Chr,
 }
 
 impl NotificationEvent {

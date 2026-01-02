@@ -34,6 +34,7 @@ import 'nes_actions.dart';
 import 'mobile_shell.dart';
 import '../features/debugger/debugger_panel.dart';
 import '../features/debugger/tilemap_viewer.dart';
+import '../features/debugger/tile_viewer.dart';
 import '../features/tools/tools_panel.dart';
 
 class NesShell extends ConsumerStatefulWidget {
@@ -501,6 +502,7 @@ class _NesShellState extends ConsumerState<NesShell>
       openDebugger: _openDebugger,
       openTools: _openTools,
       openTilemapViewer: _openTilemapViewer,
+      openTileViewer: _openTileViewer,
     );
   }
 
@@ -581,6 +583,44 @@ class _NesShellState extends ConsumerState<NesShell>
             child: Scaffold(
               appBar: AppBar(title: Text(l10n.menuTilemapViewer)),
               body: const TilemapViewer(),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openTileViewer() async {
+    if (_isDesktop) {
+      if (_desktopWindowManager.isSupported) {
+        final languageCode = ref.read(appLanguageProvider).languageCode;
+        await _desktopWindowManager.openTileViewerWindow(
+          languageCode: languageCode,
+        );
+      } else {
+        // Fallback to in-app navigation for platforms where multi-window is not supported
+        if (!mounted) return;
+        final l10n = AppLocalizations.of(context)!;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: Text(l10n.menuTileViewer)),
+              body: const TileViewer(),
+            ),
+          ),
+        );
+      }
+    } else {
+      // Mobile: always use in-app navigation
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ProviderScope(
+            overrides: [nesActionsProvider.overrideWithValue(_buildActions())],
+            child: Scaffold(
+              appBar: AppBar(title: Text(l10n.menuTileViewer)),
+              body: const TileViewer(),
             ),
           ),
         ),

@@ -6,6 +6,7 @@ import '../shell/nes_actions.dart';
 import '../platform/desktop_window_manager.dart';
 
 import '../features/debugger/debugger_panel.dart';
+import '../features/debugger/tile_viewer.dart';
 import '../features/debugger/tilemap_viewer.dart';
 import '../features/tools/tools_panel.dart';
 import '../platform/platform_capabilities.dart';
@@ -63,6 +64,9 @@ class SecondaryToolsContent extends StatelessWidget {
             openTilemapViewer: () async {
               await DesktopWindowManager().openTilemapWindow();
             },
+            openTileViewer: () async {
+              await DesktopWindowManager().openTileViewerWindow();
+            },
           ),
         ),
       ],
@@ -77,5 +81,14 @@ class SecondaryTilemapContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const TilemapViewer();
+  }
+}
+
+class SecondaryTileViewerContent extends StatelessWidget {
+  const SecondaryTileViewerContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const TileViewer();
   }
 }

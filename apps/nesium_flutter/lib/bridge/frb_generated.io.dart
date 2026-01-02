@@ -28,6 +28,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  RustStreamSink<ChrSnapshot> dco_decode_StreamSink_chr_snapshot_Sse(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<DebugStateNotification>
   dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw);
 
@@ -45,6 +50,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  ChrSnapshot dco_decode_chr_snapshot(dynamic raw);
 
   @protected
   DebugStateNotification dco_decode_debug_state_notification(dynamic raw);
@@ -107,6 +115,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<ChrSnapshot> sse_decode_StreamSink_chr_snapshot_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<DebugStateNotification>
   sse_decode_StreamSink_debug_state_notification_Sse(
     SseDeserializer deserializer,
@@ -126,6 +139,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  ChrSnapshot sse_decode_chr_snapshot(SseDeserializer deserializer);
 
   @protected
   DebugStateNotification sse_decode_debug_state_notification(
@@ -201,6 +217,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_chr_snapshot_Sse(
+    RustStreamSink<ChrSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_debug_state_notification_Sse(
     RustStreamSink<DebugStateNotification> self,
     SseSerializer serializer,
@@ -223,6 +245,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_chr_snapshot(ChrSnapshot self, SseSerializer serializer);
 
   @protected
   void sse_encode_debug_state_notification(

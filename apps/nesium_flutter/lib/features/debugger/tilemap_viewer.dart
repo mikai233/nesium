@@ -36,7 +36,7 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
   bridge.TilemapSnapshot? _tilemapSnapshot;
 
   // Capture mode state
-  _TilemapCaptureMode _captureMode = _TilemapCaptureMode.frameStart;
+  _TilemapCaptureMode _captureMode = _TilemapCaptureMode.vblankStart;
   int _scanline = 0;
   int _dot = 0;
   late final TextEditingController _scanlineController = TextEditingController(
@@ -1337,7 +1337,9 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
   }
 
   List<Rect> _scrollOverlayRectsFromSnapshot(bridge.TilemapSnapshot snap) {
-    final v = snap.vramAddr & 0x7FFF;
+    // Use the PPU `t` (temp) address for scroll origin. The `v` address
+    // is advanced by background fetches/pipeline and is not stable for viewport math.
+    final v = snap.tempAddr & 0x7FFF;
     final fineX = snap.fineX & 0x07;
     final coarseX = v & 0x1F;
     final coarseY = (v >> 5) & 0x1F;

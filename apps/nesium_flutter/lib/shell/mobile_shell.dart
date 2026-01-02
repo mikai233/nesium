@@ -306,6 +306,10 @@ class _MobileDrawer extends StatelessWidget {
         closeDrawer();
         unawaited(actions.openTilemapViewer?.call());
         break;
+      case NesMenuItemId.tileViewer:
+        closeDrawer();
+        unawaited(actions.openTileViewer?.call());
+        break;
       case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:
       case NesMenuItemId.loadStateSlot:

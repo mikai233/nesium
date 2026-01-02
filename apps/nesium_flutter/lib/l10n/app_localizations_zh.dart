@@ -699,4 +699,40 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get menuTilemapViewer => 'Tilemap 查看器';
+
+  @override
+  String get menuTileViewer => 'Tile 查看器';
+
+  @override
+  String tileViewerError(String error) {
+    return '错误：$error';
+  }
+
+  @override
+  String get tileViewerRetry => '重试';
+
+  @override
+  String get tileViewerSettings => 'Tile 查看器设置';
+
+  @override
+  String get tileViewerOverlays => '覆盖层';
+
+  @override
+  String get tileViewerShowGrid => '显示图块网格';
+
+  @override
+  String get tileViewerPalette => '调色板';
+
+  @override
+  String tileViewerPaletteBg(int index) {
+    return '背景 $index';
+  }
+
+  @override
+  String tileViewerPaletteSprite(int index) {
+    return '精灵 $index';
+  }
+
+  @override
+  String get tileViewerClose => '关闭';
 }
