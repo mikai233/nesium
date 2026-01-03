@@ -328,7 +328,10 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
                         ),
                         child: Stack(
                           children: [
-                            Texture(textureId: _flutterTextureId!),
+                            Texture(
+                              textureId: _flutterTextureId!,
+                              filterQuality: FilterQuality.none,
+                            ),
                             CustomPaint(
                               painter: _TilemapGridPainter(
                                 showTileGrid: _showTileGrid,

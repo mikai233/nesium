@@ -419,8 +419,8 @@ impl Runner {
 
         // Broadcast debug state if there's a subscriber.
         self.maybe_broadcast_debug_state();
-        self.maybe_broadcast_tilemap_state();
-        self.maybe_broadcast_chr_state();
+        // Broadcast tilemap/CHR state (shared snapshot consumption)
+        self.maybe_broadcast_tilemap_and_chr_state();
     }
 
     /// Captures rewind history (snapshot + render index plane) when enabled.
@@ -582,62 +582,13 @@ impl Runner {
             .broadcast(EventTopic::DebugState, Box::new(debug));
     }
 
-    /// Broadcasts tilemap state to subscribers if someone is listening.
-    fn maybe_broadcast_tilemap_state(&mut self) {
-        if self.pubsub.has_subscriber(EventTopic::Tilemap) {
-            let Some(snap) = self.nes.take_tilemap_capture_snapshot() else {
-                return;
-            };
-            let (ciram, palette, chr, mirroring, bg_pattern_base, vram_addr, temp_addr, fine_x) = (
-                snap.ciram,
-                snap.palette,
-                snap.chr,
-                snap.mirroring,
-                snap.bg_pattern_base,
-                snap.vram_addr,
-                snap.temp_addr,
-                snap.fine_x,
-            );
+    /// Broadcasts tilemap and/or CHR state to subscribers if someone is listening.
+    /// Both viewers share the same snapshot to avoid consuming it twice.
+    fn maybe_broadcast_tilemap_and_chr_state(&mut self) {
+        let has_tilemap = self.pubsub.has_subscriber(EventTopic::Tilemap);
+        let has_chr = self.pubsub.has_subscriber(EventTopic::Chr);
 
-            // Convert current NES palette to platform-specific format for aux texture rendering.
-            // Use nesium_flutter's platform_color_format() for consistency with main screen.
-            let nes_palette = self.nes.palette();
-            let mut bgra_palette = [[0u8; 4]; 64];
-
-            // Note: bgra_palette field name is historical - it contains platform-specific format.
-            // This is determined at compile time by nesium-flutter's platform_color_format().
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
-            {
-                for (i, color) in nes_palette.as_colors().iter().enumerate() {
-                    bgra_palette[i] = [color.b, color.g, color.r, 0xFF]; // BGRA
-                }
-            }
-            #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-            {
-                for (i, color) in nes_palette.as_colors().iter().enumerate() {
-                    bgra_palette[i] = [color.r, color.g, color.b, 0xFF]; // RGBA
-                }
-            }
-
-            let tilemap = TilemapState {
-                ciram,
-                palette,
-                chr,
-                mirroring,
-                bgra_palette,
-                bg_pattern_base,
-                vram_addr,
-                temp_addr,
-                fine_x,
-            };
-            self.pubsub
-                .broadcast(EventTopic::Tilemap, Box::new(tilemap));
-        }
-    }
-
-    /// Broadcasts CHR state to subscribers if someone is listening.
-    fn maybe_broadcast_chr_state(&mut self) {
-        if !self.pubsub.has_subscriber(EventTopic::Chr) {
+        if !has_tilemap && !has_chr {
             return;
         }
 
@@ -645,31 +596,50 @@ impl Runner {
             return;
         };
 
-        // Convert current NES palette to platform-specific format
+        // Convert current NES palette to platform-specific format for aux texture rendering.
         let nes_palette = self.nes.palette();
         let mut bgra_palette = [[0u8; 4]; 64];
 
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
             for (i, color) in nes_palette.as_colors().iter().enumerate() {
-                bgra_palette[i] = [color.b, color.g, color.r, 0xFF];
+                bgra_palette[i] = [color.b, color.g, color.r, 0xFF]; // BGRA
             }
         }
         #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         {
             for (i, color) in nes_palette.as_colors().iter().enumerate() {
-                bgra_palette[i] = [color.r, color.g, color.b, 0xFF];
+                bgra_palette[i] = [color.r, color.g, color.b, 0xFF]; // RGBA
             }
         }
 
-        let chr_state = ChrState {
-            chr: snap.chr,
-            palette: snap.palette,
-            bgra_palette,
-            selected_palette: 0, // Default to first palette, runtime will override via API
-        };
+        // Broadcast to Tilemap subscribers
+        if has_tilemap {
+            let tilemap = TilemapState {
+                ciram: snap.ciram.clone(),
+                palette: snap.palette.clone(),
+                chr: snap.chr.clone(),
+                mirroring: snap.mirroring,
+                bgra_palette,
+                bg_pattern_base: snap.bg_pattern_base,
+                vram_addr: snap.vram_addr,
+                temp_addr: snap.temp_addr,
+                fine_x: snap.fine_x,
+            };
+            self.pubsub
+                .broadcast(EventTopic::Tilemap, Box::new(tilemap));
+        }
 
-        self.pubsub.broadcast(EventTopic::Chr, Box::new(chr_state));
+        // Broadcast to CHR subscribers
+        if has_chr {
+            let chr_state = ChrState {
+                chr: snap.chr,
+                palette: snap.palette,
+                bgra_palette,
+                selected_palette: 0, // Default to first palette, runtime will override via API
+            };
+            self.pubsub.broadcast(EventTopic::Chr, Box::new(chr_state));
+        }
     }
 
     /// Loads a ROM from the specified path, calculates its SHA-1 hash, and initializes the NES state.
