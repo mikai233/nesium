@@ -440,19 +440,6 @@ fn apply_grayscale_in_place(buf: &mut [u8]) {
 /// Auxiliary texture ID for CHR/Tile Viewer.
 pub const CHR_TEXTURE_ID: u32 = 2;
 
-/// Currently selected palette index for CHR rendering (0-7).
-static CHR_SELECTED_PALETTE: AtomicU8 = AtomicU8::new(0);
-
-/// Sets the palette index for CHR rendering (0-7: 0-3 BG, 4-7 Sprite).
-pub fn set_chr_palette(palette_index: u8) {
-    CHR_SELECTED_PALETTE.store(palette_index.min(7), Ordering::Relaxed);
-}
-
-/// Gets the current palette index for CHR rendering.
-pub fn chr_selected_palette() -> u8 {
-    CHR_SELECTED_PALETTE.load(Ordering::Relaxed)
-}
-
 /// Sender that updates the CHR auxiliary texture AND streams ChrSnapshot to Flutter.
 pub struct ChrTextureAndStateSender {
     sink: StreamSink<crate::api::events::ChrSnapshot>,
@@ -468,10 +455,8 @@ impl RuntimeEventSender for ChrTextureAndStateSender {
     fn send(&self, event: Box<dyn Event>) -> bool {
         let any: Box<dyn std::any::Any> = event;
         if let Ok(state) = any.downcast::<nesium_runtime::ChrState>() {
-            let selected_palette = chr_selected_palette();
-
             // Update auxiliary texture
-            render_chr_to_aux(&state, selected_palette);
+            crate::aux_texture::aux_update(CHR_TEXTURE_ID, &state.rgba);
 
             // Convert BGRA palette to RGBA for Flutter
             let mut rgba_palette = Vec::with_capacity(64 * 4);
@@ -487,10 +472,22 @@ impl RuntimeEventSender for ChrTextureAndStateSender {
             }
 
             let snapshot = crate::api::events::ChrSnapshot {
-                chr: state.chr.clone(),
                 palette: state.palette.to_vec(),
                 rgba_palette,
-                selected_palette,
+                selected_palette: state.selected_palette,
+                width: state.width,
+                height: state.height,
+                source: state.source as u8,
+                source_size: state.source_size,
+                start_address: state.start_address,
+                column_count: state.column_count,
+                row_count: state.row_count,
+                layout: state.layout as u8,
+                background: state.background as u8,
+                use_grayscale_palette: state.use_grayscale_palette,
+                bg_pattern_base: state.bg_pattern_base,
+                sprite_pattern_base: state.sprite_pattern_base,
+                large_sprites: state.large_sprites,
             };
 
             let _ = self.sink.add(snapshot);
@@ -498,86 +495,4 @@ impl RuntimeEventSender for ChrTextureAndStateSender {
         }
         true
     }
-}
-
-/// Renders CHR pattern tables to RGBA and updates the auxiliary texture.
-///
-/// Output: 128x256 pixels (16 tiles wide × 32 tiles tall)
-/// - Top half (rows 0-15): Pattern Table 0 ($0000-$0FFF)
-/// - Bottom half (rows 16-31): Pattern Table 1 ($1000-$1FFF)
-fn render_chr_to_aux(state: &nesium_runtime::ChrState, selected_palette: u8) {
-    const WIDTH: usize = 128; // 16 tiles × 8 pixels
-    const HEIGHT: usize = 256; // 32 tiles × 8 pixels
-    const TILES_PER_ROW: usize = 16;
-
-    let mut rgba = vec![0u8; WIDTH * HEIGHT * 4];
-    let chr = &state.chr;
-    let palette = &state.palette;
-    let palette_idx = (selected_palette as usize) % 8;
-
-    // Each pattern table has 256 tiles (16×16 grid)
-    // Total: 512 tiles in a 16×32 grid
-    for tile_index in 0..512 {
-        let tile_x = tile_index % TILES_PER_ROW;
-        let tile_y = tile_index / TILES_PER_ROW;
-
-        // CHR data: each tile is 16 bytes (2 planes of 8 bytes)
-        let chr_offset = tile_index * 16;
-
-        for py in 0..8 {
-            let plane0_offset = chr_offset + py;
-            let plane1_offset = chr_offset + py + 8;
-
-            let plane0 = if plane0_offset < chr.len() {
-                chr[plane0_offset]
-            } else {
-                0
-            };
-            let plane1 = if plane1_offset < chr.len() {
-                chr[plane1_offset]
-            } else {
-                0
-            };
-
-            for px in 0..8 {
-                let bit = 7 - px;
-                let color_low = (plane0 >> bit) & 1;
-                let color_high = (plane1 >> bit) & 1;
-                let color_index = ((color_high << 1) | color_low) as usize;
-
-                // Look up in NES palette
-                // Palettes 0-3 are background ($3F00-$3F0F), 4-7 are sprites ($3F10-$3F1F)
-                let pal_base = if palette_idx < 4 {
-                    palette_idx * 4
-                } else {
-                    0x10 + (palette_idx - 4) * 4
-                };
-
-                let nes_color = if color_index == 0 {
-                    palette[0] as usize // Universal background color
-                } else {
-                    let idx = pal_base + color_index;
-                    if idx < palette.len() {
-                        palette[idx] as usize
-                    } else {
-                        0
-                    }
-                } & 0x3F;
-
-                let screen_x = tile_x * 8 + px;
-                let screen_y = tile_y * 8 + py;
-                let idx = (screen_y * WIDTH + screen_x) * 4;
-
-                if idx + 3 < rgba.len() {
-                    let pixel = state.bgra_palette[nes_color];
-                    rgba[idx] = pixel[0];
-                    rgba[idx + 1] = pixel[1];
-                    rgba[idx + 2] = pixel[2];
-                    rgba[idx + 3] = pixel[3];
-                }
-            }
-        }
-    }
-
-    crate::aux_texture::aux_update(CHR_TEXTURE_ID, &rgba);
 }

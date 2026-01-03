@@ -1460,11 +1460,197 @@ abstract class AppLocalizations {
   /// **'Sprite {index}'**
   String tileViewerPaletteSprite(int index);
 
+  /// No description provided for @tileViewerGrayscale.
+  ///
+  /// In en, this message translates to:
+  /// **'Use grayscale palette'**
+  String get tileViewerGrayscale;
+
+  /// No description provided for @tileViewerSelectedTile.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected Tile'**
+  String get tileViewerSelectedTile;
+
+  /// No description provided for @tileViewerPatternTable.
+  ///
+  /// In en, this message translates to:
+  /// **'Pattern Table'**
+  String get tileViewerPatternTable;
+
+  /// No description provided for @tileViewerTileIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile Index'**
+  String get tileViewerTileIndex;
+
+  /// No description provided for @tileViewerChrAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'CHR Address'**
+  String get tileViewerChrAddress;
+
   /// No description provided for @tileViewerClose.
   ///
   /// In en, this message translates to:
   /// **'Close'**
   String get tileViewerClose;
+
+  /// No description provided for @tileViewerSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get tileViewerSource;
+
+  /// No description provided for @tileViewerSourcePpu.
+  ///
+  /// In en, this message translates to:
+  /// **'PPU Memory'**
+  String get tileViewerSourcePpu;
+
+  /// No description provided for @tileViewerSourceChrRom.
+  ///
+  /// In en, this message translates to:
+  /// **'CHR ROM'**
+  String get tileViewerSourceChrRom;
+
+  /// No description provided for @tileViewerSourceChrRam.
+  ///
+  /// In en, this message translates to:
+  /// **'CHR RAM'**
+  String get tileViewerSourceChrRam;
+
+  /// No description provided for @tileViewerSourcePrgRom.
+  ///
+  /// In en, this message translates to:
+  /// **'PRG ROM'**
+  String get tileViewerSourcePrgRom;
+
+  /// No description provided for @tileViewerAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Address'**
+  String get tileViewerAddress;
+
+  /// No description provided for @tileViewerSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get tileViewerSize;
+
+  /// No description provided for @tileViewerColumns.
+  ///
+  /// In en, this message translates to:
+  /// **'Cols'**
+  String get tileViewerColumns;
+
+  /// No description provided for @tileViewerRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Rows'**
+  String get tileViewerRows;
+
+  /// No description provided for @tileViewerLayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Layout'**
+  String get tileViewerLayout;
+
+  /// No description provided for @tileViewerLayoutNormal.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal'**
+  String get tileViewerLayoutNormal;
+
+  /// No description provided for @tileViewerLayout8x16.
+  ///
+  /// In en, this message translates to:
+  /// **'8×16 Sprites'**
+  String get tileViewerLayout8x16;
+
+  /// No description provided for @tileViewerLayout16x16.
+  ///
+  /// In en, this message translates to:
+  /// **'16×16 Sprites'**
+  String get tileViewerLayout16x16;
+
+  /// No description provided for @tileViewerBackground.
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get tileViewerBackground;
+
+  /// No description provided for @tileViewerBgDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get tileViewerBgDefault;
+
+  /// No description provided for @tileViewerBgTransparent.
+  ///
+  /// In en, this message translates to:
+  /// **'Transparent'**
+  String get tileViewerBgTransparent;
+
+  /// No description provided for @tileViewerBgPalette.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette Color'**
+  String get tileViewerBgPalette;
+
+  /// No description provided for @tileViewerBgBlack.
+  ///
+  /// In en, this message translates to:
+  /// **'Black'**
+  String get tileViewerBgBlack;
+
+  /// No description provided for @tileViewerBgWhite.
+  ///
+  /// In en, this message translates to:
+  /// **'White'**
+  String get tileViewerBgWhite;
+
+  /// No description provided for @tileViewerBgMagenta.
+  ///
+  /// In en, this message translates to:
+  /// **'Magenta'**
+  String get tileViewerBgMagenta;
+
+  /// No description provided for @tileViewerPresets.
+  ///
+  /// In en, this message translates to:
+  /// **'Presets'**
+  String get tileViewerPresets;
+
+  /// No description provided for @tileViewerPresetPpu.
+  ///
+  /// In en, this message translates to:
+  /// **'PPU'**
+  String get tileViewerPresetPpu;
+
+  /// No description provided for @tileViewerPresetChr.
+  ///
+  /// In en, this message translates to:
+  /// **'CHR'**
+  String get tileViewerPresetChr;
+
+  /// No description provided for @tileViewerPresetRom.
+  ///
+  /// In en, this message translates to:
+  /// **'ROM'**
+  String get tileViewerPresetRom;
+
+  /// No description provided for @tileViewerPresetBg.
+  ///
+  /// In en, this message translates to:
+  /// **'BG'**
+  String get tileViewerPresetBg;
+
+  /// No description provided for @tileViewerPresetOam.
+  ///
+  /// In en, this message translates to:
+  /// **'OAM'**
+  String get tileViewerPresetOam;
 }
 
 class _AppLocalizationsDelegate

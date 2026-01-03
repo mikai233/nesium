@@ -10,7 +10,10 @@ use nesium_core::{
     reset_kind::ResetKind,
 };
 
-use super::types::{EventTopic, RuntimeError, RuntimeEventSender};
+use super::types::{
+    EventTopic, RuntimeError, RuntimeEventSender, TileViewerBackground, TileViewerLayout,
+    TileViewerSource,
+};
 
 pub(crate) type ControlReplySender = Sender<Result<(), RuntimeError>>;
 
@@ -34,6 +37,17 @@ pub(crate) enum ControlMessage {
     SubscribeEvent(EventTopic, Box<dyn RuntimeEventSender>, ControlReplySender),
     UnsubscribeEvent(EventTopic, ControlReplySender),
     SetTilemapCapturePoint(TilemapCapturePoint, ControlReplySender),
+    SetTileViewerSource(TileViewerSource, ControlReplySender),
+    SetTileViewerStartAddress(u32, ControlReplySender),
+    SetTileViewerSize {
+        columns: u16,
+        rows: u16,
+        reply: ControlReplySender,
+    },
+    SetTileViewerLayout(TileViewerLayout, ControlReplySender),
+    SetTileViewerBackground(TileViewerBackground, ControlReplySender),
+    SetTileViewerPalette(u8, ControlReplySender),
+    SetTileViewerUseGrayscalePalette(bool, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

@@ -141,26 +141,119 @@ impl Default for TilemapState {
 
 impl Event for TilemapState {}
 
-/// CHR (pattern table) state for Tile Viewer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileViewerSource {
+    /// PPU-visible pattern table bytes ($0000-$1FFF after mapper banking).
+    Ppu,
+    /// Cartridge CHR ROM bytes (unbanked).
+    ChrRom,
+    /// Cartridge CHR RAM bytes (unbanked).
+    ChrRam,
+    /// Cartridge PRG ROM bytes.
+    PrgRom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileViewerLayout {
+    Normal,
+    SingleLine8x16,
+    SingleLine16x16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileViewerBackground {
+    Default,
+    Transparent,
+    PaletteColor,
+    Black,
+    White,
+    Magenta,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TileViewerConfig {
+    pub source: TileViewerSource,
+    pub start_address: u32,
+    pub column_count: u16,
+    pub row_count: u16,
+    pub layout: TileViewerLayout,
+    pub background: TileViewerBackground,
+    pub selected_palette: u8,
+    pub use_grayscale_palette: bool,
+}
+
+impl Default for TileViewerConfig {
+    fn default() -> Self {
+        Self {
+            source: TileViewerSource::Ppu,
+            start_address: 0,
+            column_count: 16,
+            row_count: 32,
+            layout: TileViewerLayout::Normal,
+            background: TileViewerBackground::Default,
+            selected_palette: 0,
+            use_grayscale_palette: false,
+        }
+    }
+}
+
+/// Tile Viewer state for Flutter inspection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChrState {
-    /// Full CHR data (up to 8 KiB for pattern tables $0000-$1FFF).
-    pub chr: Vec<u8>,
+    /// Rendered tile view (platform-native RGBA/BGRA) matching the aux texture.
+    pub rgba: Vec<u8>,
+    /// Tile view width (pixels).
+    pub width: u16,
+    /// Tile view height (pixels).
+    pub height: u16,
+    /// Selected source kind for the current view.
+    pub source: TileViewerSource,
+    /// Total size of the selected source memory, in bytes.
+    pub source_size: u32,
+    /// Start address within the selected source memory.
+    pub start_address: u32,
+    /// Number of tiles (8×8) per row in the view.
+    pub column_count: u16,
+    /// Number of tile rows (8×8) in the view.
+    pub row_count: u16,
+    pub layout: TileViewerLayout,
+    pub background: TileViewerBackground,
     /// 32-byte palette RAM (NES internal palette).
     pub palette: [u8; 32],
     /// 64-entry BGRA palette for aux texture rendering.
     pub bgra_palette: [[u8; 4]; 64],
     /// Currently selected palette index (0-7: 0-3 for BG, 4-7 for sprites).
     pub selected_palette: u8,
+    /// Whether to display using a grayscale palette.
+    pub use_grayscale_palette: bool,
+    /// Background pattern table base ($0000 or $1000).
+    pub bg_pattern_base: u16,
+    /// Sprite pattern table base ($0000 or $1000).
+    pub sprite_pattern_base: u16,
+    /// Whether sprites use 8×16 mode.
+    pub large_sprites: bool,
 }
 
 impl Default for ChrState {
     fn default() -> Self {
         Self {
-            chr: Vec::new(),
+            rgba: Vec::new(),
+            width: 0,
+            height: 0,
+            source: TileViewerSource::Ppu,
+            source_size: 0,
+            start_address: 0,
+            column_count: 16,
+            row_count: 32,
+            layout: TileViewerLayout::Normal,
+            background: TileViewerBackground::Default,
             palette: [0; 32],
             bgra_palette: [[0; 4]; 64],
             selected_palette: 0,
+            use_grayscale_palette: false,
+            bg_pattern_base: 0,
+            sprite_pattern_base: 0,
+            large_sprites: false,
         }
     }
 }

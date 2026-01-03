@@ -15,7 +15,8 @@ use super::{
     state::RuntimeState,
     types::{
         AudioMode, ChrState, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT,
-        NotificationEvent, PpuDebugState, RuntimeError, TilemapState,
+        NotificationEvent, PpuDebugState, RuntimeError, TileViewerBackground, TileViewerLayout,
+        TileViewerSource, TilemapState,
     },
     util::button_bit,
 };
@@ -294,6 +295,62 @@ impl Runner {
             }
             ControlMessage::SetTilemapCapturePoint(point, reply) => {
                 self.nes.set_tilemap_capture_point(point);
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetTileViewerSource(source, reply) => {
+                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                    cfg.source = source;
+                }
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetTileViewerStartAddress(start_address, reply) => {
+                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                    cfg.start_address = start_address;
+                }
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetTileViewerSize {
+                columns,
+                rows,
+                reply,
+            } => {
+                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                    cfg.column_count = columns;
+                    cfg.row_count = rows;
+                    // Match Mesen2: enforce multiple-of-2 counts when using non-normal layouts.
+                    if !matches!(cfg.layout, TileViewerLayout::Normal) {
+                        cfg.column_count &= !1;
+                        cfg.row_count &= !1;
+                    }
+                }
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetTileViewerLayout(layout, reply) => {
+                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                    cfg.layout = layout;
+                    if !matches!(cfg.layout, TileViewerLayout::Normal) {
+                        cfg.column_count &= !1;
+                        cfg.row_count &= !1;
+                    }
+                }
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetTileViewerBackground(background, reply) => {
+                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                    cfg.background = background;
+                }
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetTileViewerPalette(palette, reply) => {
+                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                    cfg.selected_palette = palette.min(7);
+                }
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetTileViewerUseGrayscalePalette(enabled, reply) => {
+                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                    cfg.use_grayscale_palette = enabled;
+                }
                 let _ = reply.send(Ok(()));
             }
         }
@@ -632,12 +689,69 @@ impl Runner {
 
         // Broadcast to CHR subscribers
         if has_chr {
+            let cfg = self
+                .state
+                .tile_viewer
+                .lock()
+                .map(|v| *v)
+                .unwrap_or_default();
+
+            let mut column_count = cfg.column_count.clamp(4, 256);
+            let mut row_count = cfg.row_count.clamp(4, 256);
+            if !matches!(cfg.layout, TileViewerLayout::Normal) {
+                column_count &= !1;
+                row_count &= !1;
+            }
+
+            let width = column_count.saturating_mul(8);
+            let height = row_count.saturating_mul(8);
+            let tile_count = column_count as usize * row_count as usize;
+            let bytes_per_tile = 16usize; // NES 2bpp planar 8×8
+            let total_size = tile_count.saturating_mul(bytes_per_tile);
+
+            let (_, _, _, ctrl, _, _, _, _, _, _) = self.nes.ppu_debug_state();
+            let sprite_pattern_base = if (ctrl & 0x08) != 0 { 0x1000 } else { 0x0000 };
+            let large_sprites = (ctrl & 0x20) != 0;
+
+            let (source_size, source_bytes) = self.tile_viewer_read_source_bytes(
+                cfg.source,
+                cfg.start_address,
+                total_size,
+                &snap.chr,
+            );
+
+            let rgba = self.render_tile_view_rgba(
+                &source_bytes,
+                column_count,
+                row_count,
+                cfg.layout,
+                cfg.background,
+                cfg.selected_palette,
+                cfg.use_grayscale_palette,
+                &snap.palette,
+                &bgra_palette,
+            );
+
             let chr_state = ChrState {
-                chr: snap.chr,
+                rgba,
+                width,
+                height,
+                source: cfg.source,
+                source_size,
+                start_address: cfg.start_address,
+                column_count,
+                row_count,
+                layout: cfg.layout,
+                background: cfg.background,
                 palette: snap.palette,
                 bgra_palette,
-                selected_palette: 0, // Default to first palette, runtime will override via API
+                selected_palette: cfg.selected_palette.min(7),
+                use_grayscale_palette: cfg.use_grayscale_palette,
+                bg_pattern_base: snap.bg_pattern_base,
+                sprite_pattern_base,
+                large_sprites,
             };
+
             self.pubsub.broadcast(EventTopic::Chr, Box::new(chr_state));
         }
     }
@@ -680,6 +794,239 @@ impl Runner {
         }
     }
 
+    fn tile_viewer_read_source_bytes(
+        &self,
+        source: TileViewerSource,
+        start_address: u32,
+        len: usize,
+        ppu_chr: &[u8],
+    ) -> (u32, Vec<u8>) {
+        let mut out = vec![0u8; len];
+
+        match source {
+            TileViewerSource::Ppu => {
+                let size = 0x2000usize;
+                let src = if ppu_chr.is_empty() {
+                    &[0u8; 0]
+                } else {
+                    ppu_chr
+                };
+                for (i, b) in out.iter_mut().enumerate() {
+                    if src.is_empty() {
+                        *b = 0;
+                    } else {
+                        *b = src[(start_address as usize + i) % size % src.len()];
+                    }
+                }
+                (size as u32, out)
+            }
+            TileViewerSource::ChrRom => {
+                let src = self
+                    .nes
+                    .get_cartridge()
+                    .and_then(|c| {
+                        let m = c.mapper();
+                        m.chr_rom().or_else(|| m.chr_ram())
+                    })
+                    .unwrap_or(&[]);
+                let size = src.len();
+                if size == 0 {
+                    return (0, out);
+                }
+                for (i, b) in out.iter_mut().enumerate() {
+                    *b = src[(start_address as usize + i) % size];
+                }
+                (size as u32, out)
+            }
+            TileViewerSource::ChrRam => {
+                let src = self
+                    .nes
+                    .get_cartridge()
+                    .and_then(|c| {
+                        let m = c.mapper();
+                        m.chr_ram().or_else(|| m.chr_rom())
+                    })
+                    .unwrap_or(&[]);
+                let size = src.len();
+                if size == 0 {
+                    return (0, out);
+                }
+                for (i, b) in out.iter_mut().enumerate() {
+                    *b = src[(start_address as usize + i) % size];
+                }
+                (size as u32, out)
+            }
+            TileViewerSource::PrgRom => {
+                let src = self
+                    .nes
+                    .get_cartridge()
+                    .and_then(|c| c.mapper().prg_rom())
+                    .unwrap_or(&[]);
+                let size = src.len();
+                if size == 0 {
+                    return (0, out);
+                }
+                for (i, b) in out.iter_mut().enumerate() {
+                    *b = src[(start_address as usize + i) % size];
+                }
+                (size as u32, out)
+            }
+        }
+    }
+
+    fn render_tile_view_rgba(
+        &self,
+        source_bytes: &[u8],
+        column_count: u16,
+        row_count: u16,
+        layout: TileViewerLayout,
+        background: TileViewerBackground,
+        selected_palette: u8,
+        use_grayscale_palette: bool,
+        palette_ram: &[u8; 32],
+        bgra_palette: &[[u8; 4]; 64],
+    ) -> Vec<u8> {
+        let width = column_count as usize * 8;
+        let height = row_count as usize * 8;
+        let mut rgba = vec![0u8; width.saturating_mul(height).saturating_mul(4)];
+
+        let bytes_per_tile = 16usize;
+        let palette_index = (selected_palette as usize).min(7);
+        let pal_base = if palette_index < 4 {
+            palette_index * 4
+        } else {
+            0x10 + (palette_index - 4) * 4
+        };
+
+        for ty in 0..row_count as usize {
+            for tx in 0..column_count as usize {
+                let (mx, my) = tile_viewer_from_layout(layout, tx, ty, column_count as usize);
+                let tile_index = my.saturating_mul(column_count as usize).saturating_add(mx);
+                let base = tile_index.saturating_mul(bytes_per_tile);
+                if base + 15 >= source_bytes.len() {
+                    continue;
+                }
+
+                for py in 0..8usize {
+                    let plane0 = source_bytes[base + py];
+                    let plane1 = source_bytes[base + py + 8];
+                    for px in 0..8usize {
+                        let bit = 7 - px;
+                        let lo = (plane0 >> bit) & 1;
+                        let hi = (plane1 >> bit) & 1;
+                        let color_index = ((hi << 1) | lo) as usize;
+
+                        let pixel = if color_index == 0 {
+                            match background {
+                                TileViewerBackground::Default => {
+                                    let nes = (palette_ram[0] & 0x3F) as usize;
+                                    bgra_palette.get(nes).copied().unwrap_or([0, 0, 0, 0xFF])
+                                }
+                                TileViewerBackground::Transparent => [0, 0, 0, 0],
+                                TileViewerBackground::PaletteColor => {
+                                    let idx = pal_base.min(palette_ram.len().saturating_sub(1));
+                                    let nes = (palette_ram[idx] & 0x3F) as usize;
+                                    bgra_palette.get(nes).copied().unwrap_or([0, 0, 0, 0xFF])
+                                }
+                                TileViewerBackground::Black => solid_pixel(0, 0, 0, 0xFF),
+                                TileViewerBackground::White => solid_pixel(0xFF, 0xFF, 0xFF, 0xFF),
+                                TileViewerBackground::Magenta => solid_pixel(0xFF, 0, 0xFF, 0xFF),
+                            }
+                        } else {
+                            let idx = pal_base + color_index;
+                            let nes = if idx < palette_ram.len() {
+                                (palette_ram[idx] & 0x3F) as usize
+                            } else {
+                                0
+                            };
+                            bgra_palette.get(nes).copied().unwrap_or([0, 0, 0, 0xFF])
+                        };
+
+                        let sx = tx * 8 + px;
+                        let sy = ty * 8 + py;
+                        let di = (sy * width + sx) * 4;
+                        if di + 3 < rgba.len() {
+                            rgba[di] = pixel[0];
+                            rgba[di + 1] = pixel[1];
+                            rgba[di + 2] = pixel[2];
+                            rgba[di + 3] = pixel[3];
+                        }
+                    }
+                }
+            }
+        }
+
+        if use_grayscale_palette {
+            apply_grayscale_in_place(&mut rgba);
+        }
+
+        rgba
+    }
+}
+
+fn tile_viewer_from_layout(
+    layout: TileViewerLayout,
+    column: usize,
+    row: usize,
+    column_count: usize,
+) -> (usize, usize) {
+    match layout {
+        TileViewerLayout::Normal => (column, row),
+        TileViewerLayout::SingleLine8x16 => {
+            // A0 B0 C0 D0 -> A0 A1 B0 B1
+            // A1 B1 C1 D1    C0 C1 D0 D1
+            let display_column = (column * 2) % column_count + (row & 0x01);
+            let display_row = (row & !0x01) + if column >= column_count / 2 { 1 } else { 0 };
+            (display_column, display_row)
+        }
+        TileViewerLayout::SingleLine16x16 => {
+            // See Mesen2 mapping (TileViewerViewModel.FromLayoutCoordinates).
+            let display_column =
+                ((column & !0x01) * 2 + if (row & 0x01) != 0 { 2 } else { 0 } + (column & 0x01))
+                    % column_count;
+            let display_row = (row & !0x01) + if column >= column_count / 2 { 1 } else { 0 };
+            (display_column, display_row)
+        }
+    }
+}
+
+fn solid_pixel(r: u8, g: u8, b: u8, a: u8) -> [u8; 4] {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        [b, g, r, a]
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    {
+        [r, g, b, a]
+    }
+}
+
+fn apply_grayscale_in_place(buf: &mut [u8]) {
+    for px in buf.chunks_exact_mut(4) {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            let b = px[0] as u16;
+            let g = px[1] as u16;
+            let r = px[2] as u16;
+            let y = ((54 * r + 183 * g + 19 * b) >> 8) as u8;
+            px[0] = y;
+            px[1] = y;
+            px[2] = y;
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        {
+            let r = px[0] as u16;
+            let g = px[1] as u16;
+            let b = px[2] as u16;
+            let y = ((54 * r + 183 * g + 19 * b) >> 8) as u8;
+            px[0] = y;
+            px[1] = y;
+            px[2] = y;
+        }
+    }
+}
+
+impl Runner {
     /// Resets the NES console (warm or cold reset) and clears transient states.
     fn handle_reset(&mut self, kind: ResetKind, reply: ControlReplySender) {
         if self.nes.get_cartridge().is_some() {

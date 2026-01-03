@@ -86,38 +86,148 @@ Future<void> unsubscribeChrState() =>
 Future<void> setChrPalette({required int paletteIndex}) => RustLib.instance.api
     .crateApiEventsSetChrPalette(paletteIndex: paletteIndex);
 
+/// Sets the display mode for CHR auxiliary texture.
+///
+/// - `0`: Default (use selected palette)
+/// - `1`: Grayscale
+Future<void> setChrDisplayMode({required int mode}) =>
+    RustLib.instance.api.crateApiEventsSetChrDisplayMode(mode: mode);
+
+/// Sets the CHR preset source for the Tile Viewer.
+///
+/// - `0`: PPU (current PPU-visible CHR at $0000-$1FFF)
+/// - `1`: CHR (cartridge CHR ROM/RAM, first 8 KiB)
+/// - `2`: ROM (cartridge PRG ROM, first 8 KiB)
+Future<void> setChrSource({required int source}) =>
+    RustLib.instance.api.crateApiEventsSetChrSource(source: source);
+
+/// Sets the tile viewer source.
+///
+/// - `0`: PPU
+/// - `1`: CHR ROM
+/// - `2`: CHR RAM
+/// - `3`: PRG ROM
+Future<void> setTileViewerSource({required int source}) =>
+    RustLib.instance.api.crateApiEventsSetTileViewerSource(source: source);
+
+Future<void> setTileViewerStartAddress({required int startAddress}) => RustLib
+    .instance
+    .api
+    .crateApiEventsSetTileViewerStartAddress(startAddress: startAddress);
+
+Future<void> setTileViewerSize({required int columns, required int rows}) =>
+    RustLib.instance.api.crateApiEventsSetTileViewerSize(
+      columns: columns,
+      rows: rows,
+    );
+
+/// Sets the tile layout.
+///
+/// - `0`: Normal
+/// - `1`: SingleLine8x16
+/// - `2`: SingleLine16x16
+Future<void> setTileViewerLayout({required int layout}) =>
+    RustLib.instance.api.crateApiEventsSetTileViewerLayout(layout: layout);
+
+/// Sets the tile background.
+///
+/// - `0`: Default
+/// - `1`: Transparent
+/// - `2`: PaletteColor
+/// - `3`: Black
+/// - `4`: White
+/// - `5`: Magenta
+Future<void> setTileViewerBackground({required int background}) => RustLib
+    .instance
+    .api
+    .crateApiEventsSetTileViewerBackground(background: background);
+
 /// CHR snapshot for UI inspection (tile preview, palette selection, etc).
 ///
 /// Note: `rgba_palette` is ALWAYS RGBA regardless of platform, so Flutter can render it easily.
 class ChrSnapshot {
-  final Uint8List chr;
   final Uint8List palette;
   final Uint8List rgbaPalette;
   final int selectedPalette;
+  final int width;
+  final int height;
+
+  /// `0..=3` as per `set_tile_viewer_source`.
+  final int source;
+  final int sourceSize;
+  final int startAddress;
+  final int columnCount;
+  final int rowCount;
+
+  /// `0..=2` as per `set_tile_viewer_layout`.
+  final int layout;
+
+  /// `0..=5` as per `set_tile_viewer_background`.
+  final int background;
+  final bool useGrayscalePalette;
+  final int bgPatternBase;
+  final int spritePatternBase;
+  final bool largeSprites;
 
   const ChrSnapshot({
-    required this.chr,
     required this.palette,
     required this.rgbaPalette,
     required this.selectedPalette,
+    required this.width,
+    required this.height,
+    required this.source,
+    required this.sourceSize,
+    required this.startAddress,
+    required this.columnCount,
+    required this.rowCount,
+    required this.layout,
+    required this.background,
+    required this.useGrayscalePalette,
+    required this.bgPatternBase,
+    required this.spritePatternBase,
+    required this.largeSprites,
   });
 
   @override
   int get hashCode =>
-      chr.hashCode ^
       palette.hashCode ^
       rgbaPalette.hashCode ^
-      selectedPalette.hashCode;
+      selectedPalette.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      source.hashCode ^
+      sourceSize.hashCode ^
+      startAddress.hashCode ^
+      columnCount.hashCode ^
+      rowCount.hashCode ^
+      layout.hashCode ^
+      background.hashCode ^
+      useGrayscalePalette.hashCode ^
+      bgPatternBase.hashCode ^
+      spritePatternBase.hashCode ^
+      largeSprites.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ChrSnapshot &&
           runtimeType == other.runtimeType &&
-          chr == other.chr &&
           palette == other.palette &&
           rgbaPalette == other.rgbaPalette &&
-          selectedPalette == other.selectedPalette;
+          selectedPalette == other.selectedPalette &&
+          width == other.width &&
+          height == other.height &&
+          source == other.source &&
+          sourceSize == other.sourceSize &&
+          startAddress == other.startAddress &&
+          columnCount == other.columnCount &&
+          rowCount == other.rowCount &&
+          layout == other.layout &&
+          background == other.background &&
+          useGrayscalePalette == other.useGrayscalePalette &&
+          bgPatternBase == other.bgPatternBase &&
+          spritePatternBase == other.spritePatternBase &&
+          largeSprites == other.largeSprites;
 }
 
 /// Debug state notification sent per-frame when subscribed.

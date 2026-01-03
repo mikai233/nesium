@@ -734,5 +734,98 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get tileViewerGrayscale => '使用灰度调色板';
+
+  @override
+  String get tileViewerSelectedTile => '选中的图块';
+
+  @override
+  String get tileViewerPatternTable => '图案表';
+
+  @override
+  String get tileViewerTileIndex => '图块索引';
+
+  @override
+  String get tileViewerChrAddress => 'CHR 地址';
+
+  @override
   String get tileViewerClose => '关闭';
+
+  @override
+  String get tileViewerSource => '数据源';
+
+  @override
+  String get tileViewerSourcePpu => 'PPU 内存';
+
+  @override
+  String get tileViewerSourceChrRom => 'CHR ROM';
+
+  @override
+  String get tileViewerSourceChrRam => 'CHR RAM';
+
+  @override
+  String get tileViewerSourcePrgRom => 'PRG ROM';
+
+  @override
+  String get tileViewerAddress => '地址';
+
+  @override
+  String get tileViewerSize => '尺寸';
+
+  @override
+  String get tileViewerColumns => '列';
+
+  @override
+  String get tileViewerRows => '行';
+
+  @override
+  String get tileViewerLayout => '布局';
+
+  @override
+  String get tileViewerLayoutNormal => '正常';
+
+  @override
+  String get tileViewerLayout8x16 => '8×16 精灵';
+
+  @override
+  String get tileViewerLayout16x16 => '16×16 精灵';
+
+  @override
+  String get tileViewerBackground => '背景色';
+
+  @override
+  String get tileViewerBgDefault => '默认';
+
+  @override
+  String get tileViewerBgTransparent => '透明';
+
+  @override
+  String get tileViewerBgPalette => '调色板颜色';
+
+  @override
+  String get tileViewerBgBlack => '黑色';
+
+  @override
+  String get tileViewerBgWhite => '白色';
+
+  @override
+  String get tileViewerBgMagenta => '品红';
+
+  @override
+  String get tileViewerPresets => '预设';
+
+  @override
+  String get tileViewerPresetPpu => 'PPU';
+
+  @override
+  String get tileViewerPresetChr => 'CHR';
+
+  @override
+  String get tileViewerPresetRom => 'ROM';
+
+  @override
+  String get tileViewerPresetBg => '背景';
+
+  @override
+  String get tileViewerPresetOam => '精灵';
 }

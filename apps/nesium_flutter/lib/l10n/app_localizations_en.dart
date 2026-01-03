@@ -747,5 +747,98 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get tileViewerGrayscale => 'Use grayscale palette';
+
+  @override
+  String get tileViewerSelectedTile => 'Selected Tile';
+
+  @override
+  String get tileViewerPatternTable => 'Pattern Table';
+
+  @override
+  String get tileViewerTileIndex => 'Tile Index';
+
+  @override
+  String get tileViewerChrAddress => 'CHR Address';
+
+  @override
   String get tileViewerClose => 'Close';
+
+  @override
+  String get tileViewerSource => 'Source';
+
+  @override
+  String get tileViewerSourcePpu => 'PPU Memory';
+
+  @override
+  String get tileViewerSourceChrRom => 'CHR ROM';
+
+  @override
+  String get tileViewerSourceChrRam => 'CHR RAM';
+
+  @override
+  String get tileViewerSourcePrgRom => 'PRG ROM';
+
+  @override
+  String get tileViewerAddress => 'Address';
+
+  @override
+  String get tileViewerSize => 'Size';
+
+  @override
+  String get tileViewerColumns => 'Cols';
+
+  @override
+  String get tileViewerRows => 'Rows';
+
+  @override
+  String get tileViewerLayout => 'Layout';
+
+  @override
+  String get tileViewerLayoutNormal => 'Normal';
+
+  @override
+  String get tileViewerLayout8x16 => '8×16 Sprites';
+
+  @override
+  String get tileViewerLayout16x16 => '16×16 Sprites';
+
+  @override
+  String get tileViewerBackground => 'Background';
+
+  @override
+  String get tileViewerBgDefault => 'Default';
+
+  @override
+  String get tileViewerBgTransparent => 'Transparent';
+
+  @override
+  String get tileViewerBgPalette => 'Palette Color';
+
+  @override
+  String get tileViewerBgBlack => 'Black';
+
+  @override
+  String get tileViewerBgWhite => 'White';
+
+  @override
+  String get tileViewerBgMagenta => 'Magenta';
+
+  @override
+  String get tileViewerPresets => 'Presets';
+
+  @override
+  String get tileViewerPresetPpu => 'PPU';
+
+  @override
+  String get tileViewerPresetChr => 'CHR';
+
+  @override
+  String get tileViewerPresetRom => 'ROM';
+
+  @override
+  String get tileViewerPresetBg => 'BG';
+
+  @override
+  String get tileViewerPresetOam => 'OAM';
 }

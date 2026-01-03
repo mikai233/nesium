@@ -24,7 +24,8 @@ use super::{
     state::RuntimeState,
     types::{
         CONTROL_REPLY_TIMEOUT, EventTopic, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError,
-        RuntimeEventSender, SAVE_STATE_REPLY_TIMEOUT, VideoConfig,
+        RuntimeEventSender, SAVE_STATE_REPLY_TIMEOUT, TileViewerBackground, TileViewerLayout,
+        TileViewerSource, VideoConfig,
     },
     util::button_bit,
 };
@@ -190,6 +191,61 @@ impl RuntimeHandle {
             "set_tilemap_capture_point",
             CONTROL_REPLY_TIMEOUT,
             |reply| ControlMessage::SetTilemapCapturePoint(point, reply),
+        )
+    }
+
+    pub fn set_tile_viewer_source(&self, source: TileViewerSource) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_tile_viewer_source", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetTileViewerSource(source, reply)
+        })
+    }
+
+    pub fn set_tile_viewer_start_address(&self, start_address: u32) -> Result<(), RuntimeError> {
+        self.send_with_reply(
+            "set_tile_viewer_start_address",
+            CONTROL_REPLY_TIMEOUT,
+            |reply| ControlMessage::SetTileViewerStartAddress(start_address, reply),
+        )
+    }
+
+    pub fn set_tile_viewer_size(&self, columns: u16, rows: u16) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_tile_viewer_size", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetTileViewerSize {
+                columns,
+                rows,
+                reply,
+            }
+        })
+    }
+
+    pub fn set_tile_viewer_layout(&self, layout: TileViewerLayout) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_tile_viewer_layout", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetTileViewerLayout(layout, reply)
+        })
+    }
+
+    pub fn set_tile_viewer_background(
+        &self,
+        background: TileViewerBackground,
+    ) -> Result<(), RuntimeError> {
+        self.send_with_reply(
+            "set_tile_viewer_background",
+            CONTROL_REPLY_TIMEOUT,
+            |reply| ControlMessage::SetTileViewerBackground(background, reply),
+        )
+    }
+
+    pub fn set_tile_viewer_palette(&self, palette: u8) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_tile_viewer_palette", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetTileViewerPalette(palette, reply)
+        })
+    }
+
+    pub fn set_tile_viewer_use_grayscale_palette(&self, enabled: bool) -> Result<(), RuntimeError> {
+        self.send_with_reply(
+            "set_tile_viewer_use_grayscale_palette",
+            CONTROL_REPLY_TIMEOUT,
+            |reply| ControlMessage::SetTileViewerUseGrayscalePalette(enabled, reply),
         )
     }
 

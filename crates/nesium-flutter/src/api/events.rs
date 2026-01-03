@@ -226,10 +226,25 @@ pub async fn set_tilemap_display_mode(mode: u8) -> Result<(), String> {
 #[frb]
 #[derive(Debug, Clone)]
 pub struct ChrSnapshot {
-    pub chr: Vec<u8>,
     pub palette: Vec<u8>,
     pub rgba_palette: Vec<u8>,
     pub selected_palette: u8,
+    pub width: u16,
+    pub height: u16,
+    /// `0..=3` as per `set_tile_viewer_source`.
+    pub source: u8,
+    pub source_size: u32,
+    pub start_address: u32,
+    pub column_count: u16,
+    pub row_count: u16,
+    /// `0..=2` as per `set_tile_viewer_layout`.
+    pub layout: u8,
+    /// `0..=5` as per `set_tile_viewer_background`.
+    pub background: u8,
+    pub use_grayscale_palette: bool,
+    pub bg_pattern_base: u16,
+    pub sprite_pattern_base: u16,
+    pub large_sprites: bool,
 }
 
 /// Subscribes to CHR state updates.
@@ -268,6 +283,125 @@ pub async fn set_chr_palette(palette_index: u8) -> Result<(), String> {
     if palette_index > 7 {
         return Err(format!("Invalid palette index: {}", palette_index));
     }
-    crate::senders::set_chr_palette(palette_index);
-    Ok(())
+    crate::runtime_handle()
+        .set_tile_viewer_palette(palette_index)
+        .map_err(|e| e.to_string())
+}
+
+/// Sets the display mode for CHR auxiliary texture.
+///
+/// - `0`: Default (use selected palette)
+/// - `1`: Grayscale
+#[frb]
+pub async fn set_chr_display_mode(mode: u8) -> Result<(), String> {
+    if mode > 1 {
+        return Err(format!("Invalid CHR display mode: {}", mode));
+    }
+    crate::runtime_handle()
+        .set_tile_viewer_use_grayscale_palette(mode == 1)
+        .map_err(|e| e.to_string())
+}
+
+/// Sets the CHR preset source for the Tile Viewer.
+///
+/// - `0`: PPU (current PPU-visible CHR at $0000-$1FFF)
+/// - `1`: CHR (cartridge CHR ROM/RAM, first 8 KiB)
+/// - `2`: ROM (cartridge PRG ROM, first 8 KiB)
+#[frb]
+pub async fn set_chr_source(source: u8) -> Result<(), String> {
+    if source > 2 {
+        return Err(format!("Invalid CHR source: {}", source));
+    }
+    use nesium_runtime::TileViewerSource;
+
+    let handle = crate::runtime_handle();
+    let src = match source {
+        0 => TileViewerSource::Ppu,
+        1 => TileViewerSource::ChrRam,
+        2 => TileViewerSource::PrgRom,
+        _ => TileViewerSource::Ppu,
+    };
+
+    handle
+        .set_tile_viewer_source(src)
+        .map_err(|e| e.to_string())
+}
+
+/// Sets the tile viewer source.
+///
+/// - `0`: PPU
+/// - `1`: CHR ROM
+/// - `2`: CHR RAM
+/// - `3`: PRG ROM
+#[frb]
+pub async fn set_tile_viewer_source(source: u8) -> Result<(), String> {
+    use nesium_runtime::TileViewerSource;
+    let src = match source {
+        0 => TileViewerSource::Ppu,
+        1 => TileViewerSource::ChrRom,
+        2 => TileViewerSource::ChrRam,
+        3 => TileViewerSource::PrgRom,
+        _ => return Err(format!("Invalid tile viewer source: {}", source)),
+    };
+    crate::runtime_handle()
+        .set_tile_viewer_source(src)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
+pub async fn set_tile_viewer_start_address(start_address: u32) -> Result<(), String> {
+    crate::runtime_handle()
+        .set_tile_viewer_start_address(start_address)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
+pub async fn set_tile_viewer_size(columns: u16, rows: u16) -> Result<(), String> {
+    crate::runtime_handle()
+        .set_tile_viewer_size(columns, rows)
+        .map_err(|e| e.to_string())
+}
+
+/// Sets the tile layout.
+///
+/// - `0`: Normal
+/// - `1`: SingleLine8x16
+/// - `2`: SingleLine16x16
+#[frb]
+pub async fn set_tile_viewer_layout(layout: u8) -> Result<(), String> {
+    use nesium_runtime::TileViewerLayout;
+    let layout = match layout {
+        0 => TileViewerLayout::Normal,
+        1 => TileViewerLayout::SingleLine8x16,
+        2 => TileViewerLayout::SingleLine16x16,
+        _ => return Err(format!("Invalid tile layout: {}", layout)),
+    };
+    crate::runtime_handle()
+        .set_tile_viewer_layout(layout)
+        .map_err(|e| e.to_string())
+}
+
+/// Sets the tile background.
+///
+/// - `0`: Default
+/// - `1`: Transparent
+/// - `2`: PaletteColor
+/// - `3`: Black
+/// - `4`: White
+/// - `5`: Magenta
+#[frb]
+pub async fn set_tile_viewer_background(background: u8) -> Result<(), String> {
+    use nesium_runtime::TileViewerBackground;
+    let bg = match background {
+        0 => TileViewerBackground::Default,
+        1 => TileViewerBackground::Transparent,
+        2 => TileViewerBackground::PaletteColor,
+        3 => TileViewerBackground::Black,
+        4 => TileViewerBackground::White,
+        5 => TileViewerBackground::Magenta,
+        _ => return Err(format!("Invalid tile background: {}", background)),
+    };
+    crate::runtime_handle()
+        .set_tile_viewer_background(bg)
+        .map_err(|e| e.to_string())
 }
