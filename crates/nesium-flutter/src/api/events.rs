@@ -1,9 +1,14 @@
 use flutter_rust_bridge::frb;
 use nesium_core::interceptor::tilemap_capture_interceptor::TilemapCapturePoint;
 use nesium_runtime::runtime::EventTopic;
+use nesium_runtime::{TileViewerBackground, TileViewerLayout, TileViewerSource};
 
 use crate::frb_generated::StreamSink;
-use crate::senders::{FlutterDebugEventSender, FlutterRuntimeEventSender};
+use crate::runtime_handle;
+use crate::senders::chr::ChrTextureAndStateSender;
+use crate::senders::debug::FlutterDebugEventSender;
+use crate::senders::runtime::FlutterRuntimeEventSender;
+use crate::senders::tilemap::{self, TilemapTextureAndStateSender, TilemapTextureSender};
 
 // =============================================================================
 // Runtime Notification (for general events like audio init failure)
@@ -63,7 +68,7 @@ pub struct DebugStateNotification {
 /// every frame until cancelled.
 #[frb]
 pub async fn debug_state_stream(sink: StreamSink<DebugStateNotification>) -> Result<(), String> {
-    let handle = crate::runtime_handle();
+    let handle = runtime_handle();
     let sender = Box::new(FlutterDebugEventSender::new(sink));
 
     handle
@@ -78,7 +83,7 @@ pub async fn debug_state_stream(sink: StreamSink<DebugStateNotification>) -> Res
 /// Call this when closing the debug panel to stop unnecessary computation.
 #[frb]
 pub async fn unsubscribe_debug_state() -> Result<(), String> {
-    let handle = crate::runtime_handle();
+    let handle = runtime_handle();
 
     handle
         .unsubscribe_event(EventTopic::DebugState)
@@ -97,8 +102,8 @@ pub async fn unsubscribe_debug_state() -> Result<(), String> {
 /// The actual pixel data is written directly to the texture buffer, not sent via stream.
 #[frb]
 pub async fn subscribe_tilemap_texture() -> Result<(), String> {
-    let handle = crate::runtime_handle();
-    let sender = Box::new(crate::senders::TilemapTextureSender);
+    let handle = runtime_handle();
+    let sender = Box::new(TilemapTextureSender);
 
     handle
         .subscribe_event(EventTopic::Tilemap, sender)
@@ -110,7 +115,7 @@ pub async fn subscribe_tilemap_texture() -> Result<(), String> {
 /// Unsubscribes from tilemap texture updates.
 #[frb]
 pub async fn unsubscribe_tilemap_texture() -> Result<(), String> {
-    let handle = crate::runtime_handle();
+    let handle = runtime_handle();
 
     handle
         .unsubscribe_event(EventTopic::Tilemap)
@@ -156,8 +161,8 @@ pub struct TilemapSnapshot {
 /// This also refreshes the tilemap auxiliary texture, so the UI can use a single subscription.
 #[frb]
 pub async fn tilemap_state_stream(sink: StreamSink<TilemapSnapshot>) -> Result<(), String> {
-    let handle = crate::runtime_handle();
-    let sender = Box::new(crate::senders::TilemapTextureAndStateSender::new(sink));
+    let handle = runtime_handle();
+    let sender = Box::new(TilemapTextureAndStateSender::new(sink));
 
     handle
         .subscribe_event(EventTopic::Tilemap, sender)
@@ -169,7 +174,7 @@ pub async fn tilemap_state_stream(sink: StreamSink<TilemapSnapshot>) -> Result<(
 /// Use the PPU frame start (scanline 0, cycle 0) as the tilemap capture point.
 #[frb]
 pub async fn set_tilemap_capture_frame_start() -> Result<(), String> {
-    crate::runtime_handle()
+    runtime_handle()
         .set_tilemap_capture_point(TilemapCapturePoint::FrameStart)
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -178,7 +183,7 @@ pub async fn set_tilemap_capture_frame_start() -> Result<(), String> {
 /// Use the PPU VBlank start (scanline 241, cycle 1) as the tilemap capture point.
 #[frb]
 pub async fn set_tilemap_capture_vblank_start() -> Result<(), String> {
-    crate::runtime_handle()
+    runtime_handle()
         .set_tilemap_capture_point(TilemapCapturePoint::VblankStart)
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -193,7 +198,7 @@ pub async fn set_tilemap_capture_scanline(scanline: i32, dot: i32) -> Result<(),
     if !(0..=340).contains(&dot) {
         return Err(format!("Invalid dot: {}", dot));
     }
-    crate::runtime_handle()
+    runtime_handle()
         .set_tilemap_capture_point(TilemapCapturePoint::ScanlineDot {
             scanline: scanline as i16,
             dot: dot as u16,
@@ -212,7 +217,7 @@ pub async fn set_tilemap_display_mode(mode: u8) -> Result<(), String> {
     if mode > 2 {
         return Err(format!("Invalid tilemap display mode: {}", mode));
     }
-    crate::senders::set_tilemap_display_mode(mode);
+    tilemap::set_tilemap_display_mode(mode);
     Ok(())
 }
 
@@ -252,8 +257,8 @@ pub struct ChrSnapshot {
 /// This refreshes the CHR auxiliary texture, so the UI can use a single subscription.
 #[frb]
 pub async fn chr_state_stream(sink: StreamSink<ChrSnapshot>) -> Result<(), String> {
-    let handle = crate::runtime_handle();
-    let sender = Box::new(crate::senders::ChrTextureAndStateSender::new(sink));
+    let handle = runtime_handle();
+    let sender = Box::new(ChrTextureAndStateSender::new(sink));
 
     handle
         .subscribe_event(EventTopic::Chr, sender)
@@ -265,7 +270,7 @@ pub async fn chr_state_stream(sink: StreamSink<ChrSnapshot>) -> Result<(), Strin
 /// Unsubscribes from CHR state updates.
 #[frb]
 pub async fn unsubscribe_chr_state() -> Result<(), String> {
-    let handle = crate::runtime_handle();
+    let handle = runtime_handle();
 
     handle
         .unsubscribe_event(EventTopic::Chr)
@@ -283,7 +288,7 @@ pub async fn set_chr_palette(palette_index: u8) -> Result<(), String> {
     if palette_index > 7 {
         return Err(format!("Invalid palette index: {}", palette_index));
     }
-    crate::runtime_handle()
+    runtime_handle()
         .set_tile_viewer_palette(palette_index)
         .map_err(|e| e.to_string())
 }
@@ -297,7 +302,7 @@ pub async fn set_chr_display_mode(mode: u8) -> Result<(), String> {
     if mode > 1 {
         return Err(format!("Invalid CHR display mode: {}", mode));
     }
-    crate::runtime_handle()
+    runtime_handle()
         .set_tile_viewer_use_grayscale_palette(mode == 1)
         .map_err(|e| e.to_string())
 }
@@ -312,9 +317,8 @@ pub async fn set_chr_source(source: u8) -> Result<(), String> {
     if source > 2 {
         return Err(format!("Invalid CHR source: {}", source));
     }
-    use nesium_runtime::TileViewerSource;
 
-    let handle = crate::runtime_handle();
+    let handle = runtime_handle();
     let src = match source {
         0 => TileViewerSource::Ppu,
         1 => TileViewerSource::ChrRam,
@@ -343,21 +347,21 @@ pub async fn set_tile_viewer_source(source: u8) -> Result<(), String> {
         3 => TileViewerSource::PrgRom,
         _ => return Err(format!("Invalid tile viewer source: {}", source)),
     };
-    crate::runtime_handle()
+    runtime_handle()
         .set_tile_viewer_source(src)
         .map_err(|e| e.to_string())
 }
 
 #[frb]
 pub async fn set_tile_viewer_start_address(start_address: u32) -> Result<(), String> {
-    crate::runtime_handle()
+    runtime_handle()
         .set_tile_viewer_start_address(start_address)
         .map_err(|e| e.to_string())
 }
 
 #[frb]
 pub async fn set_tile_viewer_size(columns: u16, rows: u16) -> Result<(), String> {
-    crate::runtime_handle()
+    runtime_handle()
         .set_tile_viewer_size(columns, rows)
         .map_err(|e| e.to_string())
 }
@@ -369,14 +373,13 @@ pub async fn set_tile_viewer_size(columns: u16, rows: u16) -> Result<(), String>
 /// - `2`: SingleLine16x16
 #[frb]
 pub async fn set_tile_viewer_layout(layout: u8) -> Result<(), String> {
-    use nesium_runtime::TileViewerLayout;
     let layout = match layout {
         0 => TileViewerLayout::Normal,
         1 => TileViewerLayout::SingleLine8x16,
         2 => TileViewerLayout::SingleLine16x16,
         _ => return Err(format!("Invalid tile layout: {}", layout)),
     };
-    crate::runtime_handle()
+    runtime_handle()
         .set_tile_viewer_layout(layout)
         .map_err(|e| e.to_string())
 }
@@ -391,7 +394,6 @@ pub async fn set_tile_viewer_layout(layout: u8) -> Result<(), String> {
 /// - `5`: Magenta
 #[frb]
 pub async fn set_tile_viewer_background(background: u8) -> Result<(), String> {
-    use nesium_runtime::TileViewerBackground;
     let bg = match background {
         0 => TileViewerBackground::Default,
         1 => TileViewerBackground::Transparent,
@@ -401,7 +403,7 @@ pub async fn set_tile_viewer_background(background: u8) -> Result<(), String> {
         5 => TileViewerBackground::Magenta,
         _ => return Err(format!("Invalid tile background: {}", background)),
     };
-    crate::runtime_handle()
+    runtime_handle()
         .set_tile_viewer_background(bg)
         .map_err(|e| e.to_string())
 }
