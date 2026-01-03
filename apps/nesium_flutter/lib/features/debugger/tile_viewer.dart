@@ -1014,7 +1014,7 @@ class _TileViewerState extends ConsumerState<TileViewer> {
                 value: _startAddress,
                 maxValue: _maxAddress,
                 pageIncrement: _addressIncrement,
-                byteIncrement: 16, // 16 bytes per tile
+                byteIncrement: 1,
                 onChanged: (v) async {
                   setState(() => _startAddress = v);
                   await bridge.setTileViewerStartAddress(startAddress: v);
@@ -1741,11 +1741,8 @@ class _AddressInput extends StatelessWidget {
 
     return Row(
       children: [
-        // Prev page <<
-        navButton('«', -pageIncrement, enabled: value >= pageIncrement),
-        // Prev byte <
-        navButton('<', -byteIncrement, enabled: value >= byteIncrement),
-        // Value display
+        navButton('«', -pageIncrement, enabled: value > 0),
+        navButton('<', -byteIncrement, enabled: value > 0),
         Expanded(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1763,17 +1760,13 @@ class _AddressInput extends StatelessWidget {
             ),
           ),
         ),
-        // Next byte >
-        navButton(
-          '>',
-          byteIncrement,
-          enabled: value + byteIncrement <= maxValue,
-        ),
-        // Next page >>
+        // Next byte > (Mesen2: CanIncrementSmall = Value < Maximum)
+        navButton('>', byteIncrement, enabled: value < maxValue),
+        // Next page >> (Mesen2: CanIncrementLarge = Value < Maximum - LargeIncrement + 1)
         navButton(
           '»',
           pageIncrement,
-          enabled: value + pageIncrement <= maxValue,
+          enabled: value < maxValue - pageIncrement + 1,
         ),
       ],
     );
