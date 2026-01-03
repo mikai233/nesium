@@ -962,71 +962,7 @@ impl Runner {
 
         rgba
     }
-}
 
-fn tile_viewer_from_layout(
-    layout: TileViewerLayout,
-    column: usize,
-    row: usize,
-    column_count: usize,
-) -> (usize, usize) {
-    match layout {
-        TileViewerLayout::Normal => (column, row),
-        TileViewerLayout::SingleLine8x16 => {
-            // A0 B0 C0 D0 -> A0 A1 B0 B1
-            // A1 B1 C1 D1    C0 C1 D0 D1
-            let display_column = (column * 2) % column_count + (row & 0x01);
-            let display_row = (row & !0x01) + if column >= column_count / 2 { 1 } else { 0 };
-            (display_column, display_row)
-        }
-        TileViewerLayout::SingleLine16x16 => {
-            // See Mesen2 mapping (TileViewerViewModel.FromLayoutCoordinates).
-            let display_column =
-                ((column & !0x01) * 2 + if (row & 0x01) != 0 { 2 } else { 0 } + (column & 0x01))
-                    % column_count;
-            let display_row = (row & !0x01) + if column >= column_count / 2 { 1 } else { 0 };
-            (display_column, display_row)
-        }
-    }
-}
-
-fn solid_pixel(r: u8, g: u8, b: u8, a: u8) -> [u8; 4] {
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    {
-        [b, g, r, a]
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-    {
-        [r, g, b, a]
-    }
-}
-
-fn apply_grayscale_in_place(buf: &mut [u8]) {
-    for px in buf.chunks_exact_mut(4) {
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        {
-            let b = px[0] as u16;
-            let g = px[1] as u16;
-            let r = px[2] as u16;
-            let y = ((54 * r + 183 * g + 19 * b) >> 8) as u8;
-            px[0] = y;
-            px[1] = y;
-            px[2] = y;
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-        {
-            let r = px[0] as u16;
-            let g = px[1] as u16;
-            let b = px[2] as u16;
-            let y = ((54 * r + 183 * g + 19 * b) >> 8) as u8;
-            px[0] = y;
-            px[1] = y;
-            px[2] = y;
-        }
-    }
-}
-
-impl Runner {
     /// Resets the NES console (warm or cold reset) and clears transient states.
     fn handle_reset(&mut self, kind: ResetKind, reply: ControlReplySender) {
         if self.nes.get_cartridge().is_some() {
@@ -1268,5 +1204,67 @@ impl Runner {
             .load_snapshot(&snap)
             .map_err(|e| format!("{:?}", e))?;
         Ok(())
+    }
+}
+
+fn tile_viewer_from_layout(
+    layout: TileViewerLayout,
+    column: usize,
+    row: usize,
+    column_count: usize,
+) -> (usize, usize) {
+    match layout {
+        TileViewerLayout::Normal => (column, row),
+        TileViewerLayout::SingleLine8x16 => {
+            // A0 B0 C0 D0 -> A0 A1 B0 B1
+            // A1 B1 C1 D1    C0 C1 D0 D1
+            let display_column = (column * 2) % column_count + (row & 0x01);
+            let display_row = (row & !0x01) + if column >= column_count / 2 { 1 } else { 0 };
+            (display_column, display_row)
+        }
+        TileViewerLayout::SingleLine16x16 => {
+            // See Mesen2 mapping (TileViewerViewModel.FromLayoutCoordinates).
+            let display_column =
+                ((column & !0x01) * 2 + if (row & 0x01) != 0 { 2 } else { 0 } + (column & 0x01))
+                    % column_count;
+            let display_row = (row & !0x01) + if column >= column_count / 2 { 1 } else { 0 };
+            (display_column, display_row)
+        }
+    }
+}
+
+fn solid_pixel(r: u8, g: u8, b: u8, a: u8) -> [u8; 4] {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        [b, g, r, a]
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    {
+        [r, g, b, a]
+    }
+}
+
+fn apply_grayscale_in_place(buf: &mut [u8]) {
+    for px in buf.chunks_exact_mut(4) {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            let b = px[0] as u16;
+            let g = px[1] as u16;
+            let r = px[2] as u16;
+            let y = ((54 * r + 183 * g + 19 * b) >> 8) as u8;
+            px[0] = y;
+            px[1] = y;
+            px[2] = y;
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        {
+            let r = px[0] as u16;
+            let g = px[1] as u16;
+            let b = px[2] as u16;
+            let y = ((54 * r + 183 * g + 19 * b) >> 8) as u8;
+            px[0] = y;
+            px[1] = y;
+            px[2] = y;
+        }
     }
 }
