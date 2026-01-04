@@ -72,7 +72,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1017535717;
+  int get rustContentHash => 532096231;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -175,6 +175,8 @@ abstract class RustLibApi extends BaseApi {
     required int offFrames,
   });
 
+  Stream<SpriteSnapshot> crateApiEventsSpriteStateStream();
+
   Future<void> crateApiLoadRomStartNesRuntime();
 
   Future<void> crateApiEventsSubscribeTilemapTexture();
@@ -186,6 +188,8 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiEventsUnsubscribeChrState();
 
   Future<void> crateApiEventsUnsubscribeDebugState();
+
+  Future<void> crateApiEventsUnsubscribeSpriteState();
 
   Future<void> crateApiEventsUnsubscribeTilemapTexture();
 }
@@ -1372,6 +1376,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Stream<SpriteSnapshot> crateApiEventsSpriteStateStream() {
+    final sink = RustStreamSink<SpriteSnapshot>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_StreamSink_sprite_snapshot_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 40,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_String,
+          ),
+          constMeta: kCrateApiEventsSpriteStateStreamConstMeta,
+          argValues: [sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiEventsSpriteStateStreamConstMeta =>
+      const TaskConstMeta(debugName: "sprite_state_stream", argNames: ["sink"]);
+
+  @override
   Future<void> crateApiLoadRomStartNesRuntime() {
     return handler.executeNormal(
       NormalTask(
@@ -1380,7 +1416,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 41,
             port: port_,
           );
         },
@@ -1407,7 +1443,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 41,
+            funcId: 42,
             port: port_,
           );
         },
@@ -1437,7 +1473,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 42,
+              funcId: 43,
               port: port_,
             );
           },
@@ -1469,7 +1505,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 44,
             port: port_,
           );
         },
@@ -1496,7 +1532,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 45,
             port: port_,
           );
         },
@@ -1523,7 +1559,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 46,
             port: port_,
           );
         },
@@ -1542,6 +1578,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "unsubscribe_debug_state", argNames: []);
 
   @override
+  Future<void> crateApiEventsUnsubscribeSpriteState() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 47,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsUnsubscribeSpriteStateConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsUnsubscribeSpriteStateConstMeta =>
+      const TaskConstMeta(debugName: "unsubscribe_sprite_state", argNames: []);
+
+  @override
   Future<void> crateApiEventsUnsubscribeTilemapTexture() {
     return handler.executeNormal(
       NormalTask(
@@ -1550,7 +1613,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 48,
             port: port_,
           );
         },
@@ -1595,6 +1658,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   RustStreamSink<RuntimeNotification>
   dco_decode_StreamSink_runtime_notification_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
+
+  @protected
+  RustStreamSink<SpriteSnapshot> dco_decode_StreamSink_sprite_snapshot_Sse(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     throw UnimplementedError();
   }
@@ -1699,6 +1770,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<SpriteInfo> dco_decode_list_sprite_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_sprite_info).toList();
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
@@ -1744,6 +1821,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RuntimeNotificationKind dco_decode_runtime_notification_kind(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return RuntimeNotificationKind.values[raw as int];
+  }
+
+  @protected
+  SpriteInfo dco_decode_sprite_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return SpriteInfo(
+      index: dco_decode_u_8(arr[0]),
+      x: dco_decode_u_8(arr[1]),
+      y: dco_decode_u_8(arr[2]),
+      tileIndex: dco_decode_u_8(arr[3]),
+      palette: dco_decode_u_8(arr[4]),
+      flipH: dco_decode_bool(arr[5]),
+      flipV: dco_decode_bool(arr[6]),
+      behindBg: dco_decode_bool(arr[7]),
+      visible: dco_decode_bool(arr[8]),
+    );
+  }
+
+  @protected
+  SpriteSnapshot dco_decode_sprite_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return SpriteSnapshot(
+      sprites: dco_decode_list_sprite_info(arr[0]),
+      thumbnailWidth: dco_decode_u_8(arr[1]),
+      thumbnailHeight: dco_decode_u_8(arr[2]),
+      largeSprites: dco_decode_bool(arr[3]),
+      patternBase: dco_decode_u_16(arr[4]),
+      rgbaPalette: dco_decode_list_prim_u_8_strict(arr[5]),
+    );
   }
 
   @protected
@@ -1828,6 +1940,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   RustStreamSink<RuntimeNotification>
   sse_decode_StreamSink_runtime_notification_Sse(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
+  RustStreamSink<SpriteSnapshot> sse_decode_StreamSink_sprite_snapshot_Sse(
+    SseDeserializer deserializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     throw UnimplementedError('Unreachable ()');
   }
@@ -1968,6 +2088,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<SpriteInfo> sse_decode_list_sprite_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <SpriteInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_sprite_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2023,6 +2155,50 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return RuntimeNotificationKind.values[inner];
+  }
+
+  @protected
+  SpriteInfo sse_decode_sprite_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_index = sse_decode_u_8(deserializer);
+    var var_x = sse_decode_u_8(deserializer);
+    var var_y = sse_decode_u_8(deserializer);
+    var var_tileIndex = sse_decode_u_8(deserializer);
+    var var_palette = sse_decode_u_8(deserializer);
+    var var_flipH = sse_decode_bool(deserializer);
+    var var_flipV = sse_decode_bool(deserializer);
+    var var_behindBg = sse_decode_bool(deserializer);
+    var var_visible = sse_decode_bool(deserializer);
+    return SpriteInfo(
+      index: var_index,
+      x: var_x,
+      y: var_y,
+      tileIndex: var_tileIndex,
+      palette: var_palette,
+      flipH: var_flipH,
+      flipV: var_flipV,
+      behindBg: var_behindBg,
+      visible: var_visible,
+    );
+  }
+
+  @protected
+  SpriteSnapshot sse_decode_sprite_snapshot(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sprites = sse_decode_list_sprite_info(deserializer);
+    var var_thumbnailWidth = sse_decode_u_8(deserializer);
+    var var_thumbnailHeight = sse_decode_u_8(deserializer);
+    var var_largeSprites = sse_decode_bool(deserializer);
+    var var_patternBase = sse_decode_u_16(deserializer);
+    var var_rgbaPalette = sse_decode_list_prim_u_8_strict(deserializer);
+    return SpriteSnapshot(
+      sprites: var_sprites,
+      thumbnailWidth: var_thumbnailWidth,
+      thumbnailHeight: var_thumbnailHeight,
+      largeSprites: var_largeSprites,
+      patternBase: var_patternBase,
+      rgbaPalette: var_rgbaPalette,
+    );
   }
 
   @protected
@@ -2139,6 +2315,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self.setupAndSerialize(
         codec: SseCodec(
           decodeSuccessData: sse_decode_runtime_notification,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_StreamSink_sprite_snapshot_Sse(
+    RustStreamSink<SpriteSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_sprite_snapshot,
           decodeErrorData: sse_decode_AnyhowException,
         ),
       ),
@@ -2264,6 +2457,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_sprite_info(
+    List<SpriteInfo> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_sprite_info(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2319,6 +2524,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_sprite_info(SpriteInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self.index, serializer);
+    sse_encode_u_8(self.x, serializer);
+    sse_encode_u_8(self.y, serializer);
+    sse_encode_u_8(self.tileIndex, serializer);
+    sse_encode_u_8(self.palette, serializer);
+    sse_encode_bool(self.flipH, serializer);
+    sse_encode_bool(self.flipV, serializer);
+    sse_encode_bool(self.behindBg, serializer);
+    sse_encode_bool(self.visible, serializer);
+  }
+
+  @protected
+  void sse_encode_sprite_snapshot(
+    SpriteSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_sprite_info(self.sprites, serializer);
+    sse_encode_u_8(self.thumbnailWidth, serializer);
+    sse_encode_u_8(self.thumbnailHeight, serializer);
+    sse_encode_bool(self.largeSprites, serializer);
+    sse_encode_u_16(self.patternBase, serializer);
+    sse_encode_list_prim_u_8_strict(self.rgbaPalette, serializer);
   }
 
   @protected

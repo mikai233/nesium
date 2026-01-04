@@ -28,6 +28,7 @@ class NesActions {
     this.openTools,
     this.openTilemapViewer,
     this.openTileViewer,
+    this.openSpriteViewer,
   });
 
   final AsyncCallback? openRom;
@@ -49,4 +50,5 @@ class NesActions {
   final AsyncCallback? openTools;
   final AsyncCallback? openTilemapViewer;
   final AsyncCallback? openTileViewer;
+  final AsyncCallback? openSpriteViewer;
 }

@@ -43,6 +43,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_runtime_notification_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<SpriteSnapshot> dco_decode_StreamSink_sprite_snapshot_Sse(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<TilemapSnapshot> dco_decode_StreamSink_tilemap_snapshot_Sse(
     dynamic raw,
   );
@@ -75,6 +80,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<SpriteInfo> dco_decode_list_sprite_info(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -91,6 +99,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RuntimeNotificationKind dco_decode_runtime_notification_kind(dynamic raw);
+
+  @protected
+  SpriteInfo dco_decode_sprite_info(dynamic raw);
+
+  @protected
+  SpriteSnapshot dco_decode_sprite_snapshot(dynamic raw);
 
   @protected
   TilemapMirroring dco_decode_tilemap_mirroring(dynamic raw);
@@ -132,6 +146,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_StreamSink_runtime_notification_Sse(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<SpriteSnapshot> sse_decode_StreamSink_sprite_snapshot_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<TilemapSnapshot> sse_decode_StreamSink_tilemap_snapshot_Sse(
     SseDeserializer deserializer,
   );
@@ -168,6 +187,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<SpriteInfo> sse_decode_list_sprite_info(SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -190,6 +212,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RuntimeNotificationKind sse_decode_runtime_notification_kind(
     SseDeserializer deserializer,
   );
+
+  @protected
+  SpriteInfo sse_decode_sprite_info(SseDeserializer deserializer);
+
+  @protected
+  SpriteSnapshot sse_decode_sprite_snapshot(SseDeserializer deserializer);
 
   @protected
   TilemapMirroring sse_decode_tilemap_mirroring(SseDeserializer deserializer);
@@ -237,6 +265,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_sprite_snapshot_Sse(
+    RustStreamSink<SpriteSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_tilemap_snapshot_Sse(
     RustStreamSink<TilemapSnapshot> self,
     SseSerializer serializer,
@@ -279,6 +313,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_sprite_info(
+    List<SpriteInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -305,6 +345,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_runtime_notification_kind(
     RuntimeNotificationKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_sprite_info(SpriteInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_sprite_snapshot(
+    SpriteSnapshot self,
     SseSerializer serializer,
   );
 

@@ -8,6 +8,7 @@ import '../platform/platform_capabilities.dart';
 import '../shell/nes_shell.dart';
 import 'secondary_window.dart';
 import 'window_types.dart';
+import '../l10n/app_localizations.dart' show AppLocalizations;
 
 String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
   switch (kind) {
@@ -36,6 +37,11 @@ String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
         'route': 'tileViewer',
         if (languageCode != null) 'lang': languageCode,
       });
+    case WindowKind.spriteViewer:
+      return jsonEncode({
+        'route': 'spriteViewer',
+        if (languageCode != null) 'lang': languageCode,
+      });
   }
 }
 
@@ -56,6 +62,8 @@ WindowKind _parseWindowKindFromArguments(String? arguments) {
           return WindowKind.tilemap;
         case 'tileViewer':
           return WindowKind.tileViewer;
+        case 'spriteViewer':
+          return WindowKind.spriteViewer;
       }
     }
   } catch (_) {
@@ -141,6 +149,11 @@ class _WindowRouterState extends State<WindowRouter> {
         return SecondaryWindow(
           title: l10n.menuTileViewer,
           child: const SecondaryTileViewerContent(),
+        );
+      case WindowKind.spriteViewer:
+        return SecondaryWindow(
+          title: l10n.menuSpriteViewer,
+          child: const SecondarySpriteViewerContent(),
         );
     }
   }

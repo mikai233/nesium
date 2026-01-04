@@ -841,4 +841,114 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tileViewerPresetOam => 'OAM';
+
+  @override
+  String get menuSpriteViewer => 'Sprite Viewer';
+
+  @override
+  String spriteViewerError(String error) {
+    return 'Sprite viewer error: $error';
+  }
+
+  @override
+  String get spriteViewerSettingsTooltip => 'Sprite Viewer Settings';
+
+  @override
+  String get spriteViewerShowGrid => 'Show grid';
+
+  @override
+  String get spriteViewerShowOutline => 'Show outline around sprites';
+
+  @override
+  String get spriteViewerShowOffscreenRegions => 'Show offscreen regions';
+
+  @override
+  String get spriteViewerDimOffscreenSpritesGrid =>
+      'Dim offscreen sprites (grid)';
+
+  @override
+  String get spriteViewerShowListView => 'Show list view';
+
+  @override
+  String get spriteViewerPanelSprites => 'Sprites';
+
+  @override
+  String get spriteViewerPanelDataSource => 'Data Source';
+
+  @override
+  String get spriteViewerPanelSprite => 'Sprite';
+
+  @override
+  String get spriteViewerPanelSelectedSprite => 'Selected sprite';
+
+  @override
+  String get spriteViewerLabelMode => 'Mode';
+
+  @override
+  String get spriteViewerLabelPatternBase => 'Pattern base';
+
+  @override
+  String get spriteViewerLabelThumbnailSize => 'Thumbnail size';
+
+  @override
+  String get spriteViewerBgGray => 'Gray';
+
+  @override
+  String get spriteViewerDataSourceSpriteRam => 'Sprite RAM';
+
+  @override
+  String get spriteViewerDataSourceCpuMemory => 'CPU Memory';
+
+  @override
+  String spriteViewerTooltipTitle(int index) {
+    return 'Sprite #$index';
+  }
+
+  @override
+  String get spriteViewerLabelIndex => 'Index';
+
+  @override
+  String get spriteViewerLabelPos => 'Pos';
+
+  @override
+  String get spriteViewerLabelSize => 'Size';
+
+  @override
+  String get spriteViewerLabelTile => 'Tile';
+
+  @override
+  String get spriteViewerLabelTileAddr => 'Tile addr';
+
+  @override
+  String get spriteViewerLabelPalette => 'Palette';
+
+  @override
+  String get spriteViewerLabelPaletteAddr => 'Palette addr';
+
+  @override
+  String get spriteViewerLabelFlip => 'Flip';
+
+  @override
+  String get spriteViewerLabelPriority => 'Priority';
+
+  @override
+  String get spriteViewerPriorityBehindBg => 'Behind BG';
+
+  @override
+  String get spriteViewerPriorityInFront => 'In front';
+
+  @override
+  String get spriteViewerLabelVisible => 'Visible';
+
+  @override
+  String get spriteViewerValueYes => 'Yes';
+
+  @override
+  String get spriteViewerValueNoOffscreen => 'No (offscreen)';
+
+  @override
+  String get spriteViewerVisibleStatusVisible => 'Visible';
+
+  @override
+  String get spriteViewerVisibleStatusOffscreen => 'Offscreen';
 }

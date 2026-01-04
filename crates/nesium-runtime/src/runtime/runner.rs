@@ -15,8 +15,8 @@ use super::{
     state::RuntimeState,
     types::{
         AudioMode, ChrState, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT,
-        NotificationEvent, PpuDebugState, RuntimeError, TileViewerBackground, TileViewerLayout,
-        TileViewerSource, TilemapState,
+        NotificationEvent, PpuDebugState, RuntimeError, SpriteInfo, SpriteState,
+        TileViewerBackground, TileViewerLayout, TileViewerSource, TilemapState,
     },
     util::button_bit,
 };
@@ -28,7 +28,7 @@ use nesium_core::{
     Nes,
     audio::bus::AudioBusConfig,
     controller::Button,
-    interceptor::tilemap_capture_interceptor::TilemapCapturePoint,
+    interceptor::tilemap_capture_interceptor::{DebugTilemapData, TilemapCapturePoint},
     ppu::buffer::{FrameBuffer, FrameReadyCallback, SCREEN_SIZE},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
@@ -639,13 +639,14 @@ impl Runner {
             .broadcast(EventTopic::DebugState, Box::new(debug));
     }
 
-    /// Broadcasts tilemap and/or CHR state to subscribers if someone is listening.
-    /// Both viewers share the same snapshot to avoid consuming it twice.
+    /// Broadcasts tilemap, CHR, and/or sprite state to subscribers if someone is listening.
+    /// All viewers share the same snapshot to avoid consuming it twice.
     fn maybe_broadcast_tilemap_and_chr_state(&mut self) {
         let has_tilemap = self.pubsub.has_subscriber(EventTopic::Tilemap);
         let has_chr = self.pubsub.has_subscriber(EventTopic::Chr);
+        let has_sprite = self.pubsub.has_subscriber(EventTopic::Sprite);
 
-        if !has_tilemap && !has_chr {
+        if !has_tilemap && !has_chr && !has_sprite {
             return;
         }
 
@@ -753,6 +754,13 @@ impl Runner {
             };
 
             self.pubsub.broadcast(EventTopic::Chr, Box::new(chr_state));
+        }
+
+        // Broadcast to Sprite subscribers
+        if has_sprite {
+            let sprite_state = self.build_sprite_state(&snap, &bgra_palette);
+            self.pubsub
+                .broadcast(EventTopic::Sprite, Box::new(sprite_state));
         }
     }
 
@@ -961,6 +969,192 @@ impl Runner {
         }
 
         rgba
+    }
+
+    /// Builds a SpriteState from the captured OAM and CHR data.
+    fn build_sprite_state(
+        &self,
+        snap: &DebugTilemapData,
+        bgra_palette: &[[u8; 4]; 64],
+    ) -> SpriteState {
+        // Transparent background; SpriteViewer UI controls background color.
+        let bg_pixel = solid_pixel(0, 0, 0, 0);
+
+        let large_sprites = snap.large_sprites;
+        let sprite_height: u8 = if large_sprites { 16 } else { 8 };
+        let pattern_base = snap.sprite_pattern_base;
+
+        let mut sprites = Vec::with_capacity(64);
+        let oam = &snap.oam;
+
+        // Parse 64 sprites from OAM (4 bytes each)
+        for i in 0..64 {
+            let base = i * 4;
+            if base + 3 >= oam.len() {
+                break;
+            }
+
+            let y = oam[base];
+            let tile_index = oam[base + 1];
+            let attr = oam[base + 2];
+            let x = oam[base + 3];
+
+            let palette = attr & 0x03;
+            let behind_bg = (attr & 0x20) != 0;
+            let flip_h = (attr & 0x40) != 0;
+            let flip_v = (attr & 0x80) != 0;
+
+            // Sprite is visible if Y is not in the hidden range (0xEF-0xFF = Y >= 239)
+            let visible = y < 239;
+
+            sprites.push(SpriteInfo {
+                index: i as u8,
+                x,
+                y,
+                tile_index,
+                palette,
+                flip_h,
+                flip_v,
+                behind_bg,
+                visible,
+            });
+        }
+
+        let chr = &snap.chr;
+        let palette_ram = &snap.palette;
+
+        let render_sprite = |dst: &mut [u8],
+                             dst_w: usize,
+                             dst_h: usize,
+                             dest_x: isize,
+                             dest_y: isize,
+                             sprite: &SpriteInfo| {
+            let sprite_h = sprite_height as usize;
+
+            for y_out in 0..sprite_h {
+                let y_src = if sprite.flip_v {
+                    sprite_h.saturating_sub(1).saturating_sub(y_out)
+                } else {
+                    y_out
+                };
+
+                let (tile_select, row_in_tile) = if large_sprites {
+                    (y_src / 8, y_src % 8)
+                } else {
+                    (0, y_src)
+                };
+
+                let tile_pattern_base = if large_sprites {
+                    if (sprite.tile_index & 0x01) != 0 {
+                        0x1000usize
+                    } else {
+                        0x0000usize
+                    }
+                } else {
+                    pattern_base as usize
+                };
+
+                let tile_idx: u16 = if large_sprites {
+                    let base_tile = (sprite.tile_index & 0xFE) as u16;
+                    base_tile.wrapping_add(tile_select as u16)
+                } else {
+                    sprite.tile_index as u16
+                };
+
+                let tile_addr = tile_pattern_base + (tile_idx as usize) * 16;
+                let lo = chr.get(tile_addr + row_in_tile).copied().unwrap_or(0);
+                let hi = chr.get(tile_addr + row_in_tile + 8).copied().unwrap_or(0);
+
+                for x_out in 0..8usize {
+                    let bit = if sprite.flip_h { x_out } else { 7 - x_out };
+                    let lo_bit = (lo >> bit) & 1;
+                    let hi_bit = (hi >> bit) & 1;
+                    let color_idx = ((hi_bit << 1) | lo_bit) as usize;
+
+                    if color_idx == 0 {
+                        continue;
+                    }
+
+                    let palette_offset = 0x10 + (sprite.palette as usize) * 4 + color_idx;
+                    let nes_color = palette_ram.get(palette_offset).copied().unwrap_or(0) as usize;
+                    let pixel_color = bgra_palette[nes_color & 0x3F];
+
+                    let px = dest_x + x_out as isize;
+                    let py = dest_y + y_out as isize;
+                    if px < 0 || py < 0 {
+                        continue;
+                    }
+                    let (px, py) = (px as usize, py as usize);
+                    if px >= dst_w || py >= dst_h {
+                        continue;
+                    }
+                    let di = (py * dst_w + px) * 4;
+                    if di + 3 < dst.len() {
+                        dst[di..di + 4].copy_from_slice(&pixel_color);
+                    }
+                }
+            }
+        };
+
+        // Render sprite thumbnails: 64 sprites in an 8x8 grid
+        // Each sprite is 8x8 or 8x16 pixels
+        let thumb_w = 8usize;
+        let thumb_h = sprite_height as usize;
+        let grid_cols = 8usize;
+        let grid_rows = 8usize;
+        let total_w = grid_cols * thumb_w;
+        let total_h = grid_rows * thumb_h;
+        let mut thumbnails_rgba = vec![0u8; total_w * total_h * 4];
+        for px in thumbnails_rgba.chunks_exact_mut(4) {
+            px.copy_from_slice(&bg_pixel);
+        }
+
+        for (sprite_idx, sprite) in sprites.iter().enumerate() {
+            let grid_x = sprite_idx % grid_cols;
+            let grid_y = sprite_idx / grid_cols;
+            let dest_x = (grid_x * thumb_w) as isize;
+            let dest_y = (grid_y * thumb_h) as isize;
+            render_sprite(
+                &mut thumbnails_rgba,
+                total_w,
+                total_h,
+                dest_x,
+                dest_y,
+                sprite,
+            );
+        }
+
+        // Render screen preview matching Mesen2 "offscreen regions" for NES:
+        // the preview surface is 256x256, with the visible picture being 256x240
+        // starting at (0,0). The extra 16 pixels are below the visible area only.
+        const PREVIEW_W: usize = 256;
+        const PREVIEW_H: usize = 256;
+        let preview_w = PREVIEW_W;
+        let preview_h = PREVIEW_H;
+        let mut screen_rgba = vec![0u8; preview_w * preview_h * 4];
+        for px in screen_rgba.chunks_exact_mut(4) {
+            px.copy_from_slice(&bg_pixel);
+        }
+
+        for sprite in &sprites {
+            // NES sprite Y is stored as top-1 in OAM.
+            let y = sprite.y as isize + 1;
+            let x = sprite.x as isize;
+            render_sprite(&mut screen_rgba, preview_w, preview_h, x, y, sprite);
+        }
+
+        SpriteState {
+            sprites,
+            screen_rgba,
+            screen_width: preview_w as u16,
+            screen_height: preview_h as u16,
+            thumbnails_rgba,
+            thumbnail_width: thumb_w as u8,
+            thumbnail_height: thumb_h as u8,
+            large_sprites,
+            pattern_base,
+            bgra_palette: *bgra_palette,
+        }
     }
 
     /// Resets the NES console (warm or cold reset) and clears transient states.

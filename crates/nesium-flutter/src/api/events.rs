@@ -407,3 +407,71 @@ pub async fn set_tile_viewer_background(background: u8) -> Result<(), String> {
         .set_tile_viewer_background(bg)
         .map_err(|e| e.to_string())
 }
+
+// =============================================================================
+// Sprite Viewer Stream
+// =============================================================================
+
+/// Information about a single OAM sprite.
+#[frb]
+#[derive(Debug, Clone)]
+pub struct SpriteInfo {
+    pub index: u8,
+    pub x: u8,
+    pub y: u8,
+    pub tile_index: u8,
+    pub palette: u8,
+    pub flip_h: bool,
+    pub flip_v: bool,
+    pub behind_bg: bool,
+    pub visible: bool,
+}
+
+/// Sprite snapshot for UI inspection.
+///
+/// Note: `rgba_palette` is ALWAYS RGBA regardless of platform, so Flutter can render it easily.
+#[frb]
+#[derive(Debug, Clone)]
+pub struct SpriteSnapshot {
+    pub sprites: Vec<SpriteInfo>,
+    pub thumbnail_width: u8,
+    pub thumbnail_height: u8,
+    pub large_sprites: bool,
+    pub pattern_base: u16,
+    pub rgba_palette: Vec<u8>,
+}
+
+/// Subscribes to Sprite state updates.
+///
+/// This refreshes the Sprite auxiliary texture, so the UI can use a single subscription.
+#[frb]
+pub async fn sprite_state_stream(sink: StreamSink<SpriteSnapshot>) -> Result<(), String> {
+    use crate::senders::sprite::SpriteTextureAndStateSender;
+    use nesium_core::interceptor::tilemap_capture_interceptor::TilemapCapturePoint;
+
+    let handle = runtime_handle();
+    let sender = Box::new(SpriteTextureAndStateSender::new(sink));
+
+    // Ensure tilemap capture is enabled at VBlank so we get OAM data each frame
+    handle
+        .set_tilemap_capture_point(TilemapCapturePoint::VblankStart)
+        .map_err(|e| format!("Failed to set capture point: {}", e))?;
+
+    handle
+        .subscribe_event(EventTopic::Sprite, sender)
+        .map_err(|e| format!("Failed to subscribe to Sprite events: {}", e))?;
+
+    Ok(())
+}
+
+/// Unsubscribes from Sprite state updates.
+#[frb]
+pub async fn unsubscribe_sprite_state() -> Result<(), String> {
+    let handle = runtime_handle();
+
+    handle
+        .unsubscribe_event(EventTopic::Sprite)
+        .map_err(|e| format!("Failed to unsubscribe from Sprite events: {}", e))?;
+
+    Ok(())
+}

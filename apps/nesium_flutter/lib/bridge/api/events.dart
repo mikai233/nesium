@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Runtime notification stream.
 ///
@@ -141,6 +141,16 @@ Future<void> setTileViewerBackground({required int background}) => RustLib
     .instance
     .api
     .crateApiEventsSetTileViewerBackground(background: background);
+
+/// Subscribes to Sprite state updates.
+///
+/// This refreshes the Sprite auxiliary texture, so the UI can use a single subscription.
+Stream<SpriteSnapshot> spriteStateStream() =>
+    RustLib.instance.api.crateApiEventsSpriteStateStream();
+
+/// Unsubscribes from Sprite state updates.
+Future<void> unsubscribeSpriteState() =>
+    RustLib.instance.api.crateApiEventsUnsubscribeSpriteState();
 
 /// CHR snapshot for UI inspection (tile preview, palette selection, etc).
 ///
@@ -317,6 +327,100 @@ class RuntimeNotification {
 }
 
 enum RuntimeNotificationKind { audioInitFailed }
+
+/// Information about a single OAM sprite.
+class SpriteInfo {
+  final int index;
+  final int x;
+  final int y;
+  final int tileIndex;
+  final int palette;
+  final bool flipH;
+  final bool flipV;
+  final bool behindBg;
+  final bool visible;
+
+  const SpriteInfo({
+    required this.index,
+    required this.x,
+    required this.y,
+    required this.tileIndex,
+    required this.palette,
+    required this.flipH,
+    required this.flipV,
+    required this.behindBg,
+    required this.visible,
+  });
+
+  @override
+  int get hashCode =>
+      index.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      tileIndex.hashCode ^
+      palette.hashCode ^
+      flipH.hashCode ^
+      flipV.hashCode ^
+      behindBg.hashCode ^
+      visible.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SpriteInfo &&
+          runtimeType == other.runtimeType &&
+          index == other.index &&
+          x == other.x &&
+          y == other.y &&
+          tileIndex == other.tileIndex &&
+          palette == other.palette &&
+          flipH == other.flipH &&
+          flipV == other.flipV &&
+          behindBg == other.behindBg &&
+          visible == other.visible;
+}
+
+/// Sprite snapshot for UI inspection.
+///
+/// Note: `rgba_palette` is ALWAYS RGBA regardless of platform, so Flutter can render it easily.
+class SpriteSnapshot {
+  final List<SpriteInfo> sprites;
+  final int thumbnailWidth;
+  final int thumbnailHeight;
+  final bool largeSprites;
+  final int patternBase;
+  final Uint8List rgbaPalette;
+
+  const SpriteSnapshot({
+    required this.sprites,
+    required this.thumbnailWidth,
+    required this.thumbnailHeight,
+    required this.largeSprites,
+    required this.patternBase,
+    required this.rgbaPalette,
+  });
+
+  @override
+  int get hashCode =>
+      sprites.hashCode ^
+      thumbnailWidth.hashCode ^
+      thumbnailHeight.hashCode ^
+      largeSprites.hashCode ^
+      patternBase.hashCode ^
+      rgbaPalette.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SpriteSnapshot &&
+          runtimeType == other.runtimeType &&
+          sprites == other.sprites &&
+          thumbnailWidth == other.thumbnailWidth &&
+          thumbnailHeight == other.thumbnailHeight &&
+          largeSprites == other.largeSprites &&
+          patternBase == other.patternBase &&
+          rgbaPalette == other.rgbaPalette;
+}
 
 enum TilemapMirroring {
   horizontal,

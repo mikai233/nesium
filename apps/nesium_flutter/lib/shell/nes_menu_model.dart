@@ -23,6 +23,7 @@ enum NesMenuItemId {
   tools,
   tilemapViewer,
   tileViewer,
+  spriteViewer,
 }
 
 class NesMenuItemSpec {
@@ -75,6 +76,7 @@ class NesMenuItemSpec {
       NesMenuItemId.tools => l10n.menuTools,
       NesMenuItemId.tilemapViewer => l10n.menuTilemapViewer,
       NesMenuItemId.tileViewer => l10n.menuTileViewer,
+      NesMenuItemId.spriteViewer => l10n.menuSpriteViewer,
     };
   }
 }
@@ -147,6 +149,7 @@ class NesMenus {
     children: [
       NesMenuItemSpec(id: NesMenuItemId.tilemapViewer, icon: Icons.grid_on),
       NesMenuItemSpec(id: NesMenuItemId.tileViewer, icon: Icons.apps),
+      NesMenuItemSpec(id: NesMenuItemId.spriteViewer, icon: Icons.animation),
     ],
   );
   static List<NesMenuItemSpec> _buildSaveStateChildren() => [

@@ -95,4 +95,13 @@ class DesktopWindowManager {
     );
     await window.invokeMethod<void>('setLanguage', languageCode);
   }
+
+  Future<void> openSpriteViewerWindow({String? languageCode}) async {
+    if (!isSupported) return;
+    final window = await _openOrCreate(
+      WindowKind.spriteViewer,
+      languageCode: languageCode,
+    );
+    await window.invokeMethod<void>('setLanguage', languageCode);
+  }
 }

@@ -377,5 +377,54 @@
   "tileViewerPresetChr": "CHR",
   "tileViewerPresetRom": "ROM",
   "tileViewerPresetBg": "BG",
-  "tileViewerPresetOam": "OAM"
+  "tileViewerPresetOam": "OAM",
+  "menuSpriteViewer": "Sprite Viewer",
+  "spriteViewerError": "Sprite viewer error: {error}",
+  "@spriteViewerError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "spriteViewerSettingsTooltip": "Sprite Viewer Settings",
+  "spriteViewerShowGrid": "Show grid",
+  "spriteViewerShowOutline": "Show outline around sprites",
+  "spriteViewerShowOffscreenRegions": "Show offscreen regions",
+  "spriteViewerDimOffscreenSpritesGrid": "Dim offscreen sprites (grid)",
+  "spriteViewerShowListView": "Show list view",
+  "spriteViewerPanelSprites": "Sprites",
+  "spriteViewerPanelDataSource": "Data Source",
+  "spriteViewerPanelSprite": "Sprite",
+  "spriteViewerPanelSelectedSprite": "Selected sprite",
+  "spriteViewerLabelMode": "Mode",
+  "spriteViewerLabelPatternBase": "Pattern base",
+  "spriteViewerLabelThumbnailSize": "Thumbnail size",
+  "spriteViewerBgGray": "Gray",
+  "spriteViewerDataSourceSpriteRam": "Sprite RAM",
+  "spriteViewerDataSourceCpuMemory": "CPU Memory",
+  "spriteViewerTooltipTitle": "Sprite #{index}",
+  "@spriteViewerTooltipTitle": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "spriteViewerLabelIndex": "Index",
+  "spriteViewerLabelPos": "Pos",
+  "spriteViewerLabelSize": "Size",
+  "spriteViewerLabelTile": "Tile",
+  "spriteViewerLabelTileAddr": "Tile addr",
+  "spriteViewerLabelPalette": "Palette",
+  "spriteViewerLabelPaletteAddr": "Palette addr",
+  "spriteViewerLabelFlip": "Flip",
+  "spriteViewerLabelPriority": "Priority",
+  "spriteViewerPriorityBehindBg": "Behind BG",
+  "spriteViewerPriorityInFront": "In front",
+  "spriteViewerLabelVisible": "Visible",
+  "spriteViewerValueYes": "Yes",
+  "spriteViewerValueNoOffscreen": "No (offscreen)",
+  "spriteViewerVisibleStatusVisible": "Visible",
+  "spriteViewerVisibleStatusOffscreen": "Offscreen"
 }

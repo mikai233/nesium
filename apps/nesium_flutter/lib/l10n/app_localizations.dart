@@ -1651,6 +1651,216 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'OAM'**
   String get tileViewerPresetOam;
+
+  /// No description provided for @menuSpriteViewer.
+  ///
+  /// In en, this message translates to:
+  /// **'Sprite Viewer'**
+  String get menuSpriteViewer;
+
+  /// No description provided for @spriteViewerError.
+  ///
+  /// In en, this message translates to:
+  /// **'Sprite viewer error: {error}'**
+  String spriteViewerError(String error);
+
+  /// No description provided for @spriteViewerSettingsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Sprite Viewer Settings'**
+  String get spriteViewerSettingsTooltip;
+
+  /// No description provided for @spriteViewerShowGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'Show grid'**
+  String get spriteViewerShowGrid;
+
+  /// No description provided for @spriteViewerShowOutline.
+  ///
+  /// In en, this message translates to:
+  /// **'Show outline around sprites'**
+  String get spriteViewerShowOutline;
+
+  /// No description provided for @spriteViewerShowOffscreenRegions.
+  ///
+  /// In en, this message translates to:
+  /// **'Show offscreen regions'**
+  String get spriteViewerShowOffscreenRegions;
+
+  /// No description provided for @spriteViewerDimOffscreenSpritesGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'Dim offscreen sprites (grid)'**
+  String get spriteViewerDimOffscreenSpritesGrid;
+
+  /// No description provided for @spriteViewerShowListView.
+  ///
+  /// In en, this message translates to:
+  /// **'Show list view'**
+  String get spriteViewerShowListView;
+
+  /// No description provided for @spriteViewerPanelSprites.
+  ///
+  /// In en, this message translates to:
+  /// **'Sprites'**
+  String get spriteViewerPanelSprites;
+
+  /// No description provided for @spriteViewerPanelDataSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Data Source'**
+  String get spriteViewerPanelDataSource;
+
+  /// No description provided for @spriteViewerPanelSprite.
+  ///
+  /// In en, this message translates to:
+  /// **'Sprite'**
+  String get spriteViewerPanelSprite;
+
+  /// No description provided for @spriteViewerPanelSelectedSprite.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected sprite'**
+  String get spriteViewerPanelSelectedSprite;
+
+  /// No description provided for @spriteViewerLabelMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Mode'**
+  String get spriteViewerLabelMode;
+
+  /// No description provided for @spriteViewerLabelPatternBase.
+  ///
+  /// In en, this message translates to:
+  /// **'Pattern base'**
+  String get spriteViewerLabelPatternBase;
+
+  /// No description provided for @spriteViewerLabelThumbnailSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Thumbnail size'**
+  String get spriteViewerLabelThumbnailSize;
+
+  /// No description provided for @spriteViewerBgGray.
+  ///
+  /// In en, this message translates to:
+  /// **'Gray'**
+  String get spriteViewerBgGray;
+
+  /// No description provided for @spriteViewerDataSourceSpriteRam.
+  ///
+  /// In en, this message translates to:
+  /// **'Sprite RAM'**
+  String get spriteViewerDataSourceSpriteRam;
+
+  /// No description provided for @spriteViewerDataSourceCpuMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU Memory'**
+  String get spriteViewerDataSourceCpuMemory;
+
+  /// No description provided for @spriteViewerTooltipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sprite #{index}'**
+  String spriteViewerTooltipTitle(int index);
+
+  /// No description provided for @spriteViewerLabelIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Index'**
+  String get spriteViewerLabelIndex;
+
+  /// No description provided for @spriteViewerLabelPos.
+  ///
+  /// In en, this message translates to:
+  /// **'Pos'**
+  String get spriteViewerLabelPos;
+
+  /// No description provided for @spriteViewerLabelSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get spriteViewerLabelSize;
+
+  /// No description provided for @spriteViewerLabelTile.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile'**
+  String get spriteViewerLabelTile;
+
+  /// No description provided for @spriteViewerLabelTileAddr.
+  ///
+  /// In en, this message translates to:
+  /// **'Tile addr'**
+  String get spriteViewerLabelTileAddr;
+
+  /// No description provided for @spriteViewerLabelPalette.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette'**
+  String get spriteViewerLabelPalette;
+
+  /// No description provided for @spriteViewerLabelPaletteAddr.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette addr'**
+  String get spriteViewerLabelPaletteAddr;
+
+  /// No description provided for @spriteViewerLabelFlip.
+  ///
+  /// In en, this message translates to:
+  /// **'Flip'**
+  String get spriteViewerLabelFlip;
+
+  /// No description provided for @spriteViewerLabelPriority.
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get spriteViewerLabelPriority;
+
+  /// No description provided for @spriteViewerPriorityBehindBg.
+  ///
+  /// In en, this message translates to:
+  /// **'Behind BG'**
+  String get spriteViewerPriorityBehindBg;
+
+  /// No description provided for @spriteViewerPriorityInFront.
+  ///
+  /// In en, this message translates to:
+  /// **'In front'**
+  String get spriteViewerPriorityInFront;
+
+  /// No description provided for @spriteViewerLabelVisible.
+  ///
+  /// In en, this message translates to:
+  /// **'Visible'**
+  String get spriteViewerLabelVisible;
+
+  /// No description provided for @spriteViewerValueYes.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get spriteViewerValueYes;
+
+  /// No description provided for @spriteViewerValueNoOffscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'No (offscreen)'**
+  String get spriteViewerValueNoOffscreen;
+
+  /// No description provided for @spriteViewerVisibleStatusVisible.
+  ///
+  /// In en, this message translates to:
+  /// **'Visible'**
+  String get spriteViewerVisibleStatusVisible;
+
+  /// No description provided for @spriteViewerVisibleStatusOffscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Offscreen'**
+  String get spriteViewerVisibleStatusOffscreen;
 }
 
 class _AppLocalizationsDelegate

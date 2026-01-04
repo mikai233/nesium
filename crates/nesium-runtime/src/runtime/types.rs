@@ -260,12 +260,114 @@ impl Default for ChrState {
 
 impl Event for ChrState {}
 
+// =====================
+// Sprite Viewer Types
+// =====================
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpriteViewerBackground {
+    Gray,
+    Black,
+    White,
+    Magenta,
+    Transparent,
+}
+
+/// Information about a single OAM sprite.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SpriteInfo {
+    /// Sprite index in OAM (0-63).
+    pub index: u8,
+    /// X position on screen (0-255, but can render partially offscreen).
+    pub x: u8,
+    /// Y position on screen (0-239 visible, 0xEF-0xFF = offscreen top).
+    pub y: u8,
+    /// Tile index in pattern table.
+    pub tile_index: u8,
+    /// Palette index (0-3 for sprites, which maps to $3F10-$3F1F).
+    pub palette: u8,
+    /// Horizontal flip.
+    pub flip_h: bool,
+    /// Vertical flip.
+    pub flip_v: bool,
+    /// Priority: false = in front of background, true = behind background.
+    pub behind_bg: bool,
+    /// Whether sprite is visible on screen (Y not in hidden range).
+    pub visible: bool,
+}
+
+/// Configuration for the Sprite Viewer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpriteViewerConfig {
+    pub show_outline: bool,
+    pub show_offscreen: bool,
+    pub dim_offscreen: bool,
+    pub background: SpriteViewerBackground,
+}
+
+impl Default for SpriteViewerConfig {
+    fn default() -> Self {
+        Self {
+            show_outline: false,
+            show_offscreen: false,
+            dim_offscreen: true,
+            background: SpriteViewerBackground::Gray,
+        }
+    }
+}
+
+/// Sprite Viewer state for Flutter inspection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpriteState {
+    /// Information about all 64 sprites.
+    pub sprites: Vec<SpriteInfo>,
+    /// Rendered screen preview with sprites at their positions (BGRA, 256x256).
+    /// The visible picture is the top 256x240 portion; the extra 16 pixels are below.
+    pub screen_rgba: Vec<u8>,
+    /// Screen preview width.
+    pub screen_width: u16,
+    /// Screen preview height.
+    pub screen_height: u16,
+    /// Rendered sprite thumbnails (BGRA, 64 sprites × 8x8 or 8x16 each).
+    pub thumbnails_rgba: Vec<u8>,
+    /// Thumbnail width per sprite.
+    pub thumbnail_width: u8,
+    /// Thumbnail height per sprite.
+    pub thumbnail_height: u8,
+    /// Whether 8x16 sprite mode is active.
+    pub large_sprites: bool,
+    /// Sprite pattern table base ($0000 or $1000, only for 8x8 mode).
+    pub pattern_base: u16,
+    /// 64-entry BGRA palette.
+    pub bgra_palette: [[u8; 4]; 64],
+}
+
+impl Default for SpriteState {
+    fn default() -> Self {
+        Self {
+            sprites: Vec::new(),
+            screen_rgba: Vec::new(),
+            screen_width: 256,
+            screen_height: 240,
+            thumbnails_rgba: Vec::new(),
+            thumbnail_width: 8,
+            thumbnail_height: 8,
+            large_sprites: false,
+            pattern_base: 0,
+            bgra_palette: [[0; 4]; 64],
+        }
+    }
+}
+
+impl Event for SpriteState {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventTopic {
     Notification,
     DebugState,
     Tilemap,
     Chr,
+    Sprite,
 }
 
 impl NotificationEvent {

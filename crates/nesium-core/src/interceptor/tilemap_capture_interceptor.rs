@@ -13,6 +13,12 @@ pub struct DebugTilemapData {
     pub vram_addr: u16,
     pub temp_addr: u16,
     pub fine_x: u8,
+    /// OAM (Object Attribute Memory) - 256 bytes, 64 sprites × 4 bytes each.
+    pub oam: Vec<u8>,
+    /// Whether 8x16 sprite mode is active (PPU CTRL bit 5).
+    pub large_sprites: bool,
+    /// Sprite pattern table base ($0000 or $1000, only for 8x8 mode).
+    pub sprite_pattern_base: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +77,11 @@ impl TilemapCaptureInterceptor {
         let temp_addr = ppu.registers.vram.t.raw();
         let fine_x = ppu.registers.vram.x;
 
+        // Sprite-related data
+        let oam = ppu.registers.oam.as_slice().to_vec();
+        let large_sprites = ppu.registers.control.use_8x16_sprites();
+        let sprite_pattern_base = ppu.registers.control.sprite_pattern_table();
+
         self.snapshot = Some(DebugTilemapData {
             ciram,
             palette,
@@ -80,6 +91,9 @@ impl TilemapCaptureInterceptor {
             vram_addr,
             temp_addr,
             fine_x,
+            oam,
+            large_sprites,
+            sprite_pattern_base,
         });
     }
 }

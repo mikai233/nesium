@@ -8,6 +8,7 @@ import '../platform/desktop_window_manager.dart';
 import '../features/debugger/debugger_panel.dart';
 import '../features/debugger/tile_viewer.dart';
 import '../features/debugger/tilemap_viewer.dart';
+import '../features/debugger/sprite_viewer.dart';
 import '../features/tools/tools_panel.dart';
 import '../platform/platform_capabilities.dart';
 
@@ -67,6 +68,9 @@ class SecondaryToolsContent extends StatelessWidget {
             openTileViewer: () async {
               await DesktopWindowManager().openTileViewerWindow();
             },
+            openSpriteViewer: () async {
+              await DesktopWindowManager().openSpriteViewerWindow();
+            },
           ),
         ),
       ],
@@ -90,5 +94,14 @@ class SecondaryTileViewerContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const TileViewer();
+  }
+}
+
+class SecondarySpriteViewerContent extends StatelessWidget {
+  const SecondarySpriteViewerContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SpriteViewer();
   }
 }

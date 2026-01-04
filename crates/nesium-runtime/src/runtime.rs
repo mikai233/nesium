@@ -10,6 +10,7 @@ pub use crossbeam_channel::{Receiver, Sender};
 pub use handle::{Runtime, RuntimeHandle};
 pub use types::{
     AudioMode, ChrState, DebugState, Event, EventTopic, NotificationEvent, RuntimeConfig,
-    RuntimeError, RuntimeEventSender, TileViewerBackground, TileViewerConfig, TileViewerLayout,
-    TileViewerSource, TilemapState, VideoConfig, VideoExternalConfig, VideoSwapchainConfig,
+    RuntimeError, RuntimeEventSender, SpriteState, TileViewerBackground, TileViewerConfig,
+    TileViewerLayout, TileViewerSource, TilemapState, VideoConfig, VideoExternalConfig,
+    VideoSwapchainConfig,
 };

@@ -828,4 +828,113 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tileViewerPresetOam => '精灵';
+
+  @override
+  String get menuSpriteViewer => '精灵查看器';
+
+  @override
+  String spriteViewerError(String error) {
+    return '精灵查看器错误：$error';
+  }
+
+  @override
+  String get spriteViewerSettingsTooltip => '精灵查看器设置';
+
+  @override
+  String get spriteViewerShowGrid => '显示网格';
+
+  @override
+  String get spriteViewerShowOutline => '显示精灵轮廓';
+
+  @override
+  String get spriteViewerShowOffscreenRegions => '显示屏幕外区域';
+
+  @override
+  String get spriteViewerDimOffscreenSpritesGrid => '淡化屏幕外精灵（网格）';
+
+  @override
+  String get spriteViewerShowListView => '显示列表视图';
+
+  @override
+  String get spriteViewerPanelSprites => '精灵';
+
+  @override
+  String get spriteViewerPanelDataSource => '数据源';
+
+  @override
+  String get spriteViewerPanelSprite => '精灵';
+
+  @override
+  String get spriteViewerPanelSelectedSprite => '选中精灵';
+
+  @override
+  String get spriteViewerLabelMode => '模式';
+
+  @override
+  String get spriteViewerLabelPatternBase => '图案表基址';
+
+  @override
+  String get spriteViewerLabelThumbnailSize => '缩略图尺寸';
+
+  @override
+  String get spriteViewerBgGray => '灰色';
+
+  @override
+  String get spriteViewerDataSourceSpriteRam => '精灵 RAM';
+
+  @override
+  String get spriteViewerDataSourceCpuMemory => 'CPU 内存';
+
+  @override
+  String spriteViewerTooltipTitle(int index) {
+    return '精灵 #$index';
+  }
+
+  @override
+  String get spriteViewerLabelIndex => '索引';
+
+  @override
+  String get spriteViewerLabelPos => '位置';
+
+  @override
+  String get spriteViewerLabelSize => '尺寸';
+
+  @override
+  String get spriteViewerLabelTile => '图块';
+
+  @override
+  String get spriteViewerLabelTileAddr => '图块地址';
+
+  @override
+  String get spriteViewerLabelPalette => '调色板';
+
+  @override
+  String get spriteViewerLabelPaletteAddr => '调色板地址';
+
+  @override
+  String get spriteViewerLabelFlip => '翻转';
+
+  @override
+  String get spriteViewerLabelPriority => '优先级';
+
+  @override
+  String get spriteViewerPriorityBehindBg => '在背景后';
+
+  @override
+  String get spriteViewerPriorityInFront => '在前景';
+
+  @override
+  String get spriteViewerLabelVisible => '可见';
+
+  @override
+  String get spriteViewerValueYes => '是';
+
+  @override
+  String get spriteViewerValueNoOffscreen => '否（屏幕外）';
+
+  @override
+  String get spriteViewerVisibleStatusVisible => '可见';
+
+  @override
+  String get spriteViewerVisibleStatusOffscreen => '屏幕外';
 }
