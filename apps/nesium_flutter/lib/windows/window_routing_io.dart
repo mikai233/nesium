@@ -8,7 +8,6 @@ import '../platform/platform_capabilities.dart';
 import '../shell/nes_shell.dart';
 import 'secondary_window.dart';
 import 'window_types.dart';
-import '../l10n/app_localizations.dart' show AppLocalizations;
 
 String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
   switch (kind) {
@@ -132,26 +131,31 @@ class _WindowRouterState extends State<WindowRouter> {
         return const NesShell();
       case WindowKind.debugger:
         return SecondaryWindow(
+          kind: WindowKind.debugger,
           title: l10n.menuDebugger,
           child: const SecondaryDebuggerContent(),
         );
       case WindowKind.tools:
         return SecondaryWindow(
+          kind: WindowKind.tools,
           title: l10n.menuTools,
           child: const SecondaryToolsContent(),
         );
       case WindowKind.tilemap:
         return SecondaryWindow(
+          kind: WindowKind.tilemap,
           title: l10n.menuTilemapViewer,
           child: const SecondaryTilemapContent(),
         );
       case WindowKind.tileViewer:
         return SecondaryWindow(
+          kind: WindowKind.tileViewer,
           title: l10n.menuTileViewer,
           child: const SecondaryTileViewerContent(),
         );
       case WindowKind.spriteViewer:
         return SecondaryWindow(
+          kind: WindowKind.spriteViewer,
           title: l10n.menuSpriteViewer,
           child: const SecondarySpriteViewerContent(),
         );

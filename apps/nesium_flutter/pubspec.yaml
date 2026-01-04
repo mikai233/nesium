@@ -35,6 +35,7 @@ dependencies:
   intl: ^0.20.0
   flutter_riverpod: ^3.1.0
   desktop_multi_window: ^0.3.0
+  window_manager: 0.5.1
   flutter_rust_bridge: 2.11.1
   file_picker: ^10.3.8
   web: ^1.1.1

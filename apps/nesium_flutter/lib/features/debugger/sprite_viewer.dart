@@ -37,7 +37,6 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
   bool _hasReceivedData = false;
   Offset? _gridHoverPosition;
   Offset? _previewHoverPosition;
-  Offset? _gridSelectedPosition;
   Offset? _previewSelectedPosition;
 
   // Overlay tooltip
@@ -362,7 +361,6 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
     if (_selectedIndex == null) return;
     setState(() {
       _selectedIndex = null;
-      _gridSelectedPosition = null;
       _previewSelectedPosition = null;
     });
   }
@@ -791,7 +789,6 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
     final idx = _gridIndexAtPosition(localPosition, viewportSize, snapshot);
     setState(() {
       _selectedIndex = idx;
-      _gridSelectedPosition = localPosition;
       _previewSelectedPosition = null;
     });
   }
@@ -859,7 +856,6 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
     setState(() {
       _selectedIndex = idx;
       _previewSelectedPosition = localPosition;
-      _gridSelectedPosition = null;
     });
   }
 

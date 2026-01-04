@@ -6,10 +6,7 @@
 
 #include "nesium/nesium_aux_texture_plugin.h"
 #include "nesium/nesium_texture_plugin.h"
-#include "utils.h"
 #include <desktop_multi_window/desktop_multi_window_plugin.h>
-#include <flutter/method_channel.h>
-#include <flutter/standard_method_codec.h>
 
 FlutterWindow::FlutterWindow(const flutter::DartProject &project)
     : project_(project) {}
@@ -52,7 +49,6 @@ bool FlutterWindow::OnCreate() {
   DesktopMultiWindowSetWindowCreatedCallback([](void *controller_ptr) {
     auto *controller =
         static_cast<flutter::FlutterViewController *>(controller_ptr);
-    auto messenger = controller->engine()->messenger();
 
     // 1. Register generated plugins (multi_window, file_selector, etc.) for the
     // new window's engine.
@@ -63,29 +59,6 @@ bool FlutterWindow::OnCreate() {
     // local textures.
     NesiumAuxTexturePluginRegisterWithRegistrar(
         controller->engine()->GetRegistrarForPlugin("NesiumAuxTexturePlugin"));
-
-    // 3. Set up the window control channel (e.g. for setWindowTitle).
-    // Use shared_ptr to ensure the channel lives as long as the handlers.
-    auto channel =
-        std::make_shared<flutter::MethodChannel<flutter::EncodableValue>>(
-            messenger, "nesium/window",
-            &flutter::StandardMethodCodec::GetInstance());
-
-    channel->SetMethodCallHandler(
-        [controller, channel](const auto &call, auto result) {
-          if (call.method_name() == "setWindowTitle") {
-            if (std::holds_alternative<std::string>(*call.arguments())) {
-              std::string title = std::get<std::string>(*call.arguments());
-              HWND hwnd = controller->view()->GetNativeWindow();
-              SetWindowTextW(hwnd, Utf16FromUtf8(title).c_str());
-              result->Success();
-            } else {
-              result->Error("INVALID_ARGUMENT", "Title must be a string");
-            }
-          } else {
-            result->NotImplemented();
-          }
-        });
   });
 
   return true;
