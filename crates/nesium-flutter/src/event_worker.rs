@@ -10,7 +10,7 @@ use crossbeam_channel::{Receiver, Sender, bounded};
 use nesium_core::cartridge::header::Mirroring;
 
 use crate::api::events::{
-    ChrSnapshot, SpriteInfo, SpriteSnapshot, TilemapMirroring, TilemapSnapshot,
+    SpriteInfo, SpriteSnapshot, TileSnapshot, TilemapMirroring, TilemapSnapshot,
 };
 use crate::frb_generated::StreamSink;
 
@@ -21,10 +21,10 @@ pub enum EventTask {
         state: Box<nesium_runtime::TilemapState>,
         sink: Option<StreamSink<TilemapSnapshot>>,
     },
-    /// Update CHR aux texture and stream snapshot.
-    Chr {
-        state: Box<nesium_runtime::ChrState>,
-        sink: StreamSink<ChrSnapshot>,
+    /// Update Tile aux texture and stream snapshot.
+    Tile {
+        state: Box<nesium_runtime::TileState>,
+        sink: StreamSink<TileSnapshot>,
     },
     /// Update sprite aux textures and stream snapshot.
     Sprite {
@@ -69,8 +69,8 @@ fn worker_loop(rx: Receiver<EventTask>) {
             EventTask::Tilemap { state, sink } => {
                 process_tilemap(&state, sink.as_ref());
             }
-            EventTask::Chr { state, sink } => {
-                process_chr(&state, &sink);
+            EventTask::Tile { state, sink } => {
+                process_tile_viewer(&state, &sink);
             }
             EventTask::Sprite { state, sink } => {
                 process_sprite(&state, &sink);
@@ -128,8 +128,8 @@ fn process_tilemap(
     }
 }
 
-/// Processes CHR: renders tiles to aux texture and streams snapshot.
-fn process_chr(state: &nesium_runtime::ChrState, sink: &StreamSink<ChrSnapshot>) {
+/// Processes Tile Viewer: renders tiles to aux texture and streams snapshot.
+fn process_tile_viewer(state: &nesium_runtime::TileState, sink: &StreamSink<TileSnapshot>) {
     // Render tiles from source_bytes (this was previously done in NES thread!)
     let rgba = render_tile_view_rgba(
         &state.source_bytes,
@@ -144,7 +144,7 @@ fn process_chr(state: &nesium_runtime::ChrState, sink: &StreamSink<ChrSnapshot>)
     );
 
     // Update auxiliary texture with rendered data
-    crate::aux_texture::aux_update(crate::senders::chr::CHR_TEXTURE_ID, &rgba);
+    crate::aux_texture::aux_update(crate::senders::tile::TILE_VIEWER_TEXTURE_ID, &rgba);
 
     // Convert BGRA to RGBA for Flutter
     let mut rgba_palette = Vec::with_capacity(64 * 4);
@@ -159,7 +159,7 @@ fn process_chr(state: &nesium_runtime::ChrState, sink: &StreamSink<ChrSnapshot>)
         }
     }
 
-    let snapshot = ChrSnapshot {
+    let snapshot = TileSnapshot {
         palette: state.palette.to_vec(),
         rgba_palette,
         selected_palette: state.selected_palette,

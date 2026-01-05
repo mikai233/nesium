@@ -10,7 +10,11 @@ use crossbeam_channel::{Sender, bounded, unbounded};
 use nesium_core::{
     audio::bus::AudioBusConfig,
     controller::Button,
-    interceptor::tilemap_capture_interceptor::TilemapCapturePoint,
+    interceptor::{
+        sprite_interceptor::CapturePoint as SpriteCapturePoint,
+        tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
+        tilemap_interceptor::CapturePoint as TilemapCapturePoint,
+    },
     ppu::buffer::FrameReadyCallback,
     ppu::buffer::{ExternalFrameHandle, FrameBuffer},
     ppu::palette::{Palette, PaletteKind},
@@ -192,6 +196,23 @@ impl RuntimeHandle {
             CONTROL_REPLY_TIMEOUT,
             |reply| ControlMessage::SetTilemapCapturePoint(point, reply),
         )
+    }
+
+    pub fn set_tile_viewer_capture_point(
+        &self,
+        point: TileViewerCapturePoint,
+    ) -> Result<(), RuntimeError> {
+        self.send_with_reply(
+            "set_tile_viewer_capture_point",
+            CONTROL_REPLY_TIMEOUT,
+            |reply| ControlMessage::SetTileViewerCapturePoint(point, reply),
+        )
+    }
+
+    pub fn set_sprite_capture_point(&self, point: SpriteCapturePoint) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_sprite_capture_point", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetSpriteCapturePoint(point, reply)
+        })
     }
 
     pub fn set_tile_viewer_source(&self, source: TileViewerSource) -> Result<(), RuntimeError> {

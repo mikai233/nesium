@@ -6,7 +6,13 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+
+/// Returns all auxiliary texture IDs defined on the Rust side.
+///
+/// Flutter should treat these as the single source of truth and avoid hard-coding IDs.
+Future<AuxTextureIds> auxTextureIds() =>
+    RustLib.instance.api.crateApiEventsAuxTextureIds();
 
 /// Runtime notification stream.
 ///
@@ -61,6 +67,23 @@ Future<void> setTilemapCaptureScanline({
   dot: dot,
 );
 
+/// Use the PPU frame start (scanline 0, cycle 0) as the Tile Viewer capture point.
+Future<void> setTileViewerCaptureFrameStart() =>
+    RustLib.instance.api.crateApiEventsSetTileViewerCaptureFrameStart();
+
+/// Use the PPU VBlank start (scanline 241, cycle 1) as the Tile Viewer capture point.
+Future<void> setTileViewerCaptureVblankStart() =>
+    RustLib.instance.api.crateApiEventsSetTileViewerCaptureVblankStart();
+
+/// Use a specific scanline and dot as the Tile Viewer capture point.
+Future<void> setTileViewerCaptureScanline({
+  required int scanline,
+  required int dot,
+}) => RustLib.instance.api.crateApiEventsSetTileViewerCaptureScanline(
+  scanline: scanline,
+  dot: dot,
+);
+
 /// Sets the render mode for the tilemap auxiliary texture.
 ///
 /// - `0`: Default
@@ -69,37 +92,31 @@ Future<void> setTilemapCaptureScanline({
 Future<void> setTilemapDisplayMode({required int mode}) =>
     RustLib.instance.api.crateApiEventsSetTilemapDisplayMode(mode: mode);
 
-/// Subscribes to CHR state updates.
+/// Subscribes to Tile state updates.
 ///
-/// This refreshes the CHR auxiliary texture, so the UI can use a single subscription.
-Stream<ChrSnapshot> chrStateStream() =>
-    RustLib.instance.api.crateApiEventsChrStateStream();
+/// This refreshes the Tile auxiliary texture, so the UI can use a single subscription.
+Stream<TileSnapshot> tileStateStream() =>
+    RustLib.instance.api.crateApiEventsTileStateStream();
 
-/// Unsubscribes from CHR state updates.
-Future<void> unsubscribeChrState() =>
-    RustLib.instance.api.crateApiEventsUnsubscribeChrState();
+/// Unsubscribes from Tile state updates.
+Future<void> unsubscribeTileState() =>
+    RustLib.instance.api.crateApiEventsUnsubscribeTileState();
 
-/// Sets the palette index for CHR rendering.
+/// Sets the palette index for Tile Viewer rendering.
 ///
 /// - `0-3`: Background palettes
 /// - `4-7`: Sprite palettes
-Future<void> setChrPalette({required int paletteIndex}) => RustLib.instance.api
-    .crateApiEventsSetChrPalette(paletteIndex: paletteIndex);
+Future<void> setTileViewerPalette({required int paletteIndex}) => RustLib
+    .instance
+    .api
+    .crateApiEventsSetTileViewerPalette(paletteIndex: paletteIndex);
 
-/// Sets the display mode for CHR auxiliary texture.
+/// Sets the display mode for Tile Viewer auxiliary texture.
 ///
 /// - `0`: Default (use selected palette)
 /// - `1`: Grayscale
-Future<void> setChrDisplayMode({required int mode}) =>
-    RustLib.instance.api.crateApiEventsSetChrDisplayMode(mode: mode);
-
-/// Sets the CHR preset source for the Tile Viewer.
-///
-/// - `0`: PPU (current PPU-visible CHR at $0000-$1FFF)
-/// - `1`: CHR (cartridge CHR ROM/RAM, first 8 KiB)
-/// - `2`: ROM (cartridge PRG ROM, first 8 KiB)
-Future<void> setChrSource({required int source}) =>
-    RustLib.instance.api.crateApiEventsSetChrSource(source: source);
+Future<void> setTileViewerDisplayMode({required int mode}) =>
+    RustLib.instance.api.crateApiEventsSetTileViewerDisplayMode(mode: mode);
 
 /// Sets the tile viewer source.
 ///
@@ -148,96 +165,56 @@ Future<void> setTileViewerBackground({required int background}) => RustLib
 Stream<SpriteSnapshot> spriteStateStream() =>
     RustLib.instance.api.crateApiEventsSpriteStateStream();
 
+/// Use the PPU frame start (scanline 0, cycle 0) as the sprite capture point.
+Future<void> setSpriteCaptureFrameStart() =>
+    RustLib.instance.api.crateApiEventsSetSpriteCaptureFrameStart();
+
+/// Use the PPU VBlank start (scanline 241, cycle 1) as the sprite capture point.
+Future<void> setSpriteCaptureVblankStart() =>
+    RustLib.instance.api.crateApiEventsSetSpriteCaptureVblankStart();
+
+/// Use a specific scanline and dot as the sprite capture point.
+Future<void> setSpriteCaptureScanline({
+  required int scanline,
+  required int dot,
+}) => RustLib.instance.api.crateApiEventsSetSpriteCaptureScanline(
+  scanline: scanline,
+  dot: dot,
+);
+
 /// Unsubscribes from Sprite state updates.
 Future<void> unsubscribeSpriteState() =>
     RustLib.instance.api.crateApiEventsUnsubscribeSpriteState();
 
-/// CHR snapshot for UI inspection (tile preview, palette selection, etc).
-///
-/// Note: `rgba_palette` is ALWAYS RGBA regardless of platform, so Flutter can render it easily.
-class ChrSnapshot {
-  final Uint8List palette;
-  final Uint8List rgbaPalette;
-  final int selectedPalette;
-  final int width;
-  final int height;
+class AuxTextureIds {
+  final int tilemap;
+  final int tile;
+  final int sprite;
+  final int spriteScreen;
 
-  /// `0..=3` as per `set_tile_viewer_source`.
-  final int source;
-  final int sourceSize;
-  final int startAddress;
-  final int columnCount;
-  final int rowCount;
-
-  /// `0..=2` as per `set_tile_viewer_layout`.
-  final int layout;
-
-  /// `0..=5` as per `set_tile_viewer_background`.
-  final int background;
-  final bool useGrayscalePalette;
-  final int bgPatternBase;
-  final int spritePatternBase;
-  final bool largeSprites;
-
-  const ChrSnapshot({
-    required this.palette,
-    required this.rgbaPalette,
-    required this.selectedPalette,
-    required this.width,
-    required this.height,
-    required this.source,
-    required this.sourceSize,
-    required this.startAddress,
-    required this.columnCount,
-    required this.rowCount,
-    required this.layout,
-    required this.background,
-    required this.useGrayscalePalette,
-    required this.bgPatternBase,
-    required this.spritePatternBase,
-    required this.largeSprites,
+  const AuxTextureIds({
+    required this.tilemap,
+    required this.tile,
+    required this.sprite,
+    required this.spriteScreen,
   });
 
   @override
   int get hashCode =>
-      palette.hashCode ^
-      rgbaPalette.hashCode ^
-      selectedPalette.hashCode ^
-      width.hashCode ^
-      height.hashCode ^
-      source.hashCode ^
-      sourceSize.hashCode ^
-      startAddress.hashCode ^
-      columnCount.hashCode ^
-      rowCount.hashCode ^
-      layout.hashCode ^
-      background.hashCode ^
-      useGrayscalePalette.hashCode ^
-      bgPatternBase.hashCode ^
-      spritePatternBase.hashCode ^
-      largeSprites.hashCode;
+      tilemap.hashCode ^
+      tile.hashCode ^
+      sprite.hashCode ^
+      spriteScreen.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ChrSnapshot &&
+      other is AuxTextureIds &&
           runtimeType == other.runtimeType &&
-          palette == other.palette &&
-          rgbaPalette == other.rgbaPalette &&
-          selectedPalette == other.selectedPalette &&
-          width == other.width &&
-          height == other.height &&
-          source == other.source &&
-          sourceSize == other.sourceSize &&
-          startAddress == other.startAddress &&
-          columnCount == other.columnCount &&
-          rowCount == other.rowCount &&
-          layout == other.layout &&
-          background == other.background &&
-          useGrayscalePalette == other.useGrayscalePalette &&
-          bgPatternBase == other.bgPatternBase &&
-          spritePatternBase == other.spritePatternBase &&
-          largeSprites == other.largeSprites;
+          tilemap == other.tilemap &&
+          tile == other.tile &&
+          sprite == other.sprite &&
+          spriteScreen == other.spriteScreen;
 }
 
 /// Debug state notification sent per-frame when subscribed.
@@ -420,6 +397,94 @@ class SpriteSnapshot {
           largeSprites == other.largeSprites &&
           patternBase == other.patternBase &&
           rgbaPalette == other.rgbaPalette;
+}
+
+/// Tile snapshot for UI inspection (tile preview, palette selection, etc).
+///
+/// Note: `rgba_palette` is ALWAYS RGBA regardless of platform, so Flutter can render it easily.
+class TileSnapshot {
+  final Uint8List palette;
+  final Uint8List rgbaPalette;
+  final int selectedPalette;
+  final int width;
+  final int height;
+
+  /// `0..=3` as per `set_tile_viewer_source`.
+  final int source;
+  final int sourceSize;
+  final int startAddress;
+  final int columnCount;
+  final int rowCount;
+
+  /// `0..=2` as per `set_tile_viewer_layout`.
+  final int layout;
+
+  /// `0..=5` as per `set_tile_viewer_background`.
+  final int background;
+  final bool useGrayscalePalette;
+  final int bgPatternBase;
+  final int spritePatternBase;
+  final bool largeSprites;
+
+  const TileSnapshot({
+    required this.palette,
+    required this.rgbaPalette,
+    required this.selectedPalette,
+    required this.width,
+    required this.height,
+    required this.source,
+    required this.sourceSize,
+    required this.startAddress,
+    required this.columnCount,
+    required this.rowCount,
+    required this.layout,
+    required this.background,
+    required this.useGrayscalePalette,
+    required this.bgPatternBase,
+    required this.spritePatternBase,
+    required this.largeSprites,
+  });
+
+  @override
+  int get hashCode =>
+      palette.hashCode ^
+      rgbaPalette.hashCode ^
+      selectedPalette.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      source.hashCode ^
+      sourceSize.hashCode ^
+      startAddress.hashCode ^
+      columnCount.hashCode ^
+      rowCount.hashCode ^
+      layout.hashCode ^
+      background.hashCode ^
+      useGrayscalePalette.hashCode ^
+      bgPatternBase.hashCode ^
+      spritePatternBase.hashCode ^
+      largeSprites.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TileSnapshot &&
+          runtimeType == other.runtimeType &&
+          palette == other.palette &&
+          rgbaPalette == other.rgbaPalette &&
+          selectedPalette == other.selectedPalette &&
+          width == other.width &&
+          height == other.height &&
+          source == other.source &&
+          sourceSize == other.sourceSize &&
+          startAddress == other.startAddress &&
+          columnCount == other.columnCount &&
+          rowCount == other.rowCount &&
+          layout == other.layout &&
+          background == other.background &&
+          useGrayscalePalette == other.useGrayscalePalette &&
+          bgPatternBase == other.bgPatternBase &&
+          spritePatternBase == other.spritePatternBase &&
+          largeSprites == other.largeSprites;
 }
 
 enum TilemapMirroring {

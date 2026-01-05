@@ -11,9 +11,9 @@ use crate::{
     controller::{Button, ControllerPorts},
     cpu::Cpu,
     error::Error,
-    interceptor::tilemap_capture_interceptor::{
-        DebugTilemapData, TilemapCaptureInterceptor, TilemapCapturePoint,
-    },
+    interceptor::sprite_interceptor::{SpriteInterceptor, SpriteSnapshot},
+    interceptor::tile_viewer_interceptor::{TileViewerInterceptor, TileViewerSnapshot},
+    interceptor::tilemap_interceptor::{TilemapInterceptor, TilemapSnapshot},
     interceptor::{EmuInterceptor, log_interceptor::LogInterceptor},
     mem_block::cpu as cpu_ram,
     ppu::{
@@ -714,22 +714,69 @@ impl Nes {
         )
     }
 
-    pub fn set_tilemap_capture_point(&mut self, point: TilemapCapturePoint) {
-        if let Some(layer) = self.interceptor.layer_mut::<TilemapCaptureInterceptor>() {
+    // =========================================================================
+    // Tilemap capture point / snapshot
+    // =========================================================================
+
+    pub fn set_tilemap_capture_point(
+        &mut self,
+        point: crate::interceptor::tilemap_interceptor::CapturePoint,
+    ) {
+        if let Some(layer) = self.interceptor.layer_mut::<TilemapInterceptor>() {
             layer.set_capture_point(point);
         }
     }
 
-    pub fn take_tilemap_capture_snapshot(&mut self) -> Option<DebugTilemapData> {
+    pub fn take_tilemap_snapshot(&mut self) -> Option<TilemapSnapshot> {
         self.interceptor
-            .layer_mut::<TilemapCaptureInterceptor>()
+            .layer_mut::<TilemapInterceptor>()
+            .and_then(|layer| layer.take_snapshot())
+    }
+
+    // =========================================================================
+    // Tile viewer (CHR) capture point / snapshot
+    // =========================================================================
+
+    pub fn set_tile_viewer_capture_point(
+        &mut self,
+        point: crate::interceptor::tile_viewer_interceptor::CapturePoint,
+    ) {
+        if let Some(layer) = self.interceptor.layer_mut::<TileViewerInterceptor>() {
+            layer.set_capture_point(point);
+        }
+    }
+
+    pub fn take_tile_viewer_snapshot(&mut self) -> Option<TileViewerSnapshot> {
+        self.interceptor
+            .layer_mut::<TileViewerInterceptor>()
+            .and_then(|layer| layer.take_snapshot())
+    }
+
+    // =========================================================================
+    // Sprite capture point / snapshot
+    // =========================================================================
+
+    pub fn set_sprite_capture_point(
+        &mut self,
+        point: crate::interceptor::sprite_interceptor::CapturePoint,
+    ) {
+        if let Some(layer) = self.interceptor.layer_mut::<SpriteInterceptor>() {
+            layer.set_capture_point(point);
+        }
+    }
+
+    pub fn take_sprite_snapshot(&mut self) -> Option<SpriteSnapshot> {
+        self.interceptor
+            .layer_mut::<SpriteInterceptor>()
             .and_then(|layer| layer.take_snapshot())
     }
 
     fn build_interceptor() -> EmuInterceptor {
         let mut interceptor = EmuInterceptor::new();
         interceptor.add(LogInterceptor);
-        interceptor.add(TilemapCaptureInterceptor::new());
+        interceptor.add(TilemapInterceptor::new());
+        interceptor.add(TileViewerInterceptor::new());
+        interceptor.add(SpriteInterceptor::new());
         interceptor
     }
 }

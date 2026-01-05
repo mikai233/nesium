@@ -4,7 +4,11 @@ use std::path::PathBuf;
 use crossbeam_channel::Sender;
 use nesium_core::{
     audio::bus::AudioBusConfig,
-    interceptor::tilemap_capture_interceptor::TilemapCapturePoint,
+    interceptor::{
+        sprite_interceptor::CapturePoint as SpriteCapturePoint,
+        tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
+        tilemap_interceptor::CapturePoint as TilemapCapturePoint,
+    },
     ppu::buffer::FrameReadyCallback,
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
@@ -36,7 +40,11 @@ pub(crate) enum ControlMessage {
     LoadMovie(nesium_support::tas::Movie, ControlReplySender),
     SubscribeEvent(EventTopic, Box<dyn RuntimeEventSender>, ControlReplySender),
     UnsubscribeEvent(EventTopic, ControlReplySender),
+    // Per-viewer capture points
     SetTilemapCapturePoint(TilemapCapturePoint, ControlReplySender),
+    SetTileViewerCapturePoint(TileViewerCapturePoint, ControlReplySender),
+    SetSpriteCapturePoint(SpriteCapturePoint, ControlReplySender),
+    // Tile viewer settings
     SetTileViewerSource(TileViewerSource, ControlReplySender),
     SetTileViewerStartAddress(u32, ControlReplySender),
     SetTileViewerSize {

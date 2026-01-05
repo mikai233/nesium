@@ -72,7 +72,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 532096231;
+  int get rustContentHash => 791019600;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -83,7 +83,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  Stream<ChrSnapshot> crateApiEventsChrStateStream();
+  Future<AuxTextureIds> crateApiEventsAuxTextureIds();
 
   Stream<DebugStateNotification> crateApiEventsDebugStateStream();
 
@@ -117,12 +117,6 @@ abstract class RustLibApi extends BaseApi {
 
   Future<Uint8List> crateApiEmulationSaveStateToMemory();
 
-  Future<void> crateApiEventsSetChrDisplayMode({required int mode});
-
-  Future<void> crateApiEventsSetChrPalette({required int paletteIndex});
-
-  Future<void> crateApiEventsSetChrSource({required int source});
-
   Future<void> crateApiEmulationSetIntegerFpsMode({required bool enabled});
 
   Future<void> crateApiInputSetPadMask({required int pad, required int mask});
@@ -140,9 +134,31 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiEmulationSetRewinding({required bool rewinding});
 
+  Future<void> crateApiEventsSetSpriteCaptureFrameStart();
+
+  Future<void> crateApiEventsSetSpriteCaptureScanline({
+    required int scanline,
+    required int dot,
+  });
+
+  Future<void> crateApiEventsSetSpriteCaptureVblankStart();
+
   Future<void> crateApiEventsSetTileViewerBackground({required int background});
 
+  Future<void> crateApiEventsSetTileViewerCaptureFrameStart();
+
+  Future<void> crateApiEventsSetTileViewerCaptureScanline({
+    required int scanline,
+    required int dot,
+  });
+
+  Future<void> crateApiEventsSetTileViewerCaptureVblankStart();
+
+  Future<void> crateApiEventsSetTileViewerDisplayMode({required int mode});
+
   Future<void> crateApiEventsSetTileViewerLayout({required int layout});
+
+  Future<void> crateApiEventsSetTileViewerPalette({required int paletteIndex});
 
   Future<void> crateApiEventsSetTileViewerSize({
     required int columns,
@@ -181,15 +197,17 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiEventsSubscribeTilemapTexture();
 
+  Stream<TileSnapshot> crateApiEventsTileStateStream();
+
   Stream<TilemapSnapshot> crateApiEventsTilemapStateStream();
 
   Future<bool> crateApiPauseTogglePause();
 
-  Future<void> crateApiEventsUnsubscribeChrState();
-
   Future<void> crateApiEventsUnsubscribeDebugState();
 
   Future<void> crateApiEventsUnsubscribeSpriteState();
+
+  Future<void> crateApiEventsUnsubscribeTileState();
 
   Future<void> crateApiEventsUnsubscribeTilemapTexture();
 }
@@ -203,36 +221,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  Stream<ChrSnapshot> crateApiEventsChrStateStream() {
-    final sink = RustStreamSink<ChrSnapshot>();
-    unawaited(
-      handler.executeNormal(
-        NormalTask(
-          callFfi: (port_) {
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_StreamSink_chr_snapshot_Sse(sink, serializer);
-            pdeCallFfi(
-              generalizedFrbRustBinding,
-              serializer,
-              funcId: 1,
-              port: port_,
-            );
-          },
-          codec: SseCodec(
-            decodeSuccessData: sse_decode_unit,
-            decodeErrorData: sse_decode_String,
-          ),
-          constMeta: kCrateApiEventsChrStateStreamConstMeta,
-          argValues: [sink],
-          apiImpl: this,
+  Future<AuxTextureIds> crateApiEventsAuxTextureIds() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_aux_texture_ids,
+          decodeErrorData: null,
         ),
+        constMeta: kCrateApiEventsAuxTextureIdsConstMeta,
+        argValues: [],
+        apiImpl: this,
       ),
     );
-    return sink.stream;
   }
 
-  TaskConstMeta get kCrateApiEventsChrStateStreamConstMeta =>
-      const TaskConstMeta(debugName: "chr_state_stream", argNames: ["sink"]);
+  TaskConstMeta get kCrateApiEventsAuxTextureIdsConstMeta =>
+      const TaskConstMeta(debugName: "aux_texture_ids", argNames: []);
 
   @override
   Stream<DebugStateNotification> crateApiEventsDebugStateStream() {
@@ -687,96 +700,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "save_state_to_memory", argNames: []);
 
   @override
-  Future<void> crateApiEventsSetChrDisplayMode({required int mode}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_8(mode, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 18,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiEventsSetChrDisplayModeConstMeta,
-        argValues: [mode],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiEventsSetChrDisplayModeConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_chr_display_mode",
-        argNames: ["mode"],
-      );
-
-  @override
-  Future<void> crateApiEventsSetChrPalette({required int paletteIndex}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_8(paletteIndex, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 19,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiEventsSetChrPaletteConstMeta,
-        argValues: [paletteIndex],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiEventsSetChrPaletteConstMeta =>
-      const TaskConstMeta(
-        debugName: "set_chr_palette",
-        argNames: ["paletteIndex"],
-      );
-
-  @override
-  Future<void> crateApiEventsSetChrSource({required int source}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_8(source, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 20,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiEventsSetChrSourceConstMeta,
-        argValues: [source],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiEventsSetChrSourceConstMeta =>
-      const TaskConstMeta(debugName: "set_chr_source", argNames: ["source"]);
-
-  @override
   Future<void> crateApiEmulationSetIntegerFpsMode({required bool enabled}) {
     return handler.executeNormal(
       NormalTask(
@@ -786,7 +709,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 18,
             port: port_,
           );
         },
@@ -818,7 +741,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 19,
             port: port_,
           );
         },
@@ -846,7 +769,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 20,
             port: port_,
           );
         },
@@ -877,7 +800,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 21,
             port: port_,
           );
         },
@@ -905,7 +828,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 22,
             port: port_,
           );
         },
@@ -937,7 +860,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 23,
             port: port_,
           );
         },
@@ -968,7 +891,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 24,
             port: port_,
           );
         },
@@ -985,6 +908,101 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiEmulationSetRewindingConstMeta =>
       const TaskConstMeta(debugName: "set_rewinding", argNames: ["rewinding"]);
+
+  @override
+  Future<void> crateApiEventsSetSpriteCaptureFrameStart() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 25,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetSpriteCaptureFrameStartConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetSpriteCaptureFrameStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sprite_capture_frame_start",
+        argNames: [],
+      );
+
+  @override
+  Future<void> crateApiEventsSetSpriteCaptureScanline({
+    required int scanline,
+    required int dot,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_32(scanline, serializer);
+          sse_encode_i_32(dot, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 26,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetSpriteCaptureScanlineConstMeta,
+        argValues: [scanline, dot],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetSpriteCaptureScanlineConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sprite_capture_scanline",
+        argNames: ["scanline", "dot"],
+      );
+
+  @override
+  Future<void> crateApiEventsSetSpriteCaptureVblankStart() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 27,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetSpriteCaptureVblankStartConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetSpriteCaptureVblankStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sprite_capture_vblank_start",
+        argNames: [],
+      );
 
   @override
   Future<void> crateApiEventsSetTileViewerBackground({
@@ -1020,6 +1038,132 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiEventsSetTileViewerCaptureFrameStart() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 29,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetTileViewerCaptureFrameStartConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetTileViewerCaptureFrameStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_tile_viewer_capture_frame_start",
+        argNames: [],
+      );
+
+  @override
+  Future<void> crateApiEventsSetTileViewerCaptureScanline({
+    required int scanline,
+    required int dot,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_32(scanline, serializer);
+          sse_encode_i_32(dot, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 30,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetTileViewerCaptureScanlineConstMeta,
+        argValues: [scanline, dot],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetTileViewerCaptureScanlineConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_tile_viewer_capture_scanline",
+        argNames: ["scanline", "dot"],
+      );
+
+  @override
+  Future<void> crateApiEventsSetTileViewerCaptureVblankStart() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 31,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetTileViewerCaptureVblankStartConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetTileViewerCaptureVblankStartConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_tile_viewer_capture_vblank_start",
+        argNames: [],
+      );
+
+  @override
+  Future<void> crateApiEventsSetTileViewerDisplayMode({required int mode}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_8(mode, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 32,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetTileViewerDisplayModeConstMeta,
+        argValues: [mode],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetTileViewerDisplayModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_tile_viewer_display_mode",
+        argNames: ["mode"],
+      );
+
+  @override
   Future<void> crateApiEventsSetTileViewerLayout({required int layout}) {
     return handler.executeNormal(
       NormalTask(
@@ -1029,7 +1173,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1051,6 +1195,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiEventsSetTileViewerPalette({required int paletteIndex}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_8(paletteIndex, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 34,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsSetTileViewerPaletteConstMeta,
+        argValues: [paletteIndex],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsSetTileViewerPaletteConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_tile_viewer_palette",
+        argNames: ["paletteIndex"],
+      );
+
+  @override
   Future<void> crateApiEventsSetTileViewerSize({
     required int columns,
     required int rows,
@@ -1064,7 +1239,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1095,7 +1270,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1128,7 +1303,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1158,7 +1333,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1193,7 +1368,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 39,
             port: port_,
           );
         },
@@ -1223,7 +1398,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 40,
             port: port_,
           );
         },
@@ -1254,7 +1429,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 41,
             port: port_,
           );
         },
@@ -1285,7 +1460,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 42,
             port: port_,
           );
         },
@@ -1320,7 +1495,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 43,
             port: port_,
           );
         },
@@ -1354,7 +1529,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 44,
             port: port_,
           );
         },
@@ -1387,7 +1562,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 40,
+              funcId: 45,
               port: port_,
             );
           },
@@ -1416,7 +1591,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 41,
+            funcId: 46,
             port: port_,
           );
         },
@@ -1443,7 +1618,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 47,
             port: port_,
           );
         },
@@ -1462,6 +1637,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "subscribe_tilemap_texture", argNames: []);
 
   @override
+  Stream<TileSnapshot> crateApiEventsTileStateStream() {
+    final sink = RustStreamSink<TileSnapshot>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_StreamSink_tile_snapshot_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 48,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_String,
+          ),
+          constMeta: kCrateApiEventsTileStateStreamConstMeta,
+          argValues: [sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiEventsTileStateStreamConstMeta =>
+      const TaskConstMeta(debugName: "tile_state_stream", argNames: ["sink"]);
+
+  @override
   Stream<TilemapSnapshot> crateApiEventsTilemapStateStream() {
     final sink = RustStreamSink<TilemapSnapshot>();
     unawaited(
@@ -1473,7 +1680,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 43,
+              funcId: 49,
               port: port_,
             );
           },
@@ -1505,7 +1712,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 50,
             port: port_,
           );
         },
@@ -1524,33 +1731,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "toggle_pause", argNames: []);
 
   @override
-  Future<void> crateApiEventsUnsubscribeChrState() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 45,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiEventsUnsubscribeChrStateConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiEventsUnsubscribeChrStateConstMeta =>
-      const TaskConstMeta(debugName: "unsubscribe_chr_state", argNames: []);
-
-  @override
   Future<void> crateApiEventsUnsubscribeDebugState() {
     return handler.executeNormal(
       NormalTask(
@@ -1559,7 +1739,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 51,
             port: port_,
           );
         },
@@ -1586,7 +1766,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 52,
             port: port_,
           );
         },
@@ -1605,6 +1785,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "unsubscribe_sprite_state", argNames: []);
 
   @override
+  Future<void> crateApiEventsUnsubscribeTileState() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 53,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEventsUnsubscribeTileStateConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEventsUnsubscribeTileStateConstMeta =>
+      const TaskConstMeta(debugName: "unsubscribe_tile_state", argNames: []);
+
+  @override
   Future<void> crateApiEventsUnsubscribeTilemapTexture() {
     return handler.executeNormal(
       NormalTask(
@@ -1613,7 +1820,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 54,
             port: port_,
           );
         },
@@ -1641,14 +1848,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RustStreamSink<ChrSnapshot> dco_decode_StreamSink_chr_snapshot_Sse(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    throw UnimplementedError();
-  }
-
-  @protected
   RustStreamSink<DebugStateNotification>
   dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -1671,6 +1870,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustStreamSink<TileSnapshot> dco_decode_StreamSink_tile_snapshot_Sse(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
+
+  @protected
   RustStreamSink<TilemapSnapshot> dco_decode_StreamSink_tilemap_snapshot_Sse(
     dynamic raw,
   ) {
@@ -1685,35 +1892,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  bool dco_decode_bool(dynamic raw) {
+  AuxTextureIds dco_decode_aux_texture_ids(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as bool;
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return AuxTextureIds(
+      tilemap: dco_decode_u_32(arr[0]),
+      tile: dco_decode_u_32(arr[1]),
+      sprite: dco_decode_u_32(arr[2]),
+      spriteScreen: dco_decode_u_32(arr[3]),
+    );
   }
 
   @protected
-  ChrSnapshot dco_decode_chr_snapshot(dynamic raw) {
+  bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 16)
-      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
-    return ChrSnapshot(
-      palette: dco_decode_list_prim_u_8_strict(arr[0]),
-      rgbaPalette: dco_decode_list_prim_u_8_strict(arr[1]),
-      selectedPalette: dco_decode_u_8(arr[2]),
-      width: dco_decode_u_16(arr[3]),
-      height: dco_decode_u_16(arr[4]),
-      source: dco_decode_u_8(arr[5]),
-      sourceSize: dco_decode_u_32(arr[6]),
-      startAddress: dco_decode_u_32(arr[7]),
-      columnCount: dco_decode_u_16(arr[8]),
-      rowCount: dco_decode_u_16(arr[9]),
-      layout: dco_decode_u_8(arr[10]),
-      background: dco_decode_u_8(arr[11]),
-      useGrayscalePalette: dco_decode_bool(arr[12]),
-      bgPatternBase: dco_decode_u_16(arr[13]),
-      spritePatternBase: dco_decode_u_16(arr[14]),
-      largeSprites: dco_decode_bool(arr[15]),
-    );
+    return raw as bool;
   }
 
   @protected
@@ -1859,6 +2054,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TileSnapshot dco_decode_tile_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 16)
+      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
+    return TileSnapshot(
+      palette: dco_decode_list_prim_u_8_strict(arr[0]),
+      rgbaPalette: dco_decode_list_prim_u_8_strict(arr[1]),
+      selectedPalette: dco_decode_u_8(arr[2]),
+      width: dco_decode_u_16(arr[3]),
+      height: dco_decode_u_16(arr[4]),
+      source: dco_decode_u_8(arr[5]),
+      sourceSize: dco_decode_u_32(arr[6]),
+      startAddress: dco_decode_u_32(arr[7]),
+      columnCount: dco_decode_u_16(arr[8]),
+      rowCount: dco_decode_u_16(arr[9]),
+      layout: dco_decode_u_8(arr[10]),
+      background: dco_decode_u_8(arr[11]),
+      useGrayscalePalette: dco_decode_bool(arr[12]),
+      bgPatternBase: dco_decode_u_16(arr[13]),
+      spritePatternBase: dco_decode_u_16(arr[14]),
+      largeSprites: dco_decode_bool(arr[15]),
+    );
+  }
+
+  @protected
   TilemapMirroring dco_decode_tilemap_mirroring(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return TilemapMirroring.values[raw as int];
@@ -1921,14 +2142,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RustStreamSink<ChrSnapshot> sse_decode_StreamSink_chr_snapshot_Sse(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    throw UnimplementedError('Unreachable ()');
-  }
-
-  @protected
   RustStreamSink<DebugStateNotification>
   sse_decode_StreamSink_debug_state_notification_Sse(
     SseDeserializer deserializer,
@@ -1953,6 +2166,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  RustStreamSink<TileSnapshot> sse_decode_StreamSink_tile_snapshot_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
   RustStreamSink<TilemapSnapshot> sse_decode_StreamSink_tilemap_snapshot_Sse(
     SseDeserializer deserializer,
   ) {
@@ -1968,48 +2189,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
+  AuxTextureIds sse_decode_aux_texture_ids(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
+    var var_tilemap = sse_decode_u_32(deserializer);
+    var var_tile = sse_decode_u_32(deserializer);
+    var var_sprite = sse_decode_u_32(deserializer);
+    var var_spriteScreen = sse_decode_u_32(deserializer);
+    return AuxTextureIds(
+      tilemap: var_tilemap,
+      tile: var_tile,
+      sprite: var_sprite,
+      spriteScreen: var_spriteScreen,
+    );
   }
 
   @protected
-  ChrSnapshot sse_decode_chr_snapshot(SseDeserializer deserializer) {
+  bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_palette = sse_decode_list_prim_u_8_strict(deserializer);
-    var var_rgbaPalette = sse_decode_list_prim_u_8_strict(deserializer);
-    var var_selectedPalette = sse_decode_u_8(deserializer);
-    var var_width = sse_decode_u_16(deserializer);
-    var var_height = sse_decode_u_16(deserializer);
-    var var_source = sse_decode_u_8(deserializer);
-    var var_sourceSize = sse_decode_u_32(deserializer);
-    var var_startAddress = sse_decode_u_32(deserializer);
-    var var_columnCount = sse_decode_u_16(deserializer);
-    var var_rowCount = sse_decode_u_16(deserializer);
-    var var_layout = sse_decode_u_8(deserializer);
-    var var_background = sse_decode_u_8(deserializer);
-    var var_useGrayscalePalette = sse_decode_bool(deserializer);
-    var var_bgPatternBase = sse_decode_u_16(deserializer);
-    var var_spritePatternBase = sse_decode_u_16(deserializer);
-    var var_largeSprites = sse_decode_bool(deserializer);
-    return ChrSnapshot(
-      palette: var_palette,
-      rgbaPalette: var_rgbaPalette,
-      selectedPalette: var_selectedPalette,
-      width: var_width,
-      height: var_height,
-      source: var_source,
-      sourceSize: var_sourceSize,
-      startAddress: var_startAddress,
-      columnCount: var_columnCount,
-      rowCount: var_rowCount,
-      layout: var_layout,
-      background: var_background,
-      useGrayscalePalette: var_useGrayscalePalette,
-      bgPatternBase: var_bgPatternBase,
-      spritePatternBase: var_spritePatternBase,
-      largeSprites: var_largeSprites,
-    );
+    return deserializer.buffer.getUint8() != 0;
   }
 
   @protected
@@ -2202,6 +2399,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TileSnapshot sse_decode_tile_snapshot(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_palette = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_rgbaPalette = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_selectedPalette = sse_decode_u_8(deserializer);
+    var var_width = sse_decode_u_16(deserializer);
+    var var_height = sse_decode_u_16(deserializer);
+    var var_source = sse_decode_u_8(deserializer);
+    var var_sourceSize = sse_decode_u_32(deserializer);
+    var var_startAddress = sse_decode_u_32(deserializer);
+    var var_columnCount = sse_decode_u_16(deserializer);
+    var var_rowCount = sse_decode_u_16(deserializer);
+    var var_layout = sse_decode_u_8(deserializer);
+    var var_background = sse_decode_u_8(deserializer);
+    var var_useGrayscalePalette = sse_decode_bool(deserializer);
+    var var_bgPatternBase = sse_decode_u_16(deserializer);
+    var var_spritePatternBase = sse_decode_u_16(deserializer);
+    var var_largeSprites = sse_decode_bool(deserializer);
+    return TileSnapshot(
+      palette: var_palette,
+      rgbaPalette: var_rgbaPalette,
+      selectedPalette: var_selectedPalette,
+      width: var_width,
+      height: var_height,
+      source: var_source,
+      sourceSize: var_sourceSize,
+      startAddress: var_startAddress,
+      columnCount: var_columnCount,
+      rowCount: var_rowCount,
+      layout: var_layout,
+      background: var_background,
+      useGrayscalePalette: var_useGrayscalePalette,
+      bgPatternBase: var_bgPatternBase,
+      spritePatternBase: var_spritePatternBase,
+      largeSprites: var_largeSprites,
+    );
+  }
+
+  @protected
   TilemapMirroring sse_decode_tilemap_mirroring(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
@@ -2272,23 +2508,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_StreamSink_chr_snapshot_Sse(
-    RustStreamSink<ChrSnapshot> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(
-      self.setupAndSerialize(
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_chr_snapshot,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-      ),
-      serializer,
-    );
-  }
-
-  @protected
   void sse_encode_StreamSink_debug_state_notification_Sse(
     RustStreamSink<DebugStateNotification> self,
     SseSerializer serializer,
@@ -2340,6 +2559,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_StreamSink_tile_snapshot_Sse(
+    RustStreamSink<TileSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_tile_snapshot,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_StreamSink_tilemap_snapshot_Sse(
     RustStreamSink<TilemapSnapshot> self,
     SseSerializer serializer,
@@ -2363,30 +2599,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
+  void sse_encode_aux_texture_ids(
+    AuxTextureIds self,
+    SseSerializer serializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
+    sse_encode_u_32(self.tilemap, serializer);
+    sse_encode_u_32(self.tile, serializer);
+    sse_encode_u_32(self.sprite, serializer);
+    sse_encode_u_32(self.spriteScreen, serializer);
   }
 
   @protected
-  void sse_encode_chr_snapshot(ChrSnapshot self, SseSerializer serializer) {
+  void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_prim_u_8_strict(self.palette, serializer);
-    sse_encode_list_prim_u_8_strict(self.rgbaPalette, serializer);
-    sse_encode_u_8(self.selectedPalette, serializer);
-    sse_encode_u_16(self.width, serializer);
-    sse_encode_u_16(self.height, serializer);
-    sse_encode_u_8(self.source, serializer);
-    sse_encode_u_32(self.sourceSize, serializer);
-    sse_encode_u_32(self.startAddress, serializer);
-    sse_encode_u_16(self.columnCount, serializer);
-    sse_encode_u_16(self.rowCount, serializer);
-    sse_encode_u_8(self.layout, serializer);
-    sse_encode_u_8(self.background, serializer);
-    sse_encode_bool(self.useGrayscalePalette, serializer);
-    sse_encode_u_16(self.bgPatternBase, serializer);
-    sse_encode_u_16(self.spritePatternBase, serializer);
-    sse_encode_bool(self.largeSprites, serializer);
+    serializer.buffer.putUint8(self ? 1 : 0);
   }
 
   @protected
@@ -2552,6 +2779,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.largeSprites, serializer);
     sse_encode_u_16(self.patternBase, serializer);
     sse_encode_list_prim_u_8_strict(self.rgbaPalette, serializer);
+  }
+
+  @protected
+  void sse_encode_tile_snapshot(TileSnapshot self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.palette, serializer);
+    sse_encode_list_prim_u_8_strict(self.rgbaPalette, serializer);
+    sse_encode_u_8(self.selectedPalette, serializer);
+    sse_encode_u_16(self.width, serializer);
+    sse_encode_u_16(self.height, serializer);
+    sse_encode_u_8(self.source, serializer);
+    sse_encode_u_32(self.sourceSize, serializer);
+    sse_encode_u_32(self.startAddress, serializer);
+    sse_encode_u_16(self.columnCount, serializer);
+    sse_encode_u_16(self.rowCount, serializer);
+    sse_encode_u_8(self.layout, serializer);
+    sse_encode_u_8(self.background, serializer);
+    sse_encode_bool(self.useGrayscalePalette, serializer);
+    sse_encode_u_16(self.bgPatternBase, serializer);
+    sse_encode_u_16(self.spritePatternBase, serializer);
+    sse_encode_bool(self.largeSprites, serializer);
   }
 
   @protected

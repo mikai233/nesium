@@ -4,6 +4,7 @@ import 'package:nesium_flutter/bridge/api/events.dart' as bridge;
 
 import '../logging/app_logger.dart';
 import '../shell/nes_actions.dart';
+import '../domain/aux_texture_ids.dart';
 import '../domain/nes_texture_service.dart';
 import '../platform/window_manager_shim.dart';
 import '../platform/desktop_window_manager.dart';
@@ -55,23 +56,53 @@ class _SecondaryWindowState extends State<SecondaryWindow> with WindowListener {
       } catch (_) {}
     }
 
+    bridge.AuxTextureIds? ids;
+    try {
+      ids = await AuxTextureIdsCache.get();
+    } catch (_) {}
+
     switch (widget.kind) {
       case WindowKind.tilemap:
         await bestEffort(bridge.unsubscribeTilemapTexture);
-        await bestEffort(() => _textureService.pauseAuxTexture(1));
-        await bestEffort(() => _textureService.disposeAuxTexture(1));
+        if (ids != null) {
+          final nonNullIds = ids;
+          await bestEffort(
+            () => _textureService.pauseAuxTexture(nonNullIds.tilemap),
+          );
+          await bestEffort(
+            () => _textureService.disposeAuxTexture(nonNullIds.tilemap),
+          );
+        }
         break;
       case WindowKind.tileViewer:
-        await bestEffort(bridge.unsubscribeChrState);
-        await bestEffort(() => _textureService.pauseAuxTexture(2));
-        await bestEffort(() => _textureService.disposeAuxTexture(2));
+        await bestEffort(bridge.unsubscribeTileState);
+        if (ids != null) {
+          final nonNullIds = ids;
+          await bestEffort(
+            () => _textureService.pauseAuxTexture(nonNullIds.tile),
+          );
+          await bestEffort(
+            () => _textureService.disposeAuxTexture(nonNullIds.tile),
+          );
+        }
         break;
       case WindowKind.spriteViewer:
         await bestEffort(bridge.unsubscribeSpriteState);
-        await bestEffort(() => _textureService.pauseAuxTexture(3));
-        await bestEffort(() => _textureService.pauseAuxTexture(4));
-        await bestEffort(() => _textureService.disposeAuxTexture(3));
-        await bestEffort(() => _textureService.disposeAuxTexture(4));
+        if (ids != null) {
+          final nonNullIds = ids;
+          await bestEffort(
+            () => _textureService.pauseAuxTexture(nonNullIds.sprite),
+          );
+          await bestEffort(
+            () => _textureService.pauseAuxTexture(nonNullIds.spriteScreen),
+          );
+          await bestEffort(
+            () => _textureService.disposeAuxTexture(nonNullIds.sprite),
+          );
+          await bestEffort(
+            () => _textureService.disposeAuxTexture(nonNullIds.spriteScreen),
+          );
+        }
         break;
       case WindowKind.debugger:
         await bestEffort(bridge.unsubscribeDebugState);

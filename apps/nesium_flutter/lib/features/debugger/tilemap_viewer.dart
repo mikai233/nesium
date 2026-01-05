@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/events.dart' as bridge;
+import 'package:nesium_flutter/domain/aux_texture_ids.dart';
 import 'package:nesium_flutter/domain/nes_texture_service.dart';
 import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
@@ -20,7 +21,6 @@ class TilemapViewer extends ConsumerStatefulWidget {
 enum _TilemapDisplayMode { defaultMode, grayscale, attributeView }
 
 class _TilemapViewerState extends ConsumerState<TilemapViewer> {
-  static const int _tilemapTextureId = 1;
   static const int _width = 512;
   static const int _height = 480;
   static const int _minScanline = -1;
@@ -29,6 +29,7 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
   static const int _maxDot = 340;
 
   final NesTextureService _textureService = NesTextureService();
+  int? _tilemapTextureId;
   int? _flutterTextureId;
   bool _isCreating = false;
   String? _error;
@@ -102,8 +103,11 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
     });
 
     try {
+      final ids = await AuxTextureIdsCache.get();
+      _tilemapTextureId ??= ids.tilemap;
+
       final textureId = await _textureService.createAuxTexture(
-        id: _tilemapTextureId,
+        id: _tilemapTextureId!,
         width: _width,
         height: _height,
       );
@@ -145,10 +149,15 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
 
   @override
   void dispose() {
-    _textureService.pauseAuxTexture(_tilemapTextureId);
+    final textureId = _tilemapTextureId;
+    if (textureId != null) {
+      _textureService.pauseAuxTexture(textureId);
+    }
     unawaited(_tilemapSnapshotSub?.cancel());
     bridge.unsubscribeTilemapTexture();
-    _textureService.disposeAuxTexture(_tilemapTextureId);
+    if (textureId != null) {
+      _textureService.disposeAuxTexture(textureId);
+    }
     _scanlineController.dispose();
     _dotController.dispose();
     _transformationController.removeListener(_onTransformChanged);

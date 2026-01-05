@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 532096231;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 791019600;
 
 // Section: executor
 
@@ -45,7 +45,7 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
-fn wire__crate__api__events__chr_state_stream_impl(
+fn wire__crate__api__events__aux_texture_ids_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -53,7 +53,7 @@ fn wire__crate__api__events__chr_state_stream_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "chr_state_stream",
+            debug_name: "aux_texture_ids",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -67,15 +67,12 @@ fn wire__crate__api__events__chr_state_stream_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_sink = <StreamSink<
-                crate::api::events::ChrSnapshot,
-                flutter_rust_bridge::for_generated::SseCodec,
-            >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, ()>(
                     (move || async move {
-                        let output_ok = crate::api::events::chr_state_stream(api_sink).await?;
+                        let output_ok =
+                            Result::<_, ()>::Ok(crate::api::events::aux_texture_ids().await)?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -622,115 +619,6 @@ fn wire__crate__api__emulation__save_state_to_memory_impl(
         },
     )
 }
-fn wire__crate__api__events__set_chr_display_mode_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_chr_display_mode",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_mode = <u8>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, String>(
-                    (move || async move {
-                        let output_ok = crate::api::events::set_chr_display_mode(api_mode).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__events__set_chr_palette_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_chr_palette",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_palette_index = <u8>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, String>(
-                    (move || async move {
-                        let output_ok =
-                            crate::api::events::set_chr_palette(api_palette_index).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__events__set_chr_source_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "set_chr_source",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_source = <u8>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, String>(
-                    (move || async move {
-                        let output_ok = crate::api::events::set_chr_source(api_source).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
 fn wire__crate__api__emulation__set_integer_fps_mode_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -967,6 +855,117 @@ fn wire__crate__api__emulation__set_rewinding_impl(
         },
     )
 }
+fn wire__crate__api__events__set_sprite_capture_frame_start_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_sprite_capture_frame_start",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_sprite_capture_frame_start().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__events__set_sprite_capture_scanline_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_sprite_capture_scanline",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scanline = <i32>::sse_decode(&mut deserializer);
+            let api_dot = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_sprite_capture_scanline(api_scanline, api_dot)
+                                .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__events__set_sprite_capture_vblank_start_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_sprite_capture_vblank_start",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_sprite_capture_vblank_start().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__events__set_tile_viewer_background_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1004,6 +1003,156 @@ fn wire__crate__api__events__set_tile_viewer_background_impl(
         },
     )
 }
+fn wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_tile_viewer_capture_frame_start",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_tile_viewer_capture_frame_start().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_tile_viewer_capture_scanline",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scanline = <i32>::sse_decode(&mut deserializer);
+            let api_dot = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::events::set_tile_viewer_capture_scanline(
+                            api_scanline,
+                            api_dot,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_tile_viewer_capture_vblank_start",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_tile_viewer_capture_vblank_start().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__events__set_tile_viewer_display_mode_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_tile_viewer_display_mode",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_mode = <u8>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_tile_viewer_display_mode(api_mode).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__events__set_tile_viewer_layout_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1033,6 +1182,43 @@ fn wire__crate__api__events__set_tile_viewer_layout_impl(
                     (move || async move {
                         let output_ok =
                             crate::api::events::set_tile_viewer_layout(api_layout).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__events__set_tile_viewer_palette_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_tile_viewer_palette",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_palette_index = <u8>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::events::set_tile_viewer_palette(api_palette_index).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -1510,6 +1696,45 @@ fn wire__crate__api__events__subscribe_tilemap_texture_impl(
         },
     )
 }
+fn wire__crate__api__events__tile_state_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "tile_state_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_sink = <StreamSink<
+                crate::api::events::TileSnapshot,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::events::tile_state_stream(api_sink).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__events__tilemap_state_stream_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1577,41 +1802,6 @@ fn wire__crate__api__pause__toggle_pause_impl(
                     let output_ok = Result::<_, ()>::Ok(crate::api::pause::toggle_pause())?;
                     Ok(output_ok)
                 })())
-            }
-        },
-    )
-}
-fn wire__crate__api__events__unsubscribe_chr_state_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "unsubscribe_chr_state",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, String>(
-                    (move || async move {
-                        let output_ok = crate::api::events::unsubscribe_chr_state().await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
             }
         },
     )
@@ -1686,6 +1876,41 @@ fn wire__crate__api__events__unsubscribe_sprite_state_impl(
         },
     )
 }
+fn wire__crate__api__events__unsubscribe_tile_state_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "unsubscribe_tile_state",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::events::unsubscribe_tile_state().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__events__unsubscribe_tilemap_texture_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1733,16 +1958,6 @@ impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
 }
 
 impl SseDecode
-    for StreamSink<crate::api::events::ChrSnapshot, flutter_rust_bridge::for_generated::SseCodec>
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <String>::sse_decode(deserializer);
-        return StreamSink::deserialize(inner);
-    }
-}
-
-impl SseDecode
     for StreamSink<
         crate::api::events::DebugStateNotification,
         flutter_rust_bridge::for_generated::SseCodec,
@@ -1779,6 +1994,16 @@ impl SseDecode
 }
 
 impl SseDecode
+    for StreamSink<crate::api::events::TileSnapshot, flutter_rust_bridge::for_generated::SseCodec>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
     for StreamSink<
         crate::api::events::TilemapSnapshot,
         flutter_rust_bridge::for_generated::SseCodec,
@@ -1799,50 +2024,26 @@ impl SseDecode for String {
     }
 }
 
+impl SseDecode for crate::api::events::AuxTextureIds {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_tilemap = <u32>::sse_decode(deserializer);
+        let mut var_tile = <u32>::sse_decode(deserializer);
+        let mut var_sprite = <u32>::sse_decode(deserializer);
+        let mut var_spriteScreen = <u32>::sse_decode(deserializer);
+        return crate::api::events::AuxTextureIds {
+            tilemap: var_tilemap,
+            tile: var_tile,
+            sprite: var_sprite,
+            sprite_screen: var_spriteScreen,
+        };
+    }
+}
+
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_u8().unwrap() != 0
-    }
-}
-
-impl SseDecode for crate::api::events::ChrSnapshot {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_palette = <Vec<u8>>::sse_decode(deserializer);
-        let mut var_rgbaPalette = <Vec<u8>>::sse_decode(deserializer);
-        let mut var_selectedPalette = <u8>::sse_decode(deserializer);
-        let mut var_width = <u16>::sse_decode(deserializer);
-        let mut var_height = <u16>::sse_decode(deserializer);
-        let mut var_source = <u8>::sse_decode(deserializer);
-        let mut var_sourceSize = <u32>::sse_decode(deserializer);
-        let mut var_startAddress = <u32>::sse_decode(deserializer);
-        let mut var_columnCount = <u16>::sse_decode(deserializer);
-        let mut var_rowCount = <u16>::sse_decode(deserializer);
-        let mut var_layout = <u8>::sse_decode(deserializer);
-        let mut var_background = <u8>::sse_decode(deserializer);
-        let mut var_useGrayscalePalette = <bool>::sse_decode(deserializer);
-        let mut var_bgPatternBase = <u16>::sse_decode(deserializer);
-        let mut var_spritePatternBase = <u16>::sse_decode(deserializer);
-        let mut var_largeSprites = <bool>::sse_decode(deserializer);
-        return crate::api::events::ChrSnapshot {
-            palette: var_palette,
-            rgba_palette: var_rgbaPalette,
-            selected_palette: var_selectedPalette,
-            width: var_width,
-            height: var_height,
-            source: var_source,
-            source_size: var_sourceSize,
-            start_address: var_startAddress,
-            column_count: var_columnCount,
-            row_count: var_rowCount,
-            layout: var_layout,
-            background: var_background,
-            use_grayscale_palette: var_useGrayscalePalette,
-            bg_pattern_base: var_bgPatternBase,
-            sprite_pattern_base: var_spritePatternBase,
-            large_sprites: var_largeSprites,
-        };
     }
 }
 
@@ -2050,6 +2251,46 @@ impl SseDecode for crate::api::events::SpriteSnapshot {
     }
 }
 
+impl SseDecode for crate::api::events::TileSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_palette = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_rgbaPalette = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_selectedPalette = <u8>::sse_decode(deserializer);
+        let mut var_width = <u16>::sse_decode(deserializer);
+        let mut var_height = <u16>::sse_decode(deserializer);
+        let mut var_source = <u8>::sse_decode(deserializer);
+        let mut var_sourceSize = <u32>::sse_decode(deserializer);
+        let mut var_startAddress = <u32>::sse_decode(deserializer);
+        let mut var_columnCount = <u16>::sse_decode(deserializer);
+        let mut var_rowCount = <u16>::sse_decode(deserializer);
+        let mut var_layout = <u8>::sse_decode(deserializer);
+        let mut var_background = <u8>::sse_decode(deserializer);
+        let mut var_useGrayscalePalette = <bool>::sse_decode(deserializer);
+        let mut var_bgPatternBase = <u16>::sse_decode(deserializer);
+        let mut var_spritePatternBase = <u16>::sse_decode(deserializer);
+        let mut var_largeSprites = <bool>::sse_decode(deserializer);
+        return crate::api::events::TileSnapshot {
+            palette: var_palette,
+            rgba_palette: var_rgbaPalette,
+            selected_palette: var_selectedPalette,
+            width: var_width,
+            height: var_height,
+            source: var_source,
+            source_size: var_sourceSize,
+            start_address: var_startAddress,
+            column_count: var_columnCount,
+            row_count: var_rowCount,
+            layout: var_layout,
+            background: var_background,
+            use_grayscale_palette: var_useGrayscalePalette,
+            bg_pattern_base: var_bgPatternBase,
+            sprite_pattern_base: var_spritePatternBase,
+            large_sprites: var_largeSprites,
+        };
+    }
+}
+
 impl SseDecode for crate::api::events::TilemapMirroring {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2134,7 +2375,7 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__api__events__chr_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        1 => wire__crate__api__events__aux_texture_ids_impl(port, ptr, rust_vec_len, data_len),
         2 => wire__crate__api__events__debug_state_stream_impl(port, ptr, rust_vec_len, data_len),
         3 => wire__crate__api__load_rom__eject_console_impl(port, ptr, rust_vec_len, data_len),
         4 => wire__crate__api__load_rom__get_rom_hash_impl(port, ptr, rust_vec_len, data_len),
@@ -2164,108 +2405,152 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        18 => {
-            wire__crate__api__events__set_chr_display_mode_impl(port, ptr, rust_vec_len, data_len)
-        }
-        19 => wire__crate__api__events__set_chr_palette_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__events__set_chr_source_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__emulation__set_integer_fps_mode_impl(
+        18 => wire__crate__api__emulation__set_integer_fps_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
-        23 => {
+        19 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
+        20 => {
             wire__crate__api__palette__set_palette_pal_data_impl(port, ptr, rust_vec_len, data_len)
         }
-        24 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
-        26 => {
+        21 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
+        23 => {
             wire__crate__api__emulation__set_rewind_config_impl(port, ptr, rust_vec_len, data_len)
         }
-        27 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__events__set_sprite_capture_frame_start_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        26 => wire__crate__api__events__set_sprite_capture_scanline_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        27 => wire__crate__api__events__set_sprite_capture_vblank_start_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         28 => wire__crate__api__events__set_tile_viewer_background_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => {
+        29 => wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        30 => wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        31 => wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        32 => wire__crate__api__events__set_tile_viewer_display_mode_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        33 => {
             wire__crate__api__events__set_tile_viewer_layout_impl(port, ptr, rust_vec_len, data_len)
         }
-        30 => {
+        34 => wire__crate__api__events__set_tile_viewer_palette_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        35 => {
             wire__crate__api__events__set_tile_viewer_size_impl(port, ptr, rust_vec_len, data_len)
         }
-        31 => {
+        36 => {
             wire__crate__api__events__set_tile_viewer_source_impl(port, ptr, rust_vec_len, data_len)
         }
-        32 => wire__crate__api__events__set_tile_viewer_start_address_impl(
+        37 => wire__crate__api__events__set_tile_viewer_start_address_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
+        38 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
+        39 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
+        40 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__events__set_tilemap_display_mode_impl(
+        41 => wire__crate__api__events__set_tilemap_display_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
+        42 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__events__subscribe_tilemap_texture_impl(
+        43 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__events__subscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => {
+        48 => wire__crate__api__events__tile_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        49 => {
             wire__crate__api__events__tilemap_state_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        44 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
-        45 => {
-            wire__crate__api__events__unsubscribe_chr_state_impl(port, ptr, rust_vec_len, data_len)
+        50 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__events__unsubscribe_debug_state_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        52 => wire__crate__api__events__unsubscribe_sprite_state_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        53 => {
+            wire__crate__api__events__unsubscribe_tile_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        46 => wire__crate__api__events__unsubscribe_debug_state_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        47 => wire__crate__api__events__unsubscribe_sprite_state_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        48 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
+        54 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
@@ -2291,37 +2576,25 @@ fn pde_ffi_dispatcher_sync_impl(
 // Section: rust2dart
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::events::ChrSnapshot {
+impl flutter_rust_bridge::IntoDart for crate::api::events::AuxTextureIds {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.palette.into_into_dart().into_dart(),
-            self.rgba_palette.into_into_dart().into_dart(),
-            self.selected_palette.into_into_dart().into_dart(),
-            self.width.into_into_dart().into_dart(),
-            self.height.into_into_dart().into_dart(),
-            self.source.into_into_dart().into_dart(),
-            self.source_size.into_into_dart().into_dart(),
-            self.start_address.into_into_dart().into_dart(),
-            self.column_count.into_into_dart().into_dart(),
-            self.row_count.into_into_dart().into_dart(),
-            self.layout.into_into_dart().into_dart(),
-            self.background.into_into_dart().into_dart(),
-            self.use_grayscale_palette.into_into_dart().into_dart(),
-            self.bg_pattern_base.into_into_dart().into_dart(),
-            self.sprite_pattern_base.into_into_dart().into_dart(),
-            self.large_sprites.into_into_dart().into_dart(),
+            self.tilemap.into_into_dart().into_dart(),
+            self.tile.into_into_dart().into_dart(),
+            self.sprite.into_into_dart().into_dart(),
+            self.sprite_screen.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::events::ChrSnapshot
+    for crate::api::events::AuxTextureIds
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::events::ChrSnapshot>
-    for crate::api::events::ChrSnapshot
+impl flutter_rust_bridge::IntoIntoDart<crate::api::events::AuxTextureIds>
+    for crate::api::events::AuxTextureIds
 {
-    fn into_into_dart(self) -> crate::api::events::ChrSnapshot {
+    fn into_into_dart(self) -> crate::api::events::AuxTextureIds {
         self
     }
 }
@@ -2497,6 +2770,41 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::events::SpriteSnapshot>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::events::TileSnapshot {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.palette.into_into_dart().into_dart(),
+            self.rgba_palette.into_into_dart().into_dart(),
+            self.selected_palette.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.source_size.into_into_dart().into_dart(),
+            self.start_address.into_into_dart().into_dart(),
+            self.column_count.into_into_dart().into_dart(),
+            self.row_count.into_into_dart().into_dart(),
+            self.layout.into_into_dart().into_dart(),
+            self.background.into_into_dart().into_dart(),
+            self.use_grayscale_palette.into_into_dart().into_dart(),
+            self.bg_pattern_base.into_into_dart().into_dart(),
+            self.sprite_pattern_base.into_into_dart().into_dart(),
+            self.large_sprites.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::events::TileSnapshot
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::events::TileSnapshot>
+    for crate::api::events::TileSnapshot
+{
+    fn into_into_dart(self) -> crate::api::events::TileSnapshot {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::events::TilemapMirroring {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -2558,15 +2866,6 @@ impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
 }
 
 impl SseEncode
-    for StreamSink<crate::api::events::ChrSnapshot, flutter_rust_bridge::for_generated::SseCodec>
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        unimplemented!("")
-    }
-}
-
-impl SseEncode
     for StreamSink<
         crate::api::events::DebugStateNotification,
         flutter_rust_bridge::for_generated::SseCodec,
@@ -2600,6 +2899,15 @@ impl SseEncode
 }
 
 impl SseEncode
+    for StreamSink<crate::api::events::TileSnapshot, flutter_rust_bridge::for_generated::SseCodec>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
     for StreamSink<
         crate::api::events::TilemapSnapshot,
         flutter_rust_bridge::for_generated::SseCodec,
@@ -2618,32 +2926,20 @@ impl SseEncode for String {
     }
 }
 
+impl SseEncode for crate::api::events::AuxTextureIds {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.tilemap, serializer);
+        <u32>::sse_encode(self.tile, serializer);
+        <u32>::sse_encode(self.sprite, serializer);
+        <u32>::sse_encode(self.sprite_screen, serializer);
+    }
+}
+
 impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u8(self as _).unwrap();
-    }
-}
-
-impl SseEncode for crate::api::events::ChrSnapshot {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<u8>>::sse_encode(self.palette, serializer);
-        <Vec<u8>>::sse_encode(self.rgba_palette, serializer);
-        <u8>::sse_encode(self.selected_palette, serializer);
-        <u16>::sse_encode(self.width, serializer);
-        <u16>::sse_encode(self.height, serializer);
-        <u8>::sse_encode(self.source, serializer);
-        <u32>::sse_encode(self.source_size, serializer);
-        <u32>::sse_encode(self.start_address, serializer);
-        <u16>::sse_encode(self.column_count, serializer);
-        <u16>::sse_encode(self.row_count, serializer);
-        <u8>::sse_encode(self.layout, serializer);
-        <u8>::sse_encode(self.background, serializer);
-        <bool>::sse_encode(self.use_grayscale_palette, serializer);
-        <u16>::sse_encode(self.bg_pattern_base, serializer);
-        <u16>::sse_encode(self.sprite_pattern_base, serializer);
-        <bool>::sse_encode(self.large_sprites, serializer);
     }
 }
 
@@ -2804,6 +3100,28 @@ impl SseEncode for crate::api::events::SpriteSnapshot {
         <bool>::sse_encode(self.large_sprites, serializer);
         <u16>::sse_encode(self.pattern_base, serializer);
         <Vec<u8>>::sse_encode(self.rgba_palette, serializer);
+    }
+}
+
+impl SseEncode for crate::api::events::TileSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<u8>>::sse_encode(self.palette, serializer);
+        <Vec<u8>>::sse_encode(self.rgba_palette, serializer);
+        <u8>::sse_encode(self.selected_palette, serializer);
+        <u16>::sse_encode(self.width, serializer);
+        <u16>::sse_encode(self.height, serializer);
+        <u8>::sse_encode(self.source, serializer);
+        <u32>::sse_encode(self.source_size, serializer);
+        <u32>::sse_encode(self.start_address, serializer);
+        <u16>::sse_encode(self.column_count, serializer);
+        <u16>::sse_encode(self.row_count, serializer);
+        <u8>::sse_encode(self.layout, serializer);
+        <u8>::sse_encode(self.background, serializer);
+        <bool>::sse_encode(self.use_grayscale_palette, serializer);
+        <u16>::sse_encode(self.bg_pattern_base, serializer);
+        <u16>::sse_encode(self.sprite_pattern_base, serializer);
+        <bool>::sse_encode(self.large_sprites, serializer);
     }
 }
 

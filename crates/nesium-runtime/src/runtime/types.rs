@@ -199,7 +199,7 @@ impl Default for TileViewerConfig {
 
 /// Tile Viewer state for Flutter inspection.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChrState {
+pub struct TileState {
     /// Rendered tile view (platform-native RGBA/BGRA) matching the aux texture.
     /// May be empty if rendering is deferred to worker thread.
     pub rgba: Vec<u8>,
@@ -237,7 +237,7 @@ pub struct ChrState {
     pub large_sprites: bool,
 }
 
-impl Default for ChrState {
+impl Default for TileState {
     fn default() -> Self {
         Self {
             rgba: Vec::new(),
@@ -262,7 +262,7 @@ impl Default for ChrState {
     }
 }
 
-impl Event for ChrState {}
+impl Event for TileState {}
 
 // =====================
 // Sprite Viewer Types
@@ -381,7 +381,7 @@ pub enum EventTopic {
     Notification,
     DebugState,
     Tilemap,
-    Chr,
+    Tile,
     Sprite,
 }
 

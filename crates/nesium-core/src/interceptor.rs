@@ -6,8 +6,11 @@ use std::{
 
 use crate::{bus::CpuBus, cpu::Cpu};
 
+pub mod capture_point;
 pub mod log_interceptor;
-pub mod tilemap_capture_interceptor;
+pub mod sprite_interceptor;
+pub mod tile_viewer_interceptor;
+pub mod tilemap_interceptor;
 
 pub trait Interceptor: Any + Send + Debug + 'static {
     fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus);

@@ -4,9 +4,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/events.dart' as bridge;
+import 'package:nesium_flutter/domain/aux_texture_ids.dart';
 import 'package:nesium_flutter/domain/nes_controller.dart';
 import 'package:nesium_flutter/domain/nes_texture_service.dart';
 import 'package:nesium_flutter/l10n/app_localizations.dart';
+import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
 
 /// Tile Viewer that displays NES CHR pattern tables via a Flutter Texture.
@@ -36,14 +38,21 @@ enum _TileBackground {
 /// All Mesen2-style presets (both source and palette presets)
 enum _Preset { ppu, chr, rom, bg, oam }
 
+enum _CaptureMode { frameStart, vblankStart, scanline }
+
 class _TileViewerState extends ConsumerState<TileViewer> {
-  static const int _chrTextureId = 2;
+  static const int _minScanline = -1;
+  static const int _maxScanline = 260;
+  static const int _minDot = 0;
+  static const int _maxDot = 340;
 
   final NesTextureService _textureService = NesTextureService();
+  final ScrollController _sidePanelScrollController = ScrollController();
+  int? _chrTextureId;
   int? _flutterTextureId;
   bool _isCreating = false;
   String? _error;
-  StreamSubscription<bridge.ChrSnapshot>? _chrSnapshotSub;
+  StreamSubscription<bridge.TileSnapshot>? _tileSnapshotSub;
 
   // Display options
   bool _showTileGrid = true;
@@ -51,10 +60,21 @@ class _TileViewerState extends ConsumerState<TileViewer> {
   bool _useGrayscale = false;
   bool _showSidePanel = true; // Desktop side panel visibility
 
+  // Capture mode state
+  _CaptureMode _captureMode = _CaptureMode.vblankStart;
+  int _scanline = 0;
+  int _dot = 0;
+  late final TextEditingController _scanlineController = TextEditingController(
+    text: _scanline.toString(),
+  );
+  late final TextEditingController _dotController = TextEditingController(
+    text: _dot.toString(),
+  );
+
   // Selected preset (null = no preset selected, manual config)
   _Preset? _selectedPreset = _Preset.ppu;
 
-  // Configurable tile viewer options (synced with ChrSnapshot)
+  // Configurable tile viewer options (synced with TileSnapshot)
   _TileSource _source = _TileSource.ppu;
   int _startAddress = 0;
   int _columnCount = 16;
@@ -67,7 +87,7 @@ class _TileViewerState extends ConsumerState<TileViewer> {
   int get _textureHeight => _rowCount * 8;
 
   // Max address for current source
-  int get _maxAddress => (_chrSnapshot?.sourceSize ?? 0x2000) - 1;
+  int get _maxAddress => (_tileSnapshot?.sourceSize ?? 0x2000) - 1;
 
   // Address increment for page navigation
   int get _addressIncrement => _columnCount * _rowCount * 16; // 16 bytes/tile
@@ -76,7 +96,7 @@ class _TileViewerState extends ConsumerState<TileViewer> {
   _TileCoord? _hoveredTile;
   _TileCoord? _selectedTile;
   Offset? _hoverPosition; // For floating tooltip positioning
-  bridge.ChrSnapshot? _chrSnapshot; // Current snapshot for tile preview
+  bridge.TileSnapshot? _tileSnapshot; // Current snapshot for tile preview
 
   // Zoom and pan state
   final TransformationController _transformationController =
@@ -139,9 +159,12 @@ class _TileViewerState extends ConsumerState<TileViewer> {
 
   /// Recreates the texture with current dimensions
   Future<void> _recreateTexture() async {
-    await _textureService.disposeAuxTexture(_chrTextureId);
+    final ids = await AuxTextureIdsCache.get();
+    _chrTextureId ??= ids.tile;
+
+    await _textureService.disposeAuxTexture(_chrTextureId!);
     final textureId = await _textureService.createAuxTexture(
-      id: _chrTextureId,
+      id: _chrTextureId!,
       width: _textureWidth,
       height: _textureHeight,
     );
@@ -158,21 +181,28 @@ class _TileViewerState extends ConsumerState<TileViewer> {
     });
 
     try {
+      final ids = await AuxTextureIdsCache.get();
+      _chrTextureId ??= ids.tile;
+
       final textureId = await _textureService.createAuxTexture(
-        id: _chrTextureId,
+        id: _chrTextureId!,
         width: _textureWidth,
         height: _textureHeight,
       );
 
-      await _chrSnapshotSub?.cancel();
-      _chrSnapshotSub = bridge.chrStateStream().listen((snap) {
+      await _tileSnapshotSub?.cancel();
+      _tileSnapshotSub = bridge.tileStateStream().listen((snap) {
         if (!mounted) return;
         // Store snapshot for tooltip data WITHOUT triggering rebuild.
         // Texture updates automatically; setState spam kills performance.
-        _chrSnapshot = snap;
+        _tileSnapshot = snap;
       }, onError: (_) {});
 
-      await bridge.setChrPalette(paletteIndex: _selectedPalette);
+      unawaitedLogged(
+        _applyCaptureMode(),
+        message: 'Failed to set CHR capture point',
+      );
+      await bridge.setTileViewerPalette(paletteIndex: _selectedPalette);
 
       if (mounted) {
         setState(() {
@@ -192,13 +222,35 @@ class _TileViewerState extends ConsumerState<TileViewer> {
 
   @override
   void dispose() {
-    _textureService.pauseAuxTexture(_chrTextureId);
-    unawaited(_chrSnapshotSub?.cancel());
-    bridge.unsubscribeChrState();
-    _textureService.disposeAuxTexture(_chrTextureId);
+    final textureId = _chrTextureId;
+    if (textureId != null) {
+      _textureService.pauseAuxTexture(textureId);
+    }
+    unawaited(_tileSnapshotSub?.cancel());
+    bridge.unsubscribeTileState();
+    if (textureId != null) {
+      _textureService.disposeAuxTexture(textureId);
+    }
+    _scanlineController.dispose();
+    _dotController.dispose();
     _transformationController.removeListener(_onTransformChanged);
     _transformationController.dispose();
+    _sidePanelScrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _applyCaptureMode() async {
+    switch (_captureMode) {
+      case _CaptureMode.frameStart:
+        await bridge.setTileViewerCaptureFrameStart();
+      case _CaptureMode.vblankStart:
+        await bridge.setTileViewerCaptureVblankStart();
+      case _CaptureMode.scanline:
+        await bridge.setTileViewerCaptureScanline(
+          scanline: _scanline,
+          dot: _dot,
+        );
+    }
   }
 
   @override
@@ -270,7 +322,7 @@ class _TileViewerState extends ConsumerState<TileViewer> {
               // Floating hover tooltip (desktop only)
               if (_hoveredTile != null &&
                   _hoverPosition != null &&
-                  _chrSnapshot != null)
+                  _tileSnapshot != null)
                 _buildHoverTooltip(context, size),
             ],
           );
@@ -406,7 +458,7 @@ class _TileViewerState extends ConsumerState<TileViewer> {
 
   /// Applies a preset configuration (Mesen2-style)
   Future<void> _applyPreset(_Preset preset) async {
-    final snapshot = _chrSnapshot;
+    final snapshot = _tileSnapshot;
 
     // Determine new settings based on preset
     _TileSource newSource;
@@ -490,15 +542,12 @@ class _TileViewerState extends ConsumerState<TileViewer> {
     });
 
     // Notify backend
-    await bridge.setChrSource(
-      source: preset.index.clamp(0, 2),
-    ); // 0=PPU, 1=CHR, 2=ROM
     await bridge.setTileViewerSource(source: newSource.index);
     await bridge.setTileViewerStartAddress(startAddress: newAddress);
     await bridge.setTileViewerSize(columns: newColumns, rows: newRows);
     await bridge.setTileViewerLayout(layout: newLayout.index);
     if (newPalette != null) {
-      await bridge.setChrPalette(paletteIndex: newPalette);
+      await bridge.setTileViewerPalette(paletteIndex: newPalette);
     }
 
     // Recreate texture if size changed
@@ -616,8 +665,130 @@ class _TileViewerState extends ConsumerState<TileViewer> {
                 final enabled = v ?? false;
                 setState(() => _useGrayscale = enabled);
                 setMenuState(() {});
-                await bridge.setChrDisplayMode(mode: enabled ? 1 : 0);
+                await bridge.setTileViewerDisplayMode(mode: enabled ? 1 : 0);
               },
+            ),
+          ),
+        ),
+        const PopupMenuDivider(),
+        // Capture section header
+        PopupMenuItem<void>(
+          enabled: false,
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            l10n.tilemapCapture,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        PopupMenuItem<void>(
+          onTap: () {}, // Empty tap to prevent closing
+          padding: EdgeInsets.zero,
+          child: StatefulBuilder(
+            builder: (context, setMenuState) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioGroup<_CaptureMode>(
+                  groupValue: _captureMode,
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _captureMode = v);
+                    setMenuState(() {});
+                    unawaitedLogged(
+                      _applyCaptureMode(),
+                      message: 'Failed to set CHR capture point',
+                    );
+                  },
+                  child: Column(
+                    children: [
+                      RadioListTile<_CaptureMode>(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                        title: Text(l10n.tilemapCaptureFrameStart),
+                        value: _CaptureMode.frameStart,
+                      ),
+                      RadioListTile<_CaptureMode>(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                        title: Text(l10n.tilemapCaptureVblankStart),
+                        value: _CaptureMode.vblankStart,
+                      ),
+                      RadioListTile<_CaptureMode>(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                        title: Text(l10n.tilemapCaptureManual),
+                        value: _CaptureMode.scanline,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _numberFieldModern(
+                          label: l10n.tilemapScanline,
+                          enabled: _captureMode == _CaptureMode.scanline,
+                          controller: _scanlineController,
+                          hint: '$_minScanline ~ $_maxScanline',
+                          onSubmitted: (v) {
+                            final value = int.tryParse(v);
+                            if (value == null ||
+                                value < _minScanline ||
+                                value > _maxScanline) {
+                              return;
+                            }
+                            setState(() => _scanline = value);
+                            setMenuState(() {});
+                            _scanlineController.text = _scanline.toString();
+                            unawaitedLogged(
+                              _applyCaptureMode(),
+                              message: 'Failed to set CHR capture point',
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _numberFieldModern(
+                          label: l10n.tilemapDot,
+                          enabled: _captureMode == _CaptureMode.scanline,
+                          controller: _dotController,
+                          hint: '$_minDot ~ $_maxDot',
+                          onSubmitted: (v) {
+                            final value = int.tryParse(v);
+                            if (value == null ||
+                                value < _minDot ||
+                                value > _maxDot) {
+                              return;
+                            }
+                            setState(() => _dot = value);
+                            setMenuState(() {});
+                            _dotController.text = _dot.toString();
+                            unawaitedLogged(
+                              _applyCaptureMode(),
+                              message: 'Failed to set CHR capture point',
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -657,7 +828,7 @@ class _TileViewerState extends ConsumerState<TileViewer> {
                     setState(() => _selectedPalette = v);
                     _clearPresetSelection(); // Manual change clears preset
                     setMenuState(() {});
-                    await bridge.setChrPalette(paletteIndex: v);
+                    await bridge.setTileViewerPalette(paletteIndex: v);
                   },
                 ),
               ),
@@ -846,7 +1017,7 @@ class _TileViewerState extends ConsumerState<TileViewer> {
   /// Floating hover tooltip for desktop - positioned near cursor
   Widget _buildHoverTooltip(BuildContext context, Size size) {
     final tile = _hoveredTile;
-    final snap = _chrSnapshot;
+    final snap = _tileSnapshot;
     final pos = _hoverPosition;
     if (tile == null || snap == null || pos == null) return const SizedBox();
 
@@ -884,7 +1055,7 @@ class _TileViewerState extends ConsumerState<TileViewer> {
   Widget _buildTileHoverCard(
     BuildContext context, {
     required _TileInfo info,
-    required bridge.ChrSnapshot snapshot,
+    required bridge.TileSnapshot snapshot,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -956,8 +1127,10 @@ class _TileViewerState extends ConsumerState<TileViewer> {
         ),
       ),
       child: Scrollbar(
+        controller: _sidePanelScrollController,
         thumbVisibility: true,
         child: ListView(
+          controller: _sidePanelScrollController,
           padding: const EdgeInsets.all(12),
           children: [
             _sideSection(
@@ -973,6 +1146,101 @@ class _TileViewerState extends ConsumerState<TileViewer> {
                   ]),
                   const SizedBox(height: 8),
                   _buildPresetButtons(context, [_Preset.bg, _Preset.oam]),
+                ],
+              ),
+            ),
+            _sideSection(
+              context,
+              title: l10n.tilemapCapture,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RadioGroup<_CaptureMode>(
+                    groupValue: _captureMode,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _captureMode = v);
+                      unawaitedLogged(
+                        _applyCaptureMode(),
+                        message: 'Failed to set CHR capture point',
+                      );
+                    },
+                    child: Column(
+                      children: [
+                        RadioListTile<_CaptureMode>(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(l10n.tilemapCaptureFrameStart),
+                          value: _CaptureMode.frameStart,
+                        ),
+                        RadioListTile<_CaptureMode>(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(l10n.tilemapCaptureVblankStart),
+                          value: _CaptureMode.vblankStart,
+                        ),
+                        RadioListTile<_CaptureMode>(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(l10n.tilemapCaptureManual),
+                          value: _CaptureMode.scanline,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _numberFieldModern(
+                          label: l10n.tilemapScanline,
+                          enabled: _captureMode == _CaptureMode.scanline,
+                          controller: _scanlineController,
+                          hint: '$_minScanline ~ $_maxScanline',
+                          onSubmitted: (v) {
+                            final value = int.tryParse(v);
+                            if (value == null ||
+                                value < _minScanline ||
+                                value > _maxScanline) {
+                              return;
+                            }
+                            setState(() => _scanline = value);
+                            _scanlineController.text = _scanline.toString();
+                            unawaitedLogged(
+                              _applyCaptureMode(),
+                              message: 'Failed to set CHR capture point',
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _numberFieldModern(
+                          label: l10n.tilemapDot,
+                          enabled: _captureMode == _CaptureMode.scanline,
+                          controller: _dotController,
+                          hint: '$_minDot ~ $_maxDot',
+                          onSubmitted: (v) {
+                            final value = int.tryParse(v);
+                            if (value == null ||
+                                value < _minDot ||
+                                value > _maxDot) {
+                              return;
+                            }
+                            setState(() => _dot = value);
+                            _dotController.text = _dot.toString();
+                            unawaitedLogged(
+                              _applyCaptureMode(),
+                              message: 'Failed to set CHR capture point',
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -1147,7 +1415,9 @@ class _TileViewerState extends ConsumerState<TileViewer> {
                     onChanged: (v) async {
                       final enabled = v ?? false;
                       setState(() => _useGrayscale = enabled);
-                      await bridge.setChrDisplayMode(mode: enabled ? 1 : 0);
+                      await bridge.setTileViewerDisplayMode(
+                        mode: enabled ? 1 : 0,
+                      );
                     },
                   ),
                 ],
@@ -1172,21 +1442,21 @@ class _TileViewerState extends ConsumerState<TileViewer> {
                       if (v == null) return;
                       setState(() => _selectedPalette = v);
                       _clearPresetSelection(); // Manual change clears preset
-                      await bridge.setChrPalette(paletteIndex: v);
+                      await bridge.setTileViewerPalette(paletteIndex: v);
                     },
                   ),
                 ],
               ),
             ),
             // Selected Tile Info (only shows on tap/click, not hover)
-            if (_selectedTile != null && _chrSnapshot != null)
+            if (_selectedTile != null && _tileSnapshot != null)
               _sideSection(
                 context,
                 title: l10n.tileViewerSelectedTile,
                 child: _buildTileInfoCard(
                   context,
                   _selectedTile!,
-                  _chrSnapshot!,
+                  _tileSnapshot!,
                 ),
               ),
           ],
@@ -1199,7 +1469,7 @@ class _TileViewerState extends ConsumerState<TileViewer> {
   Widget _buildTileInfoCard(
     BuildContext context,
     _TileCoord tile,
-    bridge.ChrSnapshot snapshot,
+    bridge.TileSnapshot snapshot,
   ) {
     final info = _computeTileInfo(tile);
     if (info == null) return const SizedBox.shrink();
@@ -1314,6 +1584,32 @@ class _TileViewerState extends ConsumerState<TileViewer> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _numberFieldModern({
+    required String label,
+    required bool enabled,
+    required TextEditingController controller,
+    required String hint,
+    required ValueChanged<String> onSubmitted,
+  }) {
+    return TextField(
+      enabled: enabled,
+      controller: controller
+        ..selection = TextSelection.fromPosition(
+          TextPosition(offset: controller.text.length),
+        ),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        isDense: true,
+        filled: true,
+        fillColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      keyboardType: TextInputType.number,
+      onSubmitted: onSubmitted,
     );
   }
 
@@ -1495,7 +1791,7 @@ class _TileHighlightPainter extends CustomPainter {
 class _ChrTilePreview extends StatelessWidget {
   const _ChrTilePreview({required this.snapshot, required this.info});
 
-  final bridge.ChrSnapshot snapshot;
+  final bridge.TileSnapshot snapshot;
   final _TileInfo info;
 
   @override
@@ -1526,7 +1822,7 @@ class _ChrTilePreview extends StatelessWidget {
 class _ChrTilePreviewPainter extends CustomPainter {
   _ChrTilePreviewPainter({required this.snapshot, required this.info});
 
-  final bridge.ChrSnapshot snapshot;
+  final bridge.TileSnapshot snapshot;
   final _TileInfo info;
 
   @override
@@ -1598,7 +1894,7 @@ class _ChrTilePreviewPainter extends CustomPainter {
 class _PaletteStrip extends StatelessWidget {
   const _PaletteStrip({required this.snapshot});
 
-  final bridge.ChrSnapshot snapshot;
+  final bridge.TileSnapshot snapshot;
 
   @override
   Widget build(BuildContext context) {

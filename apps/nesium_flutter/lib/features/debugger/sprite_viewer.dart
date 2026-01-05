@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/events.dart' as bridge;
+import 'package:nesium_flutter/domain/aux_texture_ids.dart';
 import 'package:nesium_flutter/domain/nes_texture_service.dart';
 import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
@@ -17,18 +18,22 @@ class SpriteViewer extends ConsumerStatefulWidget {
 }
 
 class _SpriteViewerState extends ConsumerState<SpriteViewer> {
-  static const int _spriteTextureId = 3;
-  static const int _spriteScreenTextureId = 4;
   static const int _gridCols = 8;
   static const int _gridRows = 8;
   static const int _screenWidth = 256;
   static const int _screenHeight = 240;
+  static const int _minScanline = -1;
+  static const int _maxScanline = 260;
+  static const int _minDot = 0;
+  static const int _maxDot = 340;
   // Mesen2-style NES "offscreen region": only 16px below the 256x240 visible area.
   static const int _offscreenBottomHeight = 16;
   static const int _previewWidth = _screenWidth;
   static const int _previewHeight = _screenHeight + _offscreenBottomHeight;
 
   final NesTextureService _textureService = NesTextureService();
+  int? _spriteTextureId;
+  int? _spriteScreenTextureId;
   StreamSubscription<bridge.SpriteSnapshot>? _subscription;
   bridge.SpriteSnapshot? _snapshot;
   int? _selectedIndex;
@@ -59,6 +64,17 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
   bool _showListView = false;
   _SpriteBackground _background = _SpriteBackground.gray;
   _SpriteDataSource _dataSource = _SpriteDataSource.spriteRam;
+
+  // Capture mode state
+  _CaptureMode _captureMode = _CaptureMode.vblankStart;
+  int _scanline = 0;
+  int _dot = 0;
+  late final TextEditingController _scanlineController = TextEditingController(
+    text: _scanline.toString(),
+  );
+  late final TextEditingController _dotController = TextEditingController(
+    text: _dot.toString(),
+  );
 
   // ValueNotifier for sprite overlay data - allows isolated repaint
   final ValueNotifier<_SpriteOverlayData> _spriteOverlayData = ValueNotifier(
@@ -100,12 +116,24 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
 
   @override
   void dispose() {
-    _textureService.pauseAuxTexture(_spriteTextureId);
-    _textureService.pauseAuxTexture(_spriteScreenTextureId);
+    final spriteTextureId = _spriteTextureId;
+    final spriteScreenTextureId = _spriteScreenTextureId;
+    if (spriteTextureId != null) {
+      _textureService.pauseAuxTexture(spriteTextureId);
+    }
+    if (spriteScreenTextureId != null) {
+      _textureService.pauseAuxTexture(spriteScreenTextureId);
+    }
     unawaited(_subscription?.cancel());
     unawaited(_unsubscribe());
-    _textureService.disposeAuxTexture(_spriteTextureId);
-    _textureService.disposeAuxTexture(_spriteScreenTextureId);
+    if (spriteTextureId != null) {
+      _textureService.disposeAuxTexture(spriteTextureId);
+    }
+    if (spriteScreenTextureId != null) {
+      _textureService.disposeAuxTexture(spriteScreenTextureId);
+    }
+    _scanlineController.dispose();
+    _dotController.dispose();
     _previewTransformationController.removeListener(_onTransformChanged);
     _previewTransformationController.dispose();
     _sidePanelScrollController.dispose();
@@ -114,7 +142,20 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
     super.dispose();
   }
 
+  Future<void> _applyCaptureMode() async {
+    switch (_captureMode) {
+      case _CaptureMode.frameStart:
+        await bridge.setSpriteCaptureFrameStart();
+      case _CaptureMode.vblankStart:
+        await bridge.setSpriteCaptureVblankStart();
+      case _CaptureMode.scanline:
+        await bridge.setSpriteCaptureScanline(scanline: _scanline, dot: _dot);
+    }
+  }
+
   Future<void> _startStreaming() async {
+    // Default capture point (per-viewer).
+    await _applyCaptureMode();
     final stream = bridge.spriteStateStream();
     _subscription = stream.listen(
       (snapshot) {
@@ -166,6 +207,9 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
       _gridRows * snapshot.thumbnailHeight;
 
   Future<void> _ensureThumbTexture(bridge.SpriteSnapshot snapshot) async {
+    final ids = await AuxTextureIdsCache.get();
+    _spriteTextureId ??= ids.sprite;
+
     final w = _gridTextureWidth(snapshot);
     final h = _gridTextureHeight(snapshot);
     if (w <= 0 || h <= 0) return;
@@ -185,11 +229,11 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
 
     try {
       // Avoid updating a texture while it is being recreated.
-      await _textureService.pauseAuxTexture(_spriteTextureId);
-      await _textureService.disposeAuxTexture(_spriteTextureId);
+      await _textureService.pauseAuxTexture(_spriteTextureId!);
+      await _textureService.disposeAuxTexture(_spriteTextureId!);
 
       final textureId = await _textureService.createAuxTexture(
-        id: _spriteTextureId,
+        id: _spriteTextureId!,
         width: w,
         height: h,
       );
@@ -214,6 +258,9 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
   }
 
   Future<void> _ensureScreenTexture() async {
+    final ids = await AuxTextureIdsCache.get();
+    _spriteScreenTextureId ??= ids.spriteScreen;
+
     final desiredW = _previewWidth;
     final desiredH = _previewHeight;
 
@@ -230,11 +277,11 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
     });
 
     try {
-      await _textureService.pauseAuxTexture(_spriteScreenTextureId);
-      await _textureService.disposeAuxTexture(_spriteScreenTextureId);
+      await _textureService.pauseAuxTexture(_spriteScreenTextureId!);
+      await _textureService.disposeAuxTexture(_spriteScreenTextureId!);
 
       final textureId = await _textureService.createAuxTexture(
-        id: _spriteScreenTextureId,
+        id: _spriteScreenTextureId!,
         width: desiredW,
         height: desiredH,
       );
@@ -611,6 +658,129 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
                       setMenuState(() {});
                     },
                   ),
+              ],
+            ),
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<void>(
+          enabled: false,
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            l10n.tilemapCapture,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        PopupMenuItem<void>(
+          onTap: () {},
+          padding: EdgeInsets.zero,
+          child: StatefulBuilder(
+            builder: (context, setMenuState) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioGroup<_CaptureMode>(
+                  groupValue: _captureMode,
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _captureMode = v);
+                    setMenuState(() {});
+                    unawaitedLogged(
+                      _applyCaptureMode(),
+                      message: 'Failed to set sprite capture point',
+                    );
+                  },
+                  child: Column(
+                    children: [
+                      RadioListTile<_CaptureMode>(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                        title: Text(l10n.tilemapCaptureFrameStart),
+                        value: _CaptureMode.frameStart,
+                      ),
+                      RadioListTile<_CaptureMode>(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                        title: Text(l10n.tilemapCaptureVblankStart),
+                        value: _CaptureMode.vblankStart,
+                      ),
+                      RadioListTile<_CaptureMode>(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                        title: Text(l10n.tilemapCaptureManual),
+                        value: _CaptureMode.scanline,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _numberFieldModern(
+                          context,
+                          label: l10n.tilemapScanline,
+                          enabled: _captureMode == _CaptureMode.scanline,
+                          controller: _scanlineController,
+                          hint: '$_minScanline ~ $_maxScanline',
+                          onSubmitted: (v) {
+                            final value = int.tryParse(v);
+                            if (value == null ||
+                                value < _minScanline ||
+                                value > _maxScanline) {
+                              return;
+                            }
+                            setState(() => _scanline = value);
+                            setMenuState(() {});
+                            _scanlineController.text = _scanline.toString();
+                            unawaitedLogged(
+                              _applyCaptureMode(),
+                              message: 'Failed to set sprite capture point',
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _numberFieldModern(
+                          context,
+                          label: l10n.tilemapDot,
+                          enabled: _captureMode == _CaptureMode.scanline,
+                          controller: _dotController,
+                          hint: '$_minDot ~ $_maxDot',
+                          onSubmitted: (v) {
+                            final value = int.tryParse(v);
+                            if (value == null ||
+                                value < _minDot ||
+                                value > _maxDot) {
+                              return;
+                            }
+                            setState(() => _dot = value);
+                            setMenuState(() {});
+                            _dotController.text = _dot.toString();
+                            unawaitedLogged(
+                              _applyCaptureMode(),
+                              message: 'Failed to set sprite capture point',
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -1447,6 +1617,103 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
             ),
             _sideSection(
               context,
+              title: l10n.tilemapCapture,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RadioGroup<_CaptureMode>(
+                    groupValue: _captureMode,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _captureMode = v);
+                      unawaitedLogged(
+                        _applyCaptureMode(),
+                        message: 'Failed to set sprite capture point',
+                      );
+                    },
+                    child: Column(
+                      children: [
+                        RadioListTile<_CaptureMode>(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(l10n.tilemapCaptureFrameStart),
+                          value: _CaptureMode.frameStart,
+                        ),
+                        RadioListTile<_CaptureMode>(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(l10n.tilemapCaptureVblankStart),
+                          value: _CaptureMode.vblankStart,
+                        ),
+                        RadioListTile<_CaptureMode>(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(l10n.tilemapCaptureManual),
+                          value: _CaptureMode.scanline,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _numberFieldModern(
+                          context,
+                          label: l10n.tilemapScanline,
+                          enabled: _captureMode == _CaptureMode.scanline,
+                          controller: _scanlineController,
+                          hint: '$_minScanline ~ $_maxScanline',
+                          onSubmitted: (v) {
+                            final value = int.tryParse(v);
+                            if (value == null ||
+                                value < _minScanline ||
+                                value > _maxScanline) {
+                              return;
+                            }
+                            setState(() => _scanline = value);
+                            _scanlineController.text = _scanline.toString();
+                            unawaitedLogged(
+                              _applyCaptureMode(),
+                              message: 'Failed to set sprite capture point',
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _numberFieldModern(
+                          context,
+                          label: l10n.tilemapDot,
+                          enabled: _captureMode == _CaptureMode.scanline,
+                          controller: _dotController,
+                          hint: '$_minDot ~ $_maxDot',
+                          onSubmitted: (v) {
+                            final value = int.tryParse(v);
+                            if (value == null ||
+                                value < _minDot ||
+                                value > _maxDot) {
+                              return;
+                            }
+                            setState(() => _dot = value);
+                            _dotController.text = _dot.toString();
+                            unawaitedLogged(
+                              _applyCaptureMode(),
+                              message: 'Failed to set sprite capture point',
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            _sideSection(
+              context,
               title: l10n.spriteViewerPanelSprite,
               child: Column(
                 children: [
@@ -1544,6 +1811,33 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
           Text(v, style: valueStyle),
         ],
       ),
+    );
+  }
+
+  Widget _numberFieldModern(
+    BuildContext context, {
+    required String label,
+    required bool enabled,
+    required TextEditingController controller,
+    required String hint,
+    required ValueChanged<String> onSubmitted,
+  }) {
+    return TextField(
+      enabled: enabled,
+      controller: controller
+        ..selection = TextSelection.fromPosition(
+          TextPosition(offset: controller.text.length),
+        ),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        isDense: true,
+        filled: true,
+        fillColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      keyboardType: TextInputType.number,
+      onSubmitted: onSubmitted,
     );
   }
 
@@ -2034,6 +2328,8 @@ class _SpriteThumbnailPreview extends StatelessWidget {
 }
 
 enum _SpriteBackground { gray, black, white, magenta, transparent }
+
+enum _CaptureMode { frameStart, vblankStart, scanline }
 
 extension on _SpriteBackground {
   String label(AppLocalizations l10n) => switch (this) {

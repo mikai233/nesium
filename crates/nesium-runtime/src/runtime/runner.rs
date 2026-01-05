@@ -14,9 +14,9 @@ use super::{
     pubsub::RuntimePubSub,
     state::RuntimeState,
     types::{
-        AudioMode, ChrState, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT,
-        NotificationEvent, PpuDebugState, RuntimeError, SpriteInfo, SpriteState,
-        TileViewerBackground, TileViewerLayout, TileViewerSource, TilemapState,
+        AudioMode, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT, NotificationEvent,
+        PpuDebugState, RuntimeError, SpriteInfo, SpriteState, TileState, TileViewerBackground,
+        TileViewerLayout, TileViewerSource, TilemapState,
     },
     util::button_bit,
 };
@@ -28,7 +28,13 @@ use nesium_core::{
     Nes,
     audio::bus::AudioBusConfig,
     controller::Button,
-    interceptor::tilemap_capture_interceptor::{DebugTilemapData, TilemapCapturePoint},
+    interceptor::{
+        sprite_interceptor::{
+            CapturePoint as SpriteCapturePoint, SpriteSnapshot as CoreSpriteSnapshot,
+        },
+        tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
+        tilemap_interceptor::CapturePoint as TilemapCapturePoint,
+    },
     ppu::buffer::{FrameBuffer, FrameReadyCallback, SCREEN_SIZE},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
@@ -297,6 +303,14 @@ impl Runner {
                 self.nes.set_tilemap_capture_point(point);
                 let _ = reply.send(Ok(()));
             }
+            ControlMessage::SetTileViewerCapturePoint(point, reply) => {
+                self.nes.set_tile_viewer_capture_point(point);
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetSpriteCapturePoint(point, reply) => {
+                self.nes.set_sprite_capture_point(point);
+                let _ = reply.send(Ok(()));
+            }
             ControlMessage::SetTileViewerSource(source, reply) => {
                 if let Ok(mut cfg) = self.state.tile_viewer.lock() {
                     cfg.source = source;
@@ -360,23 +374,37 @@ impl Runner {
 
     fn after_subscribe_event(&mut self, topic: EventTopic) {
         match topic {
-            EventTopic::Tilemap | EventTopic::Chr => {
-                self.nes
-                    .set_tilemap_capture_point(TilemapCapturePoint::FrameStart);
-            }
+            EventTopic::Tilemap => self
+                .nes
+                .set_tilemap_capture_point(TilemapCapturePoint::VblankStart),
+            EventTopic::Tile => self
+                .nes
+                .set_tile_viewer_capture_point(TileViewerCapturePoint::VblankStart),
+            EventTopic::Sprite => self
+                .nes
+                .set_sprite_capture_point(SpriteCapturePoint::VblankStart),
             _ => {}
         }
     }
 
     fn after_unsubscribe_event(&mut self, topic: EventTopic) {
         match topic {
-            EventTopic::Tilemap | EventTopic::Chr => {
-                // Only disable capture if neither tilemap nor chr is subscribed
-                if !self.pubsub.has_subscriber(EventTopic::Tilemap)
-                    && !self.pubsub.has_subscriber(EventTopic::Chr)
-                {
+            EventTopic::Tilemap => {
+                if !self.pubsub.has_subscriber(EventTopic::Tilemap) {
                     self.nes
                         .set_tilemap_capture_point(TilemapCapturePoint::Disabled);
+                }
+            }
+            EventTopic::Tile => {
+                if !self.pubsub.has_subscriber(EventTopic::Tile) {
+                    self.nes
+                        .set_tile_viewer_capture_point(TileViewerCapturePoint::Disabled);
+                }
+            }
+            EventTopic::Sprite => {
+                if !self.pubsub.has_subscriber(EventTopic::Sprite) {
+                    self.nes
+                        .set_sprite_capture_point(SpriteCapturePoint::Disabled);
                 }
             }
             _ => {}
@@ -477,7 +505,7 @@ impl Runner {
         // Broadcast debug state if there's a subscriber.
         self.maybe_broadcast_debug_state();
 
-        // Broadcast tilemap/CHR state (shared snapshot consumption)
+        // Broadcast viewer state (each viewer has its own interceptor snapshot)
         self.maybe_broadcast_tilemap_and_chr_state();
     }
 
@@ -641,19 +669,14 @@ impl Runner {
     }
 
     /// Broadcasts tilemap, CHR, and/or sprite state to subscribers if someone is listening.
-    /// All viewers share the same snapshot to avoid consuming it twice.
     fn maybe_broadcast_tilemap_and_chr_state(&mut self) {
         let has_tilemap = self.pubsub.has_subscriber(EventTopic::Tilemap);
-        let has_chr = self.pubsub.has_subscriber(EventTopic::Chr);
+        let has_chr = self.pubsub.has_subscriber(EventTopic::Tile);
         let has_sprite = self.pubsub.has_subscriber(EventTopic::Sprite);
 
         if !has_tilemap && !has_chr && !has_sprite {
             return;
         }
-
-        let Some(snap) = self.nes.take_tilemap_capture_snapshot() else {
-            return;
-        };
 
         // Convert current NES palette to platform-specific format for aux texture rendering.
         let nes_palette = self.nes.palette();
@@ -674,104 +697,105 @@ impl Runner {
 
         // Broadcast to Tilemap subscribers
         if has_tilemap {
-            let tilemap = TilemapState {
-                ciram: snap.ciram.clone(),
-                palette: snap.palette.clone(),
-                chr: snap.chr.clone(),
-                mirroring: snap.mirroring,
-                bgra_palette,
-                bg_pattern_base: snap.bg_pattern_base,
-                vram_addr: snap.vram_addr,
-                temp_addr: snap.temp_addr,
-                fine_x: snap.fine_x,
-            };
-            self.pubsub
-                .broadcast(EventTopic::Tilemap, Box::new(tilemap));
+            if let Some(snap) = self.nes.take_tilemap_snapshot() {
+                let tilemap = TilemapState {
+                    ciram: snap.ciram,
+                    palette: snap.palette,
+                    chr: snap.chr,
+                    mirroring: snap.mirroring,
+                    bgra_palette,
+                    bg_pattern_base: snap.bg_pattern_base,
+                    vram_addr: snap.vram_addr,
+                    temp_addr: snap.temp_addr,
+                    fine_x: snap.fine_x,
+                };
+                self.pubsub
+                    .broadcast(EventTopic::Tilemap, Box::new(tilemap));
+            }
         }
 
-        // Broadcast to CHR subscribers
+        // Broadcast to Tile subscribers
         if has_chr {
-            let cfg = self
-                .state
-                .tile_viewer
-                .lock()
-                .map(|v| *v)
-                .unwrap_or_default();
+            if let Some(snap) = self.nes.take_tile_viewer_snapshot() {
+                let cfg = self
+                    .state
+                    .tile_viewer
+                    .lock()
+                    .map(|v| *v)
+                    .unwrap_or_default();
 
-            let mut column_count = cfg.column_count.clamp(4, 256);
-            let mut row_count = cfg.row_count.clamp(4, 256);
-            if !matches!(cfg.layout, TileViewerLayout::Normal) {
-                column_count &= !1;
-                row_count &= !1;
+                let mut column_count = cfg.column_count.clamp(4, 256);
+                let mut row_count = cfg.row_count.clamp(4, 256);
+                if !matches!(cfg.layout, TileViewerLayout::Normal) {
+                    column_count &= !1;
+                    row_count &= !1;
+                }
+
+                let width = column_count.saturating_mul(8);
+                let height = row_count.saturating_mul(8);
+                let tile_count = column_count as usize * row_count as usize;
+                let bytes_per_tile = 16usize; // NES 2bpp planar 8×8
+                let total_size = tile_count.saturating_mul(bytes_per_tile);
+
+                let (source_size, source_bytes) = self.tile_viewer_read_source_bytes(
+                    cfg.source,
+                    cfg.start_address,
+                    total_size,
+                    &snap.chr,
+                );
+
+                // Pass raw source_bytes to worker - rendering will happen there, not in NES thread.
+                let chr_state = TileState {
+                    rgba: Vec::new(), // Will be rendered by worker
+                    source_bytes,
+                    width,
+                    height,
+                    source: cfg.source,
+                    source_size,
+                    start_address: cfg.start_address,
+                    column_count,
+                    row_count,
+                    layout: cfg.layout,
+                    background: cfg.background,
+                    palette: snap.palette,
+                    bgra_palette,
+                    selected_palette: cfg.selected_palette.min(7),
+                    use_grayscale_palette: cfg.use_grayscale_palette,
+                    bg_pattern_base: snap.bg_pattern_base,
+                    sprite_pattern_base: snap.sprite_pattern_base,
+                    large_sprites: snap.large_sprites,
+                };
+
+                self.pubsub.broadcast(EventTopic::Tile, Box::new(chr_state));
             }
-
-            let width = column_count.saturating_mul(8);
-            let height = row_count.saturating_mul(8);
-            let tile_count = column_count as usize * row_count as usize;
-            let bytes_per_tile = 16usize; // NES 2bpp planar 8×8
-            let total_size = tile_count.saturating_mul(bytes_per_tile);
-
-            let (_, _, _, ctrl, _, _, _, _, _, _) = self.nes.ppu_debug_state();
-            let sprite_pattern_base = if (ctrl & 0x08) != 0 { 0x1000 } else { 0x0000 };
-            let large_sprites = (ctrl & 0x20) != 0;
-
-            let (source_size, source_bytes) = self.tile_viewer_read_source_bytes(
-                cfg.source,
-                cfg.start_address,
-                total_size,
-                &snap.chr,
-            );
-
-            // Pass raw source_bytes to worker - rendering will happen there, not in NES thread.
-            let chr_state = ChrState {
-                rgba: Vec::new(), // Will be rendered by worker
-                source_bytes,
-                width,
-                height,
-                source: cfg.source,
-                source_size,
-                start_address: cfg.start_address,
-                column_count,
-                row_count,
-                layout: cfg.layout,
-                background: cfg.background,
-                palette: snap.palette,
-                bgra_palette,
-                selected_palette: cfg.selected_palette.min(7),
-                use_grayscale_palette: cfg.use_grayscale_palette,
-                bg_pattern_base: snap.bg_pattern_base,
-                sprite_pattern_base,
-                large_sprites,
-            };
-
-            self.pubsub.broadcast(EventTopic::Chr, Box::new(chr_state));
         }
 
         // Broadcast to Sprite subscribers
         if has_sprite {
-            let (_, _, _, ctrl, _, _, _, _, _, _) = self.nes.ppu_debug_state();
-            let large_sprites = (ctrl & 0x20) != 0;
-            let pattern_base = if (ctrl & 0x08) != 0 { 0x1000 } else { 0x0000 };
+            if let Some(snap) = self.nes.take_sprite_snapshot() {
+                let large_sprites = snap.large_sprites;
+                let pattern_base = snap.sprite_pattern_base;
 
-            // Pass raw data to worker - rendering will happen there, not in NES thread.
-            let sprite_state = SpriteState {
-                sprites: Vec::new(),     // Will be built by worker
-                screen_rgba: Vec::new(), // Will be rendered by worker
-                screen_width: 256,
-                screen_height: 256,
-                thumbnails_rgba: Vec::new(), // Will be rendered by worker
-                thumbnail_width: 8,
-                thumbnail_height: if large_sprites { 16 } else { 8 },
-                large_sprites,
-                pattern_base,
-                bgra_palette,
-                oam: snap.oam.to_vec(),
-                chr: snap.chr.clone(),
-                palette: snap.palette,
-            };
+                // Pass raw data to worker - rendering will happen there, not in NES thread.
+                let sprite_state = SpriteState {
+                    sprites: Vec::new(),     // Will be built by worker
+                    screen_rgba: Vec::new(), // Will be rendered by worker
+                    screen_width: 256,
+                    screen_height: 256,
+                    thumbnails_rgba: Vec::new(), // Will be rendered by worker
+                    thumbnail_width: 8,
+                    thumbnail_height: if large_sprites { 16 } else { 8 },
+                    large_sprites,
+                    pattern_base,
+                    bgra_palette,
+                    oam: snap.oam,
+                    chr: snap.chr,
+                    palette: snap.palette,
+                };
 
-            self.pubsub
-                .broadcast(EventTopic::Sprite, Box::new(sprite_state));
+                self.pubsub
+                    .broadcast(EventTopic::Sprite, Box::new(sprite_state));
+            }
         }
     }
 
@@ -985,7 +1009,7 @@ impl Runner {
     /// Builds a SpriteState from the captured OAM and CHR data.
     fn build_sprite_state(
         &self,
-        snap: &DebugTilemapData,
+        snap: &CoreSpriteSnapshot,
         bgra_palette: &[[u8; 4]; 64],
     ) -> SpriteState {
         // Transparent background; SpriteViewer UI controls background color.

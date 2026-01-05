@@ -28,11 +28,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
-  RustStreamSink<ChrSnapshot> dco_decode_StreamSink_chr_snapshot_Sse(
-    dynamic raw,
-  );
-
-  @protected
   RustStreamSink<DebugStateNotification>
   dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw);
 
@@ -46,6 +41,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<TileSnapshot> dco_decode_StreamSink_tile_snapshot_Sse(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<TilemapSnapshot> dco_decode_StreamSink_tilemap_snapshot_Sse(
     dynamic raw,
   );
@@ -54,10 +54,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
-  bool dco_decode_bool(dynamic raw);
+  AuxTextureIds dco_decode_aux_texture_ids(dynamic raw);
 
   @protected
-  ChrSnapshot dco_decode_chr_snapshot(dynamic raw);
+  bool dco_decode_bool(dynamic raw);
 
   @protected
   DebugStateNotification dco_decode_debug_state_notification(dynamic raw);
@@ -105,6 +105,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SpriteSnapshot dco_decode_sprite_snapshot(dynamic raw);
 
   @protected
+  TileSnapshot dco_decode_tile_snapshot(dynamic raw);
+
+  @protected
   TilemapMirroring dco_decode_tilemap_mirroring(dynamic raw);
 
   @protected
@@ -129,11 +132,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
-  RustStreamSink<ChrSnapshot> sse_decode_StreamSink_chr_snapshot_Sse(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   RustStreamSink<DebugStateNotification>
   sse_decode_StreamSink_debug_state_notification_Sse(
     SseDeserializer deserializer,
@@ -149,6 +147,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<TileSnapshot> sse_decode_StreamSink_tile_snapshot_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<TilemapSnapshot> sse_decode_StreamSink_tilemap_snapshot_Sse(
     SseDeserializer deserializer,
   );
@@ -157,10 +160,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer);
+  AuxTextureIds sse_decode_aux_texture_ids(SseDeserializer deserializer);
 
   @protected
-  ChrSnapshot sse_decode_chr_snapshot(SseDeserializer deserializer);
+  bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
   DebugStateNotification sse_decode_debug_state_notification(
@@ -218,6 +221,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SpriteSnapshot sse_decode_sprite_snapshot(SseDeserializer deserializer);
 
   @protected
+  TileSnapshot sse_decode_tile_snapshot(SseDeserializer deserializer);
+
+  @protected
   TilemapMirroring sse_decode_tilemap_mirroring(SseDeserializer deserializer);
 
   @protected
@@ -245,12 +251,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_StreamSink_chr_snapshot_Sse(
-    RustStreamSink<ChrSnapshot> self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_StreamSink_debug_state_notification_Sse(
     RustStreamSink<DebugStateNotification> self,
     SseSerializer serializer,
@@ -269,6 +269,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_tile_snapshot_Sse(
+    RustStreamSink<TileSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_tilemap_snapshot_Sse(
     RustStreamSink<TilemapSnapshot> self,
     SseSerializer serializer,
@@ -278,10 +284,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
-  void sse_encode_bool(bool self, SseSerializer serializer);
+  void sse_encode_aux_texture_ids(AuxTextureIds self, SseSerializer serializer);
 
   @protected
-  void sse_encode_chr_snapshot(ChrSnapshot self, SseSerializer serializer);
+  void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
   void sse_encode_debug_state_notification(
@@ -354,6 +360,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     SpriteSnapshot self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_tile_snapshot(TileSnapshot self, SseSerializer serializer);
 
   @protected
   void sse_encode_tilemap_mirroring(
