@@ -330,6 +330,29 @@
   "tileViewerPresetBg": "背景",
   "tileViewerPresetOam": "精灵",
   "menuSpriteViewer": "精灵查看器",
+  "menuPaletteViewer": "调色板查看器",
+  "paletteViewerPaletteRamTitle": "调色板 RAM (32)",
+  "paletteViewerSystemPaletteTitle": "系统调色板 (64)",
+  "paletteViewerSettingsTooltip": "调色板查看器设置",
+  "paletteViewerTooltipPaletteRam": "{addr} = 0x{value}",
+  "@paletteViewerTooltipPaletteRam": {
+    "placeholders": {
+      "addr": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteViewerTooltipSystemIndex": "索引 {index}",
+  "@paletteViewerTooltipSystemIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
   "spriteViewerError": "精灵查看器错误：{error}",
   "@spriteViewerError": {
     "placeholders": {

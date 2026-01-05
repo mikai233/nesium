@@ -1,5 +1,6 @@
 use flutter_rust_bridge::frb;
 use nesium_core::interceptor::{
+    palette_interceptor::CapturePoint as PaletteCapturePoint,
     sprite_interceptor::CapturePoint as SpriteCapturePoint,
     tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
     tilemap_interceptor::CapturePoint as TilemapCapturePoint,
@@ -553,5 +554,91 @@ pub async fn unsubscribe_sprite_state() -> Result<(), String> {
         .unsubscribe_event(EventTopic::Sprite)
         .map_err(|e| format!("Failed to unsubscribe from Sprite events: {}", e))?;
 
+    Ok(())
+}
+
+// =============================================================================
+// Palette Viewer Stream
+// =============================================================================
+
+/// Palette snapshot for UI inspection.
+///
+/// Contains the 32-byte palette RAM and the 64-entry BGRA palette for rendering.
+#[frb]
+#[derive(Debug, Clone)]
+pub struct PaletteSnapshot {
+    /// 32-byte palette RAM (NES internal palette indices $00-$1F).
+    pub palette: Vec<u8>,
+    /// 64-entry BGRA palette flattened (256 bytes = 64 colors × 4 bytes per color).
+    /// Format: [B0, G0, R0, A0, B1, G1, R1, A1, ...] for each color index 0-63.
+    pub bgra_palette: Vec<u8>,
+}
+
+/// Subscribes to Palette state updates.
+///
+/// This streams the current palette to Flutter every frame.
+#[frb]
+pub async fn palette_state_stream(sink: StreamSink<PaletteSnapshot>) -> Result<(), String> {
+    use crate::senders::palette::PaletteStateSender;
+
+    let handle = runtime_handle();
+    let sender = Box::new(PaletteStateSender::new(sink));
+
+    handle
+        .subscribe_event(EventTopic::Palette, sender)
+        .map_err(|e| format!("Failed to subscribe to Palette events: {}", e))?;
+
+    Ok(())
+}
+
+/// Unsubscribes from Palette state updates.
+#[frb]
+pub async fn unsubscribe_palette_state() -> Result<(), String> {
+    let handle = runtime_handle();
+
+    handle
+        .unsubscribe_event(EventTopic::Palette)
+        .map_err(|e| format!("Failed to unsubscribe from Palette events: {}", e))?;
+
+    Ok(())
+}
+
+// =============================================================================
+// Palette Viewer Capture Point
+// =============================================================================
+
+/// Use the PPU frame start (scanline 0, cycle 0) as the palette capture point.
+#[frb]
+pub async fn set_palette_capture_frame_start() -> Result<(), String> {
+    runtime_handle()
+        .set_palette_capture_point(PaletteCapturePoint::FrameStart)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Use the PPU VBlank start (scanline 241, cycle 1) as the palette capture point.
+#[frb]
+pub async fn set_palette_capture_vblank_start() -> Result<(), String> {
+    runtime_handle()
+        .set_palette_capture_point(PaletteCapturePoint::VblankStart)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Use a specific scanline and dot as the palette capture point.
+#[frb]
+pub async fn set_palette_capture_scanline(scanline: i32, dot: i32) -> Result<(), String> {
+    if !(-1..=260).contains(&scanline) {
+        return Err(format!("Invalid scanline: {}", scanline));
+    }
+    if !(0..=340).contains(&dot) {
+        return Err(format!("Invalid dot: {}", dot));
+    }
+    runtime_handle()
+        .set_palette_capture_point(PaletteCapturePoint::ScanlineDot {
+            scanline: scanline as i16,
+            dot: dot as u16,
+        })
+        .map_err(|e| e.to_string())?;
     Ok(())
 }

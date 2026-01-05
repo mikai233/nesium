@@ -11,6 +11,7 @@ use crate::{
     controller::{Button, ControllerPorts},
     cpu::Cpu,
     error::Error,
+    interceptor::palette_interceptor::{PaletteInterceptor, PaletteSnapshot},
     interceptor::sprite_interceptor::{SpriteInterceptor, SpriteSnapshot},
     interceptor::tile_viewer_interceptor::{TileViewerInterceptor, TileViewerSnapshot},
     interceptor::tilemap_interceptor::{TilemapInterceptor, TilemapSnapshot},
@@ -771,12 +772,32 @@ impl Nes {
             .and_then(|layer| layer.take_snapshot())
     }
 
+    // =========================================================================
+    // Palette capture point / snapshot
+    // =========================================================================
+
+    pub fn set_palette_capture_point(
+        &mut self,
+        point: crate::interceptor::palette_interceptor::CapturePoint,
+    ) {
+        if let Some(layer) = self.interceptor.layer_mut::<PaletteInterceptor>() {
+            layer.set_capture_point(point);
+        }
+    }
+
+    pub fn take_palette_snapshot(&mut self) -> Option<PaletteSnapshot> {
+        self.interceptor
+            .layer_mut::<PaletteInterceptor>()
+            .and_then(|layer| layer.take_snapshot())
+    }
+
     fn build_interceptor() -> EmuInterceptor {
         let mut interceptor = EmuInterceptor::new();
         interceptor.add(LogInterceptor);
         interceptor.add(TilemapInterceptor::new());
         interceptor.add(TileViewerInterceptor::new());
         interceptor.add(SpriteInterceptor::new());
+        interceptor.add(PaletteInterceptor::new());
         interceptor
     }
 }

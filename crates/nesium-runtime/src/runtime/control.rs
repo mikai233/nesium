@@ -5,6 +5,7 @@ use crossbeam_channel::Sender;
 use nesium_core::{
     audio::bus::AudioBusConfig,
     interceptor::{
+        palette_interceptor::CapturePoint as PaletteCapturePoint,
         sprite_interceptor::CapturePoint as SpriteCapturePoint,
         tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
         tilemap_interceptor::CapturePoint as TilemapCapturePoint,
@@ -56,6 +57,8 @@ pub(crate) enum ControlMessage {
     SetTileViewerBackground(TileViewerBackground, ControlReplySender),
     SetTileViewerPalette(u8, ControlReplySender),
     SetTileViewerUseGrayscalePalette(bool, ControlReplySender),
+    // Palette viewer settings
+    SetPaletteCapturePoint(PaletteCapturePoint, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

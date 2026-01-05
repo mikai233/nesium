@@ -115,6 +115,12 @@ class NesMenuBar extends StatelessWidget {
       }
     } else if (item.id == NesMenuItemId.loadTasMovie) {
       enabled = false;
+    } else if (!hasRom &&
+        (item.id == NesMenuItemId.tilemapViewer ||
+            item.id == NesMenuItemId.tileViewer ||
+            item.id == NesMenuItemId.spriteViewer ||
+            item.id == NesMenuItemId.paletteViewer)) {
+      enabled = false;
     }
 
     return MenuItemButton(
@@ -189,6 +195,9 @@ class NesMenuBar extends StatelessWidget {
         break;
       case NesMenuItemId.spriteViewer:
         unawaited(actions.openSpriteViewer?.call());
+        break;
+      case NesMenuItemId.paletteViewer:
+        unawaited(actions.openPaletteViewer?.call());
         break;
     }
   }

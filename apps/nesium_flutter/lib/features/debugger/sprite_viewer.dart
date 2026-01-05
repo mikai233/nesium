@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/events.dart' as bridge;
 import 'package:nesium_flutter/domain/aux_texture_ids.dart';
+import 'package:nesium_flutter/domain/nes_controller.dart';
 import 'package:nesium_flutter/domain/nes_texture_service.dart';
+import 'package:nesium_flutter/features/debugger/viewer_skeletonizer.dart';
 import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
@@ -326,16 +329,46 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
   @override
   Widget build(BuildContext context) {
     final snapshot = _snapshot;
-
-    if (_error != null) return _buildErrorState(context);
-    if (!_hasReceivedData ||
+    final hasRom = ref.watch(nesControllerProvider).romHash != null;
+    final loading =
+        !hasRom ||
+        !_hasReceivedData ||
         snapshot == null ||
         _flutterThumbTextureId == null ||
-        _flutterScreenTextureId == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
+        _flutterScreenTextureId == null;
+    final effectiveSnapshot = snapshot ?? _loadingSnapshot();
 
-    return _buildMainLayout(context, snapshot);
+    if (_error != null) return _buildErrorState(context);
+    final base = ViewerSkeletonizer(
+      enabled: loading,
+      child: _buildMainLayout(context, effectiveSnapshot),
+    );
+    return base;
+  }
+
+  bridge.SpriteSnapshot _loadingSnapshot() {
+    final sprites = List<bridge.SpriteInfo>.generate(
+      64,
+      (i) => bridge.SpriteInfo(
+        index: i,
+        x: 0,
+        y: 0,
+        tileIndex: 0,
+        palette: 0,
+        flipH: false,
+        flipV: false,
+        behindBg: false,
+        visible: true,
+      ),
+    );
+    return bridge.SpriteSnapshot(
+      sprites: sprites,
+      thumbnailWidth: 8,
+      thumbnailHeight: 8,
+      largeSprites: false,
+      patternBase: 0,
+      rgbaPalette: Uint8List(0),
+    );
   }
 
   Widget _buildErrorState(BuildContext context) {
@@ -1179,10 +1212,20 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
                         child: Stack(
                           children: [
                             _backgroundWidget(theme),
-                            Texture(
-                              textureId: _flutterThumbTextureId!,
-                              filterQuality: FilterQuality.none,
-                            ),
+                            if (_flutterThumbTextureId != null &&
+                                !ViewerSkeletonScope.enabledOf(context))
+                              Texture(
+                                textureId: _flutterThumbTextureId!,
+                                filterQuality: FilterQuality.none,
+                              )
+                            else
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surfaceContainerHighest,
+                                  ),
+                                ),
+                              ),
                             CustomPaint(
                               painter: _SpriteGridPainter(
                                 showGrid: _showGrid,
@@ -1248,6 +1291,10 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
                     .getMaxScaleOnAxis();
                 final minScale = defaultScale < 1.0 ? defaultScale : 1.0;
 
+                final showScreenTexture =
+                    _flutterScreenTextureId != null &&
+                    !ViewerSkeletonScope.enabledOf(context);
+
                 final content = SizedBox(
                   width: displayW.toDouble(),
                   height: displayH.toDouble(),
@@ -1255,7 +1302,13 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
                     children: [
                       _backgroundWidget(theme),
                       Positioned.fill(
-                        child: _showOffscreenRegions
+                        child: !showScreenTexture
+                            ? DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainerHighest,
+                                ),
+                              )
+                            : _showOffscreenRegions
                             ? Texture(
                                 textureId: _flutterScreenTextureId!,
                                 filterQuality: FilterQuality.none,
@@ -1738,7 +1791,7 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
             _sideSection(
               context,
               title: l10n.spriteViewerPanelSelectedSprite,
-              child: selected == null
+              child: selected == null || _flutterThumbTextureId == null
                   ? _emptyHint(colorScheme.onSurfaceVariant)
                   : _SpriteInfoCard(
                       sprite: selected,
@@ -2285,6 +2338,7 @@ class _SpriteThumbnailPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final gridX = index % _SpriteViewerState._gridCols;
     final gridY = index ~/ _SpriteViewerState._gridCols;
 
@@ -2304,24 +2358,30 @@ class _SpriteThumbnailPreview extends StatelessWidget {
       child: SizedBox(
         width: dstW,
         height: dstH,
-        child: OverflowBox(
-          alignment: Alignment.topLeft,
-          minWidth: totalW,
-          maxWidth: totalW,
-          minHeight: totalH,
-          maxHeight: totalH,
-          child: Transform.translate(
-            offset: Offset(-srcX * scale, -srcY * scale),
-            child: SizedBox(
-              width: totalW,
-              height: totalH,
-              child: Texture(
-                textureId: textureId,
-                filterQuality: FilterQuality.none,
+        child: ViewerSkeletonScope.enabledOf(context)
+            ? DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                ),
+              )
+            : OverflowBox(
+                alignment: Alignment.topLeft,
+                minWidth: totalW,
+                maxWidth: totalW,
+                minHeight: totalH,
+                maxHeight: totalH,
+                child: Transform.translate(
+                  offset: Offset(-srcX * scale, -srcY * scale),
+                  child: SizedBox(
+                    width: totalW,
+                    height: totalH,
+                    child: Texture(
+                      textureId: textureId,
+                      filterQuality: FilterQuality.none,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
       ),
     );
   }

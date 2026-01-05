@@ -32,6 +32,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<PaletteSnapshot> dco_decode_StreamSink_palette_snapshot_Sse(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<RuntimeNotification>
   dco_decode_StreamSink_runtime_notification_Sse(dynamic raw);
 
@@ -93,6 +98,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PalettePresetInfo dco_decode_palette_preset_info(dynamic raw);
 
   @protected
+  PaletteSnapshot dco_decode_palette_snapshot(dynamic raw);
+
+  @protected
   RuntimeNotification dco_decode_runtime_notification(dynamic raw);
 
   @protected
@@ -134,6 +142,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   RustStreamSink<DebugStateNotification>
   sse_decode_StreamSink_debug_state_notification_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<PaletteSnapshot> sse_decode_StreamSink_palette_snapshot_Sse(
     SseDeserializer deserializer,
   );
 
@@ -205,6 +218,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PaletteSnapshot sse_decode_palette_snapshot(SseDeserializer deserializer);
+
+  @protected
   RuntimeNotification sse_decode_runtime_notification(
     SseDeserializer deserializer,
   );
@@ -253,6 +269,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_debug_state_notification_Sse(
     RustStreamSink<DebugStateNotification> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_palette_snapshot_Sse(
+    RustStreamSink<PaletteSnapshot> self,
     SseSerializer serializer,
   );
 
@@ -337,6 +359,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_palette_preset_info(
     PalettePresetInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_palette_snapshot(
+    PaletteSnapshot self,
     SseSerializer serializer,
   );
 

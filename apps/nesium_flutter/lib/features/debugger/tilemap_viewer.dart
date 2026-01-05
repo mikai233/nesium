@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/events.dart' as bridge;
 import 'package:nesium_flutter/domain/aux_texture_ids.dart';
+import 'package:nesium_flutter/domain/nes_controller.dart';
 import 'package:nesium_flutter/domain/nes_texture_service.dart';
+import 'package:nesium_flutter/features/debugger/viewer_skeletonizer.dart';
 import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
@@ -171,10 +173,13 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
     if (_error != null) {
       return _buildErrorState();
     }
-    if (_isCreating || _flutterTextureId == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return _buildMainLayout(context);
+    final hasRom = ref.watch(nesControllerProvider).romHash != null;
+    final loading = !hasRom || _isCreating || _flutterTextureId == null;
+    final base = ViewerSkeletonizer(
+      enabled: loading,
+      child: _buildMainLayout(context),
+    );
+    return base;
   }
 
   Widget _buildErrorState() {
@@ -343,10 +348,23 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
                         ),
                         child: Stack(
                           children: [
-                            Texture(
-                              textureId: _flutterTextureId!,
-                              filterQuality: FilterQuality.none,
-                            ),
+                            if (_flutterTextureId != null &&
+                                !ViewerSkeletonScope.enabledOf(context))
+                              Texture(
+                                textureId: _flutterTextureId!,
+                                filterQuality: FilterQuality.none,
+                              )
+                            else
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
                             // Use ValueListenableBuilder for scroll overlay - isolated repaint
                             ValueListenableBuilder<List<Rect>>(
                               valueListenable: _scrollOverlayRects,

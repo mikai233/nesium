@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/nes_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shell/nes_actions.dart';
 import '../../shell/nes_menu_model.dart';
@@ -12,6 +13,9 @@ class ToolsPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final actions = _getActions(ref);
+    final hasRom = ref.watch(
+      nesControllerProvider.select((s) => s.romHash != null),
+    );
 
     final tools = NesMenus.tools.children ?? [];
 
@@ -34,15 +38,25 @@ class ToolsPanel extends ConsumerWidget {
       itemCount: tools.length,
       itemBuilder: (context, index) {
         final tool = tools[index];
+        final enabled = !_requiresRom(tool.id) || hasRom;
         return ListTile(
           leading: Icon(tool.icon),
           title: Text(tool.label(l10n)),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => _onToolTap(tool.id, actions),
+          enabled: enabled,
+          onTap: enabled ? () => _onToolTap(tool.id, actions) : null,
         );
       },
     );
   }
+
+  bool _requiresRom(NesMenuItemId id) => switch (id) {
+    NesMenuItemId.tilemapViewer ||
+    NesMenuItemId.tileViewer ||
+    NesMenuItemId.spriteViewer ||
+    NesMenuItemId.paletteViewer => true,
+    _ => false,
+  };
 
   NesActions? _getActions(WidgetRef ref) {
     try {
@@ -59,6 +73,12 @@ class ToolsPanel extends ConsumerWidget {
         break;
       case NesMenuItemId.tileViewer:
         actions?.openTileViewer?.call();
+        break;
+      case NesMenuItemId.spriteViewer:
+        actions?.openSpriteViewer?.call();
+        break;
+      case NesMenuItemId.paletteViewer:
+        actions?.openPaletteViewer?.call();
         break;
       default:
         break;

@@ -376,6 +376,30 @@ impl Default for SpriteState {
 
 impl Event for SpriteState {}
 
+// =====================
+// Palette Viewer Types
+// =====================
+
+/// Palette Viewer state for Flutter inspection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaletteState {
+    /// 32-byte palette RAM (NES internal palette).
+    pub palette: [u8; 32],
+    /// 64-entry BGRA palette for rendering.
+    pub bgra_palette: [[u8; 4]; 64],
+}
+
+impl Default for PaletteState {
+    fn default() -> Self {
+        Self {
+            palette: [0; 32],
+            bgra_palette: [[0; 4]; 64],
+        }
+    }
+}
+
+impl Event for PaletteState {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventTopic {
     Notification,
@@ -383,6 +407,7 @@ pub enum EventTopic {
     Tilemap,
     Tile,
     Sprite,
+    Palette,
 }
 
 impl NotificationEvent {

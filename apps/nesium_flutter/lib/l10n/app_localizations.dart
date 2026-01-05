@@ -1658,6 +1658,42 @@ abstract class AppLocalizations {
   /// **'Sprite Viewer'**
   String get menuSpriteViewer;
 
+  /// No description provided for @menuPaletteViewer.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette Viewer'**
+  String get menuPaletteViewer;
+
+  /// No description provided for @paletteViewerPaletteRamTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette RAM (32)'**
+  String get paletteViewerPaletteRamTitle;
+
+  /// No description provided for @paletteViewerSystemPaletteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'System Palette (64)'**
+  String get paletteViewerSystemPaletteTitle;
+
+  /// No description provided for @paletteViewerSettingsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette Viewer Settings'**
+  String get paletteViewerSettingsTooltip;
+
+  /// No description provided for @paletteViewerTooltipPaletteRam.
+  ///
+  /// In en, this message translates to:
+  /// **'{addr} = 0x{value}'**
+  String paletteViewerTooltipPaletteRam(String addr, String value);
+
+  /// No description provided for @paletteViewerTooltipSystemIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Index {index}'**
+  String paletteViewerTooltipSystemIndex(int index);
+
   /// No description provided for @spriteViewerError.
   ///
   /// In en, this message translates to:

@@ -10,6 +10,7 @@ import '../platform/window_manager_shim.dart';
 import '../platform/desktop_window_manager.dart';
 
 import '../features/debugger/debugger_panel.dart';
+import '../features/debugger/palette_viewer.dart';
 import '../features/debugger/tile_viewer.dart';
 import '../features/debugger/tilemap_viewer.dart';
 import '../features/debugger/sprite_viewer.dart';
@@ -107,6 +108,9 @@ class _SecondaryWindowState extends State<SecondaryWindow> with WindowListener {
       case WindowKind.debugger:
         await bestEffort(bridge.unsubscribeDebugState);
         break;
+      case WindowKind.paletteViewer:
+        await bestEffort(bridge.unsubscribePaletteState);
+        break;
       case WindowKind.tools:
       case WindowKind.main:
         break;
@@ -163,6 +167,15 @@ class SecondaryDebuggerContent extends StatelessWidget {
   }
 }
 
+class SecondaryPaletteViewerContent extends StatelessWidget {
+  const SecondaryPaletteViewerContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const PaletteViewer();
+  }
+}
+
 class SecondaryToolsContent extends StatelessWidget {
   const SecondaryToolsContent({super.key});
 
@@ -180,6 +193,9 @@ class SecondaryToolsContent extends StatelessWidget {
             },
             openSpriteViewer: () async {
               await DesktopWindowManager().openSpriteViewerWindow();
+            },
+            openPaletteViewer: () async {
+              await DesktopWindowManager().openPaletteViewerWindow();
             },
           ),
         ),

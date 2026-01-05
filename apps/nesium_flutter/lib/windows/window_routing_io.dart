@@ -41,6 +41,11 @@ String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
         'route': 'spriteViewer',
         if (languageCode != null) 'lang': languageCode,
       });
+    case WindowKind.paletteViewer:
+      return jsonEncode({
+        'route': 'paletteViewer',
+        if (languageCode != null) 'lang': languageCode,
+      });
   }
 }
 
@@ -63,6 +68,8 @@ WindowKind _parseWindowKindFromArguments(String? arguments) {
           return WindowKind.tileViewer;
         case 'spriteViewer':
           return WindowKind.spriteViewer;
+        case 'paletteViewer':
+          return WindowKind.paletteViewer;
       }
     }
   } catch (_) {
@@ -158,6 +165,12 @@ class _WindowRouterState extends State<WindowRouter> {
           kind: WindowKind.spriteViewer,
           title: l10n.menuSpriteViewer,
           child: const SecondarySpriteViewerContent(),
+        );
+      case WindowKind.paletteViewer:
+        return SecondaryWindow(
+          kind: WindowKind.paletteViewer,
+          title: l10n.menuPaletteViewer,
+          child: const SecondaryPaletteViewerContent(),
         );
     }
   }

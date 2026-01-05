@@ -379,6 +379,29 @@
   "tileViewerPresetBg": "BG",
   "tileViewerPresetOam": "OAM",
   "menuSpriteViewer": "Sprite Viewer",
+  "menuPaletteViewer": "Palette Viewer",
+  "paletteViewerPaletteRamTitle": "Palette RAM (32)",
+  "paletteViewerSystemPaletteTitle": "System Palette (64)",
+  "paletteViewerSettingsTooltip": "Palette Viewer Settings",
+  "paletteViewerTooltipPaletteRam": "{addr} = 0x{value}",
+  "@paletteViewerTooltipPaletteRam": {
+    "placeholders": {
+      "addr": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "paletteViewerTooltipSystemIndex": "Index {index}",
+  "@paletteViewerTooltipSystemIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
   "spriteViewerError": "Sprite viewer error: {error}",
   "@spriteViewerError": {
     "placeholders": {

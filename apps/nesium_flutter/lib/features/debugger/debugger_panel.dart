@@ -27,6 +27,7 @@ class _EmptyStateView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -38,14 +39,14 @@ class _EmptyStateView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No ROM Running',
+            l10n.debuggerNoRomTitle,
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.outline,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Load a ROM to see debug state',
+            l10n.debuggerNoRomSubtitle,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
             ),

@@ -8,6 +8,7 @@ use crate::{bus::CpuBus, cpu::Cpu};
 
 pub mod capture_point;
 pub mod log_interceptor;
+pub mod palette_interceptor;
 pub mod sprite_interceptor;
 pub mod tile_viewer_interceptor;
 pub mod tilemap_interceptor;

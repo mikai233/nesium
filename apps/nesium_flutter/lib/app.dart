@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'domain/rom_hash_sync_provider.dart';
 import 'features/settings/language_settings.dart';
 import 'l10n/app_localizations.dart';
 import 'windows/window_routing.dart';
@@ -13,6 +14,7 @@ class NesiumApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(appLanguageProvider);
+    ref.watch(romHashSyncProvider);
     return MaterialApp(
       onGenerateTitle: (context) {
         final l10n = AppLocalizations.of(context);
@@ -29,6 +31,8 @@ class NesiumApp extends ConsumerWidget {
             return l10n.menuTileViewer;
           case WindowKind.spriteViewer:
             return l10n.menuSpriteViewer;
+          case WindowKind.paletteViewer:
+            return l10n.menuPaletteViewer;
           case WindowKind.main:
             return l10n.appName;
         }

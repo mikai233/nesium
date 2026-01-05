@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Returns all auxiliary texture IDs defined on the Rust side.
 ///
@@ -186,6 +186,33 @@ Future<void> setSpriteCaptureScanline({
 Future<void> unsubscribeSpriteState() =>
     RustLib.instance.api.crateApiEventsUnsubscribeSpriteState();
 
+/// Subscribes to Palette state updates.
+///
+/// This streams the current palette to Flutter every frame.
+Stream<PaletteSnapshot> paletteStateStream() =>
+    RustLib.instance.api.crateApiEventsPaletteStateStream();
+
+/// Unsubscribes from Palette state updates.
+Future<void> unsubscribePaletteState() =>
+    RustLib.instance.api.crateApiEventsUnsubscribePaletteState();
+
+/// Use the PPU frame start (scanline 0, cycle 0) as the palette capture point.
+Future<void> setPaletteCaptureFrameStart() =>
+    RustLib.instance.api.crateApiEventsSetPaletteCaptureFrameStart();
+
+/// Use the PPU VBlank start (scanline 241, cycle 1) as the palette capture point.
+Future<void> setPaletteCaptureVblankStart() =>
+    RustLib.instance.api.crateApiEventsSetPaletteCaptureVblankStart();
+
+/// Use a specific scanline and dot as the palette capture point.
+Future<void> setPaletteCaptureScanline({
+  required int scanline,
+  required int dot,
+}) => RustLib.instance.api.crateApiEventsSetPaletteCaptureScanline(
+  scanline: scanline,
+  dot: dot,
+);
+
 class AuxTextureIds {
   final int tilemap;
   final int tile;
@@ -283,6 +310,31 @@ class DebugStateNotification {
           ppuCtrl == other.ppuCtrl &&
           ppuMask == other.ppuMask &&
           ppuStatus == other.ppuStatus;
+}
+
+/// Palette snapshot for UI inspection.
+///
+/// Contains the 32-byte palette RAM and the 64-entry BGRA palette for rendering.
+class PaletteSnapshot {
+  /// 32-byte palette RAM (NES internal palette indices $00-$1F).
+  final Uint8List palette;
+
+  /// 64-entry BGRA palette flattened (256 bytes = 64 colors × 4 bytes per color).
+  /// Format: [B0, G0, R0, A0, B1, G1, R1, A1, ...] for each color index 0-63.
+  final Uint8List bgraPalette;
+
+  const PaletteSnapshot({required this.palette, required this.bgraPalette});
+
+  @override
+  int get hashCode => palette.hashCode ^ bgraPalette.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PaletteSnapshot &&
+          runtimeType == other.runtimeType &&
+          palette == other.palette &&
+          bgraPalette == other.bgraPalette;
 }
 
 class RuntimeNotification {

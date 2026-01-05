@@ -36,6 +36,7 @@ import '../features/debugger/debugger_panel.dart';
 import '../features/debugger/tilemap_viewer.dart';
 import '../features/debugger/tile_viewer.dart';
 import '../features/debugger/sprite_viewer.dart';
+import '../features/debugger/palette_viewer.dart';
 import '../features/tools/tools_panel.dart';
 
 class NesShell extends ConsumerStatefulWidget {
@@ -505,6 +506,7 @@ class _NesShellState extends ConsumerState<NesShell>
       openTilemapViewer: _openTilemapViewer,
       openTileViewer: _openTileViewer,
       openSpriteViewer: _openSpriteViewer,
+      openPaletteViewer: _openPaletteViewer,
     );
   }
 
@@ -661,6 +663,42 @@ class _NesShellState extends ConsumerState<NesShell>
             child: Scaffold(
               appBar: AppBar(title: Text(l10n.menuSpriteViewer)),
               body: const SpriteViewer(),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openPaletteViewer() async {
+    if (_isDesktop) {
+      if (_desktopWindowManager.isSupported) {
+        final languageCode = ref.read(appLanguageProvider).languageCode;
+        await _desktopWindowManager.openPaletteViewerWindow(
+          languageCode: languageCode,
+        );
+      } else {
+        if (!mounted) return;
+        final l10n = AppLocalizations.of(context)!;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: Text(l10n.menuPaletteViewer)),
+              body: const PaletteViewer(),
+            ),
+          ),
+        );
+      }
+    } else {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ProviderScope(
+            overrides: [nesActionsProvider.overrideWithValue(_buildActions())],
+            child: Scaffold(
+              appBar: AppBar(title: Text(l10n.menuPaletteViewer)),
+              body: const PaletteViewer(),
             ),
           ),
         ),

@@ -227,6 +227,11 @@ class _MobileDrawer extends StatelessWidget {
         item.id == NesMenuItemId.loadState ||
         item.id == NesMenuItemId.autoSave) {
       enabled = hasRom;
+    } else if (item.id == NesMenuItemId.tilemapViewer ||
+        item.id == NesMenuItemId.tileViewer ||
+        item.id == NesMenuItemId.spriteViewer ||
+        item.id == NesMenuItemId.paletteViewer) {
+      enabled = hasRom;
     } else if (item.id == NesMenuItemId.loadTasMovie) {
       enabled = false;
     }
@@ -313,6 +318,10 @@ class _MobileDrawer extends StatelessWidget {
       case NesMenuItemId.spriteViewer:
         closeDrawer();
         unawaited(actions.openSpriteViewer?.call());
+        break;
+      case NesMenuItemId.paletteViewer:
+        closeDrawer();
+        unawaited(actions.openPaletteViewer?.call());
         break;
       case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:

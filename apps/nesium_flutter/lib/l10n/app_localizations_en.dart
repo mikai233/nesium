@@ -846,6 +846,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuSpriteViewer => 'Sprite Viewer';
 
   @override
+  String get menuPaletteViewer => 'Palette Viewer';
+
+  @override
+  String get paletteViewerPaletteRamTitle => 'Palette RAM (32)';
+
+  @override
+  String get paletteViewerSystemPaletteTitle => 'System Palette (64)';
+
+  @override
+  String get paletteViewerSettingsTooltip => 'Palette Viewer Settings';
+
+  @override
+  String paletteViewerTooltipPaletteRam(String addr, String value) {
+    return '$addr = 0x$value';
+  }
+
+  @override
+  String paletteViewerTooltipSystemIndex(int index) {
+    return 'Index $index';
+  }
+
+  @override
   String spriteViewerError(String error) {
     return 'Sprite viewer error: $error';
   }

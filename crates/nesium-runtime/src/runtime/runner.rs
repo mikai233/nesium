@@ -15,8 +15,8 @@ use super::{
     state::RuntimeState,
     types::{
         AudioMode, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT, NotificationEvent,
-        PpuDebugState, RuntimeError, SpriteInfo, SpriteState, TileState, TileViewerBackground,
-        TileViewerLayout, TileViewerSource, TilemapState,
+        PaletteState, PpuDebugState, RuntimeError, SpriteInfo, SpriteState, TileState,
+        TileViewerBackground, TileViewerLayout, TileViewerSource, TilemapState,
     },
     util::button_bit,
 };
@@ -29,6 +29,7 @@ use nesium_core::{
     audio::bus::AudioBusConfig,
     controller::Button,
     interceptor::{
+        palette_interceptor::CapturePoint as PaletteCapturePoint,
         sprite_interceptor::{
             CapturePoint as SpriteCapturePoint, SpriteSnapshot as CoreSpriteSnapshot,
         },
@@ -367,6 +368,10 @@ impl Runner {
                 }
                 let _ = reply.send(Ok(()));
             }
+            ControlMessage::SetPaletteCapturePoint(point, reply) => {
+                self.nes.set_palette_capture_point(point);
+                let _ = reply.send(Ok(()));
+            }
         }
 
         false
@@ -383,6 +388,9 @@ impl Runner {
             EventTopic::Sprite => self
                 .nes
                 .set_sprite_capture_point(SpriteCapturePoint::VblankStart),
+            EventTopic::Palette => self
+                .nes
+                .set_palette_capture_point(PaletteCapturePoint::VblankStart),
             _ => {}
         }
     }
@@ -405,6 +413,12 @@ impl Runner {
                 if !self.pubsub.has_subscriber(EventTopic::Sprite) {
                     self.nes
                         .set_sprite_capture_point(SpriteCapturePoint::Disabled);
+                }
+            }
+            EventTopic::Palette => {
+                if !self.pubsub.has_subscriber(EventTopic::Palette) {
+                    self.nes
+                        .set_palette_capture_point(PaletteCapturePoint::Disabled);
                 }
             }
             _ => {}
@@ -668,13 +682,14 @@ impl Runner {
             .broadcast(EventTopic::DebugState, Box::new(debug));
     }
 
-    /// Broadcasts tilemap, CHR, and/or sprite state to subscribers if someone is listening.
+    /// Broadcasts tilemap, CHR, sprite, and/or palette state to subscribers if someone is listening.
     fn maybe_broadcast_tilemap_and_chr_state(&mut self) {
         let has_tilemap = self.pubsub.has_subscriber(EventTopic::Tilemap);
         let has_chr = self.pubsub.has_subscriber(EventTopic::Tile);
         let has_sprite = self.pubsub.has_subscriber(EventTopic::Sprite);
+        let has_palette = self.pubsub.has_subscriber(EventTopic::Palette);
 
-        if !has_tilemap && !has_chr && !has_sprite {
+        if !has_tilemap && !has_chr && !has_sprite && !has_palette {
             return;
         }
 
@@ -795,6 +810,19 @@ impl Runner {
 
                 self.pubsub
                     .broadcast(EventTopic::Sprite, Box::new(sprite_state));
+            }
+        }
+
+        // Broadcast to Palette subscribers
+        if has_palette {
+            if let Some(snap) = self.nes.take_palette_snapshot() {
+                let palette_state = PaletteState {
+                    palette: snap.palette,
+                    bgra_palette,
+                };
+
+                self.pubsub
+                    .broadcast(EventTopic::Palette, Box::new(palette_state));
             }
         }
     }

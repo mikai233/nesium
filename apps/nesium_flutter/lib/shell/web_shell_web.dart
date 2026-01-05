@@ -1254,6 +1254,7 @@ class _WebShellState extends ConsumerState<WebShell> {
       case NesMenuItemId.tilemapViewer:
       case NesMenuItemId.tileViewer:
       case NesMenuItemId.spriteViewer:
+      case NesMenuItemId.paletteViewer:
       case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:
       case NesMenuItemId.loadStateSlot:

@@ -104,4 +104,13 @@ class DesktopWindowManager {
     );
     await window.invokeMethod<void>('setLanguage', languageCode);
   }
+
+  Future<void> openPaletteViewerWindow({String? languageCode}) async {
+    if (!isSupported) return;
+    final window = await _openOrCreate(
+      WindowKind.paletteViewer,
+      languageCode: languageCode,
+    );
+    await window.invokeMethod<void>('setLanguage', languageCode);
+  }
 }

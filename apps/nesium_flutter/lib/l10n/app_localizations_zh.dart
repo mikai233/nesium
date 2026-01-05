@@ -833,6 +833,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuSpriteViewer => '精灵查看器';
 
   @override
+  String get menuPaletteViewer => '调色板查看器';
+
+  @override
+  String get paletteViewerPaletteRamTitle => '调色板 RAM (32)';
+
+  @override
+  String get paletteViewerSystemPaletteTitle => '系统调色板 (64)';
+
+  @override
+  String get paletteViewerSettingsTooltip => '调色板查看器设置';
+
+  @override
+  String paletteViewerTooltipPaletteRam(String addr, String value) {
+    return '$addr = 0x$value';
+  }
+
+  @override
+  String paletteViewerTooltipSystemIndex(int index) {
+    return '索引 $index';
+  }
+
+  @override
   String spriteViewerError(String error) {
     return '精灵查看器错误：$error';
   }

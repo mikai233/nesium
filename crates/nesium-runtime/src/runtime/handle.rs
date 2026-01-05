@@ -11,6 +11,7 @@ use nesium_core::{
     audio::bus::AudioBusConfig,
     controller::Button,
     interceptor::{
+        palette_interceptor::CapturePoint as PaletteCapturePoint,
         sprite_interceptor::CapturePoint as SpriteCapturePoint,
         tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
         tilemap_interceptor::CapturePoint as TilemapCapturePoint,
@@ -213,6 +214,17 @@ impl RuntimeHandle {
         self.send_with_reply("set_sprite_capture_point", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::SetSpriteCapturePoint(point, reply)
         })
+    }
+
+    pub fn set_palette_capture_point(
+        &self,
+        point: PaletteCapturePoint,
+    ) -> Result<(), RuntimeError> {
+        self.send_with_reply(
+            "set_palette_capture_point",
+            CONTROL_REPLY_TIMEOUT,
+            |reply| ControlMessage::SetPaletteCapturePoint(point, reply),
+        )
     }
 
     pub fn set_tile_viewer_source(&self, source: TileViewerSource) -> Result<(), RuntimeError> {
