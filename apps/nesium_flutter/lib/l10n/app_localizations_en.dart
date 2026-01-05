@@ -12,7 +12,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTitle => 'Settings';
 
   @override
+  String get settingsTabGeneral => 'General';
+
+  @override
+  String get settingsTabInput => 'Input';
+
+  @override
+  String get settingsTabVideo => 'Video';
+
+  @override
+  String get settingsTabEmulation => 'Emulation';
+
+  @override
   String get generalTitle => 'General';
+
+  @override
+  String get themeLabel => 'Theme';
+
+  @override
+  String get themeSystem => 'System';
+
+  @override
+  String get themeLight => 'Light';
+
+  @override
+  String get themeDark => 'Dark';
 
   @override
   String get languageLabel => 'Language';

@@ -12,7 +12,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTitle => '设置';
 
   @override
+  String get settingsTabGeneral => '通用';
+
+  @override
+  String get settingsTabInput => '输入';
+
+  @override
+  String get settingsTabVideo => '画面';
+
+  @override
+  String get settingsTabEmulation => '模拟器';
+
+  @override
   String get generalTitle => '通用';
+
+  @override
+  String get themeLabel => '主题';
+
+  @override
+  String get themeSystem => '跟随系统';
+
+  @override
+  String get themeLight => '浅色';
+
+  @override
+  String get themeDark => '深色';
 
   @override
   String get languageLabel => '语言';

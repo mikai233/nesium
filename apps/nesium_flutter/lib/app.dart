@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animations/animations.dart';
 
 import 'domain/rom_hash_sync_provider.dart';
 import 'features/settings/language_settings.dart';
+import 'features/settings/theme_settings.dart';
 import 'l10n/app_localizations.dart';
 import 'windows/window_routing.dart';
 
@@ -14,6 +16,7 @@ class NesiumApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final language = ref.watch(appLanguageProvider);
+    final themeSettings = ref.watch(themeSettingsProvider);
     ref.watch(romHashSyncProvider);
     return MaterialApp(
       onGenerateTitle: (context) {
@@ -48,7 +51,34 @@ class NesiumApp extends ConsumerWidget {
         scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
         visualDensity: VisualDensity.adaptivePlatformDensity,
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: FadeThroughPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.macOS: FadeThroughPageTransitionsBuilder(),
+            TargetPlatform.windows: FadeThroughPageTransitionsBuilder(),
+            TargetPlatform.linux: FadeThroughPageTransitionsBuilder(),
+          },
+        ),
       ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blueGrey,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: FadeThroughPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.macOS: FadeThroughPageTransitionsBuilder(),
+            TargetPlatform.windows: FadeThroughPageTransitionsBuilder(),
+            TargetPlatform.linux: FadeThroughPageTransitionsBuilder(),
+          },
+        ),
+      ),
+      themeMode: themeSettings.themeMode,
       home: const WindowRouter(),
     );
   }

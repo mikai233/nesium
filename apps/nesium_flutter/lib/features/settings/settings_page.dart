@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../l10n/app_localizations.dart';
 import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
+import '../../widgets/animated_settings_widgets.dart';
 import '../controls/input_settings.dart';
 import '../controls/turbo_settings.dart';
 import '../controls/virtual_controls_editor.dart';
@@ -14,11 +15,32 @@ import '../controls/virtual_controls_settings.dart';
 import 'android_video_backend_settings.dart';
 import 'emulation_settings.dart';
 import 'language_settings.dart';
+import 'theme_settings.dart';
 import 'video_settings.dart';
 import '../../platform/nes_palette.dart' as nes_palette;
 
-class SettingsPage extends ConsumerWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
+
+  @override
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends ConsumerState<SettingsPage>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickAndApplyCustomPalette(
     BuildContext context,
@@ -92,705 +114,470 @@ class SettingsPage extends ConsumerWidget {
   };
 
   @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.settingsTitle),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(icon: const Icon(Icons.public), text: l10n.settingsTabGeneral),
+            Tab(
+              icon: const Icon(Icons.videogame_asset),
+              text: l10n.settingsTabInput,
+            ),
+            Tab(icon: const Icon(Icons.palette), text: l10n.settingsTabVideo),
+            Tab(
+              icon: const Icon(Icons.settings_applications),
+              text: l10n.settingsTabEmulation,
+            ),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _GeneralTab(),
+          _InputTab(editCustomBinding: _editCustomBinding),
+          _VideoTab(pickAndApplyCustomPalette: _pickAndApplyCustomPalette),
+          _EmulationTab(),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// General Tab
+// ============================================================================
+
+class _GeneralTab extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final language = ref.watch(appLanguageProvider);
+    final languageController = ref.read(appLanguageProvider.notifier);
+    final themeSettings = ref.watch(themeSettingsProvider);
+    final themeController = ref.read(themeSettingsProvider.notifier);
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        AnimatedSectionHeader(
+          title: l10n.generalTitle,
+          icon: Icons.settings,
+          delay: const Duration(milliseconds: 50),
+        ),
+        AnimatedSettingsCard(
+          index: 0,
+          child: Column(
+            children: [
+              ListTile(
+                title: Text(l10n.languageLabel),
+                subtitle: Text(
+                  switch (language) {
+                    AppLanguage.system => l10n.languageSystem,
+                    AppLanguage.english => l10n.languageEnglish,
+                    AppLanguage.chineseSimplified =>
+                      l10n.languageChineseSimplified,
+                  },
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                trailing: DropdownButton<AppLanguage>(
+                  value: language,
+                  underline: const SizedBox(),
+                  items: [
+                    DropdownMenuItem(
+                      value: AppLanguage.system,
+                      child: Text(l10n.languageSystem),
+                    ),
+                    DropdownMenuItem(
+                      value: AppLanguage.english,
+                      child: Text(l10n.languageEnglish),
+                    ),
+                    DropdownMenuItem(
+                      value: AppLanguage.chineseSimplified,
+                      child: Text(l10n.languageChineseSimplified),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    languageController.setLanguage(value);
+                  },
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                title: Text(l10n.themeLabel),
+                subtitle: Text(
+                  switch (themeSettings.mode) {
+                    AppThemeMode.system => l10n.themeSystem,
+                    AppThemeMode.light => l10n.themeLight,
+                    AppThemeMode.dark => l10n.themeDark,
+                  },
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                trailing: DropdownButton<AppThemeMode>(
+                  value: themeSettings.mode,
+                  underline: const SizedBox(),
+                  items: [
+                    DropdownMenuItem(
+                      value: AppThemeMode.system,
+                      child: Text(l10n.themeSystem),
+                    ),
+                    DropdownMenuItem(
+                      value: AppThemeMode.light,
+                      child: Text(l10n.themeLight),
+                    ),
+                    DropdownMenuItem(
+                      value: AppThemeMode.dark,
+                      child: Text(l10n.themeDark),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    themeController.setThemeMode(value);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Continue in next part due to length...
+
+// ============================================================================
+// Input Tab
+// ============================================================================
+
+class _InputTab extends ConsumerWidget {
+  const _InputTab({required this.editCustomBinding});
+
+  final Future<void> Function(
+    BuildContext,
+    InputSettingsController,
+    InputSettings,
+    KeyboardBindingAction,
+  )
+  editCustomBinding;
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final inputSettings = ref.watch(inputSettingsProvider);
     final inputController = ref.read(inputSettingsProvider.notifier);
-
     final turboSettings = ref.watch(turboSettingsProvider);
     final turboController = ref.read(turboSettingsProvider.notifier);
-
     final settings = ref.watch(virtualControlsSettingsProvider);
     final controller = ref.read(virtualControlsSettingsProvider.notifier);
     final editor = ref.watch(virtualControlsEditorProvider);
     final editorController = ref.read(virtualControlsEditorProvider.notifier);
 
-    final emulationSettings = ref.watch(emulationSettingsProvider);
-    final emulationController = ref.read(emulationSettingsProvider.notifier);
-
-    final videoSettings = ref.watch(videoSettingsProvider);
-    final videoController = ref.read(videoSettingsProvider.notifier);
-
-    final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
-    final androidBackendController = ref.read(
-      androidVideoBackendSettingsProvider.notifier,
-    );
-
-    final language = ref.watch(appLanguageProvider);
-    final languageController = ref.read(appLanguageProvider.notifier);
-
     final supportsVirtual = supportsVirtualControls;
     final usingVirtual = inputSettings.device == InputDevice.virtualController;
-    final isAndroid =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.settingsTitle)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            l10n.generalTitle,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 0,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: l10n.languageLabel,
-                  border: const OutlineInputBorder(),
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        AnimatedSectionHeader(
+          title: l10n.inputTitle,
+          icon: Icons.gamepad,
+          delay: const Duration(milliseconds: 50),
+        ),
+        // Input Device
+        AnimatedSettingsCard(
+          index: 0,
+          child: ListTile(
+            title: Text(l10n.inputDeviceLabel),
+            subtitle: Text(switch (inputSettings.device) {
+              InputDevice.keyboard => l10n.inputDeviceKeyboard,
+              InputDevice.virtualController =>
+                l10n.inputDeviceVirtualController,
+            }, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+            trailing: DropdownButton<InputDevice>(
+              value: inputSettings.device,
+              underline: const SizedBox(),
+              items: [
+                DropdownMenuItem(
+                  value: InputDevice.keyboard,
+                  child: Text(l10n.inputDeviceKeyboard),
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<AppLanguage>(
-                    value: language,
-                    isExpanded: true,
-                    items: [
-                      DropdownMenuItem(
-                        value: AppLanguage.system,
-                        child: Text(l10n.languageSystem),
-                      ),
-                      DropdownMenuItem(
-                        value: AppLanguage.english,
-                        child: Text(l10n.languageEnglish),
-                      ),
-                      DropdownMenuItem(
-                        value: AppLanguage.chineseSimplified,
-                        child: Text(l10n.languageChineseSimplified),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      languageController.setLanguage(value);
-                    },
+                if (supportsVirtual ||
+                    inputSettings.device == InputDevice.virtualController)
+                  DropdownMenuItem(
+                    value: InputDevice.virtualController,
+                    enabled: supportsVirtual,
+                    child: Text(l10n.inputDeviceVirtualController),
                   ),
-                ),
-              ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                inputController.setDevice(value);
+              },
             ),
           ),
-          const Divider(),
-          Text(l10n.inputTitle, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 0,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: l10n.inputDeviceLabel,
-                  border: const OutlineInputBorder(),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<InputDevice>(
-                    value: inputSettings.device,
-                    isExpanded: true,
-                    items: [
-                      DropdownMenuItem(
-                        value: InputDevice.keyboard,
-                        child: Text(l10n.inputDeviceKeyboard),
-                      ),
-                      if (supportsVirtual ||
-                          inputSettings.device == InputDevice.virtualController)
-                        DropdownMenuItem(
-                          value: InputDevice.virtualController,
-                          enabled: supportsVirtual,
-                          child: Text(l10n.inputDeviceVirtualController),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      inputController.setDevice(value);
-                    },
-                  ),
+        ),
+        // Turbo Settings
+        AnimatedSettingsCard(
+          index: 1,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(
+                  l10n.turboTitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            elevation: 0,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.turboTitle,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: turboSettings.linked,
-                    title: Text(l10n.turboLinkPressRelease),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      turboController.setLinked(value);
-                    },
-                  ),
-                  _SliderTile(
-                    label: l10n.virtualControlsTurboOnFrames,
-                    value: turboSettings.onFrames.toDouble(),
-                    min: 1,
-                    max: 30,
-                    divisions: 29,
-                    onChanged: (v) => turboController.setOnFrames(v.round()),
-                    valueLabel: l10n.framesValue(turboSettings.onFrames),
-                  ),
-                  _SliderTile(
-                    label: l10n.virtualControlsTurboOffFrames,
-                    value: turboSettings.offFrames.toDouble(),
-                    min: 1,
-                    max: 30,
-                    divisions: 29,
-                    onChanged: (v) => turboController.setOffFrames(v.round()),
-                    valueLabel: l10n.framesValue(turboSettings.offFrames),
-                  ),
-                ],
+              CheckboxListTile(
+                value: turboSettings.linked,
+                title: Text(l10n.turboLinkPressRelease),
+                onChanged: (value) {
+                  if (value == null) return;
+                  turboController.setLinked(value);
+                },
               ),
-            ),
-          ),
-          if (inputSettings.device == InputDevice.keyboard) ...[
-            const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: InputDecorator(
-                  decoration: InputDecoration(
-                    labelText: l10n.keyboardPresetLabel,
-                    border: const OutlineInputBorder(),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<KeyboardPreset>(
-                      value: inputSettings.keyboardPreset,
-                      isExpanded: true,
-                      items: [
-                        for (final preset in KeyboardPreset.values)
-                          DropdownMenuItem(
-                            value: preset,
-                            child: Text(_presetLabel(l10n, preset)),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        inputController.setKeyboardPreset(value);
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 0,
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: Theme(
-                data: Theme.of(
-                  context,
-                ).copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  initiallyExpanded: false,
-                  title: Text(
-                    inputSettings.keyboardPreset == KeyboardPreset.custom
-                        ? l10n.customKeyBindingsTitle
-                        : l10n.keyBindingsTitle,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
                   children: [
-                    for (final action in KeyboardBindingAction.values)
-                      ListTile(
-                        title: Text(_actionLabel(l10n, action)),
-                        subtitle: Text(
-                          _keyLabel(
-                            l10n,
-                            inputSettings.bindingForAction(action),
-                          ),
-                        ),
-                        trailing:
-                            inputSettings.keyboardPreset ==
-                                KeyboardPreset.custom
-                            ? const Icon(Icons.edit)
-                            : null,
-                        onTap:
-                            inputSettings.keyboardPreset ==
-                                KeyboardPreset.custom
-                            ? () => _editCustomBinding(
-                                context,
-                                inputController,
-                                inputSettings,
-                                action,
-                              )
-                            : null,
-                      ),
-                    if (inputSettings.keyboardPreset == KeyboardPreset.custom)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                        child: Text(
-                          l10n.tipPressEscapeToClearBinding,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
+                    AnimatedSliderTile(
+                      label: l10n.virtualControlsTurboOnFrames,
+                      value: turboSettings.onFrames.toDouble(),
+                      min: 1,
+                      max: 30,
+                      divisions: 29,
+                      onChanged: (v) => turboController.setOnFrames(v.round()),
+                      valueLabel: l10n.framesValue(turboSettings.onFrames),
+                    ),
+                    AnimatedSliderTile(
+                      label: l10n.virtualControlsTurboOffFrames,
+                      value: turboSettings.offFrames.toDouble(),
+                      min: 1,
+                      max: 30,
+                      divisions: 29,
+                      onChanged: (v) => turboController.setOffFrames(v.round()),
+                      valueLabel: l10n.framesValue(turboSettings.offFrames),
+                    ),
                   ],
                 ),
               ),
-            ),
-          ],
-          const Divider(),
-          Text(
-            l10n.emulationTitle,
-            style: Theme.of(context).textTheme.titleLarge,
+              const SizedBox(height: 8),
+            ],
           ),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 0,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Column(
-              children: [
-                SwitchListTile(
-                  value: emulationSettings.integerFpsMode,
-                  title: Text(l10n.integerFpsTitle),
-                  subtitle: Text(l10n.integerFpsSubtitle),
-                  onChanged: emulationController.setIntegerFpsMode,
+        ),
+        // Keyboard Settings (shown when keyboard is selected)
+        if (inputSettings.device == InputDevice.keyboard) ...[
+          AnimatedSettingsCard(
+            index: 2,
+            child: ListTile(
+              title: Text(l10n.keyboardPresetLabel),
+              subtitle: Text(
+                _SettingsPageState._presetLabel(
+                  l10n,
+                  inputSettings.keyboardPreset,
                 ),
-                SwitchListTile(
-                  title: Text(l10n.pauseInBackgroundTitle),
-                  subtitle: Text(l10n.pauseInBackgroundSubtitle),
-                  value: emulationSettings.pauseInBackground,
-                  onChanged: emulationController.setPauseInBackground,
-                ),
-                const Divider(),
-                SwitchListTile(
-                  title: Text(l10n.autoSaveEnabledTitle),
-                  subtitle: Text(l10n.autoSaveEnabledSubtitle),
-                  value: emulationSettings.autoSaveEnabled,
-                  onChanged: emulationController.setAutoSaveEnabled,
-                ),
-                if (emulationSettings.autoSaveEnabled)
-                  ListTile(
-                    title: Text(l10n.autoSaveIntervalTitle),
-                    trailing: Text(
-                      l10n.autoSaveIntervalValue(
-                        emulationSettings.autoSaveIntervalInMinutes,
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+              trailing: DropdownButton<KeyboardPreset>(
+                value: inputSettings.keyboardPreset,
+                underline: const SizedBox(),
+                items: [
+                  for (final preset in KeyboardPreset.values)
+                    DropdownMenuItem(
+                      value: preset,
+                      child: Text(
+                        _SettingsPageState._presetLabel(l10n, preset),
                       ),
                     ),
-                    subtitle: Slider(
-                      value: emulationSettings.autoSaveIntervalInMinutes
-                          .toDouble(),
-                      min: 1,
-                      max: 60,
-                      divisions: 59,
-                      onChanged: (v) => emulationController
-                          .setAutoSaveIntervalInMinutes(v.toInt()),
-                    ),
-                  ),
-                const Divider(),
-                SwitchListTile(
-                  title: Text(l10n.rewindEnabledTitle),
-                  subtitle: Text(l10n.rewindEnabledSubtitle),
-                  value: emulationSettings.rewindEnabled,
-                  onChanged: emulationController.setRewindEnabled,
-                ),
-                if (emulationSettings.rewindEnabled)
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  inputController.setKeyboardPreset(value);
+                },
+              ),
+            ),
+          ),
+          AnimatedSettingsCard(
+            index: 3,
+            child: AnimatedExpansionTile(
+              title: Text(
+                inputSettings.keyboardPreset == KeyboardPreset.custom
+                    ? l10n.customKeyBindingsTitle
+                    : l10n.keyBindingsTitle,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              children: [
+                for (final action in KeyboardBindingAction.values)
                   ListTile(
-                    title: Text(l10n.rewindSecondsTitle),
-                    trailing: Text(
-                      l10n.rewindSecondsValue(emulationSettings.rewindSeconds),
+                    title: Text(_SettingsPageState._actionLabel(l10n, action)),
+                    subtitle: Text(
+                      _keyLabel(l10n, inputSettings.bindingForAction(action)),
                     ),
-                    subtitle: Slider(
-                      value: emulationSettings.rewindSeconds.toDouble(),
-                      min: 10,
-                      max: 300,
-                      divisions: 29,
-                      onChanged: (v) =>
-                          emulationController.setRewindSeconds(v.toInt()),
+                    trailing:
+                        inputSettings.keyboardPreset == KeyboardPreset.custom
+                        ? const Icon(Icons.edit)
+                        : null,
+                    onTap: inputSettings.keyboardPreset == KeyboardPreset.custom
+                        ? () => editCustomBinding(
+                            context,
+                            inputController,
+                            inputSettings,
+                            action,
+                          )
+                        : null,
+                  ),
+                if (inputSettings.keyboardPreset == KeyboardPreset.custom)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      l10n.tipPressEscapeToClearBinding,
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
               ],
             ),
           ),
-          const Divider(),
-          Text(l10n.videoTitle, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          Card(
-            elevation: 0,
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
+        ],
+        // Virtual Controls
+        if (supportsVirtualControls) ...[
+          const SizedBox(height: 12),
+          AnimatedSettingsCard(
+            index: 4,
+            child: ListTile(
+              leading: const Icon(Icons.tune),
+              title: Text(l10n.virtualControlsEditTitle),
+              subtitle: Text(
+                editor.enabled
+                    ? l10n.virtualControlsEditSubtitleEnabled
+                    : l10n.virtualControlsEditSubtitleDisabled,
+              ),
+              trailing: Switch(
+                value: editor.enabled,
+                onChanged: (enabled) {
+                  if (enabled &&
+                      inputSettings.device != InputDevice.virtualController) {
+                    inputController.setDevice(InputDevice.virtualController);
+                  }
+                  editorController.setEnabled(enabled);
+                  if (enabled) {
+                    Navigator.of(context).maybePop();
+                  }
+                },
+              ),
+            ),
+          ),
+          if (editor.enabled) ...[
+            const SizedBox(height: 12),
+            AnimatedSettingsCard(
+              index: 5,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: l10n.paletteModeLabel,
-                      border: const OutlineInputBorder(),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<PaletteMode>(
-                        value: videoSettings.paletteMode,
-                        isExpanded: true,
-                        items: [
-                          DropdownMenuItem(
-                            value: PaletteMode.builtin,
-                            child: Text(l10n.paletteModeBuiltin),
-                          ),
-                          DropdownMenuItem(
-                            value: PaletteMode.custom,
-                            child: Text(
-                              videoSettings.customPaletteName == null
-                                  ? l10n.paletteModeCustom
-                                  : l10n.paletteModeCustomActive(
-                                      videoSettings.customPaletteName!,
-                                    ),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) async {
-                          if (value == null) return;
-                          if (value == PaletteMode.builtin) {
-                            try {
-                              await videoController.setBuiltinPreset(
-                                videoSettings.builtinPreset,
-                              );
-                            } catch (e, st) {
-                              logWarning(
-                                e,
-                                stackTrace: st,
-                                message: 'setBuiltinPreset failed',
-                                logger: 'settings_page',
-                              );
-                            }
-                            return;
-                          }
-
-                          if (videoSettings.customPaletteName != null) {
-                            videoController.useCustomIfAvailable();
-                            return;
-                          }
-                          await _pickAndApplyCustomPalette(
-                            context,
-                            videoController,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
                   SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: videoSettings.integerScaling,
-                    title: Text(l10n.videoIntegerScalingTitle),
-                    subtitle: Text(l10n.videoIntegerScalingSubtitle),
-                    onChanged: (value) async {
-                      try {
-                        await videoController.setIntegerScaling(value);
-                      } catch (e, st) {
-                        logWarning(
-                          e,
-                          stackTrace: st,
-                          message: 'setIntegerScaling failed',
-                          logger: 'settings_page',
-                        );
-                      }
-                    },
+                    secondary: const Icon(Icons.grid_4x4),
+                    title: Text(l10n.gridSnappingTitle),
+                    value: editor.gridSnapEnabled,
+                    onChanged: editorController.setGridSnapEnabled,
                   ),
-                  const SizedBox(height: 12),
-                  InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: l10n.videoAspectRatio,
-                      border: const OutlineInputBorder(),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<NesAspectRatio>(
-                        value: videoSettings.aspectRatio,
-                        isExpanded: true,
-                        items: [
-                          DropdownMenuItem(
-                            value: NesAspectRatio.square,
-                            child: Text(l10n.videoAspectRatioSquare),
-                          ),
-                          DropdownMenuItem(
-                            value: NesAspectRatio.ntsc,
-                            child: Text(l10n.videoAspectRatioNtsc),
-                          ),
-                          DropdownMenuItem(
-                            value: NesAspectRatio.stretch,
-                            child: Text(l10n.videoAspectRatioStretch),
-                          ),
-                        ],
-                        onChanged: (value) async {
-                          if (value == null) return;
-                          try {
-                            await videoController.setAspectRatio(value);
-                          } catch (e, st) {
-                            logWarning(
-                              e,
-                              stackTrace: st,
-                              message: 'setAspectRatio failed',
-                              logger: 'settings_page',
-                            );
-                          }
-                        },
+                  if (editor.gridSnapEnabled)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: AnimatedSliderTile(
+                        label: l10n.gridSpacingLabel,
+                        value: editor.gridSpacing.clamp(4, 64),
+                        min: 4,
+                        max: 64,
+                        divisions: 60,
+                        onChanged: editorController.setGridSpacing,
+                        valueLabel:
+                            '${editor.gridSpacing.toStringAsFixed(0)} px',
                       ),
-                    ),
-                  ),
-                  _SliderTile(
-                    label: l10n.videoScreenVerticalOffset,
-                    value: videoSettings.screenVerticalOffset,
-                    min: -240,
-                    max: 240,
-                    divisions: 96,
-                    onChanged: (v) => videoController.setScreenVerticalOffset(
-                      v.roundToDouble(),
-                    ),
-                    valueLabel:
-                        '${videoSettings.screenVerticalOffset.toStringAsFixed(0)} px',
-                  ),
-                  if (isAndroid) ...[
-                    const SizedBox(height: 12),
-                    InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: l10n.videoBackendLabel,
-                        border: const OutlineInputBorder(),
-                        helperText: l10n.videoBackendRestartHint,
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<AndroidVideoBackend>(
-                          value: androidBackend.backend,
-                          isExpanded: true,
-                          items: [
-                            DropdownMenuItem(
-                              value: AndroidVideoBackend.hardware,
-                              child: Text(l10n.videoBackendHardware),
-                            ),
-                            DropdownMenuItem(
-                              value: AndroidVideoBackend.upload,
-                              child: Text(l10n.videoBackendUpload),
-                            ),
-                          ],
-                          onChanged: (value) async {
-                            if (value == null) return;
-                            try {
-                              await androidBackendController.setBackend(value);
-                            } catch (e, st) {
-                              logWarning(
-                                e,
-                                stackTrace: st,
-                                message: 'setBackend failed',
-                                logger: 'settings_page',
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                    if (androidBackend.backend == AndroidVideoBackend.hardware)
-                      const SizedBox(height: 12),
-                  ],
-                  const SizedBox(height: 12),
-                  if (videoSettings.paletteMode == PaletteMode.builtin)
-                    InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: l10n.builtinPaletteLabel,
-                        border: const OutlineInputBorder(),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<nes_palette.PaletteKind>(
-                          value: videoSettings.builtinPreset,
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(
-                              value: nes_palette.PaletteKind.nesdevNtsc,
-                              child: Text('Nesdev (NTSC)'),
-                            ),
-                            DropdownMenuItem(
-                              value: nes_palette.PaletteKind.fbxCompositeDirect,
-                              child: Text('FirebrandX (Composite Direct)'),
-                            ),
-                            DropdownMenuItem(
-                              value: nes_palette.PaletteKind.sonyCxa2025AsUs,
-                              child: Text('Sony CXA2025AS (US)'),
-                            ),
-                            DropdownMenuItem(
-                              value: nes_palette.PaletteKind.pal2C07,
-                              child: Text('RP2C07 (PAL)'),
-                            ),
-                            DropdownMenuItem(
-                              value: nes_palette.PaletteKind.rawLinear,
-                              child: Text('Raw linear'),
-                            ),
-                          ],
-                          onChanged: (value) async {
-                            if (value == null) return;
-                            try {
-                              await videoController.setBuiltinPreset(value);
-                            } catch (e, st) {
-                              logWarning(
-                                e,
-                                stackTrace: st,
-                                message: 'setBuiltinPreset failed',
-                                logger: 'settings_page',
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                    )
-                  else
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(l10n.customPaletteLoadTitle),
-                      subtitle: Text(l10n.customPaletteLoadSubtitle),
-                      trailing: const Icon(Icons.folder_open),
-                      onTap: () =>
-                          _pickAndApplyCustomPalette(context, videoController),
                     ),
                 ],
               ),
             ),
-          ),
-          if (supportsVirtualControls) ...[
-            const Divider(),
-            Text(
-              l10n.virtualControlsTitle,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Card(
-              elevation: 0,
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: ListTile(
-                leading: const Icon(Icons.tune),
-                title: Text(l10n.virtualControlsEditTitle),
-                subtitle: Text(
-                  editor.enabled
-                      ? l10n.virtualControlsEditSubtitleEnabled
-                      : l10n.virtualControlsEditSubtitleDisabled,
-                ),
-                trailing: Switch(
-                  value: editor.enabled,
-                  onChanged: (enabled) {
-                    if (enabled &&
-                        inputSettings.device != InputDevice.virtualController) {
-                      inputController.setDevice(InputDevice.virtualController);
-                    }
-                    editorController.setEnabled(enabled);
-                    if (enabled) {
-                      // Return to the game view so the user can drag/resize the controls.
-                      Navigator.of(context).maybePop();
-                    }
-                  },
-                ),
-              ),
-            ),
-            if (editor.enabled) ...[
-              const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: Column(
-                  children: [
-                    SwitchListTile(
-                      secondary: const Icon(Icons.grid_4x4),
-                      title: Text(l10n.gridSnappingTitle),
-                      value: editor.gridSnapEnabled,
-                      onChanged: editorController.setGridSnapEnabled,
-                    ),
-                    if (editor.gridSnapEnabled)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(child: Text(l10n.gridSpacingLabel)),
-                                Text(
-                                  '${editor.gridSpacing.toStringAsFixed(0)} px',
-                                ),
-                              ],
-                            ),
-                            Slider(
-                              value: editor.gridSpacing.clamp(4, 64),
-                              min: 4,
-                              max: 64,
-                              divisions: 60,
-                              onChanged: editorController.setGridSpacing,
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-            if (!usingVirtual)
-              Text(
+          ],
+          if (!usingVirtual)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
                 l10n.virtualControlsSwitchInputTip,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-            const SizedBox(height: 8),
-            Opacity(
-              opacity: usingVirtual ? 1 : 0.5,
-              child: IgnorePointer(
-                ignoring: !usingVirtual,
-                child: Column(
-                  children: [
-                    _SliderTile(
-                      label: l10n.virtualControlsButtonSize,
-                      value: settings.buttonSize,
-                      min: 40,
-                      max: 120,
-                      onChanged: controller.setButtonSize,
-                      valueLabel:
-                          '${settings.buttonSize.toStringAsFixed(0)} px',
+            ),
+          const SizedBox(height: 8),
+          Opacity(
+            opacity: usingVirtual ? 1 : 0.5,
+            child: IgnorePointer(
+              ignoring: !usingVirtual,
+              child: Column(
+                children: [
+                  AnimatedSliderTile(
+                    label: l10n.virtualControlsButtonSize,
+                    value: settings.buttonSize,
+                    min: 40,
+                    max: 120,
+                    onChanged: controller.setButtonSize,
+                    valueLabel: '${settings.buttonSize.toStringAsFixed(0)} px',
+                  ),
+                  AnimatedSliderTile(
+                    label: l10n.virtualControlsGap,
+                    value: settings.gap,
+                    min: 4,
+                    max: 24,
+                    onChanged: controller.setGap,
+                    valueLabel: '${settings.gap.toStringAsFixed(0)} px',
+                  ),
+                  AnimatedSliderTile(
+                    label: l10n.virtualControlsOpacity,
+                    value: settings.opacity,
+                    min: 0.2,
+                    max: 0.8,
+                    onChanged: controller.setOpacity,
+                    valueLabel: settings.opacity.toStringAsFixed(2),
+                  ),
+                  AnimatedSliderTile(
+                    label: l10n.virtualControlsHitboxScale,
+                    value: settings.hitboxScale,
+                    min: 1.0,
+                    max: 1.4,
+                    divisions: 40,
+                    onChanged: controller.setHitboxScale,
+                    valueLabel: settings.hitboxScale.toStringAsFixed(2),
+                  ),
+                  AnimatedSwitchTile(
+                    value: settings.hapticsEnabled,
+                    title: Text(l10n.virtualControlsHapticFeedback),
+                    onChanged: controller.setHapticsEnabled,
+                  ),
+                  AnimatedSliderTile(
+                    label: l10n.virtualControlsDpadDeadzone,
+                    value: settings.dpadDeadzoneRatio,
+                    min: 0.06,
+                    max: 0.30,
+                    divisions: 48,
+                    onChanged: controller.setDpadDeadzoneRatio,
+                    valueLabel: settings.dpadDeadzoneRatio.toStringAsFixed(2),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                    _SliderTile(
-                      label: l10n.virtualControlsGap,
-                      value: settings.gap,
-                      min: 4,
-                      max: 24,
-                      onChanged: controller.setGap,
-                      valueLabel: '${settings.gap.toStringAsFixed(0)} px',
-                    ),
-                    _SliderTile(
-                      label: l10n.virtualControlsOpacity,
-                      value: settings.opacity,
-                      min: 0.2,
-                      max: 0.8,
-                      onChanged: controller.setOpacity,
-                      valueLabel: settings.opacity.toStringAsFixed(2),
-                    ),
-                    _SliderTile(
-                      label: l10n.virtualControlsHitboxScale,
-                      value: settings.hitboxScale,
-                      min: 1.0,
-                      max: 1.4,
-                      divisions: 40,
-                      onChanged: controller.setHitboxScale,
-                      valueLabel: settings.hitboxScale.toStringAsFixed(2),
-                    ),
-                    SwitchListTile(
-                      value: settings.hapticsEnabled,
-                      title: Text(l10n.virtualControlsHapticFeedback),
-                      onChanged: controller.setHapticsEnabled,
-                    ),
-                    _SliderTile(
-                      label: l10n.virtualControlsDpadDeadzone,
-                      value: settings.dpadDeadzoneRatio,
-                      min: 0.06,
-                      max: 0.30,
-                      divisions: 48,
-                      onChanged: controller.setDpadDeadzoneRatio,
-                      valueLabel: settings.dpadDeadzoneRatio.toStringAsFixed(2),
-                    ),
-                    Text(
+                    child: Text(
                       l10n.virtualControlsDpadDeadzoneHelp,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(
@@ -798,18 +585,23 @@ class SettingsPage extends ConsumerWidget {
                         ).colorScheme.onSurface.withValues(alpha: 0.75),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    _SliderTile(
-                      label: l10n.virtualControlsDpadBoundaryDeadzone,
-                      value: settings.dpadBoundaryDeadzoneRatio,
-                      min: 0.35,
-                      max: 0.90,
-                      divisions: 55,
-                      onChanged: controller.setDpadBoundaryDeadzoneRatio,
-                      valueLabel: settings.dpadBoundaryDeadzoneRatio
-                          .toStringAsFixed(2),
+                  ),
+                  AnimatedSliderTile(
+                    label: l10n.virtualControlsDpadBoundaryDeadzone,
+                    value: settings.dpadBoundaryDeadzoneRatio,
+                    min: 0.35,
+                    max: 0.90,
+                    divisions: 55,
+                    onChanged: controller.setDpadBoundaryDeadzoneRatio,
+                    valueLabel: settings.dpadBoundaryDeadzoneRatio
+                        .toStringAsFixed(2),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                    Text(
+                    child: Text(
                       l10n.virtualControlsDpadBoundaryDeadzoneHelp,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(
@@ -817,69 +609,509 @@ class SettingsPage extends ConsumerWidget {
                         ).colorScheme.onSurface.withValues(alpha: 0.75),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
                       l10n.tipAdjustButtonsInDrawer,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    const Divider(),
-                    ListTile(
+                  ),
+                  const Divider(),
+                  AnimatedSettingsCard(
+                    index: 6,
+                    child: ListTile(
                       leading: const Icon(Icons.restore),
                       title: Text(l10n.virtualControlsReset),
                       onTap: controller.resetToDefault,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ],
-      ),
+      ],
     );
   }
 }
 
-class _SliderTile extends StatelessWidget {
-  const _SliderTile({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-    required this.valueLabel,
-    this.divisions,
-  });
+// ============================================================================
+// Video Tab
+// ============================================================================
 
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final int? divisions;
-  final ValueChanged<double> onChanged;
-  final String valueLabel;
+class _VideoTab extends ConsumerWidget {
+  const _VideoTab({required this.pickAndApplyCustomPalette});
+
+  final Future<void> Function(BuildContext, VideoSettingsController)
+  pickAndApplyCustomPalette;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
+    final videoSettings = ref.watch(videoSettingsProvider);
+    final videoController = ref.read(videoSettingsProvider.notifier);
+    final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
+    final androidBackendController = ref.read(
+      androidVideoBackendSettingsProvider.notifier,
+    );
+    final isAndroid =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+    final filledBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    );
+    InputDecoration filledDecoration({
+      required String labelText,
+      String? helperText,
+    }) {
+      return InputDecoration(
+        labelText: labelText,
+        helperText: helperText,
+        filled: true,
+        fillColor: colorScheme.surfaceContainerHighest,
+        border: filledBorder,
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
       children: [
-        Row(
-          children: [
-            Expanded(child: Text(label)),
-            Text(valueLabel, style: Theme.of(context).textTheme.labelMedium),
-          ],
+        AnimatedSectionHeader(
+          title: l10n.videoTitle,
+          icon: Icons.videocam,
+          delay: const Duration(milliseconds: 100),
         ),
-        Slider(
-          value: value.clamp(min, max),
-          min: min,
-          max: max,
-          divisions: divisions,
-          onChanged: onChanged,
+        const SizedBox(height: 8),
+        AnimatedSettingsCard(
+          index: 0,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InputDecorator(
+                  decoration: filledDecoration(
+                    labelText: l10n.paletteModeLabel,
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<PaletteMode>(
+                      value: videoSettings.paletteMode,
+                      isExpanded: true,
+                      items: [
+                        DropdownMenuItem(
+                          value: PaletteMode.builtin,
+                          child: Text(l10n.paletteModeBuiltin),
+                        ),
+                        DropdownMenuItem(
+                          value: PaletteMode.custom,
+                          child: Text(
+                            videoSettings.customPaletteName == null
+                                ? l10n.paletteModeCustom
+                                : l10n.paletteModeCustomActive(
+                                    videoSettings.customPaletteName!,
+                                  ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) async {
+                        if (value == null) return;
+                        if (value == PaletteMode.builtin) {
+                          try {
+                            await videoController.setBuiltinPreset(
+                              videoSettings.builtinPreset,
+                            );
+                          } catch (e, st) {
+                            logWarning(
+                              e,
+                              stackTrace: st,
+                              message: 'setBuiltinPreset failed',
+                              logger: 'settings_page',
+                            );
+                          }
+                          return;
+                        }
+                        if (videoSettings.customPaletteName != null) {
+                          videoController.useCustomIfAvailable();
+                          return;
+                        }
+                        await pickAndApplyCustomPalette(
+                          context,
+                          videoController,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (videoSettings.paletteMode == PaletteMode.builtin)
+                  InputDecorator(
+                    decoration: filledDecoration(
+                      labelText: l10n.builtinPaletteLabel,
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<nes_palette.PaletteKind>(
+                        value: videoSettings.builtinPreset,
+                        isExpanded: true,
+                        items: const [
+                          DropdownMenuItem(
+                            value: nes_palette.PaletteKind.nesdevNtsc,
+                            child: Text('Nesdev (NTSC)'),
+                          ),
+                          DropdownMenuItem(
+                            value: nes_palette.PaletteKind.fbxCompositeDirect,
+                            child: Text('FirebrandX (Composite Direct)'),
+                          ),
+                          DropdownMenuItem(
+                            value: nes_palette.PaletteKind.sonyCxa2025AsUs,
+                            child: Text('Sony CXA2025AS (US)'),
+                          ),
+                          DropdownMenuItem(
+                            value: nes_palette.PaletteKind.pal2C07,
+                            child: Text('RP2C07 (PAL)'),
+                          ),
+                          DropdownMenuItem(
+                            value: nes_palette.PaletteKind.rawLinear,
+                            child: Text('Raw linear'),
+                          ),
+                        ],
+                        onChanged: (value) async {
+                          if (value == null) return;
+                          try {
+                            await videoController.setBuiltinPreset(value);
+                          } catch (e, st) {
+                            logWarning(
+                              e,
+                              stackTrace: st,
+                              message: 'setBuiltinPreset failed',
+                              logger: 'settings_page',
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  )
+                else
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l10n.customPaletteLoadTitle),
+                    subtitle: Text(
+                      videoSettings.customPaletteName == null
+                          ? l10n.customPaletteLoadSubtitle
+                          : l10n.paletteModeCustomActive(
+                              videoSettings.customPaletteName!,
+                            ),
+                    ),
+                    trailing: IconButton.filledTonal(
+                      tooltip: l10n.actionLoadPalette,
+                      icon: const Icon(Icons.folder_open),
+                      onPressed: () =>
+                          pickAndApplyCustomPalette(context, videoController),
+                    ),
+                    onTap: () =>
+                        pickAndApplyCustomPalette(context, videoController),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AnimatedSettingsCard(
+          index: 1,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: videoSettings.integerScaling,
+                  title: Text(l10n.videoIntegerScalingTitle),
+                  subtitle: Text(l10n.videoIntegerScalingSubtitle),
+                  secondary: const Icon(Icons.grid_on),
+                  onChanged: (value) async {
+                    try {
+                      await videoController.setIntegerScaling(value);
+                    } catch (e, st) {
+                      logWarning(
+                        e,
+                        stackTrace: st,
+                        message: 'setIntegerScaling failed',
+                        logger: 'settings_page',
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                InputDecorator(
+                  decoration: filledDecoration(
+                    labelText: l10n.videoAspectRatio,
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<NesAspectRatio>(
+                      value: videoSettings.aspectRatio,
+                      isExpanded: true,
+                      items: [
+                        DropdownMenuItem(
+                          value: NesAspectRatio.square,
+                          child: Text(l10n.videoAspectRatioSquare),
+                        ),
+                        DropdownMenuItem(
+                          value: NesAspectRatio.ntsc,
+                          child: Text(l10n.videoAspectRatioNtsc),
+                        ),
+                        DropdownMenuItem(
+                          value: NesAspectRatio.stretch,
+                          child: Text(l10n.videoAspectRatioStretch),
+                        ),
+                      ],
+                      onChanged: (value) async {
+                        if (value == null) return;
+                        try {
+                          await videoController.setAspectRatio(value);
+                        } catch (e, st) {
+                          logWarning(
+                            e,
+                            stackTrace: st,
+                            message: 'setAspectRatio failed',
+                            logger: 'settings_page',
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                AnimatedSliderTile(
+                  label: l10n.videoScreenVerticalOffset,
+                  value: videoSettings.screenVerticalOffset,
+                  min: -240,
+                  max: 240,
+                  divisions: 96,
+                  onChanged: (v) => videoController.setScreenVerticalOffset(
+                    v.roundToDouble(),
+                  ),
+                  valueLabel:
+                      '${videoSettings.screenVerticalOffset.toStringAsFixed(0)} px',
+                ),
+                if (isAndroid) ...[
+                  const SizedBox(height: 12),
+                  InputDecorator(
+                    decoration: filledDecoration(
+                      labelText: l10n.videoBackendLabel,
+                      helperText: l10n.videoBackendRestartHint,
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<AndroidVideoBackend>(
+                        value: androidBackend.backend,
+                        isExpanded: true,
+                        items: [
+                          DropdownMenuItem(
+                            value: AndroidVideoBackend.hardware,
+                            child: Text(l10n.videoBackendHardware),
+                          ),
+                          DropdownMenuItem(
+                            value: AndroidVideoBackend.upload,
+                            child: Text(l10n.videoBackendUpload),
+                          ),
+                        ],
+                        onChanged: (value) async {
+                          if (value == null) return;
+                          try {
+                            await androidBackendController.setBackend(value);
+                          } catch (e, st) {
+                            logWarning(
+                              e,
+                              stackTrace: st,
+                              message: 'setBackend failed',
+                              logger: 'settings_page',
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 }
+
+// ============================================================================
+// Emulation Tab
+// ============================================================================
+
+class _EmulationTab extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final emulationSettings = ref.watch(emulationSettingsProvider);
+    final emulationController = ref.read(emulationSettingsProvider.notifier);
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        AnimatedSectionHeader(
+          title: l10n.emulationTitle,
+          icon: Icons.developer_board,
+          delay: const Duration(milliseconds: 100),
+        ),
+        const SizedBox(height: 8),
+        AnimatedSettingsCard(
+          index: 0,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.speed),
+                  value: emulationSettings.integerFpsMode,
+                  title: Text(l10n.integerFpsTitle),
+                  subtitle: Text(l10n.integerFpsSubtitle),
+                  onChanged: emulationController.setIntegerFpsMode,
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.pause_circle_outline),
+                  title: Text(l10n.pauseInBackgroundTitle),
+                  subtitle: Text(l10n.pauseInBackgroundSubtitle),
+                  value: emulationSettings.pauseInBackground,
+                  onChanged: emulationController.setPauseInBackground,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AnimatedSettingsCard(
+          index: 1,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.save_outlined),
+                  title: Text(l10n.autoSaveEnabledTitle),
+                  subtitle: Text(l10n.autoSaveEnabledSubtitle),
+                  value: emulationSettings.autoSaveEnabled,
+                  onChanged: emulationController.setAutoSaveEnabled,
+                ),
+                ClipRect(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    reverseDuration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SizeTransition(
+                          sizeFactor: animation,
+                          axisAlignment: -1,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: emulationSettings.autoSaveEnabled
+                        ? Padding(
+                            key: const ValueKey('autoSaveInterval'),
+                            padding: const EdgeInsets.fromLTRB(56, 0, 0, 4),
+                            child: AnimatedSliderTile(
+                              label: l10n.autoSaveIntervalTitle,
+                              value: emulationSettings.autoSaveIntervalInMinutes
+                                  .toDouble(),
+                              min: 1,
+                              max: 60,
+                              divisions: 59,
+                              onChanged: (v) => emulationController
+                                  .setAutoSaveIntervalInMinutes(v.toInt()),
+                              valueLabel: l10n.autoSaveIntervalValue(
+                                emulationSettings.autoSaveIntervalInMinutes,
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(
+                            key: ValueKey('autoSaveIntervalEmpty'),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AnimatedSettingsCard(
+          index: 2,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.history_toggle_off),
+                  title: Text(l10n.rewindEnabledTitle),
+                  subtitle: Text(l10n.rewindEnabledSubtitle),
+                  value: emulationSettings.rewindEnabled,
+                  onChanged: emulationController.setRewindEnabled,
+                ),
+                ClipRect(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    reverseDuration: const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SizeTransition(
+                          sizeFactor: animation,
+                          axisAlignment: -1,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: emulationSettings.rewindEnabled
+                        ? Padding(
+                            key: const ValueKey('rewindSeconds'),
+                            padding: const EdgeInsets.fromLTRB(56, 0, 0, 4),
+                            child: AnimatedSliderTile(
+                              label: l10n.rewindSecondsTitle,
+                              value: emulationSettings.rewindSeconds.toDouble(),
+                              min: 10,
+                              max: 300,
+                              divisions: 29,
+                              onChanged: (v) => emulationController
+                                  .setRewindSeconds(v.toInt()),
+                              valueLabel: l10n.rewindSecondsValue(
+                                emulationSettings.rewindSeconds,
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(
+                            key: ValueKey('rewindSecondsEmpty'),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// Helper Functions and Classes
+// ============================================================================
 
 String _keyLabel(AppLocalizations l10n, LogicalKeyboardKey? key) {
   if (key == null) return l10n.unassignedKey;

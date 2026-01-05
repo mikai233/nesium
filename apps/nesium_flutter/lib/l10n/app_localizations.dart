@@ -104,11 +104,59 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsTitle;
 
+  /// No description provided for @settingsTabGeneral.
+  ///
+  /// In en, this message translates to:
+  /// **'General'**
+  String get settingsTabGeneral;
+
+  /// No description provided for @settingsTabInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Input'**
+  String get settingsTabInput;
+
+  /// No description provided for @settingsTabVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Video'**
+  String get settingsTabVideo;
+
+  /// No description provided for @settingsTabEmulation.
+  ///
+  /// In en, this message translates to:
+  /// **'Emulation'**
+  String get settingsTabEmulation;
+
   /// No description provided for @generalTitle.
   ///
   /// In en, this message translates to:
   /// **'General'**
   String get generalTitle;
+
+  /// No description provided for @themeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get themeLabel;
+
+  /// No description provided for @themeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get themeSystem;
+
+  /// No description provided for @themeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeLight;
+
+  /// No description provided for @themeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeDark;
 
   /// No description provided for @languageLabel.
   ///
