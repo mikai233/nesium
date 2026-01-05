@@ -60,6 +60,11 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
   _SpriteBackground _background = _SpriteBackground.gray;
   _SpriteDataSource _dataSource = _SpriteDataSource.spriteRam;
 
+  // ValueNotifier for sprite overlay data - allows isolated repaint
+  final ValueNotifier<_SpriteOverlayData> _spriteOverlayData = ValueNotifier(
+    const _SpriteOverlayData(sprites: [], largeSprites: false),
+  );
+
   // Zoom and pan state
   final TransformationController _previewTransformationController =
       TransformationController();
@@ -105,6 +110,7 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
     _previewTransformationController.dispose();
     _sidePanelScrollController.dispose();
     _removeTooltipOverlay();
+    _spriteOverlayData.dispose();
     super.dispose();
   }
 
@@ -113,10 +119,24 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
     _subscription = stream.listen(
       (snapshot) {
         if (mounted) {
-          setState(() {
-            _snapshot = snapshot;
-            _hasReceivedData = true;
-          });
+          // Store snapshot for data access.
+          final firstData = !_hasReceivedData;
+          _snapshot = snapshot;
+          _hasReceivedData = true;
+
+          // Only setState on first data to show UI.
+          // Outline updates go via ValueNotifier (isolated repaint).
+          if (firstData) {
+            setState(() {});
+          }
+          // Update outline overlay via ValueNotifier (isolated repaint)
+          if (_showOutline) {
+            _spriteOverlayData.value = _SpriteOverlayData(
+              sprites: snapshot.sprites,
+              largeSprites: snapshot.largeSprites,
+            );
+          }
+
           unawaitedLogged(
             _ensureThumbTexture(snapshot),
             message: 'Failed to create sprite aux texture',
@@ -1088,17 +1108,26 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
                                 ),
                               ),
                       ),
-                      // CustomPaint overlay - same coordinate origin as the preview (0,0 at top-left)
-                      CustomPaint(
-                        painter: _SpritePreviewOverlayPainter(
-                          sprites: snapshot.sprites,
-                          largeSprites: snapshot.largeSprites,
-                          showOutline: _showOutline,
-                          showOffscreenRegions: _showOffscreenRegions,
-                          hoveredIndex: _previewHoveredIndex,
-                          selectedIndex: _selectedIndex,
-                        ),
-                        size: Size.infinite,
+                      // CustomPaint overlay - isolated repaint via ValueListenableBuilder
+                      ValueListenableBuilder<_SpriteOverlayData>(
+                        valueListenable: _spriteOverlayData,
+                        builder: (context, overlayData, _) {
+                          return CustomPaint(
+                            painter: _SpritePreviewOverlayPainter(
+                              sprites: _showOutline
+                                  ? overlayData.sprites
+                                  : snapshot.sprites,
+                              largeSprites: _showOutline
+                                  ? overlayData.largeSprites
+                                  : snapshot.largeSprites,
+                              showOutline: _showOutline,
+                              showOffscreenRegions: _showOffscreenRegions,
+                              hoveredIndex: _previewHoveredIndex,
+                              selectedIndex: _selectedIndex,
+                            ),
+                            size: Size.infinite,
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -2151,4 +2180,12 @@ class _SpritePreviewOverlayPainter extends CustomPainter {
         hoveredIndex != oldDelegate.hoveredIndex ||
         selectedIndex != oldDelegate.selectedIndex;
   }
+}
+
+/// Data class for sprite overlay ValueNotifier
+class _SpriteOverlayData {
+  const _SpriteOverlayData({required this.sprites, required this.largeSprites});
+
+  final List<bridge.SpriteInfo> sprites;
+  final bool largeSprites;
 }

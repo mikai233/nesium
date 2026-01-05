@@ -476,6 +476,7 @@ impl Runner {
 
         // Broadcast debug state if there's a subscriber.
         self.maybe_broadcast_debug_state();
+
         // Broadcast tilemap/CHR state (shared snapshot consumption)
         self.maybe_broadcast_tilemap_and_chr_state();
     }
@@ -721,20 +722,10 @@ impl Runner {
                 &snap.chr,
             );
 
-            let rgba = self.render_tile_view_rgba(
-                &source_bytes,
-                column_count,
-                row_count,
-                cfg.layout,
-                cfg.background,
-                cfg.selected_palette,
-                cfg.use_grayscale_palette,
-                &snap.palette,
-                &bgra_palette,
-            );
-
+            // Pass raw source_bytes to worker - rendering will happen there, not in NES thread.
             let chr_state = ChrState {
-                rgba,
+                rgba: Vec::new(), // Will be rendered by worker
+                source_bytes,
                 width,
                 height,
                 source: cfg.source,
@@ -758,7 +749,27 @@ impl Runner {
 
         // Broadcast to Sprite subscribers
         if has_sprite {
-            let sprite_state = self.build_sprite_state(&snap, &bgra_palette);
+            let (_, _, _, ctrl, _, _, _, _, _, _) = self.nes.ppu_debug_state();
+            let large_sprites = (ctrl & 0x20) != 0;
+            let pattern_base = if (ctrl & 0x08) != 0 { 0x1000 } else { 0x0000 };
+
+            // Pass raw data to worker - rendering will happen there, not in NES thread.
+            let sprite_state = SpriteState {
+                sprites: Vec::new(),     // Will be built by worker
+                screen_rgba: Vec::new(), // Will be rendered by worker
+                screen_width: 256,
+                screen_height: 256,
+                thumbnails_rgba: Vec::new(), // Will be rendered by worker
+                thumbnail_width: 8,
+                thumbnail_height: if large_sprites { 16 } else { 8 },
+                large_sprites,
+                pattern_base,
+                bgra_palette,
+                oam: snap.oam.to_vec(),
+                chr: snap.chr.clone(),
+                palette: snap.palette,
+            };
+
             self.pubsub
                 .broadcast(EventTopic::Sprite, Box::new(sprite_state));
         }
@@ -1154,6 +1165,9 @@ impl Runner {
             large_sprites,
             pattern_base,
             bgra_palette: *bgra_palette,
+            oam: snap.oam.to_vec(),
+            chr: snap.chr.clone(),
+            palette: snap.palette,
         }
     }
 

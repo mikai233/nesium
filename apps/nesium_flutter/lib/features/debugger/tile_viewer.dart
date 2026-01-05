@@ -167,7 +167,9 @@ class _TileViewerState extends ConsumerState<TileViewer> {
       await _chrSnapshotSub?.cancel();
       _chrSnapshotSub = bridge.chrStateStream().listen((snap) {
         if (!mounted) return;
-        setState(() => _chrSnapshot = snap);
+        // Store snapshot for tooltip data WITHOUT triggering rebuild.
+        // Texture updates automatically; setState spam kills performance.
+        _chrSnapshot = snap;
       }, onError: (_) {});
 
       await bridge.setChrPalette(paletteIndex: _selectedPalette);

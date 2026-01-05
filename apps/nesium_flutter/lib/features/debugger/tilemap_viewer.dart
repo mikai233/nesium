@@ -64,6 +64,9 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
   bool _hoverTooltipMeasurePending = false;
   bool _showSidePanel = true;
 
+  // ValueNotifier for scroll overlay rects - allows isolated repaint
+  final ValueNotifier<List<Rect>> _scrollOverlayRects = ValueNotifier(const []);
+
   // Zoom and pan state
   final TransformationController _transformationController =
       TransformationController();
@@ -108,7 +111,12 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
       await _tilemapSnapshotSub?.cancel();
       _tilemapSnapshotSub = bridge.tilemapStateStream().listen((snap) {
         if (!mounted) return;
-        setState(() => _tilemapSnapshot = snap);
+        // Store snapshot for tooltip data access.
+        _tilemapSnapshot = snap;
+        // Update scroll overlay rects via ValueNotifier (isolated repaint).
+        if (_showScrollOverlay) {
+          _scrollOverlayRects.value = _scrollOverlayRectsFromSnapshot(snap);
+        }
       }, onError: (_) {});
       unawaitedLogged(
         _applyCaptureMode(),
@@ -145,6 +153,7 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
     _dotController.dispose();
     _transformationController.removeListener(_onTransformChanged);
     _transformationController.dispose();
+    _scrollOverlayRects.dispose();
     super.dispose();
   }
 
@@ -283,9 +292,6 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
     // Mobile: show tooltip on tap selection
     final showSelectedTooltip =
         !isNativeDesktop && _selectedTile != null && _tilemapSnapshot != null;
-    final scrollOverlayRects = _showScrollOverlay && _tilemapSnapshot != null
-        ? _scrollOverlayRectsFromSnapshot(_tilemapSnapshot!)
-        : const <Rect>[];
 
     return Container(
       color: colorScheme.surfaceContainerLowest,
@@ -332,19 +338,25 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
                               textureId: _flutterTextureId!,
                               filterQuality: FilterQuality.none,
                             ),
-                            CustomPaint(
-                              painter: _TilemapGridPainter(
-                                showTileGrid: _showTileGrid,
-                                showAttributeGrid: _showAttributeGrid,
-                                showAttributeGrid32: _showAttributeGrid32,
-                                showNametableDelimiters:
-                                    _showNametableDelimiters,
-                                showScrollOverlay: _showScrollOverlay,
-                                scrollOverlayRects: scrollOverlayRects,
-                                hoveredTile: _hoveredTile,
-                                selectedTile: _selectedTile,
-                              ),
-                              size: Size.infinite,
+                            // Use ValueListenableBuilder for scroll overlay - isolated repaint
+                            ValueListenableBuilder<List<Rect>>(
+                              valueListenable: _scrollOverlayRects,
+                              builder: (context, scrollRects, _) {
+                                return CustomPaint(
+                                  painter: _TilemapGridPainter(
+                                    showTileGrid: _showTileGrid,
+                                    showAttributeGrid: _showAttributeGrid,
+                                    showAttributeGrid32: _showAttributeGrid32,
+                                    showNametableDelimiters:
+                                        _showNametableDelimiters,
+                                    showScrollOverlay: _showScrollOverlay,
+                                    scrollOverlayRects: scrollRects,
+                                    hoveredTile: _hoveredTile,
+                                    selectedTile: _selectedTile,
+                                  ),
+                                  size: Size.infinite,
+                                );
+                              },
                             ),
                             if (showHoverTooltip)
                               _buildHoverTooltip(context, size),

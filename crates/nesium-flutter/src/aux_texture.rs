@@ -3,11 +3,12 @@
 //! This module provides a simple double-buffered texture system completely
 //! separate from the main NES screen rendering pipeline.
 
+use dashmap::DashMap;
 use std::{
-    collections::HashMap,
+    hash::{BuildHasher, Hasher},
     os::raw::c_uint,
     sync::{
-        Mutex, OnceLock,
+        OnceLock,
         atomic::{AtomicU8, Ordering},
     },
 };
@@ -86,25 +87,59 @@ impl AuxTexture {
 }
 
 // ============================================================================
+// Custom Hasher for Texture ID Shard Affinity
+// ============================================================================
+
+/// Custom hasher that maps texture IDs directly to their value.
+/// This ensures texture IDs 1, 2, 3, 4 (our aux textures) distribute to
+/// separate DashMap shards, eliminating lock contention between concurrent updates.
+#[derive(Clone, Default)]
+pub struct TextureIdHasher;
+
+impl BuildHasher for TextureIdHasher {
+    type Hasher = TextureIdHasherState;
+    fn build_hasher(&self) -> Self::Hasher {
+        TextureIdHasherState(0)
+    }
+}
+
+/// Hasher state that treats the input bytes as the hash value directly.
+#[derive(Default)]
+pub struct TextureIdHasherState(u64);
+
+impl Hasher for TextureIdHasherState {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        // For u32 keys, DashMap writes 4 bytes. Use them directly as hash.
+        if bytes.len() >= 4 {
+            self.0 = u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as u64;
+        }
+    }
+}
+
+// ============================================================================
 // Global Registry
 // ============================================================================
 
-static AUX_TEXTURES: OnceLock<Mutex<HashMap<u32, AuxTexture>>> = OnceLock::new();
+static AUX_TEXTURES: OnceLock<DashMap<u32, AuxTexture, TextureIdHasher>> = OnceLock::new();
 
-fn registry() -> &'static Mutex<HashMap<u32, AuxTexture>> {
-    AUX_TEXTURES.get_or_init(|| Mutex::new(HashMap::new()))
+fn registry() -> &'static DashMap<u32, AuxTexture, TextureIdHasher> {
+    AUX_TEXTURES.get_or_init(|| DashMap::with_hasher(TextureIdHasher))
 }
 
 /// Creates an auxiliary texture with the given ID and dimensions.
 /// If a texture with the same ID already exists, it is replaced.
 pub fn aux_create(id: u32, width: u32, height: u32) {
     let tex = AuxTexture::new(width, height);
-    registry().lock().unwrap().insert(id, tex);
+    registry().insert(id, tex);
 }
 
 /// Destroys the auxiliary texture with the given ID.
 pub fn aux_destroy(id: u32) {
-    registry().lock().unwrap().remove(&id);
+    registry().remove(&id);
 }
 
 /// Updates the auxiliary texture by copying RGBA data into its back buffer,
@@ -112,8 +147,7 @@ pub fn aux_destroy(id: u32) {
 ///
 /// Returns `true` on success.
 pub fn aux_update(id: u32, rgba: &[u8]) -> bool {
-    let mut guard = registry().lock().unwrap();
-    if let Some(tex) = guard.get_mut(&id) {
+    if let Some(mut tex) = registry().get_mut(&id) {
         let expected_len = tex.plane_len();
         if rgba.len() >= expected_len {
             tex.back_buffer_mut()[..expected_len].copy_from_slice(&rgba[..expected_len]);
@@ -128,8 +162,7 @@ pub fn aux_update(id: u32, rgba: &[u8]) -> bool {
 ///
 /// Returns the number of bytes copied, or 0 if the texture does not exist.
 pub fn aux_copy(id: u32, dst: &mut [u8], dst_pitch: usize) -> usize {
-    let guard = registry().lock().unwrap();
-    if let Some(tex) = guard.get(&id) {
+    if let Some(tex) = registry().get(&id) {
         tex.copy_front_to(dst, dst_pitch)
     } else {
         0

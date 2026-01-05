@@ -17,6 +17,8 @@ flutter_rust_bridge.workspace = true
 anyhow.workspace = true
 nesium-runtime.workspace = true
 nesium-support.workspace = true
+dashmap.workspace = true
+crossbeam-channel.workspace = true
 
 [target.'cfg(any(target_os = "android", target_os = "windows", target_os = "linux"))'.dependencies]
 mimalloc = { workspace = true, optional = true }

@@ -201,7 +201,10 @@ impl Default for TileViewerConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChrState {
     /// Rendered tile view (platform-native RGBA/BGRA) matching the aux texture.
+    /// May be empty if rendering is deferred to worker thread.
     pub rgba: Vec<u8>,
+    /// Raw source bytes for tile rendering (passed to worker for deferred rendering).
+    pub source_bytes: Vec<u8>,
     /// Tile view width (pixels).
     pub width: u16,
     /// Tile view height (pixels).
@@ -238,6 +241,7 @@ impl Default for ChrState {
     fn default() -> Self {
         Self {
             rgba: Vec::new(),
+            source_bytes: Vec::new(),
             width: 0,
             height: 0,
             source: TileViewerSource::Ppu,
@@ -323,12 +327,14 @@ pub struct SpriteState {
     pub sprites: Vec<SpriteInfo>,
     /// Rendered screen preview with sprites at their positions (BGRA, 256x256).
     /// The visible picture is the top 256x240 portion; the extra 16 pixels are below.
+    /// May be empty if rendering is deferred to worker thread.
     pub screen_rgba: Vec<u8>,
     /// Screen preview width.
     pub screen_width: u16,
     /// Screen preview height.
     pub screen_height: u16,
     /// Rendered sprite thumbnails (BGRA, 64 sprites × 8x8 or 8x16 each).
+    /// May be empty if rendering is deferred to worker thread.
     pub thumbnails_rgba: Vec<u8>,
     /// Thumbnail width per sprite.
     pub thumbnail_width: u8,
@@ -340,6 +346,12 @@ pub struct SpriteState {
     pub pattern_base: u16,
     /// 64-entry BGRA palette.
     pub bgra_palette: [[u8; 4]; 64],
+    /// Raw OAM data (256 bytes, for deferred rendering).
+    pub oam: Vec<u8>,
+    /// Raw CHR data (for deferred rendering).
+    pub chr: Vec<u8>,
+    /// 32-byte palette RAM (for deferred rendering).
+    pub palette: [u8; 32],
 }
 
 impl Default for SpriteState {
@@ -355,6 +367,9 @@ impl Default for SpriteState {
             large_sprites: false,
             pattern_base: 0,
             bgra_palette: [[0; 4]; 64],
+            oam: Vec::new(),
+            chr: Vec::new(),
+            palette: [0; 32],
         }
     }
 }

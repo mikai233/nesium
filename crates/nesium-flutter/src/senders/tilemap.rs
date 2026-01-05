@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use nesium_core::cartridge::header::Mirroring;
 use nesium_runtime::{Event, RuntimeEventSender};
 
-use crate::api::events::{TilemapMirroring, TilemapSnapshot};
+use crate::api::events::TilemapSnapshot;
 use crate::frb_generated::StreamSink;
 
 /// Auxiliary texture ID for Tilemap Viewer.
@@ -48,7 +48,9 @@ impl RuntimeEventSender for TilemapTextureSender {
     fn send(&self, event: Box<dyn Event>) -> bool {
         let any: Box<dyn Any> = event;
         if let Ok(state) = any.downcast::<nesium_runtime::TilemapState>() {
-            render_tilemap_to_aux(&state);
+            // Queue rendering to worker thread instead of blocking NES thread
+            let _ = crate::event_worker::event_worker()
+                .send(crate::event_worker::EventTask::Tilemap { state, sink: None });
         }
         true
     }
@@ -69,46 +71,12 @@ impl RuntimeEventSender for TilemapTextureAndStateSender {
     fn send(&self, event: Box<dyn Event>) -> bool {
         let any: Box<dyn Any> = event;
         if let Ok(state) = any.downcast::<nesium_runtime::TilemapState>() {
-            // Update auxiliary texture (same as TilemapTextureSender)
-            render_tilemap_to_aux(&state);
-
-            // Move data into the snapshot to avoid clones where possible.
-            let state = *state;
-            let mirroring = match state.mirroring {
-                Mirroring::Horizontal => TilemapMirroring::Horizontal,
-                Mirroring::Vertical => TilemapMirroring::Vertical,
-                Mirroring::FourScreen => TilemapMirroring::FourScreen,
-                Mirroring::SingleScreenLower => TilemapMirroring::SingleScreenLower,
-                Mirroring::SingleScreenUpper => TilemapMirroring::SingleScreenUpper,
-                Mirroring::MapperControlled => TilemapMirroring::MapperControlled,
-            };
-
-            // Always provide RGBA to Flutter for easy rendering, regardless of platform.
-            let mut rgba_palette = Vec::with_capacity(64 * 4);
-            for px in state.bgra_palette.iter() {
-                #[cfg(any(target_os = "macos", target_os = "ios"))]
-                {
-                    rgba_palette.extend_from_slice(&[px[2], px[1], px[0], px[3]]);
-                }
-                #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-                {
-                    rgba_palette.extend_from_slice(px);
-                }
-            }
-
-            let snapshot = TilemapSnapshot {
-                ciram: state.ciram,
-                palette: state.palette.to_vec(),
-                chr: state.chr,
-                mirroring,
-                bg_pattern_base: state.bg_pattern_base,
-                rgba_palette,
-                vram_addr: state.vram_addr,
-                temp_addr: state.temp_addr,
-                fine_x: state.fine_x,
-            };
-
-            let _ = self.sink.add(snapshot);
+            // Queue all work to worker thread - rendering, palette conversion, and streaming
+            let _ =
+                crate::event_worker::event_worker().send(crate::event_worker::EventTask::Tilemap {
+                    state,
+                    sink: Some(self.sink.clone()),
+                });
             return true;
         }
         true
@@ -116,7 +84,7 @@ impl RuntimeEventSender for TilemapTextureAndStateSender {
 }
 
 /// Renders tilemap state to RGBA and updates the auxiliary texture.
-fn render_tilemap_to_aux(state: &nesium_runtime::TilemapState) {
+pub fn render_tilemap_to_aux(state: &nesium_runtime::TilemapState) {
     // Output: 512x480 (2x2 nametables: 256x240 each)
     const WIDTH: usize = 512;
     const HEIGHT: usize = 480;
