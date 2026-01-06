@@ -40,8 +40,6 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     //
     // `pendingRustBufferIndex` uses `UInt32.max` as the empty sentinel.
     private let textureId = ManagedAtomic<Int64>(-1)
-    private let pendingRustBufferIndex = ManagedAtomic<UInt32>(UInt32.max)
-    private let copyScheduled = ManagedAtomic<Bool>(false)
     private let frameDirty = ManagedAtomic<Bool>(false)
     private let notifyScheduled = ManagedAtomic<Bool>(false)
     private var displayLink: CVDisplayLink?
@@ -116,8 +114,6 @@ final class NesiumTextureManager: NesiumFrameConsumer {
             self.textureId.store(-1, ordering: .releasing)
         }
 
-        pendingRustBufferIndex.store(UInt32.max, ordering: .releasing)
-        copyScheduled.store(false, ordering: .releasing)
         frameDirty.store(false, ordering: .releasing)
         notifyScheduled.store(false, ordering: .releasing)
 
@@ -137,46 +133,23 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     /// The manager is responsible for copying the Rust buffer into the
     /// CVPixelBuffer backing the Flutter texture and then notifying Flutter.
     func nesiumOnFrameReady(bufferIndex: UInt32, width: Int, height: Int, pitch: Int) {
-        // Publish the latest ready framebuffer index (latest-only). We overwrite any previous pending index.
-        pendingRustBufferIndex.store(bufferIndex, ordering: .releasing)
-
-        // Ensure only one drain is scheduled at a time; the drain loop will pick up the latest pending index.
-        let scheduled = copyScheduled.compareExchange(
-            expected: false,
-            desired: true,
-            ordering: .acquiringAndReleasing
-        ).exchanged
-
-        guard scheduled else { return }
-
-        frameCopyQueue.async { [weak self] in
-            self?.drainPendingFrames()
+        // Execute frame copy synchronously to minimize latency.
+        // The copy operation is lightweight (~60KB memcpy) and can run on the Rust callback thread.
+        frameCopyQueue.sync { [weak self] in
+            self?.copyFrame(bufferIndex: bufferIndex)
         }
     }
 
-    private func drainPendingFrames() {
-        let empty = UInt32.max
-
-        let bufferIndex = pendingRustBufferIndex.exchange(empty, ordering: .acquiringAndReleasing)
-        guard bufferIndex != empty else {
-            copyScheduled.store(false, ordering: .releasing)
-            return
-        }
-
-        guard let texture = self.texture else {
-            copyScheduled.store(false, ordering: .releasing)
-            return
-        }
+    private func copyFrame(bufferIndex: UInt32) {
+        guard let texture = self.texture else { return }
 
         guard let (pixelBuffer, writeIndex) = texture.acquireWritablePixelBuffer() else {
-            copyScheduled.store(false, ordering: .releasing)
             return
         }
 
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
         guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
             CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-            copyScheduled.store(false, ordering: .releasing)
             return
         }
 
@@ -194,22 +167,6 @@ final class NesiumTextureManager: NesiumFrameConsumer {
 
         texture.commitLatestReady(writeIndex)
         frameDirty.store(true, ordering: .releasing)
-
-        // Unschedule after one copy; if a frame arrived concurrently, schedule another drain.
-        copyScheduled.store(false, ordering: .releasing)
-        let hasNew = pendingRustBufferIndex.load(ordering: .acquiring) != empty
-        if hasNew {
-            let scheduled = copyScheduled.compareExchange(
-                expected: false,
-                desired: true,
-                ordering: .acquiringAndReleasing
-            ).exchanged
-            if scheduled {
-                frameCopyQueue.async { [weak self] in
-                    self?.drainPendingFrames()
-                }
-            }
-        }
     }
 
     private func startVsyncPumpIfNeeded() {
