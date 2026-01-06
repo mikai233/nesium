@@ -180,24 +180,19 @@ impl Runner {
                 WaitOutcome::DeadlineReached => {}
             }
 
-            let mut frames_run: u32 = 0;
-            while (rewinding || !paused)
-                && Instant::now() + FRAME_LEAD >= self.next_frame_deadline
-                && frames_run < 3
-            {
+            // Run exactly one frame per iteration to avoid jitter from catch-up frames.
+            if rewinding || !paused {
                 if self.state.rewinding.load(Ordering::Acquire) {
                     self.rewind_frame();
                 } else {
                     self.step_frame();
                 }
                 self.next_frame_deadline += self.frame_duration;
-                frames_run += 1;
             }
 
+            // If we've fallen behind, reset the deadline instead of trying to catch up.
             let now = Instant::now();
-            if now > self.next_frame_deadline
-                && now.duration_since(self.next_frame_deadline) > self.frame_duration * 2
-            {
+            if now > self.next_frame_deadline {
                 self.next_frame_deadline = now;
             }
         }
