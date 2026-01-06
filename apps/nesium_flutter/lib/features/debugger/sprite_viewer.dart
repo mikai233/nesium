@@ -12,6 +12,7 @@ import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
 import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
+import 'package:nesium_flutter/widgets/single_position_scrollbar.dart';
 
 /// Sprite Viewer - displays 64 sprite thumbnails using an auxiliary texture.
 class SpriteViewer extends ConsumerStatefulWidget {
@@ -88,7 +89,6 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
   // Zoom and pan state
   final TransformationController _previewTransformationController =
       TransformationController();
-  final ScrollController _sidePanelScrollController = ScrollController();
   static const double _maxScale = 12.0;
   bool _isCanvasTransformed = false;
   Matrix4 _previewDefaultTransform = Matrix4.identity();
@@ -140,7 +140,6 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
     _dotController.dispose();
     _previewTransformationController.removeListener(_onTransformChanged);
     _previewTransformationController.dispose();
-    _sidePanelScrollController.dispose();
     _removeTooltipOverlay();
     _spriteOverlayData.dispose();
     super.dispose();
@@ -1482,16 +1481,24 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
   ) {
     const panelWidth = 320.0;
     return ClipRect(
-      child: AnimatedContainer(
+      child: TweenAnimationBuilder<double>(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        width: _showSidePanel ? panelWidth : 0,
-        child: _showSidePanel
-            ? SizedBox(
-                width: panelWidth,
-                child: _buildDesktopSidePanel(context, snapshot, grid),
-              )
-            : null,
+        tween: Tween<double>(end: _showSidePanel ? 1.0 : 0.0),
+        builder: (context, factor, child) {
+          return IgnorePointer(
+            ignoring: factor == 0.0,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              widthFactor: factor,
+              child: child,
+            ),
+          );
+        },
+        child: SizedBox(
+          width: panelWidth,
+          child: _buildDesktopSidePanel(context, snapshot, grid),
+        ),
       ),
     );
   }
@@ -1519,280 +1526,286 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
           left: BorderSide(color: colorScheme.outlineVariant, width: 1),
         ),
       ),
-      child: Scrollbar(
-        controller: _sidePanelScrollController,
+      child: SinglePositionScrollbar(
         thumbVisibility: true,
-        child: ListView(
-          controller: _sidePanelScrollController,
-          padding: const EdgeInsets.all(12),
-          children: [
-            // Sprite Grid
-            _sideSection(
-              context,
-              title: l10n.spriteViewerPanelSprites,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final gridW = _gridTextureWidth(snapshot);
-                  final gridH = _gridTextureHeight(snapshot);
-                  final aspectRatio = gridH == 0 ? 1.0 : gridW / gridH;
-                  final availableWidth = constraints.maxWidth;
-                  final calculatedHeight = availableWidth / aspectRatio;
+        builder: (context, controller) {
+          return ListView(
+            controller: controller,
+            primary: false,
+            padding: const EdgeInsets.all(12),
+            children: [
+              // Sprite Grid
+              _sideSection(
+                context,
+                title: l10n.spriteViewerPanelSprites,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final gridW = _gridTextureWidth(snapshot);
+                    final gridH = _gridTextureHeight(snapshot);
+                    final aspectRatio = gridH == 0 ? 1.0 : gridW / gridH;
+                    final availableWidth = constraints.maxWidth;
+                    final calculatedHeight = availableWidth / aspectRatio;
 
-                  return SizedBox(
-                    height: calculatedHeight.clamp(150.0, 300.0),
-                    child: grid,
-                  );
-                },
+                    return SizedBox(
+                      height: calculatedHeight.clamp(150.0, 300.0),
+                      child: grid,
+                    );
+                  },
+                ),
               ),
-            ),
-            // List View Toggle
-            CheckboxListTile(
-              dense: true,
-              visualDensity: VisualDensity.compact,
-              controlAffinity: ListTileControlAffinity.trailing,
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.spriteViewerShowListView),
-              value: _showListView,
-              onChanged: (v) => setState(() => _showListView = v ?? false),
-            ),
-            const SizedBox(height: 8),
-            _sideSection(
-              context,
-              title: l10n.tilemapPanelDisplay,
-              child: Column(
-                children: [
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.spriteViewerShowGrid),
-                    value: _showGrid,
-                    onChanged: (v) => setState(() => _showGrid = v ?? false),
-                  ),
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.spriteViewerShowOutline),
-                    value: _showOutline,
-                    onChanged: (v) => setState(() => _showOutline = v ?? false),
-                  ),
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.spriteViewerShowOffscreenRegions),
-                    value: _showOffscreenRegions,
-                    onChanged: (v) =>
-                        setState(() => _showOffscreenRegions = v ?? false),
-                  ),
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.spriteViewerDimOffscreenSpritesGrid),
-                    value: _dimOffscreenGrid,
-                    onChanged: (v) =>
-                        setState(() => _dimOffscreenGrid = v ?? false),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.tileViewerBackground,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                      SizedBox(
-                        width: 180,
-                        child: AnimatedDropdownMenu<_SpriteBackground>(
-                          density: AnimatedDropdownMenuDensity.compact,
-                          value: _background,
-                          entries: [
-                            for (final b in _SpriteBackground.values)
-                              DropdownMenuEntry(value: b, label: b.label(l10n)),
-                          ],
-                          onSelected: (v) {
-                            setState(() => _background = v);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              // List View Toggle
+              CheckboxListTile(
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                controlAffinity: ListTileControlAffinity.trailing,
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.spriteViewerShowListView),
+                value: _showListView,
+                onChanged: (v) => setState(() => _showListView = v ?? false),
               ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.spriteViewerPanelDataSource,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.tileViewerSource,
-                      style: theme.textTheme.bodySmall,
+              const SizedBox(height: 8),
+              _sideSection(
+                context,
+                title: l10n.tilemapPanelDisplay,
+                child: Column(
+                  children: [
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.spriteViewerShowGrid),
+                      value: _showGrid,
+                      onChanged: (v) => setState(() => _showGrid = v ?? false),
                     ),
-                  ),
-                  SizedBox(
-                    width: 180,
-                    child: AnimatedDropdownMenu<_SpriteDataSource>(
-                      density: AnimatedDropdownMenuDensity.compact,
-                      value: _dataSource,
-                      entries: [
-                        for (final s in _SpriteDataSource.values)
-                          DropdownMenuEntry(
-                            value: s,
-                            enabled: s == _SpriteDataSource.spriteRam,
-                            label: s.label(l10n),
-                          ),
-                      ],
-                      onSelected: (v) {
-                        if (v != _SpriteDataSource.spriteRam) return;
-                        setState(() => _dataSource = v);
-                      },
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.spriteViewerShowOutline),
+                      value: _showOutline,
+                      onChanged: (v) =>
+                          setState(() => _showOutline = v ?? false),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.tilemapCapture,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RadioGroup<_CaptureMode>(
-                    groupValue: _captureMode,
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _captureMode = v);
-                      unawaitedLogged(
-                        _applyCaptureMode(),
-                        message: 'Failed to set sprite capture point',
-                      );
-                    },
-                    child: Column(
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.spriteViewerShowOffscreenRegions),
+                      value: _showOffscreenRegions,
+                      onChanged: (v) =>
+                          setState(() => _showOffscreenRegions = v ?? false),
+                    ),
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.spriteViewerDimOffscreenSpritesGrid),
+                      value: _dimOffscreenGrid,
+                      onChanged: (v) =>
+                          setState(() => _dimOffscreenGrid = v ?? false),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
                       children: [
-                        RadioListTile<_CaptureMode>(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.tilemapCaptureFrameStart),
-                          value: _CaptureMode.frameStart,
+                        Expanded(
+                          child: Text(
+                            l10n.tileViewerBackground,
+                            style: theme.textTheme.bodySmall,
+                          ),
                         ),
-                        RadioListTile<_CaptureMode>(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.tilemapCaptureVblankStart),
-                          value: _CaptureMode.vblankStart,
-                        ),
-                        RadioListTile<_CaptureMode>(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.tilemapCaptureManual),
-                          value: _CaptureMode.scanline,
+                        SizedBox(
+                          width: 180,
+                          child: AnimatedDropdownMenu<_SpriteBackground>(
+                            density: AnimatedDropdownMenuDensity.compact,
+                            value: _background,
+                            entries: [
+                              for (final b in _SpriteBackground.values)
+                                DropdownMenuEntry(
+                                  value: b,
+                                  label: b.label(l10n),
+                                ),
+                            ],
+                            onSelected: (v) {
+                              setState(() => _background = v);
+                            },
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _numberFieldModern(
-                          context,
-                          label: l10n.tilemapScanline,
-                          enabled: _captureMode == _CaptureMode.scanline,
-                          controller: _scanlineController,
-                          hint: '$_minScanline ~ $_maxScanline',
-                          onSubmitted: (v) {
-                            final value = int.tryParse(v);
-                            if (value == null ||
-                                value < _minScanline ||
-                                value > _maxScanline) {
-                              return;
-                            }
-                            setState(() => _scanline = value);
-                            _scanlineController.text = _scanline.toString();
-                            unawaitedLogged(
-                              _applyCaptureMode(),
-                              message: 'Failed to set sprite capture point',
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _numberFieldModern(
-                          context,
-                          label: l10n.tilemapDot,
-                          enabled: _captureMode == _CaptureMode.scanline,
-                          controller: _dotController,
-                          hint: '$_minDot ~ $_maxDot',
-                          onSubmitted: (v) {
-                            final value = int.tryParse(v);
-                            if (value == null ||
-                                value < _minDot ||
-                                value > _maxDot) {
-                              return;
-                            }
-                            setState(() => _dot = value);
-                            _dotController.text = _dot.toString();
-                            unawaitedLogged(
-                              _applyCaptureMode(),
-                              message: 'Failed to set sprite capture point',
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.spriteViewerPanelSprite,
-              child: Column(
-                children: [
-                  _kvModern(
-                    context,
-                    l10n.spriteViewerLabelMode,
-                    snapshot.largeSprites ? '8×16' : '8×8',
-                  ),
-                  _kvModern(
-                    context,
-                    l10n.spriteViewerLabelPatternBase,
-                    _hex(snapshot.patternBase, width: 4),
-                  ),
-                  _kvModern(
-                    context,
-                    l10n.spriteViewerLabelThumbnailSize,
-                    '${snapshot.thumbnailWidth}×${snapshot.thumbnailHeight}',
-                  ),
-                ],
-              ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.spriteViewerPanelSelectedSprite,
-              child: selected == null || _flutterThumbTextureId == null
-                  ? _emptyHint(colorScheme.onSurfaceVariant)
-                  : _SpriteInfoCard(
-                      sprite: selected,
-                      snapshot: snapshot,
-                      textureId: _flutterThumbTextureId!,
+              _sideSection(
+                context,
+                title: l10n.spriteViewerPanelDataSource,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        l10n.tileViewerSource,
+                        style: theme.textTheme.bodySmall,
+                      ),
                     ),
-            ),
-          ],
-        ),
+                    SizedBox(
+                      width: 180,
+                      child: AnimatedDropdownMenu<_SpriteDataSource>(
+                        density: AnimatedDropdownMenuDensity.compact,
+                        value: _dataSource,
+                        entries: [
+                          for (final s in _SpriteDataSource.values)
+                            DropdownMenuEntry(
+                              value: s,
+                              enabled: s == _SpriteDataSource.spriteRam,
+                              label: s.label(l10n),
+                            ),
+                        ],
+                        onSelected: (v) {
+                          if (v != _SpriteDataSource.spriteRam) return;
+                          setState(() => _dataSource = v);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _sideSection(
+                context,
+                title: l10n.tilemapCapture,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RadioGroup<_CaptureMode>(
+                      groupValue: _captureMode,
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() => _captureMode = v);
+                        unawaitedLogged(
+                          _applyCaptureMode(),
+                          message: 'Failed to set sprite capture point',
+                        );
+                      },
+                      child: Column(
+                        children: [
+                          RadioListTile<_CaptureMode>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(l10n.tilemapCaptureFrameStart),
+                            value: _CaptureMode.frameStart,
+                          ),
+                          RadioListTile<_CaptureMode>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(l10n.tilemapCaptureVblankStart),
+                            value: _CaptureMode.vblankStart,
+                          ),
+                          RadioListTile<_CaptureMode>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(l10n.tilemapCaptureManual),
+                            value: _CaptureMode.scanline,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _numberFieldModern(
+                            context,
+                            label: l10n.tilemapScanline,
+                            enabled: _captureMode == _CaptureMode.scanline,
+                            controller: _scanlineController,
+                            hint: '$_minScanline ~ $_maxScanline',
+                            onSubmitted: (v) {
+                              final value = int.tryParse(v);
+                              if (value == null ||
+                                  value < _minScanline ||
+                                  value > _maxScanline) {
+                                return;
+                              }
+                              setState(() => _scanline = value);
+                              _scanlineController.text = _scanline.toString();
+                              unawaitedLogged(
+                                _applyCaptureMode(),
+                                message: 'Failed to set sprite capture point',
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _numberFieldModern(
+                            context,
+                            label: l10n.tilemapDot,
+                            enabled: _captureMode == _CaptureMode.scanline,
+                            controller: _dotController,
+                            hint: '$_minDot ~ $_maxDot',
+                            onSubmitted: (v) {
+                              final value = int.tryParse(v);
+                              if (value == null ||
+                                  value < _minDot ||
+                                  value > _maxDot) {
+                                return;
+                              }
+                              setState(() => _dot = value);
+                              _dotController.text = _dot.toString();
+                              unawaitedLogged(
+                                _applyCaptureMode(),
+                                message: 'Failed to set sprite capture point',
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              _sideSection(
+                context,
+                title: l10n.spriteViewerPanelSprite,
+                child: Column(
+                  children: [
+                    _kvModern(
+                      context,
+                      l10n.spriteViewerLabelMode,
+                      snapshot.largeSprites ? '8×16' : '8×8',
+                    ),
+                    _kvModern(
+                      context,
+                      l10n.spriteViewerLabelPatternBase,
+                      _hex(snapshot.patternBase, width: 4),
+                    ),
+                    _kvModern(
+                      context,
+                      l10n.spriteViewerLabelThumbnailSize,
+                      '${snapshot.thumbnailWidth}×${snapshot.thumbnailHeight}',
+                    ),
+                  ],
+                ),
+              ),
+              _sideSection(
+                context,
+                title: l10n.spriteViewerPanelSelectedSprite,
+                child: selected == null || _flutterThumbTextureId == null
+                    ? _emptyHint(colorScheme.onSurfaceVariant)
+                    : _SpriteInfoCard(
+                        sprite: selected,
+                        snapshot: snapshot,
+                        textureId: _flutterThumbTextureId!,
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1903,76 +1916,80 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
         color: colorScheme.surfaceContainerLowest,
         border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
       ),
-      child: Scrollbar(
+      child: SinglePositionScrollbar(
         thumbVisibility: true,
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: snapshot.sprites.length,
-          itemBuilder: (context, i) {
-            final s = snapshot.sprites[i];
-            final selected = _selectedIndex == i;
-            final yActual = (s.y + 1) & 0xFF;
-            final mono = theme.textTheme.bodySmall?.copyWith(
-              fontFamily: 'monospace',
-            );
+        builder: (context, controller) {
+          return ListView.builder(
+            controller: controller,
+            primary: false,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: snapshot.sprites.length,
+            itemBuilder: (context, i) {
+              final s = snapshot.sprites[i];
+              final selected = _selectedIndex == i;
+              final yActual = (s.y + 1) & 0xFF;
+              final mono = theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+              );
 
-            String flags() =>
-                '${s.flipH ? 'H' : '-'}${s.flipV ? 'V' : '-'}${s.behindBg ? 'B' : 'F'}';
+              String flags() =>
+                  '${s.flipH ? 'H' : '-'}${s.flipV ? 'V' : '-'}${s.behindBg ? 'B' : 'F'}';
 
-            Widget cell(String text, {double? width}) {
-              return SizedBox(
-                width: width,
-                child: Text(
-                  text,
-                  style: mono,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              Widget cell(String text, {double? width}) {
+                return SizedBox(
+                  width: width,
+                  child: Text(
+                    text,
+                    style: mono,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }
+
+              return InkWell(
+                onTap: () => setState(() => _selectedIndex = i),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  color: selected
+                      ? colorScheme.primaryContainer
+                      : Colors.transparent,
+                  child: Row(
+                    children: [
+                      cell('#${s.index.toString().padLeft(2, '0')}', width: 44),
+                      cell(
+                        'X ${_hex(s.x)} (${s.x.toString().padLeft(3)})',
+                        width: 110,
+                      ),
+                      cell(
+                        'Y ${_hex(s.y)} (${yActual.toString().padLeft(3)})',
+                        width: 110,
+                      ),
+                      cell('T ${_hex(s.tileIndex)}', width: 54),
+                      cell('P ${s.palette}', width: 40),
+                      cell(flags(), width: 44),
+                      const Spacer(),
+                      Text(
+                        s.visible
+                            ? l10n.spriteViewerVisibleStatusVisible
+                            : l10n.spriteViewerVisibleStatusOffscreen,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: s.visible
+                              ? colorScheme.onSurfaceVariant
+                              : colorScheme.error,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
-            }
-
-            return InkWell(
-              onTap: () => setState(() => _selectedIndex = i),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                color: selected
-                    ? colorScheme.primaryContainer
-                    : Colors.transparent,
-                child: Row(
-                  children: [
-                    cell('#${s.index.toString().padLeft(2, '0')}', width: 44),
-                    cell(
-                      'X ${_hex(s.x)} (${s.x.toString().padLeft(3)})',
-                      width: 110,
-                    ),
-                    cell(
-                      'Y ${_hex(s.y)} (${yActual.toString().padLeft(3)})',
-                      width: 110,
-                    ),
-                    cell('T ${_hex(s.tileIndex)}', width: 54),
-                    cell('P ${s.palette}', width: 40),
-                    cell(flags(), width: 44),
-                    const Spacer(),
-                    Text(
-                      s.visible
-                          ? l10n.spriteViewerVisibleStatusVisible
-                          : l10n.spriteViewerVisibleStatusOffscreen,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: s.visible
-                            ? colorScheme.onSurfaceVariant
-                            : colorScheme.error,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
+            },
+          );
+        },
       ),
     );
   }

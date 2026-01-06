@@ -12,6 +12,7 @@ import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
 import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
+import 'package:nesium_flutter/widgets/single_position_scrollbar.dart';
 
 /// Tilemap Viewer that displays NES nametables via a Flutter Texture.
 class TilemapViewer extends ConsumerStatefulWidget {
@@ -595,192 +596,200 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
           left: BorderSide(color: colorScheme.outlineVariant, width: 1),
         ),
       ),
-      child: Scrollbar(
+      child: SinglePositionScrollbar(
         thumbVisibility: true,
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            _sideSection(
-              context,
-              title: l10n.tilemapPanelDisplay,
-              child: Column(
-                children: [
-                  _displayModeDropdown(context),
-                  const SizedBox(height: 4),
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.tilemapTileGrid),
-                    value: _showTileGrid,
-                    onChanged: (v) {
-                      setState(() => _showTileGrid = v ?? false);
-                    },
-                  ),
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.tilemapAttrGrid),
-                    value: _showAttributeGrid,
-                    onChanged: (v) {
-                      setState(() => _showAttributeGrid = v ?? false);
-                    },
-                  ),
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.tilemapAttrGrid32),
-                    value: _showAttributeGrid32,
-                    onChanged: (v) =>
-                        setState(() => _showAttributeGrid32 = v ?? false),
-                  ),
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.tilemapNtBounds),
-                    value: _showNametableDelimiters,
-                    onChanged: (v) {
-                      setState(() => _showNametableDelimiters = v ?? false);
-                    },
-                  ),
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.tilemapScrollOverlay),
-                    value: _showScrollOverlay,
-                    onChanged: (v) =>
-                        setState(() => _showScrollOverlay = v ?? false),
-                  ),
-                ],
+        builder: (context, controller) {
+          return ListView(
+            controller: controller,
+            primary: false,
+            padding: const EdgeInsets.all(12),
+            children: [
+              _sideSection(
+                context,
+                title: l10n.tilemapPanelDisplay,
+                child: Column(
+                  children: [
+                    _displayModeDropdown(context),
+                    const SizedBox(height: 4),
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.tilemapTileGrid),
+                      value: _showTileGrid,
+                      onChanged: (v) {
+                        setState(() => _showTileGrid = v ?? false);
+                      },
+                    ),
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.tilemapAttrGrid),
+                      value: _showAttributeGrid,
+                      onChanged: (v) {
+                        setState(() => _showAttributeGrid = v ?? false);
+                      },
+                    ),
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.tilemapAttrGrid32),
+                      value: _showAttributeGrid32,
+                      onChanged: (v) =>
+                          setState(() => _showAttributeGrid32 = v ?? false),
+                    ),
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.tilemapNtBounds),
+                      value: _showNametableDelimiters,
+                      onChanged: (v) {
+                        setState(() => _showNametableDelimiters = v ?? false);
+                      },
+                    ),
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.tilemapScrollOverlay),
+                      value: _showScrollOverlay,
+                      onChanged: (v) =>
+                          setState(() => _showScrollOverlay = v ?? false),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.tilemapCapture,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RadioGroup<_TilemapCaptureMode>(
-                    groupValue: _captureMode,
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _captureMode = v);
-                      _applyCaptureMode();
-                    },
-                    child: Column(
+              _sideSection(
+                context,
+                title: l10n.tilemapCapture,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RadioGroup<_TilemapCaptureMode>(
+                      groupValue: _captureMode,
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() => _captureMode = v);
+                        _applyCaptureMode();
+                      },
+                      child: Column(
+                        children: [
+                          RadioListTile<_TilemapCaptureMode>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(l10n.tilemapCaptureFrameStart),
+                            value: _TilemapCaptureMode.frameStart,
+                          ),
+                          RadioListTile<_TilemapCaptureMode>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(l10n.tilemapCaptureVblankStart),
+                            value: _TilemapCaptureMode.vblankStart,
+                          ),
+                          RadioListTile<_TilemapCaptureMode>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(l10n.tilemapCaptureManual),
+                            value: _TilemapCaptureMode.scanline,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
                       children: [
-                        RadioListTile<_TilemapCaptureMode>(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.tilemapCaptureFrameStart),
-                          value: _TilemapCaptureMode.frameStart,
+                        Expanded(
+                          child: _numberFieldModern(
+                            label: l10n.tilemapScanline,
+                            enabled:
+                                _captureMode == _TilemapCaptureMode.scanline,
+                            controller: _scanlineController,
+                            hint: '$_minScanline ~ $_maxScanline',
+                            onSubmitted: (v) {
+                              final value = int.tryParse(v);
+                              if (value == null ||
+                                  value < _minScanline ||
+                                  value > _maxScanline) {
+                                return;
+                              }
+                              setState(() => _scanline = value);
+                              _scanlineController.text = _scanline.toString();
+                              _applyCaptureMode();
+                            },
+                          ),
                         ),
-                        RadioListTile<_TilemapCaptureMode>(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.tilemapCaptureVblankStart),
-                          value: _TilemapCaptureMode.vblankStart,
-                        ),
-                        RadioListTile<_TilemapCaptureMode>(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.tilemapCaptureManual),
-                          value: _TilemapCaptureMode.scanline,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _numberFieldModern(
+                            label: l10n.tilemapDot,
+                            enabled:
+                                _captureMode == _TilemapCaptureMode.scanline,
+                            controller: _dotController,
+                            hint: '$_minDot ~ $_maxDot',
+                            onSubmitted: (v) {
+                              final value = int.tryParse(v);
+                              if (value == null ||
+                                  value < _minDot ||
+                                  value > _maxDot) {
+                                return;
+                              }
+                              setState(() => _dot = value);
+                              _dotController.text = _dot.toString();
+                              _applyCaptureMode();
+                            },
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _numberFieldModern(
-                          label: l10n.tilemapScanline,
-                          enabled: _captureMode == _TilemapCaptureMode.scanline,
-                          controller: _scanlineController,
-                          hint: '$_minScanline ~ $_maxScanline',
-                          onSubmitted: (v) {
-                            final value = int.tryParse(v);
-                            if (value == null ||
-                                value < _minScanline ||
-                                value > _maxScanline) {
-                              return;
-                            }
-                            setState(() => _scanline = value);
-                            _scanlineController.text = _scanline.toString();
-                            _applyCaptureMode();
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _numberFieldModern(
-                          label: l10n.tilemapDot,
-                          enabled: _captureMode == _TilemapCaptureMode.scanline,
-                          controller: _dotController,
-                          hint: '$_minDot ~ $_maxDot',
-                          onSubmitted: (v) {
-                            final value = int.tryParse(v);
-                            if (value == null ||
-                                value < _minDot ||
-                                value > _maxDot) {
-                              return;
-                            }
-                            setState(() => _dot = value);
-                            _dotController.text = _dot.toString();
-                            _applyCaptureMode();
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.tilemapPanelTilemap,
-              child: Column(
-                children: [
-                  _kvModern(l10n.tilemapInfoSize, '64×60'),
-                  _kvModern(l10n.tilemapInfoSizePx, '512×480'),
-                  _kvModern(l10n.tilemapInfoTilemapAddress, _hex(0x2000)),
-                  _kvModern(
-                    l10n.tilemapInfoTilesetAddress,
-                    snap != null ? _hex(snap.bgPatternBase) : '—',
-                  ),
-                  _kvModern(
-                    l10n.tilemapInfoMirroring,
-                    snap != null ? _mirroringLabel(l10n, snap.mirroring) : '—',
-                  ),
-                  _kvModern(
-                    l10n.tilemapInfoTileFormat,
-                    l10n.tilemapInfoTileFormat2bpp,
-                  ),
-                ],
+              _sideSection(
+                context,
+                title: l10n.tilemapPanelTilemap,
+                child: Column(
+                  children: [
+                    _kvModern(l10n.tilemapInfoSize, '64×60'),
+                    _kvModern(l10n.tilemapInfoSizePx, '512×480'),
+                    _kvModern(l10n.tilemapInfoTilemapAddress, _hex(0x2000)),
+                    _kvModern(
+                      l10n.tilemapInfoTilesetAddress,
+                      snap != null ? _hex(snap.bgPatternBase) : '—',
+                    ),
+                    _kvModern(
+                      l10n.tilemapInfoMirroring,
+                      snap != null
+                          ? _mirroringLabel(l10n, snap.mirroring)
+                          : '—',
+                    ),
+                    _kvModern(
+                      l10n.tilemapInfoTileFormat,
+                      l10n.tilemapInfoTileFormat2bpp,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.tilemapPanelSelectedTile,
-              child: (selected == null || snap == null)
-                  ? _emptyHint(colorScheme.onSurfaceVariant)
-                  : _TileInfoCard(info: selected, snapshot: snap),
-            ),
-          ],
-        ),
+              _sideSection(
+                context,
+                title: l10n.tilemapPanelSelectedTile,
+                child: (selected == null || snap == null)
+                    ? _emptyHint(colorScheme.onSurfaceVariant)
+                    : _TileInfoCard(info: selected, snapshot: snap),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -951,12 +960,26 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
   }
 
   Widget _buildDesktopSidePanelWrapper(BuildContext context) {
+    const panelWidth = 280.0;
     return ClipRect(
-      child: AnimatedContainer(
+      child: TweenAnimationBuilder<double>(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        width: _showSidePanel ? 280 : 0,
-        child: _showSidePanel ? _buildDesktopSidePanel(context) : null,
+        tween: Tween<double>(end: _showSidePanel ? 1.0 : 0.0),
+        builder: (context, factor, child) {
+          return IgnorePointer(
+            ignoring: factor == 0.0,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              widthFactor: factor,
+              child: child,
+            ),
+          );
+        },
+        child: SizedBox(
+          width: panelWidth,
+          child: _buildDesktopSidePanel(context),
+        ),
       ),
     );
   }

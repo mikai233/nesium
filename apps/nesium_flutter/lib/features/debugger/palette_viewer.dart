@@ -9,6 +9,7 @@ import 'package:nesium_flutter/features/debugger/viewer_skeletonizer.dart';
 import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
+import 'package:nesium_flutter/widgets/single_position_scrollbar.dart';
 
 enum _CaptureMode { frameStart, vblankStart, scanline }
 
@@ -31,7 +32,6 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
   String? _error;
 
   bool _showSidePanel = true;
-  final ScrollController _sidePanelScrollController = ScrollController();
 
   _CaptureMode _captureMode = _CaptureMode.vblankStart;
   int _scanline = 0;
@@ -55,7 +55,6 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
     unawaited(_unsubscribe());
     _scanlineController.dispose();
     _dotController.dispose();
-    _sidePanelScrollController.dispose();
     super.dispose();
   }
 
@@ -354,26 +353,27 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
           left: BorderSide(color: colorScheme.outlineVariant, width: 1),
         ),
       ),
-      child: Scrollbar(
+      child: SinglePositionScrollbar(
         thumbVisibility: true,
-        controller: _sidePanelScrollController,
-        child: ListView(
-          controller: _sidePanelScrollController,
-          primary: false,
-          padding: const EdgeInsets.all(12),
-          children: [
-            _sideSection(
-              context,
-              title: l10n.tilemapCapture,
-              child: _buildCaptureControls(
+        builder: (context, controller) {
+          return ListView(
+            controller: controller,
+            primary: false,
+            padding: const EdgeInsets.all(12),
+            children: [
+              _sideSection(
                 context,
-                l10n,
-                dense: true,
-                showTitle: false,
+                title: l10n.tilemapCapture,
+                child: _buildCaptureControls(
+                  context,
+                  l10n,
+                  dense: true,
+                  showTitle: false,
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
   }

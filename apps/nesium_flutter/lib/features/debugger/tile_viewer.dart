@@ -12,6 +12,7 @@ import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
 import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
+import 'package:nesium_flutter/widgets/single_position_scrollbar.dart';
 
 /// Tile Viewer that displays NES CHR pattern tables via a Flutter Texture.
 class TileViewer extends ConsumerStatefulWidget {
@@ -49,7 +50,6 @@ class _TileViewerState extends ConsumerState<TileViewer> {
   static const int _maxDot = 340;
 
   final NesTextureService _textureService = NesTextureService();
-  final ScrollController _sidePanelScrollController = ScrollController();
   int? _chrTextureId;
   int? _flutterTextureId;
   bool _isCreating = false;
@@ -237,7 +237,6 @@ class _TileViewerState extends ConsumerState<TileViewer> {
     _dotController.dispose();
     _transformationController.removeListener(_onTransformChanged);
     _transformationController.dispose();
-    _sidePanelScrollController.dispose();
     super.dispose();
   }
 
@@ -1141,335 +1140,337 @@ class _TileViewerState extends ConsumerState<TileViewer> {
           left: BorderSide(color: colorScheme.outlineVariant, width: 1),
         ),
       ),
-      child: Scrollbar(
-        controller: _sidePanelScrollController,
+      child: SinglePositionScrollbar(
         thumbVisibility: true,
-        child: ListView(
-          controller: _sidePanelScrollController,
-          padding: const EdgeInsets.all(12),
-          children: [
-            _sideSection(
-              context,
-              title: l10n.tileViewerPresets,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildPresetButtons(context, [
-                    _Preset.ppu,
-                    _Preset.chr,
-                    _Preset.rom,
-                  ]),
-                  const SizedBox(height: 8),
-                  _buildPresetButtons(context, [_Preset.bg, _Preset.oam]),
-                ],
+        builder: (context, controller) {
+          return ListView(
+            controller: controller,
+            primary: false,
+            padding: const EdgeInsets.all(12),
+            children: [
+              _sideSection(
+                context,
+                title: l10n.tileViewerPresets,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildPresetButtons(context, [
+                      _Preset.ppu,
+                      _Preset.chr,
+                      _Preset.rom,
+                    ]),
+                    const SizedBox(height: 8),
+                    _buildPresetButtons(context, [_Preset.bg, _Preset.oam]),
+                  ],
+                ),
               ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.tilemapCapture,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  RadioGroup<_CaptureMode>(
-                    groupValue: _captureMode,
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _captureMode = v);
-                      unawaitedLogged(
-                        _applyCaptureMode(),
-                        message: 'Failed to set CHR capture point',
-                      );
-                    },
-                    child: Column(
+              _sideSection(
+                context,
+                title: l10n.tilemapCapture,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RadioGroup<_CaptureMode>(
+                      groupValue: _captureMode,
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() => _captureMode = v);
+                        unawaitedLogged(
+                          _applyCaptureMode(),
+                          message: 'Failed to set CHR capture point',
+                        );
+                      },
+                      child: Column(
+                        children: [
+                          RadioListTile<_CaptureMode>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(l10n.tilemapCaptureFrameStart),
+                            value: _CaptureMode.frameStart,
+                          ),
+                          RadioListTile<_CaptureMode>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(l10n.tilemapCaptureVblankStart),
+                            value: _CaptureMode.vblankStart,
+                          ),
+                          RadioListTile<_CaptureMode>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(l10n.tilemapCaptureManual),
+                            value: _CaptureMode.scanline,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
                       children: [
-                        RadioListTile<_CaptureMode>(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.tilemapCaptureFrameStart),
-                          value: _CaptureMode.frameStart,
+                        Expanded(
+                          child: _numberFieldModern(
+                            label: l10n.tilemapScanline,
+                            enabled: _captureMode == _CaptureMode.scanline,
+                            controller: _scanlineController,
+                            hint: '$_minScanline ~ $_maxScanline',
+                            onSubmitted: (v) {
+                              final value = int.tryParse(v);
+                              if (value == null ||
+                                  value < _minScanline ||
+                                  value > _maxScanline) {
+                                return;
+                              }
+                              setState(() => _scanline = value);
+                              _scanlineController.text = _scanline.toString();
+                              unawaitedLogged(
+                                _applyCaptureMode(),
+                                message: 'Failed to set CHR capture point',
+                              );
+                            },
+                          ),
                         ),
-                        RadioListTile<_CaptureMode>(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.tilemapCaptureVblankStart),
-                          value: _CaptureMode.vblankStart,
-                        ),
-                        RadioListTile<_CaptureMode>(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.tilemapCaptureManual),
-                          value: _CaptureMode.scanline,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _numberFieldModern(
+                            label: l10n.tilemapDot,
+                            enabled: _captureMode == _CaptureMode.scanline,
+                            controller: _dotController,
+                            hint: '$_minDot ~ $_maxDot',
+                            onSubmitted: (v) {
+                              final value = int.tryParse(v);
+                              if (value == null ||
+                                  value < _minDot ||
+                                  value > _maxDot) {
+                                return;
+                              }
+                              setState(() => _dot = value);
+                              _dotController.text = _dot.toString();
+                              unawaitedLogged(
+                                _applyCaptureMode(),
+                                message: 'Failed to set CHR capture point',
+                              );
+                            },
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _numberFieldModern(
-                          label: l10n.tilemapScanline,
-                          enabled: _captureMode == _CaptureMode.scanline,
-                          controller: _scanlineController,
-                          hint: '$_minScanline ~ $_maxScanline',
-                          onSubmitted: (v) {
-                            final value = int.tryParse(v);
-                            if (value == null ||
-                                value < _minScanline ||
-                                value > _maxScanline) {
-                              return;
-                            }
-                            setState(() => _scanline = value);
-                            _scanlineController.text = _scanline.toString();
-                            unawaitedLogged(
-                              _applyCaptureMode(),
-                              message: 'Failed to set CHR capture point',
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _numberFieldModern(
-                          label: l10n.tilemapDot,
-                          enabled: _captureMode == _CaptureMode.scanline,
-                          controller: _dotController,
-                          hint: '$_minDot ~ $_maxDot',
-                          onSubmitted: (v) {
-                            final value = int.tryParse(v);
-                            if (value == null ||
-                                value < _minDot ||
-                                value > _maxDot) {
-                              return;
-                            }
-                            setState(() => _dot = value);
-                            _dotController.text = _dot.toString();
-                            unawaitedLogged(
-                              _applyCaptureMode(),
-                              message: 'Failed to set CHR capture point',
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            // Source selector
-            _sideSection(
-              context,
-              title: l10n.tileViewerSource,
-              child: AnimatedDropdownMenu<_TileSource>(
-                density: AnimatedDropdownMenuDensity.compact,
-                value: _source,
-                entries: [
-                  DropdownMenuEntry(
-                    value: _TileSource.ppu,
-                    label: l10n.tileViewerSourcePpu,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileSource.chrRom,
-                    label: l10n.tileViewerSourceChrRom,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileSource.chrRam,
-                    label: l10n.tileViewerSourceChrRam,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileSource.prgRom,
-                    label: l10n.tileViewerSourcePrgRom,
-                  ),
-                ],
-                onSelected: (v) async {
-                  setState(() => _source = v);
-                  await bridge.setTileViewerSource(source: v.index);
-                },
-              ),
-            ),
-            // Address input
-            _sideSection(
-              context,
-              title: l10n.tileViewerAddress,
-              child: _AddressInput(
-                value: _startAddress,
-                maxValue: _maxAddress,
-                pageIncrement: _addressIncrement,
-                byteIncrement: 1,
-                onChanged: (v) async {
-                  setState(() => _startAddress = v);
-                  await bridge.setTileViewerStartAddress(startAddress: v);
-                },
-              ),
-            ),
-            // Size selector (columns × rows)
-            _sideSection(
-              context,
-              title: l10n.tileViewerSize,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _SizeInput(
-                      label: l10n.tileViewerColumns,
-                      value: _columnCount,
-                      min: 4,
-                      max: 256,
-                      step: _layout == _TileLayout.normal ? 1 : 2,
-                      onChanged: (v) => _updateSize(columns: v),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _SizeInput(
-                      label: l10n.tileViewerRows,
-                      value: _rowCount,
-                      min: 4,
-                      max: 256,
-                      step: _layout == _TileLayout.normal ? 1 : 2,
-                      onChanged: (v) => _updateSize(rows: v),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Layout selector
-            _sideSection(
-              context,
-              title: l10n.tileViewerLayout,
-              child: AnimatedDropdownMenu<_TileLayout>(
-                density: AnimatedDropdownMenuDensity.compact,
-                value: _layout,
-                entries: [
-                  DropdownMenuEntry(
-                    value: _TileLayout.normal,
-                    label: l10n.tileViewerLayoutNormal,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileLayout.singleLine8x16,
-                    label: l10n.tileViewerLayout8x16,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileLayout.singleLine16x16,
-                    label: l10n.tileViewerLayout16x16,
-                  ),
-                ],
-                onSelected: (v) async {
-                  setState(() => _layout = v);
-                  await bridge.setTileViewerLayout(layout: v.index);
-                },
-              ),
-            ),
-            // Background selector
-            _sideSection(
-              context,
-              title: l10n.tileViewerBackground,
-              child: AnimatedDropdownMenu<_TileBackground>(
-                density: AnimatedDropdownMenuDensity.compact,
-                value: _background,
-                entries: [
-                  DropdownMenuEntry(
-                    value: _TileBackground.defaultBg,
-                    label: l10n.tileViewerBgDefault,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileBackground.transparent,
-                    label: l10n.tileViewerBgTransparent,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileBackground.paletteColor,
-                    label: l10n.tileViewerBgPalette,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileBackground.black,
-                    label: l10n.tileViewerBgBlack,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileBackground.white,
-                    label: l10n.tileViewerBgWhite,
-                  ),
-                  DropdownMenuEntry(
-                    value: _TileBackground.magenta,
-                    label: l10n.tileViewerBgMagenta,
-                  ),
-                ],
-                onSelected: (v) async {
-                  setState(() => _background = v);
-                  await bridge.setTileViewerBackground(background: v.index);
-                },
-              ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.tileViewerOverlays,
-              child: Column(
-                children: [
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.tileViewerShowGrid),
-                    value: _showTileGrid,
-                    onChanged: (v) {
-                      setState(() => _showTileGrid = v ?? false);
-                    },
-                  ),
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.tileViewerGrayscale),
-                    value: _useGrayscale,
-                    onChanged: (v) async {
-                      final enabled = v ?? false;
-                      setState(() => _useGrayscale = enabled);
-                      await bridge.setTileViewerDisplayMode(
-                        mode: enabled ? 1 : 0,
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            _sideSection(
-              context,
-              title: l10n.tileViewerPalette,
-              child: AnimatedDropdownMenu<int>(
-                density: AnimatedDropdownMenuDensity.compact,
-                value: _selectedPalette,
-                entries: [
-                  for (var i = 0; i < 8; i++)
-                    DropdownMenuEntry(
-                      value: i,
-                      label: i < 4
-                          ? l10n.tileViewerPaletteBg(i)
-                          : l10n.tileViewerPaletteSprite(i - 4),
-                    ),
-                ],
-                onSelected: (v) async {
-                  setState(() => _selectedPalette = v);
-                  _clearPresetSelection(); // Manual change clears preset
-                  await bridge.setTileViewerPalette(paletteIndex: v);
-                },
-              ),
-            ),
-            // Selected Tile Info (only shows on tap/click, not hover)
-            if (_selectedTile != null && _tileSnapshot != null)
-              _sideSection(
-                context,
-                title: l10n.tileViewerSelectedTile,
-                child: _buildTileInfoCard(
-                  context,
-                  _selectedTile!,
-                  _tileSnapshot!,
+                  ],
                 ),
               ),
-          ],
-        ),
+              // Source selector
+              _sideSection(
+                context,
+                title: l10n.tileViewerSource,
+                child: AnimatedDropdownMenu<_TileSource>(
+                  density: AnimatedDropdownMenuDensity.compact,
+                  value: _source,
+                  entries: [
+                    DropdownMenuEntry(
+                      value: _TileSource.ppu,
+                      label: l10n.tileViewerSourcePpu,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileSource.chrRom,
+                      label: l10n.tileViewerSourceChrRom,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileSource.chrRam,
+                      label: l10n.tileViewerSourceChrRam,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileSource.prgRom,
+                      label: l10n.tileViewerSourcePrgRom,
+                    ),
+                  ],
+                  onSelected: (v) async {
+                    setState(() => _source = v);
+                    await bridge.setTileViewerSource(source: v.index);
+                  },
+                ),
+              ),
+              // Address input
+              _sideSection(
+                context,
+                title: l10n.tileViewerAddress,
+                child: _AddressInput(
+                  value: _startAddress,
+                  maxValue: _maxAddress,
+                  pageIncrement: _addressIncrement,
+                  byteIncrement: 1,
+                  onChanged: (v) async {
+                    setState(() => _startAddress = v);
+                    await bridge.setTileViewerStartAddress(startAddress: v);
+                  },
+                ),
+              ),
+              // Size selector (columns × rows)
+              _sideSection(
+                context,
+                title: l10n.tileViewerSize,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _SizeInput(
+                        label: l10n.tileViewerColumns,
+                        value: _columnCount,
+                        min: 4,
+                        max: 256,
+                        step: _layout == _TileLayout.normal ? 1 : 2,
+                        onChanged: (v) => _updateSize(columns: v),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _SizeInput(
+                        label: l10n.tileViewerRows,
+                        value: _rowCount,
+                        min: 4,
+                        max: 256,
+                        step: _layout == _TileLayout.normal ? 1 : 2,
+                        onChanged: (v) => _updateSize(rows: v),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Layout selector
+              _sideSection(
+                context,
+                title: l10n.tileViewerLayout,
+                child: AnimatedDropdownMenu<_TileLayout>(
+                  density: AnimatedDropdownMenuDensity.compact,
+                  value: _layout,
+                  entries: [
+                    DropdownMenuEntry(
+                      value: _TileLayout.normal,
+                      label: l10n.tileViewerLayoutNormal,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileLayout.singleLine8x16,
+                      label: l10n.tileViewerLayout8x16,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileLayout.singleLine16x16,
+                      label: l10n.tileViewerLayout16x16,
+                    ),
+                  ],
+                  onSelected: (v) async {
+                    setState(() => _layout = v);
+                    await bridge.setTileViewerLayout(layout: v.index);
+                  },
+                ),
+              ),
+              // Background selector
+              _sideSection(
+                context,
+                title: l10n.tileViewerBackground,
+                child: AnimatedDropdownMenu<_TileBackground>(
+                  density: AnimatedDropdownMenuDensity.compact,
+                  value: _background,
+                  entries: [
+                    DropdownMenuEntry(
+                      value: _TileBackground.defaultBg,
+                      label: l10n.tileViewerBgDefault,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileBackground.transparent,
+                      label: l10n.tileViewerBgTransparent,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileBackground.paletteColor,
+                      label: l10n.tileViewerBgPalette,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileBackground.black,
+                      label: l10n.tileViewerBgBlack,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileBackground.white,
+                      label: l10n.tileViewerBgWhite,
+                    ),
+                    DropdownMenuEntry(
+                      value: _TileBackground.magenta,
+                      label: l10n.tileViewerBgMagenta,
+                    ),
+                  ],
+                  onSelected: (v) async {
+                    setState(() => _background = v);
+                    await bridge.setTileViewerBackground(background: v.index);
+                  },
+                ),
+              ),
+              _sideSection(
+                context,
+                title: l10n.tileViewerOverlays,
+                child: Column(
+                  children: [
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.tileViewerShowGrid),
+                      value: _showTileGrid,
+                      onChanged: (v) {
+                        setState(() => _showTileGrid = v ?? false);
+                      },
+                    ),
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.tileViewerGrayscale),
+                      value: _useGrayscale,
+                      onChanged: (v) async {
+                        final enabled = v ?? false;
+                        setState(() => _useGrayscale = enabled);
+                        await bridge.setTileViewerDisplayMode(
+                          mode: enabled ? 1 : 0,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              _sideSection(
+                context,
+                title: l10n.tileViewerPalette,
+                child: AnimatedDropdownMenu<int>(
+                  density: AnimatedDropdownMenuDensity.compact,
+                  value: _selectedPalette,
+                  entries: [
+                    for (var i = 0; i < 8; i++)
+                      DropdownMenuEntry(
+                        value: i,
+                        label: i < 4
+                            ? l10n.tileViewerPaletteBg(i)
+                            : l10n.tileViewerPaletteSprite(i - 4),
+                      ),
+                  ],
+                  onSelected: (v) async {
+                    setState(() => _selectedPalette = v);
+                    _clearPresetSelection(); // Manual change clears preset
+                    await bridge.setTileViewerPalette(paletteIndex: v);
+                  },
+                ),
+              ),
+              // Selected Tile Info (only shows on tap/click, not hover)
+              if (_selectedTile != null && _tileSnapshot != null)
+                _sideSection(
+                  context,
+                  title: l10n.tileViewerSelectedTile,
+                  child: _buildTileInfoCard(
+                    context,
+                    _selectedTile!,
+                    _tileSnapshot!,
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
