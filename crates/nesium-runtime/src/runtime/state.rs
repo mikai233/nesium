@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64};
 
-use super::types::{SpriteViewerConfig, TileViewerConfig};
+use super::types::TileViewerConfig;
 
 pub(crate) const TURBO_ON_FRAMES_DEFAULT: u8 = 2;
 pub(crate) const TURBO_OFF_FRAMES_DEFAULT: u8 = 2;
@@ -15,7 +15,6 @@ pub(crate) struct RuntimeState {
     pub(crate) frame_seq: AtomicU64,
     pub(crate) rom_hash: Mutex<Option<[u8; 32]>>,
     pub(crate) tile_viewer: Mutex<TileViewerConfig>,
-    pub(crate) sprite_viewer: Mutex<SpriteViewerConfig>,
     pub(crate) rewind_enabled: AtomicBool,
     pub(crate) rewind_capacity: AtomicU64,
     pub(crate) rewinding: AtomicBool,
@@ -32,7 +31,6 @@ impl RuntimeState {
             frame_seq: AtomicU64::new(0),
             rom_hash: Mutex::new(None),
             tile_viewer: Mutex::new(TileViewerConfig::default()),
-            sprite_viewer: Mutex::new(SpriteViewerConfig::default()),
             rewind_enabled: AtomicBool::new(false),
             rewind_capacity: AtomicU64::new(600), // Default 10s @ 60fps
             rewinding: AtomicBool::new(false),

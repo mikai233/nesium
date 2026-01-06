@@ -268,15 +268,6 @@ impl Event for TileState {}
 // Sprite Viewer Types
 // =====================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SpriteViewerBackground {
-    Gray,
-    Black,
-    White,
-    Magenta,
-    Transparent,
-}
-
 /// Information about a single OAM sprite.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SpriteInfo {
@@ -298,26 +289,6 @@ pub struct SpriteInfo {
     pub behind_bg: bool,
     /// Whether sprite is visible on screen (Y not in hidden range).
     pub visible: bool,
-}
-
-/// Configuration for the Sprite Viewer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SpriteViewerConfig {
-    pub show_outline: bool,
-    pub show_offscreen: bool,
-    pub dim_offscreen: bool,
-    pub background: SpriteViewerBackground,
-}
-
-impl Default for SpriteViewerConfig {
-    fn default() -> Self {
-        Self {
-            show_outline: false,
-            show_offscreen: false,
-            dim_offscreen: true,
-            background: SpriteViewerBackground::Gray,
-        }
-    }
 }
 
 /// Sprite Viewer state for Flutter inspection.
