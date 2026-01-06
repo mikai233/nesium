@@ -40,8 +40,6 @@ impl PaletteInterceptor {
 }
 
 impl Interceptor for PaletteInterceptor {
-    fn debug(&self, _cpu: &mut Cpu, _bus: &mut CpuBus) {}
-
     fn on_ppu_frame_start(&mut self, _cpu: &mut Cpu, bus: &mut CpuBus) {
         if self.capture_point.should_capture_on_frame_start() {
             self.capture(bus);

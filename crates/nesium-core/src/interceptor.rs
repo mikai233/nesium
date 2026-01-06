@@ -14,7 +14,7 @@ pub mod tile_viewer_interceptor;
 pub mod tilemap_interceptor;
 
 pub trait Interceptor: Any + Send + Debug + 'static {
-    fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus);
+    fn debug(&mut self, _cpu: &mut Cpu, _bus: &mut CpuBus) {}
 
     fn on_ppu_frame_start(&mut self, _cpu: &mut Cpu, _bus: &mut CpuBus) {}
 
@@ -85,8 +85,8 @@ impl EmuInterceptor {
 }
 
 impl Interceptor for EmuInterceptor {
-    fn debug(&self, cpu: &mut Cpu, bus: &mut CpuBus) {
-        for interceptor in self.layers.values() {
+    fn debug(&mut self, cpu: &mut Cpu, bus: &mut CpuBus) {
+        for interceptor in self.layers.values_mut() {
             interceptor.debug(cpu, bus);
         }
     }

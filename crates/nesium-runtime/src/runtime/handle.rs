@@ -116,8 +116,16 @@ impl Runtime {
             pubsub.subscribe(EventTopic::Notification, sender);
         }
 
+        let ctrl_tx_clone = ctrl_tx.clone();
         let join = thread::spawn(move || {
-            let mut runner = Runner::new(audio_mode, ctrl_rx, pubsub, framebuffer, thread_state);
+            let mut runner = Runner::new(
+                audio_mode,
+                ctrl_rx,
+                ctrl_tx_clone,
+                pubsub,
+                framebuffer,
+                thread_state,
+            );
             runner.run();
         });
 
@@ -519,6 +527,44 @@ impl RuntimeHandle {
     pub fn load_movie(&self, movie: nesium_support::tas::Movie) -> Result<(), RuntimeError> {
         self.send_with_reply("load_movie", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::LoadMovie(movie, reply)
+        })
+    }
+
+    /// Enables the debugger with the given debug channels.
+    ///
+    /// Returns the receiver for debug events that the UI should monitor.
+    /// The caller should hold onto the `Sender<DebugCommand>` to send commands.
+    pub fn enable_debugger(
+        &self,
+        debug_rx: crossbeam_channel::Receiver<super::debug::DebugCommand>,
+        debug_tx: crossbeam_channel::Sender<super::debug::DebugEvent>,
+    ) -> Result<(), RuntimeError> {
+        let (reply_tx, reply_rx) = bounded::<Result<(), RuntimeError>>(1);
+        self.inner
+            .ctrl_tx
+            .send(ControlMessage::EnableDebugger {
+                debug_rx,
+                debug_tx,
+                reply: reply_tx,
+            })
+            .map_err(|_| RuntimeError::ControlChannelDisconnected)?;
+        match reply_rx.recv_timeout(CONTROL_REPLY_TIMEOUT) {
+            Ok(res) => res,
+            Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                Err(RuntimeError::ControlTimeout {
+                    op: "enable_debugger",
+                })
+            }
+            Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                Err(RuntimeError::ControlChannelDisconnected)
+            }
+        }
+    }
+
+    /// Disables the debugger and removes it from the interceptor stack.
+    pub fn disable_debugger(&self) -> Result<(), RuntimeError> {
+        self.send_with_reply("disable_debugger", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::DisableDebugger(reply)
         })
     }
 }

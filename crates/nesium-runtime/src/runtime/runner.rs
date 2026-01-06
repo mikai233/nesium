@@ -77,6 +77,7 @@ pub(crate) struct Runner {
     nes: Nes,
     audio: Option<NesAudioPlayer>,
     ctrl_rx: Receiver<ControlMessage>,
+    ctrl_tx: Sender<ControlMessage>,
     pubsub: RuntimePubSub,
     state: Arc<RuntimeState>,
     next_frame_deadline: Instant,
@@ -93,6 +94,7 @@ impl Runner {
     pub(crate) fn new(
         audio_mode: AudioMode,
         ctrl_rx: Receiver<ControlMessage>,
+        ctrl_tx: Sender<ControlMessage>,
         mut pubsub: RuntimePubSub,
         framebuffer: FrameBuffer,
         state: Arc<RuntimeState>,
@@ -125,6 +127,7 @@ impl Runner {
             nes,
             audio,
             ctrl_rx,
+            ctrl_tx,
             pubsub,
             state,
             next_frame_deadline: Instant::now(),
@@ -363,6 +366,26 @@ impl Runner {
             }
             ControlMessage::SetPaletteCapturePoint(point, reply) => {
                 self.nes.set_palette_capture_point(point);
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::EnableDebugger {
+                debug_rx,
+                debug_tx,
+                reply,
+            } => {
+                use super::debug_interceptor::DebugInterceptor;
+                let interceptor = DebugInterceptor::new(
+                    self.ctrl_rx.clone(),
+                    self.ctrl_tx.clone(),
+                    debug_rx,
+                    debug_tx,
+                );
+                self.nes.interceptor.add(interceptor);
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::DisableDebugger(reply) => {
+                use super::debug_interceptor::DebugInterceptor;
+                self.nes.interceptor.remove::<DebugInterceptor>();
                 let _ = reply.send(Ok(()));
             }
         }

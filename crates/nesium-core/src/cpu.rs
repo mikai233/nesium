@@ -167,12 +167,12 @@ impl DmaController {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cpu {
     // ===== Architectural registers (6502 visible state) =====
-    pub(crate) a: u8,     // Accumulator (A)
-    pub(crate) x: u8,     // Index register X
-    pub(crate) y: u8,     // Index register Y
-    pub(crate) s: u8,     // Stack pointer (offset in page $01xx)
+    pub a: u8,            // Accumulator (A)
+    pub x: u8,            // Index register X
+    pub y: u8,            // Index register Y
+    pub s: u8,            // Stack pointer (offset in page $01xx)
     pub(crate) p: Status, // Processor status flags (NV-BDIZC)
-    pub(crate) pc: u16,   // Program counter
+    pub pc: u16,          // Program counter
 
     // ===== Current instruction / microcycle state =====
     /// Opcode currently being executed (set once fetched; cleared when instruction completes).
@@ -231,6 +231,11 @@ impl Cpu {
             effective_addr: 0,
             dma: DmaController::default(),
         }
+    }
+
+    /// Returns the processor status flags (P register) as a raw u8.
+    pub fn status_bits(&self) -> u8 {
+        self.p.bits()
     }
 
     /// Perform a CPU reset. The `kind` distinguishes between a true power-on

@@ -1,7 +1,7 @@
 use core::ffi::c_void;
 use std::path::PathBuf;
 
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Receiver, Sender};
 use nesium_core::{
     audio::bus::AudioBusConfig,
     interceptor::{
@@ -15,6 +15,7 @@ use nesium_core::{
     reset_kind::ResetKind,
 };
 
+use super::debug::{DebugCommand, DebugEvent};
 use super::types::{
     EventTopic, RuntimeError, RuntimeEventSender, TileViewerBackground, TileViewerLayout,
     TileViewerSource,
@@ -59,6 +60,15 @@ pub(crate) enum ControlMessage {
     SetTileViewerUseGrayscalePalette(bool, ControlReplySender),
     // Palette viewer settings
     SetPaletteCapturePoint(PaletteCapturePoint, ControlReplySender),
+    // Debugger control
+    /// Enable the debugger with the given channels.
+    EnableDebugger {
+        debug_rx: Receiver<DebugCommand>,
+        debug_tx: Sender<DebugEvent>,
+        reply: ControlReplySender,
+    },
+    /// Disable and remove the debugger.
+    DisableDebugger(ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without
