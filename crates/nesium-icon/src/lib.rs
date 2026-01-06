@@ -12,8 +12,6 @@ use crate::save::save_surface;
 use skia_safe::image::CachingHint;
 use skia_safe::surfaces::raster_n32_premul;
 use skia_safe::{AlphaType, ColorType, ImageInfo, Surface};
-#[cfg(feature = "svg")]
-use skia_safe::{Rect, svg};
 
 /// Default render dimension (square).
 pub const DEFAULT_ICON_SIZE: u32 = WIDTH as u32;
@@ -87,15 +85,17 @@ pub fn render_png(path: &str) -> Result<(), String> {
 /// Convenience helper for the binary: renders the base icon and saves an SVG.
 #[cfg(feature = "svg")]
 pub fn render_svg(path: &str) -> Result<(), String> {
+    use skia_safe::{Rect, svg};
+    use std::io::Write;
     let bounds = Rect::from_wh(WIDTH as f32, HEIGHT as f32);
-    let mut canvas = svg::Canvas::new(bounds, None);
+    let canvas = svg::Canvas::new(bounds, None);
 
-    draw_background(&mut canvas);
-    draw_dashed_ring(&mut canvas);
-    draw_controller(&mut canvas);
+    draw_background(&canvas);
+    draw_dashed_ring(&canvas);
+    draw_controller(&canvas);
 
     let data = canvas.end();
-    let mut file = File::create(path).map_err(|e| e.to_string())?;
+    let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
     file.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
 
     println!("Successfully generated: {}", path);
