@@ -117,21 +117,11 @@ class AnimatedSliderTile extends StatelessWidget {
             Expanded(
               child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
             ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 150),
-              transitionBuilder: (child, animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(scale: animation, child: child),
-                );
-              },
-              child: Text(
-                valueLabel,
-                key: ValueKey(valueLabel),
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
+            Text(
+              valueLabel,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

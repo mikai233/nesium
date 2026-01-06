@@ -11,6 +11,7 @@ import 'package:nesium_flutter/features/debugger/viewer_skeletonizer.dart';
 import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
+import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
 
 /// Tilemap Viewer that displays NES nametables via a Flutter Texture.
 class TilemapViewer extends ConsumerStatefulWidget {
@@ -1063,7 +1064,7 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
           ),
         ),
         PopupMenuItem<void>(
-          onTap: () {}, // Empty tap to prevent closing
+          enabled: false,
           padding: EdgeInsets.zero,
           child: StatefulBuilder(
             builder: (context, setMenuState) => Column(
@@ -1082,26 +1083,26 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
                           style: theme.textTheme.bodySmall,
                         ),
                       ),
-                      DropdownButtonHideUnderline(
-                        child: DropdownButton<_TilemapDisplayMode>(
-                          isDense: true,
+                      SizedBox(
+                        width: 180,
+                        child: AnimatedDropdownMenu<_TilemapDisplayMode>(
+                          density: AnimatedDropdownMenuDensity.compact,
                           value: _displayMode,
-                          items: [
-                            DropdownMenuItem(
+                          entries: [
+                            DropdownMenuEntry(
                               value: _TilemapDisplayMode.defaultMode,
-                              child: Text(l10n.tilemapDisplayModeDefault),
+                              label: l10n.tilemapDisplayModeDefault,
                             ),
-                            DropdownMenuItem(
+                            DropdownMenuEntry(
                               value: _TilemapDisplayMode.grayscale,
-                              child: Text(l10n.tilemapDisplayModeGrayscale),
+                              label: l10n.tilemapDisplayModeGrayscale,
                             ),
-                            DropdownMenuItem(
+                            DropdownMenuEntry(
                               value: _TilemapDisplayMode.attributeView,
-                              child: Text(l10n.tilemapDisplayModeAttributeView),
+                              label: l10n.tilemapDisplayModeAttributeView,
                             ),
                           ],
-                          onChanged: (v) {
-                            if (v == null) return;
+                          onSelected: (v) {
                             setState(() => _displayMode = v);
                             setMenuState(() {});
                             _applyTextureRenderMode();
@@ -1349,26 +1350,26 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
             style: theme.textTheme.bodySmall,
           ),
         ),
-        DropdownButtonHideUnderline(
-          child: DropdownButton<_TilemapDisplayMode>(
-            isDense: true,
+        SizedBox(
+          width: 180,
+          child: AnimatedDropdownMenu<_TilemapDisplayMode>(
+            density: AnimatedDropdownMenuDensity.compact,
             value: _displayMode,
-            items: [
-              DropdownMenuItem(
+            entries: [
+              DropdownMenuEntry(
                 value: _TilemapDisplayMode.defaultMode,
-                child: Text(l10n.tilemapDisplayModeDefault),
+                label: l10n.tilemapDisplayModeDefault,
               ),
-              DropdownMenuItem(
+              DropdownMenuEntry(
                 value: _TilemapDisplayMode.grayscale,
-                child: Text(l10n.tilemapDisplayModeGrayscale),
+                label: l10n.tilemapDisplayModeGrayscale,
               ),
-              DropdownMenuItem(
+              DropdownMenuEntry(
                 value: _TilemapDisplayMode.attributeView,
-                child: Text(l10n.tilemapDisplayModeAttributeView),
+                label: l10n.tilemapDisplayModeAttributeView,
               ),
             ],
-            onChanged: (v) {
-              if (v == null) return;
+            onSelected: (v) {
               setState(() => _displayMode = v);
               _applyTextureRenderMode();
             },

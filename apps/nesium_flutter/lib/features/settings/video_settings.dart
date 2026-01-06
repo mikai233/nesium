@@ -106,6 +106,13 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     await nes_palette.setPalettePreset(kind: state.builtinPreset);
   }
 
+  Future<void> setPaletteMode(PaletteMode mode) async {
+    if (mode == state.paletteMode) return;
+    state = state.copyWith(paletteMode: mode);
+    await _persist(state);
+    await applyToRuntime();
+  }
+
   Future<void> setBuiltinPreset(nes_palette.PaletteKind preset) async {
     if (preset == state.builtinPreset &&
         state.paletteMode == PaletteMode.builtin) {

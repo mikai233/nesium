@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../l10n/app_localizations.dart';
 import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
+import '../../widgets/animated_dropdown_menu.dart';
 import '../../widgets/animated_settings_widgets.dart';
 import '../controls/input_settings.dart';
 import '../controls/turbo_settings.dart';
@@ -187,27 +188,29 @@ class _GeneralTab extends ConsumerWidget {
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
-                trailing: DropdownButton<AppLanguage>(
-                  value: language,
-                  underline: const SizedBox(),
-                  items: [
-                    DropdownMenuItem(
-                      value: AppLanguage.system,
-                      child: Text(l10n.languageSystem),
-                    ),
-                    DropdownMenuItem(
-                      value: AppLanguage.english,
-                      child: Text(l10n.languageEnglish),
-                    ),
-                    DropdownMenuItem(
-                      value: AppLanguage.chineseSimplified,
-                      child: Text(l10n.languageChineseSimplified),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    languageController.setLanguage(value);
-                  },
+                trailing: SizedBox(
+                  width: 180,
+                  child: AnimatedDropdownMenu<AppLanguage>(
+                    density: AnimatedDropdownMenuDensity.compact,
+                    value: language,
+                    entries: [
+                      DropdownMenuEntry(
+                        value: AppLanguage.system,
+                        label: l10n.languageSystem,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppLanguage.english,
+                        label: l10n.languageEnglish,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppLanguage.chineseSimplified,
+                        label: l10n.languageChineseSimplified,
+                      ),
+                    ],
+                    onSelected: (value) {
+                      languageController.setLanguage(value);
+                    },
+                  ),
                 ),
               ),
               const Divider(height: 1),
@@ -223,27 +226,27 @@ class _GeneralTab extends ConsumerWidget {
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
-                trailing: DropdownButton<AppThemeMode>(
-                  value: themeSettings.mode,
-                  underline: const SizedBox(),
-                  items: [
-                    DropdownMenuItem(
-                      value: AppThemeMode.system,
-                      child: Text(l10n.themeSystem),
-                    ),
-                    DropdownMenuItem(
-                      value: AppThemeMode.light,
-                      child: Text(l10n.themeLight),
-                    ),
-                    DropdownMenuItem(
-                      value: AppThemeMode.dark,
-                      child: Text(l10n.themeDark),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    themeController.setThemeMode(value);
-                  },
+                trailing: SizedBox(
+                  width: 180,
+                  child: AnimatedDropdownMenu<AppThemeMode>(
+                    density: AnimatedDropdownMenuDensity.compact,
+                    value: themeSettings.mode,
+                    entries: [
+                      DropdownMenuEntry(
+                        value: AppThemeMode.system,
+                        label: l10n.themeSystem,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppThemeMode.light,
+                        label: l10n.themeLight,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppThemeMode.dark,
+                        label: l10n.themeDark,
+                      ),
+                    ],
+                    onSelected: themeController.setThemeMode,
+                  ),
                 ),
               ),
             ],
@@ -304,26 +307,26 @@ class _InputTab extends ConsumerWidget {
               InputDevice.virtualController =>
                 l10n.inputDeviceVirtualController,
             }, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-            trailing: DropdownButton<InputDevice>(
-              value: inputSettings.device,
-              underline: const SizedBox(),
-              items: [
-                DropdownMenuItem(
-                  value: InputDevice.keyboard,
-                  child: Text(l10n.inputDeviceKeyboard),
-                ),
-                if (supportsVirtual ||
-                    inputSettings.device == InputDevice.virtualController)
-                  DropdownMenuItem(
-                    value: InputDevice.virtualController,
-                    enabled: supportsVirtual,
-                    child: Text(l10n.inputDeviceVirtualController),
+            trailing: SizedBox(
+              width: 200,
+              child: AnimatedDropdownMenu<InputDevice>(
+                density: AnimatedDropdownMenuDensity.compact,
+                value: inputSettings.device,
+                entries: [
+                  DropdownMenuEntry(
+                    value: InputDevice.keyboard,
+                    label: l10n.inputDeviceKeyboard,
                   ),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                inputController.setDevice(value);
-              },
+                  if (supportsVirtual ||
+                      inputSettings.device == InputDevice.virtualController)
+                    DropdownMenuEntry(
+                      value: InputDevice.virtualController,
+                      label: l10n.inputDeviceVirtualController,
+                      enabled: supportsVirtual,
+                    ),
+                ],
+                onSelected: inputController.setDevice,
+              ),
             ),
           ),
         ),
@@ -392,22 +395,20 @@ class _InputTab extends ConsumerWidget {
                 ),
                 style: TextStyle(color: Theme.of(context).colorScheme.primary),
               ),
-              trailing: DropdownButton<KeyboardPreset>(
-                value: inputSettings.keyboardPreset,
-                underline: const SizedBox(),
-                items: [
-                  for (final preset in KeyboardPreset.values)
-                    DropdownMenuItem(
-                      value: preset,
-                      child: Text(
-                        _SettingsPageState._presetLabel(l10n, preset),
+              trailing: SizedBox(
+                width: 200,
+                child: AnimatedDropdownMenu<KeyboardPreset>(
+                  density: AnimatedDropdownMenuDensity.compact,
+                  value: inputSettings.keyboardPreset,
+                  entries: [
+                    for (final preset in KeyboardPreset.values)
+                      DropdownMenuEntry(
+                        value: preset,
+                        label: _SettingsPageState._presetLabel(l10n, preset),
                       ),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value == null) return;
-                  inputController.setKeyboardPreset(value);
-                },
+                  ],
+                  onSelected: inputController.setKeyboardPreset,
+                ),
               ),
             ),
           ),
@@ -650,7 +651,6 @@ class _VideoTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final colorScheme = Theme.of(context).colorScheme;
     final videoSettings = ref.watch(videoSettingsProvider);
     final videoController = ref.read(videoSettingsProvider.notifier);
     final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
@@ -660,21 +660,89 @@ class _VideoTab extends ConsumerWidget {
     final isAndroid =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-    final filledBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    );
-    InputDecoration filledDecoration({
+    Widget dropdown<T>({
       required String labelText,
+      required T value,
+      required List<DropdownMenuEntry<T>> entries,
+      required Future<void> Function(T) onSelected,
       String? helperText,
     }) {
-      return InputDecoration(
+      return AnimatedDropdownMenu<T>(
         labelText: labelText,
         helperText: helperText,
-        filled: true,
-        fillColor: colorScheme.surfaceContainerHighest,
-        border: filledBorder,
+        value: value,
+        entries: entries,
+        onSelected: onSelected,
       );
+    }
+
+    Future<void> onPaletteModeSelected(PaletteMode value) async {
+      if (value == PaletteMode.builtin) {
+        try {
+          await videoController.setBuiltinPreset(videoSettings.builtinPreset);
+        } catch (e, st) {
+          logWarning(
+            e,
+            stackTrace: st,
+            message: 'setBuiltinPreset failed',
+            logger: 'settings_page',
+          );
+        }
+        return;
+      }
+      final hasCustom = videoSettings.customPaletteName != null;
+      try {
+        await videoController.setPaletteMode(PaletteMode.custom);
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'setPaletteMode failed',
+          logger: 'settings_page',
+        );
+      }
+      if (hasCustom) return;
+      if (!context.mounted) return;
+      await pickAndApplyCustomPalette(context, videoController);
+    }
+
+    Future<void> setBuiltinPalette(nes_palette.PaletteKind value) async {
+      try {
+        await videoController.setBuiltinPreset(value);
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'setBuiltinPreset failed',
+          logger: 'settings_page',
+        );
+      }
+    }
+
+    Future<void> setAspectRatio(NesAspectRatio value) async {
+      try {
+        await videoController.setAspectRatio(value);
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'setAspectRatio failed',
+          logger: 'settings_page',
+        );
+      }
+    }
+
+    Future<void> setAndroidBackend(AndroidVideoBackend value) async {
+      try {
+        await androidBackendController.setBackend(value);
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'setBackend failed',
+          logger: 'settings_page',
+        );
+      }
     }
 
     return ListView(
@@ -693,106 +761,53 @@ class _VideoTab extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                InputDecorator(
-                  decoration: filledDecoration(
-                    labelText: l10n.paletteModeLabel,
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<PaletteMode>(
-                      value: videoSettings.paletteMode,
-                      isExpanded: true,
-                      items: [
-                        DropdownMenuItem(
-                          value: PaletteMode.builtin,
-                          child: Text(l10n.paletteModeBuiltin),
-                        ),
-                        DropdownMenuItem(
-                          value: PaletteMode.custom,
-                          child: Text(
-                            videoSettings.customPaletteName == null
-                                ? l10n.paletteModeCustom
-                                : l10n.paletteModeCustomActive(
-                                    videoSettings.customPaletteName!,
-                                  ),
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) async {
-                        if (value == null) return;
-                        if (value == PaletteMode.builtin) {
-                          try {
-                            await videoController.setBuiltinPreset(
-                              videoSettings.builtinPreset,
-                            );
-                          } catch (e, st) {
-                            logWarning(
-                              e,
-                              stackTrace: st,
-                              message: 'setBuiltinPreset failed',
-                              logger: 'settings_page',
-                            );
-                          }
-                          return;
-                        }
-                        if (videoSettings.customPaletteName != null) {
-                          videoController.useCustomIfAvailable();
-                          return;
-                        }
-                        await pickAndApplyCustomPalette(
-                          context,
-                          videoController,
-                        );
-                      },
+                dropdown<PaletteMode>(
+                  labelText: l10n.paletteModeLabel,
+                  value: videoSettings.paletteMode,
+                  entries: [
+                    DropdownMenuEntry(
+                      value: PaletteMode.builtin,
+                      label: l10n.paletteModeBuiltin,
                     ),
-                  ),
+                    DropdownMenuEntry(
+                      value: PaletteMode.custom,
+                      label: videoSettings.customPaletteName == null
+                          ? l10n.paletteModeCustom
+                          : l10n.paletteModeCustomActive(
+                              videoSettings.customPaletteName!,
+                            ),
+                    ),
+                  ],
+                  onSelected: onPaletteModeSelected,
                 ),
                 const SizedBox(height: 12),
                 if (videoSettings.paletteMode == PaletteMode.builtin)
-                  InputDecorator(
-                    decoration: filledDecoration(
-                      labelText: l10n.builtinPaletteLabel,
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<nes_palette.PaletteKind>(
-                        value: videoSettings.builtinPreset,
-                        isExpanded: true,
-                        items: const [
-                          DropdownMenuItem(
-                            value: nes_palette.PaletteKind.nesdevNtsc,
-                            child: Text('Nesdev (NTSC)'),
-                          ),
-                          DropdownMenuItem(
-                            value: nes_palette.PaletteKind.fbxCompositeDirect,
-                            child: Text('FirebrandX (Composite Direct)'),
-                          ),
-                          DropdownMenuItem(
-                            value: nes_palette.PaletteKind.sonyCxa2025AsUs,
-                            child: Text('Sony CXA2025AS (US)'),
-                          ),
-                          DropdownMenuItem(
-                            value: nes_palette.PaletteKind.pal2C07,
-                            child: Text('RP2C07 (PAL)'),
-                          ),
-                          DropdownMenuItem(
-                            value: nes_palette.PaletteKind.rawLinear,
-                            child: Text('Raw linear'),
-                          ),
-                        ],
-                        onChanged: (value) async {
-                          if (value == null) return;
-                          try {
-                            await videoController.setBuiltinPreset(value);
-                          } catch (e, st) {
-                            logWarning(
-                              e,
-                              stackTrace: st,
-                              message: 'setBuiltinPreset failed',
-                              logger: 'settings_page',
-                            );
-                          }
-                        },
+                  dropdown<nes_palette.PaletteKind>(
+                    labelText: l10n.builtinPaletteLabel,
+                    value: videoSettings.builtinPreset,
+                    entries: const [
+                      DropdownMenuEntry(
+                        value: nes_palette.PaletteKind.nesdevNtsc,
+                        label: 'Nesdev (NTSC)',
                       ),
-                    ),
+                      DropdownMenuEntry(
+                        value: nes_palette.PaletteKind.fbxCompositeDirect,
+                        label: 'FirebrandX (Composite Direct)',
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_palette.PaletteKind.sonyCxa2025AsUs,
+                        label: 'Sony CXA2025AS (US)',
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_palette.PaletteKind.pal2C07,
+                        label: 'RP2C07 (PAL)',
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_palette.PaletteKind.rawLinear,
+                        label: 'Raw linear',
+                      ),
+                    ],
+                    onSelected: setBuiltinPalette,
                   )
                 else
                   ListTile(
@@ -845,43 +860,24 @@ class _VideoTab extends ConsumerWidget {
                   },
                 ),
                 const SizedBox(height: 12),
-                InputDecorator(
-                  decoration: filledDecoration(
-                    labelText: l10n.videoAspectRatio,
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<NesAspectRatio>(
-                      value: videoSettings.aspectRatio,
-                      isExpanded: true,
-                      items: [
-                        DropdownMenuItem(
-                          value: NesAspectRatio.square,
-                          child: Text(l10n.videoAspectRatioSquare),
-                        ),
-                        DropdownMenuItem(
-                          value: NesAspectRatio.ntsc,
-                          child: Text(l10n.videoAspectRatioNtsc),
-                        ),
-                        DropdownMenuItem(
-                          value: NesAspectRatio.stretch,
-                          child: Text(l10n.videoAspectRatioStretch),
-                        ),
-                      ],
-                      onChanged: (value) async {
-                        if (value == null) return;
-                        try {
-                          await videoController.setAspectRatio(value);
-                        } catch (e, st) {
-                          logWarning(
-                            e,
-                            stackTrace: st,
-                            message: 'setAspectRatio failed',
-                            logger: 'settings_page',
-                          );
-                        }
-                      },
+                dropdown<NesAspectRatio>(
+                  labelText: l10n.videoAspectRatio,
+                  value: videoSettings.aspectRatio,
+                  entries: [
+                    DropdownMenuEntry(
+                      value: NesAspectRatio.square,
+                      label: l10n.videoAspectRatioSquare,
                     ),
-                  ),
+                    DropdownMenuEntry(
+                      value: NesAspectRatio.ntsc,
+                      label: l10n.videoAspectRatioNtsc,
+                    ),
+                    DropdownMenuEntry(
+                      value: NesAspectRatio.stretch,
+                      label: l10n.videoAspectRatioStretch,
+                    ),
+                  ],
+                  onSelected: setAspectRatio,
                 ),
                 AnimatedSliderTile(
                   label: l10n.videoScreenVerticalOffset,
@@ -897,40 +893,21 @@ class _VideoTab extends ConsumerWidget {
                 ),
                 if (isAndroid) ...[
                   const SizedBox(height: 12),
-                  InputDecorator(
-                    decoration: filledDecoration(
-                      labelText: l10n.videoBackendLabel,
-                      helperText: l10n.videoBackendRestartHint,
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<AndroidVideoBackend>(
-                        value: androidBackend.backend,
-                        isExpanded: true,
-                        items: [
-                          DropdownMenuItem(
-                            value: AndroidVideoBackend.hardware,
-                            child: Text(l10n.videoBackendHardware),
-                          ),
-                          DropdownMenuItem(
-                            value: AndroidVideoBackend.upload,
-                            child: Text(l10n.videoBackendUpload),
-                          ),
-                        ],
-                        onChanged: (value) async {
-                          if (value == null) return;
-                          try {
-                            await androidBackendController.setBackend(value);
-                          } catch (e, st) {
-                            logWarning(
-                              e,
-                              stackTrace: st,
-                              message: 'setBackend failed',
-                              logger: 'settings_page',
-                            );
-                          }
-                        },
+                  dropdown<AndroidVideoBackend>(
+                    labelText: l10n.videoBackendLabel,
+                    helperText: l10n.videoBackendRestartHint,
+                    value: androidBackend.backend,
+                    entries: [
+                      DropdownMenuEntry(
+                        value: AndroidVideoBackend.hardware,
+                        label: l10n.videoBackendHardware,
                       ),
-                    ),
+                      DropdownMenuEntry(
+                        value: AndroidVideoBackend.upload,
+                        label: l10n.videoBackendUpload,
+                      ),
+                    ],
+                    onSelected: setAndroidBackend,
                   ),
                 ],
               ],

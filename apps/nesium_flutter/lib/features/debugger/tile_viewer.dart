@@ -11,6 +11,7 @@ import 'package:nesium_flutter/features/debugger/viewer_skeletonizer.dart';
 import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
+import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
 
 /// Tile Viewer that displays NES CHR pattern tables via a Flutter Texture.
 class TileViewer extends ConsumerStatefulWidget {
@@ -811,30 +812,29 @@ class _TileViewerState extends ConsumerState<TileViewer> {
           ),
         ),
         PopupMenuItem<void>(
-          onTap: () {}, // Empty tap to prevent closing
+          enabled: false,
           padding: EdgeInsets.zero,
           child: StatefulBuilder(
             builder: (context, setMenuState) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  isDense: true,
-                  isExpanded: true,
-                  value: _selectedPalette,
-                  items: List.generate(8, (i) {
-                    final label = i < 4
-                        ? l10n.tileViewerPaletteBg(i)
-                        : l10n.tileViewerPaletteSprite(i - 4);
-                    return DropdownMenuItem(value: i, child: Text(label));
-                  }),
-                  onChanged: (v) async {
-                    if (v == null) return;
-                    setState(() => _selectedPalette = v);
-                    _clearPresetSelection(); // Manual change clears preset
-                    setMenuState(() {});
-                    await bridge.setTileViewerPalette(paletteIndex: v);
-                  },
-                ),
+              child: AnimatedDropdownMenu<int>(
+                density: AnimatedDropdownMenuDensity.compact,
+                value: _selectedPalette,
+                entries: [
+                  for (var i = 0; i < 8; i++)
+                    DropdownMenuEntry(
+                      value: i,
+                      label: i < 4
+                          ? l10n.tileViewerPaletteBg(i)
+                          : l10n.tileViewerPaletteSprite(i - 4),
+                    ),
+                ],
+                onSelected: (v) async {
+                  setState(() => _selectedPalette = v);
+                  _clearPresetSelection(); // Manual change clears preset
+                  setMenuState(() {});
+                  await bridge.setTileViewerPalette(paletteIndex: v);
+                },
               ),
             ),
           ),
@@ -1263,29 +1263,28 @@ class _TileViewerState extends ConsumerState<TileViewer> {
             _sideSection(
               context,
               title: l10n.tileViewerSource,
-              child: DropdownButton<_TileSource>(
-                isExpanded: true,
+              child: AnimatedDropdownMenu<_TileSource>(
+                density: AnimatedDropdownMenuDensity.compact,
                 value: _source,
-                items: [
-                  DropdownMenuItem(
+                entries: [
+                  DropdownMenuEntry(
                     value: _TileSource.ppu,
-                    child: Text(l10n.tileViewerSourcePpu),
+                    label: l10n.tileViewerSourcePpu,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileSource.chrRom,
-                    child: Text(l10n.tileViewerSourceChrRom),
+                    label: l10n.tileViewerSourceChrRom,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileSource.chrRam,
-                    child: Text(l10n.tileViewerSourceChrRam),
+                    label: l10n.tileViewerSourceChrRam,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileSource.prgRom,
-                    child: Text(l10n.tileViewerSourcePrgRom),
+                    label: l10n.tileViewerSourcePrgRom,
                   ),
                 ],
-                onChanged: (v) async {
-                  if (v == null) return;
+                onSelected: (v) async {
                   setState(() => _source = v);
                   await bridge.setTileViewerSource(source: v.index);
                 },
@@ -1340,25 +1339,24 @@ class _TileViewerState extends ConsumerState<TileViewer> {
             _sideSection(
               context,
               title: l10n.tileViewerLayout,
-              child: DropdownButton<_TileLayout>(
-                isExpanded: true,
+              child: AnimatedDropdownMenu<_TileLayout>(
+                density: AnimatedDropdownMenuDensity.compact,
                 value: _layout,
-                items: [
-                  DropdownMenuItem(
+                entries: [
+                  DropdownMenuEntry(
                     value: _TileLayout.normal,
-                    child: Text(l10n.tileViewerLayoutNormal),
+                    label: l10n.tileViewerLayoutNormal,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileLayout.singleLine8x16,
-                    child: Text(l10n.tileViewerLayout8x16),
+                    label: l10n.tileViewerLayout8x16,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileLayout.singleLine16x16,
-                    child: Text(l10n.tileViewerLayout16x16),
+                    label: l10n.tileViewerLayout16x16,
                   ),
                 ],
-                onChanged: (v) async {
-                  if (v == null) return;
+                onSelected: (v) async {
                   setState(() => _layout = v);
                   await bridge.setTileViewerLayout(layout: v.index);
                 },
@@ -1368,37 +1366,36 @@ class _TileViewerState extends ConsumerState<TileViewer> {
             _sideSection(
               context,
               title: l10n.tileViewerBackground,
-              child: DropdownButton<_TileBackground>(
-                isExpanded: true,
+              child: AnimatedDropdownMenu<_TileBackground>(
+                density: AnimatedDropdownMenuDensity.compact,
                 value: _background,
-                items: [
-                  DropdownMenuItem(
+                entries: [
+                  DropdownMenuEntry(
                     value: _TileBackground.defaultBg,
-                    child: Text(l10n.tileViewerBgDefault),
+                    label: l10n.tileViewerBgDefault,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileBackground.transparent,
-                    child: Text(l10n.tileViewerBgTransparent),
+                    label: l10n.tileViewerBgTransparent,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileBackground.paletteColor,
-                    child: Text(l10n.tileViewerBgPalette),
+                    label: l10n.tileViewerBgPalette,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileBackground.black,
-                    child: Text(l10n.tileViewerBgBlack),
+                    label: l10n.tileViewerBgBlack,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileBackground.white,
-                    child: Text(l10n.tileViewerBgWhite),
+                    label: l10n.tileViewerBgWhite,
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuEntry(
                     value: _TileBackground.magenta,
-                    child: Text(l10n.tileViewerBgMagenta),
+                    label: l10n.tileViewerBgMagenta,
                   ),
                 ],
-                onChanged: (v) async {
-                  if (v == null) return;
+                onSelected: (v) async {
                   setState(() => _background = v);
                   await bridge.setTileViewerBackground(background: v.index);
                 },
@@ -1441,26 +1438,23 @@ class _TileViewerState extends ConsumerState<TileViewer> {
             _sideSection(
               context,
               title: l10n.tileViewerPalette,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  DropdownButton<int>(
-                    isExpanded: true,
-                    value: _selectedPalette,
-                    items: List.generate(8, (i) {
-                      final label = i < 4
+              child: AnimatedDropdownMenu<int>(
+                density: AnimatedDropdownMenuDensity.compact,
+                value: _selectedPalette,
+                entries: [
+                  for (var i = 0; i < 8; i++)
+                    DropdownMenuEntry(
+                      value: i,
+                      label: i < 4
                           ? l10n.tileViewerPaletteBg(i)
-                          : l10n.tileViewerPaletteSprite(i - 4);
-                      return DropdownMenuItem(value: i, child: Text(label));
-                    }),
-                    onChanged: (v) async {
-                      if (v == null) return;
-                      setState(() => _selectedPalette = v);
-                      _clearPresetSelection(); // Manual change clears preset
-                      await bridge.setTileViewerPalette(paletteIndex: v);
-                    },
-                  ),
+                          : l10n.tileViewerPaletteSprite(i - 4),
+                    ),
                 ],
+                onSelected: (v) async {
+                  setState(() => _selectedPalette = v);
+                  _clearPresetSelection(); // Manual change clears preset
+                  await bridge.setTileViewerPalette(paletteIndex: v);
+                },
               ),
             ),
             // Selected Tile Info (only shows on tap/click, not hover)

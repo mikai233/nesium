@@ -11,6 +11,7 @@ import 'package:nesium_flutter/features/debugger/viewer_skeletonizer.dart';
 import 'package:nesium_flutter/l10n/app_localizations.dart';
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
+import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
 
 /// Sprite Viewer - displays 64 sprite thumbnails using an auxiliary texture.
 class SpriteViewer extends ConsumerStatefulWidget {
@@ -604,7 +605,7 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
           ),
         ),
         PopupMenuItem<void>(
-          onTap: () {},
+          enabled: false,
           padding: EdgeInsets.zero,
           child: StatefulBuilder(
             builder: (context, setMenuState) => Column(
@@ -658,20 +659,16 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
                   child: Row(
                     children: [
                       Expanded(child: Text(l10n.tileViewerBackground)),
-                      DropdownButtonHideUnderline(
-                        child: DropdownButton<_SpriteBackground>(
-                          isDense: true,
+                      SizedBox(
+                        width: 180,
+                        child: AnimatedDropdownMenu<_SpriteBackground>(
+                          density: AnimatedDropdownMenuDensity.compact,
                           value: _background,
-                          items: _SpriteBackground.values
-                              .map(
-                                (b) => DropdownMenuItem(
-                                  value: b,
-                                  child: Text(b.label(l10n)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) {
-                            if (v == null) return;
+                          entries: [
+                            for (final b in _SpriteBackground.values)
+                              DropdownMenuEntry(value: b, label: b.label(l10n)),
+                          ],
+                          onSelected: (v) {
                             setState(() => _background = v);
                             setMenuState(() {});
                           },
@@ -1611,20 +1608,16 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
                           style: theme.textTheme.bodySmall,
                         ),
                       ),
-                      DropdownButtonHideUnderline(
-                        child: DropdownButton<_SpriteBackground>(
-                          isDense: true,
+                      SizedBox(
+                        width: 180,
+                        child: AnimatedDropdownMenu<_SpriteBackground>(
+                          density: AnimatedDropdownMenuDensity.compact,
                           value: _background,
-                          items: _SpriteBackground.values
-                              .map(
-                                (b) => DropdownMenuItem(
-                                  value: b,
-                                  child: Text(b.label(l10n)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) {
-                            if (v == null) return;
+                          entries: [
+                            for (final b in _SpriteBackground.values)
+                              DropdownMenuEntry(value: b, label: b.label(l10n)),
+                          ],
+                          onSelected: (v) {
                             setState(() => _background = v);
                           },
                         ),
@@ -1645,21 +1638,20 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<_SpriteDataSource>(
-                      isDense: true,
+                  SizedBox(
+                    width: 180,
+                    child: AnimatedDropdownMenu<_SpriteDataSource>(
+                      density: AnimatedDropdownMenuDensity.compact,
                       value: _dataSource,
-                      items: _SpriteDataSource.values
-                          .map(
-                            (s) => DropdownMenuItem(
-                              value: s,
-                              enabled: s == _SpriteDataSource.spriteRam,
-                              child: Text(s.label(l10n)),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (v) {
-                        if (v == null) return;
+                      entries: [
+                        for (final s in _SpriteDataSource.values)
+                          DropdownMenuEntry(
+                            value: s,
+                            enabled: s == _SpriteDataSource.spriteRam,
+                            label: s.label(l10n),
+                          ),
+                      ],
+                      onSelected: (v) {
                         if (v != _SpriteDataSource.spriteRam) return;
                         setState(() => _dataSource = v);
                       },
