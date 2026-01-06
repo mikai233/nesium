@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/events.dart' as bridge;
@@ -28,7 +28,20 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
   static const double _sidePanelWidth = 280;
 
   StreamSubscription<bridge.PaletteSnapshot>? _subscription;
-  bridge.PaletteSnapshot? _snapshot;
+  bool _hasReceivedData = false;
+  final List<int> _systemPaletteArgb = List<int>.filled(64, 0xFF000000);
+  late final List<ValueNotifier<int>> _systemPaletteArgbNotifiers =
+      List<ValueNotifier<int>>.generate(
+        64,
+        (_) => ValueNotifier<int>(0xFF000000),
+      );
+  late final List<ValueNotifier<_PaletteRamEntry>> _paletteRamNotifiers =
+      List<ValueNotifier<_PaletteRamEntry>>.generate(
+        32,
+        (_) => ValueNotifier<_PaletteRamEntry>(
+          const _PaletteRamEntry(value: 0, argb: 0xFF000000),
+        ),
+      );
   String? _error;
 
   bool _showSidePanel = true;
@@ -53,6 +66,12 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
   void dispose() {
     unawaited(_subscription?.cancel());
     unawaited(_unsubscribe());
+    for (final n in _systemPaletteArgbNotifiers) {
+      n.dispose();
+    }
+    for (final n in _paletteRamNotifiers) {
+      n.dispose();
+    }
     _scanlineController.dispose();
     _dotController.dispose();
     super.dispose();
@@ -83,7 +102,12 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
       _subscription = bridge.paletteStateStream().listen(
         (snap) {
           if (!mounted) return;
-          setState(() => _snapshot = snap);
+          final firstData = !_hasReceivedData;
+          if (firstData) {
+            setState(() => _hasReceivedData = true);
+          }
+          _updateSystemPalette(snap.bgraPalette);
+          _updatePaletteRam(snap.palette);
         },
         onError: (e) {
           if (!mounted) return;
@@ -96,10 +120,42 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
     }
   }
 
+  bool _updateSystemPalette(Uint8List bgraPalette) {
+    if (bgraPalette.length < 64 * 4) return false;
+
+    var anyChanged = false;
+    for (var i = 0; i < 64; i++) {
+      final base = i * 4;
+      final b = bgraPalette[base];
+      final g = bgraPalette[base + 1];
+      final r = bgraPalette[base + 2];
+      final a = bgraPalette[base + 3];
+      final argb = (a << 24) | (r << 16) | (g << 8) | b;
+      if (_systemPaletteArgb[i] == argb) continue;
+
+      _systemPaletteArgb[i] = argb;
+      _systemPaletteArgbNotifiers[i].value = argb;
+      anyChanged = true;
+    }
+    return anyChanged;
+  }
+
+  void _updatePaletteRam(Uint8List paletteRam) {
+    if (paletteRam.length < 32) return;
+
+    for (var i = 0; i < 32; i++) {
+      final value = paletteRam[i];
+      final color = _systemPaletteArgb[value & 0x3F];
+      final notifier = _paletteRamNotifiers[i];
+      final current = notifier.value;
+      if (current.value == value && current.argb == color) continue;
+      notifier.value = _PaletteRamEntry(value: value, argb: color);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final snapshot = _snapshot;
 
     if (_error != null) {
       return Center(
@@ -120,15 +176,8 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
     }
 
     final hasRom = ref.watch(nesControllerProvider).romHash != null;
-    final loading = !hasRom || snapshot == null;
-    final effectiveSnapshot =
-        snapshot ??
-        bridge.PaletteSnapshot(
-          palette: Uint8List(32),
-          bgraPalette: Uint8List(64 * 4),
-        );
-
-    final content = _buildPaletteContent(context, effectiveSnapshot);
+    final loading = !hasRom || !_hasReceivedData;
+    final content = _buildPaletteContent(context);
 
     if (!isNativeDesktop) {
       final base = ViewerSkeletonizer(
@@ -168,15 +217,9 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
     return base;
   }
 
-  Widget _buildPaletteContent(
-    BuildContext context,
-    bridge.PaletteSnapshot snap,
-  ) {
+  Widget _buildPaletteContent(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-
-    final systemPalette = _decodeBgraPalette(snap.bgraPalette);
-    final paletteRam = snap.palette;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -190,27 +233,9 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
           const SizedBox(height: 8),
           _ColorGrid(
             columns: 16,
-            cells: List.generate(32, (i) {
-              final v = paletteRam[i] & 0x3F;
-              final color = systemPalette[v];
-              final addr = 0x3F00 + i;
-              final addrStr = addr
-                  .toRadixString(16)
-                  .toUpperCase()
-                  .padLeft(4, '0');
-              final valueStr = v
-                  .toRadixString(16)
-                  .toUpperCase()
-                  .padLeft(2, '0');
-              return _ColorCell(
-                color: color,
-                label: i.toString().padLeft(2, '0'),
-                tooltip: l10n.paletteViewerTooltipPaletteRam(
-                  '\$$addrStr',
-                  valueStr,
-                ),
-              );
-            }),
+            itemCount: 32,
+            cellBuilder: (context, i) =>
+                _PaletteRamCell(index: i, entry: _paletteRamNotifiers[i]),
           ),
           const SizedBox(height: 24),
           Text(
@@ -220,14 +245,11 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
           const SizedBox(height: 8),
           _ColorGrid(
             columns: 16,
-            cells: List.generate(64, (i) {
-              final color = systemPalette[i];
-              return _ColorCell(
-                color: color,
-                label: i.toString().padLeft(2, '0'),
-                tooltip: l10n.paletteViewerTooltipSystemIndex(i),
-              );
-            }),
+            itemCount: 64,
+            cellBuilder: (context, i) => _SystemPaletteCell(
+              index: i,
+              argb: _systemPaletteArgbNotifiers[i],
+            ),
           ),
         ],
       ),
@@ -541,73 +563,173 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
   }
 }
 
-List<Color> _decodeBgraPalette(Uint8List bgra) {
-  if (bgra.length < 64 * 4) {
-    return List<Color>.filled(64, const Color(0xFF000000));
-  }
-  return List<Color>.generate(64, (i) {
-    final base = i * 4;
-    final b = bgra[base];
-    final g = bgra[base + 1];
-    final r = bgra[base + 2];
-    final a = bgra[base + 3];
-    return Color.fromARGB(a, r, g, b);
-  });
+@immutable
+class _PaletteRamEntry {
+  final int value;
+  final int argb;
+
+  const _PaletteRamEntry({required this.value, required this.argb});
 }
 
-class _ColorCell {
-  final Color color;
-  final String label;
-  final String tooltip;
+class _ColorGrid extends StatefulWidget {
+  final int columns;
+  final int itemCount;
+  final Widget Function(BuildContext context, int index) cellBuilder;
 
-  const _ColorCell({
+  const _ColorGrid({
+    required this.columns,
+    required this.itemCount,
+    required this.cellBuilder,
+  });
+
+  @override
+  State<_ColorGrid> createState() => _ColorGridState();
+}
+
+class _ColorGridState extends State<_ColorGrid> {
+  static const double _cellSize = 32.0;
+  static const double _gap = 6.0;
+  static const _duration = Duration(milliseconds: 180);
+
+  int _columnsForWidth(double maxWidth) {
+    final maxColumns = widget.columns.clamp(1, 999);
+    if (!maxWidth.isFinite) return maxColumns;
+    final fit = ((maxWidth + _gap) / (_cellSize + _gap)).floor();
+    return fit.clamp(1, maxColumns);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cols = _columnsForWidth(constraints.maxWidth);
+        final rows = (widget.itemCount / cols).ceil();
+
+        final gridWidth = (cols * _cellSize) + ((cols - 1) * _gap);
+        final gridHeight = rows == 0
+            ? 0.0
+            : (rows * _cellSize) + ((rows - 1) * _gap);
+
+        return ClipRect(
+          child: AnimatedContainer(
+            duration: _duration,
+            curve: Curves.easeOut,
+            width: gridWidth,
+            height: gridHeight,
+            child: Stack(
+              children: [
+                for (var i = 0; i < widget.itemCount; i++)
+                  _buildAnimatedCell(context, i, cols),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAnimatedCell(BuildContext context, int index, int columns) {
+    final col = index % columns;
+    final row = index ~/ columns;
+
+    final left = col * (_cellSize + _gap);
+    final top = row * (_cellSize + _gap);
+
+    return AnimatedPositioned(
+      key: ValueKey(index),
+      duration: _duration,
+      curve: Curves.easeOut,
+      left: left,
+      top: top,
+      width: _cellSize,
+      height: _cellSize,
+      child: RepaintBoundary(child: widget.cellBuilder(context, index)),
+    );
+  }
+}
+
+class _PaletteRamCell extends StatelessWidget {
+  const _PaletteRamCell({required this.index, required this.entry});
+
+  final int index;
+  final ValueListenable<_PaletteRamEntry> entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return ValueListenableBuilder<_PaletteRamEntry>(
+      valueListenable: entry,
+      builder: (context, e, _) {
+        final v = e.value & 0x3F;
+        final addr = 0x3F00 + index;
+        final addrStr = addr.toRadixString(16).toUpperCase().padLeft(4, '0');
+        final valueStr = v.toRadixString(16).toUpperCase().padLeft(2, '0');
+        return _ColorSwatchCell(
+          color: Color(e.argb),
+          label: index.toString().padLeft(2, '0'),
+          tooltip: l10n.paletteViewerTooltipPaletteRam('\$$addrStr', valueStr),
+        );
+      },
+    );
+  }
+}
+
+class _SystemPaletteCell extends StatelessWidget {
+  const _SystemPaletteCell({required this.index, required this.argb});
+
+  final int index;
+  final ValueListenable<int> argb;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return ValueListenableBuilder<int>(
+      valueListenable: argb,
+      builder: (context, v, _) {
+        return _ColorSwatchCell(
+          color: Color(v),
+          label: index.toString().padLeft(2, '0'),
+          tooltip: l10n.paletteViewerTooltipSystemIndex(index),
+        );
+      },
+    );
+  }
+}
+
+class _ColorSwatchCell extends StatelessWidget {
+  const _ColorSwatchCell({
     required this.color,
     required this.label,
     required this.tooltip,
   });
-}
 
-class _ColorGrid extends StatelessWidget {
-  final int columns;
-  final List<_ColorCell> cells;
-
-  const _ColorGrid({required this.columns, required this.cells});
+  final Color color;
+  final String label;
+  final String tooltip;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const cellSize = 32.0;
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        for (final cell in cells)
-          Tooltip(
-            message: cell.tooltip,
-            child: SizedBox(
-              width: cellSize,
-              height: cellSize,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: cell.color,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                ),
-                child: Center(
-                  child: Text(
-                    cell.label,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: cell.color.computeLuminance() > 0.55
-                          ? Colors.black
-                          : Colors.white,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ),
-              ),
+    return Tooltip(
+      message: tooltip,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: color.computeLuminance() > 0.55
+                  ? Colors.black
+                  : Colors.white,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 }
