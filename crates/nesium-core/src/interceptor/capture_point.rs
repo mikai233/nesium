@@ -3,9 +3,8 @@
 /// Defines when to capture a snapshot from an interceptor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CapturePoint {
-    #[default]
-    Disabled,
     FrameStart,
+    #[default]
     VblankStart,
     ScanlineDot {
         scanline: i16,

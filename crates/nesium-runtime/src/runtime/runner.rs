@@ -28,14 +28,7 @@ use nesium_core::{
     Nes,
     audio::bus::AudioBusConfig,
     controller::Button,
-    interceptor::{
-        palette_interceptor::CapturePoint as PaletteCapturePoint,
-        sprite_interceptor::{
-            CapturePoint as SpriteCapturePoint, SpriteSnapshot as CoreSpriteSnapshot,
-        },
-        tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
-        tilemap_interceptor::CapturePoint as TilemapCapturePoint,
-    },
+    interceptor::sprite_interceptor::SpriteSnapshot as CoreSpriteSnapshot,
     ppu::buffer::{FrameBuffer, FrameReadyCallback, SCREEN_SIZE},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
@@ -379,18 +372,10 @@ impl Runner {
 
     fn after_subscribe_event(&mut self, topic: EventTopic) {
         match topic {
-            EventTopic::Tilemap => self
-                .nes
-                .set_tilemap_capture_point(TilemapCapturePoint::VblankStart),
-            EventTopic::Tile => self
-                .nes
-                .set_tile_viewer_capture_point(TileViewerCapturePoint::VblankStart),
-            EventTopic::Sprite => self
-                .nes
-                .set_sprite_capture_point(SpriteCapturePoint::VblankStart),
-            EventTopic::Palette => self
-                .nes
-                .set_palette_capture_point(PaletteCapturePoint::VblankStart),
+            EventTopic::Tilemap => self.nes.enable_tilemap_interceptor(),
+            EventTopic::Tile => self.nes.enable_tile_viewer_interceptor(),
+            EventTopic::Sprite => self.nes.enable_sprite_interceptor(),
+            EventTopic::Palette => self.nes.enable_palette_interceptor(),
             _ => {}
         }
     }
@@ -399,26 +384,22 @@ impl Runner {
         match topic {
             EventTopic::Tilemap => {
                 if !self.pubsub.has_subscriber(EventTopic::Tilemap) {
-                    self.nes
-                        .set_tilemap_capture_point(TilemapCapturePoint::Disabled);
+                    self.nes.disable_tilemap_interceptor();
                 }
             }
             EventTopic::Tile => {
                 if !self.pubsub.has_subscriber(EventTopic::Tile) {
-                    self.nes
-                        .set_tile_viewer_capture_point(TileViewerCapturePoint::Disabled);
+                    self.nes.disable_tile_viewer_interceptor();
                 }
             }
             EventTopic::Sprite => {
                 if !self.pubsub.has_subscriber(EventTopic::Sprite) {
-                    self.nes
-                        .set_sprite_capture_point(SpriteCapturePoint::Disabled);
+                    self.nes.disable_sprite_interceptor();
                 }
             }
             EventTopic::Palette => {
                 if !self.pubsub.has_subscriber(EventTopic::Palette) {
-                    self.nes
-                        .set_palette_capture_point(PaletteCapturePoint::Disabled);
+                    self.nes.disable_palette_interceptor();
                 }
             }
             _ => {}

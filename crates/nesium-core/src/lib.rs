@@ -728,6 +728,18 @@ impl Nes {
         }
     }
 
+    /// Enables the tilemap interceptor (adds it if not already present).
+    pub fn enable_tilemap_interceptor(&mut self) {
+        if self.interceptor.layer::<TilemapInterceptor>().is_none() {
+            self.interceptor.add(TilemapInterceptor::new());
+        }
+    }
+
+    /// Disables the tilemap interceptor (removes it if present).
+    pub fn disable_tilemap_interceptor(&mut self) {
+        self.interceptor.remove::<TilemapInterceptor>();
+    }
+
     pub fn take_tilemap_snapshot(&mut self) -> Option<TilemapSnapshot> {
         self.interceptor
             .layer_mut::<TilemapInterceptor>()
@@ -745,6 +757,18 @@ impl Nes {
         if let Some(layer) = self.interceptor.layer_mut::<TileViewerInterceptor>() {
             layer.set_capture_point(point);
         }
+    }
+
+    /// Enables the tile viewer interceptor (adds it if not already present).
+    pub fn enable_tile_viewer_interceptor(&mut self) {
+        if self.interceptor.layer::<TileViewerInterceptor>().is_none() {
+            self.interceptor.add(TileViewerInterceptor::new());
+        }
+    }
+
+    /// Disables the tile viewer interceptor (removes it if present).
+    pub fn disable_tile_viewer_interceptor(&mut self) {
+        self.interceptor.remove::<TileViewerInterceptor>();
     }
 
     pub fn take_tile_viewer_snapshot(&mut self) -> Option<TileViewerSnapshot> {
@@ -766,6 +790,18 @@ impl Nes {
         }
     }
 
+    /// Enables the sprite interceptor (adds it if not already present).
+    pub fn enable_sprite_interceptor(&mut self) {
+        if self.interceptor.layer::<SpriteInterceptor>().is_none() {
+            self.interceptor.add(SpriteInterceptor::new());
+        }
+    }
+
+    /// Disables the sprite interceptor (removes it if present).
+    pub fn disable_sprite_interceptor(&mut self) {
+        self.interceptor.remove::<SpriteInterceptor>();
+    }
+
     pub fn take_sprite_snapshot(&mut self) -> Option<SpriteSnapshot> {
         self.interceptor
             .layer_mut::<SpriteInterceptor>()
@@ -785,6 +821,18 @@ impl Nes {
         }
     }
 
+    /// Enables the palette interceptor (adds it if not already present).
+    pub fn enable_palette_interceptor(&mut self) {
+        if self.interceptor.layer::<PaletteInterceptor>().is_none() {
+            self.interceptor.add(PaletteInterceptor::new());
+        }
+    }
+
+    /// Disables the palette interceptor (removes it if present).
+    pub fn disable_palette_interceptor(&mut self) {
+        self.interceptor.remove::<PaletteInterceptor>();
+    }
+
     pub fn take_palette_snapshot(&mut self) -> Option<PaletteSnapshot> {
         self.interceptor
             .layer_mut::<PaletteInterceptor>()
@@ -794,10 +842,7 @@ impl Nes {
     fn build_interceptor() -> EmuInterceptor {
         let mut interceptor = EmuInterceptor::new();
         interceptor.add(LogInterceptor);
-        interceptor.add(TilemapInterceptor::new());
-        interceptor.add(TileViewerInterceptor::new());
-        interceptor.add(SpriteInterceptor::new());
-        interceptor.add(PaletteInterceptor::new());
+        // Viewer interceptors are added dynamically on subscription
         interceptor
     }
 }
