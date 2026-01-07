@@ -334,6 +334,54 @@ class AppLocalizationsZh extends AppLocalizations {
   String get netplayRoomCode => '房间代码';
 
   @override
+  String get netplayRoleLabel => '角色';
+
+  @override
+  String netplayPlayerIndex(int index) {
+    return '玩家 $index';
+  }
+
+  @override
+  String get netplaySpectator => '旁观者';
+
+  @override
+  String get netplayClientId => '客户端 ID';
+
+  @override
+  String get netplayOrSeparator => '或';
+
+  @override
+  String netplayConnectFailed(String error) {
+    return '连接失败: $error';
+  }
+
+  @override
+  String netplayDisconnectFailed(String error) {
+    return '断开连接失败: $error';
+  }
+
+  @override
+  String netplayCreateRoomFailed(String error) {
+    return '创建房间失败: $error';
+  }
+
+  @override
+  String netplayJoinRoomFailed(String error) {
+    return '加入房间失败: $error';
+  }
+
+  @override
+  String netplaySwitchRoleFailed(String error) {
+    return '切换角色失败: $error';
+  }
+
+  @override
+  String get netplayInvalidRoomCode => '房间代码无效';
+
+  @override
+  String get netplayRomBroadcasted => '联机游戏: ROM 已广播至房间';
+
+  @override
   String get menuLoadTasMovie => '加载 TAS 录像…';
 
   @override

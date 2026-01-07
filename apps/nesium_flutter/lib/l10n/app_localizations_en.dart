@@ -342,6 +342,54 @@ class AppLocalizationsEn extends AppLocalizations {
   String get netplayRoomCode => 'Room Code';
 
   @override
+  String get netplayRoleLabel => 'Role';
+
+  @override
+  String netplayPlayerIndex(int index) {
+    return 'Player $index';
+  }
+
+  @override
+  String get netplaySpectator => 'Spectator';
+
+  @override
+  String get netplayClientId => 'Client ID';
+
+  @override
+  String get netplayOrSeparator => 'OR';
+
+  @override
+  String netplayConnectFailed(String error) {
+    return 'Connect failed: $error';
+  }
+
+  @override
+  String netplayDisconnectFailed(String error) {
+    return 'Disconnect failed: $error';
+  }
+
+  @override
+  String netplayCreateRoomFailed(String error) {
+    return 'Create room failed: $error';
+  }
+
+  @override
+  String netplayJoinRoomFailed(String error) {
+    return 'Join room failed: $error';
+  }
+
+  @override
+  String netplaySwitchRoleFailed(String error) {
+    return 'Switch role failed: $error';
+  }
+
+  @override
+  String get netplayInvalidRoomCode => 'Invalid room code';
+
+  @override
+  String get netplayRomBroadcasted => 'Netplay: ROM broadcasted to room';
+
+  @override
   String get menuLoadTasMovie => 'Load TAS Movie...';
 
   @override

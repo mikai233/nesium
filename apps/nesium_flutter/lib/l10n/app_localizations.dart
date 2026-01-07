@@ -722,6 +722,78 @@ abstract class AppLocalizations {
   /// **'Room Code'**
   String get netplayRoomCode;
 
+  /// No description provided for @netplayRoleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get netplayRoleLabel;
+
+  /// No description provided for @netplayPlayerIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Player {index}'**
+  String netplayPlayerIndex(int index);
+
+  /// No description provided for @netplaySpectator.
+  ///
+  /// In en, this message translates to:
+  /// **'Spectator'**
+  String get netplaySpectator;
+
+  /// No description provided for @netplayClientId.
+  ///
+  /// In en, this message translates to:
+  /// **'Client ID'**
+  String get netplayClientId;
+
+  /// No description provided for @netplayOrSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **'OR'**
+  String get netplayOrSeparator;
+
+  /// No description provided for @netplayConnectFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect failed: {error}'**
+  String netplayConnectFailed(String error);
+
+  /// No description provided for @netplayDisconnectFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect failed: {error}'**
+  String netplayDisconnectFailed(String error);
+
+  /// No description provided for @netplayCreateRoomFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Create room failed: {error}'**
+  String netplayCreateRoomFailed(String error);
+
+  /// No description provided for @netplayJoinRoomFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Join room failed: {error}'**
+  String netplayJoinRoomFailed(String error);
+
+  /// No description provided for @netplaySwitchRoleFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch role failed: {error}'**
+  String netplaySwitchRoleFailed(String error);
+
+  /// No description provided for @netplayInvalidRoomCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid room code'**
+  String get netplayInvalidRoomCode;
+
+  /// No description provided for @netplayRomBroadcasted.
+  ///
+  /// In en, this message translates to:
+  /// **'Netplay: ROM broadcasted to room'**
+  String get netplayRomBroadcasted;
+
   /// No description provided for @menuLoadTasMovie.
   ///
   /// In en, this message translates to:

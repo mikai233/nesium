@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animations/animations.dart';
 import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
 
 import '../../domain/nes_controller.dart';
@@ -38,6 +39,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   }
 
   Future<void> _connect() async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       await netplayConnect(
         serverAddr: _serverAddrController.text,
@@ -45,26 +47,28 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Connect failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.netplayConnectFailed(e.toString()))),
+        );
       }
     }
   }
 
   Future<void> _disconnect() async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       await netplayDisconnect();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Disconnect failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.netplayDisconnectFailed(e.toString()))),
+        );
       }
     }
   }
 
   Future<void> _createRoom() async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       await netplayCreateRoom();
 
@@ -75,47 +79,49 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
         await netplaySendRomLoaded();
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Netplay: ROM broadcasted to room')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.netplayRomBroadcasted)));
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Create room failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.netplayCreateRoomFailed(e.toString()))),
+        );
       }
     }
   }
 
   Future<void> _joinRoom() async {
+    final l10n = AppLocalizations.of(context)!;
     final code = int.tryParse(_roomCodeController.text);
     if (code == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid room code')));
+      ).showSnackBar(SnackBar(content: Text(l10n.netplayInvalidRoomCode)));
       return;
     }
     try {
       await netplayJoinRoom(roomCode: code);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Join room failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.netplayJoinRoomFailed(e.toString()))),
+        );
       }
     }
   }
 
   Future<void> _switchRole(int role) async {
+    final l10n = AppLocalizations.of(context)!;
     try {
       await netplaySwitchRole(role: role);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Switch role failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.netplaySwitchRoleFailed(e.toString()))),
+        );
       }
     }
   }
@@ -137,28 +143,92 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
             children: [
               _buildStatusCard(l10n, status),
               const SizedBox(height: 24),
-              if (state == NetplayState.disconnected)
-                _buildConnectForm(l10n)
-              else if (state == NetplayState.connected)
-                _buildRoomForm(l10n)
-              else if (state == NetplayState.inRoom)
-                _buildInRoomInfo(l10n, status!)
-              else if (state == NetplayState.connecting)
-                const Center(child: CircularProgressIndicator()),
-              if (state != NetplayState.disconnected) ...[
-                const SizedBox(height: 24),
-                FilledButton.tonal(
-                  onPressed: _disconnect,
-                  style: FilledButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error,
-                  ),
-                  child: Text(l10n.netplayDisconnect),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                child: PageTransitionSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder:
+                      (
+                        Widget child,
+                        Animation<double> animation,
+                        Animation<double> secondaryAnimation,
+                      ) {
+                        return FadeThroughTransition(
+                          animation: animation,
+                          secondaryAnimation: secondaryAnimation,
+                          fillColor: Colors.transparent,
+                          child: child,
+                        );
+                      },
+                  child: _buildContent(l10n, state, status),
                 ),
-              ],
+              ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildContent(
+    AppLocalizations l10n,
+    NetplayState state,
+    NetplayStatus? status,
+  ) {
+    switch (state) {
+      case NetplayState.disconnected:
+        return KeyedSubtree(
+          key: const ValueKey('disconnected'),
+          child: _buildConnectForm(l10n),
+        );
+      case NetplayState.connected:
+        return KeyedSubtree(
+          key: const ValueKey('connected'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildRoomForm(l10n),
+              const SizedBox(height: 24),
+              _buildDisconnectButton(l10n),
+            ],
+          ),
+        );
+      case NetplayState.inRoom:
+        return KeyedSubtree(
+          key: const ValueKey('inRoom'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildInRoomInfo(l10n, status!),
+              const SizedBox(height: 24),
+              _buildDisconnectButton(l10n),
+            ],
+          ),
+        );
+      case NetplayState.connecting:
+        return KeyedSubtree(
+          key: const ValueKey('connecting'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 48),
+              const Center(child: CircularProgressIndicator()),
+              const SizedBox(height: 48),
+              _buildDisconnectButton(l10n),
+            ],
+          ),
+        );
+    }
+  }
+
+  Widget _buildDisconnectButton(AppLocalizations l10n) {
+    return FilledButton.tonal(
+      onPressed: _disconnect,
+      style: FilledButton.styleFrom(
+        foregroundColor: Theme.of(context).colorScheme.error,
+      ),
+      child: Text(l10n.netplayDisconnect),
     );
   }
 
@@ -280,7 +350,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'OR',
+                l10n.netplayOrSeparator,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),
@@ -331,16 +401,16 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
               child: Divider(),
             ),
             AnimatedDropdownMenu<int>(
-              labelText: 'Role',
+              labelText: l10n.netplayRoleLabel,
               value: status.playerIndex,
-              entries: const [
-                DropdownMenuEntry(value: 0, label: 'Player 1'),
-                DropdownMenuEntry(value: 1, label: 'Player 2'),
-                DropdownMenuEntry(value: 2, label: 'Player 3'),
-                DropdownMenuEntry(value: 3, label: 'Player 4'),
+              entries: [
+                DropdownMenuEntry(value: 0, label: l10n.netplayPlayerIndex(1)),
+                DropdownMenuEntry(value: 1, label: l10n.netplayPlayerIndex(2)),
+                DropdownMenuEntry(value: 2, label: l10n.netplayPlayerIndex(3)),
+                DropdownMenuEntry(value: 3, label: l10n.netplayPlayerIndex(4)),
                 DropdownMenuEntry(
                   value: spectatorPlayerIndex,
-                  label: 'Spectator',
+                  label: l10n.netplaySpectator,
                 ),
               ],
               onSelected: (value) => _switchRole(value),
@@ -350,7 +420,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
               child: Divider(),
             ),
             _buildInfoRow(
-              'Client ID',
+              l10n.netplayClientId,
               status.clientId.toString(),
               icon: Icons.fingerprint_rounded,
             ),

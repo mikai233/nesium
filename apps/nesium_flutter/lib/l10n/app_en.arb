@@ -146,6 +146,60 @@
   "netplayCreateRoom": "Create Room",
   "netplayJoinRoom": "Join Room",
   "netplayRoomCode": "Room Code",
+  "netplayRoleLabel": "Role",
+  "netplayPlayerIndex": "Player {index}",
+  "@netplayPlayerIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "netplaySpectator": "Spectator",
+  "netplayClientId": "Client ID",
+  "netplayOrSeparator": "OR",
+  "netplayConnectFailed": "Connect failed: {error}",
+  "@netplayConnectFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "netplayDisconnectFailed": "Disconnect failed: {error}",
+  "@netplayDisconnectFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "netplayCreateRoomFailed": "Create room failed: {error}",
+  "@netplayCreateRoomFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "netplayJoinRoomFailed": "Join room failed: {error}",
+  "@netplayJoinRoomFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "netplaySwitchRoleFailed": "Switch role failed: {error}",
+  "@netplaySwitchRoleFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "netplayInvalidRoomCode": "Invalid room code",
+  "netplayRomBroadcasted": "Netplay: ROM broadcasted to room",
   "menuLoadTasMovie": "Load TAS Movie...",
   "menuPreferences": "Preferences...",
   "saveToExternalFile": "Save to file...",
