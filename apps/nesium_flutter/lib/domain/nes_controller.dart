@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/logging/app_logger.dart';
@@ -51,6 +53,14 @@ class NesController extends Notifier<NesState> {
 
   void updateRomHash(String? hash) {
     state = state.copyWith(romHash: hash);
+  }
+
+  void updateRomBytes(Uint8List? bytes) {
+    if (bytes != null) {
+      state = state.copyWith(romBytes: bytes);
+    } else {
+      state = state.copyWith(clearRomBytes: true);
+    }
   }
 }
 

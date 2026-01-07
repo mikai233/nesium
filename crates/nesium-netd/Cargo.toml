@@ -11,3 +11,6 @@ bytes.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 postcard = { workspace = true, features = ["use-std"] }
+tracing.workspace = true
+clap = { workspace = true, features = ["derive"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

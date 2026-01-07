@@ -286,7 +286,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuPowerReset => '电源重置';
 
   @override
-  String get menuEject => '弹出';
+  String get menuEject => '关机';
 
   @override
   String get menuSaveState => '保存存档…';
@@ -296,6 +296,42 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get menuPauseResume => '暂停 / 继续';
+
+  @override
+  String get menuNetplay => '联机游戏';
+
+  @override
+  String get netplayStatusDisconnected => '未连接';
+
+  @override
+  String get netplayStatusConnecting => '正在连接…';
+
+  @override
+  String get netplayStatusConnected => '已连接 (等待房间)';
+
+  @override
+  String get netplayStatusInRoom => '已进入房间';
+
+  @override
+  String get netplayDisconnect => '断开连接';
+
+  @override
+  String get netplayServerAddress => '服务器地址';
+
+  @override
+  String get netplayPlayerName => '玩家名称';
+
+  @override
+  String get netplayConnect => '连接';
+
+  @override
+  String get netplayCreateRoom => '创建房间';
+
+  @override
+  String get netplayJoinRoom => '加入房间';
+
+  @override
+  String get netplayRoomCode => '房间代码';
 
   @override
   String get menuLoadTasMovie => '加载 TAS 录像…';
@@ -402,7 +438,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get actionPowerResetNes => '电源重置 NES';
 
   @override
-  String get actionEjectNes => '弹出';
+  String get actionEjectNes => '关机';
 
   @override
   String get actionLoadPalette => '加载调色板';

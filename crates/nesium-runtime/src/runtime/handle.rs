@@ -375,14 +375,20 @@ impl RuntimeHandle {
         })
     }
 
+    pub fn load_rom_from_memory(&self, bytes: Vec<u8>) -> Result<(), RuntimeError> {
+        self.send_with_reply("load_rom_from_memory", LOAD_ROM_REPLY_TIMEOUT, |reply| {
+            ControlMessage::LoadRomFromMemory(bytes, reply)
+        })
+    }
+
     pub fn reset(&self, kind: ResetKind) -> Result<(), RuntimeError> {
         self.send_with_reply("reset", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::Reset(kind, reply)
         })
     }
 
-    pub fn eject(&self) -> Result<(), RuntimeError> {
-        self.send_with_reply("eject", CONTROL_REPLY_TIMEOUT, ControlMessage::Eject)
+    pub fn power_off(&self) -> Result<(), RuntimeError> {
+        self.send_with_reply("power_off", CONTROL_REPLY_TIMEOUT, ControlMessage::PowerOff)
     }
 
     pub fn set_audio_config(&self, cfg: AudioBusConfig) -> Result<(), RuntimeError> {
@@ -565,6 +571,29 @@ impl RuntimeHandle {
     pub fn disable_debugger(&self) -> Result<(), RuntimeError> {
         self.send_with_reply("disable_debugger", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::DisableDebugger(reply)
+        })
+    }
+
+    /// Enable netplay with the given input provider.
+    ///
+    /// When enabled, the runtime will poll inputs from the provider instead of
+    /// the local atomic pad masks.
+    pub fn enable_netplay(
+        &self,
+        input_provider: std::sync::Arc<dyn nesium_netplay::NetplayInputProvider>,
+    ) -> Result<(), RuntimeError> {
+        self.send_with_reply("enable_netplay", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::EnableNetplay {
+                input_provider,
+                reply,
+            }
+        })
+    }
+
+    /// Disable netplay and return to local input.
+    pub fn disable_netplay(&self) -> Result<(), RuntimeError> {
+        self.send_with_reply("disable_netplay", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::DisableNetplay(reply)
         })
     }
 }

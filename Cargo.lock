@@ -3044,8 +3044,10 @@ dependencies = [
  "mimalloc",
  "ndk-context",
  "nesium-core",
+ "nesium-netplay",
  "nesium-runtime",
  "nesium-support",
+ "tokio",
 ]
 
 [[package]]
@@ -3072,19 +3074,29 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "clap",
  "nesium-netproto",
  "postcard",
  "serde",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
 name = "nesium-netplay"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "clap",
+ "crossbeam-channel",
+ "nesium-netd",
  "nesium-netproto",
+ "postcard",
+ "serde",
+ "thiserror 2.0.17",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3106,6 +3118,7 @@ dependencies = [
  "crossbeam-channel",
  "lz4_flex",
  "nesium-core",
+ "nesium-netplay",
  "nesium-support",
  "ringbuf",
  "sha1",

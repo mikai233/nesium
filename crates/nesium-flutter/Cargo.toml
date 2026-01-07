@@ -16,7 +16,9 @@ nesium-core.workspace = true
 flutter_rust_bridge.workspace = true
 anyhow.workspace = true
 nesium-runtime.workspace = true
+nesium-netplay.workspace = true
 nesium-support.workspace = true
+tokio = { workspace = true, features = ["full"] }
 dashmap.workspace = true
 crossbeam-channel.workspace = true
 

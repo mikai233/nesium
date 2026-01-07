@@ -629,7 +629,7 @@ abstract class AppLocalizations {
   /// No description provided for @menuEject.
   ///
   /// In en, this message translates to:
-  /// **'Eject'**
+  /// **'Power Off'**
   String get menuEject;
 
   /// No description provided for @menuSaveState.
@@ -649,6 +649,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pause / Resume'**
   String get menuPauseResume;
+
+  /// No description provided for @menuNetplay.
+  ///
+  /// In en, this message translates to:
+  /// **'Netplay'**
+  String get menuNetplay;
+
+  /// No description provided for @netplayStatusDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected'**
+  String get netplayStatusDisconnected;
+
+  /// No description provided for @netplayStatusConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting...'**
+  String get netplayStatusConnecting;
+
+  /// No description provided for @netplayStatusConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected (Waiting for Room)'**
+  String get netplayStatusConnected;
+
+  /// No description provided for @netplayStatusInRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'In Room'**
+  String get netplayStatusInRoom;
+
+  /// No description provided for @netplayDisconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get netplayDisconnect;
+
+  /// No description provided for @netplayServerAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Server Address'**
+  String get netplayServerAddress;
+
+  /// No description provided for @netplayPlayerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Player Name'**
+  String get netplayPlayerName;
+
+  /// No description provided for @netplayConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get netplayConnect;
+
+  /// No description provided for @netplayCreateRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Room'**
+  String get netplayCreateRoom;
+
+  /// No description provided for @netplayJoinRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Join Room'**
+  String get netplayJoinRoom;
+
+  /// No description provided for @netplayRoomCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Room Code'**
+  String get netplayRoomCode;
 
   /// No description provided for @menuLoadTasMovie.
   ///
@@ -845,7 +917,7 @@ abstract class AppLocalizations {
   /// No description provided for @actionEjectNes.
   ///
   /// In en, this message translates to:
-  /// **'Eject'**
+  /// **'Power Off'**
   String get actionEjectNes;
 
   /// No description provided for @actionLoadPalette.

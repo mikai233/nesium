@@ -7,6 +7,7 @@ import 'api/emulation.dart';
 import 'api/events.dart';
 import 'api/input.dart';
 import 'api/load_rom.dart';
+import 'api/netplay.dart';
 import 'api/palette.dart';
 import 'api/pause.dart';
 import 'api/simple.dart';
@@ -30,6 +31,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   RustStreamSink<DebugStateNotification>
   dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw);
+
+  @protected
+  RustStreamSink<NetplayGameEvent> dco_decode_StreamSink_netplay_game_event_Sse(
+    dynamic raw,
+  );
+
+  @protected
+  RustStreamSink<NetplayStatus> dco_decode_StreamSink_netplay_status_Sse(
+    dynamic raw,
+  );
 
   @protected
   RustStreamSink<PaletteSnapshot> dco_decode_StreamSink_palette_snapshot_Sse(
@@ -84,6 +95,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SpriteInfo> dco_decode_list_sprite_info(dynamic raw);
+
+  @protected
+  NetplayGameEvent dco_decode_netplay_game_event(dynamic raw);
+
+  @protected
+  NetplayState dco_decode_netplay_state(dynamic raw);
+
+  @protected
+  NetplayStatus dco_decode_netplay_status(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -146,6 +166,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<NetplayGameEvent> sse_decode_StreamSink_netplay_game_event_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<NetplayStatus> sse_decode_StreamSink_netplay_status_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<PaletteSnapshot> sse_decode_StreamSink_palette_snapshot_Sse(
     SseDeserializer deserializer,
   );
@@ -202,6 +232,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SpriteInfo> sse_decode_list_sprite_info(SseDeserializer deserializer);
+
+  @protected
+  NetplayGameEvent sse_decode_netplay_game_event(SseDeserializer deserializer);
+
+  @protected
+  NetplayState sse_decode_netplay_state(SseDeserializer deserializer);
+
+  @protected
+  NetplayStatus sse_decode_netplay_status(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -269,6 +308,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_debug_state_notification_Sse(
     RustStreamSink<DebugStateNotification> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_netplay_game_event_Sse(
+    RustStreamSink<NetplayGameEvent> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_netplay_status_Sse(
+    RustStreamSink<NetplayStatus> self,
     SseSerializer serializer,
   );
 
@@ -343,6 +394,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<SpriteInfo> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_netplay_game_event(
+    NetplayGameEvent self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netplay_state(NetplayState self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_netplay_status(NetplayStatus self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);

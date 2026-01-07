@@ -7,7 +7,8 @@ pub const MAGIC: [u8; 2] = *b"NS";
 pub const VERSION: u8 = 1;
 
 /// Fixed header length in bytes (wire format).
-pub const HEADER_LEN: usize = 28;
+/// Changed from 28 to 30 to accommodate u32 payload_len for large messages.
+pub const HEADER_LEN: usize = 30;
 
 /// Maximum payload size allowed for UDP packets (in bytes).
 /// Keep this below typical path MTU to reduce fragmentation risk.
@@ -15,9 +16,10 @@ pub const MAX_UDP_PAYLOAD: usize = 1200;
 
 /// Maximum size of a single framed TCP packet (header + payload), in bytes.
 /// This limit is enforced to avoid unbounded allocations.
-pub const MAX_TCP_FRAME: usize = 64 * 1024;
+/// Set to 2MB to support large NES ROM files.
+pub const MAX_TCP_FRAME: usize = 2 * 1024 * 1024;
 
-/// Maximum size for "control-plane" TCP packets (header + payload), in bytes.
+/// Maximum size for \"control-plane\" TCP packets (header + payload), in bytes.
 /// Intended for small handshake/control messages; larger transfers should use
 /// dedicated message types and/or chunking.
 pub const MAX_TCP_CONTROL_FRAME: usize = 4096;
@@ -25,6 +27,11 @@ pub const MAX_TCP_CONTROL_FRAME: usize = 4096;
 /// TCP framing prefix length in bytes.
 ///
 /// TCP is a byte stream, so each packet is framed as:
-/// `[u16 frame_len_le][Header][Payload]`,
+/// `[u32 frame_len_le][Header][Payload]`,
 /// where `frame_len_le` is the length of `[Header][Payload]` in bytes.
-pub const TCP_LEN_PREFIX: usize = 2;
+pub const TCP_LEN_PREFIX: usize = 4;
+
+/// Player index marker used to represent a spectator on the wire.
+///
+/// This value appears in session messages such as `JoinAck`, `PlayerJoined`, and `RoleChanged`.
+pub const SPECTATOR_PLAYER_INDEX: u8 = 0xFF;

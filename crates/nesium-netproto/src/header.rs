@@ -43,7 +43,7 @@ pub struct Header {
     pub ack_bits: u32,
 
     /// Payload length in bytes. `decode()` requires `buf.len() == HEADER_LEN + payload_len`.
-    pub payload_len: u16,
+    pub payload_len: u32,
 }
 
 impl Header {
@@ -78,7 +78,7 @@ impl Header {
     /// - 14..18 seq (u32 LE)
     /// - 18..22 ack (u32 LE)
     /// - 22..26 ack_bits (u32 LE)
-    /// - 26..28 payload_len (u16 LE)
+    /// - 26..30 payload_len (u32 LE)
     pub fn encode_into(&self, out: &mut [u8; HEADER_LEN]) {
         out[0..2].copy_from_slice(&MAGIC);
         out[2] = self.version;
@@ -91,7 +91,7 @@ impl Header {
         out[14..18].copy_from_slice(&self.seq.to_le_bytes());
         out[18..22].copy_from_slice(&self.ack.to_le_bytes());
         out[22..26].copy_from_slice(&self.ack_bits.to_le_bytes());
-        out[26..28].copy_from_slice(&self.payload_len.to_le_bytes());
+        out[26..30].copy_from_slice(&self.payload_len.to_le_bytes());
     }
 
     /// Decode a packet buffer that contains exactly `[Header][Payload]`.
@@ -123,7 +123,7 @@ impl Header {
         let seq = read_u32_le(buf, 14)?;
         let ack = read_u32_le(buf, 18)?;
         let ack_bits = read_u32_le(buf, 22)?;
-        let payload_len = read_u16_le(buf, 26)?;
+        let payload_len = read_u32_le(buf, 26)?;
 
         let payload_len_usize = payload_len as usize;
         if buf.len() != HEADER_LEN + payload_len_usize {
@@ -213,7 +213,7 @@ mod tests {
             h.ack_bits
         );
         assert_eq!(
-            u16::from_le_bytes(buf[26..28].try_into().unwrap()),
+            u32::from_le_bytes(buf[26..30].try_into().unwrap()),
             h.payload_len
         );
 

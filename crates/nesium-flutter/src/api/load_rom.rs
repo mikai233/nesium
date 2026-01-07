@@ -18,6 +18,13 @@ pub fn load_rom(path: String) -> Result<(), String> {
 }
 
 #[frb]
+pub fn load_rom_from_bytes(bytes: Vec<u8>) -> Result<(), String> {
+    crate::runtime_handle()
+        .load_rom_from_memory(bytes)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
 pub fn reset_console() -> Result<(), String> {
     crate::runtime_handle()
         .reset(ResetKind::Soft)
@@ -32,8 +39,10 @@ pub fn power_reset_console() -> Result<(), String> {
 }
 
 #[frb]
-pub fn eject_console() -> Result<(), String> {
-    crate::runtime_handle().eject().map_err(|e| e.to_string())
+pub fn power_off_console() -> Result<(), String> {
+    crate::runtime_handle()
+        .power_off()
+        .map_err(|e| e.to_string())
 }
 
 #[frb]

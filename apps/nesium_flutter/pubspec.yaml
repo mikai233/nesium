@@ -45,6 +45,7 @@ dependencies:
   path: ^1.9.1
   skeletonizer: ^2.1.2
   animations: ^2.1.1
+  freezed_annotation: ^2.4.4
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -64,6 +65,8 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4
+  build_runner: ^2.4.9
+  freezed: ^2.5.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

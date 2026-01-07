@@ -294,7 +294,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuPowerReset => 'Power Reset';
 
   @override
-  String get menuEject => 'Eject';
+  String get menuEject => 'Power Off';
 
   @override
   String get menuSaveState => 'Save State...';
@@ -304,6 +304,42 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get menuPauseResume => 'Pause / Resume';
+
+  @override
+  String get menuNetplay => 'Netplay';
+
+  @override
+  String get netplayStatusDisconnected => 'Disconnected';
+
+  @override
+  String get netplayStatusConnecting => 'Connecting...';
+
+  @override
+  String get netplayStatusConnected => 'Connected (Waiting for Room)';
+
+  @override
+  String get netplayStatusInRoom => 'In Room';
+
+  @override
+  String get netplayDisconnect => 'Disconnect';
+
+  @override
+  String get netplayServerAddress => 'Server Address';
+
+  @override
+  String get netplayPlayerName => 'Player Name';
+
+  @override
+  String get netplayConnect => 'Connect';
+
+  @override
+  String get netplayCreateRoom => 'Create Room';
+
+  @override
+  String get netplayJoinRoom => 'Join Room';
+
+  @override
+  String get netplayRoomCode => 'Room Code';
 
   @override
   String get menuLoadTasMovie => 'Load TAS Movie...';
@@ -412,7 +448,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionPowerResetNes => 'Power Reset NES';
 
   @override
-  String get actionEjectNes => 'Eject';
+  String get actionEjectNes => 'Power Off';
 
   @override
   String get actionLoadPalette => 'Load palette';

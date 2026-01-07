@@ -1,16 +1,23 @@
 use serde::{Deserialize, Serialize};
 
+/// Client sends a batch of inputs to the server.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct InputBatch {
-    pub base_frame: u32,
-    pub buttons: [u16; 8],
+    /// Starting frame number for this batch.
+    pub start_frame: u32,
+    /// Sequential inputs for consecutive frames (one u16 per frame).
+    pub buttons: Vec<u16>,
 }
 
+/// Server broadcasts confirmation of inputs for a specific player.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RelayInputs {
-    pub player_id: u8,
+    /// The player index who generated these inputs.
+    pub player_index: u8,
+    /// Starting frame number.
     pub base_frame: u32,
-    pub buttons: [u16; 16],
+    /// Inputs (one u16 per frame).
+    pub buttons: Vec<u16>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

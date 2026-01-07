@@ -282,9 +282,9 @@ class _MobileDrawer extends StatelessWidget {
         closeDrawer();
         unawaited(actions.powerReset?.call());
         break;
-      case NesMenuItemId.eject:
-        closeDrawer();
-        unawaited(actions.eject?.call());
+      case NesMenuItemId.powerOff:
+        if (!context.mounted) return;
+        unawaited(actions.powerOff?.call());
         break;
       case NesMenuItemId.togglePause:
         closeDrawer();
@@ -322,6 +322,9 @@ class _MobileDrawer extends StatelessWidget {
       case NesMenuItemId.paletteViewer:
         closeDrawer();
         unawaited(actions.openPaletteViewer?.call());
+        break;
+      case NesMenuItemId.netplay:
+        unawaited(actions.openNetplay?.call());
         break;
       case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:

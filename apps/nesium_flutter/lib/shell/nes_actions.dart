@@ -20,7 +20,7 @@ class NesActions {
     this.loadTasMovie,
     this.reset,
     this.powerReset,
-    this.eject,
+    this.powerOff,
     this.togglePause,
     this.openSettings,
     this.openAbout,
@@ -30,6 +30,7 @@ class NesActions {
     this.openTileViewer,
     this.openSpriteViewer,
     this.openPaletteViewer,
+    this.openNetplay,
   });
 
   final AsyncCallback? openRom;
@@ -43,7 +44,7 @@ class NesActions {
   final AsyncCallback? loadTasMovie;
   final AsyncCallback? reset;
   final AsyncCallback? powerReset;
-  final AsyncCallback? eject;
+  final AsyncCallback? powerOff;
   final AsyncCallback? togglePause;
   final AsyncCallback? openSettings;
   final AsyncCallback? openAbout;
@@ -53,4 +54,5 @@ class NesActions {
   final AsyncCallback? openTileViewer;
   final AsyncCallback? openSpriteViewer;
   final AsyncCallback? openPaletteViewer;
+  final AsyncCallback? openNetplay;
 }

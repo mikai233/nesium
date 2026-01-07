@@ -8,3 +8,12 @@ license.workspace = true
 nesium-netproto.workspace = true
 clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
+bytes = { workspace = true }
+postcard = { workspace = true }
+tracing = { workspace = true }
+crossbeam-channel = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+nesium-netd = { workspace = true }

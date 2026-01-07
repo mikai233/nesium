@@ -152,7 +152,7 @@ impl LibretroCore for NesiumCore {
     }
 
     fn unload_game(&mut self) {
-        self.nes.eject_cartridge();
+        self.nes.power_off();
     }
 
     fn reset(&mut self) {

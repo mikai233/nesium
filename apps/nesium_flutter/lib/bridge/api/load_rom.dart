@@ -12,14 +12,17 @@ Future<void> startNesRuntime() =>
 Future<void> loadRom({required String path}) =>
     RustLib.instance.api.crateApiLoadRomLoadRom(path: path);
 
+Future<void> loadRomFromBytes({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiLoadRomLoadRomFromBytes(bytes: bytes);
+
 Future<void> resetConsole() =>
     RustLib.instance.api.crateApiLoadRomResetConsole();
 
 Future<void> powerResetConsole() =>
     RustLib.instance.api.crateApiLoadRomPowerResetConsole();
 
-Future<void> ejectConsole() =>
-    RustLib.instance.api.crateApiLoadRomEjectConsole();
+Future<void> powerOffConsole() =>
+    RustLib.instance.api.crateApiLoadRomPowerOffConsole();
 
 Future<Uint8List?> getRomHash() =>
     RustLib.instance.api.crateApiLoadRomGetRomHash();

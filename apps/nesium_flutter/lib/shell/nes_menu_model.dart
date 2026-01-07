@@ -14,7 +14,7 @@ enum NesMenuItemId {
   loadStateFile,
   reset,
   powerReset,
-  eject,
+  powerOff,
   togglePause,
   loadTasMovie,
   settings,
@@ -25,6 +25,7 @@ enum NesMenuItemId {
   tileViewer,
   spriteViewer,
   paletteViewer,
+  netplay,
 }
 
 class NesMenuItemSpec {
@@ -68,7 +69,7 @@ class NesMenuItemSpec {
       NesMenuItemId.loadStateFile => l10n.loadFromExternalFile,
       NesMenuItemId.reset => l10n.menuReset,
       NesMenuItemId.powerReset => l10n.menuPowerReset,
-      NesMenuItemId.eject => l10n.menuEject,
+      NesMenuItemId.powerOff => l10n.menuEject,
       NesMenuItemId.togglePause => l10n.menuPauseResume,
       NesMenuItemId.loadTasMovie => l10n.menuLoadTasMovie,
       NesMenuItemId.settings => l10n.menuPreferences,
@@ -79,6 +80,7 @@ class NesMenuItemSpec {
       NesMenuItemId.tileViewer => l10n.menuTileViewer,
       NesMenuItemId.spriteViewer => l10n.menuSpriteViewer,
       NesMenuItemId.paletteViewer => l10n.menuPaletteViewer,
+      NesMenuItemId.netplay => l10n.menuNetplay,
     };
   }
 }
@@ -121,9 +123,9 @@ class NesMenus {
     id: NesMenuItemId.powerReset,
     icon: Icons.power_settings_new,
   );
-  static const NesMenuItemSpec eject = NesMenuItemSpec(
-    id: NesMenuItemId.eject,
-    icon: Icons.eject,
+  static const NesMenuItemSpec powerOff = NesMenuItemSpec(
+    id: NesMenuItemId.powerOff,
+    icon: Icons.power_settings_new,
   );
   static const NesMenuItemSpec togglePause = NesMenuItemSpec(
     id: NesMenuItemId.togglePause,
@@ -140,6 +142,10 @@ class NesMenus {
   static const NesMenuItemSpec about = NesMenuItemSpec(
     id: NesMenuItemId.about,
     icon: Icons.info_outline,
+  );
+  static const NesMenuItemSpec netplay = NesMenuItemSpec(
+    id: NesMenuItemId.netplay,
+    icon: Icons.network_check_outlined,
   );
   static const NesMenuItemSpec debugger = NesMenuItemSpec(
     id: NesMenuItemId.debugger,
@@ -195,9 +201,10 @@ class NesMenus {
     saveState,
     loadState,
     NesMenuItemSpec(id: NesMenuItemId.autoSave, icon: Icons.history),
+    netplay,
     reset,
     powerReset,
-    eject,
+    powerOff,
     togglePause,
     debugger,
     tools,
@@ -228,7 +235,7 @@ class NesMenus {
     ),
     const NesMenuSectionSpec(
       id: NesMenuSectionId.emulation,
-      items: [togglePause, loadTasMovie, reset, powerReset, eject],
+      items: [togglePause, netplay, loadTasMovie, reset, powerReset, powerOff],
     ),
     const NesMenuSectionSpec(id: NesMenuSectionId.settings, items: [settings]),
     const NesMenuSectionSpec(

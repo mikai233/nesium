@@ -24,9 +24,7 @@ pub async fn run_tcp_listener(
 
         let tx_clone = tx.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_tcp_connection(stream, peer, conn_id, tx_clone).await {
-                eprintln!("[tcp] {} (conn_id={}) handler error: {}", peer, conn_id, e);
-            }
+            handle_tcp_connection(stream, peer, conn_id, tx_clone).await;
         });
     }
 }
@@ -36,7 +34,7 @@ async fn handle_tcp_connection(
     peer: SocketAddr,
     conn_id: ConnId,
     tx: mpsc::Sender<InboundEvent>,
-) -> anyhow::Result<()> {
+) {
     let _ = stream.set_nodelay(true);
 
     // Split the stream so read/write can progress independently.
@@ -71,14 +69,22 @@ async fn handle_tcp_connection(
         }
 
         framer.buf_mut().reserve(4096);
-        let n = read.read_buf(framer.buf_mut()).await?;
-        if n == 0 {
-            disconnect_reason = "eof".to_string();
-            break;
+        match read.read_buf(framer.buf_mut()).await {
+            Ok(n) => {
+                if n == 0 {
+                    disconnect_reason = "eof".to_string();
+                    break;
+                }
+            }
+            Err(e) => {
+                disconnect_reason = format!("read error: {}", e);
+                break;
+            }
         }
 
         match framer.drain_packets() {
             Ok(packets) => {
+                let mut closed = false;
                 for packet in packets {
                     // Forward decoded packets to upper layer.
                     if tx
@@ -93,8 +99,12 @@ async fn handle_tcp_connection(
                     {
                         // Upper layer is gone -> stop connection task.
                         disconnect_reason = "inbound channel closed".to_string();
+                        closed = true;
                         break;
                     }
+                }
+                if closed {
+                    break;
                 }
             }
             Err(e) => {
@@ -120,6 +130,4 @@ async fn handle_tcp_connection(
 
     // Await writer task; ignore errors here (connection is closing anyway).
     let _ = writer.await;
-
-    Ok(())
 }

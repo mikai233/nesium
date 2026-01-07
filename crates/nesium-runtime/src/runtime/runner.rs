@@ -1,5 +1,6 @@
+use nesium_netplay::NetplayInputProvider;
 use nesium_support::rewind::RewindState;
-use nesium_support::tas::{FrameFlags, InputFrame};
+use nesium_support::tas::{self, FrameFlags, InputFrame};
 use sha1::{Digest, Sha1};
 use std::sync::atomic::Ordering;
 use std::{
@@ -86,8 +87,10 @@ pub(crate) struct Runner {
     turbo_prev_masks: [u8; 4],
     turbo_start_frame: [[u64; 8]; 4],
     rewind: RewindState,
-    movie: Option<nesium_support::tas::Movie>,
+    movie: Option<tas::Movie>,
     movie_frame: usize,
+    netplay_input: Option<Arc<dyn NetplayInputProvider>>,
+    netplay_active: bool,
 }
 
 impl Runner {
@@ -138,6 +141,8 @@ impl Runner {
             rewind: RewindState::new(),
             movie: None,
             movie_frame: 0,
+            netplay_input: None,
+            netplay_active: false,
         }
     }
 
@@ -182,17 +187,22 @@ impl Runner {
 
             // Run exactly one frame per iteration to avoid jitter from catch-up frames.
             if rewinding || !paused {
-                if self.state.rewinding.load(Ordering::Acquire) {
-                    self.rewind_frame();
-                } else {
-                    self.step_frame();
-                }
+                self.step_frame();
                 self.next_frame_deadline += self.frame_duration;
             }
 
             // If we've fallen behind, reset the deadline instead of trying to catch up.
+            // EXCEPTION: If Netplay inputs are ready, we WANT to catch up.
             let now = Instant::now();
-            if now > self.next_frame_deadline {
+            let mut allow_catchup = false;
+
+            if let Some(np) = &self.netplay_input {
+                if np.should_fast_forward(self.state.frame_seq.load(Ordering::Acquire) as u32) {
+                    allow_catchup = true;
+                }
+            }
+
+            if now > self.next_frame_deadline && !allow_catchup {
                 self.next_frame_deadline = now;
             }
         }
@@ -200,6 +210,15 @@ impl Runner {
 
     fn wait_until_next_deadline(&mut self) -> WaitOutcome {
         loop {
+            // Netplay Fast-Forward: If we have inputs ready for the current frame, don't wait.
+            // This allows catching up quickly after a state load or lag spike.
+            if let Some(np) = &self.netplay_input {
+                // frame_seq is incremented *after* run_frame, so we are checking the frame we are ABOUT to run.
+                if np.should_fast_forward(self.state.frame_seq.load(Ordering::Acquire) as u32) {
+                    return WaitOutcome::DeadlineReached;
+                }
+            }
+
             let target = self
                 .next_frame_deadline
                 .checked_sub(FRAME_LEAD)
@@ -258,8 +277,11 @@ impl Runner {
         match msg {
             ControlMessage::Stop => return true,
             ControlMessage::LoadRom(path, reply) => self.handle_load_rom(path, reply),
+            ControlMessage::LoadRomFromMemory(bytes, reply) => {
+                self.handle_load_rom_from_memory(bytes, reply)
+            }
             ControlMessage::Reset(kind, reply) => self.handle_reset(kind, reply),
-            ControlMessage::Eject(reply) => self.handle_eject(reply),
+            ControlMessage::PowerOff(reply) => self.handle_power_off(reply),
             ControlMessage::SetAudioConfig(cfg, reply) => self.handle_set_audio_config(cfg, reply),
             ControlMessage::SetFrameReadyCallback(cb, user_data, reply) => {
                 self.handle_set_frame_ready_callback(cb, user_data, reply)
@@ -383,6 +405,17 @@ impl Runner {
                 self.nes.interceptor.remove::<DebugInterceptor>();
                 let _ = reply.send(Ok(()));
             }
+            ControlMessage::EnableNetplay {
+                input_provider,
+                reply,
+            } => {
+                self.netplay_input = Some(input_provider);
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::DisableNetplay(reply) => {
+                self.netplay_input = None;
+                let _ = reply.send(Ok(()));
+            }
         }
 
         false
@@ -445,9 +478,6 @@ impl Runner {
 
             back_indices.copy_from_slice(&indices);
 
-            // Increment `frame_seq` BEFORE present so the Android signal pipe carries the new sequence.
-            self.state.frame_seq.fetch_add(1, Ordering::Release);
-
             // Present converts indices to packed pixels once and swaps the presented plane.
             fb.present(&palette);
 
@@ -458,54 +488,47 @@ impl Runner {
     }
 
     fn step_frame(&mut self) {
-        self.maybe_capture_rewind_history();
-
-        // If a TAS movie is active, we treat it as the sole input source.
-        // User input and turbo are ignored during playback.
-        let movie_frame = self.current_movie_frame();
-        if let Some(frame) = movie_frame.as_ref() {
-            // TAS playback and interactive rewind are mutually exclusive.
-            self.state.rewinding.store(false, Ordering::Release);
-            // Apply reset markers before sampling inputs for the frame.
-            self.apply_movie_resets(frame);
-        }
-
         let frame_seq = self.state.frame_seq.load(Ordering::Relaxed);
-        let turbo_on_frames = self.state.turbo_on_frames.load(Ordering::Acquire).max(1) as u64;
-        let turbo_off_frames = self.state.turbo_off_frames.load(Ordering::Acquire).max(1) as u64;
-        let turbo_cycle = turbo_on_frames + turbo_off_frames;
+        let movie_frame = self.movie_frame_for_seq(frame_seq);
+        self.maybe_apply_movie_frame(&movie_frame);
 
-        let mut any_input = false;
+        let (turbo_on_frames, period) = self.turbo_params();
 
-        // Sync inputs (atomic bitmasks, no channel).
-        for pad in 0..4 {
-            let mask = if let Some(frame) = movie_frame.as_ref() {
-                // TAS: feed the recorded button mask as-is.
-                frame.ports[pad]
-            } else {
-                // Live input: base mask plus optional turbo overlay.
-                let base = self.state.pad_masks[pad].load(Ordering::Acquire);
-                self.apply_turbo_to_mask(pad, base, frame_seq, turbo_on_frames, turbo_cycle)
-            };
+        let netplay_inputs = self.netplay_inputs_for_frame(frame_seq, turbo_on_frames, period);
+        let (any_input, netplay_rewind) = self.apply_inputs_for_frame(
+            frame_seq,
+            turbo_on_frames,
+            period,
+            movie_frame.as_ref(),
+            netplay_inputs.as_ref(),
+        );
 
-            if mask != 0 {
-                any_input = true;
+        // Check if we should rewind
+        // Priority: Netplay Rewind > Offline Rewind
+        let should_rewind = netplay_rewind
+            || (netplay_inputs.is_none() && self.state.rewinding.load(Ordering::Acquire));
+
+        if should_rewind {
+            self.rewind_frame();
+            // Skip run_frame
+        } else {
+            self.maybe_send_periodic_netplay_state(frame_seq);
+
+            // Any regular input (including TAS input) should cancel offline rewind.
+            // This prevents the runtime from getting stuck in a rewind-only loop.
+            if any_input && netplay_inputs.is_none() {
+                self.state.rewinding.store(false, Ordering::Release);
             }
 
-            self.apply_pad_mask(pad, mask);
-        }
+            let samples = self.nes.run_frame(self.audio.is_some());
+            if let Some(audio) = &mut self.audio
+                && !samples.is_empty()
+            {
+                audio.push_samples(&samples);
+            }
 
-        // Any input (including TAS input) should cancel rewind.
-        // This prevents the runtime from getting stuck in a rewind-only loop.
-        if any_input {
-            self.state.rewinding.store(false, Ordering::Release);
-        }
-
-        let samples = self.nes.run_frame(self.audio.is_some());
-        if let Some(audio) = &mut self.audio
-            && !samples.is_empty()
-        {
-            audio.push_samples(&samples);
+            // Capture history for future rewind
+            self.maybe_capture_rewind_history();
         }
 
         self.state.frame_seq.fetch_add(1, Ordering::Relaxed);
@@ -520,6 +543,174 @@ impl Runner {
 
         // Broadcast viewer state (each viewer has its own interceptor snapshot)
         self.maybe_broadcast_tilemap_and_chr_state();
+    }
+
+    fn movie_frame_for_seq(&mut self, frame_seq: u64) -> Option<InputFrame> {
+        if let Some(movie) = &mut self.movie {
+            movie.frames.get(frame_seq as usize).copied()
+        } else {
+            None
+        }
+    }
+
+    fn maybe_apply_movie_frame(&mut self, movie_frame: &Option<InputFrame>) {
+        if let Some(frame) = movie_frame {
+            self.state.rewinding.store(false, Ordering::Release);
+            self.apply_movie_resets(frame);
+        }
+    }
+
+    fn turbo_params(&self) -> (u64, u64) {
+        let turbo_on_frames = self.state.turbo_on_frames.load(Ordering::Relaxed) as u64;
+        let turbo_off_frames = self.state.turbo_off_frames.load(Ordering::Relaxed) as u64;
+        let period = (turbo_on_frames + turbo_off_frames).max(1);
+        (turbo_on_frames, period)
+    }
+
+    fn netplay_inputs_for_frame(
+        &mut self,
+        frame_seq: u64,
+        turbo_on_frames: u64,
+        period: u64,
+    ) -> Option<[u16; 4]> {
+        let np = self.netplay_input.as_ref()?;
+        if !np.is_active() {
+            self.netplay_active = false;
+            return None;
+        }
+        let np = np.clone();
+
+        // 1) Send local input to server (if we are a player).
+        if let Some(_local_idx) = np.local_player() {
+            let cap = np.rewind_capacity();
+            self.state
+                .rewind_capacity
+                .store(cap as u64, Ordering::Release);
+
+            let delay = np.input_delay();
+            // In single-machine netplay, the local user is physically holding "Controller 1".
+            // So we read from physical port 0, but send it as our assigned netplay index.
+            let physical_pad = 0;
+
+            if physical_pad < 4 {
+                // At start of session OR upon late activation, fill the delay buffer with empty inputs
+                // to prime the input pipeline.
+                let was_inactive = !self.netplay_active;
+                if frame_seq == 0 || was_inactive {
+                    for i in 0..delay {
+                        np.send_input_to_server(frame_seq as u32 + i, 0);
+                    }
+                }
+                self.netplay_active = true;
+
+                // Immediate State Sync on Activation (Host only)
+                if was_inactive && np.local_player() == Some(0) {
+                    match self.capture_compressed_snapshot() {
+                        Ok(bytes) => {
+                            np.send_state(frame_seq as u32, &bytes);
+                            eprintln!("[Netplay] Sent immediate state sync at frame {}", frame_seq);
+                        }
+                        Err(e) => {
+                            eprintln!("[Netplay] Failed to capture immediate state: {}", e);
+                        }
+                    }
+                }
+
+                let base = self.state.pad_masks[physical_pad].load(Ordering::Acquire);
+                let mut input = self.apply_turbo_to_mask(
+                    physical_pad,
+                    base as u8,
+                    frame_seq,
+                    turbo_on_frames,
+                    period,
+                ) as u16;
+
+                // Inject Rewind bit if requested locally.
+                if self.state.rewinding.load(Ordering::Acquire) {
+                    input |= 0x0100;
+                }
+
+                np.send_input_to_server(frame_seq as u32 + delay, input);
+            }
+        }
+
+        // 2) Wait for confirmed inputs (lockstep).
+        let mut inputs = None;
+        while inputs.is_none() {
+            inputs = np.poll_inputs(frame_seq as u32);
+            if inputs.is_none() {
+                // IMPORTANT: Don't fall back to offline inputs when netplay is active.
+                // A temporary input stall must pause the emulation instead of desyncing.
+                if !np.is_active() {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(1));
+            }
+        }
+        inputs
+    }
+
+    fn apply_inputs_for_frame(
+        &mut self,
+        frame_seq: u64,
+        turbo_on_frames: u64,
+        period: u64,
+        movie_frame: Option<&InputFrame>,
+        netplay_inputs: Option<&[u16; 4]>,
+    ) -> (bool, bool) {
+        let mut any_input = false;
+        let mut netplay_rewind = false;
+
+        // Sync inputs: priority is netplay > TAS movie > live input.
+        for pad in 0..4 {
+            let mask: u16 = if let Some(inputs) = netplay_inputs {
+                let inp = inputs[pad];
+                if (inp & 0x0100) != 0 {
+                    netplay_rewind = true;
+                }
+                inp
+            } else if let Some(frame) = movie_frame {
+                frame.ports[pad] as u16
+            } else {
+                let base = self.state.pad_masks[pad].load(Ordering::Acquire);
+                self.apply_turbo_to_mask(pad, base as u8, frame_seq, turbo_on_frames, period) as u16
+            };
+
+            if (mask & 0xFF) != 0 {
+                any_input = true;
+            }
+
+            self.apply_pad_mask(pad, (mask & 0xFF) as u8);
+        }
+
+        (any_input, netplay_rewind)
+    }
+
+    fn maybe_send_periodic_netplay_state(&mut self, frame_seq: u64) {
+        // Periodic Netplay State Sync (Host Only)
+        // Every second (60 frames), the host sends a compressed state snapshot to the server.
+        // This allows late joiners (and spectators) to catch up quickly without replaying the entire history.
+        if !self.netplay_active || frame_seq == 0 || frame_seq % 60 != 0 {
+            return;
+        }
+
+        // Clone the Arc to avoid borrowing self while mutating self for capture.
+        let Some(np) = self.netplay_input.clone() else {
+            return;
+        };
+        // Only the host (P1) is responsible for providing state.
+        if np.local_player() != Some(0) {
+            return;
+        }
+
+        match self.capture_compressed_snapshot() {
+            Ok(bytes) => {
+                np.send_state(frame_seq as u32, &bytes);
+            }
+            Err(e) => {
+                eprintln!("[Netplay] Failed to capture periodic state: {}", e);
+            }
+        }
     }
 
     /// Captures rewind history (snapshot + render index plane) when enabled.
@@ -860,6 +1051,43 @@ impl Runner {
                 *self.state.rom_hash.lock().unwrap() = None;
                 let error = e.to_string();
                 let _ = reply.send(Err(RuntimeError::LoadRomFailed { path, error }));
+            }
+        }
+    }
+
+    fn handle_load_rom_from_memory(&mut self, bytes: Vec<u8>, reply: ControlReplySender) {
+        let mut hasher = Sha1::new();
+        hasher.update(&bytes);
+        let hash: [u8; 20] = hasher.finalize().into();
+        let mut full_hash = [0u8; 32];
+        full_hash[..20].copy_from_slice(&hash);
+
+        match nesium_core::cartridge::load_cartridge(bytes) {
+            Ok(cart) => {
+                self.nes.insert_cartridge(cart);
+                *self.state.rom_hash.lock().unwrap() = Some(full_hash);
+                self.state.paused.store(false, Ordering::Release);
+                self.next_frame_deadline = Instant::now();
+                if let Some(audio) = &self.audio {
+                    audio.clear();
+                }
+                self.rewind.clear();
+                self.state.rewinding.store(false, Ordering::Release);
+                // Reset frame sequence when netplay is active to prevent frame mismatch.
+                // Without this, after power off and reload, frame_seq stays high but
+                // netplay expects frames starting from 0, causing a deadlock.
+                if self.netplay_input.is_some() {
+                    self.state.frame_seq.store(0, Ordering::Release);
+                }
+                let _ = reply.send(Ok(()));
+            }
+            Err(e) => {
+                *self.state.rom_hash.lock().unwrap() = None;
+                let error = e.to_string();
+                let _ = reply.send(Err(RuntimeError::LoadRomFailed {
+                    path: PathBuf::from("memory"),
+                    error,
+                }));
             }
         }
     }
@@ -1243,20 +1471,44 @@ impl Runner {
         let _ = reply.send(Ok(()));
     }
 
-    /// Ejects the current cartridge and clears associated runtime states.
-    fn handle_eject(&mut self, reply: ControlReplySender) {
-        self.nes.eject_cartridge();
+    /// Powers off the console and performs a full shutdown.
+    ///
+    /// This clears all NES state and displays a black screen.
+    fn handle_power_off(&mut self, reply: ControlReplySender) {
+        self.nes.power_off();
+        // Clear input state
         for mask in &self.state.pad_masks {
             mask.store(0, Ordering::Release);
         }
         for mask in &self.state.turbo_masks {
             mask.store(0, Ordering::Release);
         }
+        // Clear audio
         if let Some(audio) = &self.audio {
             audio.clear();
         }
+        // Clear rewind history
         self.rewind.clear();
         self.state.rewinding.store(false, Ordering::Release);
+        // Reset frame sequence (important for netplay)
+        self.state.frame_seq.store(0, Ordering::Release);
+        // Clear ROM hash
+        *self.state.rom_hash.lock().unwrap() = None;
+
+        // Clear framebuffer and present black screen
+        // Get palette first to avoid borrow conflict with framebuffer_mut()
+        let palette = *self.nes.ppu.palette().as_colors();
+        let fb = self.nes.ppu.framebuffer_mut();
+        fb.clear();
+        // Present the cleared buffer to trigger frame callback and display black
+        fb.present(&palette);
+
+        // Deactivate netplay to prevent lockstep issues on next ROM load
+        if let Some(np) = &self.netplay_input {
+            np.set_active(false);
+        }
+        self.netplay_active = false;
+
         let _ = reply.send(Ok(()));
     }
 
@@ -1364,6 +1616,13 @@ impl Runner {
     fn handle_load_state_from_memory(&mut self, bytes: Vec<u8>, reply: ControlReplySender) {
         match self.apply_compressed_snapshot(bytes) {
             Ok(_) => {
+                // Netplay uses a frame-relative timeline (starting at 0) mapped onto the network
+                // `start_frame`. If the runtime advanced a few frames between ROM load and sync,
+                // resetting here prevents 1–2 frame drift for late joiners.
+                if self.netplay_input.is_some() {
+                    self.state.frame_seq.store(0, Ordering::Release);
+                    self.next_frame_deadline = Instant::now();
+                }
                 let _ = reply.send(Ok(()));
             }
             Err(error) => {

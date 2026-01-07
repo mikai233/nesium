@@ -18,7 +18,7 @@ pub fn encode_udp<T: serde::Serialize>(
     }
 
     header.msg_id = msg_id as u8;
-    header.payload_len = payload_bytes.len() as u16;
+    header.payload_len = payload_bytes.len() as u32;
 
     let mut out = vec![0u8; HEADER_LEN + payload_bytes.len()];
     let mut hbuf = [0u8; HEADER_LEN];

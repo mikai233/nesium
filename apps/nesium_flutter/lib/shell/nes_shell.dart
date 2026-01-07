@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 import 'package:nesium_flutter/bridge/api/pause.dart' as nes_pause;
 import 'package:nesium_flutter/bridge/api/emulation.dart' as nes_emulation;
+import 'package:nesium_flutter/bridge/api/netplay.dart' as nes_netplay;
 
 import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
@@ -25,6 +27,7 @@ import '../features/settings/emulation_settings.dart';
 import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
 import '../features/about/about_page.dart';
+import '../features/netplay/netplay_screen.dart';
 import '../l10n/app_localizations.dart';
 import '../logging/app_logger.dart';
 import '../platform/desktop_window_manager.dart';
@@ -53,6 +56,8 @@ class _NesShellState extends ConsumerState<NesShell>
   final FocusNode _focusNode = FocusNode();
   bool _pausedByLifecycle = false;
   StreamSubscription<nes_events.RuntimeNotification>? _runtimeNotificationsSub;
+  StreamSubscription<nes_netplay.NetplayGameEvent>? _netplayEventsSub;
+  Future<void> _netplayEventChain = Future.value();
 
   bool get _isDesktop => isNativeDesktop;
 
@@ -69,6 +74,7 @@ class _NesShellState extends ConsumerState<NesShell>
         // Let UI report errors lazily when commands are used.
       }
       _startRuntimeEvents();
+      _startNetplayEvents();
       await ref.read(nesControllerProvider.notifier).initTexture();
       final turbo = ref.read(turboSettingsProvider);
       await nes_input
@@ -88,6 +94,7 @@ class _NesShellState extends ConsumerState<NesShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _runtimeNotificationsSub?.cancel();
+    _netplayEventsSub?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
@@ -126,6 +133,77 @@ class _NesShellState extends ConsumerState<NesShell>
           _showSnack('Audio init failed: $error');
           break;
       }
+    }, onError: (_) {});
+  }
+
+  void _startNetplayEvents() {
+    if (!mounted) return;
+    if (_netplayEventsSub != null) return;
+
+    _netplayEventsSub = nes_netplay.netplayGameEventStream().listen((event) {
+      // Serialize netplay event handling to preserve ordering.
+      // Freezed `when` callbacks are async but the stream listener does not await them,
+      // which can race `SyncState` vs `StartGame` and cause 1–2 frame drift.
+      _netplayEventChain = _netplayEventChain
+          .then((_) async {
+            if (!mounted) return;
+            await event.when(
+              loadRom: (data) async {
+                try {
+                  await nes_api.loadRomFromBytes(bytes: data);
+                  _pausedByLifecycle = true;
+                  // setPaused(true) might fail if emulation not started?
+                  // But we just loaded ROM, so it should be fine.
+                  await nes_pause.setPaused(paused: true);
+                  await nes_netplay.netplaySendRomLoaded();
+                  if (mounted) _showSnack('Netplay: ROM loaded');
+                } catch (e) {
+                  if (mounted) _showSnack('Netplay load failed: $e');
+                }
+              },
+              startGame: () async {
+                _pausedByLifecycle = false;
+                await nes_pause.setPaused(paused: false);
+                if (mounted) _showSnack('Netplay: Game Started');
+              },
+              pauseSync: (paused) async {
+                _pausedByLifecycle = paused;
+                await nes_pause.setPaused(paused: paused);
+                if (mounted)
+                  _showSnack('Netplay: ${paused ? "Paused" : "Resumed"}');
+              },
+              resetSync: (kind) async {
+                if (kind == 1) {
+                  await nes_api.powerResetConsole();
+                  if (mounted) _showSnack('Netplay: Power Reset');
+                } else {
+                  await nes_api.resetConsole();
+                  if (mounted) _showSnack('Netplay: Console Reset');
+                }
+              },
+              syncState: (frame, data) async {
+                await nes_emulation.loadStateFromMemory(data: data);
+                if (mounted) {
+                  _showSnack(
+                    'Netplay: State received (Frame $frame, ${data.length} bytes)',
+                  );
+                }
+              },
+              playerLeft: (playerIndex) async {
+                if (mounted) {
+                  _showSnack('Netplay: Player ${playerIndex + 1} left');
+                }
+              },
+            );
+          })
+          .catchError((Object e, StackTrace st) {
+            logWarning(
+              e,
+              stackTrace: st,
+              message: 'netplay event handling failed',
+              logger: 'nes_shell',
+            );
+          });
     }, onError: (_) {});
   }
 
@@ -199,18 +277,84 @@ class _NesShellState extends ConsumerState<NesShell>
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['nes'],
+      withData: true,
       withReadStream: false,
     );
-    final path = result?.files.single.path;
-    if (path == null || path.isEmpty) {
+    final file = result?.files.single;
+    final path = file?.path;
+    var bytes = file?.bytes;
+
+    if (path == null && bytes == null) {
       return;
     }
+
+    // Determine name from path if available, or just fallback
+    final name = path != null ? p.basenameWithoutExtension(path) : 'rom';
 
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
     await _runRustCommand(l10n.actionLoadRom, () async {
-      await nes_api.loadRom(path: path);
-      final name = p.basenameWithoutExtension(path);
+      final isNetplay = await nes_netplay.netplayIsConnected();
+
+      if (isNetplay && bytes != null) {
+        await nes_api.loadRom(
+          path: path ?? '',
+        ); // Use path if available for normal load
+
+        // Cache ROM bytes for late joiner sync
+        ref
+            .read(nesControllerProvider.notifier)
+            .updateRomBytes(Uint8List.fromList(bytes));
+
+        // Pause immediately to wait for sync
+        _pausedByLifecycle = true;
+        await nes_pause.setPaused(paused: true);
+
+        try {
+          // In netplay mode, any player (non-spectator) may broadcast the ROM.
+          // Spectators will be rejected and should wait for the server to push `LoadRom`.
+          await nes_netplay.netplaySendRom(data: bytes);
+        } catch (e) {
+          _pausedByLifecycle = false;
+          await nes_pause.setPaused(paused: false);
+          rethrow;
+        }
+
+        // Host already loaded the ROM locally; confirm immediately so the server can StartGame.
+        try {
+          await nes_netplay.netplaySendRomLoaded();
+        } catch (e) {
+          _pausedByLifecycle = false;
+          await nes_pause.setPaused(paused: false);
+          rethrow;
+        }
+        // Host waits for StartGame too.
+      } else if (isNetplay && bytes == null && path != null) {
+        // Fallback: read bytes from path if FilePicker didn't give them (shouldn't happen with withData: true)
+        // Use dart:io if necessary, but withData: true is standard.
+      } else {
+        await nes_api.loadRom(
+          path: path ?? '',
+        ); // Use path if available for normal load
+
+        // Cache ROM bytes for potential netplay late joiner sync
+        // If bytes not available from picker, try to read from file
+        if (bytes != null) {
+          ref
+              .read(nesControllerProvider.notifier)
+              .updateRomBytes(Uint8List.fromList(bytes));
+        } else if (path != null) {
+          // Read file bytes for caching (non-web platforms)
+          try {
+            final file = File(path);
+            final fileBytes = await file.readAsBytes();
+            ref.read(nesControllerProvider.notifier).updateRomBytes(fileBytes);
+          } catch (_) {
+            // Ignore read errors - just won't have cached bytes
+          }
+        }
+      }
+
       await ref.read(nesControllerProvider.notifier).refreshRomHash();
       ref
           .read(nesControllerProvider.notifier)
@@ -223,18 +367,36 @@ class _NesShellState extends ConsumerState<NesShell>
 
   Future<void> _resetConsole() async {
     final l10n = AppLocalizations.of(context)!;
-    await _runRustCommand(l10n.actionResetNes, nes_api.resetConsole);
+    await _runRustCommand(l10n.actionResetNes, () async {
+      final isNetplay = await nes_netplay.netplayIsConnected();
+      if (isNetplay) {
+        await nes_netplay.netplaySendReset(kind: 0);
+      }
+      await nes_api.resetConsole();
+    });
   }
 
   Future<void> _powerResetConsole() async {
     final l10n = AppLocalizations.of(context)!;
-    await _runRustCommand(l10n.actionPowerResetNes, nes_api.powerResetConsole);
+    await _runRustCommand(l10n.actionPowerResetNes, () async {
+      final isNetplay = await nes_netplay.netplayIsConnected();
+      if (isNetplay) {
+        await nes_netplay.netplaySendReset(kind: 1);
+      }
+      await nes_api.powerResetConsole();
+    });
   }
 
-  Future<void> _ejectConsole() async {
+  Future<void> _powerOffConsole() async {
+    if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
     await _runRustCommand(l10n.actionEjectNes, () async {
-      await nes_api.ejectConsole();
+      // Disconnect from netplay if connected
+      final isNetplay = await nes_netplay.netplayIsConnected();
+      if (isNetplay) {
+        await nes_netplay.netplayDisconnect();
+      }
+      await nes_api.powerOffConsole();
       await ref.read(nesControllerProvider.notifier).refreshRomHash();
     });
   }
@@ -461,6 +623,12 @@ class _NesShellState extends ConsumerState<NesShell>
     try {
       _pausedByLifecycle = false;
       await nes_pause.togglePause();
+      // Send pause sync to other players if connected
+      final isNetplay = await nes_netplay.netplayIsConnected();
+      if (isNetplay) {
+        final isPaused = await nes_pause.isPaused();
+        await nes_netplay.netplaySendPause(paused: isPaused);
+      }
       // Intentionally do not show a snackbar on success to avoid noisy UI.
       // Errors are still surfaced below.
     } catch (e) {
@@ -497,7 +665,7 @@ class _NesShellState extends ConsumerState<NesShell>
       loadTasMovie: _loadTasMovie,
       reset: _resetConsole,
       powerReset: _powerResetConsole,
-      eject: _ejectConsole,
+      powerOff: _powerOffConsole,
       togglePause: _togglePause,
       openSettings: _openSettings,
       openAbout: _openAbout,
@@ -507,6 +675,7 @@ class _NesShellState extends ConsumerState<NesShell>
       openTileViewer: _openTileViewer,
       openSpriteViewer: _openSpriteViewer,
       openPaletteViewer: _openPaletteViewer,
+      openNetplay: _openNetplay,
     );
   }
 
@@ -724,6 +893,23 @@ class _NesShellState extends ConsumerState<NesShell>
         autofocus: true,
         onKeyEvent: _handleKeyEvent,
         child: shell,
+      ),
+    );
+  }
+
+  Future<void> _openNetplay() async {
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ProviderScope(
+          overrides: [nesActionsProvider.overrideWithValue(_buildActions())],
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(AppLocalizations.of(context)!.menuNetplay),
+            ),
+            body: const NetplayScreen(),
+          ),
+        ),
       ),
     );
   }

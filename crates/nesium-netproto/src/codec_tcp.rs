@@ -18,18 +18,15 @@ pub fn encode_tcp_frame<T: serde::Serialize>(
     }
 
     header.msg_id = msg_id as u8;
-    header.payload_len = payload_bytes.len() as u16;
+    header.payload_len = payload_bytes.len() as u32;
 
     let frame_len = HEADER_LEN + payload_bytes.len();
     if frame_len > MAX_TCP_FRAME {
         return Err(ProtoError::FrameTooLarge(frame_len));
     }
-    if frame_len > u16::MAX as usize {
-        return Err(ProtoError::FrameTooLarge(frame_len));
-    }
 
     let mut out = Vec::with_capacity(TCP_LEN_PREFIX + frame_len);
-    out.extend_from_slice(&(frame_len as u16).to_le_bytes());
+    out.extend_from_slice(&(frame_len as u32).to_le_bytes());
 
     let mut hbuf = [0u8; HEADER_LEN];
     header.encode_into(&mut hbuf);
@@ -48,8 +45,8 @@ pub fn try_decode_tcp_frames<'a>(
         if in_buf.len().saturating_sub(offset) < TCP_LEN_PREFIX {
             break;
         }
-        let len_bytes = &in_buf[offset..offset + 2];
-        let frame_len = u16::from_le_bytes(len_bytes.try_into().unwrap()) as usize;
+        let len_bytes = &in_buf[offset..offset + 4];
+        let frame_len = u32::from_le_bytes(len_bytes.try_into().unwrap()) as usize;
 
         if frame_len < HEADER_LEN {
             return Err(ProtoError::LengthMismatch);
@@ -63,7 +60,7 @@ pub fn try_decode_tcp_frames<'a>(
             break;
         }
 
-        let frame = &in_buf[offset + 2..offset + total_needed];
+        let frame = &in_buf[offset + 4..offset + total_needed];
         let (h, payload) = Header::decode(frame)?;
         let msg = MsgId::from_repr(h.msg_id).ok_or(ProtoError::UnknownMsgId(h.msg_id))?;
 

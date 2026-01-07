@@ -300,8 +300,8 @@ impl Nes {
         self.reset(ResetKind::PowerOn);
     }
 
-    /// Ejects the currently inserted cartridge and resets the system.
-    pub fn eject_cartridge(&mut self) {
+    /// Powers off the console: removes cartridge and resets the system.
+    pub fn power_off(&mut self) {
         self.cartridge = None;
         // Treat cartridge removal as a full power cycle from the core's
         // perspective so all state, including RAM, returns to power-on.

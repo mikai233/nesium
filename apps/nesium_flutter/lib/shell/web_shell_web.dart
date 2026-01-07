@@ -793,10 +793,10 @@ class _WebShellState extends ConsumerState<WebShell> {
       loadTasMovie: _loadTasMovie,
       reset: () => _reset(powerOn: false),
       powerReset: () => _reset(powerOn: true),
-      eject: () async {
+      powerOff: () async {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Eject is not supported on Web')),
+          const SnackBar(content: Text('Power Off is not supported on Web')),
         );
       },
       togglePause: _togglePause,
@@ -1230,8 +1230,8 @@ class _WebShellState extends ConsumerState<WebShell> {
       case NesMenuItemId.powerReset:
         unawaited(actions.powerReset?.call());
         break;
-      case NesMenuItemId.eject:
-        unawaited(actions.eject?.call());
+      case NesMenuItemId.powerOff:
+        unawaited(actions.powerOff?.call());
         break;
       case NesMenuItemId.togglePause:
         unawaited(actions.togglePause?.call());
@@ -1260,6 +1260,7 @@ class _WebShellState extends ConsumerState<WebShell> {
       case NesMenuItemId.loadStateSlot:
       case NesMenuItemId.saveStateFile:
       case NesMenuItemId.loadStateFile:
+      case NesMenuItemId.netplay:
         break;
     }
   }

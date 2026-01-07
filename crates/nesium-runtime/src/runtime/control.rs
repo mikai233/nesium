@@ -26,8 +26,9 @@ pub(crate) type ControlReplySender = Sender<Result<(), RuntimeError>>;
 pub(crate) enum ControlMessage {
     Stop,
     LoadRom(PathBuf, ControlReplySender),
+    LoadRomFromMemory(Vec<u8>, ControlReplySender),
     Reset(ResetKind, ControlReplySender),
-    Eject(ControlReplySender),
+    PowerOff(ControlReplySender),
     SetAudioConfig(AudioBusConfig, ControlReplySender),
     SetFrameReadyCallback(Option<FrameReadyCallback>, *mut c_void, ControlReplySender),
     SetPaletteKind(PaletteKind, ControlReplySender),
@@ -69,6 +70,15 @@ pub(crate) enum ControlMessage {
     },
     /// Disable and remove the debugger.
     DisableDebugger(ControlReplySender),
+
+    // Netplay control
+    /// Enable netplay with the given input provider.
+    EnableNetplay {
+        input_provider: std::sync::Arc<dyn nesium_netplay::NetplayInputProvider>,
+        reply: ControlReplySender,
+    },
+    /// Disable netplay and return to local input.
+    DisableNetplay(ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

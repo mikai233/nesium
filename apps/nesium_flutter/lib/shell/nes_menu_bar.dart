@@ -166,8 +166,8 @@ class NesMenuBar extends StatelessWidget {
       case NesMenuItemId.powerReset:
         unawaited(actions.powerReset?.call());
         break;
-      case NesMenuItemId.eject:
-        unawaited(actions.eject?.call());
+      case NesMenuItemId.powerOff:
+        unawaited(actions.powerOff?.call());
         break;
       case NesMenuItemId.togglePause:
         unawaited(actions.togglePause?.call());
@@ -198,6 +198,9 @@ class NesMenuBar extends StatelessWidget {
         break;
       case NesMenuItemId.paletteViewer:
         unawaited(actions.openPaletteViewer?.call());
+        break;
+      case NesMenuItemId.netplay:
+        unawaited(actions.openNetplay?.call());
         break;
     }
   }
