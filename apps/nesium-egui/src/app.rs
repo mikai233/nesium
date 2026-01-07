@@ -361,8 +361,9 @@ impl NesiumApp {
         }
     }
 
-    fn eject(&mut self) {
-        let _ = self.runtime_handle.eject();
+    fn power_off(&mut self) {
+        let _ = self.runtime_handle.disable_netplay();
+        let _ = self.runtime_handle.power_off();
         self.rom_path = None;
         self.last_frame_seq = self.runtime_handle.frame_seq();
         self.last_pad_masks = [0u8; 4];

@@ -10,7 +10,7 @@ pub(super) struct AppCommand {
     pub load_rom: Option<PathBuf>,
     pub reset: bool,
     pub power_reset: bool,
-    pub eject: bool,
+    pub power_off: bool,
     pub toggle_pause: bool,
     pub quit: bool,
 }
@@ -125,7 +125,7 @@ impl NesiumApp {
                 )
                 .clicked()
             {
-                cmd.eject = true;
+                cmd.power_off = true;
                 ui.close();
             }
         });
@@ -245,8 +245,8 @@ impl NesiumApp {
         if cmd.power_reset {
             self.power_reset();
         }
-        if cmd.eject {
-            self.eject();
+        if cmd.power_off {
+            self.power_off();
         }
         if cmd.toggle_pause {
             self.paused = !self.paused;
