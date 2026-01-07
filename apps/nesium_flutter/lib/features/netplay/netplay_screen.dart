@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
 
 import '../../domain/nes_controller.dart';
 import '../../l10n/app_localizations.dart';
@@ -130,12 +131,12 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
         final state = status?.state ?? NetplayState.disconnected;
 
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildStatusCard(l10n, status),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               if (state == NetplayState.disconnected)
                 _buildConnectForm(l10n)
               else if (state == NetplayState.connected)
@@ -145,12 +146,11 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
               else if (state == NetplayState.connecting)
                 const Center(child: CircularProgressIndicator()),
               if (state != NetplayState.disconnected) ...[
-                const SizedBox(height: 16),
-                ElevatedButton(
+                const SizedBox(height: 24),
+                FilledButton.tonal(
                   onPressed: _disconnect,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade100,
-                    foregroundColor: Colors.red.shade900,
+                  style: FilledButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
                   ),
                   child: Text(l10n.netplayDisconnect),
                 ),
@@ -164,52 +164,64 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
 
   Widget _buildStatusCard(AppLocalizations l10n, NetplayStatus? status) {
     final state = status?.state ?? NetplayState.disconnected;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     Color statusColor;
     String statusText;
+    IconData statusIcon;
 
     switch (state) {
       case NetplayState.disconnected:
-        statusColor = Colors.grey;
+        statusColor = colorScheme.outline;
         statusText = l10n.netplayStatusDisconnected;
+        statusIcon = Icons.link_off_rounded;
         break;
       case NetplayState.connecting:
-        statusColor = Colors.orange;
+        statusColor = colorScheme.tertiary;
         statusText = l10n.netplayStatusConnecting;
+        statusIcon = Icons.sync_rounded;
         break;
       case NetplayState.connected:
-        statusColor = Colors.blue;
+        statusColor = colorScheme.primary;
         statusText = l10n.netplayStatusConnected;
+        statusIcon = Icons.hub_rounded;
         break;
       case NetplayState.inRoom:
-        statusColor = Colors.green;
+        statusColor = colorScheme.primary;
         statusText = l10n.netplayStatusInRoom;
+        statusIcon = Icons.videogame_asset_rounded;
         break;
     }
 
     return Card(
+      elevation: 0,
+      color: statusColor.withOpacity(0.1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: statusColor.withOpacity(0.2)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: statusColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 12),
+            Icon(statusIcon, color: statusColor),
+            const SizedBox(width: 16),
             Text(
               statusText,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: statusColor,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             if (status?.error != null) ...[
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   status!.error!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.error,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -229,15 +241,25 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
           decoration: InputDecoration(
             labelText: l10n.netplayServerAddress,
             hintText: '127.0.0.1:5233',
+            prefixIcon: const Icon(Icons.dns_rounded),
+            border: const OutlineInputBorder(),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         TextField(
           controller: _playerNameController,
-          decoration: InputDecoration(labelText: l10n.netplayPlayerName),
+          decoration: InputDecoration(
+            labelText: l10n.netplayPlayerName,
+            prefixIcon: const Icon(Icons.person_rounded),
+            border: const OutlineInputBorder(),
+          ),
         ),
-        const SizedBox(height: 16),
-        ElevatedButton(onPressed: _connect, child: Text(l10n.netplayConnect)),
+        const SizedBox(height: 24),
+        FilledButton.icon(
+          onPressed: _connect,
+          icon: const Icon(Icons.login_rounded),
+          label: Text(l10n.netplayConnect),
+        ),
       ],
     );
   }
@@ -246,76 +268,122 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ElevatedButton(
+        FilledButton.icon(
           onPressed: _createRoom,
-          child: Text(l10n.netplayCreateRoom),
+          icon: const Icon(Icons.add_circle_outline_rounded),
+          label: Text(l10n.netplayCreateRoom),
         ),
-        const SizedBox(height: 16),
-        const Divider(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            const Expanded(child: Divider()),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'OR',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+              ),
+            ),
+            const Expanded(child: Divider()),
+          ],
+        ),
+        const SizedBox(height: 24),
         TextField(
           controller: _roomCodeController,
           decoration: InputDecoration(
             labelText: l10n.netplayRoomCode,
-            hintText: '123456',
+            prefixIcon: const Icon(Icons.numbers_rounded),
+            border: const OutlineInputBorder(),
           ),
           keyboardType: TextInputType.number,
         ),
-        const SizedBox(height: 8),
-        ElevatedButton(onPressed: _joinRoom, child: Text(l10n.netplayJoinRoom)),
+        const SizedBox(height: 16),
+        FilledButton.tonalIcon(
+          onPressed: _joinRoom,
+          icon: const Icon(Icons.meeting_room_rounded),
+          label: Text(l10n.netplayJoinRoom),
+        ),
       ],
     );
   }
 
   Widget _buildInRoomInfo(AppLocalizations l10n, NetplayStatus status) {
     return Card(
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            _buildInfoRow(l10n.netplayRoomCode, status.roomId.toString()),
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Role', style: TextStyle(color: Colors.grey)),
-                DropdownButton<int>(
-                  value: status.playerIndex,
-                  underline: const SizedBox(),
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('Player 1')),
-                    DropdownMenuItem(value: 1, child: Text('Player 2')),
-                    DropdownMenuItem(value: 2, child: Text('Player 3')),
-                    DropdownMenuItem(value: 3, child: Text('Player 4')),
-                    DropdownMenuItem(
-                      value: spectatorPlayerIndex,
-                      child: Text('Spectator'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null && value != status.playerIndex) {
-                      _switchRole(value);
-                    }
-                  },
+            _buildInfoRow(
+              l10n.netplayRoomCode,
+              status.roomId.toString(),
+              icon: Icons.tag_rounded,
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(),
+            ),
+            AnimatedDropdownMenu<int>(
+              labelText: 'Role',
+              value: status.playerIndex,
+              entries: const [
+                DropdownMenuEntry(value: 0, label: 'Player 1'),
+                DropdownMenuEntry(value: 1, label: 'Player 2'),
+                DropdownMenuEntry(value: 2, label: 'Player 3'),
+                DropdownMenuEntry(value: 3, label: 'Player 4'),
+                DropdownMenuEntry(
+                  value: spectatorPlayerIndex,
+                  label: 'Spectator',
                 ),
               ],
+              onSelected: (value) => _switchRole(value),
             ),
-            const Divider(),
-            _buildInfoRow('Client ID', status.clientId.toString()),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(),
+            ),
+            _buildInfoRow(
+              'Client ID',
+              status.clientId.toString(),
+              icon: Icons.fingerprint_rounded,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildInfoRow(String label, String value, {IconData? icon}) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+          if (icon != null) ...[
+            Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 12),
+          ],
+          Text(
+            label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              fontFamily: 'RobotoMono',
+            ),
+          ),
         ],
       ),
     );
