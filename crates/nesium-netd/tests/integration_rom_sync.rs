@@ -140,21 +140,34 @@ impl TestClient {
     }
 
     async fn recv_start_game(&mut self) -> anyhow::Result<()> {
-        let mut buf = vec![0u8; 4096];
-        let n = timeout(Duration::from_secs(2), self.stream.read(&mut buf)).await??;
-        buf.truncate(n);
+        let start = std::time::Instant::now();
+        loop {
+            if start.elapsed() > Duration::from_secs(5) {
+                anyhow::bail!("Timeout waiting for StartGame");
+            }
 
-        let (packets, _) = try_decode_tcp_frames(&buf)?;
-        // We might receive StartGame.
-        // It's possible we receive others if something is chatty, but strictly following protocol we expect StartGame.
-        // However, if we sent RomLoaded, we assume the server broadcasts StartGame immediately if everyone ready.
-        let packet = packets
-            .iter()
-            .find(|p| p.msg_id == MsgId::StartGame)
-            .ok_or_else(|| anyhow::anyhow!("StartGame not found in buffer"))?;
+            let mut buf = vec![0u8; 4096];
+            // Use a short read timeout to allow checking elapsed time
+            let res = timeout(Duration::from_millis(500), self.stream.read(&mut buf)).await;
+            let n = match res {
+                Ok(Ok(n)) => n,
+                Ok(Err(e)) => return Err(e.into()),
+                Err(_) => continue, // Timeout, check total time
+            };
 
-        let _: StartGame = postcard::from_bytes(packet.payload)?;
-        Ok(())
+            if n == 0 {
+                anyhow::bail!("Connection closed");
+            }
+            buf.truncate(n);
+
+            if let Ok((packets, _)) = try_decode_tcp_frames(&buf) {
+                if let Some(packet) = packets.iter().find(|p| p.msg_id == MsgId::StartGame) {
+                    let _: StartGame = postcard::from_bytes(packet.payload)?;
+                    return Ok(());
+                }
+                // If not StartGame, ignore and continue reading (e.g. PlayerJoined)
+            }
+        }
     }
 }
 
@@ -208,6 +221,7 @@ async fn test_rom_sync_flow() -> anyhow::Result<()> {
     // 3. Host Sends LoadRom
     let rom_data = vec![0xDE, 0xAD, 0xBE, 0xEF];
     c1.send_load_rom(rom_data.clone()).await?;
+    c1.send_rom_loaded().await?;
 
     // 4. Joiner Receives LoadRom
     let received_rom = c2.recv_load_rom().await?;

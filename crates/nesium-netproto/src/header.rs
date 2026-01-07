@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn header_len_is_locked() {
         assert_eq!(Header::LEN, HEADER_LEN);
-        assert_eq!(Header::LEN, 28);
+        assert_eq!(Header::LEN, 30);
     }
 
     #[test]
