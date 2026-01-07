@@ -169,13 +169,16 @@ class _NesShellState extends ConsumerState<NesShell>
               pauseSync: (paused) async {
                 _pausedByLifecycle = paused;
                 await nes_pause.setPaused(paused: paused);
-                if (mounted)
+                if (mounted) {
                   _showSnack('Netplay: ${paused ? "Paused" : "Resumed"}');
+                }
               },
               resetSync: (kind) async {
                 if (kind == 1) {
                   await nes_api.powerResetConsole();
-                  if (mounted) _showSnack('Netplay: Power Reset');
+                  if (mounted) {
+                    _showSnack('Netplay: Power Reset');
+                  }
                 } else {
                   await nes_api.resetConsole();
                   if (mounted) _showSnack('Netplay: Console Reset');

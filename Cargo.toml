@@ -58,6 +58,7 @@ nesium-core = { path = "crates/nesium-core" }
 nesium-support = { path = "crates/nesium-support" }
 nesium-icon = { path = "crates/nesium-icon" }
 nesium-runtime = { path = "crates/nesium-runtime" }
+nesium-netd = { path = "crates/nesium-netd" }
 nesium-netplay = { path = "crates/nesium-netplay" }
 nesium-netproto = { path = "crates/nesium-netproto" }
 
