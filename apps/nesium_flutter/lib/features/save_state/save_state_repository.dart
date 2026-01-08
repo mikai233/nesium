@@ -58,24 +58,50 @@ class SaveStateRepository extends Notifier<Map<int, DateTime?>> {
     final romHash = ref.read(nesControllerProvider).romHash;
     if (romHash == null) return;
 
-    // Slots 11-20 are reserved for auto-save.
-    // Find the oldest slot among 11-20 or the first empty one.
-    int targetSlot = 11;
-    DateTime? oldestTime;
+    final storage = ref.read(appStorageProvider);
 
-    for (int i = 11; i <= 20; i++) {
-      final time = state[i];
-      if (time == null) {
-        targetSlot = i;
-        break;
-      }
-      if (oldestTime == null || time.isBefore(oldestTime)) {
-        oldestTime = time;
-        targetSlot = i;
+    // Slots 11-20 are reserved for auto-save.
+    // Rotate slots: shift all existing saves down by one (11->12, 12->13, ..., 19->20).
+    // Slot 20 is discarded, and slot 11 receives the new save.
+    // This ensures the newest save is always in slot 11.
+
+    // Shift existing slots from 19 down to 11 (move 19->20, 18->19, ..., 11->12)
+    for (int i = 19; i >= 11; i--) {
+      final srcDataKey = _dataKey(romHash, i);
+      final srcMetaKey = _metaKey(romHash, i);
+      final dstDataKey = _dataKey(romHash, i + 1);
+      final dstMetaKey = _metaKey(romHash, i + 1);
+
+      final srcData = storage.get(srcDataKey);
+      final srcMeta = storage.get(srcMetaKey);
+
+      if (srcData != null && srcMeta != null) {
+        // Move data from slot i to slot i+1
+        await storage.put(dstDataKey, srcData);
+        await storage.put(dstMetaKey, srcMeta);
+      } else {
+        // Clear destination slot if source is empty
+        await storage.delete(dstDataKey);
+        await storage.delete(dstMetaKey);
       }
     }
 
-    await saveState(targetSlot, data);
+    // Save new data to slot 11
+    await storage.put(_dataKey(romHash, 11), data);
+    final now = DateTime.now();
+    await storage.put(_metaKey(romHash, 11), now.millisecondsSinceEpoch);
+
+    // Rebuild state for slots 11-20
+    final newState = <int, DateTime?>{...state};
+    for (int i = 11; i <= 20; i++) {
+      final meta = storage.get(_metaKey(romHash, i));
+      if (meta is int) {
+        newState[i] = DateTime.fromMillisecondsSinceEpoch(meta);
+      } else {
+        newState[i] = null;
+      }
+    }
+    state = newState;
   }
 
   Future<Uint8List?> loadState(int index) async {
