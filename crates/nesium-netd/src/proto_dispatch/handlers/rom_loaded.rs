@@ -7,15 +7,17 @@ use tracing::{debug, info, warn};
 
 use crate::ConnCtx;
 use crate::net::outbound::send_msg_tcp;
+use crate::proto_dispatch::error::HandlerResult;
 use crate::room::broadcast::broadcast_inputs_required;
 use crate::room::state::RoomManager;
 
-pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
+pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) -> HandlerResult {
     let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id) else {
-        return;
+        // Not an error - just ignore if not in room
+        return Ok(());
     };
     let Some(room) = room_mgr.get_room_mut(room_id) else {
-        return;
+        return Ok(());
     };
 
     info!(
@@ -45,14 +47,14 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
                 warn!(error = %e, "Failed to broadcast StartGame");
             }
         }
-        return;
+        return Ok(());
     }
 
     // Late joiner: room already started, but this client just finished loading the ROM.
     // Send them the latest cached state + input history, then BeginCatchUp to activate lockstep.
     if was_started && !sender_was_loaded {
         let Some(outbound) = sender_outbound else {
-            return;
+            return Ok(());
         };
 
         if let Some((frame, state_data)) = room.cached_state.clone() {
@@ -112,4 +114,5 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
             );
         }
     }
+    Ok(())
 }

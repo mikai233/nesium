@@ -8,9 +8,11 @@ use nesium_netproto::{
 };
 use tracing::{error, info, warn};
 
+use crate::ConnCtx;
 use crate::net::inbound::ConnId;
+use crate::net::outbound::send_msg_tcp;
+use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 use crate::room::state::{Player, RoomManager, Spectator};
-use crate::{ConnCtx, net::outbound::send_msg_tcp};
 
 pub(crate) async fn handle(
     ctx: &mut ConnCtx,
@@ -18,12 +20,12 @@ pub(crate) async fn handle(
     peer: &SocketAddr,
     payload: &[u8],
     room_mgr: &mut RoomManager,
-) {
+) -> HandlerResult {
     let join: JoinRoom = match postcard::from_bytes(payload) {
         Ok(v) => v,
         Err(e) => {
             warn!(%peer, error = %e, "Bad JoinRoom message");
-            return;
+            return Err(HandlerError::bad_message());
         }
     };
 
@@ -32,7 +34,7 @@ pub(crate) async fn handle(
             client_id = ctx.assigned_client_id,
             "Client already in a room, ignoring join request"
         );
-        return;
+        return Err(HandlerError::already_in_room());
     }
 
     let room_id = if join.room_code == 0 {
@@ -48,7 +50,7 @@ pub(crate) async fn handle(
             Some(r) => r.id,
             None => {
                 warn!(room_code = join.room_code, "Room code not found");
-                return;
+                return Err(HandlerError::room_not_found());
             }
         }
     };
@@ -187,7 +189,7 @@ pub(crate) async fn handle(
 
     // Late joiners: if there's a cached ROM, send it immediately.
     let Some(room) = room_mgr.get_room_mut(room_id) else {
-        return;
+        return Ok(());
     };
 
     if let Some(rom_data) = room.rom_data.clone() {
@@ -203,4 +205,5 @@ pub(crate) async fn handle(
         ctx.server_seq = ctx.server_seq.wrapping_add(1);
         let _ = send_msg_tcp(&ctx.outbound, h, MsgId::LoadRom, &load_rom).await;
     }
+    Ok(())
 }

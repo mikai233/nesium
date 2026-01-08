@@ -43,12 +43,27 @@ pub struct NetplayPlayer {
 #[frb]
 #[derive(Debug, Clone)]
 pub enum NetplayGameEvent {
-    LoadRom { data: Vec<u8> },
+    LoadRom {
+        data: Vec<u8>,
+    },
     StartGame,
-    PauseSync { paused: bool },
-    ResetSync { kind: u8 },
-    SyncState { frame: u32, data: Vec<u8> },
-    PlayerLeft { player_index: u8 },
+    PauseSync {
+        paused: bool,
+    },
+    ResetSync {
+        kind: u8,
+    },
+    SyncState {
+        frame: u32,
+        data: Vec<u8>,
+    },
+    PlayerLeft {
+        player_index: u8,
+    },
+    /// Server error (e.g., room not found, permission denied)
+    Error {
+        error_code: u16,
+    },
 }
 
 #[frb(ignore)]
@@ -142,6 +157,9 @@ pub async fn netplay_connect(server_addr: String, player_name: String) -> Result
                     nesium_netplay::NetplayEvent::PlayerLeft { player_index } => {
                         NetplayGameEvent::PlayerLeft { player_index }
                     }
+                    nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
+                        error_code: code as u16,
+                    },
                 };
                 let _ = sink.add(frb_event);
             }

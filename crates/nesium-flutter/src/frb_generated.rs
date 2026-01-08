@@ -3131,6 +3131,12 @@ impl SseDecode for crate::api::netplay::NetplayGameEvent {
                     player_index: var_playerIndex,
                 };
             }
+            6 => {
+                let mut var_errorCode = <u16>::sse_decode(deserializer);
+                return crate::api::netplay::NetplayGameEvent::Error {
+                    error_code: var_errorCode,
+                };
+            }
             _ => {
                 unimplemented!("");
             }
@@ -3812,6 +3818,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::netplay::NetplayGameEvent {
             crate::api::netplay::NetplayGameEvent::PlayerLeft { player_index } => {
                 [5.into_dart(), player_index.into_into_dart().into_dart()].into_dart()
             }
+            crate::api::netplay::NetplayGameEvent::Error { error_code } => {
+                [6.into_dart(), error_code.into_into_dart().into_dart()].into_dart()
+            }
             _ => {
                 unimplemented!("");
             }
@@ -4398,6 +4407,10 @@ impl SseEncode for crate::api::netplay::NetplayGameEvent {
             crate::api::netplay::NetplayGameEvent::PlayerLeft { player_index } => {
                 <i32>::sse_encode(5, serializer);
                 <u8>::sse_encode(player_index, serializer);
+            }
+            crate::api::netplay::NetplayGameEvent::Error { error_code } => {
+                <i32>::sse_encode(6, serializer);
+                <u16>::sse_encode(error_code, serializer);
             }
             _ => {
                 unimplemented!("");

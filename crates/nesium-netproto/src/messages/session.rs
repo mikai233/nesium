@@ -46,10 +46,34 @@ pub struct Leave {
     pub reason_code: u8,
 }
 
+/// Server error codes sent to clients.
+#[repr(u16)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ErrorCode {
+    /// Unspecified error
+    Unknown = 0,
+    /// Message parsing/decoding failed
+    BadMessage = 1,
+    /// Room with given code does not exist
+    RoomNotFound = 2,
+    /// Room is at maximum player capacity
+    RoomFull = 3,
+    /// Client is already in a room
+    AlreadyInRoom = 4,
+    /// Client is not in any room
+    NotInRoom = 5,
+    /// Operation requires different permissions (e.g., host-only)
+    PermissionDenied = 6,
+    /// Cannot perform action while game is running
+    GameAlreadyStarted = 7,
+    /// Invalid game or protocol state for this operation
+    InvalidState = 8,
+}
+
+/// Server sends an error response to the client.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ErrorMsg {
-    pub code: u16,
-    pub message: u16,
+    pub code: ErrorCode,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

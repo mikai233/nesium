@@ -8,14 +8,15 @@ use nesium_netproto::{
 };
 use tracing::{error, info, warn};
 
+use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 use crate::{ConnCtx, NEXT_CLIENT_ID, NEXT_SERVER_NONCE, net::outbound::send_msg_tcp};
 
-pub(crate) async fn handle(ctx: &mut ConnCtx, peer: &SocketAddr, payload: &[u8]) {
+pub(crate) async fn handle(ctx: &mut ConnCtx, peer: &SocketAddr, payload: &[u8]) -> HandlerResult {
     let hello: Hello = match postcard::from_bytes(payload) {
         Ok(v) => v,
         Err(e) => {
             warn!(%peer, error = %e, "Bad Hello message");
-            return;
+            return Err(HandlerError::bad_message());
         }
     };
 
@@ -53,4 +54,5 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, peer: &SocketAddr, payload: &[u8])
             error!(%peer, error = %e, "Failed to send Welcome");
         }
     }
+    Ok(())
 }

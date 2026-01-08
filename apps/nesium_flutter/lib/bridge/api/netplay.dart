@@ -95,6 +95,10 @@ sealed class NetplayGameEvent with _$NetplayGameEvent {
   }) = NetplayGameEvent_SyncState;
   const factory NetplayGameEvent.playerLeft({required int playerIndex}) =
       NetplayGameEvent_PlayerLeft;
+
+  /// Server error (e.g., room not found, permission denied)
+  const factory NetplayGameEvent.error({required int errorCode}) =
+      NetplayGameEvent_Error;
 }
 
 class NetplayPlayer {

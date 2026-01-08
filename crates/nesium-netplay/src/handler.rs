@@ -14,9 +14,9 @@ use nesium_netproto::{
     messages::{
         input::{InputBatch, RelayInputs},
         session::{
-            BeginCatchUp, Hello, JoinAck, JoinRoom, LoadRom, PauseGame, PauseSync, ProvideState,
-            RequestState, ResetGame, ResetSync, RomLoaded, StartGame, SyncState, TransportKind,
-            Welcome,
+            BeginCatchUp, ErrorCode, ErrorMsg, Hello, JoinAck, JoinRoom, LoadRom, PauseGame,
+            PauseSync, ProvideState, RequestState, ResetGame, ResetSync, RomLoaded, StartGame,
+            SyncState, TransportKind, Welcome,
         },
         sync::{Ping, Pong},
     },
@@ -57,6 +57,10 @@ pub enum NetplayEvent {
     /// A player has left the room.
     PlayerLeft {
         player_index: u8,
+    },
+    /// Server sent an error.
+    Error {
+        code: ErrorCode,
     },
 }
 
@@ -263,7 +267,7 @@ impl SessionHandler {
             MsgId::ResetSync => self.handle_reset_sync(&packet).await?,
             MsgId::SyncState => self.handle_sync_state(&packet).await?,
             MsgId::PlayerLeft => self.handle_player_left(&packet).await?,
-            MsgId::Error => self.handle_error(&packet)?,
+            MsgId::Error => self.handle_error(&packet).await?,
             msg => {
                 debug!("Ignoring unhandled message type: {:?}", msg);
             }
@@ -525,21 +529,23 @@ impl SessionHandler {
     }
 
     /// Handle Error message from server.
-    fn handle_error(&mut self, packet: &PacketOwned) -> Result<(), NetplayError> {
-        // Server-side errors are currently encoded as ErrorMsg.
-        match postcard::from_bytes::<nesium_netproto::messages::session::ErrorMsg>(&packet.payload)
-        {
-            Ok(msg) => {
-                warn!(
-                    code = msg.code,
-                    message = msg.message,
-                    "Received error from server"
-                );
+    async fn handle_error(&mut self, packet: &PacketOwned) -> Result<(), NetplayError> {
+        let msg: ErrorMsg = match postcard::from_bytes(&packet.payload) {
+            Ok(m) => m,
+            Err(e) => {
+                warn!("Failed to decode ErrorMsg: {:?}", e);
+                return Ok(());
             }
-            Err(_) => {
-                warn!("Received error from server: {:?}", packet.payload);
-            }
-        }
+        };
+
+        warn!(code = ?msg.code, "Received error from server");
+
+        // Notify UI layer
+        let _ = self
+            .game_event_tx
+            .send(NetplayEvent::Error { code: msg.code })
+            .await;
+
         Ok(())
     }
 

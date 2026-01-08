@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use nesium_netproto::{
     header::Header,
-    messages::session::{ErrorMsg, RoleChanged, SwitchRole},
+    messages::session::{RoleChanged, SwitchRole},
     msg_id::MsgId,
 };
 use tracing::{info, warn};
@@ -10,6 +10,7 @@ use tracing::{info, warn};
 use crate::ConnCtx;
 use crate::net::inbound::ConnId;
 use crate::net::outbound::send_msg_tcp;
+use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 use crate::room::state::RoomManager;
 
 pub(crate) async fn handle(
@@ -18,20 +19,21 @@ pub(crate) async fn handle(
     peer: &SocketAddr,
     payload: &[u8],
     room_mgr: &mut RoomManager,
-) {
+) -> HandlerResult {
     let msg: SwitchRole = match postcard::from_bytes(payload) {
         Ok(v) => v,
         Err(e) => {
             warn!(%peer, error = %e, "Bad SwitchRole message");
-            return;
+            return Err(HandlerError::bad_message());
         }
     };
 
     let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id) else {
-        return;
+        warn!(%peer, "SwitchRole: client not in a room");
+        return Err(HandlerError::not_in_room());
     };
     let Some(room) = room_mgr.get_room_mut(room_id) else {
-        return;
+        return Err(HandlerError::not_in_room());
     };
 
     // Role switching during an active game can deadlock lockstep:
@@ -39,17 +41,7 @@ pub(crate) async fn handle(
     // but the switching client may still be catching up.
     if room.started {
         warn!(%peer, room_id, "Rejecting SwitchRole while game is running");
-        let msg = ErrorMsg {
-            code: 1,
-            message: 1,
-        };
-        let mut h = Header::new(MsgId::Error as u8);
-        h.client_id = 0;
-        h.room_id = room_id;
-        h.seq = ctx.server_seq;
-        ctx.server_seq = ctx.server_seq.wrapping_add(1);
-        let _ = send_msg_tcp(&ctx.outbound, h, MsgId::Error, &msg).await;
-        return;
+        return Err(HandlerError::game_already_started());
     }
 
     match room.switch_player_role(ctx.assigned_client_id, msg.new_role) {
@@ -77,6 +69,8 @@ pub(crate) async fn handle(
         }
         Err(e) => {
             warn!(%peer, error = %e, "Failed to switch role");
+            return Err(HandlerError::invalid_state());
         }
     }
+    Ok(())
 }

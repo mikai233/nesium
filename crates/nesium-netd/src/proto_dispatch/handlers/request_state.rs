@@ -3,14 +3,15 @@ use tracing::{debug, info, warn};
 
 use crate::ConnCtx;
 use crate::net::outbound::send_msg_tcp;
+use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 use crate::room::state::RoomManager;
 
-pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
+pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) -> HandlerResult {
     let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id) else {
-        return;
+        return Err(HandlerError::not_in_room());
     };
     let Some(room) = room_mgr.get_room_mut(room_id) else {
-        return;
+        return Err(HandlerError::not_in_room());
     };
 
     if let Some((frame, state_data)) = room.cached_state.clone() {
@@ -40,4 +41,5 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
             room_id, "No cached state available"
         );
     }
+    Ok(())
 }

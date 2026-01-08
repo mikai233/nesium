@@ -4,6 +4,7 @@ use nesium_netproto::messages::input::InputBatch;
 use tracing::warn;
 
 use crate::ConnCtx;
+use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 use crate::room::broadcast::{broadcast_inputs_best_effort, broadcast_inputs_required};
 use crate::room::state::RoomManager;
 
@@ -12,21 +13,21 @@ pub(crate) async fn handle(
     peer: &SocketAddr,
     payload: &[u8],
     room_mgr: &mut RoomManager,
-) {
+) -> HandlerResult {
     let batch: InputBatch = match postcard::from_bytes(payload) {
         Ok(v) => v,
         Err(e) => {
             warn!(%peer, error = %e, "Bad InputBatch message");
-            return;
+            return Err(HandlerError::bad_message());
         }
     };
 
     let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id) else {
-        return;
+        return Err(HandlerError::not_in_room());
     };
 
     let Some(room) = room_mgr.get_room_mut(room_id) else {
-        return;
+        return Err(HandlerError::not_in_room());
     };
 
     let player_index = room
@@ -36,7 +37,8 @@ pub(crate) async fn handle(
         .map(|p| p.player_index);
 
     let Some(player_index) = player_index else {
-        return;
+        // Client is not a player (spectator?), cannot send inputs
+        return Err(HandlerError::permission_denied());
     };
 
     room.record_inputs(player_index, batch.start_frame, &batch.buttons);
@@ -64,4 +66,5 @@ pub(crate) async fn handle(
         &mut server_seq,
     );
     ctx.server_seq = server_seq;
+    Ok(())
 }

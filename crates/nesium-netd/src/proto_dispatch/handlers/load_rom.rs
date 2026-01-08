@@ -5,6 +5,7 @@ use tracing::{info, warn};
 
 use crate::ConnCtx;
 use crate::net::outbound::send_msg_tcp;
+use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 use crate::room::state::RoomManager;
 
 pub(crate) async fn handle(
@@ -12,20 +13,21 @@ pub(crate) async fn handle(
     peer: &SocketAddr,
     payload: &[u8],
     room_mgr: &mut RoomManager,
-) {
+) -> HandlerResult {
     let msg: LoadRom = match postcard::from_bytes(payload) {
         Ok(v) => v,
         Err(e) => {
             warn!(%peer, error = %e, "Bad LoadRom message");
-            return;
+            return Err(HandlerError::bad_message());
         }
     };
 
     let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id) else {
-        return;
+        warn!(%peer, "LoadRom: client not in a room");
+        return Err(HandlerError::not_in_room());
     };
     let Some(room) = room_mgr.get_room_mut(room_id) else {
-        return;
+        return Err(HandlerError::not_in_room());
     };
 
     match room.handle_load_rom(ctx.assigned_client_id) {
@@ -48,9 +50,11 @@ pub(crate) async fn handle(
                     warn!(error = %e, "Failed to forward LoadRom");
                 }
             }
+            Ok(())
         }
         Err(e) => {
             warn!(%peer, error = %e, "LoadRom rejected");
+            Err(HandlerError::permission_denied())
         }
     }
 }

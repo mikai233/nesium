@@ -2843,6 +2843,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         );
       case 5:
         return NetplayGameEvent_PlayerLeft(playerIndex: dco_decode_u_8(raw[1]));
+      case 6:
+        return NetplayGameEvent_Error(errorCode: dco_decode_u_16(raw[1]));
       default:
         throw Exception("unreachable");
     }
@@ -3305,6 +3307,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 5:
         var var_playerIndex = sse_decode_u_8(deserializer);
         return NetplayGameEvent_PlayerLeft(playerIndex: var_playerIndex);
+      case 6:
+        var var_errorCode = sse_decode_u_16(deserializer);
+        return NetplayGameEvent_Error(errorCode: var_errorCode);
       default:
         throw UnimplementedError('');
     }
@@ -3876,6 +3881,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case NetplayGameEvent_PlayerLeft(playerIndex: final playerIndex):
         sse_encode_i_32(5, serializer);
         sse_encode_u_8(playerIndex, serializer);
+      case NetplayGameEvent_Error(errorCode: final errorCode):
+        sse_encode_i_32(6, serializer);
+        sse_encode_u_16(errorCode, serializer);
     }
   }
 

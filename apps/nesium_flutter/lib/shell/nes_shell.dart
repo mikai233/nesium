@@ -197,6 +197,12 @@ class _NesShellState extends ConsumerState<NesShell>
                   _showSnack('Netplay: Player ${playerIndex + 1} left');
                 }
               },
+              error: (errorCode) async {
+                if (mounted) {
+                  final msg = _netplayErrorMessage(errorCode);
+                  _showSnack('Netplay error: $msg');
+                }
+              },
             );
           })
           .catchError((Object e, StackTrace st) {
@@ -261,6 +267,33 @@ class _NesShellState extends ConsumerState<NesShell>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Translate netplay error code to user-friendly message.
+  String _netplayErrorMessage(int errorCode) {
+    // Error codes from ErrorCode enum in nesium-netproto/src/messages/session.rs
+    switch (errorCode) {
+      case 0:
+        return 'Unknown error';
+      case 1:
+        return 'Invalid message';
+      case 2:
+        return 'Room not found';
+      case 3:
+        return 'Room is full';
+      case 4:
+        return 'Already in a room';
+      case 5:
+        return 'Not in a room';
+      case 6:
+        return 'Permission denied';
+      case 7:
+        return 'Game already started';
+      case 8:
+        return 'Invalid state';
+      default:
+        return 'Error code $errorCode';
+    }
   }
 
   Future<void> _runRustCommand(
