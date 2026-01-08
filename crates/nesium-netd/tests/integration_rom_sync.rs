@@ -88,9 +88,16 @@ impl TestClient {
         buf.truncate(n);
 
         let (packets, _) = try_decode_tcp_frames(&buf)?;
-        assert_eq!(packets.len(), 1, "Expected 1 JoinAck packet");
-        let packet = &packets[0];
-        assert_eq!(packet.msg_id, MsgId::JoinAck);
+        // Find the JoinAck packet (may be bundled with PlayerJoined notifications)
+        let packet = packets
+            .iter()
+            .find(|p| p.msg_id == MsgId::JoinAck)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Expected JoinAck packet, got {:?}",
+                    packets.iter().map(|p| p.msg_id).collect::<Vec<_>>()
+                )
+            })?;
 
         let ack: JoinAck = postcard::from_bytes(packet.payload)?;
         if ack.ok {
