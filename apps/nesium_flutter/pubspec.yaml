@@ -32,7 +32,7 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  intl: ^0.20.0
+  intl: ^0.20.2
   flutter_riverpod: ^3.1.0
   desktop_multi_window: ^0.3.0
   window_manager: 0.5.1
@@ -45,7 +45,7 @@ dependencies:
   path: ^1.9.1
   skeletonizer: ^2.1.2
   animations: ^2.1.1
-  freezed_annotation: ^2.4.4
+  freezed_annotation: ^3.1.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -65,8 +65,8 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4
-  build_runner: ^2.4.9
-  freezed: ^2.5.7
+  build_runner: ^2.10.4
+  freezed: ^3.2.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
