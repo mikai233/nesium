@@ -1,11 +1,16 @@
 use crate::{
-    constants::{HEADER_LEN, MAX_TCP_FRAME, TCP_LEN_PREFIX},
+    constants::{HEADER_LEN, TCP_LEN_PREFIX},
     error::ProtoError,
     header::Header,
+    limits::{MAX_TCP_FRAME, max_payload_for},
     msg_id::MsgId,
     packet::PacketView,
 };
 
+/// Encode a TCP frame with explicit max payload size.
+///
+/// For most use cases, prefer [`encode_tcp_frame_auto`] which automatically
+/// selects the appropriate limit based on message type.
 pub fn encode_tcp_frame<T: serde::Serialize>(
     mut header: Header,
     msg_id: MsgId,
@@ -33,6 +38,19 @@ pub fn encode_tcp_frame<T: serde::Serialize>(
     out.extend_from_slice(&hbuf);
     out.extend_from_slice(&payload_bytes);
     Ok(out)
+}
+
+/// Encode a TCP frame with automatic payload limit selection.
+///
+/// The limit is chosen based on the message type:
+/// - Data messages (ROM, snapshots, etc.): up to 2 MB
+/// - Control messages (handshake, inputs, etc.): up to 4 KB
+pub fn encode_tcp_frame_auto<T: serde::Serialize>(
+    header: Header,
+    msg_id: MsgId,
+    payload: &T,
+) -> Result<Vec<u8>, ProtoError> {
+    encode_tcp_frame(header, msg_id, payload, max_payload_for(msg_id))
 }
 
 pub fn try_decode_tcp_frames<'a>(

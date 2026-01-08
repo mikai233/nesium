@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use nesium_netproto::limits::TCP_RX_BUFFER_SIZE;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
@@ -58,14 +59,12 @@ pub async fn handle_tcp_connection(
     // Framer keeps bytes across reads.
     let mut framer = TcpFramer::new(8 * 1024);
 
-    // Hard cap to avoid unbounded buffering.
-    const MAX_RX_BUFFER: usize = 256 * 1024;
-
     let mut disconnect_reason = "eof".to_string();
 
     loop {
-        if framer.buf_mut().len() > MAX_RX_BUFFER {
-            disconnect_reason = format!("rx buffer exceeded limit ({} bytes)", MAX_RX_BUFFER);
+        // Hard cap to avoid unbounded buffering (derived from limits module).
+        if framer.buf_mut().len() > TCP_RX_BUFFER_SIZE {
+            disconnect_reason = format!("rx buffer exceeded limit ({} bytes)", TCP_RX_BUFFER_SIZE);
             break;
         }
 

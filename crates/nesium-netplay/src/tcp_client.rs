@@ -9,8 +9,7 @@ use std::net::SocketAddr;
 
 use bytes::{Buf, BytesMut};
 use nesium_netproto::{
-    codec_tcp::{encode_tcp_frame, try_decode_tcp_frames},
-    constants::MAX_TCP_FRAME,
+    codec_tcp::{encode_tcp_frame_auto, try_decode_tcp_frames},
     header::Header,
     msg_id::MsgId,
     packet::PacketView,
@@ -72,13 +71,15 @@ pub struct TcpClientHandle {
 
 impl TcpClientHandle {
     /// Send a message to the server.
+    ///
+    /// The payload size limit is automatically selected based on the message type.
     pub async fn send_message<T: serde::Serialize>(
         &self,
         header: Header,
         msg_id: MsgId,
         payload: &T,
     ) -> Result<(), NetplayError> {
-        let bytes = encode_tcp_frame(header, msg_id, payload, MAX_TCP_FRAME)?;
+        let bytes = encode_tcp_frame_auto(header, msg_id, payload)?;
         self.cmd_tx
             .send(TcpClientCommand::SendRaw(bytes::Bytes::from(bytes)))
             .await

@@ -5,8 +5,8 @@ use nesium_netproto::{
 };
 use tracing::{info, warn};
 
-use crate::ConnCtx;
 use crate::room::state::RoomManager;
+use crate::{ConnCtx, net::outbound::send_msg_tcp};
 
 pub(crate) async fn handle(ctx: &mut ConnCtx, payload: &[u8], room_mgr: &mut RoomManager) {
     let msg: PauseGame = match postcard::from_bytes(payload) {
@@ -40,10 +40,7 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, payload: &[u8], room_mgr: &mut Roo
     h.seq = 0;
 
     for recipient in &recipients {
-        if let Err(e) =
-            crate::net::outbound::send_msg_tcp(recipient, h, MsgId::PauseSync, &sync_msg, 4096)
-                .await
-        {
+        if let Err(e) = send_msg_tcp(recipient, h, MsgId::PauseSync, &sync_msg).await {
             warn!(error = %e, "Failed to broadcast PauseSync");
         }
     }

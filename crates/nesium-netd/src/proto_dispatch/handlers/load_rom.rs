@@ -1,11 +1,10 @@
 use std::net::SocketAddr;
 
-use nesium_netproto::{
-    constants::MAX_TCP_FRAME, header::Header, messages::session::LoadRom, msg_id::MsgId,
-};
+use nesium_netproto::{header::Header, messages::session::LoadRom, msg_id::MsgId};
 use tracing::{info, warn};
 
 use crate::ConnCtx;
+use crate::net::outbound::send_msg_tcp;
 use crate::room::state::RoomManager;
 
 pub(crate) async fn handle(
@@ -45,15 +44,7 @@ pub(crate) async fn handle(
             h.seq = 0;
 
             for recipient in &recipients {
-                if let Err(e) = crate::net::outbound::send_msg_tcp(
-                    recipient,
-                    h,
-                    MsgId::LoadRom,
-                    &msg,
-                    MAX_TCP_FRAME,
-                )
-                .await
-                {
+                if let Err(e) = send_msg_tcp(recipient, h, MsgId::LoadRom, &msg).await {
                     warn!(error = %e, "Failed to forward LoadRom");
                 }
             }

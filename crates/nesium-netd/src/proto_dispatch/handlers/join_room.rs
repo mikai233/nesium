@@ -1,16 +1,16 @@
 use std::net::SocketAddr;
 
 use nesium_netproto::{
-    constants::{MAX_TCP_FRAME, SPECTATOR_PLAYER_INDEX},
+    constants::SPECTATOR_PLAYER_INDEX,
     header::Header,
     messages::session::{JoinAck, JoinRoom, LoadRom, PlayerJoined},
     msg_id::MsgId,
 };
 use tracing::{error, info, warn};
 
-use crate::ConnCtx;
 use crate::net::inbound::ConnId;
 use crate::room::state::{Player, RoomManager, Spectator};
+use crate::{ConnCtx, net::outbound::send_msg_tcp};
 
 pub(crate) async fn handle(
     ctx: &mut ConnCtx,
@@ -117,9 +117,7 @@ pub(crate) async fn handle(
     h.seq = ctx.server_seq;
     ctx.server_seq = ctx.server_seq.wrapping_add(1);
 
-    if let Err(e) =
-        crate::net::outbound::send_msg_tcp(&ctx.outbound, h, MsgId::JoinAck, &ack, 4096).await
-    {
+    if let Err(e) = send_msg_tcp(&ctx.outbound, h, MsgId::JoinAck, &ack).await {
         error!(%peer, error = %e, "Failed to send JoinAck");
     }
 
@@ -146,14 +144,7 @@ pub(crate) async fn handle(
             h.seq = 0;
 
             for recipient in &existing_outbounds {
-                let _ = crate::net::outbound::send_msg_tcp(
-                    recipient,
-                    h,
-                    MsgId::PlayerJoined,
-                    &joined_msg,
-                    4096,
-                )
-                .await;
+                let _ = send_msg_tcp(recipient, h, MsgId::PlayerJoined, &joined_msg).await;
             }
             info!(
                 client_id = ctx.assigned_client_id,
@@ -190,14 +181,7 @@ pub(crate) async fn handle(
             h.room_id = room_id;
             h.seq = 0;
 
-            let _ = crate::net::outbound::send_msg_tcp(
-                &ctx.outbound,
-                h,
-                MsgId::PlayerJoined,
-                &joined_msg,
-                4096,
-            )
-            .await;
+            let _ = send_msg_tcp(&ctx.outbound, h, MsgId::PlayerJoined, &joined_msg).await;
         }
     }
 
@@ -217,13 +201,6 @@ pub(crate) async fn handle(
         h.room_id = room_id;
         h.seq = ctx.server_seq;
         ctx.server_seq = ctx.server_seq.wrapping_add(1);
-        let _ = crate::net::outbound::send_msg_tcp(
-            &ctx.outbound,
-            h,
-            MsgId::LoadRom,
-            &load_rom,
-            MAX_TCP_FRAME,
-        )
-        .await;
+        let _ = send_msg_tcp(&ctx.outbound, h, MsgId::LoadRom, &load_rom).await;
     }
 }

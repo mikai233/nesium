@@ -41,7 +41,7 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, peer: &SocketAddr, payload: &[u8])
     h.seq = ctx.server_seq;
     ctx.server_seq = ctx.server_seq.wrapping_add(1);
 
-    match send_msg_tcp(&ctx.outbound, h, MsgId::Welcome, &welcome, 4096).await {
+    match send_msg_tcp(&ctx.outbound, h, MsgId::Welcome, &welcome).await {
         Ok(()) => {
             info!(
                 client_id = ctx.assigned_client_id,

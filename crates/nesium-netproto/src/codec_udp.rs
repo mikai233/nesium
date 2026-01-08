@@ -1,9 +1,6 @@
 use crate::{
-    constants::{HEADER_LEN, MAX_UDP_PAYLOAD},
-    error::ProtoError,
-    header::Header,
-    msg_id::MsgId,
-    packet::PacketView,
+    constants::HEADER_LEN, error::ProtoError, header::Header, limits::MAX_UDP_PAYLOAD,
+    msg_id::MsgId, packet::PacketView,
 };
 
 pub fn encode_udp<T: serde::Serialize>(

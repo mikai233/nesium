@@ -1,3 +1,7 @@
+//! Protocol constants for nesium-netproto.
+//!
+//! For message size limits, see the [`limits`](crate::limits) module.
+
 /// Magic bytes at the beginning of every packet.
 /// Used to quickly reject unrelated or corrupted data.
 pub const MAGIC: [u8; 2] = *b"NS";
@@ -9,20 +13,6 @@ pub const VERSION: u8 = 1;
 /// Fixed header length in bytes (wire format).
 /// Changed from 28 to 30 to accommodate u32 payload_len for large messages.
 pub const HEADER_LEN: usize = 30;
-
-/// Maximum payload size allowed for UDP packets (in bytes).
-/// Keep this below typical path MTU to reduce fragmentation risk.
-pub const MAX_UDP_PAYLOAD: usize = 1200;
-
-/// Maximum size of a single framed TCP packet (header + payload), in bytes.
-/// This limit is enforced to avoid unbounded allocations.
-/// Set to 2MB to support large NES ROM files.
-pub const MAX_TCP_FRAME: usize = 2 * 1024 * 1024;
-
-/// Maximum size for \"control-plane\" TCP packets (header + payload), in bytes.
-/// Intended for small handshake/control messages; larger transfers should use
-/// dedicated message types and/or chunking.
-pub const MAX_TCP_CONTROL_FRAME: usize = 4096;
 
 /// TCP framing prefix length in bytes.
 ///

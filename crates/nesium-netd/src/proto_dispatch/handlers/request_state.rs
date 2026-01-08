@@ -1,9 +1,8 @@
-use nesium_netproto::{
-    constants::MAX_TCP_FRAME, header::Header, messages::session::SyncState, msg_id::MsgId,
-};
+use nesium_netproto::{header::Header, messages::session::SyncState, msg_id::MsgId};
 use tracing::{debug, info, warn};
 
 use crate::ConnCtx;
+use crate::net::outbound::send_msg_tcp;
 use crate::room::state::RoomManager;
 
 pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
@@ -32,15 +31,7 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
         h.room_id = room_id;
         h.seq = 0;
 
-        if let Err(e) = crate::net::outbound::send_msg_tcp(
-            &ctx.outbound,
-            h,
-            MsgId::SyncState,
-            &sync_msg,
-            MAX_TCP_FRAME,
-        )
-        .await
-        {
+        if let Err(e) = send_msg_tcp(&ctx.outbound, h, MsgId::SyncState, &sync_msg).await {
             warn!(error = %e, "Failed to send SyncState");
         }
     } else {

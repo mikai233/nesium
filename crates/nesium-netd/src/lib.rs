@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, info};
 
 use crate::net::inbound::{ConnId, InboundEvent};
-use crate::net::outbound::OutboundTx;
+use crate::net::outbound::{OutboundTx, send_msg_tcp};
 use crate::proto_dispatch::handlers::dispatch_packet;
 use crate::room::state::RoomManager;
 
@@ -122,14 +122,7 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
                             h.seq = 0;
 
                             for recipient in &recipients {
-                                let _ = crate::net::outbound::send_msg_tcp(
-                                    recipient,
-                                    h,
-                                    MsgId::PlayerLeft,
-                                    &msg,
-                                    4096,
-                                )
-                                .await;
+                                let _ = send_msg_tcp(recipient, h, MsgId::PlayerLeft, &msg).await;
                             }
                         }
 

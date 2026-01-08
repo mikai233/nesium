@@ -1,5 +1,4 @@
 use nesium_netproto::{
-    constants::MAX_TCP_FRAME,
     header::Header,
     messages::session::{BeginCatchUp, StartGame, SyncState},
     msg_id::MsgId,
@@ -7,6 +6,7 @@ use nesium_netproto::{
 use tracing::{debug, info, warn};
 
 use crate::ConnCtx;
+use crate::net::outbound::send_msg_tcp;
 use crate::room::broadcast::broadcast_inputs_required;
 use crate::room::state::RoomManager;
 
@@ -41,9 +41,7 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
         h.seq = 0;
 
         for recipient in &start_recipients {
-            if let Err(e) =
-                crate::net::outbound::send_msg_tcp(recipient, h, MsgId::StartGame, &msg, 4096).await
-            {
+            if let Err(e) = send_msg_tcp(recipient, h, MsgId::StartGame, &msg).await {
                 warn!(error = %e, "Failed to broadcast StartGame");
             }
         }
@@ -71,14 +69,7 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
             h.room_id = room_id;
             h.seq = ctx.server_seq;
             ctx.server_seq = ctx.server_seq.wrapping_add(1);
-            let _ = crate::net::outbound::send_msg_tcp(
-                &outbound,
-                h,
-                MsgId::SyncState,
-                &sync_state,
-                MAX_TCP_FRAME,
-            )
-            .await;
+            let _ = send_msg_tcp(&outbound, h, MsgId::SyncState, &sync_state).await;
 
             let history = room.get_input_history(frame);
             info!(
@@ -113,9 +104,7 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) {
             h.room_id = room_id;
             h.seq = ctx.server_seq;
             ctx.server_seq = ctx.server_seq.wrapping_add(1);
-            let _ =
-                crate::net::outbound::send_msg_tcp(&outbound, h, MsgId::BeginCatchUp, &msg, 4096)
-                    .await;
+            let _ = send_msg_tcp(&outbound, h, MsgId::BeginCatchUp, &msg).await;
         } else {
             debug!(
                 client_id = sender_id,

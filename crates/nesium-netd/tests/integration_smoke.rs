@@ -177,15 +177,29 @@ impl TestClient {
     }
 
     async fn recv_relay_inputs(&mut self) -> anyhow::Result<MsgId> {
-        let mut buf = vec![0u8; 4096];
-        let n = timeout(Duration::from_secs(2), self.stream.read(&mut buf)).await??;
-        buf.truncate(n);
+        // May receive PlayerJoined or other messages before RelayInputs,
+        // so keep reading until we find RelayInputs or timeout.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
 
-        let (packets, _) = try_decode_tcp_frames(&buf)?;
-        if packets.is_empty() {
-            anyhow::bail!("No packets received");
+        loop {
+            let now = tokio::time::Instant::now();
+            if now >= deadline {
+                anyhow::bail!("Timeout waiting for RelayInputs");
+            }
+            let remaining = deadline - now;
+
+            let mut buf = vec![0u8; 4096];
+            let n = timeout(remaining, self.stream.read(&mut buf)).await??;
+            buf.truncate(n);
+
+            let (packets, _) = try_decode_tcp_frames(&buf)?;
+            for packet in packets {
+                if packet.msg_id == MsgId::RelayInputs {
+                    return Ok(packet.msg_id);
+                }
+            }
+            // PlayerJoined or other messages, continue reading
         }
-        Ok(packets[0].msg_id)
     }
 }
 
