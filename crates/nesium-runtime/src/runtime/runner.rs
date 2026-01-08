@@ -1495,13 +1495,11 @@ impl Runner {
         // Clear ROM hash
         *self.state.rom_hash.lock().unwrap() = None;
 
-        // Clear framebuffer and present black screen
-        // Get palette first to avoid borrow conflict with framebuffer_mut()
-        let palette = *self.nes.ppu.palette().as_colors();
+        // Clear framebuffer to display black screen and notify frontend.
+        // clear_and_present() fills buffers with 0 bytes (black) and triggers the callback,
+        // without re-rendering using the palette (which would produce gray from palette[0]).
         let fb = self.nes.ppu.framebuffer_mut();
-        fb.clear();
-        // Present the cleared buffer to trigger frame callback and display black
-        fb.present(&palette);
+        fb.clear_and_present();
 
         // Deactivate netplay to prevent lockstep issues on next ROM load
         if let Some(np) = &self.netplay_input {

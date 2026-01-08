@@ -650,6 +650,37 @@ impl FrameBuffer {
         }
     }
 
+    /// Clears both buffers to black and notifies the frontend.
+    ///
+    /// Unlike `present()`, this method does NOT re-render using the palette.
+    /// The packed buffers are filled with 0 bytes directly (black/transparent),
+    /// and the frame-ready callback is invoked so the frontend updates its texture.
+    pub fn clear_and_present(&mut self) {
+        self.clear();
+
+        // Swap to the other plane so the cleared plane becomes front.
+        let cleared_plane = self.active_index;
+        self.active_index = 1 - self.active_index;
+
+        let pitch = match &mut self.storage {
+            FrameBufferStorage::Owned(_) => SCREEN_WIDTH * self.color_format.bytes_per_pixel(),
+            FrameBufferStorage::External(handle) => {
+                handle.present(cleared_plane);
+                handle.pitch_bytes()
+            }
+            FrameBufferStorage::Swapchain(s) => {
+                // For swapchain, we need to lock/unlock to signal the frontend.
+                let (_, pitch) = s.lock(cleared_plane);
+                s.unlock(cleared_plane);
+                pitch
+            }
+        };
+
+        if let Some(hook) = self.frame_ready_hook {
+            hook.call(cleared_plane, pitch);
+        }
+    }
+
     #[inline]
     pub fn color_format(&self) -> ColorFormat {
         self.color_format
