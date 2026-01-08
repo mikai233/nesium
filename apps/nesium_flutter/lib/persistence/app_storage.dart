@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../logging/app_logger.dart';
 
 abstract class AppStorage {
   Object? get(String key);
@@ -18,7 +19,13 @@ Future<void> initAppStorage() async {
     await Hive.initFlutter();
     final box = await Hive.openBox<Object?>('nesium');
     appStorage = _HiveAppStorage(box);
-  } catch (_) {
+  } catch (e, st) {
+    logWarning(
+      e,
+      stackTrace: st,
+      message: 'Failed to initialize Hive storage',
+      logger: 'app_storage',
+    );
     appStorage = _MemoryAppStorage();
   }
 }

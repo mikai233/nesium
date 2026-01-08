@@ -5,6 +5,7 @@ import '../../domain/nes_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shell/nes_actions.dart';
 import '../../shell/nes_menu_model.dart';
+import '../../logging/app_logger.dart';
 
 class ToolsPanel extends ConsumerWidget {
   const ToolsPanel({super.key});
@@ -61,7 +62,13 @@ class ToolsPanel extends ConsumerWidget {
   NesActions? _getActions(WidgetRef ref) {
     try {
       return ref.watch(nesActionsProvider);
-    } catch (_) {
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to watch nesActionsProvider',
+        logger: 'tools_panel',
+      );
       return null;
     }
   }

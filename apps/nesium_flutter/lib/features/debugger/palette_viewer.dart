@@ -80,7 +80,14 @@ class _PaletteViewerState extends ConsumerState<PaletteViewer> {
   Future<void> _unsubscribe() async {
     try {
       await bridge.unsubscribePaletteState();
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to unsubscribe palette state',
+        logger: 'palette_viewer',
+      );
+    }
   }
 
   Future<void> _applyCaptureMode() async {

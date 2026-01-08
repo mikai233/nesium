@@ -54,13 +54,27 @@ class _SecondaryWindowState extends State<SecondaryWindow> with WindowListener {
     Future<void> bestEffort(Future<void> Function() fn) async {
       try {
         await fn();
-      } catch (_) {}
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'Best-effort window cleanup failed',
+          logger: 'secondary_window',
+        );
+      }
     }
 
     bridge.AuxTextureIds? ids;
     try {
       ids = await AuxTextureIdsCache.get();
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to get aux texture ids',
+        logger: 'secondary_window',
+      );
+    }
 
     switch (widget.kind) {
       case WindowKind.tilemap:

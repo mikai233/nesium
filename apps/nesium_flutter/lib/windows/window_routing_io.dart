@@ -4,6 +4,7 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../logging/app_logger.dart';
 import '../platform/platform_capabilities.dart';
 import '../shell/nes_shell.dart';
 import 'secondary_window.dart';
@@ -72,8 +73,13 @@ WindowKind _parseWindowKindFromArguments(String? arguments) {
           return WindowKind.paletteViewer;
       }
     }
-  } catch (_) {
-    // Ignore malformed payloads, treat as main window.
+  } catch (e, st) {
+    logWarning(
+      e,
+      stackTrace: st,
+      message: 'Failed to parse window arguments',
+      logger: 'window_routing',
+    );
   }
   return WindowKind.main;
 }
@@ -86,7 +92,13 @@ Future<WindowKind> resolveWindowKind() async {
   try {
     final controller = await WindowController.fromCurrentEngine();
     return _parseWindowKindFromArguments(controller.arguments);
-  } catch (_) {
+  } catch (e, st) {
+    logWarning(
+      e,
+      stackTrace: st,
+      message: 'Failed to resolve window kind',
+      logger: 'window_routing',
+    );
     return WindowKind.main;
   }
 }
@@ -119,7 +131,13 @@ class _WindowRouterState extends State<WindowRouter> {
       final kind = _parseWindowKindFromArguments(controller.arguments);
       if (!mounted) return;
       setState(() => _kind = kind);
-    } catch (_) {
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to resolve kind in WindowRouter',
+        logger: 'window_routing',
+      );
       if (!mounted) return;
       setState(() => _kind = WindowKind.main);
     }

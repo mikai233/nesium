@@ -200,7 +200,14 @@ class _SpriteViewerState extends ConsumerState<SpriteViewer> {
   Future<void> _unsubscribe() async {
     try {
       await bridge.unsubscribeSpriteState();
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to unsubscribe sprite state',
+        logger: 'sprite_viewer',
+      );
+    }
   }
 
   int _gridTextureWidth(bridge.SpriteSnapshot snapshot) =>
