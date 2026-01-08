@@ -29,7 +29,8 @@ pub async fn run_tcp_listener(
     }
 }
 
-async fn handle_tcp_connection(
+/// Handle a single TCP connection. Public to allow embedding server in other crates.
+pub async fn handle_tcp_connection(
     stream: TcpStream,
     peer: SocketAddr,
     conn_id: ConnId,

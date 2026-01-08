@@ -5,4 +5,5 @@ pub mod load_rom;
 pub mod netplay;
 pub mod palette;
 pub mod pause;
+pub mod server;
 pub mod simple;

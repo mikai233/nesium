@@ -128,6 +128,72 @@ abstract class AppLocalizations {
   /// **'Emulation'**
   String get settingsTabEmulation;
 
+  /// No description provided for @settingsTabServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get settingsTabServer;
+
+  /// No description provided for @serverTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Netplay Server'**
+  String get serverTitle;
+
+  /// No description provided for @serverPortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get serverPortLabel;
+
+  /// No description provided for @serverStartButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Server'**
+  String get serverStartButton;
+
+  /// No description provided for @serverStopButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop Server'**
+  String get serverStopButton;
+
+  /// No description provided for @serverStatusRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get serverStatusRunning;
+
+  /// No description provided for @serverStatusStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get serverStatusStopped;
+
+  /// No description provided for @serverClientCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected clients: {count}'**
+  String serverClientCount(int count);
+
+  /// No description provided for @serverStartFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Server start failed: {error}'**
+  String serverStartFailed(String error);
+
+  /// No description provided for @serverStopFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Server stop failed: {error}'**
+  String serverStopFailed(String error);
+
+  /// No description provided for @serverBindAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Bind address: {address}'**
+  String serverBindAddress(String address);
+
   /// No description provided for @generalTitle.
   ///
   /// In en, this message translates to:

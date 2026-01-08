@@ -24,6 +24,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTabEmulation => 'Emulation';
 
   @override
+  String get settingsTabServer => 'Server';
+
+  @override
+  String get serverTitle => 'Netplay Server';
+
+  @override
+  String get serverPortLabel => 'Port';
+
+  @override
+  String get serverStartButton => 'Start Server';
+
+  @override
+  String get serverStopButton => 'Stop Server';
+
+  @override
+  String get serverStatusRunning => 'Running';
+
+  @override
+  String get serverStatusStopped => 'Stopped';
+
+  @override
+  String serverClientCount(int count) {
+    return 'Connected clients: $count';
+  }
+
+  @override
+  String serverStartFailed(String error) {
+    return 'Server start failed: $error';
+  }
+
+  @override
+  String serverStopFailed(String error) {
+    return 'Server stop failed: $error';
+  }
+
+  @override
+  String serverBindAddress(String address) {
+    return 'Bind address: $address';
+  }
+
+  @override
   String get generalTitle => 'General';
 
   @override

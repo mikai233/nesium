@@ -13,6 +13,7 @@ import 'api/load_rom.dart';
 import 'api/netplay.dart';
 import 'api/palette.dart';
 import 'api/pause.dart';
+import 'api/server.dart';
 import 'api/simple.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -52,6 +53,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   RustStreamSink<RuntimeNotification>
   dco_decode_StreamSink_runtime_notification_Sse(dynamic raw);
+
+  @protected
+  RustStreamSink<ServerStatus> dco_decode_StreamSink_server_status_Sse(
+    dynamic raw,
+  );
 
   @protected
   RustStreamSink<SpriteSnapshot> dco_decode_StreamSink_sprite_snapshot_Sse(
@@ -135,6 +141,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RuntimeNotificationKind dco_decode_runtime_notification_kind(dynamic raw);
 
   @protected
+  ServerStatus dco_decode_server_status(dynamic raw);
+
+  @protected
   SpriteInfo dco_decode_sprite_info(dynamic raw);
 
   @protected
@@ -191,6 +200,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   RustStreamSink<RuntimeNotification>
   sse_decode_StreamSink_runtime_notification_Sse(SseDeserializer deserializer);
+
+  @protected
+  RustStreamSink<ServerStatus> sse_decode_StreamSink_server_status_Sse(
+    SseDeserializer deserializer,
+  );
 
   @protected
   RustStreamSink<SpriteSnapshot> sse_decode_StreamSink_sprite_snapshot_Sse(
@@ -286,6 +300,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ServerStatus sse_decode_server_status(SseDeserializer deserializer);
+
+  @protected
   SpriteInfo sse_decode_sprite_info(SseDeserializer deserializer);
 
   @protected
@@ -348,6 +365,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_runtime_notification_Sse(
     RustStreamSink<RuntimeNotification> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_server_status_Sse(
+    RustStreamSink<ServerStatus> self,
     SseSerializer serializer,
   );
 
@@ -467,6 +490,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     RuntimeNotificationKind self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_server_status(ServerStatus self, SseSerializer serializer);
 
   @protected
   void sse_encode_sprite_info(SpriteInfo self, SseSerializer serializer);

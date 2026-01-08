@@ -24,6 +24,47 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTabEmulation => '模拟器';
 
   @override
+  String get settingsTabServer => '服务器';
+
+  @override
+  String get serverTitle => '联机服务器';
+
+  @override
+  String get serverPortLabel => '端口';
+
+  @override
+  String get serverStartButton => '启动服务器';
+
+  @override
+  String get serverStopButton => '停止服务器';
+
+  @override
+  String get serverStatusRunning => '运行中';
+
+  @override
+  String get serverStatusStopped => '已停止';
+
+  @override
+  String serverClientCount(int count) {
+    return '已连接客户端: $count';
+  }
+
+  @override
+  String serverStartFailed(String error) {
+    return '服务器启动失败: $error';
+  }
+
+  @override
+  String serverStopFailed(String error) {
+    return '服务器停止失败: $error';
+  }
+
+  @override
+  String serverBindAddress(String address) {
+    return '绑定地址: $address';
+  }
+
+  @override
   String get generalTitle => '通用';
 
   @override

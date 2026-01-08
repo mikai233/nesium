@@ -5,6 +5,45 @@
   "settingsTabInput": "Input",
   "settingsTabVideo": "Video",
   "settingsTabEmulation": "Emulation",
+  "settingsTabServer": "Server",
+  "serverTitle": "Netplay Server",
+  "serverPortLabel": "Port",
+  "serverStartButton": "Start Server",
+  "serverStopButton": "Stop Server",
+  "serverStatusRunning": "Running",
+  "serverStatusStopped": "Stopped",
+  "serverClientCount": "Connected clients: {count}",
+  "@serverClientCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "serverStartFailed": "Server start failed: {error}",
+  "@serverStartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "serverStopFailed": "Server stop failed: {error}",
+  "@serverStopFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "serverBindAddress": "Bind address: {address}",
+  "@serverBindAddress": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
   "generalTitle": "General",
   "themeLabel": "Theme",
   "themeSystem": "System",

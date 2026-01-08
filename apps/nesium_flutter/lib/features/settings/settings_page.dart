@@ -18,6 +18,7 @@ import 'emulation_settings.dart';
 import 'language_settings.dart';
 import 'theme_settings.dart';
 import 'video_settings.dart';
+import 'server_settings.dart';
 import '../../platform/nes_palette.dart' as nes_palette;
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -34,7 +35,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -134,6 +135,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               icon: const Icon(Icons.settings_applications),
               text: l10n.settingsTabEmulation,
             ),
+            Tab(
+              icon: const Icon(Icons.dns_rounded),
+              text: l10n.settingsTabServer,
+            ),
           ],
         ),
       ),
@@ -144,6 +149,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           _InputTab(editCustomBinding: _editCustomBinding),
           _VideoTab(pickAndApplyCustomPalette: _pickAndApplyCustomPalette),
           _EmulationTab(),
+          _ServerTab(),
         ],
       ),
     );
@@ -1078,6 +1084,239 @@ class _EmulationTab extends ConsumerWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// Server Tab
+// ============================================================================
+
+class _ServerTab extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final settings = ref.watch(serverSettingsProvider);
+    final controller = ref.read(serverSettingsProvider.notifier);
+    final statusAsync = ref.watch(serverStatusStreamProvider);
+    final theme = Theme.of(context);
+
+    final status = statusAsync.value;
+    final isRunning = status?.running ?? false;
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        AnimatedSectionHeader(
+          title: l10n.serverTitle,
+          icon: Icons.dns_rounded,
+          delay: const Duration(milliseconds: 50),
+        ),
+        const SizedBox(height: 8),
+        // Server status card
+        AnimatedSettingsCard(
+          index: 0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            decoration: BoxDecoration(
+              color: isRunning
+                  ? theme.colorScheme.primary.withAlpha(25)
+                  : theme.colorScheme.outline.withAlpha(15),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isRunning
+                    ? theme.colorScheme.primary.withAlpha(51)
+                    : theme.colorScheme.outline.withAlpha(35),
+                width: 1.5,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: Icon(
+                      isRunning
+                          ? Icons.check_circle_rounded
+                          : Icons.cancel_rounded,
+                      key: ValueKey(isRunning),
+                      color: isRunning
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outline,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          layoutBuilder: (currentChild, previousChildren) {
+                            return Stack(
+                              alignment: Alignment.centerLeft,
+                              children: [
+                                ...previousChildren,
+                                if (currentChild != null) currentChild,
+                              ],
+                            );
+                          },
+                          child: Text(
+                            isRunning
+                                ? l10n.serverStatusRunning
+                                : l10n.serverStatusStopped,
+                            key: ValueKey(isRunning),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: isRunning
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.outline,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        // Wrap content in AnimatedSize to smooth out height changes
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          alignment: Alignment.topLeft,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (isRunning && status != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  l10n.serverBindAddress(status.bindAddress),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  l10n.serverClientCount(status.clientCount),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Port configuration
+        AnimatedSettingsCard(
+          index: 1,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: TextEditingController(
+                    text: settings.port.toString(),
+                  ),
+                  decoration: InputDecoration(
+                    labelText: l10n.serverPortLabel,
+                    hintText: '5233',
+                    prefixIcon: const Icon(Icons.numbers_rounded),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainerHighest
+                        .withAlpha(50),
+                  ),
+                  keyboardType: TextInputType.number,
+                  enabled: !isRunning,
+                  onChanged: (value) {
+                    final port = int.tryParse(value);
+                    if (port != null && port > 0 && port <= 65535) {
+                      controller.setPort(port);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Start/Stop button
+        AnimatedSettingsCard(
+          index: 2,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: SizedBox(
+                width: double.infinity,
+                key: ValueKey(isRunning),
+                child: isRunning
+                    ? FilledButton.tonalIcon(
+                        onPressed: () async {
+                          try {
+                            await controller.stopServer();
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    l10n.serverStopFailed(e.toString()),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        style: FilledButton.styleFrom(
+                          foregroundColor: theme.colorScheme.error,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.stop_rounded),
+                        label: Text(l10n.serverStopButton),
+                      )
+                    : FilledButton.icon(
+                        onPressed: () async {
+                          try {
+                            await controller.startServer();
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    l10n.serverStartFailed(e.toString()),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        label: Text(l10n.serverStartButton),
+                      ),
+              ),
             ),
           ),
         ),

@@ -3044,10 +3044,12 @@ dependencies = [
  "mimalloc",
  "ndk-context",
  "nesium-core",
+ "nesium-netd",
  "nesium-netplay",
  "nesium-runtime",
  "nesium-support",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
