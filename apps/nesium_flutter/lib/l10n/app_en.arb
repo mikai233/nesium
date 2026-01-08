@@ -157,6 +157,8 @@
   },
   "netplaySpectator": "Spectator",
   "netplayClientId": "Client ID",
+  "netplayPlayerListHeader": "Players",
+  "netplayYouIndicator": "(You)",
   "netplayOrSeparator": "OR",
   "netplayConnectFailed": "Connect failed: {error}",
   "@netplayConnectFailed": {

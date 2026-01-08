@@ -87,6 +87,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  List<NetplayPlayer> dco_decode_list_netplay_player(dynamic raw);
+
+  @protected
   List<PalettePresetInfo> dco_decode_list_palette_preset_info(dynamic raw);
 
   @protected
@@ -100,6 +103,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NetplayGameEvent dco_decode_netplay_game_event(dynamic raw);
+
+  @protected
+  NetplayPlayer dco_decode_netplay_player(dynamic raw);
 
   @protected
   NetplayState dco_decode_netplay_state(dynamic raw);
@@ -222,6 +228,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  List<NetplayPlayer> sse_decode_list_netplay_player(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PalettePresetInfo> sse_decode_list_palette_preset_info(
     SseDeserializer deserializer,
   );
@@ -237,6 +248,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NetplayGameEvent sse_decode_netplay_game_event(SseDeserializer deserializer);
+
+  @protected
+  NetplayPlayer sse_decode_netplay_player(SseDeserializer deserializer);
 
   @protected
   NetplayState sse_decode_netplay_state(SseDeserializer deserializer);
@@ -377,6 +391,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_netplay_player(
+    List<NetplayPlayer> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_palette_preset_info(
     List<PalettePresetInfo> self,
     SseSerializer serializer,
@@ -402,6 +422,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     NetplayGameEvent self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_netplay_player(NetplayPlayer self, SseSerializer serializer);
 
   @protected
   void sse_encode_netplay_state(NetplayState self, SseSerializer serializer);

@@ -164,6 +164,43 @@ pub(crate) async fn handle(
         }
     }
 
+    // Inform the new joiner about all existing players and spectators.
+    if ok {
+        let room = room_mgr.get_room_mut(room_id).unwrap();
+        let mut existing_players = Vec::new();
+        for p in room.players.values() {
+            if p.client_id != ctx.assigned_client_id {
+                existing_players.push((p.client_id, p.player_index, p.name.clone()));
+            }
+        }
+        for s in &room.spectators {
+            if s.client_id != ctx.assigned_client_id {
+                existing_players.push((s.client_id, SPECTATOR_PLAYER_INDEX, s.name.clone()));
+            }
+        }
+
+        for (cid, p_idx, name) in existing_players {
+            let joined_msg = PlayerJoined {
+                client_id: cid,
+                player_index: p_idx,
+                name,
+            };
+            let mut h = Header::new(MsgId::PlayerJoined as u8);
+            h.client_id = cid;
+            h.room_id = room_id;
+            h.seq = 0;
+
+            let _ = crate::net::outbound::send_msg_tcp(
+                &ctx.outbound,
+                h,
+                MsgId::PlayerJoined,
+                &joined_msg,
+                4096,
+            )
+            .await;
+        }
+    }
+
     // Late joiners: if there's a cached ROM, send it immediately.
     let Some(room) = room_mgr.get_room_mut(room_id) else {
         return;

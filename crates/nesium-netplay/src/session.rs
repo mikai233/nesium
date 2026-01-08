@@ -22,6 +22,15 @@ pub enum SessionState {
     Spectating { start_frame: u32 },
 }
 
+/// Information about a remote player in the room.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemotePlayer {
+    pub client_id: u32,
+    pub name: String,
+    /// 0-3 for player index, or `SPECTATOR_PLAYER_INDEX` for spectator.
+    pub player_index: u8,
+}
+
 impl Default for SessionState {
     fn default() -> Self {
         Self::Disconnected
@@ -42,6 +51,9 @@ pub struct NetplaySession {
 
     /// Current room ID (0 = not in a room).
     pub room_id: u32,
+
+    /// Local player name.
+    pub local_name: String,
 
     /// Local player index (None = spectator).
     pub local_player_index: Option<u8>,
@@ -77,6 +89,9 @@ pub struct NetplaySession {
 
     /// Rewind capacity (frames) negotiated with server.
     pub rewind_capacity: u32,
+
+    /// Remote players in the room (client_id -> RemotePlayer).
+    pub players: BTreeMap<u32, RemotePlayer>,
 }
 
 impl Default for NetplaySession {
@@ -92,6 +107,7 @@ impl NetplaySession {
             state: SessionState::default(),
             client_id: 0,
             room_id: 0,
+            local_name: String::new(),
             local_player_index: None,
             input_queues: [
                 BTreeMap::new(),
@@ -108,6 +124,7 @@ impl NetplaySession {
             local_seq: 1,
             last_ack: 0,
             rewind_capacity: 600,
+            players: BTreeMap::new(),
         }
     }
 

@@ -2630,6 +2630,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<NetplayPlayer> dco_decode_list_netplay_player(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_netplay_player).toList();
+  }
+
+  @protected
   List<PalettePresetInfo> dco_decode_list_palette_preset_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_palette_preset_info).toList();
@@ -2680,6 +2686,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NetplayPlayer dco_decode_netplay_player(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return NetplayPlayer(
+      clientId: dco_decode_u_32(arr[0]),
+      name: dco_decode_String(arr[1]),
+      playerIndex: dco_decode_u_8(arr[2]),
+    );
+  }
+
+  @protected
   NetplayState dco_decode_netplay_state(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return NetplayState.values[raw as int];
@@ -2689,14 +2708,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NetplayStatus dco_decode_netplay_status(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return NetplayStatus(
       state: dco_decode_netplay_state(arr[0]),
       clientId: dco_decode_u_32(arr[1]),
       roomId: dco_decode_u_32(arr[2]),
       playerIndex: dco_decode_u_8(arr[3]),
-      error: dco_decode_opt_String(arr[4]),
+      players: dco_decode_list_netplay_player(arr[4]),
+      error: dco_decode_opt_String(arr[5]),
     );
   }
 
@@ -3023,6 +3043,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<NetplayPlayer> sse_decode_list_netplay_player(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <NetplayPlayer>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_netplay_player(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<PalettePresetInfo> sse_decode_list_palette_preset_info(
     SseDeserializer deserializer,
   ) {
@@ -3092,6 +3126,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NetplayPlayer sse_decode_netplay_player(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_clientId = sse_decode_u_32(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_playerIndex = sse_decode_u_8(deserializer);
+    return NetplayPlayer(
+      clientId: var_clientId,
+      name: var_name,
+      playerIndex: var_playerIndex,
+    );
+  }
+
+  @protected
   NetplayState sse_decode_netplay_state(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
@@ -3105,12 +3152,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_clientId = sse_decode_u_32(deserializer);
     var var_roomId = sse_decode_u_32(deserializer);
     var var_playerIndex = sse_decode_u_8(deserializer);
+    var var_players = sse_decode_list_netplay_player(deserializer);
     var var_error = sse_decode_opt_String(deserializer);
     return NetplayStatus(
       state: var_state,
       clientId: var_clientId,
       roomId: var_roomId,
       playerIndex: var_playerIndex,
+      players: var_players,
       error: var_error,
     );
   }
@@ -3528,6 +3577,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_netplay_player(
+    List<NetplayPlayer> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_netplay_player(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_palette_preset_info(
     List<PalettePresetInfo> self,
     SseSerializer serializer,
@@ -3602,6 +3663,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_netplay_player(NetplayPlayer self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.clientId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_u_8(self.playerIndex, serializer);
+  }
+
+  @protected
   void sse_encode_netplay_state(NetplayState self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
@@ -3614,6 +3683,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.clientId, serializer);
     sse_encode_u_32(self.roomId, serializer);
     sse_encode_u_8(self.playerIndex, serializer);
+    sse_encode_list_netplay_player(self.players, serializer);
     sse_encode_opt_String(self.error, serializer);
   }
 

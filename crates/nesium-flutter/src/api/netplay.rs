@@ -28,7 +28,16 @@ pub struct NetplayStatus {
     pub room_id: u32,
     /// Player index: 0, 1, or `SPECTATOR_PLAYER_INDEX` for spectator
     pub player_index: u8,
+    pub players: Vec<NetplayPlayer>,
     pub error: Option<String>,
+}
+
+#[frb]
+#[derive(Debug, Clone)]
+pub struct NetplayPlayer {
+    pub client_id: u32,
+    pub name: String,
+    pub player_index: u8,
 }
 
 #[frb]
@@ -390,7 +399,7 @@ fn notify_status(
     error: Option<String>,
 ) {
     if let Some(sink) = lock_unpoison(sink_lock).as_ref() {
-        let (state, client_id, room_id, player_index) = input_provider.with_session(|s| {
+        let (state, client_id, room_id, player_index, players) = input_provider.with_session(|s| {
             let state = match s.state {
                 SessionState::Disconnected => NetplayState::Disconnected,
                 SessionState::Connecting | SessionState::Handshake => NetplayState::Connecting,
@@ -399,11 +408,35 @@ fn notify_status(
                 | SessionState::Spectating { .. }
                 | SessionState::Syncing { .. } => NetplayState::InRoom,
             };
+
+            let mut players: Vec<NetplayPlayer> = s
+                .players
+                .values()
+                .map(|p| NetplayPlayer {
+                    client_id: p.client_id,
+                    name: p.name.clone(),
+                    player_index: p.player_index,
+                })
+                .collect();
+
+            // Include self if in a room
+            if matches!(state, NetplayState::InRoom) {
+                players.push(NetplayPlayer {
+                    client_id: s.client_id,
+                    name: s.local_name.clone(),
+                    player_index: s.local_player_index.unwrap_or(SPECTATOR_PLAYER_INDEX),
+                });
+            }
+
+            // Sort players by player_index
+            players.sort_by_key(|p| p.player_index);
+
             (
                 state,
                 s.client_id,
                 s.room_id,
                 s.local_player_index.unwrap_or(SPECTATOR_PLAYER_INDEX),
+                players,
             )
         });
 
@@ -412,6 +445,7 @@ fn notify_status(
             client_id,
             room_id,
             player_index,
+            players,
             error,
         };
 

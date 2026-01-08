@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -2863,6 +2863,20 @@ impl SseDecode for i32 {
     }
 }
 
+impl SseDecode for Vec<crate::api::netplay::NetplayPlayer> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::netplay::NetplayPlayer>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::palette::PalettePresetInfo> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2942,6 +2956,20 @@ impl SseDecode for crate::api::netplay::NetplayGameEvent {
     }
 }
 
+impl SseDecode for crate::api::netplay::NetplayPlayer {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_clientId = <u32>::sse_decode(deserializer);
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_playerIndex = <u8>::sse_decode(deserializer);
+        return crate::api::netplay::NetplayPlayer {
+            client_id: var_clientId,
+            name: var_name,
+            player_index: var_playerIndex,
+        };
+    }
+}
+
 impl SseDecode for crate::api::netplay::NetplayState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2963,12 +2991,14 @@ impl SseDecode for crate::api::netplay::NetplayStatus {
         let mut var_clientId = <u32>::sse_decode(deserializer);
         let mut var_roomId = <u32>::sse_decode(deserializer);
         let mut var_playerIndex = <u8>::sse_decode(deserializer);
+        let mut var_players = <Vec<crate::api::netplay::NetplayPlayer>>::sse_decode(deserializer);
         let mut var_error = <Option<String>>::sse_decode(deserializer);
         return crate::api::netplay::NetplayStatus {
             state: var_state,
             client_id: var_clientId,
             room_id: var_roomId,
             player_index: var_playerIndex,
+            players: var_players,
             error: var_error,
         };
     }
@@ -3590,6 +3620,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::netplay::NetplayGameEvent>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::netplay::NetplayPlayer {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.client_id.into_into_dart().into_dart(),
+            self.name.into_into_dart().into_dart(),
+            self.player_index.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::netplay::NetplayPlayer
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::netplay::NetplayPlayer>
+    for crate::api::netplay::NetplayPlayer
+{
+    fn into_into_dart(self) -> crate::api::netplay::NetplayPlayer {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::netplay::NetplayState {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -3620,6 +3672,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::netplay::NetplayStatus {
             self.client_id.into_into_dart().into_dart(),
             self.room_id.into_into_dart().into_dart(),
             self.player_index.into_into_dart().into_dart(),
+            self.players.into_into_dart().into_dart(),
             self.error.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -4036,6 +4089,16 @@ impl SseEncode for i32 {
     }
 }
 
+impl SseEncode for Vec<crate::api::netplay::NetplayPlayer> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::netplay::NetplayPlayer>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::palette::PalettePresetInfo> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4101,6 +4164,15 @@ impl SseEncode for crate::api::netplay::NetplayGameEvent {
     }
 }
 
+impl SseEncode for crate::api::netplay::NetplayPlayer {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.client_id, serializer);
+        <String>::sse_encode(self.name, serializer);
+        <u8>::sse_encode(self.player_index, serializer);
+    }
+}
+
 impl SseEncode for crate::api::netplay::NetplayState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4126,6 +4198,7 @@ impl SseEncode for crate::api::netplay::NetplayStatus {
         <u32>::sse_encode(self.client_id, serializer);
         <u32>::sse_encode(self.room_id, serializer);
         <u8>::sse_encode(self.player_index, serializer);
+        <Vec<crate::api::netplay::NetplayPlayer>>::sse_encode(self.players, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
     }
 }
@@ -4336,7 +4409,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -4360,7 +4433,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

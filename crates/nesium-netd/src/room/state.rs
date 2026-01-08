@@ -264,48 +264,58 @@ impl Room {
         new_role: u8,
     ) -> Result<Vec<(u32, u8)>, &'static str> {
         // 1. Identify current role and validate request
-        let current_role_is_spectator = self.spectators.iter().any(|s| s.client_id == client_id);
+        let current_spectator_pos = self
+            .spectators
+            .iter()
+            .position(|s| s.client_id == client_id);
         let current_player_index = self
             .players
             .iter()
             .find(|(_, p)| p.client_id == client_id)
-            .map(|(algo, _)| *algo);
+            .map(|(idx, _)| *idx);
 
-        if !current_role_is_spectator && current_player_index.is_none() {
+        if current_spectator_pos.is_none() && current_player_index.is_none() {
             return Err("Client not in room");
+        }
+
+        // Early return if role is already the same
+        if new_role == SPECTATOR_PLAYER_INDEX {
+            if current_spectator_pos.is_some() {
+                return Ok(vec![]);
+            }
+        } else if let Some(idx) = current_player_index {
+            if idx == new_role {
+                return Ok(vec![]);
+            }
         }
 
         if new_role == SPECTATOR_PLAYER_INDEX {
             // Switch to spectator
-            if current_role_is_spectator {
-                return Ok(vec![]); // No change
-            }
             if let Some(p_idx) = current_player_index {
-                let p = self.players.remove(&p_idx).unwrap();
-                self.spectators.push(Spectator {
-                    conn_id: p.conn_id,
-                    client_id: p.client_id,
-                    name: p.name,
-                    outbound: p.outbound,
-                });
-                return Ok(vec![(client_id, SPECTATOR_PLAYER_INDEX)]);
+                if let Some(p) = self.players.remove(&p_idx) {
+                    self.spectators.push(Spectator {
+                        conn_id: p.conn_id,
+                        client_id: p.client_id,
+                        name: p.name,
+                        outbound: p.outbound,
+                    });
+                    return Ok(vec![(client_id, SPECTATOR_PLAYER_INDEX)]);
+                }
             }
         } else if new_role < MAX_PLAYERS as u8 {
             // Switch to player slot
             if let Some(occupant) = self.players.remove(&new_role) {
                 // Target slot is occupied -> Swap
-                // 1. We removed the occupant temporarily.
+                // 1. We removed the occupant already.
                 // 2. We need to remove the requestor from their current spot.
-
                 let requestor = if let Some(p_idx) = current_player_index {
-                    self.players.remove(&p_idx).unwrap()
+                    // Requestor was a player (swapping slots)
+                    self.players
+                        .remove(&p_idx)
+                        .ok_or("Failed to remove requestor from current slot")?
                 } else {
-                    // Requestor is spectator
-                    let pos = self
-                        .spectators
-                        .iter()
-                        .position(|s| s.client_id == client_id)
-                        .unwrap();
+                    // Requestor was a spectator
+                    let pos = current_spectator_pos.ok_or("Requestor spectator not found")?;
                     let s = self.spectators.remove(pos);
                     Player {
                         conn_id: s.conn_id,
@@ -317,6 +327,7 @@ impl Room {
                 };
 
                 // 3. Put requestor in new_role
+                let requestor_cid = requestor.client_id;
                 self.players.insert(
                     new_role,
                     Player {
@@ -326,18 +337,18 @@ impl Room {
                 );
 
                 // 4. Put occupant in requestor's old spot
-                let occupant_new_role = if let Some(old_idx) = current_player_index {
-                    // Swap to player
+                let occupant_new_role = if let Some(old_p_idx) = current_player_index {
+                    // Swap to player slot
                     self.players.insert(
-                        old_idx,
+                        old_p_idx,
                         Player {
-                            player_index: old_idx,
+                            player_index: old_p_idx,
                             ..occupant
                         },
                     );
-                    old_idx
+                    old_p_idx
                 } else {
-                    // Swap to spectator
+                    // Swap to spectator list
                     self.spectators.push(Spectator {
                         conn_id: occupant.conn_id,
                         client_id: occupant.client_id,
@@ -348,23 +359,19 @@ impl Room {
                 };
 
                 return Ok(vec![
-                    (client_id, new_role),
+                    (requestor_cid, new_role),
                     (occupant.client_id, occupant_new_role),
                 ]);
             } else {
                 // Target slot is vacant
                 let requestor = if let Some(p_idx) = current_player_index {
-                    if p_idx == new_role {
-                        return Ok(vec![]); // Same role
-                    }
-                    self.players.remove(&p_idx).unwrap()
+                    self.players
+                        .remove(&p_idx)
+                        .ok_or("Failed to remove requestor from vacant slot flip")?
                 } else {
                     // Requestor is spectator
-                    let pos = self
-                        .spectators
-                        .iter()
-                        .position(|s| s.client_id == client_id)
-                        .unwrap();
+                    let pos = current_spectator_pos
+                        .ok_or("Requestor spectator not found for vacant slot")?;
                     let s = self.spectators.remove(pos);
                     Player {
                         conn_id: s.conn_id,

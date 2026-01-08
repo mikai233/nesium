@@ -746,6 +746,18 @@ abstract class AppLocalizations {
   /// **'Client ID'**
   String get netplayClientId;
 
+  /// No description provided for @netplayPlayerListHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Players'**
+  String get netplayPlayerListHeader;
+
+  /// No description provided for @netplayYouIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'(You)'**
+  String get netplayYouIndicator;
+
   /// No description provided for @netplayOrSeparator.
   ///
   /// In en, this message translates to:

@@ -356,6 +356,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get netplayClientId => 'Client ID';
 
   @override
+  String get netplayPlayerListHeader => 'Players';
+
+  @override
+  String get netplayYouIndicator => '(You)';
+
+  @override
   String get netplayOrSeparator => 'OR';
 
   @override

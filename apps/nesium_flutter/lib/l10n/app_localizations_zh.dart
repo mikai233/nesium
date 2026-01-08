@@ -348,6 +348,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get netplayClientId => '客户端 ID';
 
   @override
+  String get netplayPlayerListHeader => '房间玩家列表';
+
+  @override
+  String get netplayYouIndicator => ' (你)';
+
+  @override
   String get netplayOrSeparator => '或';
 
   @override

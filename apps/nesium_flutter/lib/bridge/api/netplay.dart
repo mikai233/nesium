@@ -10,7 +10,7 @@ part 'netplay.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `lock_unpoison`, `notify_status`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `NetplayManager`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `get_manager`
 
 /// Connect to netplay server and perform handshake.
@@ -97,6 +97,30 @@ sealed class NetplayGameEvent with _$NetplayGameEvent {
       NetplayGameEvent_PlayerLeft;
 }
 
+class NetplayPlayer {
+  final int clientId;
+  final String name;
+  final int playerIndex;
+
+  const NetplayPlayer({
+    required this.clientId,
+    required this.name,
+    required this.playerIndex,
+  });
+
+  @override
+  int get hashCode => clientId.hashCode ^ name.hashCode ^ playerIndex.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NetplayPlayer &&
+          runtimeType == other.runtimeType &&
+          clientId == other.clientId &&
+          name == other.name &&
+          playerIndex == other.playerIndex;
+}
+
 /// Netplay connection state.
 enum NetplayState { disconnected, connecting, connected, inRoom }
 
@@ -108,6 +132,7 @@ class NetplayStatus {
 
   /// Player index: 0, 1, or `SPECTATOR_PLAYER_INDEX` for spectator
   final int playerIndex;
+  final List<NetplayPlayer> players;
   final String? error;
 
   const NetplayStatus({
@@ -115,6 +140,7 @@ class NetplayStatus {
     required this.clientId,
     required this.roomId,
     required this.playerIndex,
+    required this.players,
     this.error,
   });
 
@@ -124,6 +150,7 @@ class NetplayStatus {
       clientId.hashCode ^
       roomId.hashCode ^
       playerIndex.hashCode ^
+      players.hashCode ^
       error.hashCode;
 
   @override
@@ -135,5 +162,6 @@ class NetplayStatus {
           clientId == other.clientId &&
           roomId == other.roomId &&
           playerIndex == other.playerIndex &&
+          players == other.players &&
           error == other.error;
 }

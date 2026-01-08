@@ -122,6 +122,8 @@
   "netplayPlayerIndex": "玩家 {index}",
   "netplaySpectator": "旁观者",
   "netplayClientId": "客户端 ID",
+  "netplayPlayerListHeader": "房间玩家列表",
+  "netplayYouIndicator": " (你)",
   "netplayOrSeparator": "或",
   "netplayConnectFailed": "连接失败: {error}",
   "netplayDisconnectFailed": "断开连接失败: {error}",

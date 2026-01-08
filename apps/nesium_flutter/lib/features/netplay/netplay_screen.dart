@@ -266,10 +266,10 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
 
     return Card(
       elevation: 0,
-      color: statusColor.withOpacity(0.1),
+      color: statusColor.withAlpha(25),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: statusColor.withOpacity(0.2)),
+        side: BorderSide(color: statusColor.withAlpha(51)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -390,11 +390,27 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildInfoRow(
               l10n.netplayRoomCode,
               status.roomId.toString(),
               icon: Icons.tag_rounded,
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(),
+            ),
+            Text(
+              l10n.netplayPlayerListHeader,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...status.players.map(
+              (p) => _buildPlayerRow(l10n, p, localClientId: status.clientId),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
@@ -426,6 +442,69 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerRow(
+    AppLocalizations l10n,
+    NetplayPlayer player, {
+    required int localClientId,
+  }) {
+    final theme = Theme.of(context);
+    final isSpectator = player.playerIndex == spectatorPlayerIndex;
+    final isSelf = player.clientId == localClientId;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(
+            isSpectator
+                ? Icons.visibility_rounded
+                : Icons.videogame_asset_rounded,
+            size: 18,
+            color: isSelf
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: theme.textTheme.bodyLarge,
+                children: [
+                  TextSpan(
+                    text: player.name,
+                    style: isSelf
+                        ? const TextStyle(fontWeight: FontWeight.bold)
+                        : null,
+                  ),
+                  if (isSelf)
+                    TextSpan(
+                      text: ' ${l10n.netplayYouIndicator}',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                ],
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            isSpectator
+                ? l10n.netplaySpectator
+                : l10n.netplayPlayerIndex(player.playerIndex + 1),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: isSelf
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: isSelf ? FontWeight.bold : null,
+            ),
+          ),
+        ],
       ),
     );
   }

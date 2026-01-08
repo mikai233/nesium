@@ -114,6 +114,10 @@ impl SessionHandler {
                 tx_clone_state.blocking_send(NetplayCommand::ProvideState(frame, data.to_vec()));
         }));
 
+        input_provider.with_session_mut(|s| {
+            s.local_name = config.name.clone();
+        });
+
         (
             Self {
                 client,
@@ -409,7 +413,7 @@ impl SessionHandler {
         let my_client_id = self.input_provider.with_session(|s| s.client_id);
         if change.client_id == my_client_id {
             // It's me!
-            self.input_provider.with_session(|session| {
+            self.input_provider.with_session_mut(|session| {
                 if change.new_role == SPECTATOR_PLAYER_INDEX {
                     // Became spectator
                     if let SessionState::Playing { start_frame, .. } = session.state {
@@ -440,6 +444,13 @@ impl SessionHandler {
                 } else {
                     Some(change.new_role)
                 });
+        } else {
+            // It's someone else
+            self.input_provider.with_session_mut(|session| {
+                if let Some(player) = session.players.get_mut(&change.client_id) {
+                    player.player_index = change.new_role;
+                }
+            });
         }
 
         Ok(())
@@ -461,14 +472,24 @@ impl SessionHandler {
             "Player joined"
         );
 
-        if msg.player_index != SPECTATOR_PLAYER_INDEX {
-            self.input_provider.with_session_mut(|session| {
+        self.input_provider.with_session_mut(|session| {
+            // Add to player list
+            session.players.insert(
+                msg.client_id,
+                crate::session::RemotePlayer {
+                    client_id: msg.client_id,
+                    name: msg.name,
+                    player_index: msg.player_index,
+                },
+            );
+
+            if msg.player_index != SPECTATOR_PLAYER_INDEX {
                 let idx = msg.player_index as usize;
                 if idx < session.active_ports.len() {
                     session.active_ports[idx] = true;
                 }
-            });
-        }
+            }
+        });
 
         Ok(())
     }
@@ -761,6 +782,7 @@ impl SessionHandler {
 
         // Mark player's port as inactive so we don't wait for their inputs
         self.input_provider.with_session_mut(|session| {
+            session.players.remove(&msg.client_id);
             session.clear_port(msg.player_index as usize);
         });
 
