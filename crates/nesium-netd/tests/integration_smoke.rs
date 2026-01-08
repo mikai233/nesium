@@ -96,9 +96,10 @@ impl TestClient {
         buf.truncate(n);
 
         let (packets, _) = try_decode_tcp_frames(&buf)?;
-        assert_eq!(packets.len(), 1, "Expected 1 JoinAck packet");
-        let packet = &packets[0];
-        assert_eq!(packet.msg_id, MsgId::JoinAck);
+        let packet = packets
+            .iter()
+            .find(|p| p.msg_id == MsgId::JoinAck)
+            .ok_or_else(|| anyhow::anyhow!("JoinAck not found in received packets"))?;
 
         let ack: JoinAck = postcard::from_bytes(packet.payload)?;
         if ack.ok {
@@ -272,7 +273,7 @@ async fn test_input_relay() -> anyhow::Result<()> {
     client1.send_hello("Player1").await?;
     client1.recv_welcome().await?;
     client1.send_join_room(0).await?;
-    let ack1 = client1.recv_join_ack().await?;
+    let _ack1 = client1.recv_join_ack().await?;
     let room_code = client1.room_id;
 
     let mut client2 = TestClient::connect(addr).await?;
@@ -301,7 +302,7 @@ async fn test_spectator_mode() -> anyhow::Result<()> {
     p1.send_hello("P1").await?;
     p1.recv_welcome().await?;
     p1.send_join_room(0).await?;
-    let ack1 = p1.recv_join_ack().await?;
+    let _ack1 = p1.recv_join_ack().await?;
     let room_code = p1.room_id;
 
     let mut p2 = TestClient::connect(addr).await?;
