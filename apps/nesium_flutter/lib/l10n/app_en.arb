@@ -59,6 +59,11 @@
   "inputDeviceLabel": "Input device",
   "inputDeviceKeyboard": "Keyboard",
   "inputDeviceVirtualController": "Virtual controller",
+  "inputPortLabel": "Configure Player",
+  "player1": "Player 1",
+  "player2": "Player 2",
+  "player3": "Player 3",
+  "player4": "Player 4",
   "keyboardPresetLabel": "Keyboard preset",
   "keyboardPresetNesStandard": "NES standard",
   "keyboardPresetFightStick": "Fight stick",
@@ -85,6 +90,39 @@
   "keyboardActionStart": "Start",
   "keyboardActionTurboA": "Turbo A",
   "keyboardActionTurboB": "Turbo B",
+  "inputBindingConflictCleared": "{player} {action} binding cleared.",
+  "@inputBindingConflictCleared": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "inputBindingConflictHint": "({player} - {action})",
+  "@inputBindingConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "inputBindingCapturedConflictHint": "Occupied by {player} - {action}",
+  "@inputBindingCapturedConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
   "emulationTitle": "Emulation",
   "integerFpsTitle": "Integer FPS mode (60Hz, NTSC)",
   "integerFpsSubtitle": "Reduces scrolling judder on 60Hz displays. PAL will be added later.",

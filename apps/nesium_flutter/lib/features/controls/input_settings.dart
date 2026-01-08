@@ -210,24 +210,90 @@ class InputSettings {
       };
 }
 
+@immutable
+class InputSettingsState {
+  const InputSettingsState({required this.ports, required this.selectedPort});
+
+  final Map<int, InputSettings> ports;
+  final int selectedPort;
+
+  InputSettings get selectedSettings => ports[selectedPort]!;
+
+  InputSettingsState copyWith({
+    Map<int, InputSettings>? ports,
+    int? selectedPort,
+  }) => InputSettingsState(
+    ports: ports ?? this.ports,
+    selectedPort: selectedPort ?? this.selectedPort,
+  );
+
+  InputBindingLocation? findConflict(
+    LogicalKeyboardKey key, {
+    int? excludePort,
+    KeyboardBindingAction? excludeAction,
+  }) {
+    for (final entry in ports.entries) {
+      final portIndex = entry.key;
+      final settings = entry.value;
+      for (final action in KeyboardBindingAction.values) {
+        if (excludePort != null &&
+            portIndex == excludePort &&
+            excludeAction != null &&
+            action == excludeAction) {
+          continue;
+        }
+        if (settings.bindingForAction(action) == key) {
+          return InputBindingLocation(port: portIndex, action: action);
+        }
+      }
+    }
+    return null;
+  }
+}
+
+class InputBindingLocation {
+  final int port;
+  final KeyboardBindingAction action;
+
+  InputBindingLocation({required this.port, required this.action});
+}
+
+class InputCollision {
+  final int port;
+  final KeyboardBindingAction action;
+  final LogicalKeyboardKey key;
+
+  InputCollision({required this.port, required this.action, required this.key});
+}
+
 bool _supportsVirtualController() {
   return supportsVirtualControls;
 }
 
-class InputSettingsController extends Notifier<InputSettings> {
+class InputSettingsController extends Notifier<InputSettingsState> {
   @override
-  InputSettings build() {
-    final defaults = _defaults();
-    final loaded = _inputSettingsFromStorage(
+  InputSettingsState build() {
+    final loaded = _inputSettingsStateFromStorage(
       ref.read(appStorageProvider).get(StorageKeys.settingsInput),
-      defaults: defaults,
+      defaults: _allDefaults(),
     );
-    var settings = loaded ?? defaults;
-    if (settings.device == InputDevice.virtualController &&
-        !_supportsVirtualController()) {
-      settings = settings.copyWith(device: InputDevice.keyboard);
-    }
-    return settings;
+    return loaded ?? _allDefaults();
+  }
+
+  InputSettingsState _allDefaults() {
+    return InputSettingsState(
+      ports: {
+        0: _defaults(port: 0),
+        1: _defaults(port: 1),
+        2: _defaults(port: 2),
+        3: _defaults(port: 3),
+      },
+      selectedPort: 0,
+    );
+  }
+
+  void setSelectedPort(int port) {
+    state = state.copyWith(selectedPort: port);
   }
 
   void setDevice(InputDevice device) {
@@ -236,150 +302,169 @@ class InputSettingsController extends Notifier<InputSettings> {
       return;
     }
     ref.read(nesInputMasksProvider.notifier).clearAll();
-    state = state.copyWith(device: device);
+    final nextPorts = Map<int, InputSettings>.from(state.ports);
+    nextPorts[state.selectedPort] = state.selectedSettings.copyWith(
+      device: device,
+    );
+    state = state.copyWith(ports: nextPorts);
     _persist(state);
   }
 
   void setKeyboardPreset(KeyboardPreset preset) {
     ref.read(nesInputMasksProvider.notifier).clearAll();
-    state = state.copyWith(keyboardPreset: preset);
+    final nextPorts = Map<int, InputSettings>.from(state.ports);
+    nextPorts[state.selectedPort] = state.selectedSettings.copyWith(
+      keyboardPreset: preset,
+    );
+    state = state.copyWith(ports: nextPorts);
     _persist(state);
   }
 
+  final _collisionController = StreamController<InputCollision>.broadcast();
+  Stream<InputCollision> get collisionStream => _collisionController.stream;
+
   void setCustomBinding(KeyboardBindingAction action, LogicalKeyboardKey? key) {
-    if (state.keyboardPreset != KeyboardPreset.custom) {
-      state = state.copyWith(keyboardPreset: KeyboardPreset.custom);
-    }
+    final nextPorts = Map<int, InputSettings>.from(state.ports);
 
-    LogicalKeyboardKey? nextUp = state.customUp;
-    LogicalKeyboardKey? nextDown = state.customDown;
-    LogicalKeyboardKey? nextLeft = state.customLeft;
-    LogicalKeyboardKey? nextRight = state.customRight;
-    LogicalKeyboardKey? nextA = state.customA;
-    LogicalKeyboardKey? nextB = state.customB;
-    LogicalKeyboardKey? nextSelect = state.customSelect;
-    LogicalKeyboardKey? nextStart = state.customStart;
-    LogicalKeyboardKey? nextTurboA = state.customTurboA;
-    LogicalKeyboardKey? nextTurboB = state.customTurboB;
+    if (key != null) {
+      // Cross-port collision detection
+      for (final entry in state.ports.entries) {
+        final portIndex = entry.key;
+        final settings = entry.value;
 
-    void clearIfDup(KeyboardBindingAction candidateAction) {
-      if (key == null) return;
-      final current = state.customBindingFor(candidateAction);
-      if (current == null || current != key) return;
-      switch (candidateAction) {
-        case KeyboardBindingAction.up:
-          nextUp = null;
-          break;
-        case KeyboardBindingAction.down:
-          nextDown = null;
-          break;
-        case KeyboardBindingAction.left:
-          nextLeft = null;
-          break;
-        case KeyboardBindingAction.right:
-          nextRight = null;
-          break;
-        case KeyboardBindingAction.a:
-          nextA = null;
-          break;
-        case KeyboardBindingAction.b:
-          nextB = null;
-          break;
-        case KeyboardBindingAction.select:
-          nextSelect = null;
-          break;
-        case KeyboardBindingAction.start:
-          nextStart = null;
-          break;
-        case KeyboardBindingAction.turboA:
-          nextTurboA = null;
-          break;
-        case KeyboardBindingAction.turboB:
-          nextTurboB = null;
-          break;
+        // We check all actions in all ports
+        for (final candidateAction in KeyboardBindingAction.values) {
+          // Skip the one we are currently setting
+          if (portIndex == state.selectedPort && candidateAction == action) {
+            continue;
+          }
+
+          if (settings.customBindingFor(candidateAction) == key) {
+            // Collision found! Clear it.
+            var updatedSettings = nextPorts[portIndex]!;
+            if (updatedSettings.keyboardPreset != KeyboardPreset.custom) {
+              updatedSettings = updatedSettings.copyWith(
+                keyboardPreset: KeyboardPreset.custom,
+              );
+            }
+
+            nextPorts[portIndex] = _clearBinding(
+              updatedSettings,
+              candidateAction,
+            );
+            _collisionController.add(
+              InputCollision(
+                port: portIndex,
+                action: candidateAction,
+                key: key,
+              ),
+            );
+          }
+        }
       }
     }
 
-    for (final other in KeyboardBindingAction.values) {
-      if (other == action) continue;
-      clearIfDup(other);
+    // Now set the new binding for the selected port
+    var selected = nextPorts[state.selectedPort]!;
+    if (selected.keyboardPreset != KeyboardPreset.custom) {
+      selected = selected.copyWith(keyboardPreset: KeyboardPreset.custom);
     }
 
-    switch (action) {
-      case KeyboardBindingAction.up:
-        nextUp = key;
-        break;
-      case KeyboardBindingAction.down:
-        nextDown = key;
-        break;
-      case KeyboardBindingAction.left:
-        nextLeft = key;
-        break;
-      case KeyboardBindingAction.right:
-        nextRight = key;
-        break;
-      case KeyboardBindingAction.a:
-        nextA = key;
-        break;
-      case KeyboardBindingAction.b:
-        nextB = key;
-        break;
-      case KeyboardBindingAction.select:
-        nextSelect = key;
-        break;
-      case KeyboardBindingAction.start:
-        nextStart = key;
-        break;
-      case KeyboardBindingAction.turboA:
-        nextTurboA = key;
-        break;
-      case KeyboardBindingAction.turboB:
-        nextTurboB = key;
-        break;
-    }
+    nextPorts[state.selectedPort] = _setBinding(selected, action, key);
 
     ref.read(nesInputMasksProvider.notifier).clearAll();
-    state = state.copyWith(
-      customUp: nextUp,
-      customDown: nextDown,
-      customLeft: nextLeft,
-      customRight: nextRight,
-      customA: nextA,
-      customB: nextB,
-      customSelect: nextSelect,
-      customStart: nextStart,
-      customTurboA: nextTurboA,
-      customTurboB: nextTurboB,
-    );
+    state = state.copyWith(ports: nextPorts);
     _persist(state);
   }
 
-  InputSettings _defaults() {
-    final device = preferVirtualControlsByDefault
+  InputSettings _clearBinding(InputSettings s, KeyboardBindingAction a) {
+    return _setBinding(s, a, null);
+  }
+
+  InputSettings _setBinding(
+    InputSettings s,
+    KeyboardBindingAction a,
+    LogicalKeyboardKey? k,
+  ) {
+    return switch (a) {
+      KeyboardBindingAction.up => s.copyWith(customUp: k),
+      KeyboardBindingAction.down => s.copyWith(customDown: k),
+      KeyboardBindingAction.left => s.copyWith(customLeft: k),
+      KeyboardBindingAction.right => s.copyWith(customRight: k),
+      KeyboardBindingAction.a => s.copyWith(customA: k),
+      KeyboardBindingAction.b => s.copyWith(customB: k),
+      KeyboardBindingAction.select => s.copyWith(customSelect: k),
+      KeyboardBindingAction.start => s.copyWith(customStart: k),
+      KeyboardBindingAction.turboA => s.copyWith(customTurboA: k),
+      KeyboardBindingAction.turboB => s.copyWith(customTurboB: k),
+    };
+  }
+
+  InputSettings _defaults({int port = 0}) {
+    final device = (port == 0 && preferVirtualControlsByDefault)
         ? InputDevice.virtualController
         : InputDevice.keyboard;
+
+    // Default bindings for P1 and P2 (P3/P4 are unassigned by default)
+    // Optimized split layout for local co-op:
+    // P1 on the left (WASD + F/G), P2 on the right (Arrows + K/L)
+    if (port == 0) {
+      return InputSettings(
+        device: device,
+        keyboardPreset: KeyboardPreset.custom,
+        customUp: LogicalKeyboardKey.keyW,
+        customDown: LogicalKeyboardKey.keyS,
+        customLeft: LogicalKeyboardKey.keyA,
+        customRight: LogicalKeyboardKey.keyD,
+        customA: LogicalKeyboardKey.keyG,
+        customB: LogicalKeyboardKey.keyF,
+        customSelect: LogicalKeyboardKey.keyQ,
+        customStart: LogicalKeyboardKey.keyE,
+        customTurboA: LogicalKeyboardKey.keyT,
+        customTurboB: LogicalKeyboardKey.keyR,
+      );
+    } else if (port == 1) {
+      return InputSettings(
+        device: InputDevice.keyboard,
+        keyboardPreset: KeyboardPreset.custom,
+        customUp: LogicalKeyboardKey.arrowUp,
+        customDown: LogicalKeyboardKey.arrowDown,
+        customLeft: LogicalKeyboardKey.arrowLeft,
+        customRight: LogicalKeyboardKey.arrowRight,
+        customA: LogicalKeyboardKey.keyL,
+        customB: LogicalKeyboardKey.keyK,
+        customSelect: LogicalKeyboardKey.keyU,
+        customStart: LogicalKeyboardKey.keyI,
+        customTurboA: LogicalKeyboardKey.keyP,
+        customTurboB: LogicalKeyboardKey.keyO,
+      );
+    }
+
     return InputSettings(
-      device: device,
-      keyboardPreset: KeyboardPreset.nesStandard,
-      customUp: LogicalKeyboardKey.arrowUp,
-      customDown: LogicalKeyboardKey.arrowDown,
-      customLeft: LogicalKeyboardKey.arrowLeft,
-      customRight: LogicalKeyboardKey.arrowRight,
-      customA: LogicalKeyboardKey.keyZ,
-      customB: LogicalKeyboardKey.keyX,
-      customSelect: LogicalKeyboardKey.space,
-      customStart: LogicalKeyboardKey.enter,
-      customTurboA: LogicalKeyboardKey.keyC,
-      customTurboB: LogicalKeyboardKey.keyV,
+      device: InputDevice.keyboard,
+      keyboardPreset: KeyboardPreset.custom,
+      customUp: null,
+      customDown: null,
+      customLeft: null,
+      customRight: null,
+      customA: null,
+      customB: null,
+      customSelect: null,
+      customStart: null,
+      customTurboA: null,
+      customTurboB: null,
     );
   }
 
-  void _persist(InputSettings value) {
+  void _persist(InputSettingsState value) {
     unawaitedLogged(
       Future<void>.sync(
         () => ref
             .read(appStorageProvider)
-            .put(StorageKeys.settingsInput, _inputSettingsToStorage(value)),
+            .put(
+              StorageKeys.settingsInput,
+              _inputSettingsStateToStorage(value),
+            ),
       ),
       message: 'Persist input settings',
       logger: 'input_settings',
@@ -388,9 +473,18 @@ class InputSettingsController extends Notifier<InputSettings> {
 }
 
 final inputSettingsProvider =
-    NotifierProvider<InputSettingsController, InputSettings>(
+    NotifierProvider<InputSettingsController, InputSettingsState>(
       InputSettingsController.new,
     );
+
+Map<String, Object?> _inputSettingsStateToStorage(InputSettingsState state) {
+  final ports = <String, Map<String, Object?>>{};
+  state.ports.forEach((index, settings) {
+    ports[index.toString()] = _inputSettingsToStorage(settings);
+  });
+
+  return <String, Object?>{'ports': ports, 'selectedPort': state.selectedPort};
+}
 
 Map<String, Object?> _inputSettingsToStorage(InputSettings value) {
   int? keyId(LogicalKeyboardKey? key) => key?.keyId;
@@ -409,6 +503,46 @@ Map<String, Object?> _inputSettingsToStorage(InputSettings value) {
     'customTurboA': keyId(value.customTurboA),
     'customTurboB': keyId(value.customTurboB),
   };
+}
+
+InputSettingsState? _inputSettingsStateFromStorage(
+  Object? value, {
+  required InputSettingsState defaults,
+}) {
+  if (value is! Map) return null;
+  final map = value.cast<String, Object?>();
+
+  final rawPorts = map['ports'];
+  final ports = Map<int, InputSettings>.from(defaults.ports);
+
+  if (rawPorts is Map) {
+    rawPorts.forEach((key, val) {
+      final index = int.tryParse(key.toString());
+      if (index != null && index >= 0 && index < 4) {
+        final settings = _inputSettingsFromStorage(
+          val,
+          defaults: defaults.ports[index]!,
+        );
+        if (settings != null) {
+          ports[index] = settings;
+        }
+      }
+    });
+  } else {
+    // Migration: if 'ports' doesn't exist, maybe it's the old format
+    final legacySettings = _inputSettingsFromStorage(
+      value,
+      defaults: defaults.ports[0]!,
+    );
+    if (legacySettings != null) {
+      ports[0] = legacySettings;
+    }
+  }
+
+  return defaults.copyWith(
+    ports: ports,
+    selectedPort: map['selectedPort'] as int? ?? defaults.selectedPort,
+  );
 }
 
 InputSettings? _inputSettingsFromStorage(

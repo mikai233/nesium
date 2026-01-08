@@ -31,6 +31,11 @@
   "inputDeviceLabel": "输入设备",
   "inputDeviceKeyboard": "键盘",
   "inputDeviceVirtualController": "虚拟手柄",
+  "inputPortLabel": "配置玩家",
+  "player1": "玩家 1",
+  "player2": "玩家 2",
+  "player3": "玩家 3",
+  "player4": "玩家 4",
   "keyboardPresetLabel": "键盘预设",
   "keyboardPresetNesStandard": "NES 标准",
   "keyboardPresetFightStick": "摇杆",
@@ -50,6 +55,39 @@
   "keyboardActionStart": "Start",
   "keyboardActionTurboA": "Turbo A",
   "keyboardActionTurboB": "Turbo B",
+  "inputBindingConflictCleared": "{player} 的 {action} 绑定已清除。",
+  "@inputBindingConflictCleared": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "inputBindingConflictHint": "({player} - {action})",
+  "@inputBindingConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "inputBindingCapturedConflictHint": "由 {player} - {action} 占用",
+  "@inputBindingCapturedConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
   "emulationTitle": "模拟器",
   "integerFpsTitle": "整数 FPS 模式（60Hz，NTSC）",
   "integerFpsSubtitle": "在 60Hz 屏幕上减少滚动抖动。PAL 之后支持。",

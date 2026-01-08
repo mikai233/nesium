@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../l10n/app_localizations.dart';
 import '../../domain/nes_input_masks.dart';
 import '../../domain/pad_button.dart';
+import '../netplay/netplay_state.dart';
 import '../../logging/app_logger.dart';
 import '../../platform/nes_emulation.dart' as frb_emulation;
 import '../screen/nes_screen_view.dart';
@@ -51,6 +52,18 @@ class _VirtualControlsOverlayState
     );
   }
 
+  void _onButtonChanged(PadButton button, bool pressed, {required int pad}) {
+    ref
+        .read(nesInputMasksProvider.notifier)
+        .setPressed(button, pressed, pad: pad);
+  }
+
+  void _onTurboChanged(PadButton button, bool enabled, {required int pad}) {
+    ref
+        .read(nesInputMasksProvider.notifier)
+        .setTurboEnabled(button, enabled, pad: pad);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -59,13 +72,18 @@ class _VirtualControlsOverlayState
     final liveSettings = ref.watch(virtualControlsSettingsProvider);
     final settings = (isEditing ? editor.draft : null) ?? liveSettings;
 
-    final inputSettings = ref.watch(inputSettingsProvider);
-    if (!isEditing && inputSettings.device != InputDevice.virtualController) {
+    final inputState = ref.watch(inputSettingsProvider);
+    final netplay = ref.watch(netplayProvider);
+    final pad = netplay.isInRoom
+        ? (netplay.status.playerIndex < 4 ? netplay.status.playerIndex : 0)
+        : 0;
+
+    if (!isEditing &&
+        inputState.ports[0]!.device != InputDevice.virtualController) {
       return const SizedBox.shrink();
     }
 
     final safeInsets = MediaQuery.paddingOf(context);
-    final input = ref.read(nesInputMasksProvider.notifier);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -360,7 +378,8 @@ class _VirtualControlsOverlayState
                     settings: settings,
                     baseColor: chromeBase,
                     surfaceColor: chromeSurface,
-                    onButtonChanged: input.setPressed,
+                    onButtonChanged: (btn, pressed) =>
+                        _onButtonChanged(btn, pressed, pad: pad),
                   ),
                 ),
               ),
@@ -428,7 +447,8 @@ class _VirtualControlsOverlayState
                     baseColor: chromeBase,
                     label: 'SELECT',
                     button: PadButton.select,
-                    onButtonChanged: input.setPressed,
+                    onButtonChanged: (btn, pressed) =>
+                        _onButtonChanged(btn, pressed, pad: pad),
                   ),
                 ),
               ),
@@ -471,7 +491,8 @@ class _VirtualControlsOverlayState
                     baseColor: chromeBase,
                     label: 'START',
                     button: PadButton.start,
-                    onButtonChanged: input.setPressed,
+                    onButtonChanged: (btn, pressed) =>
+                        _onButtonChanged(btn, pressed, pad: pad),
                   ),
                 ),
               ),
@@ -513,7 +534,8 @@ class _VirtualControlsOverlayState
                     settings: settings,
                     label: 'TB',
                     button: PadButton.b,
-                    onTurboChanged: input.setTurboEnabled,
+                    onTurboChanged: (btn, enabled) =>
+                        _onTurboChanged(btn, enabled, pad: pad),
                   ),
                 ),
               ),
@@ -555,7 +577,8 @@ class _VirtualControlsOverlayState
                     settings: settings,
                     label: 'TA',
                     button: PadButton.a,
-                    onTurboChanged: input.setTurboEnabled,
+                    onTurboChanged: (btn, enabled) =>
+                        _onTurboChanged(btn, enabled, pad: pad),
                   ),
                 ),
               ),
@@ -597,7 +620,8 @@ class _VirtualControlsOverlayState
                     settings: settings,
                     label: 'B',
                     button: PadButton.b,
-                    onButtonChanged: input.setPressed,
+                    onButtonChanged: (btn, pressed) =>
+                        _onButtonChanged(btn, pressed, pad: pad),
                   ),
                 ),
               ),
@@ -639,7 +663,8 @@ class _VirtualControlsOverlayState
                     settings: settings,
                     label: 'A',
                     button: PadButton.a,
-                    onButtonChanged: input.setPressed,
+                    onButtonChanged: (btn, pressed) =>
+                        _onButtonChanged(btn, pressed, pad: pad),
                   ),
                 ),
               ),

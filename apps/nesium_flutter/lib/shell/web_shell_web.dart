@@ -717,49 +717,54 @@ class _WebShellState extends ConsumerState<WebShell> {
       return KeyEventResult.handled;
     }
 
-    final inputSettings = ref.read(inputSettingsProvider);
-    if (inputSettings.device != InputDevice.keyboard) {
-      return KeyEventResult.ignored;
+    final inputState = ref.read(inputSettingsProvider);
+
+    // TODO: support Netplay in Web? For now just local
+    var handled = false;
+    for (var i = 0; i < 4; i++) {
+      final settings = inputState.ports[i]!;
+      if (settings.device != InputDevice.keyboard) continue;
+
+      final action = settings.resolveKeyboardBindings()[key];
+      if (action == null) continue;
+
+      final input = ref.read(nesInputMasksProvider.notifier);
+      switch (action) {
+        case KeyboardBindingAction.up:
+          input.setPressed(PadButton.up, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.down:
+          input.setPressed(PadButton.down, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.left:
+          input.setPressed(PadButton.left, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.right:
+          input.setPressed(PadButton.right, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.a:
+          input.setPressed(PadButton.a, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.b:
+          input.setPressed(PadButton.b, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.select:
+          input.setPressed(PadButton.select, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.start:
+          input.setPressed(PadButton.start, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.turboA:
+          input.setTurboEnabled(PadButton.a, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.turboB:
+          input.setTurboEnabled(PadButton.b, pressed, pad: i);
+          break;
+      }
+      handled = true;
     }
 
-    final action = inputSettings.resolveKeyboardBindings()[key];
-    if (action == null) return KeyEventResult.ignored;
-
-    final input = ref.read(nesInputMasksProvider.notifier);
-    switch (action) {
-      case KeyboardBindingAction.up:
-        input.setPressed(PadButton.up, pressed);
-        break;
-      case KeyboardBindingAction.down:
-        input.setPressed(PadButton.down, pressed);
-        break;
-      case KeyboardBindingAction.left:
-        input.setPressed(PadButton.left, pressed);
-        break;
-      case KeyboardBindingAction.right:
-        input.setPressed(PadButton.right, pressed);
-        break;
-      case KeyboardBindingAction.a:
-        input.setPressed(PadButton.a, pressed);
-        break;
-      case KeyboardBindingAction.b:
-        input.setPressed(PadButton.b, pressed);
-        break;
-      case KeyboardBindingAction.select:
-        input.setPressed(PadButton.select, pressed);
-        break;
-      case KeyboardBindingAction.start:
-        input.setPressed(PadButton.start, pressed);
-        break;
-      case KeyboardBindingAction.turboA:
-        input.setTurboEnabled(PadButton.a, pressed);
-        break;
-      case KeyboardBindingAction.turboB:
-        input.setTurboEnabled(PadButton.b, pressed);
-        break;
-    }
-
-    return KeyEventResult.handled;
+    return handled ? KeyEventResult.handled : KeyEventResult.ignored;
   }
 
   JSAny? _toJsAny(Object? value) {
@@ -871,7 +876,7 @@ class _WebShellState extends ConsumerState<WebShell> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final videoSettings = ref.watch(videoSettingsProvider);
-                  final inputSettings = ref.watch(inputSettingsProvider);
+                  final inputState = ref.watch(inputSettingsProvider);
                   final editor = ref.watch(virtualControlsEditorProvider);
                   final controlsSettings = ref.watch(
                     virtualControlsSettingsProvider,
@@ -879,7 +884,8 @@ class _WebShellState extends ConsumerState<WebShell> {
 
                   final usingVirtual =
                       editor.enabled ||
-                      inputSettings.device == InputDevice.virtualController;
+                      inputState.ports[0]!.device ==
+                          InputDevice.virtualController;
                   final autoOffsetY = (!isLandscape && usingVirtual)
                       ? -(controlsSettings.buttonSize * 0.55)
                       : 0.0;
@@ -1102,7 +1108,7 @@ class _WebShellState extends ConsumerState<WebShell> {
     final l10n = AppLocalizations.of(context)!;
     void closeDrawer() => Navigator.of(context).pop();
 
-    final inputSettings = ref.watch(inputSettingsProvider);
+    final inputState = ref.watch(inputSettingsProvider);
     final inputCtrl = ref.read(inputSettingsProvider.notifier);
     final editor = ref.watch(virtualControlsEditorProvider);
     final editorCtrl = ref.read(virtualControlsEditorProvider.notifier);
@@ -1163,7 +1169,8 @@ class _WebShellState extends ConsumerState<WebShell> {
                 value: editor.enabled,
                 onChanged: (enabled) {
                   if (enabled &&
-                      inputSettings.device != InputDevice.virtualController) {
+                      inputState.ports[0]!.device !=
+                          InputDevice.virtualController) {
                     inputCtrl.setDevice(InputDevice.virtualController);
                   }
                   editorCtrl.setEnabled(enabled);

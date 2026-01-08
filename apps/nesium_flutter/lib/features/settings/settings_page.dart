@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -31,15 +33,44 @@ class SettingsPage extends ConsumerStatefulWidget {
 class _SettingsPageState extends ConsumerState<SettingsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  StreamSubscription<InputCollision>? _collisionSubscription;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+
+    _collisionSubscription = ref
+        .read(inputSettingsProvider.notifier)
+        .collisionStream
+        .listen((collision) {
+          if (!mounted) return;
+          final l10n = AppLocalizations.of(context)!;
+          final player = switch (collision.port) {
+            0 => l10n.player1,
+            1 => l10n.player2,
+            2 => l10n.player3,
+            3 => l10n.player4,
+            _ => 'Player ${collision.port + 1}',
+          };
+
+          final action = _SettingsPageState._actionLabel(
+            l10n,
+            collision.action,
+          );
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.inputBindingConflictCleared(player, action)),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        });
   }
 
   @override
   void dispose() {
+    _collisionSubscription?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -80,11 +111,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     KeyboardBindingAction action,
   ) async {
     final l10n = AppLocalizations.of(context)!;
+    final inputState = ref.read(inputSettingsProvider);
     final result = await showDialog<_KeyCaptureResult>(
       context: context,
       builder: (context) => _KeyCaptureDialog(
-        title: l10n.bindKeyTitle(_actionLabel(l10n, action)),
+        title: l10n.bindKeyTitle(_SettingsPageState._actionLabel(l10n, action)),
         current: settings.customBindingFor(action),
+        selectedPort: inputState.selectedPort,
+        selectedAction: action,
       ),
     );
     if (result == null) return;
@@ -283,7 +317,8 @@ class _InputTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final inputSettings = ref.watch(inputSettingsProvider);
+    final inputState = ref.watch(inputSettingsProvider);
+    final inputSettings = inputState.selectedSettings;
     final inputController = ref.read(inputSettingsProvider.notifier);
     final turboSettings = ref.watch(turboSettingsProvider);
     final turboController = ref.read(turboSettingsProvider.notifier);
@@ -303,9 +338,32 @@ class _InputTab extends ConsumerWidget {
           icon: Icons.gamepad,
           delay: const Duration(milliseconds: 50),
         ),
-        // Input Device
+        // Player Selection
         AnimatedSettingsCard(
           index: 0,
+          child: ListTile(
+            title: Text(l10n.inputPortLabel),
+            trailing: SizedBox(
+              width: 200,
+              child: AnimatedDropdownMenu<int>(
+                density: AnimatedDropdownMenuDensity.compact,
+                value: inputState.selectedPort,
+                entries: [
+                  DropdownMenuEntry(value: 0, label: l10n.player1),
+                  DropdownMenuEntry(value: 1, label: l10n.player2),
+                  DropdownMenuEntry(value: 2, label: l10n.player3),
+                  DropdownMenuEntry(value: 3, label: l10n.player4),
+                ],
+                onSelected: (val) {
+                  inputController.setSelectedPort(val);
+                },
+              ),
+            ),
+          ),
+        ),
+        // Input Device
+        AnimatedSettingsCard(
+          index: 1,
           child: ListTile(
             title: Text(l10n.inputDeviceLabel),
             subtitle: Text(switch (inputSettings.device) {
@@ -419,7 +477,7 @@ class _InputTab extends ConsumerWidget {
             ),
           ),
           AnimatedSettingsCard(
-            index: 3,
+            index: 4,
             child: AnimatedExpansionTile(
               title: Text(
                 inputSettings.keyboardPreset == KeyboardPreset.custom
@@ -429,23 +487,75 @@ class _InputTab extends ConsumerWidget {
               ),
               children: [
                 for (final action in KeyboardBindingAction.values)
-                  ListTile(
-                    title: Text(_SettingsPageState._actionLabel(l10n, action)),
-                    subtitle: Text(
-                      _keyLabel(l10n, inputSettings.bindingForAction(action)),
-                    ),
-                    trailing:
-                        inputSettings.keyboardPreset == KeyboardPreset.custom
-                        ? const Icon(Icons.edit)
-                        : null,
-                    onTap: inputSettings.keyboardPreset == KeyboardPreset.custom
-                        ? () => editCustomBinding(
-                            context,
-                            inputController,
-                            inputSettings,
-                            action,
-                          )
-                        : null,
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final key = inputSettings.bindingForAction(action);
+                      final conflict = key != null
+                          ? inputState.findConflict(
+                              key,
+                              excludePort: inputState.selectedPort,
+                              excludeAction: action,
+                            )
+                          : null;
+
+                      String? conflictText;
+                      if (conflict != null) {
+                        final player = switch (conflict.port) {
+                          0 => l10n.player1,
+                          1 => l10n.player2,
+                          2 => l10n.player3,
+                          3 => l10n.player4,
+                          _ => 'P${conflict.port + 1}',
+                        };
+                        final conflictAction = _SettingsPageState._actionLabel(
+                          l10n,
+                          conflict.action,
+                        );
+                        conflictText = l10n.inputBindingConflictHint(
+                          player,
+                          conflictAction,
+                        );
+                      }
+
+                      return ListTile(
+                        title: Text(
+                          _SettingsPageState._actionLabel(l10n, action),
+                        ),
+                        subtitle: Row(
+                          children: [
+                            Text(_keyLabel(l10n, key)),
+                            if (conflictText != null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                conflictText,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        trailing:
+                            inputSettings.keyboardPreset ==
+                                KeyboardPreset.custom
+                            ? const Icon(Icons.edit)
+                            : null,
+                        onTap:
+                            inputSettings.keyboardPreset ==
+                                KeyboardPreset.custom
+                            ? () => editCustomBinding(
+                                context,
+                                inputController,
+                                inputSettings,
+                                action,
+                              )
+                            : null,
+                      );
+                    },
                   ),
                 if (inputSettings.keyboardPreset == KeyboardPreset.custom)
                   Padding(
@@ -463,7 +573,7 @@ class _InputTab extends ConsumerWidget {
         if (supportsVirtualControls) ...[
           const SizedBox(height: 12),
           AnimatedSettingsCard(
-            index: 4,
+            index: 5,
             child: ListTile(
               leading: const Icon(Icons.tune),
               title: Text(l10n.virtualControlsEditTitle),
@@ -490,7 +600,7 @@ class _InputTab extends ConsumerWidget {
           if (editor.enabled) ...[
             const SizedBox(height: 12),
             AnimatedSettingsCard(
-              index: 5,
+              index: 6,
               child: Column(
                 children: [
                   SwitchListTile(
@@ -1342,17 +1452,24 @@ class _KeyCaptureResult {
   final LogicalKeyboardKey? key;
 }
 
-class _KeyCaptureDialog extends StatefulWidget {
-  const _KeyCaptureDialog({required this.title, required this.current});
+class _KeyCaptureDialog extends ConsumerStatefulWidget {
+  const _KeyCaptureDialog({
+    required this.title,
+    required this.current,
+    required this.selectedPort,
+    required this.selectedAction,
+  });
 
   final String title;
   final LogicalKeyboardKey? current;
+  final int selectedPort;
+  final KeyboardBindingAction selectedAction;
 
   @override
-  State<_KeyCaptureDialog> createState() => _KeyCaptureDialogState();
+  ConsumerState<_KeyCaptureDialog> createState() => _KeyCaptureDialogState();
 }
 
-class _KeyCaptureDialogState extends State<_KeyCaptureDialog> {
+class _KeyCaptureDialogState extends ConsumerState<_KeyCaptureDialog> {
   final FocusNode _focusNode = FocusNode();
   LogicalKeyboardKey? _last;
 
@@ -1375,6 +1492,11 @@ class _KeyCaptureDialogState extends State<_KeyCaptureDialog> {
     }
 
     setState(() => _last = key);
+
+    // If there's no conflict, or we want to pop immediately anyway?
+    // User said "不阻止玩家设置", so we can just pop.
+    // But maybe wait a bit to show the hint?
+    // Let's pop immediately for now to keep it snappy.
     Navigator.of(context).pop(_KeyCaptureResult(key: key));
     return KeyEventResult.handled;
   }
@@ -1382,6 +1504,15 @@ class _KeyCaptureDialogState extends State<_KeyCaptureDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final inputState = ref.watch(inputSettingsProvider);
+    final currentConflict = widget.current != null
+        ? inputState.findConflict(
+            widget.current!,
+            excludePort: widget.selectedPort,
+            excludeAction: widget.selectedAction,
+          )
+        : null;
+
     return AlertDialog(
       title: Text(widget.title),
       content: Focus(
@@ -1395,11 +1526,43 @@ class _KeyCaptureDialogState extends State<_KeyCaptureDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(l10n.keyCapturePressKeyToBind),
-              const SizedBox(height: 8),
-              Text(l10n.keyCaptureCurrent(_keyLabel(l10n, widget.current))),
-              if (_last != null)
+              const SizedBox(height: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.keyCaptureCurrent(_keyLabel(l10n, widget.current)),
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  if (currentConflict != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.inputBindingCapturedConflictHint(
+                        switch (currentConflict.port) {
+                          0 => l10n.player1,
+                          1 => l10n.player2,
+                          2 => l10n.player3,
+                          3 => l10n.player4,
+                          _ => 'P${currentConflict.port + 1}',
+                        },
+                        _SettingsPageState._actionLabel(
+                          l10n,
+                          currentConflict.action,
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.secondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              if (_last != null) ...[
+                const SizedBox(height: 8),
                 Text(l10n.keyCaptureCaptured(_keyLabel(l10n, _last))),
-              const SizedBox(height: 8),
+              ],
+              const SizedBox(height: 16),
               Text(
                 l10n.keyCapturePressEscToClear,
                 style: Theme.of(context).textTheme.bodySmall,

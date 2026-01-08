@@ -110,6 +110,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inputDeviceVirtualController => 'Virtual controller';
 
   @override
+  String get inputPortLabel => 'Configure Player';
+
+  @override
+  String get player1 => 'Player 1';
+
+  @override
+  String get player2 => 'Player 2';
+
+  @override
+  String get player3 => 'Player 3';
+
+  @override
+  String get player4 => 'Player 4';
+
+  @override
   String get keyboardPresetLabel => 'Keyboard preset';
 
   @override
@@ -168,6 +183,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get keyboardActionTurboB => 'Turbo B';
+
+  @override
+  String inputBindingConflictCleared(String player, String action) {
+    return '$player $action binding cleared.';
+  }
+
+  @override
+  String inputBindingConflictHint(String player, String action) {
+    return '($player - $action)';
+  }
+
+  @override
+  String inputBindingCapturedConflictHint(String player, String action) {
+    return 'Occupied by $player - $action';
+  }
 
   @override
   String get emulationTitle => 'Emulation';

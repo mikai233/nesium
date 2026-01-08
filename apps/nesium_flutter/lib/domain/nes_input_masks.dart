@@ -5,15 +5,18 @@ import '../platform/nes_input.dart' as nes_input;
 import 'pad_button.dart';
 
 class NesInputMasksState {
-  const NesInputMasksState({required this.padMask, required this.turboMask});
+  const NesInputMasksState({required this.padMasks, required this.turboMasks});
 
-  final int padMask;
-  final int turboMask;
+  final Map<int, int> padMasks;
+  final Map<int, int> turboMasks;
 
-  NesInputMasksState copyWith({int? padMask, int? turboMask}) {
+  NesInputMasksState copyWith({
+    Map<int, int>? padMasks,
+    Map<int, int>? turboMasks,
+  }) {
     return NesInputMasksState(
-      padMask: padMask ?? this.padMask,
-      turboMask: turboMask ?? this.turboMask,
+      padMasks: padMasks ?? this.padMasks,
+      turboMasks: turboMasks ?? this.turboMasks,
     );
   }
 }
@@ -21,60 +24,77 @@ class NesInputMasksState {
 class NesInputMasksController extends Notifier<NesInputMasksState> {
   @override
   NesInputMasksState build() =>
-      const NesInputMasksState(padMask: 0, turboMask: 0);
+      const NesInputMasksState(padMasks: {}, turboMasks: {});
 
   void flushToNative() {
+    for (var i = 0; i < 4; i++) {
+      final padMask = state.padMasks[i] ?? 0;
+      final turboMask = state.turboMasks[i] ?? 0;
+
+      unawaitedLogged(
+        nes_input.setPadMask(pad: i, mask: padMask & 0xFF),
+        message: 'setPadMask (flush) pad $i',
+        logger: 'nes_input_masks',
+      );
+      unawaitedLogged(
+        nes_input.setTurboMask(pad: i, mask: turboMask & 0xFF),
+        message: 'setTurboMask (flush) pad $i',
+        logger: 'nes_input_masks',
+      );
+    }
+  }
+
+  void setPressed(PadButton button, bool pressed, {int pad = 0}) {
+    final bit = _buttonBit(button);
+    final mask = 1 << bit;
+    final currentMask = state.padMasks[pad] ?? 0;
+    final next = pressed ? (currentMask | mask) : (currentMask & ~mask);
+    if (next == currentMask) return;
+
+    final nextMasks = Map<int, int>.from(state.padMasks);
+    nextMasks[pad] = next;
+    state = state.copyWith(padMasks: nextMasks);
+
     unawaitedLogged(
-      nes_input.setPadMask(pad: 0, mask: state.padMask & 0xFF),
-      message: 'setPadMask (flush)',
-      logger: 'nes_input_masks',
-    );
-    unawaitedLogged(
-      nes_input.setTurboMask(pad: 0, mask: state.turboMask & 0xFF),
-      message: 'setTurboMask (flush)',
+      nes_input.setPadMask(pad: pad, mask: next & 0xFF),
+      message: 'setPadMask pad $pad',
       logger: 'nes_input_masks',
     );
   }
 
-  void setPressed(PadButton button, bool pressed) {
+  void setTurboEnabled(PadButton button, bool enabled, {int pad = 0}) {
     final bit = _buttonBit(button);
     final mask = 1 << bit;
-    final next = pressed ? (state.padMask | mask) : (state.padMask & ~mask);
-    if (next == state.padMask) return;
-    state = state.copyWith(padMask: next);
-    unawaitedLogged(
-      nes_input.setPadMask(pad: 0, mask: next & 0xFF),
-      message: 'setPadMask',
-      logger: 'nes_input_masks',
-    );
-  }
+    final currentMask = state.turboMasks[pad] ?? 0;
+    final next = enabled ? (currentMask | mask) : (currentMask & ~mask);
+    if (next == currentMask) return;
 
-  void setTurboEnabled(PadButton button, bool enabled) {
-    final bit = _buttonBit(button);
-    final mask = 1 << bit;
-    final next = enabled ? (state.turboMask | mask) : (state.turboMask & ~mask);
-    if (next == state.turboMask) return;
-    state = state.copyWith(turboMask: next);
+    final nextMasks = Map<int, int>.from(state.turboMasks);
+    nextMasks[pad] = next;
+    state = state.copyWith(turboMasks: nextMasks);
+
     unawaitedLogged(
-      nes_input.setTurboMask(pad: 0, mask: next & 0xFF),
-      message: 'setTurboMask',
+      nes_input.setTurboMask(pad: pad, mask: next & 0xFF),
+      message: 'setTurboMask pad $pad',
       logger: 'nes_input_masks',
     );
   }
 
   void clearAll() {
-    if (state.padMask == 0 && state.turboMask == 0) return;
-    state = const NesInputMasksState(padMask: 0, turboMask: 0);
-    unawaitedLogged(
-      nes_input.setPadMask(pad: 0, mask: 0),
-      message: 'setPadMask (clearAll)',
-      logger: 'nes_input_masks',
-    );
-    unawaitedLogged(
-      nes_input.setTurboMask(pad: 0, mask: 0),
-      message: 'setTurboMask (clearAll)',
-      logger: 'nes_input_masks',
-    );
+    if (state.padMasks.isEmpty && state.turboMasks.isEmpty) return;
+    state = const NesInputMasksState(padMasks: {}, turboMasks: {});
+    for (var i = 0; i < 4; i++) {
+      unawaitedLogged(
+        nes_input.setPadMask(pad: i, mask: 0),
+        message: 'setPadMask (clearAll) pad $i',
+        logger: 'nes_input_masks',
+      );
+      unawaitedLogged(
+        nes_input.setTurboMask(pad: i, mask: 0),
+        message: 'setTurboMask (clearAll) pad $i',
+        logger: 'nes_input_masks',
+      );
+    }
   }
 }
 

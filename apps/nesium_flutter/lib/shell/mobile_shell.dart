@@ -29,12 +29,13 @@ class MobileShell extends ConsumerWidget {
         MediaQuery.orientationOf(context) == Orientation.landscape;
 
     final videoSettings = ref.watch(videoSettingsProvider);
-    final inputSettings = ref.watch(inputSettingsProvider);
+    final inputState = ref.watch(inputSettingsProvider);
     final editor = ref.watch(virtualControlsEditorProvider);
     final controlsSettings = ref.watch(virtualControlsSettingsProvider);
 
     final usingVirtual =
-        editor.enabled || inputSettings.device == InputDevice.virtualController;
+        editor.enabled ||
+        inputState.ports[0]!.device == InputDevice.virtualController;
     final autoOffsetY = (!isLandscape && usingVirtual)
         ? -(controlsSettings.buttonSize * 0.55)
         : 0.0;
@@ -111,7 +112,7 @@ class _MobileDrawer extends StatelessWidget {
 
     return Consumer(
       builder: (context, ref, _) {
-        final inputSettings = ref.watch(inputSettingsProvider);
+        final inputState = ref.watch(inputSettingsProvider);
         final inputCtrl = ref.read(inputSettingsProvider.notifier);
 
         final editor = ref.watch(virtualControlsEditorProvider);
@@ -162,7 +163,7 @@ class _MobileDrawer extends StatelessWidget {
                     value: editor.enabled,
                     onChanged: (enabled) {
                       if (enabled &&
-                          inputSettings.device !=
+                          inputState.ports[0]!.device !=
                               InputDevice.virtualController) {
                         inputCtrl.setDevice(InputDevice.virtualController);
                       }

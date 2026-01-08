@@ -110,6 +110,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get inputDeviceVirtualController => '虚拟手柄';
 
   @override
+  String get inputPortLabel => '配置玩家';
+
+  @override
+  String get player1 => '玩家 1';
+
+  @override
+  String get player2 => '玩家 2';
+
+  @override
+  String get player3 => '玩家 3';
+
+  @override
+  String get player4 => '玩家 4';
+
+  @override
   String get keyboardPresetLabel => '键盘预设';
 
   @override
@@ -167,6 +182,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get keyboardActionTurboB => 'Turbo B';
+
+  @override
+  String inputBindingConflictCleared(String player, String action) {
+    return '$player 的 $action 绑定已清除。';
+  }
+
+  @override
+  String inputBindingConflictHint(String player, String action) {
+    return '($player - $action)';
+  }
+
+  @override
+  String inputBindingCapturedConflictHint(String player, String action) {
+    return '由 $player - $action 占用';
+  }
 
   @override
   String get emulationTitle => '模拟器';

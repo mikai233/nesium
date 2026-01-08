@@ -28,6 +28,7 @@ import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
 import '../features/about/about_page.dart';
 import '../features/netplay/netplay_screen.dart';
+import '../features/netplay/netplay_state.dart';
 import '../l10n/app_localizations.dart';
 import '../logging/app_logger.dart';
 import '../platform/desktop_window_manager.dart';
@@ -606,53 +607,87 @@ class _NesShellState extends ConsumerState<NesShell>
       return KeyEventResult.handled;
     }
 
-    final inputSettings = ref.read(inputSettingsProvider);
-    if (inputSettings.device != InputDevice.keyboard) {
-      return KeyEventResult.ignored;
+    final inputState = ref.read(inputSettingsProvider);
+    final netplay = ref.read(netplayProvider);
+
+    if (netplay.isInRoom) {
+      // Netplay: route input through the assigned player index
+      final pad = netplay.status.playerIndex;
+      if (pad >= 4) return KeyEventResult.ignored; // Spectator or invalid
+
+      // Use Port 1 settings for Netplay local player
+      final settings = inputState.ports[0]!;
+      if (settings.device != InputDevice.keyboard) {
+        return KeyEventResult.ignored;
+      }
+
+      final action = settings.resolveKeyboardBindings()[key];
+      if (action == null) return KeyEventResult.ignored;
+
+      if (pressed) _stopRewinding();
+
+      final input = ref.read(nesInputMasksProvider.notifier);
+      _dispatchAction(input, action, pressed, pad: pad);
+      return KeyEventResult.handled;
     }
 
-    final action = inputSettings.resolveKeyboardBindings()[key];
-    if (action == null) return KeyEventResult.ignored;
+    // Local play: route inputs for all configured players
+    var handled = false;
+    for (var i = 0; i < 4; i++) {
+      final settings = inputState.ports[i]!;
+      if (settings.device != InputDevice.keyboard) continue;
 
-    if (pressed) {
-      _stopRewinding();
+      final action = settings.resolveKeyboardBindings()[key];
+      if (action == null) continue;
+
+      if (pressed) _stopRewinding();
+
+      final input = ref.read(nesInputMasksProvider.notifier);
+      _dispatchAction(input, action, pressed, pad: i);
+      handled = true;
     }
 
-    final input = ref.read(nesInputMasksProvider.notifier);
+    return handled ? KeyEventResult.handled : KeyEventResult.ignored;
+  }
+
+  void _dispatchAction(
+    NesInputMasksController input,
+    KeyboardBindingAction action,
+    bool pressed, {
+    required int pad,
+  }) {
     switch (action) {
       case KeyboardBindingAction.up:
-        input.setPressed(PadButton.up, pressed);
+        input.setPressed(PadButton.up, pressed, pad: pad);
         break;
       case KeyboardBindingAction.down:
-        input.setPressed(PadButton.down, pressed);
+        input.setPressed(PadButton.down, pressed, pad: pad);
         break;
       case KeyboardBindingAction.left:
-        input.setPressed(PadButton.left, pressed);
+        input.setPressed(PadButton.left, pressed, pad: pad);
         break;
       case KeyboardBindingAction.right:
-        input.setPressed(PadButton.right, pressed);
+        input.setPressed(PadButton.right, pressed, pad: pad);
         break;
       case KeyboardBindingAction.a:
-        input.setPressed(PadButton.a, pressed);
+        input.setPressed(PadButton.a, pressed, pad: pad);
         break;
       case KeyboardBindingAction.b:
-        input.setPressed(PadButton.b, pressed);
+        input.setPressed(PadButton.b, pressed, pad: pad);
         break;
       case KeyboardBindingAction.select:
-        input.setPressed(PadButton.select, pressed);
+        input.setPressed(PadButton.select, pressed, pad: pad);
         break;
       case KeyboardBindingAction.start:
-        input.setPressed(PadButton.start, pressed);
+        input.setPressed(PadButton.start, pressed, pad: pad);
         break;
       case KeyboardBindingAction.turboA:
-        input.setTurboEnabled(PadButton.a, pressed);
+        input.setTurboEnabled(PadButton.a, pressed, pad: pad);
         break;
       case KeyboardBindingAction.turboB:
-        input.setTurboEnabled(PadButton.b, pressed);
+        input.setTurboEnabled(PadButton.b, pressed, pad: pad);
         break;
     }
-
-    return KeyEventResult.handled;
   }
 
   Future<void> _togglePause() async {

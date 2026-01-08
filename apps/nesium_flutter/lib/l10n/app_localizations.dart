@@ -284,6 +284,36 @@ abstract class AppLocalizations {
   /// **'Virtual controller'**
   String get inputDeviceVirtualController;
 
+  /// No description provided for @inputPortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure Player'**
+  String get inputPortLabel;
+
+  /// No description provided for @player1.
+  ///
+  /// In en, this message translates to:
+  /// **'Player 1'**
+  String get player1;
+
+  /// No description provided for @player2.
+  ///
+  /// In en, this message translates to:
+  /// **'Player 2'**
+  String get player2;
+
+  /// No description provided for @player3.
+  ///
+  /// In en, this message translates to:
+  /// **'Player 3'**
+  String get player3;
+
+  /// No description provided for @player4.
+  ///
+  /// In en, this message translates to:
+  /// **'Player 4'**
+  String get player4;
+
   /// No description provided for @keyboardPresetLabel.
   ///
   /// In en, this message translates to:
@@ -397,6 +427,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Turbo B'**
   String get keyboardActionTurboB;
+
+  /// No description provided for @inputBindingConflictCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'{player} {action} binding cleared.'**
+  String inputBindingConflictCleared(String player, String action);
+
+  /// No description provided for @inputBindingConflictHint.
+  ///
+  /// In en, this message translates to:
+  /// **'({player} - {action})'**
+  String inputBindingConflictHint(String player, String action);
+
+  /// No description provided for @inputBindingCapturedConflictHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Occupied by {player} - {action}'**
+  String inputBindingCapturedConflictHint(String player, String action);
 
   /// No description provided for @emulationTitle.
   ///
