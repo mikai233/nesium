@@ -14,3 +14,5 @@ bool get isNativeMobile =>
 bool get supportsVirtualControls => isNativeMobile;
 
 bool get preferVirtualControlsByDefault => isNativeMobile;
+
+bool get supportsTcp => true;

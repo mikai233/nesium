@@ -10,3 +10,6 @@ bool get isNativeMobile => false;
 bool get supportsVirtualControls => true;
 
 bool get preferVirtualControlsByDefault => false;
+
+/// Web browsers do not support raw TCP sockets.
+bool get supportsTcp => false;

@@ -38,7 +38,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: supportsTcp ? 5 : 4, vsync: this);
 
     _collisionSubscription = ref
         .read(inputSettingsProvider.notifier)
@@ -169,10 +169,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               icon: const Icon(Icons.settings_applications),
               text: l10n.settingsTabEmulation,
             ),
-            Tab(
-              icon: const Icon(Icons.dns_rounded),
-              text: l10n.settingsTabServer,
-            ),
+            if (supportsTcp)
+              Tab(
+                icon: const Icon(Icons.dns_rounded),
+                text: l10n.settingsTabServer,
+              ),
           ],
         ),
       ),
@@ -183,7 +184,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           _InputTab(editCustomBinding: _editCustomBinding),
           _VideoTab(pickAndApplyCustomPalette: _pickAndApplyCustomPalette),
           _EmulationTab(),
-          _ServerTab(),
+          if (supportsTcp) _ServerTab(),
         ],
       ),
     );
