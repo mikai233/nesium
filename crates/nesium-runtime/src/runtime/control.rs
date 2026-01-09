@@ -79,6 +79,12 @@ pub(crate) enum ControlMessage {
     },
     /// Disable netplay and return to local input.
     DisableNetplay(ControlReplySender),
+
+    // History viewer control
+    /// Seek to a specific frame in the rewind history.
+    HistorySeek(usize, ControlReplySender),
+    /// Apply a specific frame from the rewind history to the machine state.
+    HistoryApply(usize, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

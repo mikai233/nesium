@@ -231,7 +231,8 @@ class _MobileDrawer extends StatelessWidget {
     } else if (item.id == NesMenuItemId.tilemapViewer ||
         item.id == NesMenuItemId.tileViewer ||
         item.id == NesMenuItemId.spriteViewer ||
-        item.id == NesMenuItemId.paletteViewer) {
+        item.id == NesMenuItemId.paletteViewer ||
+        item.id == NesMenuItemId.historyViewer) {
       enabled = hasRom;
     } else if (item.id == NesMenuItemId.loadTasMovie) {
       enabled = false;
@@ -323,6 +324,10 @@ class _MobileDrawer extends StatelessWidget {
       case NesMenuItemId.paletteViewer:
         closeDrawer();
         unawaited(actions.openPaletteViewer?.call());
+        break;
+      case NesMenuItemId.historyViewer:
+        closeDrawer();
+        unawaited(actions.openHistoryViewer?.call());
         break;
       case NesMenuItemId.netplay:
         unawaited(actions.openNetplay?.call());

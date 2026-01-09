@@ -25,6 +25,7 @@ enum NesMenuItemId {
   tileViewer,
   spriteViewer,
   paletteViewer,
+  historyViewer,
   netplay,
 }
 
@@ -80,6 +81,7 @@ class NesMenuItemSpec {
       NesMenuItemId.tileViewer => l10n.menuTileViewer,
       NesMenuItemId.spriteViewer => l10n.menuSpriteViewer,
       NesMenuItemId.paletteViewer => l10n.menuPaletteViewer,
+      NesMenuItemId.historyViewer => l10n.menuHistoryViewer,
       NesMenuItemId.netplay => l10n.menuNetplay,
     };
   }
@@ -162,6 +164,7 @@ class NesMenus {
         id: NesMenuItemId.paletteViewer,
         icon: Icons.palette_outlined,
       ),
+      NesMenuItemSpec(id: NesMenuItemId.historyViewer, icon: Icons.history),
     ],
   );
   static List<NesMenuItemSpec> _buildSaveStateChildren() => [

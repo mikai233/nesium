@@ -1,5 +1,6 @@
 pub mod emulation;
 pub mod events;
+pub mod history;
 pub mod input;
 pub mod load_rom;
 pub mod netplay;

@@ -596,4 +596,21 @@ impl RuntimeHandle {
             ControlMessage::DisableNetplay(reply)
         })
     }
+
+    /// Seeks to a specific frame in the rewind history for the History Viewer.
+    ///
+    /// `position` is 0-indexed, where 0 is the oldest frame and `frame_count - 1` is the newest.
+    /// After calling this, subscribe to `EventTopic::History` to receive `HistoryState` updates.
+    pub fn history_seek(&self, position: usize) -> Result<(), RuntimeError> {
+        self.send_with_reply("history_seek", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::HistorySeek(position, reply)
+        })
+    }
+
+    /// Applies a specific frame from the rewind history.
+    pub fn history_apply(&self, position: usize) -> Result<(), RuntimeError> {
+        self.send_with_reply("history_apply", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::HistoryApply(position, reply)
+        })
+    }
 }

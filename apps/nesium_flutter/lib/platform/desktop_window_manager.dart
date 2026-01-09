@@ -113,4 +113,13 @@ class DesktopWindowManager {
     );
     await window.invokeMethod<void>('setLanguage', languageCode);
   }
+
+  Future<void> openHistoryViewerWindow({String? languageCode}) async {
+    if (!isSupported) return;
+    final window = await _openOrCreate(
+      WindowKind.historyViewer,
+      languageCode: languageCode,
+    );
+    await window.invokeMethod<void>('setLanguage', languageCode);
+  }
 }

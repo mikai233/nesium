@@ -26,6 +26,7 @@ pub struct AuxTextureIds {
     pub tile: u32,
     pub sprite: u32,
     pub sprite_screen: u32,
+    pub history: u32,
 }
 
 /// Returns all auxiliary texture IDs defined on the Rust side.
@@ -38,6 +39,7 @@ pub async fn aux_texture_ids() -> AuxTextureIds {
         tile: crate::senders::tile::TILE_VIEWER_TEXTURE_ID,
         sprite: crate::senders::sprite::SPRITE_TEXTURE_ID,
         sprite_screen: crate::senders::sprite::SPRITE_SCREEN_TEXTURE_ID,
+        history: crate::senders::history::HISTORY_TEXTURE_ID,
     }
 }
 
@@ -640,5 +642,49 @@ pub async fn set_palette_capture_scanline(scanline: i32, dot: i32) -> Result<(),
             dot: dot as u16,
         })
         .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// =============================================================================
+// History Viewer Stream
+// =============================================================================
+
+/// History snapshot for the History Viewer.
+#[frb]
+#[derive(Debug, Clone)]
+pub struct HistorySnapshot {
+    pub frame_count: usize,
+    pub current_position: usize,
+    /// Absolute frame sequence number of the first (oldest) frame in the buffer.
+    pub first_frame_seq: u64,
+}
+
+/// Subscribes to History state updates.
+///
+/// This streams the history data to Flutter when the user seeks.
+/// The frame is also rendered to the history auxiliary texture.
+#[frb]
+pub async fn history_state_stream(sink: StreamSink<HistorySnapshot>) -> Result<(), String> {
+    use crate::senders::history::HistoryStateSender;
+
+    let handle = runtime_handle();
+    let sender = Box::new(HistoryStateSender::new(sink));
+
+    handle
+        .subscribe_event(EventTopic::History, sender)
+        .map_err(|e| format!("Failed to subscribe to History events: {}", e))?;
+
+    Ok(())
+}
+
+/// Unsubscribes from History state updates.
+#[frb]
+pub async fn unsubscribe_history_state() -> Result<(), String> {
+    let handle = runtime_handle();
+
+    handle
+        .unsubscribe_event(EventTopic::History)
+        .map_err(|e| format!("Failed to unsubscribe from History events: {}", e))?;
+
     Ok(())
 }

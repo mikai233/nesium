@@ -1982,6 +1982,12 @@ abstract class AppLocalizations {
   /// **'Palette Viewer'**
   String get menuPaletteViewer;
 
+  /// No description provided for @menuHistoryViewer.
+  ///
+  /// In en, this message translates to:
+  /// **'History Viewer'**
+  String get menuHistoryViewer;
+
   /// No description provided for @paletteViewerPaletteRamTitle.
   ///
   /// In en, this message translates to:
@@ -2215,6 +2221,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Offscreen'**
   String get spriteViewerVisibleStatusOffscreen;
+
+  /// No description provided for @historyViewerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'History Viewer'**
+  String get historyViewerTitle;
+
+  /// No description provided for @historyViewerInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'History Info'**
+  String get historyViewerInfo;
+
+  /// No description provided for @historyViewerBufferSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind Buffer size: {size}'**
+  String historyViewerBufferSize(String size);
+
+  /// No description provided for @historyViewerHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag the slider to seek through history. Click \"Apply\" to restore machine state to this point.'**
+  String get historyViewerHint;
+
+  /// No description provided for @historyViewerApplyState.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply State'**
+  String get historyViewerApplyState;
+
+  /// No description provided for @historyViewerStateRestored.
+  ///
+  /// In en, this message translates to:
+  /// **'Machine state restored'**
+  String get historyViewerStateRestored;
+
+  /// No description provided for @historyViewerApplyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to apply: {error}'**
+  String historyViewerApplyFailed(String error);
+
+  /// No description provided for @historyViewerNoRom.
+  ///
+  /// In en, this message translates to:
+  /// **'No ROM loaded. Please load a game to see history data.'**
+  String get historyViewerNoRom;
+
+  /// No description provided for @historyViewerEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'History is empty. If the game is paused, please resume it to start recording frames.'**
+  String get historyViewerEmpty;
+
+  /// No description provided for @historyViewerDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind is disabled in settings. Enable it to capture long-term history, or rely on active recording while this viewer is open.'**
+  String get historyViewerDisabled;
+
+  /// No description provided for @historyViewerFrame.
+  ///
+  /// In en, this message translates to:
+  /// **'Frame: {current} / {total}'**
+  String historyViewerFrame(String current, String total);
+
+  /// No description provided for @historyViewerPlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get historyViewerPlay;
+
+  /// No description provided for @historyViewerPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get historyViewerPause;
+
+  /// No description provided for @historyViewerStepBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Step Back'**
+  String get historyViewerStepBack;
+
+  /// No description provided for @historyViewerStepForward.
+  ///
+  /// In en, this message translates to:
+  /// **'Step Forward'**
+  String get historyViewerStepForward;
+
+  /// No description provided for @historyViewerGoToStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Start'**
+  String get historyViewerGoToStart;
+
+  /// No description provided for @historyViewerGoToEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to End'**
+  String get historyViewerGoToEnd;
+
+  /// No description provided for @historyViewerPlaybackSpeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback Speed'**
+  String get historyViewerPlaybackSpeed;
 }
 
 class _AppLocalizationsDelegate

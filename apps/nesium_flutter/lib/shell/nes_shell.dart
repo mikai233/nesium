@@ -41,6 +41,7 @@ import '../features/debugger/tilemap_viewer.dart';
 import '../features/debugger/tile_viewer.dart';
 import '../features/debugger/sprite_viewer.dart';
 import '../features/debugger/palette_viewer.dart';
+import '../features/debugger/history_viewer.dart';
 import '../features/tools/tools_panel.dart';
 
 class NesShell extends ConsumerStatefulWidget {
@@ -746,6 +747,7 @@ class _NesShellState extends ConsumerState<NesShell>
       openTileViewer: _openTileViewer,
       openSpriteViewer: _openSpriteViewer,
       openPaletteViewer: _openPaletteViewer,
+      openHistoryViewer: _openHistoryViewer,
       openNetplay: _openNetplay,
     );
   }
@@ -939,6 +941,42 @@ class _NesShellState extends ConsumerState<NesShell>
             child: Scaffold(
               appBar: AppBar(title: Text(l10n.menuPaletteViewer)),
               body: const PaletteViewer(),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openHistoryViewer() async {
+    if (_isDesktop) {
+      if (_desktopWindowManager.isSupported) {
+        final languageCode = ref.read(appLanguageProvider).languageCode;
+        await _desktopWindowManager.openHistoryViewerWindow(
+          languageCode: languageCode,
+        );
+      } else {
+        if (!mounted) return;
+        final l10n = AppLocalizations.of(context)!;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: Text(l10n.menuHistoryViewer)),
+              body: const HistoryViewer(),
+            ),
+          ),
+        );
+      }
+    } else {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ProviderScope(
+            overrides: [nesActionsProvider.overrideWithValue(_buildActions())],
+            child: Scaffold(
+              appBar: AppBar(title: Text(l10n.menuHistoryViewer)),
+              body: const HistoryViewer(),
             ),
           ),
         ),

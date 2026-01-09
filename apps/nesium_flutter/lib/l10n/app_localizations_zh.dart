@@ -1021,6 +1021,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuPaletteViewer => '调色板查看器';
 
   @override
+  String get menuHistoryViewer => '历史查看器';
+
+  @override
   String get paletteViewerPaletteRamTitle => '调色板 RAM (32)';
 
   @override
@@ -1144,4 +1147,65 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get spriteViewerVisibleStatusOffscreen => '屏幕外';
+
+  @override
+  String get historyViewerTitle => '历史查看器';
+
+  @override
+  String get historyViewerInfo => '历史信息';
+
+  @override
+  String historyViewerBufferSize(String size) {
+    return '倒带缓冲区大小: $size';
+  }
+
+  @override
+  String get historyViewerHint => '拖动滑块可浏览历史记录。点击「应用状态」可将机器恢复到该时刻。';
+
+  @override
+  String get historyViewerApplyState => '应用状态';
+
+  @override
+  String get historyViewerStateRestored => '机器状态已恢复';
+
+  @override
+  String historyViewerApplyFailed(String error) {
+    return '应用失败: $error';
+  }
+
+  @override
+  String get historyViewerNoRom => '未加载ROM。请先加载游戏以查看历史数据。';
+
+  @override
+  String get historyViewerEmpty => '历史记录为空。如果游戏已暂停，请继续运行以开始录制帧。';
+
+  @override
+  String get historyViewerDisabled =>
+      '倒带功能已在设置中禁用。启用后可捕获长期历史记录，或者在打开此查看器时依赖主动录制。';
+
+  @override
+  String historyViewerFrame(String current, String total) {
+    return '帧: $current / $total';
+  }
+
+  @override
+  String get historyViewerPlay => '播放';
+
+  @override
+  String get historyViewerPause => '暂停';
+
+  @override
+  String get historyViewerStepBack => '后退一帧';
+
+  @override
+  String get historyViewerStepForward => '前进一帧';
+
+  @override
+  String get historyViewerGoToStart => '跳到开头';
+
+  @override
+  String get historyViewerGoToEnd => '跳到结尾';
+
+  @override
+  String get historyViewerPlaybackSpeed => '播放速度';
 }

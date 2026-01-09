@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Returns all auxiliary texture IDs defined on the Rust side.
 ///
@@ -213,17 +213,30 @@ Future<void> setPaletteCaptureScanline({
   dot: dot,
 );
 
+/// Subscribes to History state updates.
+///
+/// This streams the history data to Flutter when the user seeks.
+/// The frame is also rendered to the history auxiliary texture.
+Stream<HistorySnapshot> historyStateStream() =>
+    RustLib.instance.api.crateApiEventsHistoryStateStream();
+
+/// Unsubscribes from History state updates.
+Future<void> unsubscribeHistoryState() =>
+    RustLib.instance.api.crateApiEventsUnsubscribeHistoryState();
+
 class AuxTextureIds {
   final int tilemap;
   final int tile;
   final int sprite;
   final int spriteScreen;
+  final int history;
 
   const AuxTextureIds({
     required this.tilemap,
     required this.tile,
     required this.sprite,
     required this.spriteScreen,
+    required this.history,
   });
 
   @override
@@ -231,7 +244,8 @@ class AuxTextureIds {
       tilemap.hashCode ^
       tile.hashCode ^
       sprite.hashCode ^
-      spriteScreen.hashCode;
+      spriteScreen.hashCode ^
+      history.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -241,7 +255,8 @@ class AuxTextureIds {
           tilemap == other.tilemap &&
           tile == other.tile &&
           sprite == other.sprite &&
-          spriteScreen == other.spriteScreen;
+          spriteScreen == other.spriteScreen &&
+          history == other.history;
 }
 
 /// Debug state notification sent per-frame when subscribed.
@@ -310,6 +325,34 @@ class DebugStateNotification {
           ppuCtrl == other.ppuCtrl &&
           ppuMask == other.ppuMask &&
           ppuStatus == other.ppuStatus;
+}
+
+/// History snapshot for the History Viewer.
+class HistorySnapshot {
+  final BigInt frameCount;
+  final BigInt currentPosition;
+
+  /// Absolute frame sequence number of the first (oldest) frame in the buffer.
+  final BigInt firstFrameSeq;
+
+  const HistorySnapshot({
+    required this.frameCount,
+    required this.currentPosition,
+    required this.firstFrameSeq,
+  });
+
+  @override
+  int get hashCode =>
+      frameCount.hashCode ^ currentPosition.hashCode ^ firstFrameSeq.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HistorySnapshot &&
+          runtimeType == other.runtimeType &&
+          frameCount == other.frameCount &&
+          currentPosition == other.currentPosition &&
+          firstFrameSeq == other.firstFrameSeq;
 }
 
 /// Palette snapshot for UI inspection.

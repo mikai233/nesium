@@ -1034,6 +1034,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuPaletteViewer => 'Palette Viewer';
 
   @override
+  String get menuHistoryViewer => 'History Viewer';
+
+  @override
   String get paletteViewerPaletteRamTitle => 'Palette RAM (32)';
 
   @override
@@ -1158,4 +1161,68 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get spriteViewerVisibleStatusOffscreen => 'Offscreen';
+
+  @override
+  String get historyViewerTitle => 'History Viewer';
+
+  @override
+  String get historyViewerInfo => 'History Info';
+
+  @override
+  String historyViewerBufferSize(String size) {
+    return 'Rewind Buffer size: $size';
+  }
+
+  @override
+  String get historyViewerHint =>
+      'Drag the slider to seek through history. Click \"Apply\" to restore machine state to this point.';
+
+  @override
+  String get historyViewerApplyState => 'Apply State';
+
+  @override
+  String get historyViewerStateRestored => 'Machine state restored';
+
+  @override
+  String historyViewerApplyFailed(String error) {
+    return 'Failed to apply: $error';
+  }
+
+  @override
+  String get historyViewerNoRom =>
+      'No ROM loaded. Please load a game to see history data.';
+
+  @override
+  String get historyViewerEmpty =>
+      'History is empty. If the game is paused, please resume it to start recording frames.';
+
+  @override
+  String get historyViewerDisabled =>
+      'Rewind is disabled in settings. Enable it to capture long-term history, or rely on active recording while this viewer is open.';
+
+  @override
+  String historyViewerFrame(String current, String total) {
+    return 'Frame: $current / $total';
+  }
+
+  @override
+  String get historyViewerPlay => 'Play';
+
+  @override
+  String get historyViewerPause => 'Pause';
+
+  @override
+  String get historyViewerStepBack => 'Step Back';
+
+  @override
+  String get historyViewerStepForward => 'Step Forward';
+
+  @override
+  String get historyViewerGoToStart => 'Go to Start';
+
+  @override
+  String get historyViewerGoToEnd => 'Go to End';
+
+  @override
+  String get historyViewerPlaybackSpeed => 'Playback Speed';
 }

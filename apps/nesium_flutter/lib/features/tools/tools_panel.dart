@@ -55,7 +55,8 @@ class ToolsPanel extends ConsumerWidget {
     NesMenuItemId.tilemapViewer ||
     NesMenuItemId.tileViewer ||
     NesMenuItemId.spriteViewer ||
-    NesMenuItemId.paletteViewer => true,
+    NesMenuItemId.paletteViewer ||
+    NesMenuItemId.historyViewer => true,
     _ => false,
   };
 
@@ -86,6 +87,9 @@ class ToolsPanel extends ConsumerWidget {
         break;
       case NesMenuItemId.paletteViewer:
         actions?.openPaletteViewer?.call();
+        break;
+      case NesMenuItemId.historyViewer:
+        actions?.openHistoryViewer?.call();
         break;
       default:
         break;

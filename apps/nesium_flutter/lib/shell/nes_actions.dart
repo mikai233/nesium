@@ -30,6 +30,7 @@ class NesActions {
     this.openTileViewer,
     this.openSpriteViewer,
     this.openPaletteViewer,
+    this.openHistoryViewer,
     this.openNetplay,
   });
 
@@ -54,5 +55,6 @@ class NesActions {
   final AsyncCallback? openTileViewer;
   final AsyncCallback? openSpriteViewer;
   final AsyncCallback? openPaletteViewer;
+  final AsyncCallback? openHistoryViewer;
   final AsyncCallback? openNetplay;
 }

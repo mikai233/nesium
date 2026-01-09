@@ -14,6 +14,7 @@ import '../features/debugger/palette_viewer.dart';
 import '../features/debugger/tile_viewer.dart';
 import '../features/debugger/tilemap_viewer.dart';
 import '../features/debugger/sprite_viewer.dart';
+import '../features/debugger/history_viewer.dart';
 import '../features/tools/tools_panel.dart';
 import '../platform/platform_capabilities.dart';
 import 'window_types.dart';
@@ -125,6 +126,9 @@ class _SecondaryWindowState extends State<SecondaryWindow> with WindowListener {
       case WindowKind.paletteViewer:
         await bestEffort(bridge.unsubscribePaletteState);
         break;
+      case WindowKind.historyViewer:
+        await bestEffort(bridge.unsubscribeHistoryState);
+        break;
       case WindowKind.tools:
       case WindowKind.main:
         break;
@@ -211,6 +215,9 @@ class SecondaryToolsContent extends StatelessWidget {
             openPaletteViewer: () async {
               await DesktopWindowManager().openPaletteViewerWindow();
             },
+            openHistoryViewer: () async {
+              await DesktopWindowManager().openHistoryViewerWindow();
+            },
           ),
         ),
       ],
@@ -243,5 +250,14 @@ class SecondarySpriteViewerContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SpriteViewer();
+  }
+}
+
+class SecondaryHistoryViewerContent extends StatelessWidget {
+  const SecondaryHistoryViewerContent({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const HistoryViewer();
   }
 }

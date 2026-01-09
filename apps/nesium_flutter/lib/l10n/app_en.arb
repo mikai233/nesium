@@ -533,6 +533,7 @@
   "tileViewerPresetOam": "OAM",
   "menuSpriteViewer": "Sprite Viewer",
   "menuPaletteViewer": "Palette Viewer",
+  "menuHistoryViewer": "History Viewer",
   "paletteViewerPaletteRamTitle": "Palette RAM (32)",
   "paletteViewerSystemPaletteTitle": "System Palette (64)",
   "paletteViewerSettingsTooltip": "Palette Viewer Settings",
@@ -602,5 +603,47 @@
   "spriteViewerValueYes": "Yes",
   "spriteViewerValueNoOffscreen": "No (offscreen)",
   "spriteViewerVisibleStatusVisible": "Visible",
-  "spriteViewerVisibleStatusOffscreen": "Offscreen"
+  "spriteViewerVisibleStatusOffscreen": "Offscreen",
+  "historyViewerTitle": "History Viewer",
+  "historyViewerInfo": "History Info",
+  "historyViewerBufferSize": "Rewind Buffer size: {size}",
+  "@historyViewerBufferSize": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "historyViewerHint": "Drag the slider to seek through history. Click \"Apply\" to restore machine state to this point.",
+  "historyViewerApplyState": "Apply State",
+  "historyViewerStateRestored": "Machine state restored",
+  "historyViewerApplyFailed": "Failed to apply: {error}",
+  "@historyViewerApplyFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "historyViewerNoRom": "No ROM loaded. Please load a game to see history data.",
+  "historyViewerEmpty": "History is empty. If the game is paused, please resume it to start recording frames.",
+  "historyViewerDisabled": "Rewind is disabled in settings. Enable it to capture long-term history, or rely on active recording while this viewer is open.",
+  "historyViewerFrame": "Frame: {current} / {total}",
+  "@historyViewerFrame": {
+    "placeholders": {
+      "current": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "historyViewerPlay": "Play",
+  "historyViewerPause": "Pause",
+  "historyViewerStepBack": "Step Back",
+  "historyViewerStepForward": "Step Forward",
+  "historyViewerGoToStart": "Go to Start",
+  "historyViewerGoToEnd": "Go to End",
+  "historyViewerPlaybackSpeed": "Playback Speed"
 }

@@ -5,6 +5,7 @@
 
 import 'api/emulation.dart';
 import 'api/events.dart';
+import 'api/history.dart';
 import 'api/input.dart';
 import 'api/load_rom.dart';
 import 'api/netplay.dart';
@@ -32,6 +33,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   RustStreamSink<DebugStateNotification>
   dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw);
+
+  @protected
+  RustStreamSink<HistorySnapshot> dco_decode_StreamSink_history_snapshot_Sse(
+    dynamic raw,
+  );
 
   @protected
   RustStreamSink<NetplayGameEvent> dco_decode_StreamSink_netplay_game_event_Sse(
@@ -83,6 +89,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DebugStateNotification dco_decode_debug_state_notification(dynamic raw);
+
+  @protected
+  HistorySnapshot dco_decode_history_snapshot(dynamic raw);
 
   @protected
   int dco_decode_i_16(dynamic raw);
@@ -172,11 +181,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  BigInt dco_decode_usize(dynamic raw);
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
   RustStreamSink<DebugStateNotification>
   sse_decode_StreamSink_debug_state_notification_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<HistorySnapshot> sse_decode_StreamSink_history_snapshot_Sse(
     SseDeserializer deserializer,
   );
 
@@ -232,6 +249,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DebugStateNotification sse_decode_debug_state_notification(
     SseDeserializer deserializer,
   );
+
+  @protected
+  HistorySnapshot sse_decode_history_snapshot(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_16(SseDeserializer deserializer);
@@ -331,6 +351,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -339,6 +362,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_debug_state_notification_Sse(
     RustStreamSink<DebugStateNotification> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_history_snapshot_Sse(
+    RustStreamSink<HistorySnapshot> self,
     SseSerializer serializer,
   );
 
@@ -402,6 +431,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_debug_state_notification(
     DebugStateNotification self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_history_snapshot(
+    HistorySnapshot self,
     SseSerializer serializer,
   );
 
@@ -530,6 +565,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 }
 
 // Section: wire_class

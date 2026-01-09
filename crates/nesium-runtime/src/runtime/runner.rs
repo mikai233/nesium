@@ -15,9 +15,10 @@ use super::{
     pubsub::RuntimePubSub,
     state::RuntimeState,
     types::{
-        AudioMode, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT, NotificationEvent,
-        PaletteState, PpuDebugState, RuntimeError, SpriteInfo, SpriteState, TileState,
-        TileViewerBackground, TileViewerLayout, TileViewerSource, TilemapState,
+        AudioMode, CpuDebugState, DebugState, EventTopic, HistoryState, InterceptorKind,
+        NTSC_FPS_EXACT, NotificationEvent, PaletteState, PpuDebugState, RuntimeError, SpriteInfo,
+        SpriteState, TileState, TileViewerBackground, TileViewerLayout, TileViewerSource,
+        TilemapState,
     },
     util::button_bit,
 };
@@ -91,6 +92,14 @@ pub(crate) struct Runner {
     movie_frame: usize,
     netplay_input: Option<Arc<dyn NetplayInputProvider>>,
     netplay_active: bool,
+    /// Current position in the rewind history for the History Viewer (None = no active viewer).
+    history_position: Option<usize>,
+    /// Reference counts for interceptors. An interceptor is enabled when count > 0.
+    interceptor_refcounts: std::collections::HashMap<InterceptorKind, usize>,
+    /// Cached position for history viewer incremental seeking.
+    history_cache_position: Option<usize>,
+    /// Cached index buffer for history viewer incremental seeking.
+    history_cache_bytes: Vec<u8>,
 }
 
 impl Runner {
@@ -143,6 +152,10 @@ impl Runner {
             movie_frame: 0,
             netplay_input: None,
             netplay_active: false,
+            history_position: None,
+            interceptor_refcounts: std::collections::HashMap::new(),
+            history_cache_position: None,
+            history_cache_bytes: Vec::new(),
         }
     }
 
@@ -303,6 +316,8 @@ impl Runner {
                 self.handle_set_rewinding(rewinding, reply)
             }
             ControlMessage::LoadMovie(movie, reply) => self.handle_load_movie(movie, reply),
+            ControlMessage::HistorySeek(pos, reply) => self.handle_history_seek(pos, reply),
+            ControlMessage::HistoryApply(pos, reply) => self.handle_history_apply(pos, reply),
             ControlMessage::SubscribeEvent(topic, sender, reply) => {
                 self.pubsub.subscribe(topic, sender);
                 self.after_subscribe_event(topic);
@@ -423,37 +438,66 @@ impl Runner {
 
     fn after_subscribe_event(&mut self, topic: EventTopic) {
         match topic {
-            EventTopic::Tilemap => self.nes.enable_tilemap_interceptor(),
-            EventTopic::Tile => self.nes.enable_tile_viewer_interceptor(),
-            EventTopic::Sprite => self.nes.enable_sprite_interceptor(),
-            EventTopic::Palette => self.nes.enable_palette_interceptor(),
+            EventTopic::Tilemap => self.require_interceptor(InterceptorKind::Tilemap),
+            EventTopic::Tile => self.require_interceptor(InterceptorKind::TileViewer),
+            EventTopic::Sprite => self.require_interceptor(InterceptorKind::Sprite),
+            EventTopic::Palette => self.require_interceptor(InterceptorKind::Palette),
+            EventTopic::History => {
+                // History viewer needs palette data to render frames
+                self.require_interceptor(InterceptorKind::Palette);
+                // Always capture on subscribe if the buffer is empty.
+                if self.rewind.is_empty() {
+                    self.maybe_capture_rewind_history();
+                }
+                // Always broadcast, even if still empty (UI needs to know frame_count=0).
+                self.broadcast_history_state_initial();
+            }
             _ => {}
         }
     }
 
     fn after_unsubscribe_event(&mut self, topic: EventTopic) {
         match topic {
-            EventTopic::Tilemap => {
-                if !self.pubsub.has_subscriber(EventTopic::Tilemap) {
-                    self.nes.disable_tilemap_interceptor();
-                }
-            }
-            EventTopic::Tile => {
-                if !self.pubsub.has_subscriber(EventTopic::Tile) {
-                    self.nes.disable_tile_viewer_interceptor();
-                }
-            }
-            EventTopic::Sprite => {
-                if !self.pubsub.has_subscriber(EventTopic::Sprite) {
-                    self.nes.disable_sprite_interceptor();
-                }
-            }
-            EventTopic::Palette => {
-                if !self.pubsub.has_subscriber(EventTopic::Palette) {
-                    self.nes.disable_palette_interceptor();
-                }
+            EventTopic::Tilemap => self.release_interceptor(InterceptorKind::Tilemap),
+            EventTopic::Tile => self.release_interceptor(InterceptorKind::TileViewer),
+            EventTopic::Sprite => self.release_interceptor(InterceptorKind::Sprite),
+            EventTopic::Palette => self.release_interceptor(InterceptorKind::Palette),
+            EventTopic::History => {
+                self.history_position = None;
+                self.release_interceptor(InterceptorKind::Palette);
             }
             _ => {}
+        }
+    }
+
+    /// Increments the reference count for an interceptor and enables it if needed.
+    fn require_interceptor(&mut self, kind: InterceptorKind) {
+        let count = self.interceptor_refcounts.entry(kind).or_insert(0);
+        *count += 1;
+        if *count == 1 {
+            // First user, enable the interceptor
+            match kind {
+                InterceptorKind::Tilemap => self.nes.enable_tilemap_interceptor(),
+                InterceptorKind::TileViewer => self.nes.enable_tile_viewer_interceptor(),
+                InterceptorKind::Sprite => self.nes.enable_sprite_interceptor(),
+                InterceptorKind::Palette => self.nes.enable_palette_interceptor(),
+            }
+        }
+    }
+
+    /// Decrements the reference count for an interceptor and disables it if no one needs it.
+    fn release_interceptor(&mut self, kind: InterceptorKind) {
+        if let Some(count) = self.interceptor_refcounts.get_mut(&kind) {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                // No more users, disable the interceptor
+                match kind {
+                    InterceptorKind::Tilemap => self.nes.disable_tilemap_interceptor(),
+                    InterceptorKind::TileViewer => self.nes.disable_tile_viewer_interceptor(),
+                    InterceptorKind::Sprite => self.nes.disable_sprite_interceptor(),
+                    InterceptorKind::Palette => self.nes.disable_palette_interceptor(),
+                }
+            }
         }
     }
 
@@ -543,6 +587,9 @@ impl Runner {
 
         // Broadcast viewer state (each viewer has its own interceptor snapshot)
         self.maybe_broadcast_tilemap_and_chr_state();
+
+        // Broadcast history state if there's a subscriber.
+        self.maybe_broadcast_history_state();
     }
 
     fn movie_frame_for_seq(&mut self, frame_seq: u64) -> Option<InputFrame> {
@@ -715,7 +762,10 @@ impl Runner {
 
     /// Captures rewind history (snapshot + render index plane) when enabled.
     fn maybe_capture_rewind_history(&mut self) {
-        if !self.state.rewind_enabled.load(Ordering::Acquire) {
+        let rewind_enabled = self.state.rewind_enabled.load(Ordering::Acquire);
+        let has_subscriber = self.pubsub.has_subscriber(EventTopic::History);
+
+        if !rewind_enabled && !has_subscriber {
             return;
         }
 
@@ -724,11 +774,25 @@ impl Runner {
             ..Default::default()
         };
 
-        if let Ok(snap) = self.nes.save_snapshot(meta) {
-            let mut indices = vec![0u8; SCREEN_SIZE];
-            self.nes.copy_render_index_buffer(&mut indices);
-            let cap = self.state.rewind_capacity.load(Ordering::Acquire) as usize;
-            self.rewind.push_frame(&snap, indices, cap);
+        match self.nes.save_snapshot(meta) {
+            Ok(snap) => {
+                let mut indices = vec![0u8; SCREEN_SIZE];
+                self.nes.copy_render_index_buffer(&mut indices);
+
+                let stored_cap = self.state.rewind_capacity.load(Ordering::Acquire) as usize;
+                let cap = if has_subscriber {
+                    stored_cap.max(600) // Ensure at least 10s of history when viewer is open
+                } else {
+                    stored_cap
+                };
+
+                let frame_seq = self.state.frame_seq.load(Ordering::Relaxed);
+                self.rewind.push_frame(&snap, indices, cap, frame_seq);
+            }
+            Err(_) => {
+                // Failed to save snapshot, skip this frame
+                return;
+            }
         }
     }
 
@@ -870,6 +934,20 @@ impl Runner {
 
         self.pubsub
             .broadcast(EventTopic::DebugState, Box::new(debug));
+    }
+
+    /// Broadcasts history state if someone is listening.
+    ///
+    /// To avoid heavy overhead, this is limited to ~10 snapshots per second (every 6 frames).
+    fn maybe_broadcast_history_state(&mut self) {
+        if !self.pubsub.has_subscriber(EventTopic::History) {
+            return;
+        }
+        let pos = self
+            .history_position
+            .unwrap_or_else(|| self.rewind.len().saturating_sub(1));
+
+        self.broadcast_history_state(pos);
     }
 
     /// Broadcasts tilemap, CHR, sprite, and/or palette state to subscribers if someone is listening.
@@ -1636,6 +1714,196 @@ impl Runner {
     fn handle_set_rewinding(&mut self, rewinding: bool, reply: ControlReplySender) {
         self.state.rewinding.store(rewinding, Ordering::Release);
         let _ = reply.send(Ok(()));
+    }
+
+    /// Seeks to a specific frame in the rewind history for the History Viewer.
+    fn handle_history_seek(&mut self, position: usize, reply: ControlReplySender) {
+        let frame_count = self.rewind.len();
+        if position >= frame_count {
+            let _ = reply.send(Ok(()));
+            return;
+        }
+
+        self.history_position = Some(position);
+        self.broadcast_history_state(position);
+        let _ = reply.send(Ok(()));
+    }
+
+    /// Applies a specific frame from the rewind history to the machine state.
+    fn handle_history_apply(&mut self, position: usize, reply: ControlReplySender) {
+        let frame_count = self.rewind.len();
+        if position >= frame_count {
+            let _ = reply.send(Ok(()));
+            return;
+        }
+
+        if let Some(snap) = self.rewind.peek_snapshot_at(position) {
+            if let Err(e) = self.nes.load_snapshot(&snap) {
+                let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                    path: PathBuf::from("history"),
+                    error: format!("{:?}", e),
+                }));
+                return;
+            }
+
+            // Clear transient states.
+            if let Some(audio) = &self.audio {
+                audio.clear();
+            }
+
+            // Sync viewer to the new position.
+            self.history_position = Some(position);
+            self.broadcast_history_state(position);
+
+            let _ = reply.send(Ok(()));
+        } else {
+            let _ = reply.send(Err(RuntimeError::LoadStateFailed {
+                path: PathBuf::from("history"),
+                error: "Failed to reconstruct snapshot from history".to_string(),
+            }));
+        }
+    }
+
+    /// Broadcasts the current HistoryState to subscribers.
+    fn broadcast_history_state(&mut self, position: usize) {
+        if !self.pubsub.has_subscriber(EventTopic::History) {
+            return;
+        }
+
+        let frame_count = self.rewind.len();
+        if position >= frame_count {
+            return;
+        }
+
+        // Try incremental seeking first (O(1) per frame step).
+        let indices = self.get_history_frame_incremental(position);
+        let indices = match indices {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        // Update cache for next incremental seek.
+        self.history_cache_position = Some(position);
+        self.history_cache_bytes = indices.clone();
+
+        // Get the current palette state for rendering.
+        let snap = if let Some(s) = self.nes.take_palette_snapshot() {
+            s
+        } else {
+            return;
+        };
+
+        let mut bgra_palette = [[0u8; 4]; 64];
+        let nes_palette = self.nes.palette();
+
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            for (i, color) in nes_palette.as_colors().iter().enumerate() {
+                bgra_palette[i] = [color.b, color.g, color.r, 0xFF]; // BGRA
+            }
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        {
+            for (i, color) in nes_palette.as_colors().iter().enumerate() {
+                bgra_palette[i] = [color.r, color.g, color.b, 0xFF]; // RGBA
+            }
+        }
+
+        let state = HistoryState {
+            frame_count,
+            current_position: position,
+            first_frame_seq: self.rewind.first_frame_seq(),
+            indices,
+            palette: snap.palette,
+            bgra_palette,
+        };
+
+        self.pubsub.broadcast(EventTopic::History, Box::new(state));
+    }
+
+    /// Gets the index buffer for a frame, using incremental stepping when possible.
+    ///
+    /// - If target is same as cached position: return cached data (O(1))
+    /// - If target is adjacent (+/-1): use step_forward/step_backward (O(1))
+    /// - Otherwise: fall back to peek_frame_at (O(KEYFRAME_INTERVAL))
+    fn get_history_frame_incremental(&self, target: usize) -> Option<Vec<u8>> {
+        // Fast path: same position as cached
+        if let Some(cached_pos) = self.history_cache_position {
+            if cached_pos == target && !self.history_cache_bytes.is_empty() {
+                return Some(self.history_cache_bytes.clone());
+            }
+
+            // Check if we can do single-step incremental seek
+            if !self.history_cache_bytes.is_empty() {
+                if target == cached_pos + 1 {
+                    // Step forward by 1
+                    return self
+                        .rewind
+                        .step_forward(&self.history_cache_bytes, cached_pos);
+                } else if target + 1 == cached_pos {
+                    // Step backward by 1
+                    return self
+                        .rewind
+                        .step_backward(&self.history_cache_bytes, cached_pos);
+                }
+                // For small jumps, do multiple steps (up to 8 frames)
+                let diff = if target > cached_pos {
+                    target - cached_pos
+                } else {
+                    cached_pos - target
+                };
+                if diff <= 8 {
+                    return self.step_multiple(cached_pos, target);
+                }
+            }
+        }
+
+        // Fall back to keyframe-based seek
+        self.rewind.peek_frame_at(target)
+    }
+
+    /// Steps multiple frames from cached position to target (for small jumps).
+    fn step_multiple(&self, from: usize, to: usize) -> Option<Vec<u8>> {
+        let mut current = self.history_cache_bytes.clone();
+        let mut pos = from;
+
+        if to > from {
+            // Step forward
+            while pos < to {
+                current = self.rewind.step_forward(&current, pos)?;
+                pos += 1;
+            }
+        } else {
+            // Step backward
+            while pos > to {
+                current = self.rewind.step_backward(&current, pos)?;
+                pos -= 1;
+            }
+        }
+
+        Some(current)
+    }
+
+    /// Broadcasts initial history state, even when the buffer is empty.
+    ///
+    /// This ensures Flutter receives at least one event on subscription so the UI
+    /// knows whether there's data or not.
+    fn broadcast_history_state_initial(&mut self) {
+        if !self.pubsub.has_subscriber(EventTopic::History) {
+            return;
+        }
+
+        let frame_count = self.rewind.len();
+        if frame_count == 0 {
+            // Send an empty state so Flutter knows frame_count=0
+            let state = HistoryState::default();
+            self.pubsub.broadcast(EventTopic::History, Box::new(state));
+            return;
+        }
+
+        // Otherwise broadcast the latest frame normally
+        let last = frame_count.saturating_sub(1);
+        self.broadcast_history_state(last);
     }
 
     /// Loads a TAS movie and initializes playback by resetting the console.

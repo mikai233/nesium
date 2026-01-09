@@ -23,6 +23,7 @@ import '../features/about/about_page.dart';
 import '../features/save_state/auto_save_service.dart';
 import '../features/save_state/save_state_dialog.dart';
 import '../features/save_state/save_state_repository.dart';
+import '../features/debugger/history_viewer.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/settings/settings_page.dart';
@@ -821,6 +822,7 @@ class _WebShellState extends ConsumerState<WebShell> {
       openTools: () async {},
       openTilemapViewer: () async {},
       openTileViewer: () async {},
+      openHistoryViewer: _openHistoryViewer,
     );
 
     final isLandscape =
@@ -1025,6 +1027,20 @@ class _WebShellState extends ConsumerState<WebShell> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openHistoryViewer() async {
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            title: Text(AppLocalizations.of(context)!.menuHistoryViewer),
+          ),
+          body: const HistoryViewer(),
+        ),
+      ),
+    );
   }
 
   Future<void> _runRustCommand(
@@ -1262,6 +1278,7 @@ class _WebShellState extends ConsumerState<WebShell> {
       case NesMenuItemId.tileViewer:
       case NesMenuItemId.spriteViewer:
       case NesMenuItemId.paletteViewer:
+      case NesMenuItemId.historyViewer:
       case NesMenuItemId.autoSaveSlot:
       case NesMenuItemId.saveStateSlot:
       case NesMenuItemId.loadStateSlot:

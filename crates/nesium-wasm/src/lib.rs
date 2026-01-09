@@ -93,6 +93,9 @@ pub struct WasmNes {
     /// TAS movie playback.
     movie: Option<nesium_support::tas::Movie>,
     movie_frame: usize,
+
+    /// Frame sequence counter (absolute frame number since power on).
+    frame_seq: u64,
 }
 
 #[wasm_bindgen]
@@ -129,6 +132,7 @@ impl WasmNes {
             rewinding: false,
             movie: None,
             movie_frame: 0,
+            frame_seq: 0,
         }
     }
 
@@ -238,9 +242,11 @@ impl WasmNes {
                 self.nes.copy_render_index_buffer(&mut indices);
 
                 // Keep the same rewind buffering behavior as desktop.
-                self.rewind.push_frame(&snap, indices, self.rewind_capacity);
+                self.rewind
+                    .push_frame(&snap, indices, self.rewind_capacity, self.frame_seq);
             }
         }
+        self.frame_seq += 1;
 
         Ok(())
     }

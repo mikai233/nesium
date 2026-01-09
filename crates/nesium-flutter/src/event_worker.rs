@@ -10,7 +10,7 @@ use crossbeam_channel::{Receiver, Sender, bounded};
 use nesium_core::cartridge::header::Mirroring;
 
 use crate::api::events::{
-    SpriteInfo, SpriteSnapshot, TileSnapshot, TilemapMirroring, TilemapSnapshot,
+    HistorySnapshot, SpriteInfo, SpriteSnapshot, TileSnapshot, TilemapMirroring, TilemapSnapshot,
 };
 use crate::frb_generated::StreamSink;
 
@@ -30,6 +30,11 @@ pub enum EventTask {
     Sprite {
         state: Box<nesium_runtime::SpriteState>,
         sink: StreamSink<SpriteSnapshot>,
+    },
+    /// Render history frame to aux texture and stream snapshot.
+    History {
+        state: Box<nesium_runtime::HistoryState>,
+        sink: StreamSink<HistorySnapshot>,
     },
     /// Shutdown the worker thread.
     Shutdown,
@@ -74,6 +79,9 @@ fn worker_loop(rx: Receiver<EventTask>) {
             }
             EventTask::Sprite { state, sink } => {
                 process_sprite(&state, &sink);
+            }
+            EventTask::History { state, sink } => {
+                process_history(&state, &sink);
             }
             EventTask::Shutdown => break,
         }
@@ -228,6 +236,41 @@ fn process_sprite(state: &nesium_runtime::SpriteState, sink: &StreamSink<SpriteS
         large_sprites: state.large_sprites,
         pattern_base: state.pattern_base,
         rgba_palette,
+    };
+
+    let _ = sink.add(snapshot);
+}
+
+/// Processes History: renders frame indices to aux texture and streams snapshot.
+fn process_history(state: &nesium_runtime::HistoryState, sink: &StreamSink<HistorySnapshot>) {
+    let width = 256;
+    let height = 240;
+    let mut bgra = vec![0u8; width * height * 4];
+
+    // Render indices using the provided palette
+    // The index buffer contains NES color numbers (0-63) directly, not PPU palette indices
+    for (i, &color_idx) in state.indices.iter().enumerate() {
+        if i >= width * height {
+            break;
+        }
+
+        // color_idx is already a NES color number (0-63), use it directly with bgra_palette
+        let pixel = state.bgra_palette[(color_idx & 0x3F) as usize];
+
+        let di = i * 4;
+        bgra[di] = pixel[0];
+        bgra[di + 1] = pixel[1];
+        bgra[di + 2] = pixel[2];
+        bgra[di + 3] = pixel[3];
+    }
+
+    // Update auxiliary texture
+    crate::aux_texture::aux_update(crate::senders::history::HISTORY_TEXTURE_ID, &bgra);
+
+    let snapshot = HistorySnapshot {
+        frame_count: state.frame_count,
+        current_position: state.current_position,
+        first_frame_seq: state.first_frame_seq,
     };
 
     let _ = sink.add(snapshot);

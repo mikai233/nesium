@@ -119,7 +119,8 @@ class NesMenuBar extends StatelessWidget {
         (item.id == NesMenuItemId.tilemapViewer ||
             item.id == NesMenuItemId.tileViewer ||
             item.id == NesMenuItemId.spriteViewer ||
-            item.id == NesMenuItemId.paletteViewer)) {
+            item.id == NesMenuItemId.paletteViewer ||
+            item.id == NesMenuItemId.historyViewer)) {
       enabled = false;
     }
 
@@ -198,6 +199,9 @@ class NesMenuBar extends StatelessWidget {
         break;
       case NesMenuItemId.paletteViewer:
         unawaited(actions.openPaletteViewer?.call());
+        break;
+      case NesMenuItemId.historyViewer:
+        unawaited(actions.openHistoryViewer?.call());
         break;
       case NesMenuItemId.netplay:
         unawaited(actions.openNetplay?.call());

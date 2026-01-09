@@ -371,12 +371,63 @@ impl Default for PaletteState {
 
 impl Event for PaletteState {}
 
+// =====================
+// History Viewer Types
+// =====================
+
+/// History Viewer state for Flutter inspection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryState {
+    /// Total number of frames in the rewind history.
+    pub frame_count: usize,
+    /// Current position in the history (0 = oldest, frame_count-1 = newest).
+    pub current_position: usize,
+    /// Absolute frame sequence number of the first (oldest) frame in the buffer.
+    pub first_frame_seq: u64,
+    /// Index plane bytes of the current frame (256x240 = 61440 bytes).
+    /// Used to render the frame via auxiliary texture.
+    pub indices: Vec<u8>,
+    /// 32-byte palette RAM.
+    pub palette: [u8; 32],
+    /// 64-entry BGRA palette for aux texture rendering.
+    pub bgra_palette: [[u8; 4]; 64],
+}
+
+impl Default for HistoryState {
+    fn default() -> Self {
+        Self {
+            frame_count: 0,
+            current_position: 0,
+            first_frame_seq: 0,
+            indices: Vec::new(),
+            palette: [0; 32],
+            bgra_palette: [[0; 4]; 64],
+        }
+    }
+}
+
+impl Event for HistoryState {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventTopic {
     Notification,
     DebugState,
     Tilemap,
     Tile,
+    Sprite,
+    Palette,
+    History,
+}
+
+/// Identifies an interceptor type for reference counting.
+///
+/// Multiple subscribers may depend on the same interceptor. This enum allows
+/// the runtime to track how many subscribers need each interceptor type and
+/// only disable it when no one needs it anymore.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InterceptorKind {
+    Tilemap,
+    TileViewer,
     Sprite,
     Palette,
 }
