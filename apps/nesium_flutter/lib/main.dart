@@ -36,6 +36,17 @@ Future<void> main(List<String> args) async {
 
       if (isNativeDesktop) {
         await windowManager.ensureInitialized();
+
+        const windowOptions = WindowOptions(
+          center: true,
+          skipTaskbar: false,
+          titleBarStyle: TitleBarStyle.normal,
+        );
+
+        await windowManager.waitUntilReadyToShow(windowOptions, () async {
+          await windowManager.show();
+          await windowManager.focus();
+        });
       }
 
       await initAppStorage();

@@ -55,7 +55,7 @@ class DesktopWindowManager {
 
     // Otherwise, create a new window.
     final controller = await WindowController.create(
-      WindowConfiguration(arguments: args, hiddenAtLaunch: false),
+      WindowConfiguration(arguments: args, hiddenAtLaunch: true),
     );
     return controller;
   }
