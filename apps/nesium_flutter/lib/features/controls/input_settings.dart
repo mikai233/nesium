@@ -411,7 +411,7 @@ class InputSettingsController extends Notifier<InputSettingsState> {
     if (port == 0) {
       return InputSettings(
         device: device,
-        keyboardPreset: KeyboardPreset.custom,
+        keyboardPreset: KeyboardPreset.nesStandard,
         customUp: LogicalKeyboardKey.keyW,
         customDown: LogicalKeyboardKey.keyS,
         customLeft: LogicalKeyboardKey.keyA,
@@ -426,7 +426,7 @@ class InputSettingsController extends Notifier<InputSettingsState> {
     } else if (port == 1) {
       return InputSettings(
         device: InputDevice.keyboard,
-        keyboardPreset: KeyboardPreset.custom,
+        keyboardPreset: KeyboardPreset.nesStandard,
         customUp: LogicalKeyboardKey.arrowUp,
         customDown: LogicalKeyboardKey.arrowDown,
         customLeft: LogicalKeyboardKey.arrowLeft,
@@ -442,7 +442,7 @@ class InputSettingsController extends Notifier<InputSettingsState> {
 
     return InputSettings(
       device: InputDevice.keyboard,
-      keyboardPreset: KeyboardPreset.custom,
+      keyboardPreset: KeyboardPreset.nesStandard,
       customUp: null,
       customDown: null,
       customLeft: null,
