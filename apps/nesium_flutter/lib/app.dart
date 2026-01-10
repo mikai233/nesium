@@ -44,6 +44,7 @@ class NesiumApp extends ConsumerWidget {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(
+        fontFamily: 'NotoSansSC',
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blueGrey,
           brightness: Brightness.light,
@@ -62,6 +63,7 @@ class NesiumApp extends ConsumerWidget {
         ),
       ),
       darkTheme: ThemeData(
+        fontFamily: 'NotoSansSC',
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blueGrey,
           brightness: Brightness.dark,
