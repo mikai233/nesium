@@ -168,6 +168,7 @@ Future<int> _runStreaming({
     args,
     workingDirectory: workingDirectory,
     mode: ProcessStartMode.inheritStdio,
+    runInShell: true,
   );
   return proc.exitCode;
 }
