@@ -27,7 +27,7 @@ class NesInputMasksController extends Notifier<NesInputMasksState> {
       const NesInputMasksState(padMasks: {}, turboMasks: {});
 
   void flushToNative() {
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < 2; i++) {
       final padMask = state.padMasks[i] ?? 0;
       final turboMask = state.turboMasks[i] ?? 0;
 
@@ -83,7 +83,7 @@ class NesInputMasksController extends Notifier<NesInputMasksState> {
   void clearAll() {
     if (state.padMasks.isEmpty && state.turboMasks.isEmpty) return;
     state = const NesInputMasksState(padMasks: {}, turboMasks: {});
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < 2; i++) {
       unawaitedLogged(
         nes_input.setPadMask(pad: i, mask: 0),
         message: 'setPadMask (clearAll) pad $i',

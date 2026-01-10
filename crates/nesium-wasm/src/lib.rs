@@ -299,13 +299,10 @@ impl WasmNes {
         let port = port as usize;
         let bits_u8 = (bits & 0xFF) as u8;
 
-        let controller = self
-            .nes
-            .controllers
-            .get_mut(port)
-            .ok_or_else(|| JsValue::from_str("Invalid controller port"))?;
+        if let Some(controller) = self.nes.controllers.get_mut(port) {
+            controller.set_state(bits_u8);
+        }
 
-        controller.set_state(bits_u8);
         Ok(())
     }
 

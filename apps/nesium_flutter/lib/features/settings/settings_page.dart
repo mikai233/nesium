@@ -352,8 +352,16 @@ class _InputTab extends ConsumerWidget {
                 entries: [
                   DropdownMenuEntry(value: 0, label: l10n.player1),
                   DropdownMenuEntry(value: 1, label: l10n.player2),
-                  DropdownMenuEntry(value: 2, label: l10n.player3),
-                  DropdownMenuEntry(value: 3, label: l10n.player4),
+                  DropdownMenuEntry(
+                    value: 2,
+                    label: l10n.player3,
+                    enabled: false,
+                  ),
+                  DropdownMenuEntry(
+                    value: 3,
+                    label: l10n.player4,
+                    enabled: false,
+                  ),
                 ],
                 onSelected: (val) {
                   inputController.setSelectedPort(val);
