@@ -4,7 +4,9 @@
 // For now, this is a stub that returns empty values.
 // TODO: Implement browser Gamepad API integration in nes_worker.js.
 
-import 'dart:async';
+import 'nes_gamepad_types.dart';
+
+export 'nes_gamepad_types.dart';
 
 /// Whether gamepad support is available on this platform.
 bool get isGamepadSupported =>
@@ -46,49 +48,19 @@ Future<void> bindGamepad({required int id, int? port}) async {
   // Web: No-op
 }
 
-// === Dart-friendly types (same as IO version) ===
-
-/// Result of polling gamepads.
-class GamepadPollResult {
-  final List<int> padMasks;
-  final List<int> turboMasks;
-  final GamepadActions actions;
-
-  const GamepadPollResult({
-    required this.padMasks,
-    required this.turboMasks,
-    required this.actions,
-  });
+/// Returns the current button mapping for a NES port.
+Future<GamepadMapping?> getGamepadMapping(int port) async {
+  // Web: Stub
+  return null;
 }
 
-/// Extended gamepad actions.
-class GamepadActions {
-  final bool rewind;
-  final bool fastForward;
-  final bool saveState;
-  final bool loadState;
-  final bool pause;
-
-  const GamepadActions({
-    required this.rewind,
-    required this.fastForward,
-    required this.saveState,
-    required this.loadState,
-    required this.pause,
-  });
+/// Returns a list of currently pressed buttons on a gamepad.
+Future<List<GamepadButton>> getGamepadPressedButtons(int id) async {
+  // Web: Stub
+  return [];
 }
 
-/// Information about a connected gamepad.
-class GamepadInfo {
-  final int id;
-  final String name;
-  final bool connected;
-  final int? port;
-
-  const GamepadInfo({
-    required this.id,
-    required this.name,
-    required this.connected,
-    this.port,
-  });
+/// Sets a custom button mapping for a NES port.
+Future<void> setGamepadMapping(int port, GamepadMapping mapping) async {
+  // Web: Stub
 }
