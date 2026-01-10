@@ -114,9 +114,13 @@ class NesMenuBar extends StatelessWidget {
         enabled = false;
       }
     } else if (item.id == NesMenuItemId.loadTasMovie) {
-      enabled = false;
+      enabled = false; // TAS feature not yet implemented
     } else if (!hasRom &&
-        (item.id == NesMenuItemId.tilemapViewer ||
+        (item.id == NesMenuItemId.togglePause ||
+            item.id == NesMenuItemId.reset ||
+            item.id == NesMenuItemId.powerReset ||
+            item.id == NesMenuItemId.powerOff ||
+            item.id == NesMenuItemId.tilemapViewer ||
             item.id == NesMenuItemId.tileViewer ||
             item.id == NesMenuItemId.spriteViewer ||
             item.id == NesMenuItemId.paletteViewer)) {
