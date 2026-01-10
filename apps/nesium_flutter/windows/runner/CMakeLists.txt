@@ -131,27 +131,23 @@ echo [Rust] Build sequence completed successfully.
 ")
 
 # 6. Determine Build Mode String for the Script
-#    Logic: If CMake is in Release or Profile mode, pass 'release-dist'.
-#           For Debug or any other mode, pass 'standard'.
 set(MODE_GENEX "$<IF:$<OR:$<CONFIG:Release>,$<CONFIG:Profile>>,release-dist,standard>")
 
-# 7. Register Custom Build Command
-#    This command executes the generated batch script at build time.
-add_custom_command(
-    OUTPUT            "${RUST_DLL_STAGING}"
-    COMMAND           "${BUILD_SCRIPT}" 
-                      "${RUST_PACKAGE_NAME}" 
-                      "${RUST_TARGET}" 
-                      "${MODE_GENEX}" 
-                      "${RUST_DLL_STAGING}"
+# 7. Define Custom Target for Rust Building
+#    This target will always run in every build because it has a COMMAND.
+#    Cargo handles its own incremental build checks efficiently.
+add_custom_target(nesium_rust_build ALL
+    COMMAND "${BUILD_SCRIPT}" 
+            "${RUST_PACKAGE_NAME}" 
+            "${RUST_TARGET}" 
+            "${MODE_GENEX}" 
+            "${RUST_DLL_STAGING}"
     WORKING_DIRECTORY "${NESIUM_WORKSPACE_DIR}"
     COMMENT           "Compiling Rust backend (Mode: ${MODE_GENEX})..."
     VERBATIM
 )
 
-# 8. Define Custom Target & Dependencies
-#    Ensure the Rust build runs before the main Flutter Runner links.
-add_custom_target(nesium_rust_build ALL DEPENDS "${RUST_DLL_STAGING}")
+# 8. Link dependencies
 add_dependencies(${BINARY_NAME} nesium_rust_build)
 
 # 9. Post-Build Action: Deploy to Runner
