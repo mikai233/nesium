@@ -19,10 +19,16 @@ nesium-runtime.workspace = true
 nesium-netplay.workspace = true
 nesium-netd.workspace = true
 nesium-support.workspace = true
+
+# Enable gamepad feature on desktop platforms (not Android, not WASM)
+[target.'cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))'.dependencies]
+nesium-support = { workspace = true, features = ["gamepad"] }
+gilrs = "0.11"
 tokio = { workspace = true, features = ["full"] }
 dashmap.workspace = true
 crossbeam-channel.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [target.'cfg(any(target_os = "android", target_os = "windows", target_os = "linux"))'.dependencies]
 mimalloc = { workspace = true, optional = true }

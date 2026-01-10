@@ -278,11 +278,137 @@ abstract class AppLocalizations {
   /// **'Keyboard'**
   String get inputDeviceKeyboard;
 
+  /// No description provided for @inputDeviceGamepad.
+  ///
+  /// In en, this message translates to:
+  /// **'Gamepad'**
+  String get inputDeviceGamepad;
+
+  /// No description provided for @connectedGamepadsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected Gamepads'**
+  String get connectedGamepadsTitle;
+
+  /// No description provided for @connectedGamepadsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No gamepads connected'**
+  String get connectedGamepadsNone;
+
+  /// No description provided for @connectedGamepadsPort.
+  ///
+  /// In en, this message translates to:
+  /// **'Player {port}'**
+  String connectedGamepadsPort(int port);
+
+  /// No description provided for @connectedGamepadsUnassigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned'**
+  String get connectedGamepadsUnassigned;
+
   /// No description provided for @inputDeviceVirtualController.
   ///
   /// In en, this message translates to:
   /// **'Virtual controller'**
   String get inputDeviceVirtualController;
+
+  /// No description provided for @inputGamepadAssignmentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Gamepad Assignment'**
+  String get inputGamepadAssignmentLabel;
+
+  /// No description provided for @inputGamepadNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None/Unassigned'**
+  String get inputGamepadNone;
+
+  /// No description provided for @inputListening.
+  ///
+  /// In en, this message translates to:
+  /// **'Listening...'**
+  String get inputListening;
+
+  /// No description provided for @inputDetected.
+  ///
+  /// In en, this message translates to:
+  /// **'Detected: {buttons}'**
+  String inputDetected(String buttons);
+
+  /// No description provided for @inputGamepadMappingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Button Mapping'**
+  String get inputGamepadMappingLabel;
+
+  /// No description provided for @inputResetToDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to Default'**
+  String get inputResetToDefault;
+
+  /// No description provided for @inputButtonA.
+  ///
+  /// In en, this message translates to:
+  /// **'A'**
+  String get inputButtonA;
+
+  /// No description provided for @inputButtonB.
+  ///
+  /// In en, this message translates to:
+  /// **'B'**
+  String get inputButtonB;
+
+  /// No description provided for @inputButtonTurboA.
+  ///
+  /// In en, this message translates to:
+  /// **'Turbo A'**
+  String get inputButtonTurboA;
+
+  /// No description provided for @inputButtonTurboB.
+  ///
+  /// In en, this message translates to:
+  /// **'Turbo B'**
+  String get inputButtonTurboB;
+
+  /// No description provided for @inputButtonSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get inputButtonSelect;
+
+  /// No description provided for @inputButtonStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get inputButtonStart;
+
+  /// No description provided for @inputButtonUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Up'**
+  String get inputButtonUp;
+
+  /// No description provided for @inputButtonDown.
+  ///
+  /// In en, this message translates to:
+  /// **'Down'**
+  String get inputButtonDown;
+
+  /// No description provided for @inputButtonLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get inputButtonLeft;
+
+  /// No description provided for @inputButtonRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get inputButtonRight;
 
   /// No description provided for @inputPortLabel.
   ///

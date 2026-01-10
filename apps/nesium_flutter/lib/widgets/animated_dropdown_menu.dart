@@ -229,7 +229,7 @@ class _AnimatedDropdownMenuState<T> extends State<AnimatedDropdownMenu<T>>
 
     setState(() => _isOpen = true);
     try {
-      final result = await showModal<T>(
+      final result = await showModal<Object?>(
         context: context,
         configuration: const _NoTransitionModalConfiguration(),
         builder: (modalContext) {
@@ -243,8 +243,8 @@ class _AnimatedDropdownMenuState<T> extends State<AnimatedDropdownMenu<T>>
         },
       );
       if (!mounted) return;
-      if (result != null) {
-        final ret = widget.onSelected(result);
+      if (result is _DropdownMenuResult<T>) {
+        final ret = widget.onSelected(result.value);
         if (ret is Future) unawaited(ret);
       }
     } finally {
@@ -419,7 +419,9 @@ class _AnchoredSelectMenu<T> extends StatelessWidget {
                         return InkWell(
                           borderRadius: BorderRadius.circular(10),
                           onTap: enabled
-                              ? () => Navigator.of(context).pop(entry.value)
+                              ? () => Navigator.of(
+                                  context,
+                                ).pop(_DropdownMenuResult(entry.value))
                               : null,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -481,4 +483,10 @@ class _AnchoredSelectMenu<T> extends StatelessWidget {
       },
     );
   }
+}
+
+@immutable
+class _DropdownMenuResult<T> {
+  const _DropdownMenuResult(this.value);
+  final T value;
 }

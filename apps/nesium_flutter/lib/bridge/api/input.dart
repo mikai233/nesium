@@ -6,6 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `set_gamepad_masks`, `update_runtime_input`
+
 Future<void> setPadMask({required int pad, required int mask}) =>
     RustLib.instance.api.crateApiInputSetPadMask(pad: pad, mask: mask);
 

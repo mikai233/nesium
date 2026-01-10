@@ -10,7 +10,7 @@ import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
-enum InputDevice { keyboard, virtualController }
+enum InputDevice { keyboard, gamepad, virtualController }
 
 enum KeyboardPreset { nesStandard, fightStick, arcadeLayout, custom }
 

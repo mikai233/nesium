@@ -11,4 +11,5 @@ final class StorageKeys {
   static const String settingsTurbo = 'settings.turbo.v1';
   static const String settingsVirtualControls = 'settings.virtual_controls.v1';
   static const String serverPort = 'settings.server.port.v1';
+  static const String settingsGamepad = 'settings.gamepad.v1';
 }

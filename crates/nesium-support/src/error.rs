@@ -10,4 +10,7 @@ pub enum SupportError {
 
     #[error("Unsupported TAS movie format: {0}")]
     UnsupportedTasFormat(String),
+
+    #[error("Gamepad error: {0}")]
+    Gamepad(String),
 }

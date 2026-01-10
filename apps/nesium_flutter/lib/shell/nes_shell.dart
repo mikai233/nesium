@@ -18,6 +18,7 @@ import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
 import '../domain/nes_state.dart';
 import '../domain/pad_button.dart';
+import '../domain/gamepad_service.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/turbo_settings.dart';
 import '../features/save_state/auto_save_service.dart';
@@ -950,6 +951,7 @@ class _NesShellState extends ConsumerState<NesShell>
   Widget build(BuildContext context) {
     final NesState state = ref.watch(nesControllerProvider);
     ref.watch(autoSaveServiceProvider); // Keep auto-save timer running
+    ref.watch(gamepadServiceProvider); // Keep gamepad polling running
 
     final actions = _buildActions();
 

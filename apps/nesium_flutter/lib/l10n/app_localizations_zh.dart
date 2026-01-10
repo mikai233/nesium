@@ -107,7 +107,74 @@ class AppLocalizationsZh extends AppLocalizations {
   String get inputDeviceKeyboard => '键盘';
 
   @override
+  String get inputDeviceGamepad => '手柄';
+
+  @override
+  String get connectedGamepadsTitle => '已连接手柄';
+
+  @override
+  String get connectedGamepadsNone => '未连接手柄';
+
+  @override
+  String connectedGamepadsPort(int port) {
+    return '玩家 $port';
+  }
+
+  @override
+  String get connectedGamepadsUnassigned => '未分配';
+
+  @override
   String get inputDeviceVirtualController => '虚拟手柄';
+
+  @override
+  String get inputGamepadAssignmentLabel => '手柄分配';
+
+  @override
+  String get inputGamepadNone => '无/未分配';
+
+  @override
+  String get inputListening => '监听中...';
+
+  @override
+  String inputDetected(String buttons) {
+    return '检测到输入: $buttons';
+  }
+
+  @override
+  String get inputGamepadMappingLabel => '按键映射';
+
+  @override
+  String get inputResetToDefault => '恢复默认设置';
+
+  @override
+  String get inputButtonA => 'A';
+
+  @override
+  String get inputButtonB => 'B';
+
+  @override
+  String get inputButtonTurboA => '连发 A';
+
+  @override
+  String get inputButtonTurboB => '连发 B';
+
+  @override
+  String get inputButtonSelect => '选择';
+
+  @override
+  String get inputButtonStart => '开始';
+
+  @override
+  String get inputButtonUp => '上';
+
+  @override
+  String get inputButtonDown => '下';
+
+  @override
+  String get inputButtonLeft => '左';
+
+  @override
+  String get inputButtonRight => '右';
 
   @override
   String get inputPortLabel => '配置玩家';

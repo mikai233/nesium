@@ -7,4 +7,7 @@ pub fn greet(name: String) -> String {
 pub fn init_app() {
     // Default utilities - feel free to customize
     flutter_rust_bridge::setup_default_user_utils();
+
+    // Initialize tracing to see logs in console
+    let _ = tracing_subscriber::fmt::try_init();
 }

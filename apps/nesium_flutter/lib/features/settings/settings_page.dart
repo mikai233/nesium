@@ -17,11 +17,14 @@ import '../controls/virtual_controls_editor.dart';
 import '../controls/virtual_controls_settings.dart';
 import 'android_video_backend_settings.dart';
 import 'emulation_settings.dart';
+import 'gamepad_settings.dart';
 import 'language_settings.dart';
 import 'theme_settings.dart';
 import 'video_settings.dart';
 import 'server_settings.dart';
 import '../../platform/nes_palette.dart' as nes_palette;
+import '../../domain/connected_gamepads_provider.dart';
+import '../../platform/nes_gamepad.dart' as nes_gamepad;
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -327,6 +330,7 @@ class _InputTab extends ConsumerWidget {
     final controller = ref.read(virtualControlsSettingsProvider.notifier);
     final editor = ref.watch(virtualControlsEditorProvider);
     final editorController = ref.read(virtualControlsEditorProvider.notifier);
+    final gamepadsAsync = ref.watch(connectedGamepadsProvider);
 
     final supportsVirtual = supportsVirtualControls;
     final usingVirtual = inputSettings.device == InputDevice.virtualController;
@@ -377,6 +381,7 @@ class _InputTab extends ConsumerWidget {
             title: Text(l10n.inputDeviceLabel),
             subtitle: Text(switch (inputSettings.device) {
               InputDevice.keyboard => l10n.inputDeviceKeyboard,
+              InputDevice.gamepad => l10n.inputDeviceGamepad,
               InputDevice.virtualController =>
                 l10n.inputDeviceVirtualController,
             }, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
@@ -389,6 +394,10 @@ class _InputTab extends ConsumerWidget {
                   DropdownMenuEntry(
                     value: InputDevice.keyboard,
                     label: l10n.inputDeviceKeyboard,
+                  ),
+                  DropdownMenuEntry(
+                    value: InputDevice.gamepad,
+                    label: l10n.inputDeviceGamepad,
                   ),
                   if (supportsVirtual ||
                       inputSettings.device == InputDevice.virtualController)
@@ -403,6 +412,78 @@ class _InputTab extends ConsumerWidget {
             ),
           ),
         ),
+        if (inputSettings.device == InputDevice.gamepad) ...[
+          _ConnectedGamepadsCard(),
+          gamepadsAsync.maybeWhen(
+            data: (gamepads) {
+              if (gamepads.isEmpty) return const SizedBox.shrink();
+
+              final assignedGamepad = gamepads
+                  .cast<nes_gamepad.GamepadInfo?>()
+                  .firstWhere(
+                    (g) => g?.port == inputState.selectedPort,
+                    orElse: () => null,
+                  );
+
+              return AnimatedSettingsCard(
+                key: const ValueKey('gamepad_assignment'),
+                index: 2,
+                child: ListTile(
+                  title: Text(l10n.inputGamepadAssignmentLabel),
+                  subtitle: Text(
+                    assignedGamepad?.name ?? l10n.inputGamepadNone,
+                  ),
+                  trailing: SizedBox(
+                    width: 200,
+                    child: AnimatedDropdownMenu<int?>(
+                      density: AnimatedDropdownMenuDensity.compact,
+                      value: assignedGamepad?.id,
+                      entries: [
+                        DropdownMenuEntry(
+                          value: null,
+                          label: l10n.inputGamepadNone,
+                        ),
+                        ...gamepads.map(
+                          (g) => DropdownMenuEntry(value: g.id, label: g.name),
+                        ),
+                      ],
+                      onSelected: (id) async {
+                        if (id == null && assignedGamepad != null) {
+                          await nes_gamepad.bindGamepad(
+                            id: assignedGamepad.id,
+                            port: null,
+                          );
+                        } else if (id != null) {
+                          await nes_gamepad.bindGamepad(
+                            id: id,
+                            port: inputState.selectedPort,
+                          );
+                        }
+                        ref.invalidate(connectedGamepadsProvider);
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
+          // Gamepad Button Mappings
+          gamepadsAsync.maybeWhen(
+            data: (gamepads) {
+              final assignedGamepad = gamepads
+                  .cast<nes_gamepad.GamepadInfo?>()
+                  .firstWhere(
+                    (g) => g?.port == inputState.selectedPort,
+                    orElse: () => null,
+                  );
+              if (assignedGamepad == null) return const SizedBox.shrink();
+
+              return _GamepadMappingInfoCard(port: inputState.selectedPort);
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
         // Turbo Settings
         AnimatedSettingsCard(
           index: 1,
@@ -458,6 +539,7 @@ class _InputTab extends ConsumerWidget {
         // Keyboard Settings (shown when keyboard is selected)
         if (inputSettings.device == InputDevice.keyboard) ...[
           AnimatedSettingsCard(
+            key: const ValueKey('keyboard_preset'),
             index: 2,
             child: ListTile(
               title: Text(l10n.keyboardPresetLabel),
@@ -486,6 +568,7 @@ class _InputTab extends ConsumerWidget {
             ),
           ),
           AnimatedSettingsCard(
+            key: const ValueKey('keyboard_bindings'),
             index: 4,
             child: AnimatedExpansionTile(
               title: Text(
@@ -1586,6 +1669,571 @@ class _KeyCaptureDialogState extends ConsumerState<_KeyCaptureDialog> {
           child: Text(l10n.cancel),
         ),
       ],
+    );
+  }
+}
+
+// ============================================================================
+// Connected Gamepads Card
+// ============================================================================
+
+class _ConnectedGamepadsCard extends ConsumerWidget {
+  const _ConnectedGamepadsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final gamepadsAsync = ref.watch(connectedGamepadsProvider);
+
+    return AnimatedSettingsCard(
+      index: 2,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.sports_esports,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  l10n.connectedGamepadsTitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          gamepadsAsync.when(
+            data: (gamepads) {
+              if (gamepads.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.connectedGamepadsNone,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return Column(
+                children: gamepads.map((gamepad) {
+                  final portLabel = gamepad.port != null
+                      ? l10n.connectedGamepadsPort(gamepad.port! + 1)
+                      : l10n.connectedGamepadsUnassigned;
+                  return ListTile(
+                    leading: Icon(
+                      Icons.gamepad,
+                      color: gamepad.connected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outline,
+                    ),
+                    title: Text(gamepad.name),
+                    subtitle: Text(portLabel),
+                    dense: true,
+                    trailing: gamepad.port != null
+                        ? IconButton(
+                            icon: const Icon(Icons.link_off),
+                            onPressed: () async {
+                              await nes_gamepad.bindGamepad(
+                                id: gamepad.id,
+                                port: null,
+                              );
+                              ref.invalidate(connectedGamepadsProvider);
+                            },
+                          )
+                        : null,
+                  );
+                }).toList(),
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+            error: (error, stack) => Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Text(
+                l10n.connectedGamepadsNone,
+                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final gamepadMappingProvider =
+    FutureProvider.family<nes_gamepad.GamepadMapping?, int>((ref, port) async {
+      return nes_gamepad.getGamepadMapping(port);
+    });
+
+/// Provider for raw pressed buttons on a specific gamepad ID.
+final gamepadPressedButtonsProvider =
+    StreamProvider.family<List<nes_gamepad.GamepadButton>, int>((
+      ref,
+      gamepadId,
+    ) async* {
+      while (true) {
+        yield await nes_gamepad.getGamepadPressedButtons(gamepadId);
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+    });
+
+class RemapLocation {
+  final NesButtonAction action;
+  final int port;
+  const RemapLocation(this.action, this.port);
+}
+
+class RemappingNotifier extends Notifier<RemapLocation?> {
+  @override
+  RemapLocation? build() => null;
+  void update(RemapLocation? val) => state = val;
+}
+
+/// State for the remapping process.
+final remappingStateProvider =
+    NotifierProvider<RemappingNotifier, RemapLocation?>(RemappingNotifier.new);
+
+enum NesButtonAction {
+  a,
+  b,
+  select,
+  start,
+  up,
+  down,
+  left,
+  right,
+  turboA,
+  turboB,
+}
+
+class _GamepadMappingInfoCard extends ConsumerStatefulWidget {
+  final int port;
+
+  const _GamepadMappingInfoCard({required this.port});
+
+  @override
+  ConsumerState<_GamepadMappingInfoCard> createState() =>
+      _GamepadMappingInfoCardState();
+}
+
+class _GamepadMappingInfoCardState
+    extends ConsumerState<_GamepadMappingInfoCard> {
+  Timer? _remappingTimer;
+
+  void _startRemapping(NesButtonAction action) {
+    final assignedId = _getAssignedGamepadId();
+    if (assignedId == null) return;
+
+    ref
+        .read(remappingStateProvider.notifier)
+        .update(RemapLocation(action, widget.port));
+
+    _remappingTimer?.cancel();
+    _remappingTimer = Timer.periodic(const Duration(milliseconds: 50), (
+      timer,
+    ) async {
+      final pressed = await nes_gamepad.getGamepadPressedButtons(assignedId);
+      if (pressed.isNotEmpty) {
+        // Find first non-"unknown" button
+        final btn = pressed.firstWhere(
+          (b) => b != nes_gamepad.GamepadButton.unknown,
+          orElse: () => nes_gamepad.GamepadButton.unknown,
+        );
+        if (btn != nes_gamepad.GamepadButton.unknown) {
+          _applyRemap(action, btn);
+          timer.cancel();
+        }
+      }
+    });
+
+    // Timeout remapping after 5 seconds
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted && ref.read(remappingStateProvider)?.action == action) {
+        ref.read(remappingStateProvider.notifier).update(null);
+        _remappingTimer?.cancel();
+      }
+    });
+  }
+
+  int? _getAssignedGamepadId() {
+    final gamepads = ref.read(connectedGamepadsProvider).value ?? [];
+    for (final gp in gamepads) {
+      if (gp.port == widget.port) return gp.id;
+    }
+    return null;
+  }
+
+  Future<void> _applyRemap(
+    NesButtonAction action,
+    nes_gamepad.GamepadButton button,
+  ) async {
+    final currentMapping = await nes_gamepad.getGamepadMapping(widget.port);
+    if (currentMapping == null) return;
+
+    final newMapping = nes_gamepad.GamepadMapping(
+      a: action == NesButtonAction.a ? button : currentMapping.a,
+      b: action == NesButtonAction.b ? button : currentMapping.b,
+      select: action == NesButtonAction.select ? button : currentMapping.select,
+      start: action == NesButtonAction.start ? button : currentMapping.start,
+      up: action == NesButtonAction.up ? button : currentMapping.up,
+      down: action == NesButtonAction.down ? button : currentMapping.down,
+      left: action == NesButtonAction.left ? button : currentMapping.left,
+      right: action == NesButtonAction.right ? button : currentMapping.right,
+      turboA: action == NesButtonAction.turboA ? button : currentMapping.turboA,
+      turboB: action == NesButtonAction.turboB ? button : currentMapping.turboB,
+    );
+
+    final gamepads = ref.read(connectedGamepadsProvider).value ?? [];
+    final gp = gamepads.where((g) => g.port == widget.port).firstOrNull;
+
+    if (gp != null) {
+      ref
+          .read(gamepadSettingsProvider.notifier)
+          .saveMapping(gp.name, widget.port, newMapping);
+    } else {
+      // Fallback: just apply to port if no gamepad info found (shouldn't happen)
+      await nes_gamepad.setGamepadMapping(widget.port, newMapping);
+    }
+    if (mounted) {
+      ref.invalidate(gamepadMappingProvider(widget.port));
+      ref.read(remappingStateProvider.notifier).update(null);
+    }
+  }
+
+  Future<void> _resetToDefault() async {
+    final gamepads = ref.read(connectedGamepadsProvider).value ?? [];
+    final gp = gamepads.where((g) => g.port == widget.port).firstOrNull;
+    final standard = nes_gamepad.GamepadMapping.standard();
+
+    if (gp != null) {
+      ref
+          .read(gamepadSettingsProvider.notifier)
+          .saveMapping(gp.name, widget.port, standard);
+    } else {
+      await nes_gamepad.setGamepadMapping(widget.port, standard);
+    }
+
+    if (mounted) {
+      ref.invalidate(gamepadMappingProvider(widget.port));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final mappingAsync = ref.watch(gamepadMappingProvider(widget.port));
+    final assignedId = _getAssignedGamepadId();
+    final pressedButtons = assignedId != null
+        ? ref.watch(gamepadPressedButtonsProvider(assignedId)).value ?? []
+        : <nes_gamepad.GamepadButton>[];
+
+    final currentRemap = ref.watch(remappingStateProvider);
+
+    return AnimatedSettingsCard(
+      index: 3,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.inputGamepadMappingLabel,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    InkWell(
+                      onTap: _resetToDefault,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: Text(
+                          l10n.inputResetToDefault,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.7),
+                                decoration: TextDecoration.underline,
+                              ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (currentRemap != null && currentRemap.port == widget.port)
+                  Text(
+                    l10n.inputListening,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.secondary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  )
+                else if (pressedButtons.isNotEmpty)
+                  Text(
+                    l10n.inputDetected(
+                      pressedButtons.map((b) => b.toFriendlyName()).join(', '),
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.tertiary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          mappingAsync.when(
+            data: (mapping) {
+              if (mapping == null) return const SizedBox.shrink();
+
+              final rows = [
+                (l10n.inputButtonA, NesButtonAction.a, mapping.a),
+                (l10n.inputButtonB, NesButtonAction.b, mapping.b),
+                (
+                  l10n.inputButtonTurboA,
+                  NesButtonAction.turboA,
+                  mapping.turboA,
+                ),
+                (
+                  l10n.inputButtonTurboB,
+                  NesButtonAction.turboB,
+                  mapping.turboB,
+                ),
+                (
+                  l10n.inputButtonSelect,
+                  NesButtonAction.select,
+                  mapping.select,
+                ),
+                (l10n.inputButtonStart, NesButtonAction.start, mapping.start),
+                (l10n.inputButtonUp, NesButtonAction.up, mapping.up),
+                (l10n.inputButtonDown, NesButtonAction.down, mapping.down),
+                (l10n.inputButtonLeft, NesButtonAction.left, mapping.left),
+                (l10n.inputButtonRight, NesButtonAction.right, mapping.right),
+              ];
+
+              // Calculate conflicts
+              final buttonCounts = <nes_gamepad.GamepadButton, int>{};
+              for (final row in rows) {
+                buttonCounts[row.$3] = (buttonCounts[row.$3] ?? 0) + 1;
+              }
+
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: rows.map((row) {
+                    final isPressed = pressedButtons.contains(row.$3);
+                    final isRemapping =
+                        currentRemap?.action == row.$2 &&
+                        currentRemap?.port == widget.port;
+
+                    final isConflicted = (buttonCounts[row.$3] ?? 0) > 1;
+
+                    return _MappingCell(
+                      label: row.$1,
+                      buttonName: row.$3.toFriendlyName(),
+                      isPressed: isPressed,
+                      isRemapping: isRemapping,
+                      isConflicted: isConflicted,
+                      onTap: () => _startRemapping(row.$2),
+                    );
+                  }).toList(),
+                ),
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(e.toString()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _remappingTimer?.cancel();
+    super.dispose();
+  }
+}
+
+extension _GamepadButtonExt on nes_gamepad.GamepadButton {
+  String toFriendlyName() {
+    switch (this) {
+      case nes_gamepad.GamepadButton.south:
+        return "A / Cross";
+      case nes_gamepad.GamepadButton.east:
+        return "B / Circle";
+      case nes_gamepad.GamepadButton.north:
+        return "X / Triangle";
+      case nes_gamepad.GamepadButton.west:
+        return "Y / Square";
+      case nes_gamepad.GamepadButton.leftTrigger:
+        return "L1 / LB";
+      case nes_gamepad.GamepadButton.rightTrigger:
+        return "R1 / RB";
+      case nes_gamepad.GamepadButton.leftTrigger2:
+        return "L2 / LT";
+      case nes_gamepad.GamepadButton.rightTrigger2:
+        return "R2 / RT";
+      case nes_gamepad.GamepadButton.leftThumb:
+        return "L3 / LS";
+      case nes_gamepad.GamepadButton.rightThumb:
+        return "R3 / RS";
+      case nes_gamepad.GamepadButton.select:
+        return "Select";
+      case nes_gamepad.GamepadButton.start:
+        return "Start";
+      case nes_gamepad.GamepadButton.mode:
+        return "Mode";
+      case nes_gamepad.GamepadButton.dpadUp:
+        return "D-Pad Up";
+      case nes_gamepad.GamepadButton.dpadDown:
+        return "D-Pad Down";
+      case nes_gamepad.GamepadButton.dpadLeft:
+        return "D-Pad Left";
+      case nes_gamepad.GamepadButton.dpadRight:
+        return "D-Pad Right";
+      case nes_gamepad.GamepadButton.c:
+        return "C";
+      case nes_gamepad.GamepadButton.z:
+        return "Z";
+      case nes_gamepad.GamepadButton.unknown:
+        return "Unknown";
+    }
+  }
+}
+
+class _MappingCell extends StatelessWidget {
+  final String label;
+  final String buttonName;
+  final bool isPressed;
+  final bool isRemapping;
+  final bool isConflicted;
+  final VoidCallback onTap;
+
+  const _MappingCell({
+    required this.label,
+    required this.buttonName,
+    required this.isPressed,
+    required this.isRemapping,
+    required this.isConflicted,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        width: 150,
+        decoration: BoxDecoration(
+          color: isRemapping
+              ? colorScheme.primaryContainer
+              : isConflicted
+              ? colorScheme.errorContainer
+              : isPressed
+              ? colorScheme.secondary.withValues(alpha: 0.3)
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isRemapping
+                ? colorScheme.primary
+                : isConflicted
+                ? colorScheme.error
+                : isPressed
+                ? colorScheme.secondary
+                : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withValues(
+                        alpha: 0.7,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    isRemapping ? "???" : buttonName,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isRemapping
+                          ? colorScheme.primary
+                          : isConflicted
+                          ? colorScheme.error
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isPressed)
+              Icon(
+                Icons.check_circle,
+                size: 16,
+                color: isConflicted ? colorScheme.error : colorScheme.secondary,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

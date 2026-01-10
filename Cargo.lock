@@ -3039,6 +3039,7 @@ dependencies = [
  "crossbeam-channel",
  "dashmap 6.1.0",
  "flutter_rust_bridge",
+ "gilrs",
  "jni",
  "libc",
  "mimalloc",
@@ -3050,6 +3051,7 @@ dependencies = [
  "nesium-support",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3132,10 +3134,12 @@ name = "nesium-support"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.10.0",
+ "gilrs",
  "hex",
  "lz4_flex",
  "nesium-core",
  "thiserror 2.0.17",
+ "tracing",
 ]
 
 [[package]]

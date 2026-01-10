@@ -5,6 +5,7 @@
 
 import 'api/emulation.dart';
 import 'api/events.dart';
+import 'api/gamepad.dart';
 import 'api/input.dart';
 import 'api/load_rom.dart';
 import 'api/netplay.dart';
@@ -82,13 +83,43 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  GamepadMappingFfi dco_decode_box_autoadd_gamepad_mapping_ffi(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_u_8(dynamic raw);
+
+  @protected
   DebugStateNotification dco_decode_debug_state_notification(dynamic raw);
+
+  @protected
+  double dco_decode_f_32(dynamic raw);
+
+  @protected
+  GamepadActionsFfi dco_decode_gamepad_actions_ffi(dynamic raw);
+
+  @protected
+  GamepadButtonFfi dco_decode_gamepad_button_ffi(dynamic raw);
+
+  @protected
+  GamepadInfoFfi dco_decode_gamepad_info_ffi(dynamic raw);
+
+  @protected
+  GamepadMappingFfi dco_decode_gamepad_mapping_ffi(dynamic raw);
+
+  @protected
+  GamepadPollResultFfi dco_decode_gamepad_poll_result_ffi(dynamic raw);
 
   @protected
   int dco_decode_i_16(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
+
+  @protected
+  List<GamepadButtonFfi> dco_decode_list_gamepad_button_ffi(dynamic raw);
+
+  @protected
+  List<GamepadInfoFfi> dco_decode_list_gamepad_info_ffi(dynamic raw);
 
   @protected
   List<NetplayPlayer> dco_decode_list_netplay_player(dynamic raw);
@@ -119,6 +150,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_8(dynamic raw);
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
@@ -229,7 +263,39 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  GamepadMappingFfi sse_decode_box_autoadd_gamepad_mapping_ffi(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int sse_decode_box_autoadd_u_8(SseDeserializer deserializer);
+
+  @protected
   DebugStateNotification sse_decode_debug_state_notification(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
+  GamepadActionsFfi sse_decode_gamepad_actions_ffi(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  GamepadButtonFfi sse_decode_gamepad_button_ffi(SseDeserializer deserializer);
+
+  @protected
+  GamepadInfoFfi sse_decode_gamepad_info_ffi(SseDeserializer deserializer);
+
+  @protected
+  GamepadMappingFfi sse_decode_gamepad_mapping_ffi(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  GamepadPollResultFfi sse_decode_gamepad_poll_result_ffi(
     SseDeserializer deserializer,
   );
 
@@ -238,6 +304,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  List<GamepadButtonFfi> sse_decode_list_gamepad_button_ffi(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<GamepadInfoFfi> sse_decode_list_gamepad_info_ffi(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<NetplayPlayer> sse_decode_list_netplay_player(
@@ -272,6 +348,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer);
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -400,8 +479,50 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_gamepad_mapping_ffi(
+    GamepadMappingFfi self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_debug_state_notification(
     DebugStateNotification self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_gamepad_actions_ffi(
+    GamepadActionsFfi self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_gamepad_button_ffi(
+    GamepadButtonFfi self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_gamepad_info_ffi(
+    GamepadInfoFfi self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_gamepad_mapping_ffi(
+    GamepadMappingFfi self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_gamepad_poll_result_ffi(
+    GamepadPollResultFfi self,
     SseSerializer serializer,
   );
 
@@ -410,6 +531,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_gamepad_button_ffi(
+    List<GamepadButtonFfi> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_gamepad_info_ffi(
+    List<GamepadInfoFfi> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_netplay_player(
@@ -455,6 +588,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(

@@ -107,7 +107,74 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inputDeviceKeyboard => 'Keyboard';
 
   @override
+  String get inputDeviceGamepad => 'Gamepad';
+
+  @override
+  String get connectedGamepadsTitle => 'Connected Gamepads';
+
+  @override
+  String get connectedGamepadsNone => 'No gamepads connected';
+
+  @override
+  String connectedGamepadsPort(int port) {
+    return 'Player $port';
+  }
+
+  @override
+  String get connectedGamepadsUnassigned => 'Unassigned';
+
+  @override
   String get inputDeviceVirtualController => 'Virtual controller';
+
+  @override
+  String get inputGamepadAssignmentLabel => 'Gamepad Assignment';
+
+  @override
+  String get inputGamepadNone => 'None/Unassigned';
+
+  @override
+  String get inputListening => 'Listening...';
+
+  @override
+  String inputDetected(String buttons) {
+    return 'Detected: $buttons';
+  }
+
+  @override
+  String get inputGamepadMappingLabel => 'Button Mapping';
+
+  @override
+  String get inputResetToDefault => 'Reset to Default';
+
+  @override
+  String get inputButtonA => 'A';
+
+  @override
+  String get inputButtonB => 'B';
+
+  @override
+  String get inputButtonTurboA => 'Turbo A';
+
+  @override
+  String get inputButtonTurboB => 'Turbo B';
+
+  @override
+  String get inputButtonSelect => 'Select';
+
+  @override
+  String get inputButtonStart => 'Start';
+
+  @override
+  String get inputButtonUp => 'Up';
+
+  @override
+  String get inputButtonDown => 'Down';
+
+  @override
+  String get inputButtonLeft => 'Left';
+
+  @override
+  String get inputButtonRight => 'Right';
 
   @override
   String get inputPortLabel => 'Configure Player';

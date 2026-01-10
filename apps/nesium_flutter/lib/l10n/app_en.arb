@@ -58,7 +58,42 @@
   "turboLinkPressRelease": "Link press/release",
   "inputDeviceLabel": "Input device",
   "inputDeviceKeyboard": "Keyboard",
+  "inputDeviceGamepad": "Gamepad",
+  "connectedGamepadsTitle": "Connected Gamepads",
+  "connectedGamepadsNone": "No gamepads connected",
+  "connectedGamepadsPort": "Player {port}",
+  "@connectedGamepadsPort": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "connectedGamepadsUnassigned": "Unassigned",
   "inputDeviceVirtualController": "Virtual controller",
+  "inputGamepadAssignmentLabel": "Gamepad Assignment",
+  "inputGamepadNone": "None/Unassigned",
+  "inputListening": "Listening...",
+  "inputDetected": "Detected: {buttons}",
+  "@inputDetected": {
+    "placeholders": {
+      "buttons": {
+        "type": "String"
+      }
+    }
+  },
+  "inputGamepadMappingLabel": "Button Mapping",
+  "inputResetToDefault": "Reset to Default",
+  "inputButtonA": "A",
+  "inputButtonB": "B",
+  "inputButtonTurboA": "Turbo A",
+  "inputButtonTurboB": "Turbo B",
+  "inputButtonSelect": "Select",
+  "inputButtonStart": "Start",
+  "inputButtonUp": "Up",
+  "inputButtonDown": "Down",
+  "inputButtonLeft": "Left",
+  "inputButtonRight": "Right",
   "inputPortLabel": "Configure Player",
   "player1": "Player 1",
   "player2": "Player 2",
