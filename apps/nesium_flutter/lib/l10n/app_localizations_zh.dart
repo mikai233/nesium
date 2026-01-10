@@ -116,6 +116,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectedGamepadsNone => '未连接手柄';
 
   @override
+  String get webGamepadActivationHint => 'Web 限制：请按下手柄上的任意按键以激活。';
+
+  @override
   String connectedGamepadsPort(int port) {
     return '玩家 $port';
   }

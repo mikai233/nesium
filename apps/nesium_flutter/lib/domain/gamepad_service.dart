@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logging/app_logger.dart';
 import '../features/settings/gamepad_settings.dart';
 import 'connected_gamepads_provider.dart';
+import 'nes_input_masks.dart';
 import '../platform/nes_gamepad.dart' as nes_gamepad;
 
 /// Provider for gamepad state that polls and merges with keyboard input.
@@ -15,6 +17,7 @@ final gamepadServiceProvider = NotifierProvider<GamepadService, void>(
 /// Service that manages gamepad initialization and state.
 class GamepadService extends Notifier<void> {
   bool _initialized = false;
+  Timer? _pollTimer;
 
   @override
   void build() {
@@ -34,6 +37,7 @@ class GamepadService extends Notifier<void> {
     }
 
     ref.onDispose(() {
+      _pollTimer?.cancel();
       if (_initialized) {
         nes_gamepad.shutdownGamepad();
       }
@@ -47,7 +51,13 @@ class GamepadService extends Notifier<void> {
     try {
       await nes_gamepad.initGamepad();
       _initialized = true;
-      appLog.info('Gamepad Service initialized (polling moved to Rust)');
+      appLog.info('Gamepad Service initialized');
+
+      // On Web, we need a Dart-side polling loop to bridge input to the WASM core.
+      // On Desktop, this is handled by a dedicated Rust thread.
+      if (kIsWeb) {
+        _startWebPolling();
+      }
     } catch (e, st) {
       logError(
         e,
@@ -55,6 +65,25 @@ class GamepadService extends Notifier<void> {
         message: 'Failed to initialize Gamepad Service',
       );
     }
+  }
+
+  void _startWebPolling() {
+    _pollTimer?.cancel();
+    // Poll at ~120Hz (8ms) for responsiveness
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 8), (_) async {
+      final result = await nes_gamepad.pollGamepads();
+      if (result != null) {
+        final masks = result.padMasks;
+        final turboMasks = result.turboMasks;
+
+        // Port 0 and 1 only for now
+        for (var i = 0; i < 2; i++) {
+          ref
+              .read(nesInputMasksProvider.notifier)
+              .updateGamepadMasks(i, masks[i], turboMasks[i]);
+        }
+      }
+    });
   }
 
   /// Triggers vibration on the gamepad assigned to the given port.
@@ -83,6 +112,7 @@ class GamepadService extends Notifier<void> {
 
   /// Shuts down the gamepad subsystem.
   Future<void> shutdown() async {
+    _pollTimer?.cancel();
     if (_initialized) {
       await nes_gamepad.shutdownGamepad();
       _initialized = false;

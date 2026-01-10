@@ -61,6 +61,7 @@
   "inputDeviceGamepad": "Gamepad",
   "connectedGamepadsTitle": "Connected Gamepads",
   "connectedGamepadsNone": "No gamepads connected",
+  "webGamepadActivationHint": "Web limit: PRESS ANY BUTTON on your gamepad to activate it.",
   "connectedGamepadsPort": "Player {port}",
   "@connectedGamepadsPort": {
     "placeholders": {

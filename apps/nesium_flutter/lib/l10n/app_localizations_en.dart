@@ -116,6 +116,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectedGamepadsNone => 'No gamepads connected';
 
   @override
+  String get webGamepadActivationHint =>
+      'Web limit: PRESS ANY BUTTON on your gamepad to activate it.';
+
+  @override
   String connectedGamepadsPort(int port) {
     return 'Player $port';
   }

@@ -1,4 +1,4 @@
-/// Shared types for NES gamepad support.
+// Shared types for NES gamepad support.
 
 /// Gamepad buttons supported by the mapping system.
 enum GamepadButton {

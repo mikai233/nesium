@@ -169,12 +169,6 @@ impl GamepadManager {
             available_ports: vec![1, 0], // Player 1 (0) will be pop()ed first
         };
 
-        // Auto-assign already connected gamepads
-        let connected: Vec<_> = manager.gilrs.gamepads().map(|(id, _)| id).collect();
-        for id in connected {
-            manager.assign_gamepad(id);
-        }
-
         Ok(manager)
     }
 
@@ -188,7 +182,6 @@ impl GamepadManager {
                 EventType::Connected => {
                     let gp = self.gilrs.gamepad(id);
                     tracing::info!("Gamepad connected: {} ({:?})", gp.name(), id);
-                    self.assign_gamepad(id);
                 }
                 EventType::Disconnected => {
                     tracing::info!("Gamepad disconnected: {:?}", id);

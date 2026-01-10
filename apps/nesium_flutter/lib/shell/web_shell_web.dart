@@ -13,6 +13,7 @@ import 'package:web/web.dart' as web;
 
 import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
+import '../domain/gamepad_service.dart';
 import '../domain/pad_button.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_editor.dart';
@@ -780,6 +781,7 @@ class _WebShellState extends ConsumerState<WebShell> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    ref.watch(gamepadServiceProvider); // Keep gamepad polling running on web
     final lastError = _lastError;
     final slotStates = ref.watch(saveStateRepositoryProvider);
     final hasRom = ref.watch(

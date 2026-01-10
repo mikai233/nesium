@@ -296,6 +296,12 @@ abstract class AppLocalizations {
   /// **'No gamepads connected'**
   String get connectedGamepadsNone;
 
+  /// No description provided for @webGamepadActivationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Web limit: PRESS ANY BUTTON on your gamepad to activate it.'**
+  String get webGamepadActivationHint;
+
   /// No description provided for @connectedGamepadsPort.
   ///
   /// In en, this message translates to:

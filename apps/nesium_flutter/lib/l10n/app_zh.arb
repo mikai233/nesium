@@ -33,6 +33,7 @@
   "inputDeviceGamepad": "手柄",
   "connectedGamepadsTitle": "已连接手柄",
   "connectedGamepadsNone": "未连接手柄",
+  "webGamepadActivationHint": "Web 限制：请按下手柄上的任意按键以激活。",
   "connectedGamepadsPort": "玩家 {port}",
   "connectedGamepadsUnassigned": "未分配",
   "inputDeviceVirtualController": "虚拟手柄",
