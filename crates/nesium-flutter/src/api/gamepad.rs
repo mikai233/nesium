@@ -113,15 +113,17 @@ pub fn init_gamepad() -> Result<(), String> {
                                     handle.set_paused(next);
                                 }
 
-                                // Save/Load: TODO (needs slot/path management)
+                                // Save/Load
                                 if result.actions.save_state && !prev_actions.save_state {
-                                    tracing::info!(
-                                        "Gamepad Save State requested (not implemented)"
+                                    tracing::info!("Quick Save Requested");
+                                    crate::senders::replay::emit_replay_event(
+                                        crate::senders::replay::ReplayEventNotification::QuickSave,
                                     );
                                 }
                                 if result.actions.load_state && !prev_actions.load_state {
-                                    tracing::info!(
-                                        "Gamepad Load State requested (not implemented)"
+                                    tracing::info!("Quick Load Requested");
+                                    crate::senders::replay::emit_replay_event(
+                                        crate::senders::replay::ReplayEventNotification::QuickLoad,
                                     );
                                 }
 

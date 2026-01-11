@@ -13,6 +13,7 @@ import 'package:nesium_flutter/bridge/api/input.dart' as nes_input;
 import 'package:nesium_flutter/bridge/api/pause.dart' as nes_pause;
 import 'package:nesium_flutter/bridge/api/emulation.dart' as nes_emulation;
 import 'package:nesium_flutter/bridge/api/netplay.dart' as nes_netplay;
+import 'package:nesium_flutter/bridge/senders/replay.dart';
 
 import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
@@ -62,6 +63,7 @@ class _NesShellState extends ConsumerState<NesShell>
   StreamSubscription<nes_netplay.NetplayGameEvent>? _netplayEventsSub;
   StreamSubscription<nes_events.EmulationStatusNotification>?
   _emulationStatusSub;
+  StreamSubscription<ReplayEventNotification>? _replayEventsSub;
   Future<void> _netplayEventChain = Future.value();
 
   bool get _isDesktop => isNativeDesktop;
@@ -80,6 +82,7 @@ class _NesShellState extends ConsumerState<NesShell>
       }
       _startRuntimeEvents();
       _startEmulationStatusEvents();
+      _startReplayEvents();
       _startNetplayEvents();
       await ref.read(nesControllerProvider.notifier).initTexture();
       final turbo = ref.read(turboSettingsProvider);
@@ -102,6 +105,7 @@ class _NesShellState extends ConsumerState<NesShell>
     _runtimeNotificationsSub?.cancel();
     _netplayEventsSub?.cancel();
     _emulationStatusSub?.cancel();
+    _replayEventsSub?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
@@ -173,6 +177,25 @@ class _NesShellState extends ConsumerState<NesShell>
       controller.setRewinding(event.rewinding);
       controller.setFastForwarding(event.fastForwarding);
     }, onError: (_) {});
+  }
+
+  void _startReplayEvents() {
+    if (!mounted) return;
+    if (_replayEventsSub != null) return;
+
+    _replayEventsSub = nes_events.replayEventStream().listen(
+      (event) {
+        if (!mounted) return;
+        if (event == ReplayEventNotification.quickSave) {
+          _quickSaveState();
+        } else if (event == ReplayEventNotification.quickLoad) {
+          _quickLoadState();
+        }
+      },
+      onError: (e, st) {
+        logError(e, stackTrace: st, message: 'Replay event stream error');
+      },
+    );
   }
 
   void _startNetplayEvents() {

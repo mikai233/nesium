@@ -6,12 +6,14 @@ use nesium_core::interceptor::{
     tilemap_interceptor::CapturePoint as TilemapCapturePoint,
 };
 use nesium_runtime::runtime::EventTopic;
+
 use nesium_runtime::{TileViewerBackground, TileViewerLayout};
 
 use crate::frb_generated::StreamSink;
 use crate::runtime_handle;
 use crate::senders::debug::FlutterDebugEventSender;
 use crate::senders::emulation_status::EmulationStatusSender;
+use crate::senders::replay::ReplayEventNotification;
 use crate::senders::runtime::FlutterRuntimeEventSender;
 use crate::senders::tile::TileTextureAndStateSender;
 use crate::senders::tilemap::{self, TilemapTextureAndStateSender, TilemapTextureSender};
@@ -671,5 +673,16 @@ pub async fn set_palette_capture_scanline(scanline: i32, dot: i32) -> Result<(),
             dot: dot as u16,
         })
         .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// =============================================================================
+// Replay Event Stream (QuickSave/QuickLoad)
+// =============================================================================
+
+#[frb]
+#[frb]
+pub async fn replay_event_stream(sink: StreamSink<ReplayEventNotification>) -> Result<(), String> {
+    crate::senders::replay::set_replay_sink(sink);
     Ok(())
 }

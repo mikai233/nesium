@@ -20,6 +20,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
+import 'senders/replay.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustLibApiImplPlatform({
@@ -54,6 +55,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustStreamSink<PaletteSnapshot> dco_decode_StreamSink_palette_snapshot_Sse(
     dynamic raw,
   );
+
+  @protected
+  RustStreamSink<ReplayEventNotification>
+  dco_decode_StreamSink_replay_event_notification_Sse(dynamic raw);
 
   @protected
   RustStreamSink<RuntimeNotification>
@@ -184,6 +189,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PaletteSnapshot dco_decode_palette_snapshot(dynamic raw);
 
   @protected
+  ReplayEventNotification dco_decode_replay_event_notification(dynamic raw);
+
+  @protected
   RuntimeNotification dco_decode_runtime_notification(dynamic raw);
 
   @protected
@@ -249,6 +257,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<PaletteSnapshot> sse_decode_StreamSink_palette_snapshot_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<ReplayEventNotification>
+  sse_decode_StreamSink_replay_event_notification_Sse(
     SseDeserializer deserializer,
   );
 
@@ -405,6 +419,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PaletteSnapshot sse_decode_palette_snapshot(SseDeserializer deserializer);
 
   @protected
+  ReplayEventNotification sse_decode_replay_event_notification(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RuntimeNotification sse_decode_runtime_notification(
     SseDeserializer deserializer,
   );
@@ -480,6 +499,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_palette_snapshot_Sse(
     RustStreamSink<PaletteSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_replay_event_notification_Sse(
+    RustStreamSink<ReplayEventNotification> self,
     SseSerializer serializer,
   );
 
@@ -672,6 +697,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_palette_snapshot(
     PaletteSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_replay_event_notification(
+    ReplayEventNotification self,
     SseSerializer serializer,
   );
 

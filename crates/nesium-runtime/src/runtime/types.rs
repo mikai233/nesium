@@ -380,6 +380,14 @@ pub struct EmulationStatus {
 
 impl Event for EmulationStatus {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplayEvent {
+    QuickSave,
+    QuickLoad,
+}
+
+impl Event for ReplayEvent {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventTopic {
     Notification,
@@ -389,6 +397,7 @@ pub enum EventTopic {
     Sprite,
     Palette,
     EmulationStatus,
+    Replay,
 }
 
 impl NotificationEvent {

@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -345027701;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1385151090;
 
 // Section: executor
 
@@ -1536,6 +1536,45 @@ fn wire__crate__api__load_rom__power_reset_console_impl(
                     let output_ok = crate::api::load_rom::power_reset_console()?;
                     Ok(output_ok)
                 })())
+            }
+        },
+    )
+}
+fn wire__crate__api__events__replay_event_stream_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "replay_event_stream",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_sink = <StreamSink<
+                crate::senders::replay::ReplayEventNotification,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::events::replay_event_stream(api_sink).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
             }
         },
     )
@@ -3404,6 +3443,19 @@ impl SseDecode
 
 impl SseDecode
     for StreamSink<
+        crate::senders::replay::ReplayEventNotification,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<
         crate::api::events::RuntimeNotification,
         flutter_rust_bridge::for_generated::SseCodec,
     >
@@ -3946,6 +3998,18 @@ impl SseDecode for crate::api::events::PaletteSnapshot {
     }
 }
 
+impl SseDecode for crate::senders::replay::ReplayEventNotification {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::senders::replay::ReplayEventNotification::QuickSave,
+            1 => crate::senders::replay::ReplayEventNotification::QuickLoad,
+            _ => unreachable!("Invalid variant for ReplayEventNotification: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::events::RuntimeNotification {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4257,201 +4321,202 @@ fn pde_ffi_dispatcher_primary_impl(
         43 => {
             wire__crate__api__load_rom__power_reset_console_impl(port, ptr, rust_vec_len, data_len)
         }
-        44 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__gamepad__rumble_gamepad_impl(port, ptr, rust_vec_len, data_len),
-        46 => {
+        44 => wire__crate__api__events__replay_event_stream_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__gamepad__rumble_gamepad_impl(port, ptr, rust_vec_len, data_len),
+        47 => {
             wire__crate__api__events__runtime_notifications_impl(port, ptr, rust_vec_len, data_len)
         }
-        47 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__emulation__save_state_to_memory_impl(
+        48 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__emulation__save_state_to_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__emulation__set_fast_forward_speed_impl(
+        50 => wire__crate__api__emulation__set_fast_forward_speed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => {
+        51 => {
             wire__crate__api__emulation__set_fast_forwarding_impl(port, ptr, rust_vec_len, data_len)
         }
-        51 => {
+        52 => {
             wire__crate__api__gamepad__set_gamepad_mapping_impl(port, ptr, rust_vec_len, data_len)
         }
-        52 => wire__crate__api__emulation__set_integer_fps_mode_impl(
+        53 => wire__crate__api__emulation__set_integer_fps_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__events__set_palette_capture_frame_start_impl(
+        54 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__events__set_palette_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__events__set_palette_capture_scanline_impl(
+        56 => wire__crate__api__events__set_palette_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__api__events__set_palette_capture_vblank_start_impl(
+        57 => wire__crate__api__events__set_palette_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => {
+        58 => {
             wire__crate__api__palette__set_palette_pal_data_impl(port, ptr, rust_vec_len, data_len)
         }
-        58 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
-        60 => {
+        59 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
+        61 => {
             wire__crate__api__emulation__set_rewind_config_impl(port, ptr, rust_vec_len, data_len)
         }
-        61 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__events__set_sprite_capture_frame_start_impl(
+        62 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__events__set_sprite_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__events__set_sprite_capture_scanline_impl(
+        64 => wire__crate__api__events__set_sprite_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        64 => wire__crate__api__events__set_sprite_capture_vblank_start_impl(
+        65 => wire__crate__api__events__set_sprite_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__api__events__set_tile_viewer_background_impl(
+        66 => wire__crate__api__events__set_tile_viewer_background_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
+        67 => wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
+        68 => wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
+        69 => wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__crate__api__events__set_tile_viewer_display_mode_impl(
+        70 => wire__crate__api__events__set_tile_viewer_display_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        70 => {
+        71 => {
             wire__crate__api__events__set_tile_viewer_layout_impl(port, ptr, rust_vec_len, data_len)
         }
-        71 => wire__crate__api__events__set_tile_viewer_palette_impl(
+        72 => wire__crate__api__events__set_tile_viewer_palette_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => {
+        73 => {
             wire__crate__api__events__set_tile_viewer_size_impl(port, ptr, rust_vec_len, data_len)
         }
-        73 => {
+        74 => {
             wire__crate__api__events__set_tile_viewer_source_impl(port, ptr, rust_vec_len, data_len)
         }
-        74 => wire__crate__api__events__set_tile_viewer_start_address_impl(
+        75 => wire__crate__api__events__set_tile_viewer_start_address_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        75 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
+        76 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        76 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
+        77 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
+        78 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        78 => wire__crate__api__events__set_tilemap_display_mode_impl(
+        79 => wire__crate__api__events__set_tilemap_display_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        79 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
+        80 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__gamepad__shutdown_gamepad_impl(port, ptr, rust_vec_len, data_len),
-        83 => wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len),
-        84 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
-        85 => wire__crate__api__events__subscribe_tilemap_texture_impl(
+        81 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__gamepad__shutdown_gamepad_impl(port, ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        85 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__events__subscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        86 => wire__crate__api__events__tile_state_stream_impl(port, ptr, rust_vec_len, data_len),
-        87 => {
+        87 => wire__crate__api__events__tile_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        88 => {
             wire__crate__api__events__tilemap_state_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        88 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__events__unsubscribe_debug_state_impl(
+        89 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
+        90 => wire__crate__api__events__unsubscribe_debug_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__api__events__unsubscribe_palette_state_impl(
+        91 => wire__crate__api__events__unsubscribe_palette_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__api__events__unsubscribe_sprite_state_impl(
+        92 => wire__crate__api__events__unsubscribe_sprite_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => {
+        93 => {
             wire__crate__api__events__unsubscribe_tile_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        93 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
+        94 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
@@ -4875,6 +4940,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::events::PaletteSnapshot>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::senders::replay::ReplayEventNotification {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::QuickSave => 0.into_dart(),
+            Self::QuickLoad => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::senders::replay::ReplayEventNotification
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::senders::replay::ReplayEventNotification>
+    for crate::senders::replay::ReplayEventNotification
+{
+    fn into_into_dart(self) -> crate::senders::replay::ReplayEventNotification {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::events::RuntimeNotification {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -5135,6 +5221,18 @@ impl SseEncode
 impl SseEncode
     for StreamSink<
         crate::api::events::PaletteSnapshot,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
+    for StreamSink<
+        crate::senders::replay::ReplayEventNotification,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -5563,6 +5661,22 @@ impl SseEncode for crate::api::events::PaletteSnapshot {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<u8>>::sse_encode(self.palette, serializer);
         <Vec<u8>>::sse_encode(self.bgra_palette, serializer);
+    }
+}
+
+impl SseEncode for crate::senders::replay::ReplayEventNotification {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::senders::replay::ReplayEventNotification::QuickSave => 0,
+                crate::senders::replay::ReplayEventNotification::QuickLoad => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 

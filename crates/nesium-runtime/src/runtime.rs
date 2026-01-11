@@ -13,7 +13,7 @@ pub use debug::{DebugCommand, DebugEvent, PauseReason};
 pub use handle::{Runtime, RuntimeHandle};
 pub use types::{
     AudioMode, DebugState, EmulationStatus, Event, EventTopic, NotificationEvent, PaletteState,
-    RuntimeConfig, RuntimeError, RuntimeEventSender, SpriteInfo, SpriteState, TileState,
-    TileViewerBackground, TileViewerConfig, TileViewerLayout, TileViewerSource, TilemapState,
-    VideoConfig, VideoExternalConfig, VideoSwapchainConfig,
+    ReplayEvent, RuntimeConfig, RuntimeError, RuntimeEventSender, SpriteInfo, SpriteState,
+    TileState, TileViewerBackground, TileViewerConfig, TileViewerLayout, TileViewerSource,
+    TilemapState, VideoConfig, VideoExternalConfig, VideoSwapchainConfig,
 };

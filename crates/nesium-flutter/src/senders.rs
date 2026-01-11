@@ -1,6 +1,7 @@
 pub mod debug;
 pub mod emulation_status;
 pub mod palette;
+pub mod replay;
 pub mod runtime;
 pub mod sprite;
 pub mod tile;
