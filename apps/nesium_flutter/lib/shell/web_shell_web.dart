@@ -25,6 +25,7 @@ import '../features/about/about_page.dart';
 import '../features/save_state/auto_save_service.dart';
 import '../features/save_state/save_state_dialog.dart';
 import '../features/save_state/save_state_repository.dart';
+import '../features/screen/emulation_status_overlay.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/settings/settings_page.dart';
@@ -970,7 +971,13 @@ class _WebShellState extends ConsumerState<WebShell> {
                       height: viewport.height,
                       child: GestureDetector(
                         onTap: () => _focusNode.requestFocus(),
-                        child: HtmlElementView(viewType: _viewType),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            HtmlElementView(viewType: _viewType),
+                            if (hasRom) const EmulationStatusOverlay(),
+                          ],
+                        ),
                       ),
                     ),
                   );
