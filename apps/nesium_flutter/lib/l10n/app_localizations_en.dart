@@ -342,6 +342,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get quickSaveSlotTitle => 'Quick Save Slot';
+
+  @override
+  String get quickSaveSlotSubtitle => 'Slot used by quick save/load shortcuts.';
+
+  @override
+  String quickSaveSlotValue(int index) {
+    return 'Slot $index';
+  }
+
+  @override
   String get rewindEnabledTitle => 'Rewind';
 
   @override

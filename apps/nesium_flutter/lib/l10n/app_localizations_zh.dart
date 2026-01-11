@@ -337,6 +337,17 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get quickSaveSlotTitle => '快捷存档槽位';
+
+  @override
+  String get quickSaveSlotSubtitle => '快捷存/读使用的槽位。';
+
+  @override
+  String quickSaveSlotValue(int index) {
+    return '槽位 $index';
+  }
+
+  @override
   String get rewindEnabledTitle => '倒带';
 
   @override

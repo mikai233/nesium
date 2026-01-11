@@ -710,6 +710,24 @@ abstract class AppLocalizations {
   /// **'{minutes} minutes'**
   String autoSaveIntervalValue(int minutes);
 
+  /// No description provided for @quickSaveSlotTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick Save Slot'**
+  String get quickSaveSlotTitle;
+
+  /// No description provided for @quickSaveSlotSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Slot used by quick save/load shortcuts.'**
+  String get quickSaveSlotSubtitle;
+
+  /// No description provided for @quickSaveSlotValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Slot {index}'**
+  String quickSaveSlotValue(int index);
+
   /// No description provided for @rewindEnabledTitle.
   ///
   /// In en, this message translates to:

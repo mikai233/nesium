@@ -570,6 +570,26 @@ class _WebShellState extends ConsumerState<WebShell> {
     );
   }
 
+  int _quickSaveSlot() => ref.read(emulationSettingsProvider).quickSaveSlot;
+
+  void _quickSaveState() {
+    final slot = _quickSaveSlot();
+    unawaitedLogged(
+      _saveToSlot(slot),
+      message: 'saveState to repository (slot $slot)',
+      logger: 'web_shell',
+    );
+  }
+
+  void _quickLoadState() {
+    final slot = _quickSaveSlot();
+    unawaitedLogged(
+      _loadFromSlot(slot),
+      message: 'loadState from repository (slot $slot)',
+      logger: 'web_shell',
+    );
+  }
+
   Future<void> _openAutoSaveDialog() async {
     await showDialog<void>(
       context: context,
@@ -764,32 +784,12 @@ class _WebShellState extends ConsumerState<WebShell> {
           break;
         case KeyboardBindingAction.saveState:
           if (pressed) {
-            final repository = ref.read(saveStateRepositoryProvider.notifier);
-            final slot = 1; // Default slot for quick save
-            unawaitedLogged(
-              () async {
-                final data = await nes_emulation.saveStateToMemory();
-                await repository.saveState(slot, data);
-              }(),
-              message: 'saveState to repository (slot $slot)',
-              logger: 'web_shell',
-            );
+            _quickSaveState();
           }
           break;
         case KeyboardBindingAction.loadState:
           if (pressed) {
-            final repository = ref.read(saveStateRepositoryProvider.notifier);
-            final slot = 1; // Default slot for quick load
-            unawaitedLogged(
-              () async {
-                final data = await repository.loadState(slot);
-                if (data != null) {
-                  await nes_emulation.loadStateFromMemory(data: data);
-                }
-              }(),
-              message: 'loadState from repository (slot $slot)',
-              logger: 'web_shell',
-            );
+            _quickLoadState();
           }
           break;
         case KeyboardBindingAction.pause:

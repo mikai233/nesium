@@ -16,6 +16,7 @@ class EmulationSettings {
     required this.pauseInBackground,
     required this.autoSaveEnabled,
     required this.autoSaveIntervalInMinutes,
+    required this.quickSaveSlot,
     required this.rewindEnabled,
     required this.rewindSeconds,
   });
@@ -24,6 +25,7 @@ class EmulationSettings {
   final bool pauseInBackground;
   final bool autoSaveEnabled;
   final int autoSaveIntervalInMinutes;
+  final int quickSaveSlot;
   final bool rewindEnabled;
   final int rewindSeconds;
 
@@ -32,6 +34,7 @@ class EmulationSettings {
     bool? pauseInBackground,
     bool? autoSaveEnabled,
     int? autoSaveIntervalInMinutes,
+    int? quickSaveSlot,
     bool? rewindEnabled,
     int? rewindSeconds,
   }) {
@@ -41,6 +44,7 @@ class EmulationSettings {
       autoSaveEnabled: autoSaveEnabled ?? this.autoSaveEnabled,
       autoSaveIntervalInMinutes:
           autoSaveIntervalInMinutes ?? this.autoSaveIntervalInMinutes,
+      quickSaveSlot: quickSaveSlot ?? this.quickSaveSlot,
       rewindEnabled: rewindEnabled ?? this.rewindEnabled,
       rewindSeconds: rewindSeconds ?? this.rewindSeconds,
     );
@@ -52,6 +56,7 @@ class EmulationSettings {
       pauseInBackground: isNativeMobile,
       autoSaveEnabled: true,
       autoSaveIntervalInMinutes: 1,
+      quickSaveSlot: 1,
       rewindEnabled: true,
       rewindSeconds: 10,
     );
@@ -113,6 +118,13 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     _persist(state);
   }
 
+  void setQuickSaveSlot(int slot) {
+    final clamped = slot.clamp(1, 10);
+    if (clamped == state.quickSaveSlot) return;
+    state = state.copyWith(quickSaveSlot: clamped);
+    _persist(state);
+  }
+
   void setRewindEnabled(bool enabled) {
     if (enabled == state.rewindEnabled) return;
     state = state.copyWith(rewindEnabled: enabled);
@@ -166,6 +178,7 @@ Map<String, Object?> _emulationSettingsToStorage(EmulationSettings value) =>
       'pauseInBackground': value.pauseInBackground,
       'autoSaveEnabled': value.autoSaveEnabled,
       'autoSaveIntervalInMinutes': value.autoSaveIntervalInMinutes,
+      'quickSaveSlot': value.quickSaveSlot,
       'rewindEnabled': value.rewindEnabled,
       'rewindSeconds': value.rewindSeconds,
     };
@@ -188,6 +201,9 @@ EmulationSettings? _emulationSettingsFromStorage(
   final autoSaveIntervalInMinutes = map['autoSaveIntervalInMinutes'] is int
       ? map['autoSaveIntervalInMinutes'] as int
       : null;
+  final quickSaveSlot = map['quickSaveSlot'] is int
+      ? map['quickSaveSlot'] as int
+      : null;
   final rewindEnabled = map['rewindEnabled'] is bool
       ? map['rewindEnabled'] as bool
       : null;
@@ -200,6 +216,7 @@ EmulationSettings? _emulationSettingsFromStorage(
     autoSaveEnabled: autoSaveEnabled ?? defaults.autoSaveEnabled,
     autoSaveIntervalInMinutes:
         autoSaveIntervalInMinutes ?? defaults.autoSaveIntervalInMinutes,
+    quickSaveSlot: quickSaveSlot ?? defaults.quickSaveSlot,
     rewindEnabled: rewindEnabled ?? defaults.rewindEnabled,
     rewindSeconds: rewindSeconds ?? defaults.rewindSeconds,
   );

@@ -469,6 +469,18 @@ class _NesShellState extends ConsumerState<NesShell>
     );
   }
 
+  int _quickSaveSlot() => ref.read(emulationSettingsProvider).quickSaveSlot;
+
+  void _quickSaveState() {
+    final slot = _quickSaveSlot();
+    unawaited(_saveToSlot(slot));
+  }
+
+  void _quickLoadState() {
+    final slot = _quickSaveSlot();
+    unawaited(_loadFromSlot(slot));
+  }
+
   Future<void> _openAutoSaveDialog() async {
     await showDialog<void>(
       context: context,
@@ -721,10 +733,10 @@ class _NesShellState extends ConsumerState<NesShell>
         }
         break;
       case KeyboardBindingAction.saveState:
-        if (pressed) _saveState();
+        if (pressed) _quickSaveState();
         break;
       case KeyboardBindingAction.loadState:
-        if (pressed) _loadState();
+        if (pressed) _quickLoadState();
         break;
       case KeyboardBindingAction.pause:
         if (pressed) _togglePause();

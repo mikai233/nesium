@@ -188,6 +188,16 @@
       }
     }
   },
+  "quickSaveSlotTitle": "Quick Save Slot",
+  "quickSaveSlotSubtitle": "Slot used by quick save/load shortcuts.",
+  "quickSaveSlotValue": "Slot {index}",
+  "@quickSaveSlotValue": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
   "rewindEnabledTitle": "Rewind",
   "rewindEnabledSubtitle": "Enable real-time rewind support (Long-press Backspace on Desktop).",
   "rewindSecondsTitle": "Rewind Duration",

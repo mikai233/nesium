@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logging/app_logger.dart';
 import '../features/settings/gamepad_settings.dart';
+import '../features/settings/emulation_settings.dart';
 import 'connected_gamepads_provider.dart';
 import 'nes_input_masks.dart';
 import '../platform/nes_gamepad.dart' as nes_gamepad;
@@ -20,17 +21,22 @@ final gamepadServiceProvider = NotifierProvider<GamepadService, void>(
 class GamepadService extends Notifier<void> {
   bool _initialized = false;
   Timer? _pollTimer;
+  int _quickSaveSlot = 1;
 
   @override
   void build() {
     // Keep settings loaded
     ref.listen(gamepadSettingsProvider, (_, _) {});
+    _quickSaveSlot = ref.read(emulationSettingsProvider).quickSaveSlot;
 
     // Restore mappings when gamepads list updates
     ref.listen(connectedGamepadsProvider, (_, next) {
       next.whenData((list) {
         ref.read(gamepadSettingsProvider.notifier).restoreMappings(list);
       });
+    });
+    ref.listen(emulationSettingsProvider, (_, next) {
+      _quickSaveSlot = next.quickSaveSlot;
     });
 
     // Initialize only once
@@ -91,8 +97,22 @@ class GamepadService extends Notifier<void> {
 
         actions.setRewinding?.call(pollActions.rewind);
         actions.setFastForwarding?.call(pollActions.fastForward);
-        if (pollActions.saveState) actions.saveState?.call();
-        if (pollActions.loadState) actions.loadState?.call();
+        if (pollActions.saveState) {
+          final slot = _quickSaveSlot;
+          if (actions.saveStateSlot != null) {
+            unawaited(actions.saveStateSlot!.call(slot));
+          } else {
+            actions.saveState?.call();
+          }
+        }
+        if (pollActions.loadState) {
+          final slot = _quickSaveSlot;
+          if (actions.loadStateSlot != null) {
+            unawaited(actions.loadStateSlot!.call(slot));
+          } else {
+            actions.loadState?.call();
+          }
+        }
         if (pollActions.pause) actions.togglePause?.call();
 
         // Update last input method if there is any activity

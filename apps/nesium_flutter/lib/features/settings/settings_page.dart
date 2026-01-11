@@ -1211,6 +1211,27 @@ class _EmulationTab extends ConsumerWidget {
           index: 2,
           child: Padding(
             padding: const EdgeInsets.all(12),
+            child: AnimatedDropdownMenu<int>(
+              labelText: l10n.quickSaveSlotTitle,
+              helperText: l10n.quickSaveSlotSubtitle,
+              value: emulationSettings.quickSaveSlot,
+              entries: [
+                for (int i = 1; i <= 10; i++)
+                  DropdownMenuEntry(
+                    value: i,
+                    label: l10n.quickSaveSlotValue(i),
+                  ),
+              ],
+              onSelected: (value) =>
+                  emulationController.setQuickSaveSlot(value),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AnimatedSettingsCard(
+          index: 3,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
             child: Column(
               children: [
                 SwitchListTile(

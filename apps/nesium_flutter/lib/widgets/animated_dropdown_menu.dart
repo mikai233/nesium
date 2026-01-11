@@ -264,6 +264,16 @@ class _AnimatedDropdownMenuState<T> extends State<AnimatedDropdownMenu<T>>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final selected = _selectedEntry();
+    final overlayColor = WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.hovered) ||
+          states.contains(WidgetState.focused)) {
+        return Colors.transparent;
+      }
+      if (states.contains(WidgetState.pressed)) {
+        return colorScheme.primary.withValues(alpha: 0.08);
+      }
+      return null;
+    });
 
     final decoration = InputDecoration(
       labelText: widget.labelText,
@@ -285,6 +295,7 @@ class _AnimatedDropdownMenuState<T> extends State<AnimatedDropdownMenu<T>>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
+          overlayColor: overlayColor,
           borderRadius: BorderRadius.circular(
             widget.density == AnimatedDropdownMenuDensity.compact ? 10 : 12,
           ),
