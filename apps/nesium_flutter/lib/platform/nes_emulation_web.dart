@@ -24,6 +24,11 @@ Future<void> setFastForwarding({required bool fastForwarding}) async {
   webPostCmd('setFastForwarding', {'fastForwarding': fastForwarding});
 }
 
+Future<void> setFastForwardSpeed({required int speedPercent}) async {
+  if (!isWebNesReady) return;
+  webPostCmd('setFastForwardSpeed', {'speedPercent': speedPercent});
+}
+
 Future<void> saveState({required String path}) async {
   // handled in web_shell_web
 }

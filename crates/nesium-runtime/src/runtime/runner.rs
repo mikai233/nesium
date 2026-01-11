@@ -149,6 +149,11 @@ impl Runner {
     pub(crate) fn run(&mut self) {
         let mut last_paused = self.state.paused.load(Ordering::Acquire);
         let mut last_rewinding = self.state.rewinding.load(Ordering::Acquire);
+        let mut last_fast_forwarding = self.state.fast_forwarding.load(Ordering::Acquire);
+        let mut last_fast_forward_speed = self
+            .state
+            .fast_forward_speed_percent
+            .load(Ordering::Acquire);
 
         loop {
             while let Ok(msg) = self.ctrl_rx.try_recv() {
@@ -159,12 +164,23 @@ impl Runner {
 
             let paused = self.state.paused.load(Ordering::Acquire);
             let rewinding = self.state.rewinding.load(Ordering::Acquire);
+            let fast_forwarding = self.state.fast_forwarding.load(Ordering::Acquire);
+            let fast_forward_speed = self
+                .state
+                .fast_forward_speed_percent
+                .load(Ordering::Acquire);
 
-            if (paused != last_paused && !paused) || (rewinding != last_rewinding) {
+            if (paused != last_paused && !paused)
+                || (rewinding != last_rewinding)
+                || (fast_forwarding != last_fast_forwarding)
+                || (fast_forward_speed != last_fast_forward_speed)
+            {
                 self.next_frame_deadline = Instant::now();
             }
             last_paused = paused;
             last_rewinding = rewinding;
+            last_fast_forwarding = fast_forwarding;
+            last_fast_forward_speed = fast_forward_speed;
 
             if self.nes.get_cartridge().is_none() || (paused && !rewinding) {
                 match self.ctrl_rx.recv_timeout(Duration::from_millis(10)) {
@@ -188,7 +204,7 @@ impl Runner {
             // Run exactly one frame per iteration to avoid jitter from catch-up frames.
             if rewinding || !paused {
                 self.step_frame();
-                self.next_frame_deadline += self.frame_duration;
+                self.next_frame_deadline += self.current_frame_duration();
             }
 
             // If we've fallen behind, reset the deadline instead of trying to catch up.
@@ -217,10 +233,6 @@ impl Runner {
                 if np.should_fast_forward(self.state.frame_seq.load(Ordering::Acquire) as u32) {
                     return WaitOutcome::DeadlineReached;
                 }
-            }
-
-            if self.state.fast_forwarding.load(Ordering::Acquire) {
-                return WaitOutcome::DeadlineReached;
             }
 
             let target = self
@@ -277,6 +289,21 @@ impl Runner {
         }
     }
 
+    fn current_frame_duration(&self) -> Duration {
+        if !self.state.fast_forwarding.load(Ordering::Acquire) {
+            return self.frame_duration;
+        }
+
+        let speed = self
+            .state
+            .fast_forward_speed_percent
+            .load(Ordering::Acquire)
+            .clamp(100, 1000) as u128;
+        let base = self.frame_duration.as_nanos();
+        let scaled = (base.saturating_mul(100) / speed).max(1);
+        Duration::from_nanos(scaled.min(u128::from(u64::MAX)) as u64)
+    }
+
     fn handle_control(&mut self, msg: ControlMessage) -> bool {
         match msg {
             ControlMessage::Stop => return true,
@@ -310,6 +337,12 @@ impl Runner {
                 self.state
                     .fast_forwarding
                     .store(fast_forwarding, Ordering::Release);
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetFastForwardSpeed(speed, reply) => {
+                self.state
+                    .fast_forward_speed_percent
+                    .store(speed.clamp(100, 1000), Ordering::Release);
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::LoadMovie(movie, reply) => self.handle_load_movie(movie, reply),

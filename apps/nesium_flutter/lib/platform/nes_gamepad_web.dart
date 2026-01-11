@@ -34,6 +34,11 @@ Future<GamepadPollResult?> pollGamepads() async {
   final gamepads = web.window.navigator.getGamepads();
   final padMasks = List<int>.filled(4, 0);
   final turboMasks = List<int>.filled(4, 0);
+  bool rewind = false;
+  bool fastForward = false;
+  bool saveState = false;
+  bool loadState = false;
+  bool pause = false;
 
   // Iterate over NES ports (0-3) to populate masks based on bindings
   for (var port = 0; port < 4; port++) {
@@ -98,17 +103,23 @@ Future<GamepadPollResult?> pollGamepads() async {
 
     padMasks[port] = mask;
     turboMasks[port] = turboMask;
+
+    rewind = rewind || isMappedPressed(mapping.rewind);
+    fastForward = fastForward || isMappedPressed(mapping.fastForward);
+    saveState = saveState || isMappedPressed(mapping.saveState);
+    loadState = loadState || isMappedPressed(mapping.loadState);
+    pause = pause || isMappedPressed(mapping.pause);
   }
 
   return GamepadPollResult(
     padMasks: padMasks,
     turboMasks: turboMasks,
-    actions: const GamepadActions(
-      rewind: false,
-      fastForward: false,
-      saveState: false,
-      loadState: false,
-      pause: false,
+    actions: GamepadActions(
+      rewind: rewind,
+      fastForward: fastForward,
+      saveState: saveState,
+      loadState: loadState,
+      pause: pause,
     ),
   );
 }

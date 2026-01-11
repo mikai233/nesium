@@ -30,6 +30,9 @@ const EXACT_NTSC_FPS = 60.0988;
 let targetFps = EXACT_NTSC_FPS;
 let integerFpsMode = false;
 let rewinding = false;
+let fastForwarding = false;
+let fastForwardSpeedPercent = 100;
+let baseFps = EXACT_NTSC_FPS;
 
 // Input
 let padBaseMasks = new Map(); // port -> bits
@@ -41,6 +44,12 @@ let turboOnFrames = 2;
 let turboOffFrames = 2;
 let turboPhaseOn = true;
 let turboPhaseRemaining = turboOnFrames;
+
+function updateTargetFps() {
+    const speed = Math.max(100, Math.min(1000, fastForwardSpeedPercent | 0));
+    const multiplier = fastForwarding ? (speed / 100) : 1;
+    targetFps = baseFps * multiplier;
+}
 
 function postError(message) {
     try {
@@ -219,8 +228,11 @@ async function handleInit(msg) {
     nes = new mod.WasmNes(sr);
 
     // Default pacing: exact NES FPS with no integer-FPS audio stretch.
-    targetFps = EXACT_NTSC_FPS;
+    baseFps = EXACT_NTSC_FPS;
     integerFpsMode = false;
+    fastForwarding = false;
+    fastForwardSpeedPercent = 100;
+    updateTargetFps();
     if (typeof nes.reset_audio_integer_fps_scale === "function") {
         nes.reset_audio_integer_fps_scale();
     }
@@ -352,6 +364,24 @@ onmessage = async (ev) => {
                     break;
                 }
 
+                case "setFastForwarding": {
+                    const nextFastForwarding = !!msg.fastForwarding;
+                    if (nextFastForwarding !== fastForwarding) {
+                        fastForwarding = nextFastForwarding;
+                        updateTargetFps();
+                        nextFrameAt = 0;
+                    }
+                    break;
+                }
+
+                case "setFastForwardSpeed": {
+                    const nextSpeed = msg.speedPercent ?? 100;
+                    fastForwardSpeedPercent = Math.max(100, Math.min(1000, nextSpeed | 0));
+                    updateTargetFps();
+                    nextFrameAt = 0;
+                    break;
+                }
+
                 case "run": {
                     running = true;
                     emitAudio = msg.emitAudio ?? true;
@@ -450,17 +480,18 @@ onmessage = async (ev) => {
                     const enabled = !!msg.enabled;
                     integerFpsMode = enabled;
                     if (enabled) {
-                        targetFps = 60;
+                        baseFps = 60;
                         if (typeof nes.set_audio_integer_fps_scale !== "function") {
                             throw new Error("Missing wasm export: set_audio_integer_fps_scale. Rebuild `web/nes/pkg`.");
                         }
                         nes.set_audio_integer_fps_scale(60 / EXACT_NTSC_FPS);
                     } else {
-                        targetFps = EXACT_NTSC_FPS;
+                        baseFps = EXACT_NTSC_FPS;
                         if (typeof nes.reset_audio_integer_fps_scale === "function") {
                             nes.reset_audio_integer_fps_scale();
                         }
                     }
+                    updateTargetFps();
                     break;
                 }
 

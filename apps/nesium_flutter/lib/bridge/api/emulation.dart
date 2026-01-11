@@ -37,5 +37,10 @@ Future<void> setFastForwarding({required bool fastForwarding}) => RustLib
     .api
     .crateApiEmulationSetFastForwarding(fastForwarding: fastForwarding);
 
+Future<void> setFastForwardSpeed({required int speedPercent}) => RustLib
+    .instance
+    .api
+    .crateApiEmulationSetFastForwardSpeed(speedPercent: speedPercent);
+
 Future<void> loadTasMovie({required String data}) =>
     RustLib.instance.api.crateApiEmulationLoadTasMovie(data: data);

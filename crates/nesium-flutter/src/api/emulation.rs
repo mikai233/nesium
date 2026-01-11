@@ -57,6 +57,13 @@ pub fn set_fast_forwarding(fast_forwarding: bool) -> Result<(), String> {
 }
 
 #[frb]
+pub fn set_fast_forward_speed(speed_percent: u16) -> Result<(), String> {
+    crate::runtime_handle()
+        .set_fast_forward_speed(speed_percent)
+        .map_err(|e| e.to_string())
+}
+
+#[frb]
 pub fn load_tas_movie(data: String) -> Result<(), String> {
     let movie = nesium_support::tas::fm2::parse_str(&data).map_err(|e| e.to_string())?;
     crate::runtime_handle()

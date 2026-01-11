@@ -337,6 +337,17 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get fastForwardSpeedTitle => '快进速度';
+
+  @override
+  String get fastForwardSpeedSubtitle => '快进时的最大速度。';
+
+  @override
+  String fastForwardSpeedValue(int percent) {
+    return '$percent%';
+  }
+
+  @override
   String get quickSaveSlotTitle => '快捷存档槽位';
 
   @override

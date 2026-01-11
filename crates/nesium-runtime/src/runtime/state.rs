@@ -1,10 +1,11 @@
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicU64};
 
 use super::types::TileViewerConfig;
 
 pub(crate) const TURBO_ON_FRAMES_DEFAULT: u8 = 2;
 pub(crate) const TURBO_OFF_FRAMES_DEFAULT: u8 = 2;
+pub(crate) const FAST_FORWARD_SPEED_PERCENT_DEFAULT: u16 = 300;
 
 pub(crate) struct RuntimeState {
     pub(crate) paused: AtomicBool,
@@ -19,6 +20,7 @@ pub(crate) struct RuntimeState {
     pub(crate) rewind_capacity: AtomicU64,
     pub(crate) rewinding: AtomicBool,
     pub(crate) fast_forwarding: AtomicBool,
+    pub(crate) fast_forward_speed_percent: AtomicU16,
 }
 
 impl RuntimeState {
@@ -36,6 +38,7 @@ impl RuntimeState {
             rewind_capacity: AtomicU64::new(600), // Default 10s @ 60fps
             rewinding: AtomicBool::new(false),
             fast_forwarding: AtomicBool::new(false),
+            fast_forward_speed_percent: AtomicU16::new(FAST_FORWARD_SPEED_PERCENT_DEFAULT),
         }
     }
 }

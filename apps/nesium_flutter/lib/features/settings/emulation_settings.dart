@@ -17,6 +17,7 @@ class EmulationSettings {
     required this.autoSaveEnabled,
     required this.autoSaveIntervalInMinutes,
     required this.quickSaveSlot,
+    required this.fastForwardSpeedPercent,
     required this.rewindEnabled,
     required this.rewindSeconds,
   });
@@ -26,6 +27,7 @@ class EmulationSettings {
   final bool autoSaveEnabled;
   final int autoSaveIntervalInMinutes;
   final int quickSaveSlot;
+  final int fastForwardSpeedPercent;
   final bool rewindEnabled;
   final int rewindSeconds;
 
@@ -35,6 +37,7 @@ class EmulationSettings {
     bool? autoSaveEnabled,
     int? autoSaveIntervalInMinutes,
     int? quickSaveSlot,
+    int? fastForwardSpeedPercent,
     bool? rewindEnabled,
     int? rewindSeconds,
   }) {
@@ -45,6 +48,8 @@ class EmulationSettings {
       autoSaveIntervalInMinutes:
           autoSaveIntervalInMinutes ?? this.autoSaveIntervalInMinutes,
       quickSaveSlot: quickSaveSlot ?? this.quickSaveSlot,
+      fastForwardSpeedPercent:
+          fastForwardSpeedPercent ?? this.fastForwardSpeedPercent,
       rewindEnabled: rewindEnabled ?? this.rewindEnabled,
       rewindSeconds: rewindSeconds ?? this.rewindSeconds,
     );
@@ -57,6 +62,7 @@ class EmulationSettings {
       autoSaveEnabled: true,
       autoSaveIntervalInMinutes: 1,
       quickSaveSlot: 1,
+      fastForwardSpeedPercent: 300,
       rewindEnabled: true,
       rewindSeconds: 10,
     );
@@ -74,7 +80,6 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     final settings = loaded ?? defaults;
     scheduleMicrotask(() {
       applyToRuntime();
-      _applyRewindConfig();
     });
     return settings;
   }
@@ -85,6 +90,7 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
       message: 'setIntegerFpsMode (apply)',
       logger: 'emulation_settings',
     );
+    _applyFastForwardSpeed();
     _applyRewindConfig();
   }
 
@@ -125,6 +131,14 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     _persist(state);
   }
 
+  void setFastForwardSpeedPercent(int percent) {
+    final clamped = percent.clamp(100, 1000);
+    if (clamped == state.fastForwardSpeedPercent) return;
+    state = state.copyWith(fastForwardSpeedPercent: clamped);
+    _applyFastForwardSpeed();
+    _persist(state);
+  }
+
   void setRewindEnabled(bool enabled) {
     if (enabled == state.rewindEnabled) return;
     state = state.copyWith(rewindEnabled: enabled);
@@ -147,6 +161,16 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
         capacity: BigInt.from(state.rewindSeconds * 60),
       ),
       message: 'setRewindConfig',
+      logger: 'emulation_settings',
+    );
+  }
+
+  void _applyFastForwardSpeed() {
+    unawaitedLogged(
+      nes_emulation.setFastForwardSpeed(
+        speedPercent: state.fastForwardSpeedPercent,
+      ),
+      message: 'setFastForwardSpeed',
       logger: 'emulation_settings',
     );
   }
@@ -179,6 +203,7 @@ Map<String, Object?> _emulationSettingsToStorage(EmulationSettings value) =>
       'autoSaveEnabled': value.autoSaveEnabled,
       'autoSaveIntervalInMinutes': value.autoSaveIntervalInMinutes,
       'quickSaveSlot': value.quickSaveSlot,
+      'fastForwardSpeedPercent': value.fastForwardSpeedPercent,
       'rewindEnabled': value.rewindEnabled,
       'rewindSeconds': value.rewindSeconds,
     };
@@ -204,6 +229,9 @@ EmulationSettings? _emulationSettingsFromStorage(
   final quickSaveSlot = map['quickSaveSlot'] is int
       ? map['quickSaveSlot'] as int
       : null;
+  final fastForwardSpeedPercent = map['fastForwardSpeedPercent'] is int
+      ? map['fastForwardSpeedPercent'] as int
+      : null;
   final rewindEnabled = map['rewindEnabled'] is bool
       ? map['rewindEnabled'] as bool
       : null;
@@ -217,6 +245,8 @@ EmulationSettings? _emulationSettingsFromStorage(
     autoSaveIntervalInMinutes:
         autoSaveIntervalInMinutes ?? defaults.autoSaveIntervalInMinutes,
     quickSaveSlot: quickSaveSlot ?? defaults.quickSaveSlot,
+    fastForwardSpeedPercent:
+        fastForwardSpeedPercent ?? defaults.fastForwardSpeedPercent,
     rewindEnabled: rewindEnabled ?? defaults.rewindEnabled,
     rewindSeconds: rewindSeconds ?? defaults.rewindSeconds,
   );

@@ -1109,6 +1109,7 @@ class _EmulationTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final colorScheme = Theme.of(context).colorScheme;
     final emulationSettings = ref.watch(emulationSettingsProvider);
     final emulationController = ref.read(emulationSettingsProvider.notifier);
 
@@ -1230,6 +1231,37 @@ class _EmulationTab extends ConsumerWidget {
         const SizedBox(height: 12),
         AnimatedSettingsCard(
           index: 3,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimatedSliderTile(
+                  label: l10n.fastForwardSpeedTitle,
+                  value: emulationSettings.fastForwardSpeedPercent.toDouble(),
+                  min: 100,
+                  max: 1000,
+                  divisions: 9,
+                  onChanged: (v) =>
+                      emulationController.setFastForwardSpeedPercent(v.round()),
+                  valueLabel: l10n.fastForwardSpeedValue(
+                    emulationSettings.fastForwardSpeedPercent,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.fastForwardSpeedSubtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AnimatedSettingsCard(
+          index: 4,
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(

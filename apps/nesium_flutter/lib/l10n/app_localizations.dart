@@ -710,6 +710,24 @@ abstract class AppLocalizations {
   /// **'{minutes} minutes'**
   String autoSaveIntervalValue(int minutes);
 
+  /// No description provided for @fastForwardSpeedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fast Forward Speed'**
+  String get fastForwardSpeedTitle;
+
+  /// No description provided for @fastForwardSpeedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum speed while fast forward is active.'**
+  String get fastForwardSpeedSubtitle;
+
+  /// No description provided for @fastForwardSpeedValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String fastForwardSpeedValue(int percent);
+
   /// No description provided for @quickSaveSlotTitle.
   ///
   /// In en, this message translates to:

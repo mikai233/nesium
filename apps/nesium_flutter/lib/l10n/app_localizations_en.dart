@@ -342,6 +342,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get fastForwardSpeedTitle => 'Fast Forward Speed';
+
+  @override
+  String get fastForwardSpeedSubtitle =>
+      'Maximum speed while fast forward is active.';
+
+  @override
+  String fastForwardSpeedValue(int percent) {
+    return '$percent%';
+  }
+
+  @override
   String get quickSaveSlotTitle => 'Quick Save Slot';
 
   @override

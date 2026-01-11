@@ -188,6 +188,16 @@
       }
     }
   },
+  "fastForwardSpeedTitle": "Fast Forward Speed",
+  "fastForwardSpeedSubtitle": "Maximum speed while fast forward is active.",
+  "fastForwardSpeedValue": "{percent}%",
+  "@fastForwardSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "quickSaveSlotTitle": "Quick Save Slot",
   "quickSaveSlotSubtitle": "Slot used by quick save/load shortcuts.",
   "quickSaveSlotValue": "Slot {index}",

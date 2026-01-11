@@ -780,7 +780,11 @@ class _WebShellState extends ConsumerState<WebShell> {
           );
           break;
         case KeyboardBindingAction.fastForward:
-          // TODO: Implement fast forward in bridge
+          unawaitedLogged(
+            nes_emulation.setFastForwarding(fastForwarding: pressed),
+            message: 'setFastForwarding ($pressed)',
+            logger: 'web_shell',
+          );
           break;
         case KeyboardBindingAction.saveState:
           if (pressed) {

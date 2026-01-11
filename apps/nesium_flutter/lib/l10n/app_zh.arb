@@ -139,6 +139,16 @@
       }
     }
   },
+  "fastForwardSpeedTitle": "快进速度",
+  "fastForwardSpeedSubtitle": "快进时的最大速度。",
+  "fastForwardSpeedValue": "{percent}%",
+  "@fastForwardSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "quickSaveSlotTitle": "快捷存档槽位",
   "quickSaveSlotSubtitle": "快捷存/读使用的槽位。",
   "quickSaveSlotValue": "槽位 {index}",
