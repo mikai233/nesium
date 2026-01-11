@@ -6,13 +6,43 @@ use flutter_rust_bridge::frb;
 use std::sync::Mutex;
 use std::time::Duration;
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 use nesium_support::gamepad::{GamepadActions, GamepadInfo, GamepadManager, GamepadPollResult};
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 use std::thread::{self, JoinHandle};
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 static GAMEPAD_MANAGER: Mutex<Option<GamepadManager>> = Mutex::new(None);
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 static GAMEPAD_LOOP_STOP: AtomicBool = AtomicBool::new(false);
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 static POLLING_THREAD: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 
 /// Initializes the gamepad subsystem and starts the background polling thread.
@@ -20,86 +50,101 @@ static POLLING_THREAD: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 /// Call this once at app startup. Returns an error if gilrs fails to initialize.
 #[frb]
 pub fn init_gamepad() -> Result<(), String> {
-    let mut manager = GAMEPAD_MANAGER.lock().unwrap();
-    if manager.is_some() {
-        return Ok(()); // Already initialized
-    }
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "wasm32")
+    ))]
+    {
+        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        if manager.is_some() {
+            return Ok(()); // Already initialized
+        }
 
-    let gm = GamepadManager::new().map_err(|e| e.to_string())?;
-    *manager = Some(gm);
+        let gm = GamepadManager::new().map_err(|e| e.to_string())?;
+        *manager = Some(gm);
 
-    // Start background polling thread
-    let mut thread_guard = POLLING_THREAD.lock().unwrap();
-    if thread_guard.is_none() {
-        GAMEPAD_LOOP_STOP.store(false, Ordering::Release);
-        *thread_guard = Some(thread::spawn(move || {
-            tracing::info!("Starting gamepad polling thread (Rust)");
-            let mut prev_actions = nesium_support::gamepad::GamepadActions::default();
+        // Start background polling thread
+        let mut thread_guard = POLLING_THREAD.lock().unwrap();
+        if thread_guard.is_none() {
+            GAMEPAD_LOOP_STOP.store(false, Ordering::Release);
+            *thread_guard = Some(thread::spawn(move || {
+                tracing::info!("Starting gamepad polling thread (Rust)");
+                let mut prev_actions = nesium_support::gamepad::GamepadActions::default();
 
-            loop {
-                if GAMEPAD_LOOP_STOP.load(Ordering::Acquire) {
-                    tracing::info!("Gamepad polling thread stopping");
-                    break;
-                }
-
-                // Lock and poll
-                {
-                    let mut gm_lock = GAMEPAD_MANAGER.lock().unwrap();
-                    if let Some(gm) = gm_lock.as_mut() {
-                        let result = gm.poll();
-
-                        // Update masks in input API
-                        for port in 0..2 {
-                            crate::api::input::set_gamepad_masks(
-                                port,
-                                result.pad_masks[port],
-                                result.turbo_masks[port],
-                            );
-                        }
-
-                        // Handle actions if they changed
-                        if result.actions != prev_actions {
-                            let handle = crate::runtime_handle();
-
-                            // Rewind: state-based
-                            if result.actions.rewind != prev_actions.rewind {
-                                let _ = handle.set_rewinding(result.actions.rewind);
-                            }
-
-                            // Fast Forward: state-based
-                            if result.actions.fast_forward != prev_actions.fast_forward {
-                                let _ = handle.set_fast_forwarding(result.actions.fast_forward);
-                            }
-
-                            // Pause: toggle on rising edge
-                            if result.actions.pause && !prev_actions.pause {
-                                let next = !handle.paused();
-                                handle.set_paused(next);
-                            }
-
-                            // Save/Load: TODO (needs slot/path management)
-                            if result.actions.save_state && !prev_actions.save_state {
-                                tracing::info!("Gamepad Save State requested (not implemented)");
-                            }
-                            if result.actions.load_state && !prev_actions.load_state {
-                                tracing::info!("Gamepad Load State requested (not implemented)");
-                            }
-
-                            prev_actions = result.actions;
-                        }
-                    } else {
-                        // Manager gone? Stop loop.
+                loop {
+                    if GAMEPAD_LOOP_STOP.load(Ordering::Acquire) {
+                        tracing::info!("Gamepad polling thread stopping");
                         break;
                     }
+
+                    // Lock and poll
+                    {
+                        let mut gm_lock = GAMEPAD_MANAGER.lock().unwrap();
+                        if let Some(gm) = gm_lock.as_mut() {
+                            let result = gm.poll();
+
+                            // Update masks in input API
+                            for port in 0..2 {
+                                crate::api::input::set_gamepad_masks(
+                                    port,
+                                    result.pad_masks[port],
+                                    result.turbo_masks[port],
+                                );
+                            }
+
+                            // Handle actions if they changed
+                            if result.actions != prev_actions {
+                                let handle = crate::runtime_handle();
+
+                                // Rewind: state-based
+                                if result.actions.rewind != prev_actions.rewind {
+                                    let _ = handle.set_rewinding(result.actions.rewind);
+                                }
+
+                                // Fast Forward: state-based
+                                if result.actions.fast_forward != prev_actions.fast_forward {
+                                    let _ = handle.set_fast_forwarding(result.actions.fast_forward);
+                                }
+
+                                // Pause: toggle on rising edge
+                                if result.actions.pause && !prev_actions.pause {
+                                    let next = !handle.paused();
+                                    handle.set_paused(next);
+                                }
+
+                                // Save/Load: TODO (needs slot/path management)
+                                if result.actions.save_state && !prev_actions.save_state {
+                                    tracing::info!(
+                                        "Gamepad Save State requested (not implemented)"
+                                    );
+                                }
+                                if result.actions.load_state && !prev_actions.load_state {
+                                    tracing::info!(
+                                        "Gamepad Load State requested (not implemented)"
+                                    );
+                                }
+
+                                prev_actions = result.actions;
+                            }
+                        } else {
+                            // Manager gone? Stop loop.
+                            break;
+                        }
+                    }
+
+                    // Poll at ~250Hz
+                    thread::sleep(Duration::from_millis(4));
                 }
+            }));
+        }
 
-                // Poll at ~250Hz
-                thread::sleep(Duration::from_millis(4));
-            }
-        }));
+        Ok(())
     }
-
-    Ok(())
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        Ok(())
+    }
 }
 
 /// Polls all connected gamepads and returns the current input state.
@@ -108,24 +153,50 @@ pub fn init_gamepad() -> Result<(), String> {
 /// Call this once per frame.
 #[frb]
 pub fn poll_gamepads() -> Result<GamepadPollResultFfi, String> {
-    let mut manager = GAMEPAD_MANAGER.lock().unwrap();
-    let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "wasm32")
+    ))]
+    {
+        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
-    let result = gm.poll();
-    Ok(GamepadPollResultFfi::from(result))
+        let result = gm.poll();
+        Ok(GamepadPollResultFfi::from(result))
+    }
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        Ok(GamepadPollResultFfi {
+            pad_masks: vec![0, 0],
+            turbo_masks: vec![0, 0],
+            actions: GamepadActionsFfi::default(),
+        })
+    }
 }
 
 /// Returns information about all connected gamepads.
 #[frb]
 pub fn list_gamepads() -> Result<Vec<GamepadInfoFfi>, String> {
-    let mut manager = GAMEPAD_MANAGER.lock().unwrap();
-    let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "wasm32")
+    ))]
+    {
+        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
-    // Pump events before listing to ensure new connections are picked up
-    let _ = gm.poll();
+        // Pump events before listing to ensure new connections are picked up
+        let _ = gm.poll();
 
-    let list = gm.gamepads();
-    Ok(list.into_iter().map(GamepadInfoFfi::from).collect())
+        let list = gm.gamepads();
+        Ok(list.into_iter().map(GamepadInfoFfi::from).collect())
+    }
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        Ok(vec![])
+    }
 }
 
 /// Triggers vibration on the gamepad assigned to the given port.
@@ -135,15 +206,26 @@ pub fn list_gamepads() -> Result<Vec<GamepadInfoFfi>, String> {
 /// - `duration_ms`: How long to vibrate in milliseconds
 #[frb]
 pub fn rumble_gamepad(port: u8, strength: f32, duration_ms: u32) -> Result<(), String> {
-    let mut manager = GAMEPAD_MANAGER.lock().unwrap();
-    let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "wasm32")
+    ))]
+    {
+        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
-    gm.rumble(
-        port as usize,
-        strength,
-        Duration::from_millis(duration_ms as u64),
-    )
-    .map_err(|e| e.to_string())
+        gm.rumble(
+            port as usize,
+            strength,
+            Duration::from_millis(duration_ms as u64),
+        )
+        .map_err(|e| e.to_string())
+    }
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        Ok(())
+    }
 }
 
 /// Manually binds a gamepad to a NES port.
@@ -152,48 +234,94 @@ pub fn rumble_gamepad(port: u8, strength: f32, duration_ms: u32) -> Result<(), S
 /// - `port`: 0 for Player 1, 1 for Player 2, or null to unbind.
 #[frb]
 pub fn bind_gamepad(id: u64, port: Option<u8>) -> Result<(), String> {
-    let mut manager = GAMEPAD_MANAGER.lock().unwrap();
-    let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "wasm32")
+    ))]
+    {
+        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
-    gm.bind_gamepad(id as usize, port.map(|p| p as usize));
-    Ok(())
+        gm.bind_gamepad(id as usize, port.map(|p| p as usize));
+        Ok(())
+    }
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        // Suppress unused variables warning
+        let _ = id;
+        let _ = port;
+        Ok(())
+    }
 }
 
 /// Shuts down the gamepad subsystem.
 #[frb]
 pub fn shutdown_gamepad() {
-    GAMEPAD_LOOP_STOP.store(true, Ordering::Release);
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "wasm32")
+    ))]
+    {
+        GAMEPAD_LOOP_STOP.store(true, Ordering::Release);
 
-    let thread = POLLING_THREAD.lock().unwrap().take();
-    if let Some(handle) = thread {
-        let _ = handle.join();
+        let thread = POLLING_THREAD.lock().unwrap().take();
+        if let Some(handle) = thread {
+            let _ = handle.join();
+        }
+
+        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        *manager = None;
     }
-
-    let mut manager = GAMEPAD_MANAGER.lock().unwrap();
-    *manager = None;
 }
 
 /// Returns a list of buttons currently pressed on the given gamepad.
 #[frb]
 pub fn get_gamepad_pressed_buttons(id: u64) -> Result<Vec<GamepadButtonFfi>, String> {
-    let manager = GAMEPAD_MANAGER.lock().unwrap();
-    let gm = manager.as_ref().ok_or("Gamepad not initialized")?;
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "wasm32")
+    ))]
+    {
+        let manager = GAMEPAD_MANAGER.lock().unwrap();
+        let gm = manager.as_ref().ok_or("Gamepad not initialized")?;
 
-    let buttons = gm.get_pressed_buttons(id as usize);
-    Ok(buttons.into_iter().map(GamepadButtonFfi::from).collect())
+        let buttons = gm.get_pressed_buttons(id as usize);
+        Ok(buttons.into_iter().map(GamepadButtonFfi::from).collect())
+    }
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        let _ = id;
+        Ok(vec![])
+    }
 }
 
 /// Sets a custom button mapping for the given port.
 #[frb]
 pub fn set_gamepad_mapping(port: u8, mapping: GamepadMappingFfi) -> Result<(), String> {
-    let mut manager = GAMEPAD_MANAGER.lock().unwrap();
-    let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "wasm32")
+    ))]
+    {
+        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
-    // Extract action mapping from the combined FFI mapping
-    let action_mapping: nesium_support::gamepad::ActionMapping = mapping.clone().into();
-    gm.set_mapping(port as usize, mapping.into());
-    gm.set_action_mapping(action_mapping);
-    Ok(())
+        // Extract action mapping from the combined FFI mapping
+        let action_mapping: nesium_support::gamepad::ActionMapping = mapping.clone().into();
+        gm.set_mapping(port as usize, mapping.into());
+        gm.set_action_mapping(action_mapping);
+        Ok(())
+    }
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        let _ = port;
+        let _ = mapping;
+        Ok(())
+    }
 }
 
 // === FFI-friendly types ===
@@ -210,6 +338,11 @@ pub struct GamepadPollResultFfi {
     pub actions: GamepadActionsFfi,
 }
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 impl From<GamepadPollResult> for GamepadPollResultFfi {
     fn from(r: GamepadPollResult) -> Self {
         Self {
@@ -231,6 +364,11 @@ pub struct GamepadActionsFfi {
     pub pause: bool,
 }
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 impl From<GamepadActions> for GamepadActionsFfi {
     fn from(a: GamepadActions) -> Self {
         Self {
@@ -253,6 +391,11 @@ pub struct GamepadInfoFfi {
     pub port: Option<u8>,
 }
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 impl From<GamepadInfo> for GamepadInfoFfi {
     fn from(i: GamepadInfo) -> Self {
         Self {
@@ -290,6 +433,11 @@ pub enum GamepadButtonFfi {
     Unknown,
 }
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 impl From<gilrs::Button> for GamepadButtonFfi {
     fn from(b: gilrs::Button) -> Self {
         match b {
@@ -317,6 +465,11 @@ impl From<gilrs::Button> for GamepadButtonFfi {
     }
 }
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 impl From<GamepadButtonFfi> for gilrs::Button {
     fn from(b: GamepadButtonFfi) -> Self {
         match b {
@@ -366,6 +519,11 @@ pub struct GamepadMappingFfi {
     pub pause: Option<GamepadButtonFfi>,
 }
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 impl From<nesium_support::gamepad::ButtonMapping> for GamepadMappingFfi {
     fn from(m: nesium_support::gamepad::ButtonMapping) -> Self {
         Self {
@@ -388,6 +546,11 @@ impl From<nesium_support::gamepad::ButtonMapping> for GamepadMappingFfi {
     }
 }
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 impl From<GamepadMappingFfi> for nesium_support::gamepad::ActionMapping {
     fn from(m: GamepadMappingFfi) -> Self {
         Self {
@@ -403,27 +566,44 @@ impl From<GamepadMappingFfi> for nesium_support::gamepad::ActionMapping {
 /// Returns the current button mapping for a NES port.
 #[frb]
 pub fn get_gamepad_mapping(port: u8) -> Result<GamepadMappingFfi, String> {
-    let mut manager = GAMEPAD_MANAGER.lock().unwrap();
-    let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
+    #[cfg(all(
+        not(target_os = "android"),
+        not(target_os = "ios"),
+        not(target_arch = "wasm32")
+    ))]
+    {
+        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
-    let mapping = gm
-        .mapping(port as usize)
-        .cloned()
-        .ok_or_else(|| format!("No mapping for port {}", port))?;
+        let mapping = gm
+            .mapping(port as usize)
+            .cloned()
+            .ok_or_else(|| format!("No mapping for port {}", port))?;
 
-    let action_mapping = gm.action_mapping();
+        let action_mapping = gm.action_mapping();
 
-    let mut result = GamepadMappingFfi::from(mapping);
-    // Merge extended actions
-    result.rewind = action_mapping.rewind.map(GamepadButtonFfi::from);
-    result.fast_forward = action_mapping.fast_forward.map(GamepadButtonFfi::from);
-    result.save_state = action_mapping.save_state.map(GamepadButtonFfi::from);
-    result.load_state = action_mapping.load_state.map(GamepadButtonFfi::from);
-    result.pause = action_mapping.pause.map(GamepadButtonFfi::from);
+        let mut result = GamepadMappingFfi::from(mapping);
+        // Merge extended actions
+        result.rewind = action_mapping.rewind.map(GamepadButtonFfi::from);
+        result.fast_forward = action_mapping.fast_forward.map(GamepadButtonFfi::from);
+        result.save_state = action_mapping.save_state.map(GamepadButtonFfi::from);
+        result.load_state = action_mapping.load_state.map(GamepadButtonFfi::from);
+        result.pause = action_mapping.pause.map(GamepadButtonFfi::from);
 
-    Ok(result)
+        Ok(result)
+    }
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        let _ = port;
+        Err("Not supported on this platform".to_string())
+    }
 }
 
+#[cfg(all(
+    not(target_os = "android"),
+    not(target_os = "ios"),
+    not(target_arch = "wasm32")
+))]
 impl From<GamepadMappingFfi> for nesium_support::gamepad::ButtonMapping {
     fn from(m: GamepadMappingFfi) -> Self {
         Self {
