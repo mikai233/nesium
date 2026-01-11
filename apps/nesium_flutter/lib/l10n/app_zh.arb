@@ -53,12 +53,20 @@
   "inputButtonDown": "下",
   "inputButtonLeft": "左",
   "inputButtonRight": "右",
+  "inputButtonRewind": "倒带",
+  "inputButtonFastForward": "快进",
+  "inputButtonSaveState": "即时存档",
+  "inputButtonLoadState": "读取存档",
+  "inputButtonPause": "暂停",
+  "globalHotkeysTitle": "模拟器热键",
+  "gamepadHotkeysTitle": "手柄热键 (玩家 1)",
   "inputPortLabel": "配置玩家",
   "player1": "玩家 1",
   "player2": "玩家 2",
   "player3": "玩家 3",
   "player4": "玩家 4",
   "keyboardPresetLabel": "键盘预设",
+  "keyboardPresetNone": "无",
   "keyboardPresetNesStandard": "NES 标准",
   "keyboardPresetFightStick": "摇杆",
   "keyboardPresetArcadeLayout": "街机布局",
@@ -77,6 +85,11 @@
   "keyboardActionStart": "Start",
   "keyboardActionTurboA": "Turbo A",
   "keyboardActionTurboB": "Turbo B",
+  "keyboardActionRewind": "倒带",
+  "keyboardActionFastForward": "快进",
+  "keyboardActionSaveState": "即时存档",
+  "keyboardActionLoadState": "读取存档",
+  "keyboardActionPause": "暂停",
   "inputBindingConflictCleared": "{player} 的 {action} 绑定已清除。",
   "@inputBindingConflictCleared": {
     "placeholders": {
@@ -505,5 +518,6 @@
   "spriteViewerValueYes": "是",
   "spriteViewerValueNoOffscreen": "否（屏幕外）",
   "spriteViewerVisibleStatusVisible": "可见",
-  "spriteViewerVisibleStatusOffscreen": "屏幕外"
+  "spriteViewerVisibleStatusOffscreen": "屏幕外",
+  "longPressToClear": "长按清除"
 }

@@ -95,12 +95,20 @@
   "inputButtonDown": "Down",
   "inputButtonLeft": "Left",
   "inputButtonRight": "Right",
+  "inputButtonRewind": "Rewind",
+  "inputButtonFastForward": "Fast Forward",
+  "inputButtonSaveState": "Save State",
+  "inputButtonLoadState": "Load State",
+  "inputButtonPause": "Pause",
+  "globalHotkeysTitle": "Emulator Hotkeys",
+  "gamepadHotkeysTitle": "Gamepad Hotkeys (Player 1)",
   "inputPortLabel": "Configure Player",
   "player1": "Player 1",
   "player2": "Player 2",
   "player3": "Player 3",
   "player4": "Player 4",
   "keyboardPresetLabel": "Keyboard preset",
+  "keyboardPresetNone": "None",
   "keyboardPresetNesStandard": "NES standard",
   "keyboardPresetFightStick": "Fight stick",
   "keyboardPresetArcadeLayout": "Arcade layout",
@@ -126,6 +134,11 @@
   "keyboardActionStart": "Start",
   "keyboardActionTurboA": "Turbo A",
   "keyboardActionTurboB": "Turbo B",
+  "keyboardActionRewind": "Rewind",
+  "keyboardActionFastForward": "Fast Forward",
+  "keyboardActionSaveState": "Save State",
+  "keyboardActionLoadState": "Load State",
+  "keyboardActionPause": "Pause",
   "inputBindingConflictCleared": "{player} {action} binding cleared.",
   "@inputBindingConflictCleared": {
     "placeholders": {
@@ -638,5 +651,6 @@
   "spriteViewerValueYes": "Yes",
   "spriteViewerValueNoOffscreen": "No (offscreen)",
   "spriteViewerVisibleStatusVisible": "Visible",
-  "spriteViewerVisibleStatusOffscreen": "Offscreen"
+  "spriteViewerVisibleStatusOffscreen": "Offscreen",
+  "longPressToClear": "Long press to clear"
 }

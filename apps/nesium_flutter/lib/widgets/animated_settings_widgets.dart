@@ -3,10 +3,16 @@ import 'package:flutter/material.dart';
 /// Material You style animated settings container
 /// Uses subtle background instead of heavy cards
 class AnimatedSettingsCard extends StatefulWidget {
-  const AnimatedSettingsCard({super.key, required this.child, this.index = 0});
+  const AnimatedSettingsCard({
+    super.key,
+    required this.child,
+    this.index = 0,
+    this.animateSize = true,
+  });
 
   final Widget child;
   final int index;
+  final bool animateSize;
 
   @override
   State<AnimatedSettingsCard> createState() => _AnimatedSettingsCardState();
@@ -59,26 +65,36 @@ class _AnimatedSettingsCardState extends State<AnimatedSettingsCard>
         child: MouseRegion(
           onEnter: (_) => setState(() => _isHovered = true),
           onExit: (_) => setState(() => _isHovered = false),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: _isHovered
-                    ? colorScheme.outline.withValues(alpha: 0.3)
-                    : colorScheme.outline.withValues(alpha: 0.08),
-                width: 1,
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: widget.child,
-            ),
-          ),
+          child: widget.animateSize
+              ? AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: _buildContainer(colorScheme),
+                )
+              : _buildContainer(colorScheme),
         ),
+      ),
+    );
+  }
+
+  Widget _buildContainer(ColorScheme colorScheme) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _isHovered
+              ? colorScheme.outline.withValues(alpha: 0.3)
+              : colorScheme.outline.withValues(alpha: 0.08),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: widget.child,
       ),
     );
   }

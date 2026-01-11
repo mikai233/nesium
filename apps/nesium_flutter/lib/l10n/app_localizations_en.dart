@@ -181,6 +181,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inputButtonRight => 'Right';
 
   @override
+  String get inputButtonRewind => 'Rewind';
+
+  @override
+  String get inputButtonFastForward => 'Fast Forward';
+
+  @override
+  String get inputButtonSaveState => 'Save State';
+
+  @override
+  String get inputButtonLoadState => 'Load State';
+
+  @override
+  String get inputButtonPause => 'Pause';
+
+  @override
+  String get globalHotkeysTitle => 'Emulator Hotkeys';
+
+  @override
+  String get gamepadHotkeysTitle => 'Gamepad Hotkeys (Player 1)';
+
+  @override
   String get inputPortLabel => 'Configure Player';
 
   @override
@@ -197,6 +218,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get keyboardPresetLabel => 'Keyboard preset';
+
+  @override
+  String get keyboardPresetNone => 'None';
 
   @override
   String get keyboardPresetNesStandard => 'NES standard';
@@ -254,6 +278,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get keyboardActionTurboB => 'Turbo B';
+
+  @override
+  String get keyboardActionRewind => 'Rewind';
+
+  @override
+  String get keyboardActionFastForward => 'Fast Forward';
+
+  @override
+  String get keyboardActionSaveState => 'Save State';
+
+  @override
+  String get keyboardActionLoadState => 'Load State';
+
+  @override
+  String get keyboardActionPause => 'Pause';
 
   @override
   String inputBindingConflictCleared(String player, String action) {
@@ -1229,4 +1268,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get spriteViewerVisibleStatusOffscreen => 'Offscreen';
+
+  @override
+  String get longPressToClear => 'Long press to clear';
 }

@@ -40,6 +40,7 @@ pub(crate) enum ControlMessage {
     SaveStateToMemory(Sender<Result<Vec<u8>, RuntimeError>>),
     LoadStateFromMemory(Vec<u8>, ControlReplySender),
     SetRewinding(bool, ControlReplySender),
+    SetFastForwarding(bool, ControlReplySender),
     LoadMovie(nesium_support::tas::Movie, ControlReplySender),
     SubscribeEvent(EventTopic, Box<dyn RuntimeEventSender>, ControlReplySender),
     UnsubscribeEvent(EventTopic, ControlReplySender),

@@ -416,6 +416,48 @@ abstract class AppLocalizations {
   /// **'Right'**
   String get inputButtonRight;
 
+  /// No description provided for @inputButtonRewind.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind'**
+  String get inputButtonRewind;
+
+  /// No description provided for @inputButtonFastForward.
+  ///
+  /// In en, this message translates to:
+  /// **'Fast Forward'**
+  String get inputButtonFastForward;
+
+  /// No description provided for @inputButtonSaveState.
+  ///
+  /// In en, this message translates to:
+  /// **'Save State'**
+  String get inputButtonSaveState;
+
+  /// No description provided for @inputButtonLoadState.
+  ///
+  /// In en, this message translates to:
+  /// **'Load State'**
+  String get inputButtonLoadState;
+
+  /// No description provided for @inputButtonPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get inputButtonPause;
+
+  /// No description provided for @globalHotkeysTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Emulator Hotkeys'**
+  String get globalHotkeysTitle;
+
+  /// No description provided for @gamepadHotkeysTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Gamepad Hotkeys (Player 1)'**
+  String get gamepadHotkeysTitle;
+
   /// No description provided for @inputPortLabel.
   ///
   /// In en, this message translates to:
@@ -451,6 +493,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Keyboard preset'**
   String get keyboardPresetLabel;
+
+  /// No description provided for @keyboardPresetNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get keyboardPresetNone;
 
   /// No description provided for @keyboardPresetNesStandard.
   ///
@@ -559,6 +607,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Turbo B'**
   String get keyboardActionTurboB;
+
+  /// No description provided for @keyboardActionRewind.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind'**
+  String get keyboardActionRewind;
+
+  /// No description provided for @keyboardActionFastForward.
+  ///
+  /// In en, this message translates to:
+  /// **'Fast Forward'**
+  String get keyboardActionFastForward;
+
+  /// No description provided for @keyboardActionSaveState.
+  ///
+  /// In en, this message translates to:
+  /// **'Save State'**
+  String get keyboardActionSaveState;
+
+  /// No description provided for @keyboardActionLoadState.
+  ///
+  /// In en, this message translates to:
+  /// **'Load State'**
+  String get keyboardActionLoadState;
+
+  /// No description provided for @keyboardActionPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get keyboardActionPause;
 
   /// No description provided for @inputBindingConflictCleared.
   ///
@@ -2347,6 +2425,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Offscreen'**
   String get spriteViewerVisibleStatusOffscreen;
+
+  /// No description provided for @longPressToClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Long press to clear'**
+  String get longPressToClear;
 }
 
 class _AppLocalizationsDelegate

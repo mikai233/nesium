@@ -529,6 +529,11 @@ impl RuntimeHandle {
             ControlMessage::SetRewinding(rewinding, reply)
         })
     }
+    pub fn set_fast_forwarding(&self, fast_forwarding: bool) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_fast_forwarding", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetFastForwarding(fast_forwarding, reply)
+        })
+    }
 
     pub fn load_movie(&self, movie: nesium_support::tas::Movie) -> Result<(), RuntimeError> {
         self.send_with_reply("load_movie", CONTROL_REPLY_TIMEOUT, |reply| {

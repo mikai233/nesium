@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1186232600;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -2055332180;
 
 // Section: executor
 
@@ -1674,6 +1674,40 @@ fn wire__crate__api__emulation__save_state_to_memory_impl(
                     })()
                     .await,
                 )
+            }
+        },
+    )
+}
+fn wire__crate__api__emulation__set_fast_forwarding_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_fast_forwarding",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_fast_forwarding = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok =
+                        crate::api::emulation::set_fast_forwarding(api_fast_forwarding)?;
+                    Ok(output_ok)
+                })())
             }
         },
     )
@@ -3476,16 +3510,33 @@ impl SseDecode for crate::api::gamepad::GamepadInfoFfi {
 impl SseDecode for crate::api::gamepad::GamepadMappingFfi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_a = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
-        let mut var_b = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
-        let mut var_select = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
-        let mut var_start = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
-        let mut var_up = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
-        let mut var_down = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
-        let mut var_left = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
-        let mut var_right = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
-        let mut var_turboA = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
-        let mut var_turboB = <crate::api::gamepad::GamepadButtonFfi>::sse_decode(deserializer);
+        let mut var_a = <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_b = <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_select =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_start =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_up = <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_down =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_left =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_right =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_turboA =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_turboB =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_rewind =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_fastForward =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_saveState =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_loadState =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_pause =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
         return crate::api::gamepad::GamepadMappingFfi {
             a: var_a,
             b: var_b,
@@ -3497,6 +3548,11 @@ impl SseDecode for crate::api::gamepad::GamepadMappingFfi {
             right: var_right,
             turbo_a: var_turboA,
             turbo_b: var_turboB,
+            rewind: var_rewind,
+            fast_forward: var_fastForward,
+            save_state: var_saveState,
+            load_state: var_loadState,
+            pause: var_pause,
         };
     }
 }
@@ -3709,6 +3765,19 @@ impl SseDecode for Option<String> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<String>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::gamepad::GamepadButtonFfi> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::gamepad::GamepadButtonFfi>::sse_decode(
+                deserializer,
+            ));
         } else {
             return None;
         }
@@ -4094,179 +4163,182 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         48 => {
+            wire__crate__api__emulation__set_fast_forwarding_impl(port, ptr, rust_vec_len, data_len)
+        }
+        49 => {
             wire__crate__api__gamepad__set_gamepad_mapping_impl(port, ptr, rust_vec_len, data_len)
         }
-        49 => wire__crate__api__emulation__set_integer_fps_mode_impl(
+        50 => wire__crate__api__emulation__set_integer_fps_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__events__set_palette_capture_frame_start_impl(
+        51 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__events__set_palette_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__api__events__set_palette_capture_scanline_impl(
+        53 => wire__crate__api__events__set_palette_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__events__set_palette_capture_vblank_start_impl(
+        54 => wire__crate__api__events__set_palette_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => {
+        55 => {
             wire__crate__api__palette__set_palette_pal_data_impl(port, ptr, rust_vec_len, data_len)
         }
-        55 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
-        57 => {
+        56 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
+        58 => {
             wire__crate__api__emulation__set_rewind_config_impl(port, ptr, rust_vec_len, data_len)
         }
-        58 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__events__set_sprite_capture_frame_start_impl(
+        59 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__events__set_sprite_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__events__set_sprite_capture_scanline_impl(
+        61 => wire__crate__api__events__set_sprite_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__events__set_sprite_capture_vblank_start_impl(
+        62 => wire__crate__api__events__set_sprite_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__api__events__set_tile_viewer_background_impl(
+        63 => wire__crate__api__events__set_tile_viewer_background_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
+        64 => wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        64 => wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
+        65 => wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
+        66 => wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => wire__crate__api__events__set_tile_viewer_display_mode_impl(
+        67 => wire__crate__api__events__set_tile_viewer_display_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => {
+        68 => {
             wire__crate__api__events__set_tile_viewer_layout_impl(port, ptr, rust_vec_len, data_len)
         }
-        68 => wire__crate__api__events__set_tile_viewer_palette_impl(
+        69 => wire__crate__api__events__set_tile_viewer_palette_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => {
+        70 => {
             wire__crate__api__events__set_tile_viewer_size_impl(port, ptr, rust_vec_len, data_len)
         }
-        70 => {
+        71 => {
             wire__crate__api__events__set_tile_viewer_source_impl(port, ptr, rust_vec_len, data_len)
         }
-        71 => wire__crate__api__events__set_tile_viewer_start_address_impl(
+        72 => wire__crate__api__events__set_tile_viewer_start_address_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
+        73 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        73 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
+        74 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
+        75 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        75 => wire__crate__api__events__set_tilemap_display_mode_impl(
+        76 => wire__crate__api__events__set_tilemap_display_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        76 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
+        77 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__gamepad__shutdown_gamepad_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__events__subscribe_tilemap_texture_impl(
+        78 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
+        80 => wire__crate__api__gamepad__shutdown_gamepad_impl(port, ptr, rust_vec_len, data_len),
+        81 => wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__events__subscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__api__events__tile_state_stream_impl(port, ptr, rust_vec_len, data_len),
-        84 => {
+        84 => wire__crate__api__events__tile_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        85 => {
             wire__crate__api__events__tilemap_state_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        85 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
-        86 => wire__crate__api__events__unsubscribe_debug_state_impl(
+        86 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
+        87 => wire__crate__api__events__unsubscribe_debug_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        87 => wire__crate__api__events__unsubscribe_palette_state_impl(
+        88 => wire__crate__api__events__unsubscribe_palette_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__crate__api__events__unsubscribe_sprite_state_impl(
+        89 => wire__crate__api__events__unsubscribe_sprite_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        89 => {
+        90 => {
             wire__crate__api__events__unsubscribe_tile_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        90 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
+        91 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
@@ -4446,6 +4518,11 @@ impl flutter_rust_bridge::IntoDart for crate::api::gamepad::GamepadMappingFfi {
             self.right.into_into_dart().into_dart(),
             self.turbo_a.into_into_dart().into_dart(),
             self.turbo_b.into_into_dart().into_dart(),
+            self.rewind.into_into_dart().into_dart(),
+            self.fast_forward.into_into_dart().into_dart(),
+            self.save_state.into_into_dart().into_dart(),
+            self.load_state.into_into_dart().into_dart(),
+            self.pause.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5079,16 +5156,21 @@ impl SseEncode for crate::api::gamepad::GamepadInfoFfi {
 impl SseEncode for crate::api::gamepad::GamepadMappingFfi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.a, serializer);
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.b, serializer);
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.select, serializer);
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.start, serializer);
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.up, serializer);
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.down, serializer);
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.left, serializer);
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.right, serializer);
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.turbo_a, serializer);
-        <crate::api::gamepad::GamepadButtonFfi>::sse_encode(self.turbo_b, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.a, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.b, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.select, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.start, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.up, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.down, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.left, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.right, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.turbo_a, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.turbo_b, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.rewind, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.fast_forward, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.save_state, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.load_state, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.pause, serializer);
     }
 }
 
@@ -5259,6 +5341,16 @@ impl SseEncode for Option<String> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <String>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::gamepad::GamepadButtonFfi> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::gamepad::GamepadButtonFfi>::sse_encode(value, serializer);
         }
     }
 }

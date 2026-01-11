@@ -18,8 +18,8 @@ import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
 import '../domain/nes_state.dart';
 import '../domain/pad_button.dart';
-import '../domain/gamepad_service.dart';
 import '../features/controls/input_settings.dart';
+import '../domain/gamepad_service.dart';
 import '../features/controls/turbo_settings.dart';
 import '../features/save_state/auto_save_service.dart';
 import '../features/save_state/save_state_dialog.dart';
@@ -116,6 +116,22 @@ class _NesShellState extends ConsumerState<NesShell>
     unawaitedLogged(
       nes_emulation.setRewinding(rewinding: false),
       message: 'setRewinding(false)',
+      logger: 'nes_shell',
+    );
+  }
+
+  void _startFastForwarding() {
+    unawaitedLogged(
+      nes_emulation.setFastForwarding(fastForwarding: true),
+      message: 'setFastForwarding(true)',
+      logger: 'nes_shell',
+    );
+  }
+
+  void _stopFastForwarding() {
+    unawaitedLogged(
+      nes_emulation.setFastForwarding(fastForwarding: false),
+      message: 'setFastForwarding(false)',
       logger: 'nes_shell',
     );
   }
@@ -657,6 +673,8 @@ class _NesShellState extends ConsumerState<NesShell>
     bool pressed, {
     required int pad,
   }) {
+    ref.read(lastInputMethodProvider.notifier).set(InputMethod.keyboard);
+
     switch (action) {
       case KeyboardBindingAction.up:
         input.setPressed(PadButton.up, pressed, pad: pad);
@@ -687,6 +705,29 @@ class _NesShellState extends ConsumerState<NesShell>
         break;
       case KeyboardBindingAction.turboB:
         input.setTurboEnabled(PadButton.b, pressed, pad: pad);
+        break;
+      case KeyboardBindingAction.rewind:
+        if (pressed) {
+          _startRewinding();
+        } else {
+          _stopRewinding();
+        }
+        break;
+      case KeyboardBindingAction.fastForward:
+        if (pressed) {
+          _startFastForwarding();
+        } else {
+          _stopFastForwarding();
+        }
+        break;
+      case KeyboardBindingAction.saveState:
+        if (pressed) _saveState();
+        break;
+      case KeyboardBindingAction.loadState:
+        if (pressed) _loadState();
+        break;
+      case KeyboardBindingAction.pause:
+        if (pressed) _togglePause();
         break;
     }
   }
@@ -739,6 +780,9 @@ class _NesShellState extends ConsumerState<NesShell>
       powerReset: _powerResetConsole,
       powerOff: _powerOffConsole,
       togglePause: _togglePause,
+      setRewinding: (active) => active ? _startRewinding() : _stopRewinding(),
+      setFastForwarding: (active) =>
+          active ? _startFastForwarding() : _stopFastForwarding(),
       openSettings: _openSettings,
       openAbout: _openAbout,
       openDebugger: _openDebugger,

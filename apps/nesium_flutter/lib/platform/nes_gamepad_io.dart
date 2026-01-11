@@ -166,29 +166,42 @@ GamepadButton _gamepadButtonFromFfi(frb_gamepad.GamepadButtonFfi b) =>
 
 extension _GamepadMappingFfiExt on GamepadMapping {
   frb_gamepad.GamepadMappingFfi toFfi() => frb_gamepad.GamepadMappingFfi(
-    a: a.toFfi(),
-    b: b.toFfi(),
-    select: select.toFfi(),
-    start: start.toFfi(),
-    up: up.toFfi(),
-    down: down.toFfi(),
-    left: left.toFfi(),
-    right: right.toFfi(),
-    turboA: turboA.toFfi(),
-    turboB: turboB.toFfi(),
+    a: a?.toFfi(),
+    b: b?.toFfi(),
+    select: select?.toFfi(),
+    start: start?.toFfi(),
+    up: up?.toFfi(),
+    down: down?.toFfi(),
+    left: left?.toFfi(),
+    right: right?.toFfi(),
+    turboA: turboA?.toFfi(),
+    turboB: turboB?.toFfi(),
+    rewind: rewind?.toFfi(),
+    fastForward: fastForward?.toFfi(),
+    saveState: saveState?.toFfi(),
+    loadState: loadState?.toFfi(),
+    pause: pause?.toFfi(),
   );
 }
 
-GamepadMapping _gamepadMappingFromFfi(frb_gamepad.GamepadMappingFfi m) =>
-    GamepadMapping(
-      a: _gamepadButtonFromFfi(m.a),
-      b: _gamepadButtonFromFfi(m.b),
-      select: _gamepadButtonFromFfi(m.select),
-      start: _gamepadButtonFromFfi(m.start),
-      up: _gamepadButtonFromFfi(m.up),
-      down: _gamepadButtonFromFfi(m.down),
-      left: _gamepadButtonFromFfi(m.left),
-      right: _gamepadButtonFromFfi(m.right),
-      turboA: _gamepadButtonFromFfi(m.turboA),
-      turboB: _gamepadButtonFromFfi(m.turboB),
-    );
+GamepadMapping _gamepadMappingFromFfi(
+  frb_gamepad.GamepadMappingFfi m,
+) => GamepadMapping(
+  a: m.a != null ? _gamepadButtonFromFfi(m.a!) : null,
+  b: m.b != null ? _gamepadButtonFromFfi(m.b!) : null,
+  select: m.select != null ? _gamepadButtonFromFfi(m.select!) : null,
+  start: m.start != null ? _gamepadButtonFromFfi(m.start!) : null,
+  up: m.up != null ? _gamepadButtonFromFfi(m.up!) : null,
+  down: m.down != null ? _gamepadButtonFromFfi(m.down!) : null,
+  left: m.left != null ? _gamepadButtonFromFfi(m.left!) : null,
+  right: m.right != null ? _gamepadButtonFromFfi(m.right!) : null,
+  turboA: m.turboA != null ? _gamepadButtonFromFfi(m.turboA!) : null,
+  turboB: m.turboB != null ? _gamepadButtonFromFfi(m.turboB!) : null,
+  rewind: m.rewind != null ? _gamepadButtonFromFfi(m.rewind!) : null,
+  fastForward: m.fastForward != null
+      ? _gamepadButtonFromFfi(m.fastForward!)
+      : null,
+  saveState: m.saveState != null ? _gamepadButtonFromFfi(m.saveState!) : null,
+  loadState: m.loadState != null ? _gamepadButtonFromFfi(m.loadState!) : null,
+  pause: m.pause != null ? _gamepadButtonFromFfi(m.pause!) : null,
+);

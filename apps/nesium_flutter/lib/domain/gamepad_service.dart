@@ -8,6 +8,8 @@ import '../features/settings/gamepad_settings.dart';
 import 'connected_gamepads_provider.dart';
 import 'nes_input_masks.dart';
 import '../platform/nes_gamepad.dart' as nes_gamepad;
+import '../shell/nes_actions.dart';
+import '../features/controls/input_settings.dart';
 
 /// Provider for gamepad state that polls and merges with keyboard input.
 final gamepadServiceProvider = NotifierProvider<GamepadService, void>(
@@ -81,6 +83,30 @@ class GamepadService extends Notifier<void> {
           ref
               .read(nesInputMasksProvider.notifier)
               .updateGamepadMasks(i, masks[i], turboMasks[i]);
+        }
+
+        // Trigger extended actions
+        final actions = ref.read(nesActionsProvider);
+        final pollActions = result.actions;
+
+        actions.setRewinding?.call(pollActions.rewind);
+        actions.setFastForwarding?.call(pollActions.fastForward);
+        if (pollActions.saveState) actions.saveState?.call();
+        if (pollActions.loadState) actions.loadState?.call();
+        if (pollActions.pause) actions.togglePause?.call();
+
+        // Update last input method if there is any activity
+        final hasAnyActivity =
+            masks.any((m) => m != 0) ||
+            turboMasks.any((m) => m != 0) ||
+            pollActions.rewind ||
+            pollActions.fastForward ||
+            pollActions.saveState ||
+            pollActions.loadState ||
+            pollActions.pause;
+
+        if (hasAnyActivity) {
+          ref.read(lastInputMethodProvider.notifier).set(InputMethod.gamepad);
         }
       }
     });

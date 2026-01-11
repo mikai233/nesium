@@ -180,6 +180,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get inputButtonRight => '右';
 
   @override
+  String get inputButtonRewind => '倒带';
+
+  @override
+  String get inputButtonFastForward => '快进';
+
+  @override
+  String get inputButtonSaveState => '即时存档';
+
+  @override
+  String get inputButtonLoadState => '读取存档';
+
+  @override
+  String get inputButtonPause => '暂停';
+
+  @override
+  String get globalHotkeysTitle => '模拟器热键';
+
+  @override
+  String get gamepadHotkeysTitle => '手柄热键 (玩家 1)';
+
+  @override
   String get inputPortLabel => '配置玩家';
 
   @override
@@ -196,6 +217,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get keyboardPresetLabel => '键盘预设';
+
+  @override
+  String get keyboardPresetNone => '无';
 
   @override
   String get keyboardPresetNesStandard => 'NES 标准';
@@ -252,6 +276,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get keyboardActionTurboB => 'Turbo B';
+
+  @override
+  String get keyboardActionRewind => '倒带';
+
+  @override
+  String get keyboardActionFastForward => '快进';
+
+  @override
+  String get keyboardActionSaveState => '即时存档';
+
+  @override
+  String get keyboardActionLoadState => '读取存档';
+
+  @override
+  String get keyboardActionPause => '暂停';
 
   @override
   String inputBindingConflictCleared(String player, String action) {
@@ -1214,4 +1253,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get spriteViewerVisibleStatusOffscreen => '屏幕外';
+
+  @override
+  String get longPressToClear => '长按清除';
 }

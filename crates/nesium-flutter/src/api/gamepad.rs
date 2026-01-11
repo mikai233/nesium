@@ -34,6 +34,8 @@ pub fn init_gamepad() -> Result<(), String> {
         GAMEPAD_LOOP_STOP.store(false, Ordering::Release);
         *thread_guard = Some(thread::spawn(move || {
             tracing::info!("Starting gamepad polling thread (Rust)");
+            let mut prev_actions = nesium_support::gamepad::GamepadActions::default();
+
             loop {
                 if GAMEPAD_LOOP_STOP.load(Ordering::Acquire) {
                     tracing::info!("Gamepad polling thread stopping");
@@ -55,16 +57,35 @@ pub fn init_gamepad() -> Result<(), String> {
                             );
                         }
 
-                        // Handle actions
-                        let handle = crate::runtime_handle();
-                        if result.actions.save_state {
-                            // TODO: This uses a hardcoded slot/path if we want to support it cleanly
-                            // For now maybe we don't trigger save/load automatically without a path
+                        // Handle actions if they changed
+                        if result.actions != prev_actions {
+                            let handle = crate::runtime_handle();
+
+                            // Rewind: state-based
+                            if result.actions.rewind != prev_actions.rewind {
+                                let _ = handle.set_rewinding(result.actions.rewind);
+                            }
+
+                            // Fast Forward: state-based
+                            if result.actions.fast_forward != prev_actions.fast_forward {
+                                let _ = handle.set_fast_forwarding(result.actions.fast_forward);
+                            }
+
+                            // Pause: toggle on rising edge
+                            if result.actions.pause && !prev_actions.pause {
+                                handle.set_paused(!handle.paused());
+                            }
+
+                            // Save/Load: TODO (needs slot/path management)
+                            if result.actions.save_state && !prev_actions.save_state {
+                                tracing::info!("Gamepad Save State requested (not implemented)");
+                            }
+                            if result.actions.load_state && !prev_actions.load_state {
+                                tracing::info!("Gamepad Load State requested (not implemented)");
+                            }
+
+                            prev_actions = result.actions;
                         }
-                        if result.actions.pause {
-                            handle.set_paused(!handle.paused());
-                        }
-                        // Rewind/FastForward would need more logic or just set state
                     } else {
                         // Manager gone? Stop loop.
                         break;
@@ -167,7 +188,10 @@ pub fn set_gamepad_mapping(port: u8, mapping: GamepadMappingFfi) -> Result<(), S
     let mut manager = GAMEPAD_MANAGER.lock().unwrap();
     let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
+    // Extract action mapping from the combined FFI mapping
+    let action_mapping: nesium_support::gamepad::ActionMapping = mapping.clone().into();
     gm.set_mapping(port as usize, mapping.into());
+    gm.set_action_mapping(action_mapping);
     Ok(())
 }
 
@@ -323,31 +347,54 @@ impl From<GamepadButtonFfi> for gilrs::Button {
 #[frb]
 #[derive(Debug, Clone, Copy)]
 pub struct GamepadMappingFfi {
-    pub a: GamepadButtonFfi,
-    pub b: GamepadButtonFfi,
-    pub select: GamepadButtonFfi,
-    pub start: GamepadButtonFfi,
-    pub up: GamepadButtonFfi,
-    pub down: GamepadButtonFfi,
-    pub left: GamepadButtonFfi,
-    pub right: GamepadButtonFfi,
-    pub turbo_a: GamepadButtonFfi,
-    pub turbo_b: GamepadButtonFfi,
+    pub a: Option<GamepadButtonFfi>,
+    pub b: Option<GamepadButtonFfi>,
+    pub select: Option<GamepadButtonFfi>,
+    pub start: Option<GamepadButtonFfi>,
+    pub up: Option<GamepadButtonFfi>,
+    pub down: Option<GamepadButtonFfi>,
+    pub left: Option<GamepadButtonFfi>,
+    pub right: Option<GamepadButtonFfi>,
+    pub turbo_a: Option<GamepadButtonFfi>,
+    pub turbo_b: Option<GamepadButtonFfi>,
+    // Extended actions
+    pub rewind: Option<GamepadButtonFfi>,
+    pub fast_forward: Option<GamepadButtonFfi>,
+    pub save_state: Option<GamepadButtonFfi>,
+    pub load_state: Option<GamepadButtonFfi>,
+    pub pause: Option<GamepadButtonFfi>,
 }
 
 impl From<nesium_support::gamepad::ButtonMapping> for GamepadMappingFfi {
     fn from(m: nesium_support::gamepad::ButtonMapping) -> Self {
         Self {
-            a: GamepadButtonFfi::from(m.a),
-            b: GamepadButtonFfi::from(m.b),
-            select: GamepadButtonFfi::from(m.select),
-            start: GamepadButtonFfi::from(m.start),
-            up: GamepadButtonFfi::from(m.up),
-            down: GamepadButtonFfi::from(m.down),
-            left: GamepadButtonFfi::from(m.left),
-            right: GamepadButtonFfi::from(m.right),
-            turbo_a: GamepadButtonFfi::from(m.turbo_a),
-            turbo_b: GamepadButtonFfi::from(m.turbo_b),
+            a: m.a.map(GamepadButtonFfi::from),
+            b: m.b.map(GamepadButtonFfi::from),
+            select: m.select.map(GamepadButtonFfi::from),
+            start: m.start.map(GamepadButtonFfi::from),
+            up: m.up.map(GamepadButtonFfi::from),
+            down: m.down.map(GamepadButtonFfi::from),
+            left: m.left.map(GamepadButtonFfi::from),
+            right: m.right.map(GamepadButtonFfi::from),
+            turbo_a: m.turbo_a.map(GamepadButtonFfi::from),
+            turbo_b: m.turbo_b.map(GamepadButtonFfi::from),
+            rewind: None, // ButtonMapping doesn't have these
+            fast_forward: None,
+            save_state: None,
+            load_state: None,
+            pause: None,
+        }
+    }
+}
+
+impl From<GamepadMappingFfi> for nesium_support::gamepad::ActionMapping {
+    fn from(m: GamepadMappingFfi) -> Self {
+        Self {
+            rewind: m.rewind.map(|b| b.into()),
+            fast_forward: m.fast_forward.map(|b| b.into()),
+            save_state: m.save_state.map(|b| b.into()),
+            load_state: m.load_state.map(|b| b.into()),
+            pause: m.pause.map(|b| b.into()),
         }
     }
 }
@@ -362,22 +409,33 @@ pub fn get_gamepad_mapping(port: u8) -> Result<GamepadMappingFfi, String> {
         .mapping(port as usize)
         .cloned()
         .ok_or_else(|| format!("No mapping for port {}", port))?;
-    Ok(GamepadMappingFfi::from(mapping))
+
+    let action_mapping = gm.action_mapping();
+
+    let mut result = GamepadMappingFfi::from(mapping);
+    // Merge extended actions
+    result.rewind = action_mapping.rewind.map(GamepadButtonFfi::from);
+    result.fast_forward = action_mapping.fast_forward.map(GamepadButtonFfi::from);
+    result.save_state = action_mapping.save_state.map(GamepadButtonFfi::from);
+    result.load_state = action_mapping.load_state.map(GamepadButtonFfi::from);
+    result.pause = action_mapping.pause.map(GamepadButtonFfi::from);
+
+    Ok(result)
 }
 
 impl From<GamepadMappingFfi> for nesium_support::gamepad::ButtonMapping {
     fn from(m: GamepadMappingFfi) -> Self {
         Self {
-            a: m.a.into(),
-            b: m.b.into(),
-            select: m.select.into(),
-            start: m.start.into(),
-            up: m.up.into(),
-            down: m.down.into(),
-            left: m.left.into(),
-            right: m.right.into(),
-            turbo_a: m.turbo_a.into(),
-            turbo_b: m.turbo_b.into(),
+            a: m.a.map(|b| b.into()),
+            b: m.b.map(|b| b.into()),
+            select: m.select.map(|b| b.into()),
+            start: m.start.map(|b| b.into()),
+            up: m.up.map(|b| b.into()),
+            down: m.down.map(|b| b.into()),
+            left: m.left.map(|b| b.into()),
+            right: m.right.map(|b| b.into()),
+            turbo_a: m.turbo_a.map(|b| b.into()),
+            turbo_b: m.turbo_b.map(|b| b.into()),
         }
     }
 }

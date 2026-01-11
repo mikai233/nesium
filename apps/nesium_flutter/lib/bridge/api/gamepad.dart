@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Initializes the gamepad subsystem and starts the background polling thread.
 ///
@@ -161,28 +161,38 @@ class GamepadInfoFfi {
 
 /// FFI-safe version of ButtonMapping.
 class GamepadMappingFfi {
-  final GamepadButtonFfi a;
-  final GamepadButtonFfi b;
-  final GamepadButtonFfi select;
-  final GamepadButtonFfi start;
-  final GamepadButtonFfi up;
-  final GamepadButtonFfi down;
-  final GamepadButtonFfi left;
-  final GamepadButtonFfi right;
-  final GamepadButtonFfi turboA;
-  final GamepadButtonFfi turboB;
+  final GamepadButtonFfi? a;
+  final GamepadButtonFfi? b;
+  final GamepadButtonFfi? select;
+  final GamepadButtonFfi? start;
+  final GamepadButtonFfi? up;
+  final GamepadButtonFfi? down;
+  final GamepadButtonFfi? left;
+  final GamepadButtonFfi? right;
+  final GamepadButtonFfi? turboA;
+  final GamepadButtonFfi? turboB;
+  final GamepadButtonFfi? rewind;
+  final GamepadButtonFfi? fastForward;
+  final GamepadButtonFfi? saveState;
+  final GamepadButtonFfi? loadState;
+  final GamepadButtonFfi? pause;
 
   const GamepadMappingFfi({
-    required this.a,
-    required this.b,
-    required this.select,
-    required this.start,
-    required this.up,
-    required this.down,
-    required this.left,
-    required this.right,
-    required this.turboA,
-    required this.turboB,
+    this.a,
+    this.b,
+    this.select,
+    this.start,
+    this.up,
+    this.down,
+    this.left,
+    this.right,
+    this.turboA,
+    this.turboB,
+    this.rewind,
+    this.fastForward,
+    this.saveState,
+    this.loadState,
+    this.pause,
   });
 
   @override
@@ -196,7 +206,12 @@ class GamepadMappingFfi {
       left.hashCode ^
       right.hashCode ^
       turboA.hashCode ^
-      turboB.hashCode;
+      turboB.hashCode ^
+      rewind.hashCode ^
+      fastForward.hashCode ^
+      saveState.hashCode ^
+      loadState.hashCode ^
+      pause.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -212,7 +227,12 @@ class GamepadMappingFfi {
           left == other.left &&
           right == other.right &&
           turboA == other.turboA &&
-          turboB == other.turboB;
+          turboB == other.turboB &&
+          rewind == other.rewind &&
+          fastForward == other.fastForward &&
+          saveState == other.saveState &&
+          loadState == other.loadState &&
+          pause == other.pause;
 }
 
 /// FFI-safe version of GamepadPollResult.

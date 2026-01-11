@@ -5,6 +5,7 @@ import 'package:animations/animations.dart';
 import 'domain/rom_hash_sync_provider.dart';
 import 'features/settings/language_settings.dart';
 import 'features/settings/theme_settings.dart';
+import 'features/settings/gamepad_assignment_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'windows/window_routing.dart';
 
@@ -18,6 +19,7 @@ class NesiumApp extends ConsumerWidget {
     final language = ref.watch(appLanguageProvider);
     final themeSettings = ref.watch(themeSettingsProvider);
     ref.watch(romHashSyncProvider);
+    ref.watch(gamepadAssignmentProvider);
     return MaterialApp(
       onGenerateTitle: (context) {
         final l10n = AppLocalizations.of(context);

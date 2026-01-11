@@ -54,38 +54,38 @@ pub mod turbo_mask {
 #[derive(Debug, Clone)]
 pub struct ButtonMapping {
     // Standard NES buttons
-    pub a: Button,
-    pub b: Button,
-    pub select: Button,
-    pub start: Button,
-    pub up: Button,
-    pub down: Button,
-    pub left: Button,
-    pub right: Button,
+    pub a: Option<Button>,
+    pub b: Option<Button>,
+    pub select: Option<Button>,
+    pub start: Option<Button>,
+    pub up: Option<Button>,
+    pub down: Option<Button>,
+    pub left: Option<Button>,
+    pub right: Option<Button>,
     // Turbo buttons
-    pub turbo_a: Button,
-    pub turbo_b: Button,
+    pub turbo_a: Option<Button>,
+    pub turbo_b: Option<Button>,
 }
 
 impl Default for ButtonMapping {
     fn default() -> Self {
         Self {
-            a: Button::South, // Xbox A / PS Cross
-            b: Button::East,  // Xbox B / PS Circle
-            select: Button::Select,
-            start: Button::Start,
-            up: Button::DPadUp,
-            down: Button::DPadDown,
-            left: Button::DPadLeft,
-            right: Button::DPadRight,
-            turbo_a: Button::North, // Y / △ (Xbox Y / PS Triangle)
-            turbo_b: Button::West,  // X / □ (Xbox X / PS Square)
+            a: Some(Button::South), // Xbox A / PS Cross
+            b: Some(Button::East),  // Xbox B / PS Circle
+            select: Some(Button::Select),
+            start: Some(Button::Start),
+            up: Some(Button::DPadUp),
+            down: Some(Button::DPadDown),
+            left: Some(Button::DPadLeft),
+            right: Some(Button::DPadRight),
+            turbo_a: Some(Button::North), // Y / △ (Xbox Y / PS Triangle)
+            turbo_b: Some(Button::West),  // X / □ (Xbox X / PS Square)
         }
     }
 }
 
 /// Extended gamepad actions beyond NES controller buttons.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GamepadActions {
     /// Rewind emulation state.
     pub rewind: bool,
@@ -430,37 +430,48 @@ impl GamepadManager {
         let mut pad_mask = 0u8;
         let mut turbo_mask = 0u8;
 
+        let check_btn = |btn_opt: Option<gilrs::Button>| -> bool {
+            if let Some(btn) = btn_opt {
+                if btn == gilrs::Button::Unknown {
+                    return false;
+                }
+                gamepad.is_pressed(btn)
+            } else {
+                false
+            }
+        };
+
         // Standard NES buttons
-        if gamepad.is_pressed(mapping.a) {
+        if check_btn(mapping.a) {
             pad_mask |= button_mask::A;
         }
-        if gamepad.is_pressed(mapping.b) {
+        if check_btn(mapping.b) {
             pad_mask |= button_mask::B;
         }
-        if gamepad.is_pressed(mapping.select) {
+        if check_btn(mapping.select) {
             pad_mask |= button_mask::SELECT;
         }
-        if gamepad.is_pressed(mapping.start) {
+        if check_btn(mapping.start) {
             pad_mask |= button_mask::START;
         }
-        if gamepad.is_pressed(mapping.up) {
+        if check_btn(mapping.up) {
             pad_mask |= button_mask::UP;
         }
-        if gamepad.is_pressed(mapping.down) {
+        if check_btn(mapping.down) {
             pad_mask |= button_mask::DOWN;
         }
-        if gamepad.is_pressed(mapping.left) {
+        if check_btn(mapping.left) {
             pad_mask |= button_mask::LEFT;
         }
-        if gamepad.is_pressed(mapping.right) {
+        if check_btn(mapping.right) {
             pad_mask |= button_mask::RIGHT;
         }
 
         // Turbo buttons
-        if gamepad.is_pressed(mapping.turbo_a) {
+        if check_btn(mapping.turbo_a) {
             turbo_mask |= turbo_mask::TURBO_A;
         }
-        if gamepad.is_pressed(mapping.turbo_b) {
+        if check_btn(mapping.turbo_b) {
             turbo_mask |= turbo_mask::TURBO_B;
         }
 
@@ -485,28 +496,32 @@ impl GamepadManager {
     }
 
     fn read_actions(&self, gamepad: &gilrs::Gamepad, actions: &mut GamepadActions) {
+        let is_pressed_safe = |btn: gilrs::Button| -> bool {
+            btn != gilrs::Button::Unknown && gamepad.is_pressed(btn)
+        };
+
         if let Some(btn) = self.action_mapping.rewind {
-            if gamepad.is_pressed(btn) {
+            if is_pressed_safe(btn) {
                 actions.rewind = true;
             }
         }
         if let Some(btn) = self.action_mapping.fast_forward {
-            if gamepad.is_pressed(btn) {
+            if is_pressed_safe(btn) {
                 actions.fast_forward = true;
             }
         }
         if let Some(btn) = self.action_mapping.save_state {
-            if gamepad.is_pressed(btn) {
+            if is_pressed_safe(btn) {
                 actions.save_state = true;
             }
         }
         if let Some(btn) = self.action_mapping.load_state {
-            if gamepad.is_pressed(btn) {
+            if is_pressed_safe(btn) {
                 actions.load_state = true;
             }
         }
         if let Some(btn) = self.action_mapping.pause {
-            if gamepad.is_pressed(btn) {
+            if is_pressed_safe(btn) {
                 actions.pause = true;
             }
         }
@@ -542,9 +557,9 @@ mod tests {
     #[test]
     fn test_default_button_mapping() {
         let mapping = ButtonMapping::default();
-        assert_eq!(mapping.a, Button::South);
-        assert_eq!(mapping.b, Button::East);
-        assert_eq!(mapping.start, Button::Start);
-        assert_eq!(mapping.select, Button::Select);
+        assert_eq!(mapping.a, Some(Button::South));
+        assert_eq!(mapping.b, Some(Button::East));
+        assert_eq!(mapping.start, Some(Button::Start));
+        assert_eq!(mapping.select, Some(Button::Select));
     }
 }

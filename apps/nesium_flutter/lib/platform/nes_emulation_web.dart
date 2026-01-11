@@ -19,6 +19,11 @@ Future<void> setRewinding({required bool rewinding}) async {
   webPostCmd('setRewinding', {'rewinding': rewinding});
 }
 
+Future<void> setFastForwarding({required bool fastForwarding}) async {
+  if (!isWebNesReady) return;
+  webPostCmd('setFastForwarding', {'fastForwarding': fastForwarding});
+}
+
 Future<void> saveState({required String path}) async {
   // handled in web_shell_web
 }

@@ -709,15 +709,6 @@ class _WebShellState extends ConsumerState<WebShell> {
     final pressed = event is KeyDownEvent || event is KeyRepeatEvent;
     final key = event.logicalKey;
 
-    if (key == LogicalKeyboardKey.backspace) {
-      unawaitedLogged(
-        nes_emulation.setRewinding(rewinding: pressed),
-        message: 'setRewinding ($pressed)',
-        logger: 'web_shell',
-      );
-      return KeyEventResult.handled;
-    }
-
     final inputState = ref.read(inputSettingsProvider);
 
     // TODO: support Netplay in Web? For now just local
@@ -760,6 +751,49 @@ class _WebShellState extends ConsumerState<WebShell> {
           break;
         case KeyboardBindingAction.turboB:
           input.setTurboEnabled(PadButton.b, pressed, pad: i);
+          break;
+        case KeyboardBindingAction.rewind:
+          unawaitedLogged(
+            nes_emulation.setRewinding(rewinding: pressed),
+            message: 'setRewinding ($pressed)',
+            logger: 'web_shell',
+          );
+          break;
+        case KeyboardBindingAction.fastForward:
+          // TODO: Implement fast forward in bridge
+          break;
+        case KeyboardBindingAction.saveState:
+          if (pressed) {
+            final repository = ref.read(saveStateRepositoryProvider.notifier);
+            final slot = 1; // Default slot for quick save
+            unawaitedLogged(
+              () async {
+                final data = await nes_emulation.saveStateToMemory();
+                await repository.saveState(slot, data);
+              }(),
+              message: 'saveState to repository (slot $slot)',
+              logger: 'web_shell',
+            );
+          }
+          break;
+        case KeyboardBindingAction.loadState:
+          if (pressed) {
+            final repository = ref.read(saveStateRepositoryProvider.notifier);
+            final slot = 1; // Default slot for quick load
+            unawaitedLogged(
+              () async {
+                final data = await repository.loadState(slot);
+                if (data != null) {
+                  await nes_emulation.loadStateFromMemory(data: data);
+                }
+              }(),
+              message: 'loadState from repository (slot $slot)',
+              logger: 'web_shell',
+            );
+          }
+          break;
+        case KeyboardBindingAction.pause:
+          if (pressed) _togglePause();
           break;
       }
       handled = true;
@@ -807,6 +841,16 @@ class _WebShellState extends ConsumerState<WebShell> {
         );
       },
       togglePause: _togglePause,
+      setRewinding: (active) => unawaitedLogged(
+        nes_emulation.setRewinding(rewinding: active),
+        message: 'setRewinding ($active)',
+        logger: 'web_shell',
+      ),
+      setFastForwarding: (active) => unawaitedLogged(
+        nes_emulation.setFastForwarding(fastForwarding: active),
+        message: 'setFastForwarding ($active)',
+        logger: 'web_shell',
+      ),
       openSettings: () async {
         if (!mounted) return;
         await Navigator.of(

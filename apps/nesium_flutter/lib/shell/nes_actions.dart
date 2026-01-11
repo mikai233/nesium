@@ -22,6 +22,8 @@ class NesActions {
     this.powerReset,
     this.powerOff,
     this.togglePause,
+    this.setRewinding,
+    this.setFastForwarding,
     this.openSettings,
     this.openAbout,
     this.openDebugger,
@@ -46,6 +48,8 @@ class NesActions {
   final AsyncCallback? powerReset;
   final AsyncCallback? powerOff;
   final AsyncCallback? togglePause;
+  final ValueChanged<bool>? setRewinding;
+  final ValueChanged<bool>? setFastForwarding;
   final AsyncCallback? openSettings;
   final AsyncCallback? openAbout;
   final AsyncCallback? openDebugger;

@@ -18,6 +18,7 @@ pub(crate) struct RuntimeState {
     pub(crate) rewind_enabled: AtomicBool,
     pub(crate) rewind_capacity: AtomicU64,
     pub(crate) rewinding: AtomicBool,
+    pub(crate) fast_forwarding: AtomicBool,
 }
 
 impl RuntimeState {
@@ -34,6 +35,7 @@ impl RuntimeState {
             rewind_enabled: AtomicBool::new(false),
             rewind_capacity: AtomicU64::new(600), // Default 10s @ 60fps
             rewinding: AtomicBool::new(false),
+            fast_forwarding: AtomicBool::new(false),
         }
     }
 }

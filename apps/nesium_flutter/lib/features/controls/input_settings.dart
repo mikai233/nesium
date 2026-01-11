@@ -9,10 +9,34 @@ import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../platform/nes_gamepad.dart';
 
 enum InputDevice { keyboard, gamepad, virtualController }
 
-enum KeyboardPreset { nesStandard, fightStick, arcadeLayout, custom }
+enum InputMethod { keyboard, gamepad }
+
+class LastInputMethodNotifier extends Notifier<InputMethod> {
+  @override
+  InputMethod build() => InputMethod.keyboard;
+
+  void set(InputMethod method) => state = method;
+}
+
+final lastInputMethodProvider =
+    NotifierProvider<LastInputMethodNotifier, InputMethod>(
+      LastInputMethodNotifier.new,
+    );
+
+final keyboardPressedKeysProvider = StreamProvider<Set<LogicalKeyboardKey>>((
+  ref,
+) async* {
+  while (true) {
+    yield HardwareKeyboard.instance.logicalKeysPressed;
+    await Future.delayed(const Duration(milliseconds: 50));
+  }
+});
+
+enum KeyboardPreset { none, nesStandard, fightStick, arcadeLayout, custom }
 
 enum KeyboardBindingAction {
   up,
@@ -25,10 +49,21 @@ enum KeyboardBindingAction {
   start,
   turboA,
   turboB,
+  rewind,
+  fastForward,
+  saveState,
+  loadState,
+  pause,
+}
+
+extension KeyboardBindingActionExt on KeyboardBindingAction {
+  bool get isCore => index <= KeyboardBindingAction.turboB.index;
+  bool get isExtended => index > KeyboardBindingAction.turboB.index;
 }
 
 extension KeyboardPresetLabel on KeyboardPreset {
   String get label => switch (this) {
+    KeyboardPreset.none => 'None',
     KeyboardPreset.nesStandard => 'NES standard',
     KeyboardPreset.fightStick => 'Fight stick',
     KeyboardPreset.arcadeLayout => 'Arcade layout',
@@ -48,8 +83,51 @@ extension KeyboardBindingActionLabel on KeyboardBindingAction {
     KeyboardBindingAction.start => 'Start',
     KeyboardBindingAction.turboA => 'Turbo A',
     KeyboardBindingAction.turboB => 'Turbo B',
+    KeyboardBindingAction.rewind => 'Rewind',
+    KeyboardBindingAction.fastForward => 'Fast Forward',
+    KeyboardBindingAction.saveState => 'Save State',
+    KeyboardBindingAction.loadState => 'Load State',
+    KeyboardBindingAction.pause => 'Pause',
   };
 }
+
+final actionHintProvider = Provider.family<String, KeyboardBindingAction>((
+  ref,
+  action,
+) {
+  final method = ref.watch(lastInputMethodProvider);
+  final settings = ref.watch(inputSettingsProvider).selectedSettings;
+
+  if (method == InputMethod.keyboard) {
+    final key = settings.bindingForAction(action);
+    return key?.keyLabel ?? 'Unassigned';
+  } else {
+    // For simplicity, we map KeyboardBindingAction to NesButtonAction where they overlap
+    // and then look up the gamepad binding.
+    final gamepadMapping = ref.watch(gamepadMappingProvider(0)).asData?.value;
+    if (gamepadMapping == null) return 'Unassigned';
+
+    final button = switch (action) {
+      KeyboardBindingAction.up => gamepadMapping.up,
+      KeyboardBindingAction.down => gamepadMapping.down,
+      KeyboardBindingAction.left => gamepadMapping.left,
+      KeyboardBindingAction.right => gamepadMapping.right,
+      KeyboardBindingAction.a => gamepadMapping.a,
+      KeyboardBindingAction.b => gamepadMapping.b,
+      KeyboardBindingAction.select => gamepadMapping.select,
+      KeyboardBindingAction.start => gamepadMapping.start,
+      KeyboardBindingAction.turboA => gamepadMapping.turboA,
+      KeyboardBindingAction.turboB => gamepadMapping.turboB,
+      KeyboardBindingAction.rewind => gamepadMapping.rewind,
+      KeyboardBindingAction.fastForward => gamepadMapping.fastForward,
+      KeyboardBindingAction.saveState => gamepadMapping.saveState,
+      KeyboardBindingAction.loadState => gamepadMapping.loadState,
+      KeyboardBindingAction.pause => gamepadMapping.pause,
+    };
+
+    return button?.toFriendlyName() ?? 'Unassigned';
+  }
+});
 
 @immutable
 class InputSettings {
@@ -68,7 +146,31 @@ class InputSettings {
     required this.customStart,
     required this.customTurboA,
     required this.customTurboB,
+    this.customRewind,
+    this.customFastForward,
+    this.customSaveState,
+    this.customLoadState,
+    this.customPause,
   });
+
+  const InputSettings.empty({
+    required this.device,
+    required this.keyboardPreset,
+  }) : customUp = null,
+       customDown = null,
+       customLeft = null,
+       customRight = null,
+       customA = null,
+       customB = null,
+       customSelect = null,
+       customStart = null,
+       customTurboA = null,
+       customTurboB = null,
+       customRewind = null,
+       customFastForward = null,
+       customSaveState = null,
+       customLoadState = null,
+       customPause = null;
 
   final InputDevice device;
   final KeyboardPreset keyboardPreset;
@@ -83,6 +185,11 @@ class InputSettings {
   final LogicalKeyboardKey? customStart;
   final LogicalKeyboardKey? customTurboA;
   final LogicalKeyboardKey? customTurboB;
+  final LogicalKeyboardKey? customRewind;
+  final LogicalKeyboardKey? customFastForward;
+  final LogicalKeyboardKey? customSaveState;
+  final LogicalKeyboardKey? customLoadState;
+  final LogicalKeyboardKey? customPause;
 
   InputSettings copyWith({
     InputDevice? device,
@@ -97,6 +204,11 @@ class InputSettings {
     Object? customStart = _unset,
     Object? customTurboA = _unset,
     Object? customTurboB = _unset,
+    Object? customRewind = _unset,
+    Object? customFastForward = _unset,
+    Object? customSaveState = _unset,
+    Object? customLoadState = _unset,
+    Object? customPause = _unset,
   }) => InputSettings(
     device: device ?? this.device,
     keyboardPreset: keyboardPreset ?? this.keyboardPreset,
@@ -130,6 +242,21 @@ class InputSettings {
     customTurboB: identical(customTurboB, _unset)
         ? this.customTurboB
         : customTurboB as LogicalKeyboardKey?,
+    customRewind: identical(customRewind, _unset)
+        ? this.customRewind
+        : customRewind as LogicalKeyboardKey?,
+    customFastForward: identical(customFastForward, _unset)
+        ? this.customFastForward
+        : customFastForward as LogicalKeyboardKey?,
+    customSaveState: identical(customSaveState, _unset)
+        ? this.customSaveState
+        : customSaveState as LogicalKeyboardKey?,
+    customLoadState: identical(customLoadState, _unset)
+        ? this.customLoadState
+        : customLoadState as LogicalKeyboardKey?,
+    customPause: identical(customPause, _unset)
+        ? this.customPause
+        : customPause as LogicalKeyboardKey?,
   );
 
   Map<LogicalKeyboardKey, KeyboardBindingAction> resolveKeyboardBindings() {
@@ -145,55 +272,62 @@ class InputSettings {
     return bindings;
   }
 
-  LogicalKeyboardKey? bindingForAction(KeyboardBindingAction action) {
-    final preset = keyboardPreset;
-    if (preset == KeyboardPreset.nesStandard) {
-      return switch (action) {
-        KeyboardBindingAction.up => LogicalKeyboardKey.arrowUp,
-        KeyboardBindingAction.down => LogicalKeyboardKey.arrowDown,
-        KeyboardBindingAction.left => LogicalKeyboardKey.arrowLeft,
-        KeyboardBindingAction.right => LogicalKeyboardKey.arrowRight,
-        KeyboardBindingAction.a => LogicalKeyboardKey.keyZ,
-        KeyboardBindingAction.b => LogicalKeyboardKey.keyX,
-        KeyboardBindingAction.select => LogicalKeyboardKey.space,
-        KeyboardBindingAction.start => LogicalKeyboardKey.enter,
-        KeyboardBindingAction.turboA => LogicalKeyboardKey.keyC,
-        KeyboardBindingAction.turboB => LogicalKeyboardKey.keyV,
+  LogicalKeyboardKey? bindingForAction(KeyboardBindingAction action) =>
+      switch (keyboardPreset) {
+        KeyboardPreset.none => null,
+        KeyboardPreset.nesStandard => switch (action) {
+          KeyboardBindingAction.up => LogicalKeyboardKey.arrowUp,
+          KeyboardBindingAction.down => LogicalKeyboardKey.arrowDown,
+          KeyboardBindingAction.left => LogicalKeyboardKey.arrowLeft,
+          KeyboardBindingAction.right => LogicalKeyboardKey.arrowRight,
+          KeyboardBindingAction.a => LogicalKeyboardKey.keyZ,
+          KeyboardBindingAction.b => LogicalKeyboardKey.keyX,
+          KeyboardBindingAction.select => LogicalKeyboardKey.space,
+          KeyboardBindingAction.start => LogicalKeyboardKey.enter,
+          KeyboardBindingAction.turboA => LogicalKeyboardKey.keyC,
+          KeyboardBindingAction.turboB => LogicalKeyboardKey.keyV,
+          KeyboardBindingAction.rewind => LogicalKeyboardKey.backspace,
+          KeyboardBindingAction.fastForward => LogicalKeyboardKey.backslash,
+          KeyboardBindingAction.saveState => LogicalKeyboardKey.f5,
+          KeyboardBindingAction.loadState => LogicalKeyboardKey.f7,
+          KeyboardBindingAction.pause => LogicalKeyboardKey.escape,
+        },
+        KeyboardPreset.fightStick => switch (action) {
+          KeyboardBindingAction.up => LogicalKeyboardKey.keyW,
+          KeyboardBindingAction.down => LogicalKeyboardKey.keyS,
+          KeyboardBindingAction.left => LogicalKeyboardKey.keyA,
+          KeyboardBindingAction.right => LogicalKeyboardKey.keyD,
+          KeyboardBindingAction.a => LogicalKeyboardKey.keyJ,
+          KeyboardBindingAction.b => LogicalKeyboardKey.keyK,
+          KeyboardBindingAction.select => LogicalKeyboardKey.space,
+          KeyboardBindingAction.start => LogicalKeyboardKey.enter,
+          KeyboardBindingAction.turboA => LogicalKeyboardKey.keyU,
+          KeyboardBindingAction.turboB => LogicalKeyboardKey.keyI,
+          KeyboardBindingAction.rewind => LogicalKeyboardKey.backspace,
+          KeyboardBindingAction.fastForward => LogicalKeyboardKey.backslash,
+          KeyboardBindingAction.saveState => LogicalKeyboardKey.f5,
+          KeyboardBindingAction.loadState => LogicalKeyboardKey.f7,
+          KeyboardBindingAction.pause => LogicalKeyboardKey.escape,
+        },
+        KeyboardPreset.arcadeLayout => switch (action) {
+          KeyboardBindingAction.up => LogicalKeyboardKey.arrowUp,
+          KeyboardBindingAction.down => LogicalKeyboardKey.arrowDown,
+          KeyboardBindingAction.left => LogicalKeyboardKey.arrowLeft,
+          KeyboardBindingAction.right => LogicalKeyboardKey.arrowRight,
+          KeyboardBindingAction.a => LogicalKeyboardKey.keyJ,
+          KeyboardBindingAction.b => LogicalKeyboardKey.keyH,
+          KeyboardBindingAction.select => LogicalKeyboardKey.space,
+          KeyboardBindingAction.start => LogicalKeyboardKey.enter,
+          KeyboardBindingAction.turboA => LogicalKeyboardKey.keyK,
+          KeyboardBindingAction.turboB => LogicalKeyboardKey.keyL,
+          KeyboardBindingAction.rewind => LogicalKeyboardKey.backspace,
+          KeyboardBindingAction.fastForward => LogicalKeyboardKey.backslash,
+          KeyboardBindingAction.saveState => LogicalKeyboardKey.f5,
+          KeyboardBindingAction.loadState => LogicalKeyboardKey.f7,
+          KeyboardBindingAction.pause => LogicalKeyboardKey.escape,
+        },
+        KeyboardPreset.custom => customBindingFor(action),
       };
-    }
-
-    if (preset == KeyboardPreset.fightStick) {
-      return switch (action) {
-        KeyboardBindingAction.up => LogicalKeyboardKey.keyW,
-        KeyboardBindingAction.down => LogicalKeyboardKey.keyS,
-        KeyboardBindingAction.left => LogicalKeyboardKey.keyA,
-        KeyboardBindingAction.right => LogicalKeyboardKey.keyD,
-        KeyboardBindingAction.a => LogicalKeyboardKey.keyJ,
-        KeyboardBindingAction.b => LogicalKeyboardKey.keyK,
-        KeyboardBindingAction.select => LogicalKeyboardKey.space,
-        KeyboardBindingAction.start => LogicalKeyboardKey.enter,
-        KeyboardBindingAction.turboA => LogicalKeyboardKey.keyU,
-        KeyboardBindingAction.turboB => LogicalKeyboardKey.keyI,
-      };
-    }
-
-    if (preset == KeyboardPreset.arcadeLayout) {
-      return switch (action) {
-        KeyboardBindingAction.up => LogicalKeyboardKey.arrowUp,
-        KeyboardBindingAction.down => LogicalKeyboardKey.arrowDown,
-        KeyboardBindingAction.left => LogicalKeyboardKey.arrowLeft,
-        KeyboardBindingAction.right => LogicalKeyboardKey.arrowRight,
-        KeyboardBindingAction.a => LogicalKeyboardKey.keyJ,
-        KeyboardBindingAction.b => LogicalKeyboardKey.keyH,
-        KeyboardBindingAction.select => LogicalKeyboardKey.space,
-        KeyboardBindingAction.start => LogicalKeyboardKey.enter,
-        KeyboardBindingAction.turboA => LogicalKeyboardKey.keyK,
-        KeyboardBindingAction.turboB => LogicalKeyboardKey.keyL,
-      };
-    }
-
-    return customBindingFor(action);
-  }
 
   LogicalKeyboardKey? customBindingFor(KeyboardBindingAction action) =>
       switch (action) {
@@ -207,7 +341,34 @@ class InputSettings {
         KeyboardBindingAction.start => customStart,
         KeyboardBindingAction.turboA => customTurboA,
         KeyboardBindingAction.turboB => customTurboB,
+        KeyboardBindingAction.rewind => customRewind,
+        KeyboardBindingAction.fastForward => customFastForward,
+        KeyboardBindingAction.saveState => customSaveState,
+        KeyboardBindingAction.loadState => customLoadState,
+        KeyboardBindingAction.pause => customPause,
       };
+
+  InputSettings solidify() {
+    if (keyboardPreset == KeyboardPreset.custom) return this;
+    return copyWith(
+      keyboardPreset: KeyboardPreset.custom,
+      customUp: bindingForAction(KeyboardBindingAction.up),
+      customDown: bindingForAction(KeyboardBindingAction.down),
+      customLeft: bindingForAction(KeyboardBindingAction.left),
+      customRight: bindingForAction(KeyboardBindingAction.right),
+      customA: bindingForAction(KeyboardBindingAction.a),
+      customB: bindingForAction(KeyboardBindingAction.b),
+      customSelect: bindingForAction(KeyboardBindingAction.select),
+      customStart: bindingForAction(KeyboardBindingAction.start),
+      customTurboA: bindingForAction(KeyboardBindingAction.turboA),
+      customTurboB: bindingForAction(KeyboardBindingAction.turboB),
+      customRewind: bindingForAction(KeyboardBindingAction.rewind),
+      customFastForward: bindingForAction(KeyboardBindingAction.fastForward),
+      customSaveState: bindingForAction(KeyboardBindingAction.saveState),
+      customLoadState: bindingForAction(KeyboardBindingAction.loadState),
+      customPause: bindingForAction(KeyboardBindingAction.pause),
+    );
+  }
 }
 
 @immutable
@@ -235,6 +396,12 @@ class InputSettingsState {
     for (final entry in ports.entries) {
       final portIndex = entry.key;
       final settings = entry.value;
+
+      // Only keyboard-active ports can conflict with other keyboard/hotkey inputs
+      if (settings.device != InputDevice.keyboard) {
+        continue;
+      }
+
       for (final action in KeyboardBindingAction.values) {
         if (excludePort != null &&
             portIndex == excludePort &&
@@ -320,6 +487,14 @@ class InputSettingsController extends Notifier<InputSettingsState> {
     _persist(state);
   }
 
+  void resetToDefault(int port) {
+    ref.read(nesInputMasksProvider.notifier).clearAll();
+    final nextPorts = Map<int, InputSettings>.from(state.ports);
+    nextPorts[port] = _defaults(port: port);
+    state = state.copyWith(ports: nextPorts);
+    _persist(state);
+  }
+
   final _collisionController = StreamController<InputCollision>.broadcast();
   Stream<InputCollision> get collisionStream => _collisionController.stream;
 
@@ -367,7 +542,7 @@ class InputSettingsController extends Notifier<InputSettingsState> {
     // Now set the new binding for the selected port
     var selected = nextPorts[state.selectedPort]!;
     if (selected.keyboardPreset != KeyboardPreset.custom) {
-      selected = selected.copyWith(keyboardPreset: KeyboardPreset.custom);
+      selected = selected.solidify();
     }
 
     nextPorts[state.selectedPort] = _setBinding(selected, action, key);
@@ -397,6 +572,11 @@ class InputSettingsController extends Notifier<InputSettingsState> {
       KeyboardBindingAction.start => s.copyWith(customStart: k),
       KeyboardBindingAction.turboA => s.copyWith(customTurboA: k),
       KeyboardBindingAction.turboB => s.copyWith(customTurboB: k),
+      KeyboardBindingAction.rewind => s.copyWith(customRewind: k),
+      KeyboardBindingAction.fastForward => s.copyWith(customFastForward: k),
+      KeyboardBindingAction.saveState => s.copyWith(customSaveState: k),
+      KeyboardBindingAction.loadState => s.copyWith(customLoadState: k),
+      KeyboardBindingAction.pause => s.copyWith(customPause: k),
     };
   }
 
@@ -422,38 +602,18 @@ class InputSettingsController extends Notifier<InputSettingsState> {
         customStart: LogicalKeyboardKey.keyE,
         customTurboA: LogicalKeyboardKey.keyT,
         customTurboB: LogicalKeyboardKey.keyR,
+        customRewind: LogicalKeyboardKey.backspace,
+        customFastForward: LogicalKeyboardKey.backslash,
+        customSaveState: LogicalKeyboardKey.f5,
+        customLoadState: LogicalKeyboardKey.f7,
+        customPause: LogicalKeyboardKey.escape,
       );
-    } else if (port == 1) {
-      return InputSettings(
+    } else {
+      return const InputSettings.empty(
         device: InputDevice.keyboard,
-        keyboardPreset: KeyboardPreset.nesStandard,
-        customUp: LogicalKeyboardKey.arrowUp,
-        customDown: LogicalKeyboardKey.arrowDown,
-        customLeft: LogicalKeyboardKey.arrowLeft,
-        customRight: LogicalKeyboardKey.arrowRight,
-        customA: LogicalKeyboardKey.keyL,
-        customB: LogicalKeyboardKey.keyK,
-        customSelect: LogicalKeyboardKey.keyU,
-        customStart: LogicalKeyboardKey.keyI,
-        customTurboA: LogicalKeyboardKey.keyP,
-        customTurboB: LogicalKeyboardKey.keyO,
+        keyboardPreset: KeyboardPreset.none,
       );
     }
-
-    return InputSettings(
-      device: InputDevice.keyboard,
-      keyboardPreset: KeyboardPreset.nesStandard,
-      customUp: null,
-      customDown: null,
-      customLeft: null,
-      customRight: null,
-      customA: null,
-      customB: null,
-      customSelect: null,
-      customStart: null,
-      customTurboA: null,
-      customTurboB: null,
-    );
   }
 
   void _persist(InputSettingsState value) {
@@ -502,6 +662,11 @@ Map<String, Object?> _inputSettingsToStorage(InputSettings value) {
     'customStart': keyId(value.customStart),
     'customTurboA': keyId(value.customTurboA),
     'customTurboB': keyId(value.customTurboB),
+    'customRewind': keyId(value.customRewind),
+    'customFastForward': keyId(value.customFastForward),
+    'customSaveState': keyId(value.customSaveState),
+    'customLoadState': keyId(value.customLoadState),
+    'customPause': keyId(value.customPause),
   };
 }
 
@@ -591,5 +756,13 @@ InputSettings? _inputSettingsFromStorage(
     customStart: key(map['customStart'], defaults.customStart),
     customTurboA: key(map['customTurboA'], defaults.customTurboA),
     customTurboB: key(map['customTurboB'], defaults.customTurboB),
+    customRewind: key(map['customRewind'], defaults.customRewind),
+    customFastForward: key(
+      map['customFastForward'],
+      defaults.customFastForward,
+    ),
+    customSaveState: key(map['customSaveState'], defaults.customSaveState),
+    customLoadState: key(map['customLoadState'], defaults.customLoadState),
+    customPause: key(map['customPause'], defaults.customPause),
   );
 }

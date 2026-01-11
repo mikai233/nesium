@@ -219,6 +219,10 @@ impl Runner {
                 }
             }
 
+            if self.state.fast_forwarding.load(Ordering::Acquire) {
+                return WaitOutcome::DeadlineReached;
+            }
+
             let target = self
                 .next_frame_deadline
                 .checked_sub(FRAME_LEAD)
@@ -301,6 +305,12 @@ impl Runner {
             }
             ControlMessage::SetRewinding(rewinding, reply) => {
                 self.handle_set_rewinding(rewinding, reply)
+            }
+            ControlMessage::SetFastForwarding(fast_forwarding, reply) => {
+                self.state
+                    .fast_forwarding
+                    .store(fast_forwarding, Ordering::Release);
+                let _ = reply.send(Ok(()));
             }
             ControlMessage::LoadMovie(movie, reply) => self.handle_load_movie(movie, reply),
             ControlMessage::SubscribeEvent(topic, sender, reply) => {

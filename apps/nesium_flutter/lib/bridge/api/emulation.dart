@@ -32,5 +32,10 @@ Future<void> setRewindConfig({
 Future<void> setRewinding({required bool rewinding}) =>
     RustLib.instance.api.crateApiEmulationSetRewinding(rewinding: rewinding);
 
+Future<void> setFastForwarding({required bool fastForwarding}) => RustLib
+    .instance
+    .api
+    .crateApiEmulationSetFastForwarding(fastForwarding: fastForwarding);
+
 Future<void> loadTasMovie({required String data}) =>
     RustLib.instance.api.crateApiEmulationLoadTasMovie(data: data);

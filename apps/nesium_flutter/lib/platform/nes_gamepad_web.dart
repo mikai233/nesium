@@ -56,7 +56,8 @@ Future<GamepadPollResult?> pollGamepads() async {
     final mapping = _portMappings[port] ?? GamepadMapping.standard();
 
     // Helper to check if a specific mapped button is pressed on this specific gamepad
-    bool isMappedPressed(GamepadButton button) {
+    bool isMappedPressed(GamepadButton? button) {
+      if (button == null) return false;
       // We need to map the enum `GamepadButton` back to the Standard Gamepad Layout index.
       // This is the reverse of what `nes_gamepad_io` does (which maps index to enum).
       // Standard Layout: https://w3c.github.io/gamepad/#remapping
