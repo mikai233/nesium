@@ -175,6 +175,8 @@
   "emulationTitle": "Emulation",
   "integerFpsTitle": "Integer FPS mode (60Hz, NTSC)",
   "integerFpsSubtitle": "Reduces scrolling judder on 60Hz displays. PAL will be added later.",
+  "showOverlayTitle": "Show status overlay",
+  "showOverlaySubtitle": "Show pause/rewind/fast-forward indicators on screen.",
   "pauseInBackgroundTitle": "Pause in background",
   "pauseInBackgroundSubtitle": "Automatically pauses the emulator when the app is not active.",
   "autoSaveEnabledTitle": "Auto Save",

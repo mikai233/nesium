@@ -4,7 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/nes_controller.dart';
 import '../settings/video_settings.dart';
+import 'emulation_status_overlay.dart';
 
 class NesScreenView extends ConsumerStatefulWidget {
   const NesScreenView({
@@ -95,6 +97,9 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
 
   @override
   Widget build(BuildContext context) {
+    final hasRom = ref.watch(
+      nesControllerProvider.select((s) => s.romHash != null),
+    );
     final settings = ref.watch(videoSettingsProvider);
     final integerScaling = settings.integerScaling;
     final aspectRatio = settings.aspectRatio;
@@ -131,9 +136,15 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           final child = SizedBox(
             width: viewport.width,
             height: viewport.height,
-            child: Texture(
-              textureId: widget.textureId!,
-              filterQuality: FilterQuality.none, // nearest-neighbor scaling
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Texture(
+                  textureId: widget.textureId!,
+                  filterQuality: FilterQuality.none, // nearest-neighbor scaling
+                ),
+                if (hasRom) const EmulationStatusOverlay(),
+              ],
             ),
           );
 

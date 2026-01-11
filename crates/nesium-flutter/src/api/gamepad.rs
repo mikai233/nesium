@@ -73,7 +73,8 @@ pub fn init_gamepad() -> Result<(), String> {
 
                             // Pause: toggle on rising edge
                             if result.actions.pause && !prev_actions.pause {
-                                handle.set_paused(!handle.paused());
+                                let next = !handle.paused();
+                                handle.set_paused(next);
                             }
 
                             // Save/Load: TODO (needs slot/path management)

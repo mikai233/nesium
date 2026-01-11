@@ -317,6 +317,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get integerFpsSubtitle => '在 60Hz 屏幕上减少滚动抖动。PAL 之后支持。';
 
   @override
+  String get showOverlayTitle => '显示状态叠加层';
+
+  @override
+  String get showOverlaySubtitle => '在屏幕上显示暂停/倒带/快进指示器。';
+
+  @override
   String get pauseInBackgroundTitle => '后台暂停';
 
   @override

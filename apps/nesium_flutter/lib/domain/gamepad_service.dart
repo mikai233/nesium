@@ -8,6 +8,7 @@ import '../features/settings/gamepad_settings.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/save_state/save_state_repository.dart';
 import 'connected_gamepads_provider.dart';
+import 'emulation_status.dart';
 import 'nes_input_masks.dart';
 import '../platform/nes_gamepad.dart' as nes_gamepad;
 import '../platform/nes_emulation.dart' as nes_emulation;
@@ -102,7 +103,13 @@ class GamepadService extends Notifier<void> {
         final pollActions = result.actions;
 
         if (pollActions.rewind != _lastActions.rewind) {
-          if (ref.read(emulationSettingsProvider).rewindEnabled) {
+          final rewindEnabled = ref
+              .read(emulationSettingsProvider)
+              .rewindEnabled;
+          ref
+              .read(emulationStatusProvider.notifier)
+              .setRewinding(rewindEnabled && pollActions.rewind);
+          if (rewindEnabled) {
             unawaitedLogged(
               nes_emulation.setRewinding(rewinding: pollActions.rewind),
               message: 'setRewinding (${pollActions.rewind})',
@@ -111,6 +118,9 @@ class GamepadService extends Notifier<void> {
           }
         }
         if (pollActions.fastForward != _lastActions.fastForward) {
+          ref
+              .read(emulationStatusProvider.notifier)
+              .setFastForwarding(pollActions.fastForward);
           unawaitedLogged(
             nes_emulation.setFastForwarding(
               fastForwarding: pollActions.fastForward,

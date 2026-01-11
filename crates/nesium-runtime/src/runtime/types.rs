@@ -371,6 +371,15 @@ impl Default for PaletteState {
 
 impl Event for PaletteState {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EmulationStatus {
+    pub paused: bool,
+    pub rewinding: bool,
+    pub fast_forwarding: bool,
+}
+
+impl Event for EmulationStatus {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventTopic {
     Notification,
@@ -379,6 +388,7 @@ pub enum EventTopic {
     Tile,
     Sprite,
     Palette,
+    EmulationStatus,
 }
 
 impl NotificationEvent {

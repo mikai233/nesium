@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../domain/emulation_status.dart';
 import '../../domain/nes_input_masks.dart';
 import '../../domain/pad_button.dart';
 import '../netplay/netplay_state.dart';
@@ -37,6 +38,7 @@ class _VirtualControlsOverlayState
     final emulationSettings = ref.read(emulationSettingsProvider);
     if (!emulationSettings.rewindEnabled) return;
 
+    ref.read(emulationStatusProvider.notifier).setRewinding(true);
     unawaitedLogged(
       frb_emulation.setRewinding(rewinding: true),
       message: 'setRewinding(true)',
@@ -45,6 +47,7 @@ class _VirtualControlsOverlayState
   }
 
   void _stopRewinding() {
+    ref.read(emulationStatusProvider.notifier).setRewinding(false);
     unawaitedLogged(
       frb_emulation.setRewinding(rewinding: false),
       message: 'setRewinding(false)',

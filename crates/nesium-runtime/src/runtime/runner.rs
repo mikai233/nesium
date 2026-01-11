@@ -15,9 +15,9 @@ use super::{
     pubsub::RuntimePubSub,
     state::RuntimeState,
     types::{
-        AudioMode, CpuDebugState, DebugState, EventTopic, NTSC_FPS_EXACT, NotificationEvent,
-        PaletteState, PpuDebugState, RuntimeError, SpriteInfo, SpriteState, TileState,
-        TileViewerBackground, TileViewerLayout, TileViewerSource, TilemapState,
+        AudioMode, CpuDebugState, DebugState, EmulationStatus, EventTopic, NTSC_FPS_EXACT,
+        NotificationEvent, PaletteState, PpuDebugState, RuntimeError, SpriteInfo, SpriteState,
+        TileState, TileViewerBackground, TileViewerLayout, TileViewerSource, TilemapState,
     },
     util::button_bit,
 };
@@ -177,6 +177,21 @@ impl Runner {
             {
                 self.next_frame_deadline = Instant::now();
             }
+
+            if paused != last_paused
+                || rewinding != last_rewinding
+                || fast_forwarding != last_fast_forwarding
+            {
+                self.pubsub.broadcast(
+                    EventTopic::EmulationStatus,
+                    Box::new(EmulationStatus {
+                        paused,
+                        rewinding,
+                        fast_forwarding,
+                    }),
+                );
+            }
+
             last_paused = paused;
             last_rewinding = rewinding;
             last_fast_forwarding = fast_forwarding;

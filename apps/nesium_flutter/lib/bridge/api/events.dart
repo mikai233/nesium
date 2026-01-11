@@ -6,7 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `emulation_status_sink`, `notify_emulation_status`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Returns all auxiliary texture IDs defined on the Rust side.
 ///
@@ -19,6 +20,13 @@ Future<AuxTextureIds> auxTextureIds() =>
 /// This registers the sink directly with the runtime.
 Stream<RuntimeNotification> runtimeNotifications() =>
     RustLib.instance.api.crateApiEventsRuntimeNotifications();
+
+/// Emulation status stream.
+///
+/// Used to notify Flutter UI about pause/rewind/fast-forward changes that are triggered on the Rust
+/// side (e.g. desktop gamepad polling thread).
+Stream<EmulationStatusNotification> emulationStatusStream() =>
+    RustLib.instance.api.crateApiEventsEmulationStatusStream();
 
 /// Subscribes to debug state updates (CPU/PPU registers per frame).
 ///
@@ -310,6 +318,31 @@ class DebugStateNotification {
           ppuCtrl == other.ppuCtrl &&
           ppuMask == other.ppuMask &&
           ppuStatus == other.ppuStatus;
+}
+
+class EmulationStatusNotification {
+  final bool paused;
+  final bool rewinding;
+  final bool fastForwarding;
+
+  const EmulationStatusNotification({
+    required this.paused,
+    required this.rewinding,
+    required this.fastForwarding,
+  });
+
+  @override
+  int get hashCode =>
+      paused.hashCode ^ rewinding.hashCode ^ fastForwarding.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmulationStatusNotification &&
+          runtimeType == other.runtimeType &&
+          paused == other.paused &&
+          rewinding == other.rewinding &&
+          fastForwarding == other.fastForwarding;
 }
 
 /// Palette snapshot for UI inspection.

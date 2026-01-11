@@ -126,6 +126,8 @@
   "emulationTitle": "模拟器",
   "integerFpsTitle": "整数 FPS 模式（60Hz，NTSC）",
   "integerFpsSubtitle": "在 60Hz 屏幕上减少滚动抖动。PAL 之后支持。",
+  "showOverlayTitle": "显示状态叠加层",
+  "showOverlaySubtitle": "在屏幕上显示暂停/倒带/快进指示器。",
   "pauseInBackgroundTitle": "后台暂停",
   "pauseInBackgroundSubtitle": "应用不在前台时自动暂停模拟器。",
   "autoSaveEnabledTitle": "自动存档",

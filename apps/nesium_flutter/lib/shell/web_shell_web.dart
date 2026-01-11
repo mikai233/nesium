@@ -15,6 +15,7 @@ import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
 import '../domain/gamepad_service.dart';
 import '../domain/pad_button.dart';
+import '../domain/emulation_status.dart';
 import '../features/controls/input_settings.dart';
 import '../features/controls/virtual_controls_editor.dart';
 import '../features/controls/turbo_settings.dart';
@@ -386,7 +387,9 @@ class _WebShellState extends ConsumerState<WebShell> {
 
     if (type == 'running') {
       final value = data['value'] as JSBoolean?;
-      setState(() => _running = value?.toDart ?? false);
+      final running = value?.toDart ?? false;
+      setState(() => _running = running);
+      ref.read(emulationStatusProvider.notifier).setPaused(!running);
       return;
     }
 
@@ -411,6 +414,7 @@ class _WebShellState extends ConsumerState<WebShell> {
         _error = message ?? 'Unknown worker error';
         _running = false;
       });
+      ref.read(emulationStatusProvider.notifier).setPaused(true);
       return;
     }
 
@@ -534,8 +538,10 @@ class _WebShellState extends ConsumerState<WebShell> {
       await _ensureInitialized();
       if (_running) {
         _postCmd('pause');
+        ref.read(emulationStatusProvider.notifier).setPaused(true);
       } else {
         _postCmd('run', {'emitAudio': true});
+        ref.read(emulationStatusProvider.notifier).setPaused(false);
       }
     } catch (e) {
       _reportError(e.toString());
@@ -773,6 +779,7 @@ class _WebShellState extends ConsumerState<WebShell> {
           input.setTurboEnabled(PadButton.b, pressed, pad: i);
           break;
         case KeyboardBindingAction.rewind:
+          ref.read(emulationStatusProvider.notifier).setRewinding(pressed);
           unawaitedLogged(
             nes_emulation.setRewinding(rewinding: pressed),
             message: 'setRewinding ($pressed)',
@@ -780,6 +787,7 @@ class _WebShellState extends ConsumerState<WebShell> {
           );
           break;
         case KeyboardBindingAction.fastForward:
+          ref.read(emulationStatusProvider.notifier).setFastForwarding(pressed);
           unawaitedLogged(
             nes_emulation.setFastForwarding(fastForwarding: pressed),
             message: 'setFastForwarding ($pressed)',
@@ -845,16 +853,22 @@ class _WebShellState extends ConsumerState<WebShell> {
         );
       },
       togglePause: _togglePause,
-      setRewinding: (active) => unawaitedLogged(
-        nes_emulation.setRewinding(rewinding: active),
-        message: 'setRewinding ($active)',
-        logger: 'web_shell',
-      ),
-      setFastForwarding: (active) => unawaitedLogged(
-        nes_emulation.setFastForwarding(fastForwarding: active),
-        message: 'setFastForwarding ($active)',
-        logger: 'web_shell',
-      ),
+      setRewinding: (active) {
+        ref.read(emulationStatusProvider.notifier).setRewinding(active);
+        unawaitedLogged(
+          nes_emulation.setRewinding(rewinding: active),
+          message: 'setRewinding ($active)',
+          logger: 'web_shell',
+        );
+      },
+      setFastForwarding: (active) {
+        ref.read(emulationStatusProvider.notifier).setFastForwarding(active);
+        unawaitedLogged(
+          nes_emulation.setFastForwarding(fastForwarding: active),
+          message: 'setFastForwarding ($active)',
+          logger: 'web_shell',
+        );
+      },
       openSettings: () async {
         if (!mounted) return;
         await Navigator.of(

@@ -320,6 +320,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Reduces scrolling judder on 60Hz displays. PAL will be added later.';
 
   @override
+  String get showOverlayTitle => 'Show status overlay';
+
+  @override
+  String get showOverlaySubtitle =>
+      'Show pause/rewind/fast-forward indicators on screen.';
+
+  @override
   String get pauseInBackgroundTitle => 'Pause in background';
 
   @override

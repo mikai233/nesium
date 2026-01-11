@@ -18,6 +18,7 @@ import '../domain/nes_controller.dart';
 import '../domain/nes_input_masks.dart';
 import '../domain/nes_state.dart';
 import '../domain/pad_button.dart';
+import '../domain/emulation_status.dart';
 import '../features/controls/input_settings.dart';
 import '../domain/gamepad_service.dart';
 import '../features/controls/turbo_settings.dart';
@@ -59,6 +60,8 @@ class _NesShellState extends ConsumerState<NesShell>
   bool _pausedByLifecycle = false;
   StreamSubscription<nes_events.RuntimeNotification>? _runtimeNotificationsSub;
   StreamSubscription<nes_netplay.NetplayGameEvent>? _netplayEventsSub;
+  StreamSubscription<nes_events.EmulationStatusNotification>?
+  _emulationStatusSub;
   Future<void> _netplayEventChain = Future.value();
 
   bool get _isDesktop => isNativeDesktop;
@@ -76,6 +79,7 @@ class _NesShellState extends ConsumerState<NesShell>
         // Let UI report errors lazily when commands are used.
       }
       _startRuntimeEvents();
+      _startEmulationStatusEvents();
       _startNetplayEvents();
       await ref.read(nesControllerProvider.notifier).initTexture();
       final turbo = ref.read(turboSettingsProvider);
@@ -97,6 +101,7 @@ class _NesShellState extends ConsumerState<NesShell>
     WidgetsBinding.instance.removeObserver(this);
     _runtimeNotificationsSub?.cancel();
     _netplayEventsSub?.cancel();
+    _emulationStatusSub?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
@@ -105,6 +110,7 @@ class _NesShellState extends ConsumerState<NesShell>
     final emulationSettings = ref.read(emulationSettingsProvider);
     if (!emulationSettings.rewindEnabled) return;
 
+    ref.read(emulationStatusProvider.notifier).setRewinding(true);
     unawaitedLogged(
       nes_emulation.setRewinding(rewinding: true),
       message: 'setRewinding(true)',
@@ -113,6 +119,7 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   void _stopRewinding() {
+    ref.read(emulationStatusProvider.notifier).setRewinding(false);
     unawaitedLogged(
       nes_emulation.setRewinding(rewinding: false),
       message: 'setRewinding(false)',
@@ -121,6 +128,7 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   void _startFastForwarding() {
+    ref.read(emulationStatusProvider.notifier).setFastForwarding(true);
     unawaitedLogged(
       nes_emulation.setFastForwarding(fastForwarding: true),
       message: 'setFastForwarding(true)',
@@ -129,6 +137,7 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   void _stopFastForwarding() {
+    ref.read(emulationStatusProvider.notifier).setFastForwarding(false);
     unawaitedLogged(
       nes_emulation.setFastForwarding(fastForwarding: false),
       message: 'setFastForwarding(false)',
@@ -154,6 +163,18 @@ class _NesShellState extends ConsumerState<NesShell>
     }, onError: (_) {});
   }
 
+  void _startEmulationStatusEvents() {
+    if (!mounted) return;
+    if (_emulationStatusSub != null) return;
+
+    _emulationStatusSub = nes_events.emulationStatusStream().listen((event) {
+      final controller = ref.read(emulationStatusProvider.notifier);
+      controller.setPaused(event.paused);
+      controller.setRewinding(event.rewinding);
+      controller.setFastForwarding(event.fastForwarding);
+    }, onError: (_) {});
+  }
+
   void _startNetplayEvents() {
     if (!mounted) return;
     if (_netplayEventsSub != null) return;
@@ -173,6 +194,7 @@ class _NesShellState extends ConsumerState<NesShell>
                   // setPaused(true) might fail if emulation not started?
                   // But we just loaded ROM, so it should be fine.
                   await nes_pause.setPaused(paused: true);
+                  ref.read(emulationStatusProvider.notifier).setPaused(true);
                   await nes_netplay.netplaySendRomLoaded();
                   if (mounted) _showSnack('Netplay: ROM loaded');
                 } catch (e) {
@@ -182,11 +204,13 @@ class _NesShellState extends ConsumerState<NesShell>
               startGame: () async {
                 _pausedByLifecycle = false;
                 await nes_pause.setPaused(paused: false);
+                ref.read(emulationStatusProvider.notifier).setPaused(false);
                 if (mounted) _showSnack('Netplay: Game Started');
               },
               pauseSync: (paused) async {
                 _pausedByLifecycle = paused;
                 await nes_pause.setPaused(paused: paused);
+                ref.read(emulationStatusProvider.notifier).setPaused(paused);
                 if (mounted) {
                   _showSnack('Netplay: ${paused ? "Paused" : "Resumed"}');
                 }
@@ -249,6 +273,7 @@ class _NesShellState extends ConsumerState<NesShell>
       case AppLifecycleState.resumed:
         if (_pausedByLifecycle) {
           _pausedByLifecycle = false;
+          ref.read(emulationStatusProvider.notifier).setPaused(false);
           unawaitedLogged(
             nes_pause.setPaused(paused: false),
             message: 'setPaused(false) (resume)',
@@ -271,6 +296,7 @@ class _NesShellState extends ConsumerState<NesShell>
       if (wasPaused) return;
       _pausedByLifecycle = true;
       await nes_pause.setPaused(paused: true);
+      ref.read(emulationStatusProvider.notifier).setPaused(true);
     } catch (e, st) {
       logWarning(
         e,
@@ -363,6 +389,7 @@ class _NesShellState extends ConsumerState<NesShell>
         // Pause immediately to wait for sync
         _pausedByLifecycle = true;
         await nes_pause.setPaused(paused: true);
+        ref.read(emulationStatusProvider.notifier).setPaused(true);
 
         try {
           // In netplay mode, any player (non-spectator) may broadcast the ROM.
@@ -371,6 +398,7 @@ class _NesShellState extends ConsumerState<NesShell>
         } catch (e) {
           _pausedByLifecycle = false;
           await nes_pause.setPaused(paused: false);
+          ref.read(emulationStatusProvider.notifier).setPaused(false);
           rethrow;
         }
 
@@ -380,6 +408,7 @@ class _NesShellState extends ConsumerState<NesShell>
         } catch (e) {
           _pausedByLifecycle = false;
           await nes_pause.setPaused(paused: false);
+          ref.read(emulationStatusProvider.notifier).setPaused(false);
           rethrow;
         }
         // Host waits for StartGame too.
@@ -748,11 +777,12 @@ class _NesShellState extends ConsumerState<NesShell>
     try {
       _pausedByLifecycle = false;
       await nes_pause.togglePause();
+      final paused = await nes_pause.isPaused();
+      ref.read(emulationStatusProvider.notifier).setPaused(paused);
       // Send pause sync to other players if connected
       final isNetplay = await nes_netplay.netplayIsConnected();
       if (isNetplay) {
-        final isPaused = await nes_pause.isPaused();
-        await nes_netplay.netplaySendPause(paused: isPaused);
+        await nes_netplay.netplaySendPause(paused: paused);
       }
       // Intentionally do not show a snackbar on success to avoid noisy UI.
       // Errors are still surfaced below.

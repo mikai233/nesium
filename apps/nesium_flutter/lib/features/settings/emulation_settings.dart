@@ -20,6 +20,7 @@ class EmulationSettings {
     required this.fastForwardSpeedPercent,
     required this.rewindEnabled,
     required this.rewindSeconds,
+    required this.showEmulationStatusOverlay,
   });
 
   final bool integerFpsMode;
@@ -30,6 +31,7 @@ class EmulationSettings {
   final int fastForwardSpeedPercent;
   final bool rewindEnabled;
   final int rewindSeconds;
+  final bool showEmulationStatusOverlay;
 
   EmulationSettings copyWith({
     bool? integerFpsMode,
@@ -40,6 +42,7 @@ class EmulationSettings {
     int? fastForwardSpeedPercent,
     bool? rewindEnabled,
     int? rewindSeconds,
+    bool? showEmulationStatusOverlay,
   }) {
     return EmulationSettings(
       integerFpsMode: integerFpsMode ?? this.integerFpsMode,
@@ -52,6 +55,8 @@ class EmulationSettings {
           fastForwardSpeedPercent ?? this.fastForwardSpeedPercent,
       rewindEnabled: rewindEnabled ?? this.rewindEnabled,
       rewindSeconds: rewindSeconds ?? this.rewindSeconds,
+      showEmulationStatusOverlay:
+          showEmulationStatusOverlay ?? this.showEmulationStatusOverlay,
     );
   }
 
@@ -65,6 +70,7 @@ class EmulationSettings {
       fastForwardSpeedPercent: 300,
       rewindEnabled: true,
       rewindSeconds: 10,
+      showEmulationStatusOverlay: true,
     );
   }
 }
@@ -154,6 +160,12 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     _persist(state);
   }
 
+  void setShowEmulationStatusOverlay(bool enabled) {
+    if (enabled == state.showEmulationStatusOverlay) return;
+    state = state.copyWith(showEmulationStatusOverlay: enabled);
+    _persist(state);
+  }
+
   void _applyRewindConfig() {
     unawaitedLogged(
       nes_emulation.setRewindConfig(
@@ -206,6 +218,7 @@ Map<String, Object?> _emulationSettingsToStorage(EmulationSettings value) =>
       'fastForwardSpeedPercent': value.fastForwardSpeedPercent,
       'rewindEnabled': value.rewindEnabled,
       'rewindSeconds': value.rewindSeconds,
+      'showEmulationStatusOverlay': value.showEmulationStatusOverlay,
     };
 
 EmulationSettings? _emulationSettingsFromStorage(
@@ -238,6 +251,9 @@ EmulationSettings? _emulationSettingsFromStorage(
   final rewindSeconds = map['rewindSeconds'] is int
       ? map['rewindSeconds'] as int
       : null;
+  final showEmulationStatusOverlay = map['showEmulationStatusOverlay'] is bool
+      ? map['showEmulationStatusOverlay'] as bool
+      : null;
   return defaults.copyWith(
     integerFpsMode: integerFpsMode ?? defaults.integerFpsMode,
     pauseInBackground: pauseInBackground ?? defaults.pauseInBackground,
@@ -249,5 +265,7 @@ EmulationSettings? _emulationSettingsFromStorage(
         fastForwardSpeedPercent ?? defaults.fastForwardSpeedPercent,
     rewindEnabled: rewindEnabled ?? defaults.rewindEnabled,
     rewindSeconds: rewindSeconds ?? defaults.rewindSeconds,
+    showEmulationStatusOverlay:
+        showEmulationStatusOverlay ?? defaults.showEmulationStatusOverlay,
   );
 }

@@ -674,6 +674,18 @@ abstract class AppLocalizations {
   /// **'Reduces scrolling judder on 60Hz displays. PAL will be added later.'**
   String get integerFpsSubtitle;
 
+  /// No description provided for @showOverlayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show status overlay'**
+  String get showOverlayTitle;
+
+  /// No description provided for @showOverlaySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show pause/rewind/fast-forward indicators on screen.'**
+  String get showOverlaySubtitle;
+
   /// No description provided for @pauseInBackgroundTitle.
   ///
   /// In en, this message translates to:

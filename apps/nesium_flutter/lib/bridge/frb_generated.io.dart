@@ -35,6 +35,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<EmulationStatusNotification>
+  dco_decode_StreamSink_emulation_status_notification_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<NetplayGameEvent> dco_decode_StreamSink_netplay_game_event_Sse(
     dynamic raw,
   );
@@ -93,6 +97,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DebugStateNotification dco_decode_debug_state_notification(dynamic raw);
+
+  @protected
+  EmulationStatusNotification dco_decode_emulation_status_notification(
+    dynamic raw,
+  );
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -221,6 +230,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<EmulationStatusNotification>
+  sse_decode_StreamSink_emulation_status_notification_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<NetplayGameEvent> sse_decode_StreamSink_netplay_game_event_Sse(
     SseDeserializer deserializer,
   );
@@ -283,6 +298,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DebugStateNotification sse_decode_debug_state_notification(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  EmulationStatusNotification sse_decode_emulation_status_notification(
     SseDeserializer deserializer,
   );
 
@@ -438,6 +458,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_emulation_status_notification_Sse(
+    RustStreamSink<EmulationStatusNotification> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_netplay_game_event_Sse(
     RustStreamSink<NetplayGameEvent> self,
     SseSerializer serializer,
@@ -512,6 +538,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_debug_state_notification(
     DebugStateNotification self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_emulation_status_notification(
+    EmulationStatusNotification self,
     SseSerializer serializer,
   );
 

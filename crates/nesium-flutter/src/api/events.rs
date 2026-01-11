@@ -11,6 +11,7 @@ use nesium_runtime::{TileViewerBackground, TileViewerLayout};
 use crate::frb_generated::StreamSink;
 use crate::runtime_handle;
 use crate::senders::debug::FlutterDebugEventSender;
+use crate::senders::emulation_status::EmulationStatusSender;
 use crate::senders::runtime::FlutterRuntimeEventSender;
 use crate::senders::tile::TileTextureAndStateSender;
 use crate::senders::tilemap::{self, TilemapTextureAndStateSender, TilemapTextureSender};
@@ -66,6 +67,36 @@ pub async fn runtime_notifications(sink: StreamSink<RuntimeNotification>) -> Res
     handle
         .subscribe_event(EventTopic::Notification, Box::new(sender))
         .map_err(|e| format!("Failed to subscribe to Notification events: {}", e))?;
+
+    Ok(())
+}
+
+// =============================================================================
+// Emulation Status Stream (paused/rewind/fast-forward)
+// =============================================================================
+
+#[frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EmulationStatusNotification {
+    pub paused: bool,
+    pub rewinding: bool,
+    pub fast_forwarding: bool,
+}
+
+/// Emulation status stream.
+///
+/// Used to notify Flutter UI about pause/rewind/fast-forward changes that are triggered on the Rust
+/// side (e.g. desktop gamepad polling thread).
+#[frb]
+pub async fn emulation_status_stream(
+    sink: StreamSink<EmulationStatusNotification>,
+) -> Result<(), String> {
+    let handle = crate::runtime_handle();
+    let sender = Box::new(EmulationStatusSender::new(sink));
+
+    handle
+        .subscribe_event(EventTopic::EmulationStatus, sender)
+        .map_err(|e| format!("Failed to subscribe to EmulationStatus events: {}", e))?;
 
     Ok(())
 }
