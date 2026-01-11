@@ -47,9 +47,11 @@ class NesMenuBar extends StatelessWidget {
                   .map(
                     (section) => _buildSubmenu(
                       section.title(l10n),
-                      section.items
-                          .map((item) => _buildMenuItem(item, l10n))
-                          .toList(),
+                      _wrapAnimated(
+                        section.items
+                            .map((item) => _buildMenuItem(item, l10n))
+                            .toList(),
+                      ),
                       textStyle,
                     ),
                   )
@@ -83,9 +85,11 @@ class NesMenuBar extends StatelessWidget {
       return SubmenuButton(
         menuChildren: isSaveLoad && !hasRom
             ? []
-            : item.children!
-                  .map((child) => _buildMenuItem(child, l10n))
-                  .toList(),
+            : _wrapAnimated(
+                item.children!
+                    .map((child) => _buildMenuItem(child, l10n))
+                    .toList(),
+              ),
         child: Text(item.label(l10n)),
       );
     }
@@ -207,5 +211,64 @@ class NesMenuBar extends StatelessWidget {
         unawaited(actions.openNetplay?.call());
         break;
     }
+  }
+
+  List<Widget> _wrapAnimated(List<Widget> items) {
+    return List.generate(
+      items.length,
+      (i) => _AnimatedMenuEntry(index: i, child: items[i]),
+    );
+  }
+}
+
+class _AnimatedMenuEntry extends StatefulWidget {
+  const _AnimatedMenuEntry({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_AnimatedMenuEntry> createState() => _AnimatedMenuEntryState();
+}
+
+class _AnimatedMenuEntryState extends State<_AnimatedMenuEntry>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<double> _sizeFactor;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _sizeFactor = Tween<double>(
+      begin: 0.2,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SizeTransition(
+        sizeFactor: _sizeFactor,
+        axisAlignment: -1.0,
+        child: widget.child,
+      ),
+    );
   }
 }
