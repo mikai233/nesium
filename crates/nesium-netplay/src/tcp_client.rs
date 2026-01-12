@@ -348,7 +348,11 @@ async fn connect_quic_inner(
         NetplayError::ConnectionFailed(format!("Failed to build QUIC crypto config: {}", e))
     })?;
     let mut client_config = quinn::ClientConfig::new(Arc::new(crypto));
-    client_config.transport_config(Arc::new(quinn::TransportConfig::default()));
+    let mut transport = quinn::TransportConfig::default();
+    transport.keep_alive_interval(Some(std::time::Duration::from_secs(5)));
+    // Increase idle timeout to 30s as a fallback
+    transport.max_idle_timeout(Some(quinn::VarInt::from_u32(30_000).into()));
+    client_config.transport_config(Arc::new(transport));
 
     let mut endpoint = quinn::Endpoint::client("0.0.0.0:0".parse().unwrap()).map_err(|e| {
         NetplayError::ConnectionFailed(format!("Failed to create QUIC endpoint: {}", e))
