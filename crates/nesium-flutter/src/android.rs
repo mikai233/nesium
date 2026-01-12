@@ -747,10 +747,11 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
     set_rust_renderer_active(true);
 
     let stop_for_thread = stop.clone();
+    let swapchain_ref = std::panic::AssertUnwindSafe(swapchain_ref);
     let join = std::thread::spawn(move || {
         let window = window_ptr as *mut ANativeWindow;
         let res = std::panic::catch_unwind(|| unsafe {
-            run_rust_renderer(window, swapchain_ref, stop_for_thread);
+            run_rust_renderer(window, *swapchain_ref, stop_for_thread);
         });
         if let Err(_) = res {
             eprintln!("Rust renderer thread panicked");
@@ -1142,16 +1143,9 @@ unsafe fn run_rust_renderer(
 
     while !stop.load(Ordering::Acquire) {
         let msg = {
-            let mut state = match signal.mu.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
+            let mut state = signal.mu.lock();
             while state.queue.is_empty() && !stop.load(Ordering::Acquire) {
-                let (g, _) = match signal.cv.wait_timeout(state, Duration::from_millis(500)) {
-                    Ok(res) => res,
-                    Err(poisoned) => poisoned.into_inner(),
-                };
-                state = g;
+                signal.cv.wait_for(&mut state, Duration::from_millis(500));
             }
             if stop.load(Ordering::Acquire) {
                 None
@@ -1328,7 +1322,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nesiumAuxCrea
 /// Kotlin: `NesiumNative.nesiumAuxCopy(id: Int, dst: ByteBuffer, dstPitch: Int, dstHeight: Int): Int`
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nesiumAuxCopy(
-    mut env: JNIEnv,
+    env: JNIEnv,
     _class: JClass,
     id: jint,
     dst: jobject,

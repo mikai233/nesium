@@ -3,8 +3,6 @@
 //! This module exposes gilrs-based gamepad functionality to Flutter.
 
 use flutter_rust_bridge::frb;
-use parking_lot::Mutex;
-use std::time::Duration;
 
 #[cfg(all(
     not(target_os = "android"),
@@ -31,7 +29,7 @@ use std::thread::{self, JoinHandle};
     not(target_os = "ios"),
     not(target_arch = "wasm32")
 ))]
-static GAMEPAD_MANAGER: Mutex<Option<GamepadManager>> = Mutex::new(None);
+static GAMEPAD_MANAGER: parking_lot::Mutex<Option<GamepadManager>> = parking_lot::Mutex::new(None);
 #[cfg(all(
     not(target_os = "android"),
     not(target_os = "ios"),
@@ -43,7 +41,7 @@ static GAMEPAD_LOOP_STOP: AtomicBool = AtomicBool::new(false);
     not(target_os = "ios"),
     not(target_arch = "wasm32")
 ))]
-static POLLING_THREAD: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
+static POLLING_THREAD: parking_lot::Mutex<Option<JoinHandle<()>>> = parking_lot::Mutex::new(None);
 
 /// Initializes the gamepad subsystem and starts the background polling thread.
 ///
@@ -136,7 +134,7 @@ pub fn init_gamepad() -> Result<(), String> {
                     }
 
                     // Poll at ~250Hz
-                    thread::sleep(Duration::from_millis(4));
+                    thread::sleep(std::time::Duration::from_millis(4));
                 }
             }));
         }
@@ -220,7 +218,7 @@ pub fn rumble_gamepad(port: u8, strength: f32, duration_ms: u32) -> Result<(), S
         gm.rumble(
             port as usize,
             strength,
-            Duration::from_millis(duration_ms as u64),
+            std::time::Duration::from_millis(duration_ms as u64),
         )
         .map_err(|e| e.to_string())
     }
