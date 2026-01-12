@@ -65,6 +65,7 @@ endif()
 # 4. Define Output Paths
 #    The DLL will be temporarily staged in the CMake binary directory before being copied to the Runner.
 set(RUST_DLL_STAGING "${CMAKE_CURRENT_BINARY_DIR}/${RUST_LIB_NAME}.dll")
+set(RUST_IMPLIB_STAGING "${CMAKE_CURRENT_BINARY_DIR}/${RUST_LIB_NAME}.dll.lib")
 set(BUILD_SCRIPT     "${CMAKE_CURRENT_BINARY_DIR}/cargo_build_runner.bat")
 
 # 5. Generate the Batch Build Script
@@ -77,7 +78,8 @@ setlocal enabledelayedexpansion
 set PACKAGE_NAME=%1
 set TARGET_ARCH=%2
 set BUILD_MODE=%3
-set OUTPUT_DEST=%4
+set OUTPUT_DLL_DEST=%4
+set OUTPUT_IMPLIB_DEST=%5
 
 :: --- [Phase 1] Environment Setup ---
 :: Clear potential conflicts from VS environment variables to ensure a clean Rust build.
@@ -113,6 +115,7 @@ if %errorlevel% neq 0 (
 :: Locate the generated DLL within the Rust target directory and copy it to the staging area.
 :: Note: The working directory is set to the Workspace Root, so paths are relative to that.
 set SRC_DLL=target\\%TARGET_ARCH%\\!SUBDIR!\\${RUST_LIB_NAME}.dll
+set SRC_IMPLIB=target\\%TARGET_ARCH%\\!SUBDIR!\\${RUST_LIB_NAME}.dll.lib
 
 if not exist \"!SRC_DLL!\" (
     echo [Rust] Fatal Error: DLL artifact not found at: !SRC_DLL!
@@ -121,10 +124,23 @@ if not exist \"!SRC_DLL!\" (
 )
 
 echo [Rust] Copying artifact to staging area...
-copy /Y \"!SRC_DLL!\" \"%OUTPUT_DEST%\" >nul
+copy /Y \"!SRC_DLL!\" \"%OUTPUT_DLL_DEST%\" >nul
 if %errorlevel% neq 0 (
     echo [Rust] Fatal Error: Failed to copy DLL.
     exit /b 1
+)
+
+if not exist \"!SRC_IMPLIB!\" (
+    echo [Rust] Fatal Error: Import library not found at: !SRC_IMPLIB!
+    echo [Rust] Please verify the cargo output directory structure.
+    exit /b 1
+)
+
+echo [Rust] Copying import library to staging area...
+copy /Y \"!SRC_IMPLIB!\" \"%OUTPUT_IMPLIB_DEST%\" >nul
+if %errorlevel% neq 0 (
+    echo [Rust] Fatal Error: Failed to copy import library.
+    exit /b %errorlevel%
 )
 
 echo [Rust] Build sequence completed successfully.
@@ -142,6 +158,7 @@ add_custom_target(nesium_rust_build ALL
             "${RUST_TARGET}" 
             "${MODE_GENEX}" 
             "${RUST_DLL_STAGING}"
+            "${RUST_IMPLIB_STAGING}"
     WORKING_DIRECTORY "${NESIUM_WORKSPACE_DIR}"
     COMMENT           "Compiling Rust backend (Mode: ${MODE_GENEX})..."
     VERBATIM
@@ -149,6 +166,12 @@ add_custom_target(nesium_rust_build ALL
 
 # 8. Link dependencies
 add_dependencies(${BINARY_NAME} nesium_rust_build)
+add_library(nesium_flutter_rust SHARED IMPORTED GLOBAL)
+set_target_properties(nesium_flutter_rust PROPERTIES
+    IMPORTED_LOCATION "${RUST_DLL_STAGING}"
+    IMPORTED_IMPLIB "${RUST_IMPLIB_STAGING}"
+)
+target_link_libraries(${BINARY_NAME} PRIVATE nesium_flutter_rust)
 
 # 9. Post-Build Action: Deploy to Runner
 #    Copy the staged DLL to the final executable directory alongside the Flutter Runner.

@@ -22,7 +22,10 @@ ExternalLibrary _openRustLibrary() {
     return ExternalLibrary.open(name);
   }
 
-  if (Platform.isMacOS || Platform.isIOS || Platform.isLinux) {
+  if (Platform.isMacOS ||
+      Platform.isIOS ||
+      Platform.isLinux ||
+      Platform.isWindows) {
     return ExternalLibrary.process(iKnowHowToUseIt: true);
   }
 

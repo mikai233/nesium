@@ -15,6 +15,7 @@
 #include "flutter/standard_method_codec.h"
 #include "flutter/texture_registrar.h"
 
+#include "nesium_rust_ffi.h"
 #include "nesium_texture.h"
 
 // Windows auxiliary texture plugin for debugger views (Tilemap, Pattern, etc.)
@@ -28,45 +29,13 @@
 
 namespace {
 
-// Rust C ABI function pointers for auxiliary textures
-struct RustAuxApi {
-  HMODULE dll = nullptr;
-
-  void (*aux_create)(uint32_t id, uint32_t width, uint32_t height) = nullptr;
-  size_t (*aux_copy)(uint32_t id, uint8_t *dst, uint32_t dst_pitch,
-                     uint32_t dst_height) = nullptr;
-  void (*aux_destroy)(uint32_t id) = nullptr;
-
-  // Bind to the already-loaded nesium_flutter module
-  bool BindLoadedModule(const wchar_t *module_name) {
-    dll = ::GetModuleHandleW(module_name);
-    if (!dll) {
-      return false;
-    }
-
-    aux_create = reinterpret_cast<decltype(aux_create)>(
-        ::GetProcAddress(dll, "nesium_aux_create"));
-    aux_copy = reinterpret_cast<decltype(aux_copy)>(
-        ::GetProcAddress(dll, "nesium_aux_copy"));
-    aux_destroy = reinterpret_cast<decltype(aux_destroy)>(
-        ::GetProcAddress(dll, "nesium_aux_destroy"));
-
-    return aux_create && aux_copy && aux_destroy;
-  }
-};
-
-// Global API instance
-static RustAuxApi g_aux_api;
-
 // Represents one auxiliary texture registered with Flutter.
 class AuxTextureEntry {
 public:
   AuxTextureEntry(uint32_t id, uint32_t width, uint32_t height)
       : id_(id), texture_(std::make_unique<NesiumTexture>(width, height)) {
     // Create the Rust-side backing store.
-    if (g_aux_api.aux_create) {
-      g_aux_api.aux_create(id, width, height);
-    }
+    nesium_aux_create(id, width, height);
 
     // Create Flutter texture variant.
     texture_variant_ =
@@ -77,19 +46,17 @@ public:
   }
 
   ~AuxTextureEntry() {
-    if (g_aux_api.aux_destroy) {
-      g_aux_api.aux_destroy(id_);
-    }
+    nesium_aux_destroy(id_);
   }
 
   // Copies from Rust buffer into the back buffer and commits.
   void UpdateFromRust() {
-    if (!texture_ || !g_aux_api.aux_copy)
+    if (!texture_)
       return;
 
     auto [dst, write_index] = texture_->acquireWritableBuffer();
-    g_aux_api.aux_copy(id_, dst, static_cast<uint32_t>(texture_->stride()),
-                       static_cast<uint32_t>(texture_->height()));
+    nesium_aux_copy(id_, dst, static_cast<uint32_t>(texture_->stride()),
+                    static_cast<uint32_t>(texture_->height()));
     texture_->commitLatestReady(write_index);
   }
 
@@ -106,13 +73,6 @@ public:
   explicit NesiumAuxTexturePlugin(flutter::PluginRegistrarWindows *registrar)
       : registrar_(registrar),
         texture_registrar_(registrar->texture_registrar()) {
-    // Bind to the already-loaded Rust DLL
-    if (!g_aux_api.BindLoadedModule(L"nesium_flutter.dll")) {
-      // Log error but continue - textures just won't work until DLL is loaded
-      OutputDebugStringW(
-          L"NesiumAuxTexturePlugin: Failed to bind to nesium_flutter.dll\n");
-    }
-
     channel_ =
         std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
             registrar_->messenger(), "nesium_aux",
