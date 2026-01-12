@@ -18,7 +18,7 @@ final connectedGamepadsProvider =
       yield await _fetchGamepads();
 
       // Periodic refresh
-      await for (final _ in Stream.periodic(const Duration(seconds: 2))) {
+      await for (final _ in Stream.periodic(const Duration(seconds: 1))) {
         yield await _fetchGamepads();
       }
     });
@@ -26,7 +26,8 @@ final connectedGamepadsProvider =
 Future<List<nes_gamepad.GamepadInfo>> _fetchGamepads() async {
   if (!nes_gamepad.isGamepadSupported) return [];
   try {
-    return await nes_gamepad.listGamepads();
+    final gamepads = await nes_gamepad.listGamepads();
+    return gamepads.where((g) => g.connected).toList();
   } catch (e, st) {
     logError(e, stackTrace: st, message: 'Failed to list gamepads');
     return [];

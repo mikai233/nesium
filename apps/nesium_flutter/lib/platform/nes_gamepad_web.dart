@@ -28,10 +28,71 @@ final Map<int, GamepadMapping> _portMappings = {};
 // Bindings from NES Port (0-3) to Gamepad Index.
 // On Web, we start with no bindings and let the user assign gamepads in settings.
 final Map<int, int> _bindings = {};
+// Remember the gamepad's `id` string for each bound port so we can re-resolve
+// the correct index after disconnect/reconnect (the index is not stable).
+final Map<int, String> _bindingNames = {};
+// Best-effort stable fingerprint from the `id` string (e.g. Vendor/Product) to
+// survive browsers changing the prefix of the `id` across reconnects.
+final Map<int, String> _bindingVidPid = {};
+
+String? _extractVidPid(String id) {
+  final match = RegExp(
+    r'Vendor:\s*([0-9a-fA-F]{4})\s*Product:\s*([0-9a-fA-F]{4})',
+  ).firstMatch(id);
+  if (match == null) return null;
+  final vid = match.group(1)!.toLowerCase();
+  final pid = match.group(2)!.toLowerCase();
+  return '$vid:$pid';
+}
+
+int? _resolveBoundGamepadIndex({
+  required int port,
+  required JSArray<web.Gamepad?> gamepads,
+}) {
+  final boundIndex = _bindings[port];
+  if (boundIndex == null) return null;
+
+  final boundName = _bindingNames[port];
+  final hasBoundName = boundName != null && boundName.isNotEmpty;
+
+  if (boundIndex >= 0 && boundIndex < gamepads.length) {
+    final gp = gamepads.toDart[boundIndex];
+    if (gp != null && gp.connected && (!hasBoundName || gp.id == boundName)) {
+      return boundIndex;
+    }
+  }
+
+  if (hasBoundName) {
+    for (var i = 0; i < gamepads.length; i++) {
+      final gp = gamepads.toDart[i];
+      if (gp != null && gp.connected && gp.id == boundName) {
+        _bindings[port] = i;
+        return i;
+      }
+    }
+  }
+
+  final expectedVidPid = _bindingVidPid[port];
+  if (expectedVidPid != null && expectedVidPid.isNotEmpty) {
+    for (var i = 0; i < gamepads.length; i++) {
+      final gp = gamepads.toDart[i];
+      if (gp == null || !gp.connected) continue;
+      final vidPid = _extractVidPid(gp.id);
+      if (vidPid != null && vidPid == expectedVidPid) {
+        _bindings[port] = i;
+        _bindingNames[port] = gp.id;
+        return i;
+      }
+    }
+  }
+
+  return null;
+}
 
 /// Polls all connected gamepads and returns the current input state.
 Future<GamepadPollResult?> pollGamepads() async {
   final gamepads = web.window.navigator.getGamepads();
+
   final padMasks = List<int>.filled(4, 0);
   final turboMasks = List<int>.filled(4, 0);
   bool rewind = false;
@@ -42,10 +103,12 @@ Future<GamepadPollResult?> pollGamepads() async {
 
   // Iterate over NES ports (0-3) to populate masks based on bindings
   for (var port = 0; port < 4; port++) {
-    final gamepadIndex = _bindings[port];
+    final gamepadIndex = _resolveBoundGamepadIndex(
+      port: port,
+      gamepads: gamepads,
+    );
     if (gamepadIndex == null) continue;
 
-    if (gamepadIndex >= gamepads.length) continue;
     final gamepad = gamepads.toDart[gamepadIndex];
     if (gamepad == null || !gamepad.connected) continue;
 
@@ -129,6 +192,12 @@ Future<List<GamepadInfo>> listGamepads() async {
   final gamepads = web.window.navigator.getGamepads();
   final infoList = <GamepadInfo>[];
 
+  // Repair stale bindings first (indices can change after reconnect).
+  final boundPorts = List<int>.from(_bindings.keys);
+  for (final port in boundPorts) {
+    _resolveBoundGamepadIndex(port: port, gamepads: gamepads);
+  }
+
   for (var i = 0; i < gamepads.length; i++) {
     final gamepad = gamepads.toDart[i];
     if (gamepad != null && gamepad.connected) {
@@ -143,7 +212,7 @@ Future<List<GamepadInfo>> listGamepads() async {
 
       infoList.add(
         GamepadInfo(
-          id: gamepad.index,
+          id: i,
           name: gamepad.id,
           connected: gamepad.connected,
           port: assignedPort,
@@ -163,8 +232,11 @@ Future<void> rumbleGamepad({
   final gamepads = web.window.navigator.getGamepads();
 
   // Use binding to find gamepad
-  final gamepadIndex = _bindings[port];
-  if (gamepadIndex == null || gamepadIndex >= gamepads.length) return;
+  final gamepadIndex = _resolveBoundGamepadIndex(
+    port: port,
+    gamepads: gamepads,
+  );
+  if (gamepadIndex == null) return;
 
   final gamepad = gamepads.toDart[gamepadIndex];
   if (gamepad == null || !gamepad.connected) return;
@@ -192,13 +264,36 @@ Future<void> bindGamepad({required int id, int? port}) async {
   if (port != null && port >= 0 && port < 4) {
     // Assign gamepad `id` to `port`
     _bindings[port] = id;
+    final gamepads = web.window.navigator.getGamepads();
+    if (id >= 0 && id < gamepads.length) {
+      final gp = gamepads.toDart[id];
+      if (gp != null && gp.connected) {
+        _bindingNames[port] = gp.id;
+        final vidPid = _extractVidPid(gp.id);
+        if (vidPid != null) {
+          _bindingVidPid[port] = vidPid;
+        } else {
+          _bindingVidPid.remove(port);
+        }
+      } else {
+        _bindingNames.remove(port);
+        _bindingVidPid.remove(port);
+      }
+    } else {
+      _bindingNames.remove(port);
+      _bindingVidPid.remove(port);
+    }
 
     // Clear other ports if they were assigned to this gamepad (optional, but good for exclusive binding)
     // Actually standard behavior: one gamepad can't be two players.
     _bindings.removeWhere((key, value) => key != port && value == id);
+    _bindingNames.removeWhere((key, _) => !_bindings.containsKey(key));
+    _bindingVidPid.removeWhere((key, _) => !_bindings.containsKey(key));
   } else {
     // Unbind gamepad `id` from any port
     _bindings.removeWhere((key, value) => value == id);
+    _bindingNames.removeWhere((key, _) => !_bindings.containsKey(key));
+    _bindingVidPid.removeWhere((key, _) => !_bindings.containsKey(key));
   }
 }
 

@@ -1925,7 +1925,8 @@ class _GamepadMappingInfoCardState
   Timer? _remappingTimer;
 
   void _startRemapping(NesButtonAction action) {
-    final assignedId = _getAssignedGamepadId();
+    final gamepads = ref.read(connectedGamepadsProvider).value ?? [];
+    final assignedId = _getAssignedGamepadId(gamepads);
     if (assignedId == null) return;
 
     ref
@@ -1959,8 +1960,7 @@ class _GamepadMappingInfoCardState
     });
   }
 
-  int? _getAssignedGamepadId() {
-    final gamepads = ref.read(connectedGamepadsProvider).value ?? [];
+  int? _getAssignedGamepadId(List<nes_gamepad.GamepadInfo> gamepads) {
     for (final gp in gamepads) {
       if (gp.port == widget.port) return gp.id;
     }
@@ -2131,10 +2131,11 @@ class _GamepadMappingInfoCardState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final gamepads = ref.watch(connectedGamepadsProvider).value ?? [];
     final mappingAsync = ref.watch(
       nes_gamepad.gamepadMappingProvider(widget.port),
     );
-    final assignedId = _getAssignedGamepadId();
+    final assignedId = _getAssignedGamepadId(gamepads);
     final pressedButtons = assignedId != null
         ? ref
                   .watch(nes_gamepad.gamepadPressedButtonsProvider(assignedId))

@@ -215,6 +215,7 @@ impl GamepadManager {
     pub fn gamepads(&self) -> Vec<GamepadInfo> {
         self.gilrs
             .gamepads()
+            .filter(|(_, gamepad)| gamepad.is_connected())
             .map(|(id, gamepad)| {
                 let port = self.port_assignments.get(&id).copied();
                 GamepadInfo {
@@ -353,11 +354,11 @@ impl GamepadManager {
         let gamepad_id = self
             .gilrs
             .gamepads()
-            .find(|(id, _)| usize::from(*id) == id_raw)
+            .find(|(id, gamepad)| usize::from(*id) == id_raw && gamepad.is_connected())
             .map(|(id, _)| id);
 
         let Some(id) = gamepad_id else {
-            tracing::warn!("Failed to find gamepad with raw ID {}", id_raw);
+            tracing::warn!("Failed to find connected gamepad with raw ID {}", id_raw);
             return;
         };
 
@@ -395,25 +396,6 @@ impl GamepadManager {
             );
             self.port_assignments.insert(id, target_port);
             self.available_ports.retain(|&p| p != target_port);
-        }
-    }
-
-    fn assign_gamepad(&mut self, id: GamepadId) {
-        if self.port_assignments.contains_key(&id) {
-            return; // Already assigned
-        }
-
-        if let Some(port) = self.available_ports.pop() {
-            let name = self.gilrs.gamepad(id).name().to_string();
-            tracing::info!("Assigning gamepad '{}' ({:?}) to port {}", name, id, port);
-            self.port_assignments.insert(id, port);
-        } else {
-            // We still track the gamepad as connected but it has no port
-            tracing::info!(
-                "Gamepad '{}' ({:?}) connected but no ports available",
-                self.gilrs.gamepad(id).name(),
-                id
-            );
         }
     }
 
