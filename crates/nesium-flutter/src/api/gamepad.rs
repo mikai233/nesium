@@ -3,7 +3,7 @@
 //! This module exposes gilrs-based gamepad functionality to Flutter.
 
 use flutter_rust_bridge::frb;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use std::time::Duration;
 
 #[cfg(all(
@@ -56,7 +56,7 @@ pub fn init_gamepad() -> Result<(), String> {
         not(target_arch = "wasm32")
     ))]
     {
-        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let mut manager = GAMEPAD_MANAGER.lock();
         if manager.is_some() {
             return Ok(()); // Already initialized
         }
@@ -65,7 +65,7 @@ pub fn init_gamepad() -> Result<(), String> {
         *manager = Some(gm);
 
         // Start background polling thread
-        let mut thread_guard = POLLING_THREAD.lock().unwrap();
+        let mut thread_guard = POLLING_THREAD.lock();
         if thread_guard.is_none() {
             GAMEPAD_LOOP_STOP.store(false, Ordering::Release);
             *thread_guard = Some(thread::spawn(move || {
@@ -80,7 +80,7 @@ pub fn init_gamepad() -> Result<(), String> {
 
                     // Lock and poll
                     {
-                        let mut gm_lock = GAMEPAD_MANAGER.lock().unwrap();
+                        let mut gm_lock = GAMEPAD_MANAGER.lock();
                         if let Some(gm) = gm_lock.as_mut() {
                             let result = gm.poll();
 
@@ -161,7 +161,7 @@ pub fn poll_gamepads() -> Result<GamepadPollResultFfi, String> {
         not(target_arch = "wasm32")
     ))]
     {
-        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let mut manager = GAMEPAD_MANAGER.lock();
         let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
         let result = gm.poll();
@@ -186,7 +186,7 @@ pub fn list_gamepads() -> Result<Vec<GamepadInfoFfi>, String> {
         not(target_arch = "wasm32")
     ))]
     {
-        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let mut manager = GAMEPAD_MANAGER.lock();
         let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
         // Pump events before listing to ensure new connections are picked up
@@ -214,7 +214,7 @@ pub fn rumble_gamepad(port: u8, strength: f32, duration_ms: u32) -> Result<(), S
         not(target_arch = "wasm32")
     ))]
     {
-        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let mut manager = GAMEPAD_MANAGER.lock();
         let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
         gm.rumble(
@@ -242,7 +242,7 @@ pub fn bind_gamepad(id: u64, port: Option<u8>) -> Result<(), String> {
         not(target_arch = "wasm32")
     ))]
     {
-        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let mut manager = GAMEPAD_MANAGER.lock();
         let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
         gm.bind_gamepad(id as usize, port.map(|p| p as usize));
@@ -268,12 +268,12 @@ pub fn shutdown_gamepad() {
     {
         GAMEPAD_LOOP_STOP.store(true, Ordering::Release);
 
-        let thread = POLLING_THREAD.lock().unwrap().take();
+        let thread = POLLING_THREAD.lock().take();
         if let Some(handle) = thread {
             let _ = handle.join();
         }
 
-        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let mut manager = GAMEPAD_MANAGER.lock();
         *manager = None;
     }
 }
@@ -287,7 +287,7 @@ pub fn get_gamepad_pressed_buttons(id: u64) -> Result<Vec<GamepadButtonFfi>, Str
         not(target_arch = "wasm32")
     ))]
     {
-        let manager = GAMEPAD_MANAGER.lock().unwrap();
+        let manager = GAMEPAD_MANAGER.lock();
         let gm = manager.as_ref().ok_or("Gamepad not initialized")?;
 
         let buttons = gm.get_pressed_buttons(id as usize);
@@ -309,7 +309,7 @@ pub fn set_gamepad_mapping(port: u8, mapping: GamepadMappingFfi) -> Result<(), S
         not(target_arch = "wasm32")
     ))]
     {
-        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let mut manager = GAMEPAD_MANAGER.lock();
         let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
         // Extract action mapping from the combined FFI mapping
@@ -574,7 +574,7 @@ pub fn get_gamepad_mapping(port: u8) -> Result<GamepadMappingFfi, String> {
         not(target_arch = "wasm32")
     ))]
     {
-        let mut manager = GAMEPAD_MANAGER.lock().unwrap();
+        let mut manager = GAMEPAD_MANAGER.lock();
         let gm = manager.as_mut().ok_or("Gamepad not initialized")?;
 
         let mapping = gm

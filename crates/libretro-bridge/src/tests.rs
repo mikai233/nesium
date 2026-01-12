@@ -1,13 +1,11 @@
 use super::*;
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use std::{
     ffi::{CStr, CString, c_void},
     mem::MaybeUninit,
     ptr, slice,
-    sync::{
-        Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 static EVENTS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
@@ -21,7 +19,7 @@ static INPUT_REQUESTS: Lazy<Mutex<Vec<(u32, u32, u32, u32)>>> =
 static ENV_CMDS: Lazy<Mutex<Vec<u32>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 fn log(event: impl Into<String>) {
-    EVENTS.lock().unwrap().push(event.into());
+    EVENTS.lock().push(event.into());
 }
 
 #[derive(Default)]
@@ -148,12 +146,11 @@ crate::export_libretro_core!(DummyCore);
 unsafe extern "C" fn video_cb(data: *const c_void, width: u32, height: u32, pitch: usize) {
     VIDEO_FRAMES
         .lock()
-        .unwrap()
         .push((width, height, pitch, data.is_null()));
 }
 
 unsafe extern "C" fn audio_sample_cb(left: i16, right: i16) {
-    AUDIO_SAMPLES.lock().unwrap().push((left, right));
+    AUDIO_SAMPLES.lock().push((left, right));
 }
 
 unsafe extern "C" fn audio_batch_cb(data: *const i16, frames: usize) -> usize {
@@ -162,7 +159,7 @@ unsafe extern "C" fn audio_batch_cb(data: *const i16, frames: usize) -> usize {
     for pair in slice.chunks_exact(2) {
         chunk.push((pair[0], pair[1]));
     }
-    AUDIO_BATCHES.lock().unwrap().push(chunk);
+    AUDIO_BATCHES.lock().push(chunk);
     frames
 }
 
@@ -171,26 +168,23 @@ unsafe extern "C" fn input_poll_cb() {
 }
 
 unsafe extern "C" fn input_state_cb(port: u32, device: u32, index: u32, id: u32) -> i16 {
-    INPUT_REQUESTS
-        .lock()
-        .unwrap()
-        .push((port, device, index, id));
+    INPUT_REQUESTS.lock().push((port, device, index, id));
     1
 }
 
 unsafe extern "C" fn environment_cb(cmd: u32, _data: *mut c_void) -> bool {
-    ENV_CMDS.lock().unwrap().push(cmd);
+    ENV_CMDS.lock().push(cmd);
     true
 }
 
 fn reset_logs() {
-    EVENTS.lock().unwrap().clear();
-    VIDEO_FRAMES.lock().unwrap().clear();
-    AUDIO_SAMPLES.lock().unwrap().clear();
-    AUDIO_BATCHES.lock().unwrap().clear();
+    EVENTS.lock().clear();
+    VIDEO_FRAMES.lock().clear();
+    AUDIO_SAMPLES.lock().clear();
+    AUDIO_BATCHES.lock().clear();
     INPUT_POLLS.store(0, Ordering::SeqCst);
-    INPUT_REQUESTS.lock().unwrap().clear();
-    ENV_CMDS.lock().unwrap().clear();
+    INPUT_REQUESTS.lock().clear();
+    ENV_CMDS.lock().clear();
 }
 
 #[test]
@@ -251,7 +245,7 @@ fn exports_delegate_to_trait() {
     unsafe { retro_unload_game() };
     unsafe { retro_deinit() };
 
-    let events = EVENTS.lock().unwrap().clone();
+    let events = EVENTS.lock().clone();
     assert!(events.iter().any(|e| e == "construct"));
     assert!(events.iter().any(|e| e == "init"));
     assert!(events.iter().any(|e| e == "run"));
@@ -259,10 +253,10 @@ fn exports_delegate_to_trait() {
     assert!(events.iter().any(|e| e.starts_with("cheat(")));
     assert!(events.iter().any(|e| e.starts_with("controller(")));
 
-    assert_eq!(VIDEO_FRAMES.lock().unwrap().len(), 1);
-    assert_eq!(AUDIO_SAMPLES.lock().unwrap().len(), 1);
-    assert_eq!(AUDIO_BATCHES.lock().unwrap().len(), 1);
+    assert_eq!(VIDEO_FRAMES.lock().len(), 1);
+    assert_eq!(AUDIO_SAMPLES.lock().len(), 1);
+    assert_eq!(AUDIO_BATCHES.lock().len(), 1);
     assert_eq!(INPUT_POLLS.load(Ordering::SeqCst), 1);
-    assert_eq!(INPUT_REQUESTS.lock().unwrap().len(), 1);
-    assert_eq!(ENV_CMDS.lock().unwrap().len(), 1);
+    assert_eq!(INPUT_REQUESTS.lock().len(), 1);
+    assert_eq!(ENV_CMDS.lock().len(), 1);
 }

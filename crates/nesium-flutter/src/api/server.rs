@@ -2,8 +2,9 @@
 //!
 //! Allows starting/stopping a netplay server directly within the app.
 
+use parking_lot::Mutex;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
@@ -73,7 +74,7 @@ fn get_server() -> &'static Mutex<EmbeddedServer> {
 pub async fn netserver_start(port: u16) -> Result<u16, String> {
     let server_mutex = get_server();
     {
-        let server = server_mutex.lock().map_err(|e| e.to_string())?;
+        let server = server_mutex.lock();
         if server.is_running() {
             return Err("Server is already running".to_string());
         }
@@ -117,7 +118,7 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
     let (event_tx, mut event_rx) = mpsc::channel(1024);
     let (server_tx, server_rx) = mpsc::channel(1024);
 
-    let mut server = server_mutex.lock().map_err(|e| e.to_string())?;
+    let mut server = server_mutex.lock();
     server.client_count = 0;
     server.task_handles.clear();
     server.quic_bind_addr = None;
@@ -186,7 +187,7 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
                     let Some(ev) = ev_opt else { break; };
                     match ev {
                         InboundEvent::Connected { .. } => {
-                            let mut s = get_server().lock().unwrap();
+                            let mut s = get_server().lock();
                             s.client_count += 1;
                             let count = s.client_count;
                             notify_server_status(
@@ -201,7 +202,7 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
                             );
                         }
                         InboundEvent::Disconnected { .. } => {
-                            let mut s = get_server().lock().unwrap();
+                            let mut s = get_server().lock();
                             s.client_count = s.client_count.saturating_sub(1);
                             let count = s.client_count;
                             notify_server_status(
@@ -268,7 +269,7 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
 pub async fn netserver_stop() -> Result<(), String> {
     let server_mutex = get_server();
     let (tx, task_handles, status_sink) = {
-        let mut server = server_mutex.lock().map_err(|e| e.to_string())?;
+        let mut server = server_mutex.lock();
         let tx = server.shutdown_tx.take();
         let handles = std::mem::take(&mut server.task_handles);
         if tx.is_some() {
@@ -312,25 +313,21 @@ pub async fn netserver_stop() -> Result<(), String> {
 #[frb]
 pub fn netserver_is_running() -> bool {
     let server_mutex = get_server();
-    server_mutex.lock().map(|s| s.is_running()).unwrap_or(false)
+    server_mutex.lock().is_running()
 }
 
 /// Get the current server port (0 if not running).
 #[frb]
 pub fn netserver_get_port() -> u16 {
     let server_mutex = get_server();
-    server_mutex
-        .lock()
-        .ok()
-        .and_then(|s| s.bind_addr.map(|a| a.port()))
-        .unwrap_or(0)
+    server_mutex.lock().bind_addr.map(|a| a.port()).unwrap_or(0)
 }
 
 /// Subscribe to server status updates.
 #[frb]
 pub fn netserver_status_stream(sink: StreamSink<ServerStatus>) -> Result<(), String> {
     let server_mutex = get_server();
-    let server = server_mutex.lock().map_err(|e| e.to_string())?;
+    let server = server_mutex.lock();
 
     // Send initial status
     let running = server.is_running();
@@ -355,9 +352,8 @@ pub fn netserver_status_stream(sink: StreamSink<ServerStatus>) -> Result<(), Str
     let _ = sink.add(status);
 
     // Store sink for future updates
-    if let Ok(mut sink_guard) = server.status_sink.lock() {
-        *sink_guard = Some(sink);
-    }
+    let mut sink_guard = server.status_sink.lock();
+    *sink_guard = Some(sink);
 
     Ok(())
 }
@@ -372,17 +368,16 @@ fn notify_server_status(
     quic_bind_address: String,
     quic_cert_sha256_fingerprint: String,
 ) {
-    if let Ok(guard) = sink_lock.lock() {
-        if let Some(ref sink) = *guard {
-            let _ = sink.add(ServerStatus {
-                running,
-                port,
-                client_count,
-                bind_address,
-                quic_enabled,
-                quic_bind_address,
-                quic_cert_sha256_fingerprint,
-            });
-        }
+    let guard = sink_lock.lock();
+    if let Some(ref sink) = *guard {
+        let _ = sink.add(ServerStatus {
+            running,
+            port,
+            client_count,
+            bind_address,
+            quic_enabled,
+            quic_bind_address,
+            quic_cert_sha256_fingerprint,
+        });
     }
 }

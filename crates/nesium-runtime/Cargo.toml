@@ -15,3 +15,4 @@ ringbuf.workspace = true
 crossbeam-channel.workspace = true
 thiserror.workspace = true
 lz4_flex.workspace = true
+parking_lot.workspace = true

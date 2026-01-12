@@ -20,6 +20,7 @@ rustls-native-certs.workspace = true
 ring.workspace = true
 hex.workspace = true
 base64.workspace = true
+parking_lot.workspace = true
 
 [dev-dependencies]
 nesium-netd = { workspace = true }

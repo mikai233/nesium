@@ -1,9 +1,10 @@
+use parking_lot::{Condvar, Mutex};
 use std::{
     collections::VecDeque,
     ffi::{CStr, c_char, c_int, c_uint, c_void},
     os::unix::io::RawFd,
     sync::{
-        Arc, Condvar, Mutex, OnceLock,
+        Arc, OnceLock,
         atomic::{AtomicBool, AtomicI32, Ordering},
     },
     time::Duration,
@@ -166,23 +167,14 @@ impl AhbSwapchain {
     }
 
     fn wait_gpu_idle(&self, idx: usize) {
-        let mut guard = match self.sync_mu.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut guard = self.sync_mu.lock();
         while guard.gpu_busy[idx] {
-            guard = match self.gpu_busy_cv.wait(guard) {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
+            self.gpu_busy_cv.wait(&mut guard);
         }
     }
 
     fn set_gpu_busy(&self, idx: usize, busy: bool) {
-        let mut guard = match self.sync_mu.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut guard = self.sync_mu.lock();
         guard.gpu_busy[idx] = busy;
         if !busy {
             self.gpu_busy_cv.notify_all();
@@ -206,10 +198,7 @@ impl AhbSwapchain {
                 )
             };
             if res == 0 && !out.is_null() {
-                let mut guard = match self.sync_mu.lock() {
-                    Ok(guard) => guard,
-                    Err(poisoned) => poisoned.into_inner(),
-                };
+                let mut guard = self.sync_mu.lock();
                 guard.cpu_locked[idx] = true;
                 return out as *mut u8;
             }
@@ -223,20 +212,14 @@ impl AhbSwapchain {
         eprintln!(
             "AHardwareBuffer_lock failed for idx={idx} (err={last_err}); falling back to dummy buffer"
         );
-        let mut guard = match self.sync_mu.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut guard = self.sync_mu.lock();
         guard.cpu_locked[idx] = false;
         self.fallback_planes[idx].as_ptr() as *mut u8
     }
 
     fn unlock_plane(&self, idx: usize) {
         let should_unlock = {
-            let mut guard = match self.sync_mu.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => poisoned.into_inner(),
-            };
+            let mut guard = self.sync_mu.lock();
             let was_locked = guard.cpu_locked[idx];
             guard.cpu_locked[idx] = false;
             was_locked
@@ -314,8 +297,8 @@ struct RustRendererSignalState {
 }
 
 struct RustRendererSignal {
-    mu: std::sync::Mutex<RustRendererSignalState>,
-    cv: std::sync::Condvar,
+    mu: Mutex<RustRendererSignalState>,
+    cv: Condvar,
 }
 
 static RUST_RENDERER_SIGNAL: OnceLock<RustRendererSignal> = OnceLock::new();
@@ -323,10 +306,7 @@ static RUST_RENDERER_SIGNAL: OnceLock<RustRendererSignal> = OnceLock::new();
 fn notify_rust_renderer(buffer_index: u32) {
     let signal = rust_renderer_signal();
 
-    let mut state = match signal.mu.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut state = signal.mu.lock();
 
     if !state.renderer_active {
         return;
@@ -704,10 +684,7 @@ fn rust_renderer_wake() {
 
 fn set_rust_renderer_active(active: bool) {
     let signal = rust_renderer_signal();
-    let mut state = match signal.mu.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut state = signal.mu.lock();
     state.renderer_active = active;
     if !active {
         state.queue.clear();
@@ -782,10 +759,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
         unsafe { ANativeWindow_release(window) };
     });
 
-    let mut slot = match rust_renderer_slot().lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    let mut slot = rust_renderer_slot().lock();
     *slot = Some(RustRendererHandle { stop, join });
 }
 
@@ -796,10 +770,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStopRus
 ) {
     set_rust_renderer_active(false);
     let handle = {
-        let mut slot = match rust_renderer_slot().lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut slot = rust_renderer_slot().lock();
         slot.take()
     };
     if let Some(handle) = handle {

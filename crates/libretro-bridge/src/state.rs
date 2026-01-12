@@ -5,10 +5,10 @@ use crate::{
     raw,
     runtime::{CallbackSet, RuntimeHandles},
 };
+use parking_lot::Mutex;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
     ptr, slice,
-    sync::Mutex,
 };
 
 #[doc(hidden)]
@@ -28,31 +28,31 @@ impl<T: LibretroCore> CoreInstance<T> {
     }
 
     pub fn set_environment(&self, cb: raw::retro_environment_t) {
-        self.callbacks.lock().unwrap().set_environment(cb);
+        self.callbacks.lock().set_environment(cb);
     }
 
     pub fn set_video_refresh(&self, cb: raw::retro_video_refresh_t) {
-        self.callbacks.lock().unwrap().set_video(cb);
+        self.callbacks.lock().set_video(cb);
     }
 
     pub fn set_audio_sample(&self, cb: raw::retro_audio_sample_t) {
-        self.callbacks.lock().unwrap().set_audio_sample(cb);
+        self.callbacks.lock().set_audio_sample(cb);
     }
 
     pub fn set_audio_batch(&self, cb: raw::retro_audio_sample_batch_t) {
-        self.callbacks.lock().unwrap().set_audio_batch(cb);
+        self.callbacks.lock().set_audio_batch(cb);
     }
 
     pub fn set_input_poll(&self, cb: raw::retro_input_poll_t) {
-        self.callbacks.lock().unwrap().set_input_poll(cb);
+        self.callbacks.lock().set_input_poll(cb);
     }
 
     pub fn set_input_state(&self, cb: raw::retro_input_state_t) {
-        self.callbacks.lock().unwrap().set_input_state(cb);
+        self.callbacks.lock().set_input_state(cb);
     }
 
     pub fn init(&self) {
-        let mut guard = self.core.lock().unwrap();
+        let mut guard = self.core.lock();
         assert!(
             guard.is_none(),
             "retro_init called while the core is still active"
@@ -64,7 +64,7 @@ impl<T: LibretroCore> CoreInstance<T> {
     }
 
     pub fn deinit(&self) {
-        let mut guard = self.core.lock().unwrap();
+        let mut guard = self.core.lock();
         if let Some(mut core) = guard.take() {
             core.deinit();
         }
@@ -108,7 +108,7 @@ impl<T: LibretroCore> CoreInstance<T> {
     }
 
     pub fn run(&self) {
-        let callbacks = *self.callbacks.lock().unwrap();
+        let callbacks = *self.callbacks.lock();
         let mut runtime = RuntimeHandles::new(callbacks);
         self.with_core_mut(|core| core.run(&mut runtime));
     }
@@ -233,7 +233,7 @@ impl<T: LibretroCore> CoreInstance<T> {
     }
 
     fn with_core<R>(&self, f: impl FnOnce(&T) -> R) -> R {
-        let guard = self.core.lock().unwrap();
+        let guard = self.core.lock();
         let core = guard
             .as_ref()
             .expect("libretro core has not been initialized");
@@ -241,7 +241,7 @@ impl<T: LibretroCore> CoreInstance<T> {
     }
 
     fn with_core_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        let mut guard = self.core.lock().unwrap();
+        let mut guard = self.core.lock();
         let core = guard
             .as_mut()
             .expect("libretro core has not been initialized");

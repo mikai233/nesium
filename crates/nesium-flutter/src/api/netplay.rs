@@ -6,7 +6,8 @@ use nesium_netplay::{
     NetplayCommand, NetplayConfig, SPECTATOR_PLAYER_INDEX, SessionHandler, SessionState,
     SharedInputProvider,
 };
-use std::sync::{Arc, Mutex, OnceLock};
+use parking_lot::Mutex;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::mpsc;
 
 /// Netplay connection state.
@@ -909,12 +910,7 @@ fn notify_status(
     }
 }
 
-/// Lock a `std::sync::Mutex` without panicking on poisoning.
-///
-/// `Mutex::lock()` can fail if another thread panicked while holding the lock. In the Flutter FFI
-/// layer we prefer recovering the inner value over crashing the entire process.
-fn lock_unpoison<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+/// Lock a `parking_lot::Mutex` (compatibility wrapper).
+fn lock_unpoison<T>(mutex: &Mutex<T>) -> parking_lot::MutexGuard<'_, T> {
+    mutex.lock()
 }

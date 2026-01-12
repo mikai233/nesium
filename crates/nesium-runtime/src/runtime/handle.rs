@@ -316,7 +316,7 @@ impl RuntimeHandle {
     }
 
     pub fn rom_hash(&self) -> Option<[u8; 32]> {
-        *self.inner.state.rom_hash.lock().unwrap()
+        *self.inner.state.rom_hash.lock()
     }
 
     pub fn set_pad_mask(&self, pad: usize, mask: u8) {

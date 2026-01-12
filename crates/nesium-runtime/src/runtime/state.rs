@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU16, AtomicU64};
 
 use super::types::TileViewerConfig;

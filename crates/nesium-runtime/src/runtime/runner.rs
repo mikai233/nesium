@@ -384,13 +384,15 @@ impl Runner {
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::SetTileViewerSource(source, reply) => {
-                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                {
+                    let mut cfg = self.state.tile_viewer.lock();
                     cfg.source = source;
                 }
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::SetTileViewerStartAddress(start_address, reply) => {
-                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                {
+                    let mut cfg = self.state.tile_viewer.lock();
                     cfg.start_address = start_address;
                 }
                 let _ = reply.send(Ok(()));
@@ -400,7 +402,8 @@ impl Runner {
                 rows,
                 reply,
             } => {
-                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                {
+                    let mut cfg = self.state.tile_viewer.lock();
                     cfg.column_count = columns;
                     cfg.row_count = rows;
                     // Match Mesen2: enforce multiple-of-2 counts when using non-normal layouts.
@@ -412,7 +415,8 @@ impl Runner {
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::SetTileViewerLayout(layout, reply) => {
-                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                {
+                    let mut cfg = self.state.tile_viewer.lock();
                     cfg.layout = layout;
                     if !matches!(cfg.layout, TileViewerLayout::Normal) {
                         cfg.column_count &= !1;
@@ -422,19 +426,22 @@ impl Runner {
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::SetTileViewerBackground(background, reply) => {
-                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                {
+                    let mut cfg = self.state.tile_viewer.lock();
                     cfg.background = background;
                 }
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::SetTileViewerPalette(palette, reply) => {
-                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                {
+                    let mut cfg = self.state.tile_viewer.lock();
                     cfg.selected_palette = palette.min(7);
                 }
                 let _ = reply.send(Ok(()));
             }
             ControlMessage::SetTileViewerUseGrayscalePalette(enabled, reply) => {
-                if let Ok(mut cfg) = self.state.tile_viewer.lock() {
+                {
+                    let mut cfg = self.state.tile_viewer.lock();
                     cfg.use_grayscale_palette = enabled;
                 }
                 let _ = reply.send(Ok(()));
@@ -980,12 +987,7 @@ impl Runner {
         // Broadcast to Tile subscribers
         if has_chr {
             if let Some(snap) = self.nes.take_tile_viewer_snapshot() {
-                let cfg = self
-                    .state
-                    .tile_viewer
-                    .lock()
-                    .map(|v| *v)
-                    .unwrap_or_default();
+                let cfg = self.state.tile_viewer.lock().clone();
 
                 let mut column_count = cfg.column_count.clamp(4, 256);
                 let mut row_count = cfg.row_count.clamp(4, 256);
@@ -1088,7 +1090,7 @@ impl Runner {
 
                 match self.nes.load_cartridge_from_file(&path) {
                     Ok(_) => {
-                        *self.state.rom_hash.lock().unwrap() = Some(full_hash);
+                        *self.state.rom_hash.lock() = Some(full_hash);
                         self.state.paused.store(false, Ordering::Release);
                         self.next_frame_deadline = Instant::now();
                         if let Some(audio) = &self.audio {
@@ -1099,14 +1101,14 @@ impl Runner {
                         let _ = reply.send(Ok(()));
                     }
                     Err(e) => {
-                        *self.state.rom_hash.lock().unwrap() = None;
+                        *self.state.rom_hash.lock() = None;
                         let error = e.to_string();
                         let _ = reply.send(Err(RuntimeError::LoadRomFailed { path, error }));
                     }
                 }
             }
             Err(e) => {
-                *self.state.rom_hash.lock().unwrap() = None;
+                *self.state.rom_hash.lock() = None;
                 let error = e.to_string();
                 let _ = reply.send(Err(RuntimeError::LoadRomFailed { path, error }));
             }
@@ -1123,7 +1125,7 @@ impl Runner {
         match nesium_core::cartridge::load_cartridge(bytes) {
             Ok(cart) => {
                 self.nes.insert_cartridge(cart);
-                *self.state.rom_hash.lock().unwrap() = Some(full_hash);
+                *self.state.rom_hash.lock() = Some(full_hash);
                 self.state.paused.store(false, Ordering::Release);
                 self.next_frame_deadline = Instant::now();
                 if let Some(audio) = &self.audio {
@@ -1140,7 +1142,7 @@ impl Runner {
                 let _ = reply.send(Ok(()));
             }
             Err(e) => {
-                *self.state.rom_hash.lock().unwrap() = None;
+                *self.state.rom_hash.lock() = None;
                 let error = e.to_string();
                 let _ = reply.send(Err(RuntimeError::LoadRomFailed {
                     path: PathBuf::from("memory"),
@@ -1551,7 +1553,7 @@ impl Runner {
         // Reset frame sequence (important for netplay)
         self.state.frame_seq.store(0, Ordering::Release);
         // Clear ROM hash
-        *self.state.rom_hash.lock().unwrap() = None;
+        *self.state.rom_hash.lock() = None;
 
         // Clear framebuffer to display black screen and notify frontend.
         // clear_and_present() fills buffers with 0 bytes (black) and triggers the callback,
@@ -1734,7 +1736,7 @@ impl Runner {
     /// Captures the current NES state as a postcard-serialized, LZ4-compressed byte buffer.
     fn capture_compressed_snapshot(&mut self) -> Result<Vec<u8>, String> {
         let cart = self.nes.get_cartridge().ok_or("no cartridge loaded")?;
-        let rom_hash = *self.state.rom_hash.lock().unwrap();
+        let rom_hash = *self.state.rom_hash.lock();
         let header = cart.header();
         let mapper = Some((header.mapper(), header.submapper()));
 
@@ -1768,7 +1770,7 @@ impl Runner {
         }
         // Validate ROM Hash.
         if let Some(expected_hash) = snap.meta.rom_hash {
-            let current_hash = *self.state.rom_hash.lock().unwrap();
+            let current_hash = *self.state.rom_hash.lock();
             if Some(expected_hash) != current_hash {
                 return Err("ROM hash mismatch: this save belongs to a different game".to_string());
             }

@@ -113,3 +113,4 @@ rustls = { version = "0.23.35", default-features = false, features = ["std", "ri
 rustls-native-certs = "0.8.3"
 ring = "0.17.14"
 rcgen = { version = "0.14.6", default-features = false, features = ["pem", "ring"] }
+parking_lot = "0.12.5"

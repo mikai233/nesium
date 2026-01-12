@@ -3,8 +3,9 @@
 //! This trait allows the NES runtime to fetch controller inputs
 //! from the network instead of the local UI.
 
+use parking_lot::Mutex;
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
@@ -116,13 +117,13 @@ impl SharedInputProvider {
 
     /// Get mutable access to the session.
     pub fn with_session<R>(&self, f: impl FnOnce(&mut NetplaySession) -> R) -> R {
-        let mut session = self.session.lock().unwrap();
+        let mut session = self.session.lock();
         f(&mut session)
     }
 
     /// Get mutable access to the session (mut variant).
     pub fn with_session_mut<R>(&self, f: impl FnOnce(&mut NetplaySession) -> R) -> R {
-        let mut session = self.session.lock().unwrap();
+        let mut session = self.session.lock();
         f(&mut session)
     }
 
@@ -133,13 +134,13 @@ impl SharedInputProvider {
 
     /// Set the local player index.
     pub fn set_local_player(&self, player: Option<u8>) {
-        let mut guard = self.local_player.lock().unwrap();
+        let mut guard = self.local_player.lock();
         *guard = player;
     }
 
     /// Get the local player index.
     pub fn local_player(&self) -> Option<u8> {
-        let guard = self.local_player.lock().unwrap();
+        let guard = self.local_player.lock();
         *guard
     }
 
@@ -150,7 +151,7 @@ impl SharedInputProvider {
 
     /// Push confirmed input from network into the queue.
     pub fn push_remote_input(&self, port: usize, frame: u32, buttons: u16) {
-        let mut session = self.session.lock().unwrap();
+        let mut session = self.session.lock();
         session.push_input(port, frame, buttons);
 
         // Signal that we might no longer be waiting
@@ -161,24 +162,26 @@ impl SharedInputProvider {
 
     /// Clear all input queues.
     pub fn clear_queues(&self) {
-        let mut session = self.session.lock().unwrap();
+        let mut session = self.session.lock();
         session.clear_inputs();
     }
 
     /// Set callback for sending inputs.
     pub fn set_on_send_input(&self, cb: Box<dyn Fn(u32, u16) + Send + Sync>) {
-        *self.on_send_input.lock().unwrap() = Some(cb);
+        let mut guard = self.on_send_input.lock();
+        *guard = Some(cb);
     }
 
     /// Set callback for sending state.
     pub fn set_on_send_state(&self, cb: Box<dyn Fn(u32, &[u8]) + Send + Sync>) {
-        *self.on_send_state.lock().unwrap() = Some(cb);
+        let mut guard = self.on_send_state.lock();
+        *guard = Some(cb);
     }
 }
 
 impl NetplayInputProvider for SharedInputProvider {
     fn poll_inputs(&self, frame: u32) -> Option<[u16; 4]> {
-        let mut session = self.session.lock().unwrap();
+        let mut session = self.session.lock();
         let effective_frame = frame.wrapping_add(frame_offset(&session));
 
         // Check if we have valid inputs for THIS specific frame
@@ -219,17 +222,17 @@ impl NetplayInputProvider for SharedInputProvider {
     }
 
     fn local_player(&self) -> Option<u8> {
-        let guard = self.local_player.lock().unwrap();
+        let guard = self.local_player.lock();
         *guard
     }
 
     fn input_delay(&self) -> u32 {
-        let session = self.session.lock().unwrap();
+        let session = self.session.lock();
         session.input_delay_frames as u32
     }
 
     fn rewind_capacity(&self) -> u32 {
-        let session = self.session.lock().unwrap();
+        let session = self.session.lock();
         session.rewind_capacity
     }
 
@@ -245,26 +248,26 @@ impl NetplayInputProvider for SharedInputProvider {
         // CRITICAL: Push to own queue immediately to prevent lockstep deadlock.
         // Without this, the game waits for server relay which causes latency-induced freeze.
         // Then send to server for relay to other players
-        let cb = self.on_send_input.lock().unwrap();
+        let cb = self.on_send_input.lock();
         if let Some(f) = cb.as_ref() {
             f(effective_frame, buttons);
         }
     }
 
     fn is_frame_ready(&self, frame: u32) -> bool {
-        let session = self.session.lock().unwrap();
+        let session = self.session.lock();
         session.is_frame_ready(frame.wrapping_add(frame_offset(&session)))
     }
 
     fn should_fast_forward(&self, frame: u32) -> bool {
-        let session = self.session.lock().unwrap();
+        let session = self.session.lock();
         session.should_fast_forward(frame.wrapping_add(frame_offset(&session)))
     }
 
     fn send_state(&self, frame: u32, data: &[u8]) {
         let effective_frame =
             self.with_session(|session| frame.wrapping_add(frame_offset(session)));
-        let cb = self.on_send_state.lock().unwrap();
+        let cb = self.on_send_state.lock();
         if let Some(f) = cb.as_ref() {
             f(effective_frame, data);
         }
