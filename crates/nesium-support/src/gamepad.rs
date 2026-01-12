@@ -159,7 +159,7 @@ impl GamepadManager {
             SupportError::Gamepad(e.to_string())
         })?;
 
-        let mut manager = Self {
+        let manager = Self {
             gilrs,
             port_assignments: HashMap::new(),
             pad_states: [0; MAX_PORTS],
