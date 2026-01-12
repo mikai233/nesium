@@ -44,6 +44,14 @@
       }
     }
   },
+  "serverQuicFingerprint": "QUIC fingerprint: {fingerprint}",
+  "@serverQuicFingerprint": {
+    "placeholders": {
+      "fingerprint": {
+        "type": "String"
+      }
+    }
+  },
   "generalTitle": "General",
   "themeLabel": "Theme",
   "themeSystem": "System",
@@ -283,13 +291,24 @@
   "menuLoadState": "Load State...",
   "menuPauseResume": "Pause / Resume",
   "menuNetplay": "Netplay",
+  "netplayTransportLabel": "Transport",
+  "netplayTransportAuto": "Auto (QUIC → TCP)",
+  "netplayTransportUnknown": "Unknown",
+  "netplayTransportTcp": "TCP",
+  "netplayTransportQuic": "QUIC",
+  "netplayUsingTcpFallback": "QUIC failed, using TCP",
   "netplayStatusDisconnected": "Disconnected",
   "netplayStatusConnecting": "Connecting...",
   "netplayStatusConnected": "Connected (Waiting for Room)",
   "netplayStatusInRoom": "In Room",
   "netplayDisconnect": "Disconnect",
   "netplayServerAddress": "Server Address",
+  "netplayServerNameLabel": "Server name (SNI)",
+  "netplayServerNameHint": "localhost",
   "netplayPlayerName": "Player Name",
+  "netplayQuicFingerprintLabel": "QUIC cert fingerprint (optional)",
+  "netplayQuicFingerprintHint": "base64url (43 chars)",
+  "netplayQuicFingerprintHelper": "Enter this to use pinned QUIC. Leave empty to use system trust (QUIC) or fallback to TCP.",
   "netplayConnect": "Connect",
   "netplayCreateRoom": "Create Room",
   "netplayJoinRoom": "Join Room",
@@ -391,6 +410,8 @@
   "lastErrorDetailsAction": "Details",
   "lastErrorDialogTitle": "Last error",
   "lastErrorCopied": "Copied",
+  "copy": "Copy",
+  "paste": "Paste",
   "windowDebuggerTitle": "Nesium Debugger",
   "windowToolsTitle": "Nesium Tools",
   "virtualControlsEditTitle": "Edit virtual controls",

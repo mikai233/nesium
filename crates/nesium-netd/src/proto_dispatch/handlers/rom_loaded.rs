@@ -28,7 +28,8 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) -> Han
     let sender_id = ctx.assigned_client_id;
     let was_started = room.started;
     let sender_was_loaded = room.loaded_players.contains(&sender_id);
-    let sender_outbound = room.outbound_for_client(sender_id);
+    let sender_state_outbound = room.outbound_for_client_msg(sender_id, MsgId::SyncState);
+    let sender_input_outbound = room.outbound_for_client_msg(sender_id, MsgId::RelayInputs);
 
     let start_recipients = room.handle_rom_loaded(sender_id);
     if !start_recipients.is_empty() {
@@ -37,10 +38,7 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) -> Han
         let msg = StartGame {
             active_ports_mask: room.get_active_ports_mask(),
         };
-        let mut h = Header::new(MsgId::StartGame as u8);
-        h.client_id = 0; // System message
-        h.room_id = room_id;
-        h.seq = 0;
+        let h = Header::new(MsgId::StartGame as u8);
 
         for recipient in &start_recipients {
             if let Err(e) = send_msg_tcp(recipient, h, MsgId::StartGame, &msg).await {
@@ -53,7 +51,7 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) -> Han
     // Late joiner: room already started, but this client just finished loading the ROM.
     // Send them the latest cached state + input history, then BeginCatchUp to activate lockstep.
     if was_started && !sender_was_loaded {
-        let Some(outbound) = sender_outbound else {
+        let Some(state_outbound) = sender_state_outbound else {
             return Ok(());
         };
 
@@ -66,12 +64,8 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) -> Han
                 frame,
                 data: state_data,
             };
-            let mut h = Header::new(MsgId::SyncState as u8);
-            h.client_id = 0;
-            h.room_id = room_id;
-            h.seq = ctx.server_seq;
-            ctx.server_seq = ctx.server_seq.wrapping_add(1);
-            let _ = send_msg_tcp(&outbound, h, MsgId::SyncState, &sync_state).await;
+            let h = Header::new(MsgId::SyncState as u8);
+            let _ = send_msg_tcp(&state_outbound, h, MsgId::SyncState, &sync_state).await;
 
             let history = room.get_input_history(frame);
             info!(
@@ -80,13 +74,13 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) -> Han
                 "Sending input history to late joiner"
             );
 
-            let recipients = vec![outbound.clone()];
-            let mut seq = ctx.server_seq;
+            let Some(input_outbound) = sender_input_outbound else {
+                return Ok(());
+            };
+            let recipients = vec![input_outbound.clone()];
             for (p_idx, base, buttons) in history {
-                broadcast_inputs_required(&recipients, p_idx, base, &buttons, room_id, &mut seq)
-                    .await;
+                broadcast_inputs_required(&recipients, p_idx, base, &buttons).await;
             }
-            ctx.server_seq = seq;
 
             // After state + inputs are in flight, tell the joiner to begin catch-up.
             let mut active_ports_mask: u8 = 0;
@@ -101,12 +95,8 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) -> Han
                 target_frame,
                 active_ports_mask,
             };
-            let mut h = Header::new(MsgId::BeginCatchUp as u8);
-            h.client_id = 0;
-            h.room_id = room_id;
-            h.seq = ctx.server_seq;
-            ctx.server_seq = ctx.server_seq.wrapping_add(1);
-            let _ = send_msg_tcp(&outbound, h, MsgId::BeginCatchUp, &msg).await;
+            let h = Header::new(MsgId::BeginCatchUp as u8);
+            let _ = send_msg_tcp(&state_outbound, h, MsgId::BeginCatchUp, &msg).await;
         } else {
             debug!(
                 client_id = sender_id,

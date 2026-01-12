@@ -44,10 +44,7 @@ pub(crate) async fn handle(
     );
 
     let sync_msg = ResetSync { kind: msg.kind };
-    let mut h = Header::new(MsgId::ResetSync as u8);
-    h.client_id = ctx.assigned_client_id;
-    h.room_id = room_id;
-    h.seq = 0;
+    let h = Header::new(MsgId::ResetSync as u8);
 
     let frame = match encode_tcp_frame(h, MsgId::ResetSync, &sync_msg, 4096) {
         Ok(f) => Bytes::from(f),

@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use nesium_netproto::{
+    channel::ChannelKind,
     constants::SPECTATOR_PLAYER_INDEX,
     header::Header,
     messages::session::{JoinAck, JoinRoom, LoadRom, PlayerJoined},
@@ -12,7 +13,7 @@ use crate::ConnCtx;
 use crate::net::inbound::ConnId;
 use crate::net::outbound::send_msg_tcp;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
-use crate::room::state::{Player, RoomManager, Spectator};
+use crate::room::state::{ClientOutbounds, Player, RoomManager, Spectator};
 
 pub(crate) async fn handle(
     ctx: &mut ConnCtx,
@@ -38,7 +39,7 @@ pub(crate) async fn handle(
     }
 
     let room_id = if join.room_code == 0 {
-        let id = room_mgr.create_room(ctx.rom_hash, ctx.assigned_client_id);
+        let id = room_mgr.create_room(ctx.assigned_client_id);
         info!(
             room_id = id,
             client_id = ctx.assigned_client_id,
@@ -59,12 +60,20 @@ pub(crate) async fn handle(
         let room = room_mgr.get_room_mut(room_id).unwrap();
         let is_spectator = room.player_count() >= 2;
 
+        let mut outbounds = ClientOutbounds::new(ctx.outbound.clone());
+        if let Some(tx) = ctx.channels.get(&ChannelKind::Input) {
+            outbounds.set_channel(ChannelKind::Input, tx.clone());
+        }
+        if let Some(tx) = ctx.channels.get(&ChannelKind::Bulk) {
+            outbounds.set_channel(ChannelKind::Bulk, tx.clone());
+        }
+
         if is_spectator {
             room.add_spectator(Spectator {
                 conn_id,
                 client_id: ctx.assigned_client_id,
                 name: ctx.name.clone(),
-                outbound: ctx.outbound.clone(),
+                outbounds,
             });
             info!(
                 client_id = ctx.assigned_client_id,
@@ -77,7 +86,7 @@ pub(crate) async fn handle(
                 client_id: ctx.assigned_client_id,
                 player_index: 0,
                 name: ctx.name.clone(),
-                outbound: ctx.outbound.clone(),
+                outbounds,
             }) {
                 Some(idx) => {
                     info!(
@@ -113,11 +122,7 @@ pub(crate) async fn handle(
         room_id,
     };
 
-    let mut h = Header::new(MsgId::JoinAck as u8);
-    h.client_id = ctx.assigned_client_id;
-    h.room_id = room_id;
-    h.seq = ctx.server_seq;
-    ctx.server_seq = ctx.server_seq.wrapping_add(1);
+    let h = Header::new(MsgId::JoinAck as u8);
 
     if let Err(e) = send_msg_tcp(&ctx.outbound, h, MsgId::JoinAck, &ack).await {
         error!(%peer, error = %e, "Failed to send JoinAck");
@@ -130,8 +135,12 @@ pub(crate) async fn handle(
             .players
             .values()
             .filter(|p| p.client_id != ctx.assigned_client_id)
-            .map(|p| p.outbound.clone())
-            .chain(room.spectators.iter().map(|s| s.outbound.clone()))
+            .map(|p| p.outbounds.outbound_for_msg(MsgId::PlayerJoined))
+            .chain(
+                room.spectators
+                    .iter()
+                    .map(|s| s.outbounds.outbound_for_msg(MsgId::PlayerJoined)),
+            )
             .collect();
 
         if !existing_outbounds.is_empty() {
@@ -140,10 +149,7 @@ pub(crate) async fn handle(
                 player_index,
                 name: ctx.name.clone(),
             };
-            let mut h = Header::new(MsgId::PlayerJoined as u8);
-            h.client_id = ctx.assigned_client_id;
-            h.room_id = room_id;
-            h.seq = 0;
+            let h = Header::new(MsgId::PlayerJoined as u8);
 
             for recipient in &existing_outbounds {
                 let _ = send_msg_tcp(recipient, h, MsgId::PlayerJoined, &joined_msg).await;
@@ -178,10 +184,7 @@ pub(crate) async fn handle(
                 player_index: p_idx,
                 name,
             };
-            let mut h = Header::new(MsgId::PlayerJoined as u8);
-            h.client_id = cid;
-            h.room_id = room_id;
-            h.seq = 0;
+            let h = Header::new(MsgId::PlayerJoined as u8);
 
             let _ = send_msg_tcp(&ctx.outbound, h, MsgId::PlayerJoined, &joined_msg).await;
         }
@@ -198,12 +201,11 @@ pub(crate) async fn handle(
             "Sending cached ROM to joiner"
         );
         let load_rom = LoadRom { data: rom_data };
-        let mut h = Header::new(MsgId::LoadRom as u8);
-        h.client_id = 0; // System message
-        h.room_id = room_id;
-        h.seq = ctx.server_seq;
-        ctx.server_seq = ctx.server_seq.wrapping_add(1);
-        let _ = send_msg_tcp(&ctx.outbound, h, MsgId::LoadRom, &load_rom).await;
+        let h = Header::new(MsgId::LoadRom as u8);
+        let tx = room
+            .outbound_for_client_msg(ctx.assigned_client_id, MsgId::LoadRom)
+            .unwrap_or_else(|| ctx.outbound.clone());
+        let _ = send_msg_tcp(&tx, h, MsgId::LoadRom, &load_rom).await;
     }
     Ok(())
 }

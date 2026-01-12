@@ -19,11 +19,23 @@ pub enum NetplayState {
     InRoom,
 }
 
+/// Actual transport used by the current netplay session.
+#[frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetplayTransport {
+    Unknown,
+    Tcp,
+    Quic,
+}
+
 /// Netplay status snapshot streamed to Flutter.
 #[frb]
 #[derive(Debug, Clone)]
 pub struct NetplayStatus {
     pub state: NetplayState,
+    pub transport: NetplayTransport,
+    /// True if QUIC connection failed and we fell back to TCP (only for Auto connect modes).
+    pub tcp_fallback_from_quic: bool,
     pub client_id: u32,
     pub room_id: u32,
     /// Player index: 0, 1, or `SPECTATOR_PLAYER_INDEX` for spectator
@@ -115,9 +127,13 @@ pub async fn netplay_connect(server_addr: String, player_name: String) -> Result
         .await
         .map_err(|e| format!("Failed to connect: {}", e))?;
 
+    mgr.input_provider.with_session(|s| {
+        s.tcp_fallback_from_quic = false;
+    });
+
     let config = NetplayConfig {
         name: player_name,
-        rom_hash: [0; 16], // TODO: Get ROM hash from runtime
+        transport: nesium_netproto::messages::session::TransportKind::Tcp,
         spectator: false,
         room_code: 0,
     };
@@ -183,6 +199,413 @@ pub async fn netplay_connect(server_addr: String, player_name: String) -> Result
     *lock_unpoison(&mgr.session_task) = Some(task);
 
     // Enable in runtime
+    crate::runtime_handle()
+        .enable_netplay(mgr.input_provider.clone())
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Connect to netplay server and perform handshake (QUIC preferred, TCP fallback).
+#[frb]
+pub async fn netplay_connect_auto(
+    server_addr: String,
+    server_name: String,
+    player_name: String,
+) -> Result<(), String> {
+    let mgr = get_manager();
+
+    let _ = netplay_disconnect().await;
+
+    let addr = server_addr
+        .parse()
+        .map_err(|e| format!("Invalid address: {}", e))?;
+
+    let (event_tx, event_rx) = mpsc::channel(256);
+    let (game_event_tx, mut game_event_rx) = mpsc::channel(32);
+
+    let (client, chosen_transport) =
+        nesium_netplay::connect_auto(addr, Some(server_name.as_str()), event_tx)
+            .await
+            .map_err(|e| format!("Failed to connect (auto): {}", e))?;
+
+    mgr.input_provider.with_session(|s| {
+        s.tcp_fallback_from_quic =
+            chosen_transport == nesium_netproto::messages::session::TransportKind::Tcp;
+    });
+
+    let config = NetplayConfig {
+        name: player_name,
+        transport: chosen_transport,
+        spectator: false,
+        room_code: 0,
+    };
+
+    let (mut handler, cmd_tx) = SessionHandler::new(
+        client,
+        config,
+        mgr.input_provider.clone(),
+        event_rx,
+        game_event_tx,
+    );
+
+    *lock_unpoison(&mgr.command_tx) = Some(cmd_tx);
+
+    let status_sink = mgr.status_sink.clone();
+    let game_event_sink = mgr.game_event_sink.clone();
+    let input_provider = mgr.input_provider.clone();
+
+    tokio::spawn(async move {
+        while let Some(event) = game_event_rx.recv().await {
+            if let Some(sink) = lock_unpoison(&game_event_sink).as_ref() {
+                let frb_event = match event {
+                    nesium_netplay::NetplayEvent::LoadRom(data) => {
+                        NetplayGameEvent::LoadRom { data }
+                    }
+                    nesium_netplay::NetplayEvent::StartGame => NetplayGameEvent::StartGame,
+                    nesium_netplay::NetplayEvent::PauseSync { paused } => {
+                        NetplayGameEvent::PauseSync { paused }
+                    }
+                    nesium_netplay::NetplayEvent::ResetSync(kind) => {
+                        NetplayGameEvent::ResetSync { kind }
+                    }
+                    nesium_netplay::NetplayEvent::SyncState(frame, data) => {
+                        NetplayGameEvent::SyncState { frame, data }
+                    }
+                    nesium_netplay::NetplayEvent::PlayerLeft { player_index } => {
+                        NetplayGameEvent::PlayerLeft { player_index }
+                    }
+                    nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
+                        error_code: code as u16,
+                    },
+                };
+                let _ = sink.add(frb_event);
+            }
+        }
+    });
+
+    let task = tokio::spawn(async move {
+        notify_status(&status_sink, &input_provider, None);
+
+        if let Err(e) = handler.run().await {
+            let err_msg = e.to_string();
+            notify_status(&status_sink, &input_provider, Some(err_msg.clone()));
+            return Err(err_msg);
+        }
+
+        notify_status(&status_sink, &input_provider, None);
+        Ok(())
+    });
+
+    *lock_unpoison(&mgr.session_task) = Some(task);
+
+    crate::runtime_handle()
+        .enable_netplay(mgr.input_provider.clone())
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Connect to netplay server and perform handshake (QUIC pinned SHA-256 fingerprint preferred, TCP fallback).
+#[frb]
+pub async fn netplay_connect_auto_pinned(
+    server_addr: String,
+    server_name: String,
+    pinned_sha256_fingerprint: String,
+    player_name: String,
+) -> Result<(), String> {
+    let mgr = get_manager();
+
+    let _ = netplay_disconnect().await;
+
+    let addr = server_addr
+        .parse()
+        .map_err(|e| format!("Invalid address: {}", e))?;
+
+    let (event_tx, event_rx) = mpsc::channel(256);
+    let (game_event_tx, mut game_event_rx) = mpsc::channel(32);
+
+    let (client, chosen_transport) = nesium_netplay::connect_auto_pinned(
+        addr,
+        &server_name,
+        &pinned_sha256_fingerprint,
+        event_tx,
+    )
+    .await
+    .map_err(|e| format!("Failed to connect (auto pinned): {}", e))?;
+
+    mgr.input_provider.with_session(|s| {
+        s.tcp_fallback_from_quic =
+            chosen_transport == nesium_netproto::messages::session::TransportKind::Tcp;
+    });
+
+    let config = NetplayConfig {
+        name: player_name,
+        transport: chosen_transport,
+        spectator: false,
+        room_code: 0,
+    };
+
+    let (mut handler, cmd_tx) = SessionHandler::new(
+        client,
+        config,
+        mgr.input_provider.clone(),
+        event_rx,
+        game_event_tx,
+    );
+
+    *lock_unpoison(&mgr.command_tx) = Some(cmd_tx);
+
+    let status_sink = mgr.status_sink.clone();
+    let game_event_sink = mgr.game_event_sink.clone();
+    let input_provider = mgr.input_provider.clone();
+
+    tokio::spawn(async move {
+        while let Some(event) = game_event_rx.recv().await {
+            if let Some(sink) = lock_unpoison(&game_event_sink).as_ref() {
+                let frb_event = match event {
+                    nesium_netplay::NetplayEvent::LoadRom(data) => {
+                        NetplayGameEvent::LoadRom { data }
+                    }
+                    nesium_netplay::NetplayEvent::StartGame => NetplayGameEvent::StartGame,
+                    nesium_netplay::NetplayEvent::PauseSync { paused } => {
+                        NetplayGameEvent::PauseSync { paused }
+                    }
+                    nesium_netplay::NetplayEvent::ResetSync(kind) => {
+                        NetplayGameEvent::ResetSync { kind }
+                    }
+                    nesium_netplay::NetplayEvent::SyncState(frame, data) => {
+                        NetplayGameEvent::SyncState { frame, data }
+                    }
+                    nesium_netplay::NetplayEvent::PlayerLeft { player_index } => {
+                        NetplayGameEvent::PlayerLeft { player_index }
+                    }
+                    nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
+                        error_code: code as u16,
+                    },
+                };
+                let _ = sink.add(frb_event);
+            }
+        }
+    });
+
+    let task = tokio::spawn(async move {
+        notify_status(&status_sink, &input_provider, None);
+
+        if let Err(e) = handler.run().await {
+            let err_msg = e.to_string();
+            notify_status(&status_sink, &input_provider, Some(err_msg.clone()));
+            return Err(err_msg);
+        }
+
+        notify_status(&status_sink, &input_provider, None);
+        Ok(())
+    });
+
+    *lock_unpoison(&mgr.session_task) = Some(task);
+
+    crate::runtime_handle()
+        .enable_netplay(mgr.input_provider.clone())
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Connect to netplay server over QUIC and perform handshake.
+#[frb]
+pub async fn netplay_connect_quic(
+    server_addr: String,
+    server_name: String,
+    player_name: String,
+) -> Result<(), String> {
+    let mgr = get_manager();
+
+    let _ = netplay_disconnect().await;
+
+    let addr = server_addr
+        .parse()
+        .map_err(|e| format!("Invalid address: {}", e))?;
+
+    let (event_tx, event_rx) = mpsc::channel(256);
+    let (game_event_tx, mut game_event_rx) = mpsc::channel(32);
+
+    let client = nesium_netplay::connect_quic(addr, &server_name, event_tx)
+        .await
+        .map_err(|e| format!("Failed to connect (quic): {}", e))?;
+
+    mgr.input_provider.with_session(|s| {
+        s.tcp_fallback_from_quic = false;
+    });
+
+    let config = NetplayConfig {
+        name: player_name,
+        transport: nesium_netproto::messages::session::TransportKind::Quic,
+        spectator: false,
+        room_code: 0,
+    };
+
+    let (mut handler, cmd_tx) = SessionHandler::new(
+        client,
+        config,
+        mgr.input_provider.clone(),
+        event_rx,
+        game_event_tx,
+    );
+
+    *lock_unpoison(&mgr.command_tx) = Some(cmd_tx);
+
+    let status_sink = mgr.status_sink.clone();
+    let game_event_sink = mgr.game_event_sink.clone();
+    let input_provider = mgr.input_provider.clone();
+
+    tokio::spawn(async move {
+        while let Some(event) = game_event_rx.recv().await {
+            if let Some(sink) = lock_unpoison(&game_event_sink).as_ref() {
+                let frb_event = match event {
+                    nesium_netplay::NetplayEvent::LoadRom(data) => {
+                        NetplayGameEvent::LoadRom { data }
+                    }
+                    nesium_netplay::NetplayEvent::StartGame => NetplayGameEvent::StartGame,
+                    nesium_netplay::NetplayEvent::PauseSync { paused } => {
+                        NetplayGameEvent::PauseSync { paused }
+                    }
+                    nesium_netplay::NetplayEvent::ResetSync(kind) => {
+                        NetplayGameEvent::ResetSync { kind }
+                    }
+                    nesium_netplay::NetplayEvent::SyncState(frame, data) => {
+                        NetplayGameEvent::SyncState { frame, data }
+                    }
+                    nesium_netplay::NetplayEvent::PlayerLeft { player_index } => {
+                        NetplayGameEvent::PlayerLeft { player_index }
+                    }
+                    nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
+                        error_code: code as u16,
+                    },
+                };
+                let _ = sink.add(frb_event);
+            }
+        }
+    });
+
+    let task = tokio::spawn(async move {
+        notify_status(&status_sink, &input_provider, None);
+
+        if let Err(e) = handler.run().await {
+            let err_msg = e.to_string();
+            notify_status(&status_sink, &input_provider, Some(err_msg.clone()));
+            return Err(err_msg);
+        }
+
+        notify_status(&status_sink, &input_provider, None);
+        Ok(())
+    });
+
+    *lock_unpoison(&mgr.session_task) = Some(task);
+
+    crate::runtime_handle()
+        .enable_netplay(mgr.input_provider.clone())
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Connect to netplay server over QUIC (pinned SHA-256 fingerprint) and perform handshake.
+#[frb]
+pub async fn netplay_connect_quic_pinned(
+    server_addr: String,
+    server_name: String,
+    pinned_sha256_fingerprint: String,
+    player_name: String,
+) -> Result<(), String> {
+    let mgr = get_manager();
+
+    let _ = netplay_disconnect().await;
+
+    let addr = server_addr
+        .parse()
+        .map_err(|e| format!("Invalid address: {}", e))?;
+
+    let (event_tx, event_rx) = mpsc::channel(256);
+    let (game_event_tx, mut game_event_rx) = mpsc::channel(32);
+
+    let client = nesium_netplay::connect_quic_pinned(
+        addr,
+        &server_name,
+        &pinned_sha256_fingerprint,
+        event_tx,
+    )
+    .await
+    .map_err(|e| format!("Failed to connect (quic pinned): {}", e))?;
+
+    mgr.input_provider.with_session(|s| {
+        s.tcp_fallback_from_quic = false;
+    });
+
+    let config = NetplayConfig {
+        name: player_name,
+        transport: nesium_netproto::messages::session::TransportKind::Quic,
+        spectator: false,
+        room_code: 0,
+    };
+
+    let (mut handler, cmd_tx) = SessionHandler::new(
+        client,
+        config,
+        mgr.input_provider.clone(),
+        event_rx,
+        game_event_tx,
+    );
+
+    *lock_unpoison(&mgr.command_tx) = Some(cmd_tx);
+
+    let status_sink = mgr.status_sink.clone();
+    let game_event_sink = mgr.game_event_sink.clone();
+    let input_provider = mgr.input_provider.clone();
+
+    tokio::spawn(async move {
+        while let Some(event) = game_event_rx.recv().await {
+            if let Some(sink) = lock_unpoison(&game_event_sink).as_ref() {
+                let frb_event = match event {
+                    nesium_netplay::NetplayEvent::LoadRom(data) => {
+                        NetplayGameEvent::LoadRom { data }
+                    }
+                    nesium_netplay::NetplayEvent::StartGame => NetplayGameEvent::StartGame,
+                    nesium_netplay::NetplayEvent::PauseSync { paused } => {
+                        NetplayGameEvent::PauseSync { paused }
+                    }
+                    nesium_netplay::NetplayEvent::ResetSync(kind) => {
+                        NetplayGameEvent::ResetSync { kind }
+                    }
+                    nesium_netplay::NetplayEvent::SyncState(frame, data) => {
+                        NetplayGameEvent::SyncState { frame, data }
+                    }
+                    nesium_netplay::NetplayEvent::PlayerLeft { player_index } => {
+                        NetplayGameEvent::PlayerLeft { player_index }
+                    }
+                    nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
+                        error_code: code as u16,
+                    },
+                };
+                let _ = sink.add(frb_event);
+            }
+        }
+    });
+
+    let task = tokio::spawn(async move {
+        notify_status(&status_sink, &input_provider, None);
+
+        if let Err(e) = handler.run().await {
+            let err_msg = e.to_string();
+            notify_status(&status_sink, &input_provider, Some(err_msg.clone()));
+            return Err(err_msg);
+        }
+
+        notify_status(&status_sink, &input_provider, None);
+        Ok(())
+    });
+
+    *lock_unpoison(&mgr.session_task) = Some(task);
+
     crate::runtime_handle()
         .enable_netplay(mgr.input_provider.clone())
         .map_err(|e| e.to_string())?;
@@ -417,49 +840,64 @@ fn notify_status(
     error: Option<String>,
 ) {
     if let Some(sink) = lock_unpoison(sink_lock).as_ref() {
-        let (state, client_id, room_id, player_index, players) = input_provider.with_session(|s| {
-            let state = match s.state {
-                SessionState::Disconnected => NetplayState::Disconnected,
-                SessionState::Connecting | SessionState::Handshake => NetplayState::Connecting,
-                SessionState::WaitingForRoom => NetplayState::Connected,
-                SessionState::Playing { .. }
-                | SessionState::Spectating { .. }
-                | SessionState::Syncing { .. } => NetplayState::InRoom,
-            };
+        let (state, transport, tcp_fallback_from_quic, client_id, room_id, player_index, players) =
+            input_provider.with_session(|s| {
+                let state = match s.state {
+                    SessionState::Disconnected => NetplayState::Disconnected,
+                    SessionState::Connecting | SessionState::Handshake => NetplayState::Connecting,
+                    SessionState::WaitingForRoom => NetplayState::Connected,
+                    SessionState::Playing { .. }
+                    | SessionState::Spectating { .. }
+                    | SessionState::Syncing { .. } => NetplayState::InRoom,
+                };
 
-            let mut players: Vec<NetplayPlayer> = s
-                .players
-                .values()
-                .map(|p| NetplayPlayer {
-                    client_id: p.client_id,
-                    name: p.name.clone(),
-                    player_index: p.player_index,
-                })
-                .collect();
+                let transport = match s.transport {
+                    Some(nesium_netproto::messages::session::TransportKind::Tcp) => {
+                        NetplayTransport::Tcp
+                    }
+                    Some(nesium_netproto::messages::session::TransportKind::Quic) => {
+                        NetplayTransport::Quic
+                    }
+                    None => NetplayTransport::Unknown,
+                };
 
-            // Include self if in a room
-            if matches!(state, NetplayState::InRoom) {
-                players.push(NetplayPlayer {
-                    client_id: s.client_id,
-                    name: s.local_name.clone(),
-                    player_index: s.local_player_index.unwrap_or(SPECTATOR_PLAYER_INDEX),
-                });
-            }
+                let mut players: Vec<NetplayPlayer> = s
+                    .players
+                    .values()
+                    .map(|p| NetplayPlayer {
+                        client_id: p.client_id,
+                        name: p.name.clone(),
+                        player_index: p.player_index,
+                    })
+                    .collect();
 
-            // Sort players by player_index
-            players.sort_by_key(|p| p.player_index);
+                // Include self if in a room
+                if matches!(state, NetplayState::InRoom) {
+                    players.push(NetplayPlayer {
+                        client_id: s.client_id,
+                        name: s.local_name.clone(),
+                        player_index: s.local_player_index.unwrap_or(SPECTATOR_PLAYER_INDEX),
+                    });
+                }
 
-            (
-                state,
-                s.client_id,
-                s.room_id,
-                s.local_player_index.unwrap_or(SPECTATOR_PLAYER_INDEX),
-                players,
-            )
-        });
+                // Sort players by player_index
+                players.sort_by_key(|p| p.player_index);
+
+                (
+                    state,
+                    transport,
+                    s.tcp_fallback_from_quic,
+                    s.client_id,
+                    s.room_id,
+                    s.local_player_index.unwrap_or(SPECTATOR_PLAYER_INDEX),
+                    players,
+                )
+            });
 
         let status = NetplayStatus {
             state,
+            transport,
+            tcp_fallback_from_quic,
             client_id,
             room_id,
             player_index,

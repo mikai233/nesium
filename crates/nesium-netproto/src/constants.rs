@@ -11,8 +11,9 @@ pub const MAGIC: [u8; 2] = *b"NS";
 pub const VERSION: u8 = 1;
 
 /// Fixed header length in bytes (wire format).
-/// Changed from 28 to 30 to accommodate u32 payload_len for large messages.
-pub const HEADER_LEN: usize = 30;
+/// Minimal header for stream transports:
+/// `[magic(2)][version(1)][msg_id(1)][payload_len(u32)]` = 8 bytes.
+pub const HEADER_LEN: usize = 8;
 
 /// TCP framing prefix length in bytes.
 ///

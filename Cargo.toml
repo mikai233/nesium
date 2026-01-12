@@ -108,3 +108,8 @@ console_error_panic_hook = "0.1.7"
 mimalloc = "0.1.48"
 dashmap = "6.1.0"
 hex = "0.4.3"
+quinn = { version = "0.11.9", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "0.23.35", default-features = false, features = ["std", "ring", "tls12"] }
+rustls-native-certs = "0.8.3"
+ring = "0.17.14"
+rcgen = { version = "0.14.6", default-features = false, features = ["pem", "ring"] }

@@ -14,3 +14,10 @@ postcard = { workspace = true, features = ["use-std"] }
 tracing.workspace = true
 clap = { workspace = true, features = ["derive"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+rand.workspace = true
+quinn.workspace = true
+rustls.workspace = true
+ring.workspace = true
+rcgen.workspace = true
+hex.workspace = true
+base64.workspace = true

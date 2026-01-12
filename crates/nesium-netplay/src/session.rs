@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, VecDeque};
 
+use nesium_netproto::messages::session::TransportKind;
+
 /// Netplay session state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionState {
@@ -46,6 +48,12 @@ pub struct NetplaySession {
     /// Current session state.
     pub state: SessionState,
 
+    /// Transport selected for this session (None = not connected yet).
+    pub transport: Option<TransportKind>,
+
+    /// True if the client attempted QUIC and fell back to TCP.
+    pub tcp_fallback_from_quic: bool,
+
     /// Server-assigned client ID (0 = not assigned yet).
     pub client_id: u32,
 
@@ -75,17 +83,8 @@ pub struct NetplaySession {
     /// Current frame number.
     pub current_frame: u32,
 
-    /// ROM hash for validation.
-    pub rom_hash: [u8; 16],
-
     /// Server nonce for handshake.
     pub server_nonce: u32,
-
-    /// Sequence number for outgoing packets.
-    pub local_seq: u32,
-
-    /// Last acknowledged sequence from server.
-    pub last_ack: u32,
 
     /// Rewind capacity (frames) negotiated with server.
     pub rewind_capacity: u32,
@@ -105,6 +104,8 @@ impl NetplaySession {
     pub fn new() -> Self {
         Self {
             state: SessionState::default(),
+            transport: None,
+            tcp_fallback_from_quic: false,
             client_id: 0,
             room_id: 0,
             local_name: String::new(),
@@ -119,10 +120,7 @@ impl NetplaySession {
             active_ports: [false; 4],
             input_delay_frames: 2,
             current_frame: 0,
-            rom_hash: [0; 16],
             server_nonce: 0,
-            local_seq: 1,
-            last_ack: 0,
             rewind_capacity: 600,
             players: BTreeMap::new(),
         }
@@ -265,13 +263,6 @@ impl NetplaySession {
         if port < self.active_ports.len() {
             self.active_ports[port] = false;
         }
-    }
-
-    /// Increment and return the next sequence number.
-    pub fn next_seq(&mut self) -> u32 {
-        let seq = self.local_seq;
-        self.local_seq = self.local_seq.wrapping_add(1);
-        seq
     }
 }
 

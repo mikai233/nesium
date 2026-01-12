@@ -1442,6 +1442,55 @@ class _ServerTab extends ConsumerWidget {
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
+                                if (status.quicEnabled &&
+                                    status.quicCertSha256Fingerprint
+                                        .trim()
+                                        .isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          l10n.serverQuicFingerprint(
+                                            status.quicCertSha256Fingerprint,
+                                          ),
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                                fontFamily: 'RobotoMono',
+                                              ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        onPressed: () async {
+                                          await Clipboard.setData(
+                                            ClipboardData(
+                                              text: status
+                                                  .quicCertSha256Fingerprint,
+                                            ),
+                                          );
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  l10n.lastErrorCopied,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        icon: const Icon(
+                                          Icons.content_copy_rounded,
+                                        ),
+                                        tooltip: l10n.copy,
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
                             ],
                           ),

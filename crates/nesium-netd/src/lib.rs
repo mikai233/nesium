@@ -1,11 +1,16 @@
 //! Server library - main loop logic extracted for testing.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, AtomicU64};
 
-use nesium_netproto::{header::Header, messages::session::PlayerLeft, msg_id::MsgId};
+use nesium_netproto::{
+    channel::ChannelKind,
+    header::Header,
+    messages::session::{AttachChannel, PlayerLeft},
+    msg_id::MsgId,
+};
 use tokio::sync::mpsc;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::net::inbound::{ConnId, InboundEvent};
 use crate::net::outbound::{OutboundTx, send_msg_tcp};
@@ -22,14 +27,28 @@ pub mod session;
 /// Monotonically increasing IDs.
 static NEXT_CLIENT_ID: AtomicU32 = AtomicU32::new(1);
 static NEXT_SERVER_NONCE: AtomicU32 = AtomicU32::new(1);
+static NEXT_SESSION_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConnRole {
+    /// Newly accepted TCP connection with no session association yet.
+    Unbound,
+    /// Primary session/control connection (Hello/Welcome happens here).
+    Control,
+    /// Secondary channel connection attached to an existing session.
+    Channel(ChannelKind),
+}
 
 /// Per-connection server-side context.
 struct ConnCtx {
     outbound: OutboundTx,
-    server_seq: u32,
     assigned_client_id: u32,
-    rom_hash: [u8; 16],
     name: String,
+    role: ConnRole,
+    /// Assigned on `Hello` and used to attach secondary channels.
+    session_token: u64,
+    /// Secondary channel outbounds (stored on the control connection).
+    channels: HashMap<ChannelKind, OutboundTx>,
 }
 
 /// Run the server main loop.
@@ -38,6 +57,7 @@ struct ConnCtx {
 pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<()> {
     let mut conns: HashMap<ConnId, ConnCtx> = HashMap::new();
     let mut room_mgr = RoomManager::new();
+    let mut token_to_control_conn: HashMap<u64, ConnId> = HashMap::new();
 
     info!("Server main loop started");
 
@@ -53,10 +73,11 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
                     conn_id,
                     ConnCtx {
                         outbound,
-                        server_seq: 1,
                         assigned_client_id: 0,
-                        rom_hash: [0; 16],
                         name: String::new(),
+                        role: ConnRole::Unbound,
+                        session_token: 0,
+                        channels: HashMap::new(),
                     },
                 );
                 debug!(conn_id, %peer, "Client connected");
@@ -69,64 +90,96 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
                 ..
             } => {
                 if let Some(ctx) = conns.get(&conn_id) {
-                    if let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id) {
-                        let (player_index, recipients) = {
-                            let Some(room) = room_mgr.get_room_mut(room_id) else {
-                                conns.remove(&conn_id);
-                                continue;
-                            };
+                    match ctx.role {
+                        ConnRole::Control => {
+                            if ctx.session_token != 0 {
+                                token_to_control_conn.remove(&ctx.session_token);
+                            }
 
-                            let player_index =
-                                if let Some(player) = room.remove_player(ctx.assigned_client_id) {
-                                    info!(
-                                        client_id = ctx.assigned_client_id,
-                                        room_id,
-                                        player_index = player.player_index,
-                                        "Player left room"
-                                    );
-                                    Some(player.player_index)
-                                } else if room.remove_spectator(ctx.assigned_client_id).is_some() {
-                                    info!(
-                                        client_id = ctx.assigned_client_id,
-                                        room_id,
-                                        role = "spectator",
-                                        "Client left room"
-                                    );
-                                    None // Spectators don't have a player_index
-                                } else {
-                                    None
+                            if let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id)
+                            {
+                                let (player_index, recipients) = {
+                                    let Some(room) = room_mgr.get_room_mut(room_id) else {
+                                        conns.remove(&conn_id);
+                                        continue;
+                                    };
+
+                                    let player_index = if let Some(player) =
+                                        room.remove_player(ctx.assigned_client_id)
+                                    {
+                                        info!(
+                                            client_id = ctx.assigned_client_id,
+                                            room_id,
+                                            player_index = player.player_index,
+                                            "Player left room"
+                                        );
+                                        Some(player.player_index)
+                                    } else if room
+                                        .remove_spectator(ctx.assigned_client_id)
+                                        .is_some()
+                                    {
+                                        info!(
+                                            client_id = ctx.assigned_client_id,
+                                            room_id,
+                                            role = "spectator",
+                                            "Client left room"
+                                        );
+                                        None // Spectators don't have a player_index
+                                    } else {
+                                        None
+                                    };
+
+                                    let recipients = if player_index.is_some() {
+                                        room.all_outbounds_msg(MsgId::PlayerLeft)
+                                    } else {
+                                        Vec::new()
+                                    };
+
+                                    if room.is_empty() {
+                                        room_mgr.remove_room(room_id);
+                                        info!(room_id, "Removed empty room");
+                                    }
+
+                                    (player_index, recipients)
                                 };
 
-                            let recipients = if player_index.is_some() {
-                                room.all_outbounds()
-                            } else {
-                                Vec::new()
-                            };
+                                if let Some(p_idx) = player_index {
+                                    let msg = PlayerLeft {
+                                        client_id: ctx.assigned_client_id,
+                                        player_index: p_idx,
+                                    };
+                                    let h = Header::new(MsgId::PlayerLeft as u8);
 
-                            if room.is_empty() {
-                                room_mgr.remove_room(room_id);
-                                info!(room_id, "Removed empty room");
-                            }
+                                    for recipient in &recipients {
+                                        let _ = send_msg_tcp(recipient, h, MsgId::PlayerLeft, &msg)
+                                            .await;
+                                    }
+                                }
 
-                            (player_index, recipients)
-                        };
-
-                        if let Some(p_idx) = player_index {
-                            let msg = PlayerLeft {
-                                client_id: ctx.assigned_client_id,
-                                player_index: p_idx,
-                            };
-                            let mut h = Header::new(MsgId::PlayerLeft as u8);
-                            h.client_id = ctx.assigned_client_id;
-                            h.room_id = room_id;
-                            h.seq = 0;
-
-                            for recipient in &recipients {
-                                let _ = send_msg_tcp(recipient, h, MsgId::PlayerLeft, &msg).await;
+                                room_mgr.remove_client(ctx.assigned_client_id);
                             }
                         }
+                        ConnRole::Channel(ch) => {
+                            let client_id = ctx.assigned_client_id;
+                            let token = ctx.session_token;
 
-                        room_mgr.remove_client(ctx.assigned_client_id);
+                            if client_id != 0 {
+                                if let Some(room_id) = room_mgr.get_client_room(client_id) {
+                                    if let Some(room) = room_mgr.get_room_mut(room_id) {
+                                        room.clear_client_channel_outbound(client_id, ch);
+                                    }
+                                }
+                            }
+
+                            if token != 0 {
+                                if let Some(control_conn_id) = token_to_control_conn.get(&token) {
+                                    if let Some(control_ctx) = conns.get_mut(&control_conn_id) {
+                                        control_ctx.channels.remove(&ch);
+                                    }
+                                }
+                            }
+                        }
+                        ConnRole::Unbound => {}
                     }
                 }
 
@@ -140,11 +193,87 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
                 packet,
                 ..
             } => {
+                if packet.msg_id == MsgId::AttachChannel {
+                    let Ok(msg) = postcard::from_bytes::<AttachChannel>(&packet.payload) else {
+                        warn!(conn_id, %peer, "Bad AttachChannel message");
+                        continue;
+                    };
+
+                    if msg.channel == ChannelKind::Control {
+                        warn!(conn_id, %peer, "AttachChannel: invalid channel=Control");
+                        continue;
+                    }
+
+                    let Some(control_conn_id) =
+                        token_to_control_conn.get(&msg.session_token).copied()
+                    else {
+                        warn!(
+                            conn_id,
+                            %peer,
+                            token = msg.session_token,
+                            "AttachChannel: session token not found"
+                        );
+                        continue;
+                    };
+
+                    let Some(control_client_id) =
+                        conns.get(&control_conn_id).map(|c| c.assigned_client_id)
+                    else {
+                        continue;
+                    };
+
+                    if control_client_id == 0 {
+                        warn!(conn_id, %peer, "AttachChannel: control connection not handshaked yet");
+                        continue;
+                    }
+
+                    let Some(outbound) = conns.get(&conn_id).map(|c| c.outbound.clone()) else {
+                        continue;
+                    };
+
+                    if let Some(ctx) = conns.get_mut(&conn_id) {
+                        ctx.assigned_client_id = control_client_id;
+                        ctx.role = ConnRole::Channel(msg.channel);
+                        ctx.session_token = msg.session_token;
+                    }
+
+                    if let Some(control_ctx) = conns.get_mut(&control_conn_id) {
+                        // If the client re-attaches the same channel (e.g. reconnect), replace it.
+                        control_ctx.channels.insert(msg.channel, outbound.clone());
+                    }
+
+                    if let Some(room_id) = room_mgr.get_client_room(control_client_id) {
+                        if let Some(room) = room_mgr.get_room_mut(room_id) {
+                            room.set_client_channel_outbound(
+                                control_client_id,
+                                msg.channel,
+                                outbound,
+                            );
+                        }
+                    }
+
+                    debug!(
+                        conn_id,
+                        %peer,
+                        client_id = control_client_id,
+                        channel = ?msg.channel,
+                        "Attached channel connection"
+                    );
+                    continue;
+                }
+
                 let Some(ctx) = conns.get_mut(&conn_id) else {
                     continue;
                 };
 
                 dispatch_packet(ctx, conn_id, &peer, &packet, &mut room_mgr).await;
+
+                if packet.msg_id == MsgId::Hello
+                    && ctx.role == ConnRole::Control
+                    && ctx.session_token != 0
+                {
+                    token_to_control_conn.insert(ctx.session_token, conn_id);
+                }
             }
         }
     }

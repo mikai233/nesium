@@ -2,6 +2,7 @@
 use nesium_netplay::{
     NetplayCommand, NetplayConfig, NetplayEvent, SessionHandler, connect, create_input_provider,
 };
+use nesium_netproto::messages::session::TransportKind;
 // use nesium_netproto::messages::session::LoadRom;
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
@@ -41,7 +42,7 @@ async fn test_rom_sync_flow() {
     let c1_input = create_input_provider();
     let c1_config = NetplayConfig {
         name: "Player1".to_string(),
-        rom_hash: [1; 16],
+        transport: TransportKind::Tcp,
         spectator: false,
         room_code: 0, // Create room
     };
@@ -74,7 +75,7 @@ async fn test_rom_sync_flow() {
     let c2_input = create_input_provider();
     let c2_config = NetplayConfig {
         name: "Player2".to_string(),
-        rom_hash: [1; 16],
+        transport: nesium_netproto::messages::session::TransportKind::Tcp,
         spectator: false,
         room_code: room_id,
     };
@@ -160,7 +161,7 @@ async fn test_late_join_receives_cached_rom_and_state() {
     let c1_input = create_input_provider();
     let c1_config = NetplayConfig {
         name: "Host".to_string(),
-        rom_hash: [1; 16],
+        transport: nesium_netproto::messages::session::TransportKind::Tcp,
         spectator: false,
         room_code: 0, // Create room
     };
@@ -223,7 +224,7 @@ async fn test_late_join_receives_cached_rom_and_state() {
     let c2_input = create_input_provider();
     let c2_config = NetplayConfig {
         name: "LateJoiner".to_string(),
-        rom_hash: [1; 16],
+        transport: nesium_netproto::messages::session::TransportKind::Tcp,
         spectator: false,
         room_code: room_id,
     };

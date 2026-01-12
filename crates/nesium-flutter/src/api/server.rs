@@ -3,7 +3,6 @@
 //! Allows starting/stopping a netplay server directly within the app.
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::frb_generated::StreamSink;
@@ -19,6 +18,10 @@ pub struct ServerStatus {
     pub port: u16,
     pub client_count: u32,
     pub bind_address: String,
+    pub quic_enabled: bool,
+    pub quic_bind_address: String,
+    /// Leaf certificate SHA-256 fingerprint (base64url, no padding), for pinned QUIC client connections.
+    pub quic_cert_sha256_fingerprint: String,
 }
 
 #[frb(ignore)]
@@ -27,6 +30,10 @@ struct EmbeddedServer {
     shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
     /// Current bind address.
     bind_addr: Option<SocketAddr>,
+    /// QUIC bind address (UDP).
+    quic_bind_addr: Option<SocketAddr>,
+    /// QUIC cert leaf SHA-256 fingerprint (AA:BB:..).
+    quic_cert_sha256_fingerprint: Option<String>,
     /// Status stream sink.
     status_sink: Arc<Mutex<Option<StreamSink<ServerStatus>>>>,
     /// Number of connected clients.
@@ -40,6 +47,8 @@ impl EmbeddedServer {
         Self {
             shutdown_tx: None,
             bind_addr: None,
+            quic_bind_addr: None,
+            quic_cert_sha256_fingerprint: None,
             status_sink: Arc::new(Mutex::new(None)),
             client_count: 0,
             task_handles: Vec::new(),
@@ -52,7 +61,6 @@ impl EmbeddedServer {
 }
 
 static SERVER: OnceLock<Mutex<EmbeddedServer>> = OnceLock::new();
-static NEXT_CONN_ID: AtomicU64 = AtomicU64::new(1);
 
 fn get_server() -> &'static Mutex<EmbeddedServer> {
     SERVER.get_or_init(|| Mutex::new(EmbeddedServer::new()))
@@ -86,6 +94,22 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
         .map_err(|e| format!("Failed to get local address: {}", e))?;
     let actual_port = actual_addr.port();
 
+    // Start QUIC listener on the same port number (UDP uses a separate socket).
+    let quic_bind_addr: SocketAddr = format!("0.0.0.0:{}", actual_port)
+        .parse()
+        .map_err(|e| format!("Invalid QUIC bind address: {}", e))?;
+
+    let (quic_server_config, quic_fingerprint) = {
+        let dir = nesium_netd::net::quic_config::default_quic_data_dir("nesium_flutter");
+        let (cert_path, key_path) = nesium_netd::net::quic_config::ensure_quic_cert_pair(&dir)
+            .map_err(|e| format!("Failed to ensure QUIC cert/key: {}", e))?;
+        let fp = nesium_netd::net::quic_config::sha256_fingerprint_base64url_from_pem(&cert_path)
+            .map_err(|e| format!("Failed to compute QUIC cert fingerprint: {}", e))?;
+        let cfg = nesium_netd::net::quic_config::build_quic_server_config(&cert_path, &key_path)
+            .map_err(|e| format!("Failed to build QUIC server config: {}", e))?;
+        (cfg, fp)
+    };
+
     // Create shutdown broadcast channel
     let (shutdown_tx, mut shutdown_rx_listener) = tokio::sync::watch::channel(false);
 
@@ -96,18 +120,21 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
     let mut server = server_mutex.lock().map_err(|e| e.to_string())?;
     server.client_count = 0;
     server.task_handles.clear();
+    server.quic_bind_addr = None;
+    server.quic_cert_sha256_fingerprint = None;
     let status_sink = server.status_sink.clone();
 
     // Spawn the TCP listener task
     let shutdown_tx_clone = shutdown_tx.clone();
+    let event_tx_listener = event_tx.clone();
     let listener_handle = tokio::spawn(async move {
         loop {
             tokio::select! {
                 result = listener.accept() => {
                     match result {
                         Ok((stream, peer)) => {
-                            let conn_id = NEXT_CONN_ID.fetch_add(1, Ordering::Relaxed);
-                            let tx_clone = event_tx.clone();
+                            let conn_id = nesium_netd::net::inbound::next_conn_id();
+                            let tx_clone = event_tx_listener.clone();
                             let mut shutdown_rx_conn = shutdown_tx_clone.subscribe();
                             tokio::spawn(async move {
                                 tokio::select! {
@@ -135,9 +162,20 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
     });
     server.task_handles.push(listener_handle);
 
+    // Spawn the QUIC listener task (aborted on shutdown).
+    let tx_quic = event_tx.clone();
+    let quic_handle = tokio::spawn(async move {
+        let _ =
+            nesium_netd::net::quic::run_quic_listener(quic_bind_addr, quic_server_config, tx_quic)
+                .await;
+    });
+    server.task_handles.push(quic_handle);
+
     // Spawn monitoring task to track client count
     let status_sink_clone = status_sink.clone();
     let bind_address = actual_addr.to_string();
+    let quic_bind_address = quic_bind_addr.to_string();
+    let quic_fingerprint_clone = quic_fingerprint.clone();
     let mut shutdown_rx_monitor = shutdown_tx.subscribe();
     let monitor_handle = tokio::spawn(async move {
         use nesium_netd::net::inbound::InboundEvent;
@@ -151,13 +189,31 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
                             let mut s = get_server().lock().unwrap();
                             s.client_count += 1;
                             let count = s.client_count;
-                            notify_server_status(&status_sink_clone, true, actual_port, count, bind_address.clone());
+                            notify_server_status(
+                                &status_sink_clone,
+                                true,
+                                actual_port,
+                                count,
+                                bind_address.clone(),
+                                true,
+                                quic_bind_address.clone(),
+                                quic_fingerprint_clone.clone(),
+                            );
                         }
                         InboundEvent::Disconnected { .. } => {
                             let mut s = get_server().lock().unwrap();
                             s.client_count = s.client_count.saturating_sub(1);
                             let count = s.client_count;
-                            notify_server_status(&status_sink_clone, true, actual_port, count, bind_address.clone());
+                            notify_server_status(
+                                &status_sink_clone,
+                                true,
+                                actual_port,
+                                count,
+                                bind_address.clone(),
+                                true,
+                                quic_bind_address.clone(),
+                                quic_fingerprint_clone.clone(),
+                            );
                         }
                         _ => {}
                     }
@@ -182,11 +238,27 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
 
     server.shutdown_tx = Some(shutdown_tx);
     server.bind_addr = Some(actual_addr);
+    server.quic_bind_addr = Some(quic_bind_addr);
+    server.quic_cert_sha256_fingerprint = Some(quic_fingerprint.clone());
 
     // Notify status update
-    notify_server_status(&status_sink, true, actual_port, 0, actual_addr.to_string());
+    notify_server_status(
+        &status_sink,
+        true,
+        actual_port,
+        0,
+        actual_addr.to_string(),
+        true,
+        quic_bind_addr.to_string(),
+        quic_fingerprint.clone(),
+    );
 
     tracing::info!("Embedded server started on {}", actual_addr);
+    tracing::info!("Embedded QUIC enabled on {}", quic_bind_addr);
+    tracing::info!(
+        "Embedded QUIC cert SHA-256 fingerprint: {}",
+        quic_fingerprint
+    );
 
     Ok(actual_port)
 }
@@ -202,6 +274,8 @@ pub async fn netserver_stop() -> Result<(), String> {
         if tx.is_some() {
             server.bind_addr = None;
             server.client_count = 0;
+            server.quic_bind_addr = None;
+            server.quic_cert_sha256_fingerprint = None;
         }
         (tx, handles, server.status_sink.clone())
     };
@@ -216,7 +290,16 @@ pub async fn netserver_stop() -> Result<(), String> {
         }
 
         // Notify status update
-        notify_server_status(&status_sink, false, 0, 0, String::new());
+        notify_server_status(
+            &status_sink,
+            false,
+            0,
+            0,
+            String::new(),
+            false,
+            String::new(),
+            String::new(),
+        );
 
         tracing::info!("Embedded server stopped and all tasks aborted");
         Ok(())
@@ -253,11 +336,21 @@ pub fn netserver_status_stream(sink: StreamSink<ServerStatus>) -> Result<(), Str
     let running = server.is_running();
     let addr = server.bind_addr;
     let count = server.client_count;
+    let quic_enabled = server.quic_bind_addr.is_some();
     let status = ServerStatus {
         running,
         port: addr.map(|a| a.port()).unwrap_or(0),
         client_count: count,
         bind_address: addr.map(|a| a.to_string()).unwrap_or_default(),
+        quic_enabled,
+        quic_bind_address: server
+            .quic_bind_addr
+            .map(|a| a.to_string())
+            .unwrap_or_default(),
+        quic_cert_sha256_fingerprint: server
+            .quic_cert_sha256_fingerprint
+            .clone()
+            .unwrap_or_default(),
     };
     let _ = sink.add(status);
 
@@ -275,6 +368,9 @@ fn notify_server_status(
     port: u16,
     client_count: u32,
     bind_address: String,
+    quic_enabled: bool,
+    quic_bind_address: String,
+    quic_cert_sha256_fingerprint: String,
 ) {
     if let Ok(guard) = sink_lock.lock() {
         if let Some(ref sink) = *guard {
@@ -283,6 +379,9 @@ fn notify_server_status(
                 port,
                 client_count,
                 bind_address,
+                quic_enabled,
+                quic_bind_address,
+                quic_cert_sha256_fingerprint,
             });
         }
     }

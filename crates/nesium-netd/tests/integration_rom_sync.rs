@@ -23,7 +23,6 @@ struct TestClient {
     stream: TcpStream,
     client_id: u32,
     room_id: u32,
-    seq: u32,
 }
 
 impl TestClient {
@@ -33,7 +32,6 @@ impl TestClient {
             stream,
             client_id: 0,
             room_id: 0,
-            seq: 1,
         })
     }
 
@@ -41,16 +39,14 @@ impl TestClient {
         let hello = Hello {
             client_nonce: 12345,
             transport: TransportKind::Tcp,
-            proto_min: 1,
-            proto_max: 1,
-            rom_hash: [0xAB; 16],
+            proto_min: nesium_netproto::constants::VERSION,
+            proto_max: nesium_netproto::constants::VERSION,
             name: name.to_string(),
         };
 
         let header = Header::new(MsgId::Hello as u8);
         let frame = encode_tcp_frame(header, MsgId::Hello, &hello, 4096)?;
         self.stream.write_all(&frame).await?;
-        self.seq += 1;
         Ok(())
     }
 
@@ -72,10 +68,7 @@ impl TestClient {
     async fn send_join_room(&mut self, room_code: u32) -> anyhow::Result<()> {
         let join = JoinRoom { room_code };
 
-        let mut header = Header::new(MsgId::JoinRoom as u8);
-        header.client_id = self.client_id;
-        header.seq = self.seq;
-        self.seq += 1;
+        let header = Header::new(MsgId::JoinRoom as u8);
 
         let frame = encode_tcp_frame(header, MsgId::JoinRoom, &join, 4096)?;
         self.stream.write_all(&frame).await?;
@@ -101,18 +94,14 @@ impl TestClient {
 
         let ack: JoinAck = postcard::from_bytes(packet.payload)?;
         if ack.ok {
-            self.room_id = packet.header.room_id;
+            self.room_id = ack.room_id;
         }
         Ok(ack)
     }
 
     async fn send_load_rom(&mut self, data: Vec<u8>) -> anyhow::Result<()> {
         let msg = LoadRom { data };
-        let mut header = Header::new(MsgId::LoadRom as u8);
-        header.client_id = self.client_id;
-        header.room_id = self.room_id;
-        header.seq = self.seq;
-        self.seq += 1;
+        let header = Header::new(MsgId::LoadRom as u8);
 
         let frame = encode_tcp_frame(header, MsgId::LoadRom, &msg, 4096)?;
         self.stream.write_all(&frame).await?;
@@ -135,11 +124,7 @@ impl TestClient {
 
     async fn send_rom_loaded(&mut self) -> anyhow::Result<()> {
         let msg = RomLoaded {};
-        let mut header = Header::new(MsgId::RomLoaded as u8);
-        header.client_id = self.client_id;
-        header.room_id = self.room_id;
-        header.seq = self.seq;
-        self.seq += 1;
+        let header = Header::new(MsgId::RomLoaded as u8);
 
         let frame = encode_tcp_frame(header, MsgId::RomLoaded, &msg, 4096)?;
         self.stream.write_all(&frame).await?;

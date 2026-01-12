@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animations/animations.dart';
 import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
@@ -9,6 +10,8 @@ import '../../domain/nes_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../bridge/api/netplay.dart';
 import 'netplay_constants.dart';
+
+enum _NetplayTransportOption { auto, tcp, quic }
 
 class NetplayScreen extends ConsumerStatefulWidget {
   const NetplayScreen({super.key});
@@ -19,10 +22,13 @@ class NetplayScreen extends ConsumerStatefulWidget {
 
 class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   final _serverAddrController = TextEditingController(text: '127.0.0.1:5233');
+  final _serverNameController = TextEditingController(text: 'localhost');
+  final _pinnedFingerprintController = TextEditingController();
   final _playerNameController = TextEditingController(text: 'Player');
   final _roomCodeController = TextEditingController();
 
   Stream<NetplayStatus>? _statusStream;
+  _NetplayTransportOption _transport = _NetplayTransportOption.auto;
 
   @override
   void initState() {
@@ -33,6 +39,8 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   @override
   void dispose() {
     _serverAddrController.dispose();
+    _serverNameController.dispose();
+    _pinnedFingerprintController.dispose();
     _playerNameController.dispose();
     _roomCodeController.dispose();
     super.dispose();
@@ -41,16 +49,79 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   Future<void> _connect() async {
     final l10n = AppLocalizations.of(context)!;
     try {
-      await netplayConnect(
-        serverAddr: _serverAddrController.text,
-        playerName: _playerNameController.text,
-      );
+      final serverAddr = _serverAddrController.text.trim();
+      final playerName = _playerNameController.text.trim();
+
+      final serverNameRaw = _serverNameController.text.trim();
+      final serverName = serverNameRaw.isEmpty ? 'localhost' : serverNameRaw;
+
+      final pinned = _pinnedFingerprintController.text.trim();
+      final usePinned = pinned.isNotEmpty;
+
+      switch (_transport) {
+        case _NetplayTransportOption.tcp:
+          await netplayConnect(serverAddr: serverAddr, playerName: playerName);
+          break;
+        case _NetplayTransportOption.quic:
+          if (usePinned) {
+            await netplayConnectQuicPinned(
+              serverAddr: serverAddr,
+              serverName: serverName,
+              pinnedSha256Fingerprint: pinned,
+              playerName: playerName,
+            );
+          } else {
+            await netplayConnectQuic(
+              serverAddr: serverAddr,
+              serverName: serverName,
+              playerName: playerName,
+            );
+          }
+          break;
+        case _NetplayTransportOption.auto:
+          if (usePinned) {
+            await netplayConnectAutoPinned(
+              serverAddr: serverAddr,
+              serverName: serverName,
+              pinnedSha256Fingerprint: pinned,
+              playerName: playerName,
+            );
+          } else {
+            await netplayConnectAuto(
+              serverAddr: serverAddr,
+              serverName: serverName,
+              playerName: playerName,
+            );
+          }
+          break;
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.netplayConnectFailed(e.toString()))),
         );
       }
+    }
+  }
+
+  Future<void> _pastePinnedFingerprint() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text == null) return;
+
+    setState(() {
+      _pinnedFingerprintController.text = text.trim();
+    });
+  }
+
+  String _transportName(AppLocalizations l10n, NetplayTransport transport) {
+    switch (transport) {
+      case NetplayTransport.unknown:
+        return l10n.netplayTransportUnknown;
+      case NetplayTransport.tcp:
+        return l10n.netplayTransportTcp;
+      case NetplayTransport.quic:
+        return l10n.netplayTransportQuic;
     }
   }
 
@@ -274,28 +345,76 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(statusIcon, color: statusColor),
             const SizedBox(width: 16),
-            Text(
-              statusText,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: statusColor,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          statusText,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (status != null &&
+                          state != NetplayState.disconnected &&
+                          state != NetplayState.connecting &&
+                          status.transport != NetplayTransport.unknown) ...[
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: theme.colorScheme.outlineVariant,
+                            ),
+                          ),
+                          child: Text(
+                            _transportName(l10n, status.transport),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (status?.tcpFallbackFromQuic == true) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.netplayUsingTcpFallback,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if (status?.error != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      status!.error!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.error,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
               ),
             ),
-            if (status?.error != null) ...[
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  status!.error!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.error,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -306,6 +425,26 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        AnimatedDropdownMenu<_NetplayTransportOption>(
+          labelText: l10n.netplayTransportLabel,
+          value: _transport,
+          entries: [
+            DropdownMenuEntry(
+              value: _NetplayTransportOption.auto,
+              label: l10n.netplayTransportAuto,
+            ),
+            DropdownMenuEntry(
+              value: _NetplayTransportOption.tcp,
+              label: l10n.netplayTransportTcp,
+            ),
+            DropdownMenuEntry(
+              value: _NetplayTransportOption.quic,
+              label: l10n.netplayTransportQuic,
+            ),
+          ],
+          onSelected: (value) => setState(() => _transport = value),
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: _serverAddrController,
           decoration: InputDecoration(
@@ -315,6 +454,38 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
             border: const OutlineInputBorder(),
           ),
         ),
+        if (_transport != _NetplayTransportOption.tcp) ...[
+          const SizedBox(height: 16),
+          TextField(
+            controller: _serverNameController,
+            decoration: InputDecoration(
+              labelText: l10n.netplayServerNameLabel,
+              hintText: l10n.netplayServerNameHint,
+              prefixIcon: const Icon(Icons.badge_rounded),
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _pinnedFingerprintController,
+            decoration: InputDecoration(
+              labelText: l10n.netplayQuicFingerprintLabel,
+              hintText: l10n.netplayQuicFingerprintHint,
+              prefixIcon: const Icon(Icons.key_rounded),
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                onPressed: _pastePinnedFingerprint,
+                tooltip: l10n.paste,
+                icon: const Icon(Icons.content_paste_rounded),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.netplayQuicFingerprintHelper,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
         const SizedBox(height: 16),
         TextField(
           controller: _playerNameController,
@@ -439,6 +610,15 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
               l10n.netplayClientId,
               status.clientId.toString(),
               icon: Icons.fingerprint_rounded,
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(),
+            ),
+            _buildInfoRow(
+              l10n.netplayTransportLabel,
+              _transportName(l10n, status.transport),
+              icon: Icons.swap_horiz_rounded,
             ),
           ],
         ),

@@ -38,12 +38,20 @@ class ServerStatus {
   final int port;
   final int clientCount;
   final String bindAddress;
+  final bool quicEnabled;
+  final String quicBindAddress;
+
+  /// Leaf certificate SHA-256 fingerprint (base64url, no padding), for pinned QUIC client connections.
+  final String quicCertSha256Fingerprint;
 
   const ServerStatus({
     required this.running,
     required this.port,
     required this.clientCount,
     required this.bindAddress,
+    required this.quicEnabled,
+    required this.quicBindAddress,
+    required this.quicCertSha256Fingerprint,
   });
 
   @override
@@ -51,7 +59,10 @@ class ServerStatus {
       running.hashCode ^
       port.hashCode ^
       clientCount.hashCode ^
-      bindAddress.hashCode;
+      bindAddress.hashCode ^
+      quicEnabled.hashCode ^
+      quicBindAddress.hashCode ^
+      quicCertSha256Fingerprint.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -61,5 +72,8 @@ class ServerStatus {
           running == other.running &&
           port == other.port &&
           clientCount == other.clientCount &&
-          bindAddress == other.bindAddress;
+          bindAddress == other.bindAddress &&
+          quicEnabled == other.quicEnabled &&
+          quicBindAddress == other.quicBindAddress &&
+          quicCertSha256Fingerprint == other.quicCertSha256Fingerprint;
 }

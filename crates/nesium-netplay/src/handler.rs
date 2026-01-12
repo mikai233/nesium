@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use nesium_netproto::{
+    channel::ChannelKind,
     constants::SPECTATOR_PLAYER_INDEX,
     header::Header,
     messages::{
@@ -37,8 +38,8 @@ use crate::{
 pub struct NetplayConfig {
     /// Player name to display.
     pub name: String,
-    /// ROM hash for validation.
-    pub rom_hash: [u8; 16],
+    /// Preferred transport used in the Hello handshake.
+    pub transport: TransportKind,
     /// Whether to join as spectator.
     pub spectator: bool,
     /// Room code to join (0 = create new room).
@@ -213,20 +214,19 @@ impl SessionHandler {
     async fn handle_connected(&mut self) -> Result<(), NetplayError> {
         self.input_provider.with_session(|session| {
             session.state = SessionState::Connecting;
+            session.transport = Some(self.config.transport);
         });
 
         // Send Hello message
         let hello = Hello {
             client_nonce: rand_nonce(),
-            transport: TransportKind::Tcp,
-            proto_min: 1,
-            proto_max: 1,
-            rom_hash: self.config.rom_hash,
+            transport: self.config.transport,
+            proto_min: nesium_netproto::constants::VERSION,
+            proto_max: nesium_netproto::constants::VERSION,
             name: self.config.name.clone(),
         };
 
-        let mut header = Header::new(MsgId::Hello as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
+        let header = Header::new(MsgId::Hello as u8);
 
         self.client
             .send_message(header, MsgId::Hello, &hello)
@@ -234,7 +234,6 @@ impl SessionHandler {
 
         self.input_provider.with_session(|session| {
             session.state = SessionState::Handshake;
-            session.rom_hash = self.config.rom_hash;
         });
 
         Ok(())
@@ -246,6 +245,8 @@ impl SessionHandler {
         self.input_provider.set_active(false);
         self.input_provider.with_session(|session| {
             session.state = SessionState::Disconnected;
+            session.transport = None;
+            session.tcp_fallback_from_quic = false;
         });
     }
 
@@ -286,6 +287,22 @@ impl SessionHandler {
             welcome.assigned_client_id, welcome.room_id, welcome.input_delay_frames
         );
 
+        // Best-effort: attach secondary channels to avoid HOL blocking on large transfers.
+        if let Err(e) = self
+            .client
+            .attach_channel(welcome.session_token, ChannelKind::Bulk)
+            .await
+        {
+            warn!(error = %e, "Failed to attach bulk channel; falling back to control");
+        }
+        if let Err(e) = self
+            .client
+            .attach_channel(welcome.session_token, ChannelKind::Input)
+            .await
+        {
+            warn!(error = %e, "Failed to attach input channel; falling back to control");
+        }
+
         self.input_provider.with_session(|session| {
             session.client_id = welcome.assigned_client_id;
             session.room_id = welcome.room_id;
@@ -307,9 +324,7 @@ impl SessionHandler {
     async fn send_join_room(&mut self, room_code: u32) -> Result<(), NetplayError> {
         let join = JoinRoom { room_code };
 
-        let mut header = Header::new(MsgId::JoinRoom as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
-        header.client_id = self.input_provider.with_session(|s| s.client_id);
+        let header = Header::new(MsgId::JoinRoom as u8);
 
         self.client
             .send_message(header, MsgId::JoinRoom, &join)
@@ -322,10 +337,7 @@ impl SessionHandler {
     async fn send_switch_role(&mut self, new_role: u8) -> Result<(), NetplayError> {
         let req = nesium_netproto::messages::session::SwitchRole { new_role };
 
-        let mut header = Header::new(MsgId::SwitchRole as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
-        header.client_id = self.input_provider.with_session(|s| s.client_id);
-        header.room_id = self.input_provider.with_session(|s| s.room_id);
+        let header = Header::new(MsgId::SwitchRole as u8);
 
         self.client
             .send_message(header, MsgId::SwitchRole, &req)
@@ -581,13 +593,7 @@ impl SessionHandler {
 
         if should_send {
             if let Some(batch) = batch {
-                let mut header = Header::new(MsgId::InputBatch as u8);
-                header.seq = self.input_provider.with_session(|s| s.next_seq());
-                header.client_id = self.input_provider.with_session(|s| s.client_id);
-                header.room_id = self.input_provider.with_session(|s| s.room_id);
-
-                // Use UDP if enabled, else TCP
-                // TODO: Implement UDP support. For now always TCP.
+                let header = Header::new(MsgId::InputBatch as u8);
                 self.client
                     .send_message(header, MsgId::InputBatch, &batch)
                     .await?;
@@ -602,9 +608,7 @@ impl SessionHandler {
             t_ms: current_time_ms(),
         };
 
-        let mut header = Header::new(MsgId::Ping as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
-        header.client_id = self.input_provider.with_session(|s| s.client_id);
+        let header = Header::new(MsgId::Ping as u8);
 
         self.client.send_message(header, MsgId::Ping, &ping).await?;
 
@@ -704,10 +708,7 @@ impl SessionHandler {
     async fn send_load_rom(&mut self, data: Vec<u8>) -> Result<(), NetplayError> {
         let req = LoadRom { data };
 
-        let mut header = Header::new(MsgId::LoadRom as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
-        header.client_id = self.input_provider.with_session(|s| s.client_id);
-        header.room_id = self.input_provider.with_session(|s| s.room_id);
+        let header = Header::new(MsgId::LoadRom as u8);
 
         self.client
             .send_message(header, MsgId::LoadRom, &req)
@@ -720,10 +721,7 @@ impl SessionHandler {
     async fn send_rom_loaded(&mut self) -> Result<(), NetplayError> {
         let req = RomLoaded {};
 
-        let mut header = Header::new(MsgId::RomLoaded as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
-        header.client_id = self.input_provider.with_session(|s| s.client_id);
-        header.room_id = self.input_provider.with_session(|s| s.room_id);
+        let header = Header::new(MsgId::RomLoaded as u8);
 
         self.client
             .send_message(header, MsgId::RomLoaded, &req)
@@ -806,10 +804,7 @@ impl SessionHandler {
     async fn send_pause_game(&mut self, paused: bool) -> Result<(), NetplayError> {
         let req = PauseGame { paused };
 
-        let mut header = Header::new(MsgId::PauseGame as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
-        header.client_id = self.input_provider.with_session(|s| s.client_id);
-        header.room_id = self.input_provider.with_session(|s| s.room_id);
+        let header = Header::new(MsgId::PauseGame as u8);
 
         self.client
             .send_message(header, MsgId::PauseGame, &req)
@@ -821,10 +816,7 @@ impl SessionHandler {
     async fn send_reset_game(&mut self, kind: u8) -> Result<(), NetplayError> {
         let req = ResetGame { kind };
 
-        let mut header = Header::new(MsgId::ResetGame as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
-        header.client_id = self.input_provider.with_session(|s| s.client_id);
-        header.room_id = self.input_provider.with_session(|s| s.room_id);
+        let header = Header::new(MsgId::ResetGame as u8);
 
         self.client
             .send_message(header, MsgId::ResetGame, &req)
@@ -836,10 +828,7 @@ impl SessionHandler {
     async fn send_request_state(&mut self) -> Result<(), NetplayError> {
         let req = RequestState {};
 
-        let mut header = Header::new(MsgId::RequestState as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
-        header.client_id = self.input_provider.with_session(|s| s.client_id);
-        header.room_id = self.input_provider.with_session(|s| s.room_id);
+        let header = Header::new(MsgId::RequestState as u8);
 
         self.client
             .send_message(header, MsgId::RequestState, &req)
@@ -850,10 +839,7 @@ impl SessionHandler {
     /// Send ProvideState (provide state to server for caching).
     async fn send_provide_state(&mut self, frame: u32, data: Vec<u8>) -> Result<(), NetplayError> {
         let msg = ProvideState { frame, data };
-        let mut header = Header::new(MsgId::ProvideState as u8);
-        header.seq = self.input_provider.with_session(|s| s.next_seq());
-        header.client_id = self.input_provider.with_session(|s| s.client_id);
-        header.room_id = self.input_provider.with_session(|s| s.room_id);
+        let header = Header::new(MsgId::ProvideState as u8);
 
         self.client
             .send_message(header, MsgId::ProvideState, &msg)

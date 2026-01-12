@@ -9,6 +9,7 @@ pub enum MsgId {
     JoinAck = 4,
     Leave = 5,
     Error = 6,
+    AttachChannel = 7,
 
     SwitchRole = 10,
     RoleChanged = 11,

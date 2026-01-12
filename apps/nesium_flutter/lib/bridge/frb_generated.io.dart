@@ -166,6 +166,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NetplayStatus dco_decode_netplay_status(dynamic raw);
 
   @protected
+  NetplayTransport dco_decode_netplay_transport(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -390,6 +393,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   NetplayStatus sse_decode_netplay_status(SseDeserializer deserializer);
+
+  @protected
+  NetplayTransport sse_decode_netplay_transport(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -664,6 +670,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_netplay_status(NetplayStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_netplay_transport(
+    NetplayTransport self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);

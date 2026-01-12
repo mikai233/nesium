@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+use crate::channel::ChannelKind;
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportKind {
     Tcp,
-    Udp,
-    Kcp,
+    Quic,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -13,19 +14,30 @@ pub struct Hello {
     pub transport: TransportKind,
     pub proto_min: u8,
     pub proto_max: u8,
-    pub rom_hash: [u8; 16],
     pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Welcome {
     pub server_nonce: u32,
+    /// Token used to attach additional channels (e.g., input/bulk) for the same session.
+    pub session_token: u64,
     pub assigned_client_id: u32,
     pub room_id: u32,
     pub tick_hz: u16,
     pub input_delay_frames: u8,
     pub max_payload: u16,
     pub rewind_capacity: u32,
+}
+
+/// Attach a secondary channel connection to an existing session.
+///
+/// For TCP fallback, clients may open multiple TCP connections and send this message
+/// on the new connection as the first packet.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AttachChannel {
+    pub session_token: u64,
+    pub channel: ChannelKind,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

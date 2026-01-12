@@ -65,6 +65,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String serverQuicFingerprint(String fingerprint) {
+    return 'QUIC fingerprint: $fingerprint';
+  }
+
+  @override
   String get generalTitle => 'General';
 
   @override
@@ -520,6 +525,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuNetplay => 'Netplay';
 
   @override
+  String get netplayTransportLabel => 'Transport';
+
+  @override
+  String get netplayTransportAuto => 'Auto (QUIC → TCP)';
+
+  @override
+  String get netplayTransportUnknown => 'Unknown';
+
+  @override
+  String get netplayTransportTcp => 'TCP';
+
+  @override
+  String get netplayTransportQuic => 'QUIC';
+
+  @override
+  String get netplayUsingTcpFallback => 'QUIC failed, using TCP';
+
+  @override
   String get netplayStatusDisconnected => 'Disconnected';
 
   @override
@@ -538,7 +561,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get netplayServerAddress => 'Server Address';
 
   @override
+  String get netplayServerNameLabel => 'Server name (SNI)';
+
+  @override
+  String get netplayServerNameHint => 'localhost';
+
+  @override
   String get netplayPlayerName => 'Player Name';
+
+  @override
+  String get netplayQuicFingerprintLabel => 'QUIC cert fingerprint (optional)';
+
+  @override
+  String get netplayQuicFingerprintHint => 'base64url (43 chars)';
+
+  @override
+  String get netplayQuicFingerprintHelper =>
+      'Enter this to use pinned QUIC. Leave empty to use system trust (QUIC) or fallback to TCP.';
 
   @override
   String get netplayConnect => 'Connect';
@@ -671,6 +710,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lastErrorCopied => 'Copied';
+
+  @override
+  String get copy => 'Copy';
+
+  @override
+  String get paste => 'Paste';
 
   @override
   String get windowDebuggerTitle => 'Nesium Debugger';

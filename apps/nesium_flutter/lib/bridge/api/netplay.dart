@@ -10,7 +10,7 @@ part 'netplay.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `lock_unpoison`, `notify_status`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `NetplayManager`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `get_manager`
 
 /// Connect to netplay server and perform handshake.
@@ -19,6 +19,54 @@ Future<void> netplayConnect({
   required String playerName,
 }) => RustLib.instance.api.crateApiNetplayNetplayConnect(
   serverAddr: serverAddr,
+  playerName: playerName,
+);
+
+/// Connect to netplay server and perform handshake (QUIC preferred, TCP fallback).
+Future<void> netplayConnectAuto({
+  required String serverAddr,
+  required String serverName,
+  required String playerName,
+}) => RustLib.instance.api.crateApiNetplayNetplayConnectAuto(
+  serverAddr: serverAddr,
+  serverName: serverName,
+  playerName: playerName,
+);
+
+/// Connect to netplay server and perform handshake (QUIC pinned SHA-256 fingerprint preferred, TCP fallback).
+Future<void> netplayConnectAutoPinned({
+  required String serverAddr,
+  required String serverName,
+  required String pinnedSha256Fingerprint,
+  required String playerName,
+}) => RustLib.instance.api.crateApiNetplayNetplayConnectAutoPinned(
+  serverAddr: serverAddr,
+  serverName: serverName,
+  pinnedSha256Fingerprint: pinnedSha256Fingerprint,
+  playerName: playerName,
+);
+
+/// Connect to netplay server over QUIC and perform handshake.
+Future<void> netplayConnectQuic({
+  required String serverAddr,
+  required String serverName,
+  required String playerName,
+}) => RustLib.instance.api.crateApiNetplayNetplayConnectQuic(
+  serverAddr: serverAddr,
+  serverName: serverName,
+  playerName: playerName,
+);
+
+/// Connect to netplay server over QUIC (pinned SHA-256 fingerprint) and perform handshake.
+Future<void> netplayConnectQuicPinned({
+  required String serverAddr,
+  required String serverName,
+  required String pinnedSha256Fingerprint,
+  required String playerName,
+}) => RustLib.instance.api.crateApiNetplayNetplayConnectQuicPinned(
+  serverAddr: serverAddr,
+  serverName: serverName,
+  pinnedSha256Fingerprint: pinnedSha256Fingerprint,
   playerName: playerName,
 );
 
@@ -131,6 +179,10 @@ enum NetplayState { disconnected, connecting, connected, inRoom }
 /// Netplay status snapshot streamed to Flutter.
 class NetplayStatus {
   final NetplayState state;
+  final NetplayTransport transport;
+
+  /// True if QUIC connection failed and we fell back to TCP (only for Auto connect modes).
+  final bool tcpFallbackFromQuic;
   final int clientId;
   final int roomId;
 
@@ -141,6 +193,8 @@ class NetplayStatus {
 
   const NetplayStatus({
     required this.state,
+    required this.transport,
+    required this.tcpFallbackFromQuic,
     required this.clientId,
     required this.roomId,
     required this.playerIndex,
@@ -151,6 +205,8 @@ class NetplayStatus {
   @override
   int get hashCode =>
       state.hashCode ^
+      transport.hashCode ^
+      tcpFallbackFromQuic.hashCode ^
       clientId.hashCode ^
       roomId.hashCode ^
       playerIndex.hashCode ^
@@ -163,9 +219,14 @@ class NetplayStatus {
       other is NetplayStatus &&
           runtimeType == other.runtimeType &&
           state == other.state &&
+          transport == other.transport &&
+          tcpFallbackFromQuic == other.tcpFallbackFromQuic &&
           clientId == other.clientId &&
           roomId == other.roomId &&
           playerIndex == other.playerIndex &&
           players == other.players &&
           error == other.error;
 }
+
+/// Actual transport used by the current netplay session.
+enum NetplayTransport { unknown, tcp, quic }

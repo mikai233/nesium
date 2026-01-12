@@ -40,10 +40,7 @@ pub(crate) async fn handle(
     );
 
     let sync_msg = PauseSync { paused: msg.paused };
-    let mut h = Header::new(MsgId::PauseSync as u8);
-    h.client_id = ctx.assigned_client_id;
-    h.room_id = room_id;
-    h.seq = 0;
+    let h = Header::new(MsgId::PauseSync as u8);
 
     for recipient in &recipients {
         if let Err(e) = send_msg_tcp(recipient, h, MsgId::PauseSync, &sync_msg).await {

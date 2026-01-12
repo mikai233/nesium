@@ -27,12 +27,13 @@ pub(crate) async fn handle(ctx: &mut ConnCtx, room_mgr: &mut RoomManager) -> Han
             frame,
             data: state_data,
         };
-        let mut h = Header::new(MsgId::SyncState as u8);
-        h.client_id = 0; // System message
-        h.room_id = room_id;
-        h.seq = 0;
+        let h = Header::new(MsgId::SyncState as u8);
 
-        if let Err(e) = send_msg_tcp(&ctx.outbound, h, MsgId::SyncState, &sync_msg).await {
+        let tx = room
+            .outbound_for_client_msg(ctx.assigned_client_id, MsgId::SyncState)
+            .unwrap_or_else(|| ctx.outbound.clone());
+
+        if let Err(e) = send_msg_tcp(&tx, h, MsgId::SyncState, &sync_msg).await {
             warn!(error = %e, "Failed to send SyncState");
         }
     } else {

@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use nesium_netproto::messages::input::InputBatch;
+use nesium_netproto::msg_id::MsgId;
 use tracing::warn;
 
 use crate::ConnCtx;
@@ -44,17 +45,22 @@ pub(crate) async fn handle(
     room.record_inputs(player_index, batch.start_frame, &batch.buttons);
 
     // Players are required recipients for lockstep; spectators are best-effort.
-    let player_recipients: Vec<_> = room.players.values().map(|p| p.outbound.clone()).collect();
-    let spectator_recipients: Vec<_> = room.spectators.iter().map(|s| s.outbound.clone()).collect();
+    let player_recipients: Vec<_> = room
+        .players
+        .values()
+        .map(|p| p.outbounds.outbound_for_msg(MsgId::RelayInputs))
+        .collect();
+    let spectator_recipients: Vec<_> = room
+        .spectators
+        .iter()
+        .map(|s| s.outbounds.outbound_for_msg(MsgId::RelayInputs))
+        .collect();
 
-    let mut server_seq = ctx.server_seq;
     broadcast_inputs_required(
         &player_recipients,
         player_index,
         batch.start_frame,
         &batch.buttons,
-        room_id,
-        &mut server_seq,
     )
     .await;
     broadcast_inputs_best_effort(
@@ -62,9 +68,6 @@ pub(crate) async fn handle(
         player_index,
         batch.start_frame,
         &batch.buttons,
-        room_id,
-        &mut server_seq,
     );
-    ctx.server_seq = server_seq;
     Ok(())
 }

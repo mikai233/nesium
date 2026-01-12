@@ -17,6 +17,8 @@ final netplayProvider = Provider<NetplayAppState>((ref) {
       ref.watch(netplayStatusProvider).value ??
       const NetplayStatus(
         state: NetplayState.disconnected,
+        transport: NetplayTransport.unknown,
+        tcpFallbackFromQuic: false,
         clientId: 0,
         roomId: 0,
         playerIndex: 100, // spectator placeholder

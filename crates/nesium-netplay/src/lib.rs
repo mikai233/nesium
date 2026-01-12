@@ -23,4 +23,7 @@ pub use handler::{NetplayCommand, NetplayConfig, NetplayEvent, SessionHandler};
 pub use input_provider::{NetplayInputProvider, SharedInputProvider, create_input_provider};
 pub use nesium_netproto::constants::SPECTATOR_PLAYER_INDEX;
 pub use session::{NetplaySession, SessionState};
-pub use tcp_client::{TcpClientEvent, TcpClientHandle, connect};
+pub use tcp_client::{
+    TcpClientEvent, TcpClientHandle, connect, connect_auto, connect_auto_pinned, connect_quic,
+    connect_quic_pinned,
+};

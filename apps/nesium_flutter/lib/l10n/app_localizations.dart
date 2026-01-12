@@ -194,6 +194,12 @@ abstract class AppLocalizations {
   /// **'Bind address: {address}'**
   String serverBindAddress(String address);
 
+  /// No description provided for @serverQuicFingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'QUIC fingerprint: {fingerprint}'**
+  String serverQuicFingerprint(String fingerprint);
+
   /// No description provided for @generalTitle.
   ///
   /// In en, this message translates to:
@@ -1028,6 +1034,42 @@ abstract class AppLocalizations {
   /// **'Netplay'**
   String get menuNetplay;
 
+  /// No description provided for @netplayTransportLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get netplayTransportLabel;
+
+  /// No description provided for @netplayTransportAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto (QUIC → TCP)'**
+  String get netplayTransportAuto;
+
+  /// No description provided for @netplayTransportUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get netplayTransportUnknown;
+
+  /// No description provided for @netplayTransportTcp.
+  ///
+  /// In en, this message translates to:
+  /// **'TCP'**
+  String get netplayTransportTcp;
+
+  /// No description provided for @netplayTransportQuic.
+  ///
+  /// In en, this message translates to:
+  /// **'QUIC'**
+  String get netplayTransportQuic;
+
+  /// No description provided for @netplayUsingTcpFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'QUIC failed, using TCP'**
+  String get netplayUsingTcpFallback;
+
   /// No description provided for @netplayStatusDisconnected.
   ///
   /// In en, this message translates to:
@@ -1064,11 +1106,41 @@ abstract class AppLocalizations {
   /// **'Server Address'**
   String get netplayServerAddress;
 
+  /// No description provided for @netplayServerNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Server name (SNI)'**
+  String get netplayServerNameLabel;
+
+  /// No description provided for @netplayServerNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'localhost'**
+  String get netplayServerNameHint;
+
   /// No description provided for @netplayPlayerName.
   ///
   /// In en, this message translates to:
   /// **'Player Name'**
   String get netplayPlayerName;
+
+  /// No description provided for @netplayQuicFingerprintLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'QUIC cert fingerprint (optional)'**
+  String get netplayQuicFingerprintLabel;
+
+  /// No description provided for @netplayQuicFingerprintHint.
+  ///
+  /// In en, this message translates to:
+  /// **'base64url (43 chars)'**
+  String get netplayQuicFingerprintHint;
+
+  /// No description provided for @netplayQuicFingerprintHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter this to use pinned QUIC. Leave empty to use system trust (QUIC) or fallback to TCP.'**
+  String get netplayQuicFingerprintHelper;
 
   /// No description provided for @netplayConnect.
   ///
@@ -1297,6 +1369,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copied'**
   String get lastErrorCopied;
+
+  /// No description provided for @copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get copy;
+
+  /// No description provided for @paste.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get paste;
 
   /// No description provided for @windowDebuggerTitle.
   ///

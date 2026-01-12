@@ -7,10 +7,59 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::net::inbound::ConnId;
 use crate::net::outbound::OutboundTx;
-use nesium_netproto::constants::SPECTATOR_PLAYER_INDEX;
+use nesium_netproto::{
+    channel::{ChannelKind, channel_for_msg},
+    constants::SPECTATOR_PLAYER_INDEX,
+    msg_id::MsgId,
+};
 
 /// Maximum number of players per room.
 pub const MAX_PLAYERS: usize = 4;
+
+#[derive(Debug, Clone)]
+pub struct ClientOutbounds {
+    pub control: OutboundTx,
+    pub input: Option<OutboundTx>,
+    pub bulk: Option<OutboundTx>,
+}
+
+impl ClientOutbounds {
+    pub fn new(control: OutboundTx) -> Self {
+        Self {
+            control,
+            input: None,
+            bulk: None,
+        }
+    }
+
+    pub fn outbound_for_channel(&self, channel: ChannelKind) -> OutboundTx {
+        match channel {
+            ChannelKind::Control => self.control.clone(),
+            ChannelKind::Input => self.input.clone().unwrap_or_else(|| self.control.clone()),
+            ChannelKind::Bulk => self.bulk.clone().unwrap_or_else(|| self.control.clone()),
+        }
+    }
+
+    pub fn outbound_for_msg(&self, msg_id: MsgId) -> OutboundTx {
+        self.outbound_for_channel(channel_for_msg(msg_id))
+    }
+
+    pub fn set_channel(&mut self, channel: ChannelKind, outbound: OutboundTx) {
+        match channel {
+            ChannelKind::Control => self.control = outbound,
+            ChannelKind::Input => self.input = Some(outbound),
+            ChannelKind::Bulk => self.bulk = Some(outbound),
+        }
+    }
+
+    pub fn clear_channel(&mut self, channel: ChannelKind) {
+        match channel {
+            ChannelKind::Control => {}
+            ChannelKind::Input => self.input = None,
+            ChannelKind::Bulk => self.bulk = None,
+        }
+    }
+}
 
 /// Player assignment in a room.
 #[derive(Debug, Clone)]
@@ -19,7 +68,7 @@ pub struct Player {
     pub client_id: u32,
     pub player_index: u8,
     pub name: String,
-    pub outbound: OutboundTx,
+    pub outbounds: ClientOutbounds,
 }
 
 /// Spectator in a room.
@@ -28,7 +77,7 @@ pub struct Spectator {
     pub conn_id: ConnId,
     pub client_id: u32,
     pub name: String,
-    pub outbound: OutboundTx,
+    pub outbounds: ClientOutbounds,
 }
 
 /// Room state.
@@ -38,8 +87,6 @@ pub struct Room {
     pub id: u32,
     /// Room code for joining.
     pub code: u32,
-    /// ROM hash for validation.
-    pub rom_hash: [u8; 16],
     /// Host client ID (first player to join).
     pub host_client_id: u32,
     /// Players in the room (player_index -> Player).
@@ -68,11 +115,10 @@ pub struct Room {
 
 impl Room {
     /// Create a new room.
-    pub fn new(id: u32, code: u32, rom_hash: [u8; 16], host_client_id: u32) -> Self {
+    pub fn new(id: u32, code: u32, host_client_id: u32) -> Self {
         Self {
             id,
             code,
-            rom_hash,
             host_client_id,
             players: HashMap::new(),
             spectators: Vec::new(),
@@ -201,14 +247,55 @@ impl Room {
         self.rom_data = Some(data);
     }
 
-    pub fn outbound_for_client(&self, client_id: u32) -> Option<OutboundTx> {
+    pub fn outbound_for_client_channel(
+        &self,
+        client_id: u32,
+        channel: ChannelKind,
+    ) -> Option<OutboundTx> {
         if let Some(p) = self.players.values().find(|p| p.client_id == client_id) {
-            return Some(p.outbound.clone());
+            return Some(p.outbounds.outbound_for_channel(channel));
         }
         self.spectators
             .iter()
             .find(|s| s.client_id == client_id)
-            .map(|s| s.outbound.clone())
+            .map(|s| s.outbounds.outbound_for_channel(channel))
+    }
+
+    pub fn outbound_for_client_msg(&self, client_id: u32, msg_id: MsgId) -> Option<OutboundTx> {
+        self.outbound_for_client_channel(client_id, channel_for_msg(msg_id))
+    }
+
+    pub fn set_client_channel_outbound(
+        &mut self,
+        client_id: u32,
+        channel: ChannelKind,
+        outbound: OutboundTx,
+    ) {
+        if let Some(p) = self.players.values_mut().find(|p| p.client_id == client_id) {
+            p.outbounds.set_channel(channel, outbound);
+            return;
+        }
+        if let Some(s) = self
+            .spectators
+            .iter_mut()
+            .find(|s| s.client_id == client_id)
+        {
+            s.outbounds.set_channel(channel, outbound);
+        }
+    }
+
+    pub fn clear_client_channel_outbound(&mut self, client_id: u32, channel: ChannelKind) {
+        if let Some(p) = self.players.values_mut().find(|p| p.client_id == client_id) {
+            p.outbounds.clear_channel(channel);
+            return;
+        }
+        if let Some(s) = self
+            .spectators
+            .iter_mut()
+            .find(|s| s.client_id == client_id)
+        {
+            s.outbounds.clear_channel(channel);
+        }
     }
 
     pub fn record_inputs(&mut self, player_index: u8, start_frame: u32, buttons: &[u16]) {
@@ -248,10 +335,18 @@ impl Room {
         }
     }
 
-    /// Get all outbound channels for broadcast.
-    pub fn all_outbounds(&self) -> Vec<OutboundTx> {
-        let mut result: Vec<_> = self.players.values().map(|p| p.outbound.clone()).collect();
-        result.extend(self.spectators.iter().map(|s| s.outbound.clone()));
+    /// Get all outbound channels for broadcast (routed by message type).
+    pub fn all_outbounds_msg(&self, msg_id: MsgId) -> Vec<OutboundTx> {
+        let mut result: Vec<_> = self
+            .players
+            .values()
+            .map(|p| p.outbounds.outbound_for_msg(msg_id))
+            .collect();
+        result.extend(
+            self.spectators
+                .iter()
+                .map(|s| s.outbounds.outbound_for_msg(msg_id)),
+        );
         result
     }
 
@@ -297,7 +392,7 @@ impl Room {
                         conn_id: p.conn_id,
                         client_id: p.client_id,
                         name: p.name,
-                        outbound: p.outbound,
+                        outbounds: p.outbounds,
                     });
                     return Ok(vec![(client_id, SPECTATOR_PLAYER_INDEX)]);
                 }
@@ -322,7 +417,7 @@ impl Room {
                         client_id: s.client_id,
                         player_index: 0,
                         name: s.name,
-                        outbound: s.outbound,
+                        outbounds: s.outbounds,
                     }
                 };
 
@@ -353,7 +448,7 @@ impl Room {
                         conn_id: occupant.conn_id,
                         client_id: occupant.client_id,
                         name: occupant.name,
-                        outbound: occupant.outbound,
+                        outbounds: occupant.outbounds,
                     });
                     SPECTATOR_PLAYER_INDEX
                 };
@@ -378,7 +473,7 @@ impl Room {
                         client_id: s.client_id,
                         player_index: 0,
                         name: s.name,
-                        outbound: s.outbound,
+                        outbounds: s.outbounds,
                     }
                 };
 
@@ -415,12 +510,12 @@ impl Room {
         let mut recipients = Vec::new();
         for p in self.players.values() {
             if p.client_id != sender_id {
-                recipients.push(p.outbound.clone());
+                recipients.push(p.outbounds.outbound_for_msg(MsgId::LoadRom));
             }
         }
         for s in &self.spectators {
             if s.client_id != sender_id {
-                recipients.push(s.outbound.clone());
+                recipients.push(s.outbounds.outbound_for_msg(MsgId::LoadRom));
             }
         }
 
@@ -446,7 +541,7 @@ impl Room {
         if all_loaded && !self.players.is_empty() {
             self.started = true;
             // Broadcast StartGame to everyone
-            self.all_outbounds()
+            self.all_outbounds_msg(MsgId::StartGame)
         } else {
             Vec::new()
         }
@@ -463,7 +558,7 @@ impl Room {
         }
 
         self.paused = paused;
-        self.all_outbounds()
+        self.all_outbounds_msg(MsgId::PauseSync)
     }
 
     /// Handle ResetGame from a client.
@@ -490,7 +585,7 @@ impl Room {
             "Cleared cached state and input buffers on reset"
         );
 
-        self.all_outbounds()
+        self.all_outbounds_msg(MsgId::ResetSync)
     }
 }
 
@@ -513,11 +608,11 @@ impl RoomManager {
     }
 
     /// Create a new room.
-    pub fn create_room(&mut self, rom_hash: [u8; 16], host_client_id: u32) -> u32 {
+    pub fn create_room(&mut self, host_client_id: u32) -> u32 {
         let id = self.next_room_id;
         self.next_room_id += 1;
         let code = id; // Simple: room code = room id for now
-        let room = Room::new(id, code, rom_hash, host_client_id);
+        let room = Room::new(id, code, host_client_id);
         self.rooms.insert(id, room);
         id
     }

@@ -46,16 +46,13 @@ pub(crate) async fn handle(
 
     match room.switch_player_role(ctx.assigned_client_id, msg.new_role) {
         Ok(changes) => {
-            let recipients = room.all_outbounds();
+            let recipients = room.all_outbounds_msg(MsgId::RoleChanged);
             for (cid, role) in changes {
                 let broadcast = RoleChanged {
                     client_id: cid,
                     new_role: role,
                 };
-                let mut h = Header::new(MsgId::RoleChanged as u8);
-                h.client_id = cid;
-                h.room_id = room_id;
-                h.seq = 0;
+                let h = Header::new(MsgId::RoleChanged as u8);
 
                 for recipient in &recipients {
                     if let Err(e) = send_msg_tcp(recipient, h, MsgId::RoleChanged, &broadcast).await

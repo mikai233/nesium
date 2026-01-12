@@ -65,6 +65,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String serverQuicFingerprint(String fingerprint) {
+    return 'QUIC 指纹：$fingerprint';
+  }
+
+  @override
   String get generalTitle => '通用';
 
   @override
@@ -509,6 +514,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get menuNetplay => '联机游戏';
 
   @override
+  String get netplayTransportLabel => '传输协议';
+
+  @override
+  String get netplayTransportAuto => '自动（QUIC → TCP）';
+
+  @override
+  String get netplayTransportUnknown => '未知';
+
+  @override
+  String get netplayTransportTcp => 'TCP';
+
+  @override
+  String get netplayTransportQuic => 'QUIC';
+
+  @override
+  String get netplayUsingTcpFallback => 'QUIC 连接失败，已回退到 TCP';
+
+  @override
   String get netplayStatusDisconnected => '未连接';
 
   @override
@@ -527,7 +550,23 @@ class AppLocalizationsZh extends AppLocalizations {
   String get netplayServerAddress => '服务器地址';
 
   @override
+  String get netplayServerNameLabel => '服务器名称（SNI）';
+
+  @override
+  String get netplayServerNameHint => 'localhost';
+
+  @override
   String get netplayPlayerName => '玩家名称';
+
+  @override
+  String get netplayQuicFingerprintLabel => 'QUIC 证书指纹（可选）';
+
+  @override
+  String get netplayQuicFingerprintHint => 'base64url（43 字符）';
+
+  @override
+  String get netplayQuicFingerprintHelper =>
+      '填入后启用指纹 Pinning（推荐）。留空则使用系统信任（QUIC）或回退到 TCP。';
 
   @override
   String get netplayConnect => '连接';
@@ -660,6 +699,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get lastErrorCopied => '已复制';
+
+  @override
+  String get copy => '复制';
+
+  @override
+  String get paste => '粘贴';
 
   @override
   String get windowDebuggerTitle => 'Nesium 调试器';

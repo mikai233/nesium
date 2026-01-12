@@ -3,5 +3,7 @@ pub mod inbound;
 pub mod kcp;
 pub mod limits;
 pub mod outbound;
+pub mod quic;
+pub mod quic_config;
 pub mod tcp;
 pub mod udp;

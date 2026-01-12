@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
 
@@ -6,10 +8,17 @@ use super::framing::PacketOwned;
 /// Unique connection identifier assigned by the server.
 pub type ConnId = u64;
 
+static NEXT_CONN_ID: AtomicU64 = AtomicU64::new(1);
+
+pub fn next_conn_id() -> ConnId {
+    NEXT_CONN_ID.fetch_add(1, Ordering::Relaxed)
+}
+
 /// Transport type for a connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportKind {
     Tcp,
+    Quic,
 }
 
 /// Sender used by upper layers to write bytes to this connection.
