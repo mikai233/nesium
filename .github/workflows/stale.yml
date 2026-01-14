@@ -1,0 +1,25 @@
+name: Close stale needs-info issues
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-issue-stale: 7
+          days-before-issue-close: 0
+          only-issue-labels: needs-info
+          close-issue-message: >
+            Closing due to missing information. Please reopen with the requested details.
+          # optional: lock to stop spam replies
+          # days-before-issue-lock: 0
+          # lock-issue-message: >
+          #   Locked due to inactivity after closure. Please open a new issue with full details if needed.

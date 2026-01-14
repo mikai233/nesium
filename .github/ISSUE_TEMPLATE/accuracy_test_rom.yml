@@ -1,0 +1,71 @@
+name: Accuracy / test ROM regression
+description: Report failing test ROMs or accuracy regressions.
+title: "[Accuracy] "
+labels:
+  - accuracy
+body:
+  - type: checkboxes
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I can reproduce on the latest commit from main.
+          required: false
+  - type: dropdown
+    attributes:
+      label: Test type
+      options:
+        - Automated test ROM suite
+        - Manual / interactive ROM
+        - Game regression (not a test ROM)
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Suite / ROM name
+      description: Provide the exact suite name or ROM file name.
+      placeholder: e.g. blargg_ppu_tests_2005_09_15b
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: ROM hash
+      description: SHA1 or CRC32 is enough; do not upload ROMs.
+      placeholder: e.g. SHA1 abcdef...
+    validations:
+      required: false
+  - type: dropdown
+    attributes:
+      label: Frontend
+      options:
+        - nesium-egui (apps/nesium-egui)
+        - nesium-flutter (apps/nesium_flutter)
+        - Web (Flutter Web + WASM)
+        - Core only (no UI)
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Version / commit
+      description: Output of `git rev-parse --short HEAD` (or a release tag).
+      placeholder: e.g. 1a2b3c4
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Observed result
+      description: What failed? Include screenshots or logs if available.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Mapper info, settings, or anything that helps reproduce.
+    validations:
+      required: false

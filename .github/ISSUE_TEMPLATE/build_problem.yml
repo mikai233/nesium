@@ -1,0 +1,61 @@
+name: Build / CI problem
+description: Report build failures, dependency issues, or CI problems.
+title: "[Build] "
+labels:
+  - build
+body:
+  - type: checkboxes
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I ran the build with a clean workspace.
+          required: false
+  - type: dropdown
+    attributes:
+      label: Target
+      options:
+        - Core (Rust)
+        - nesium-egui
+        - nesium-flutter
+        - Web (Flutter Web + WASM)
+        - CI
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: OS
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Toolchain versions
+      description: Rust version, Flutter version, and any other relevant tool versions.
+      placeholder: rustc 1.xx.x, Flutter x.y.z
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Command used
+      placeholder: e.g. cargo run -p nesium-egui
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Error output
+      description: Paste the full error output.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Anything else that might help reproduce the problem.
+    validations:
+      required: false

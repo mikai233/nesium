@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Project README
+    url: https://github.com/mikai233/nesium/blob/main/README.md
+    about: Read the project overview, features, and roadmap.
+  - name: Web demo
+    url: https://mikai233.github.io/nesium/
+    about: Try the emulator in the browser.

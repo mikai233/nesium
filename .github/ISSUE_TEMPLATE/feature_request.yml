@@ -1,0 +1,53 @@
+name: Feature request
+description: Suggest an idea or improvement for Nesium.
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: checkboxes
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: This is not a general support question.
+          required: true
+  - type: textarea
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+      placeholder: I want to...
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed solution
+      description: Describe the change you want to see.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you have considered?
+    validations:
+      required: false
+  - type: dropdown
+    attributes:
+      label: Scope
+      options:
+        - Core emulator (CPU/PPU/APU/mappers)
+        - Testing / ROM suites
+        - Frontend - nesium-egui
+        - Frontend - nesium-flutter
+        - Web build
+        - Build / CI / tooling
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Links, screenshots, or examples.
+    validations:
+      required: false
