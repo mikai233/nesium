@@ -101,6 +101,7 @@ class _MobileShellState extends ConsumerState<MobileShell>
       child: Scaffold(
         appBar: isLandscape ? null : AppBar(title: Text(l10n.appName)),
         drawer: _MobileDrawer(actions: widget.actions),
+        drawerEnableOpenDragGesture: !isLandscape,
         body: Stack(
           fit: StackFit.expand,
           children: [
