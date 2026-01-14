@@ -3,6 +3,7 @@
     <application
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:isGame="true"
         android:label="Nesium">
         <activity
             android:name=".MainActivity"
