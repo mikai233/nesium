@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/nes_controller.dart';
@@ -13,17 +14,65 @@ import '../features/about/about_page.dart';
 import '../features/screen/nes_screen_view.dart';
 import '../features/settings/video_settings.dart';
 import '../l10n/app_localizations.dart';
+import '../platform/platform_capabilities.dart';
 import 'nes_actions.dart';
 import 'nes_menu_model.dart';
 
-class MobileShell extends ConsumerWidget {
+class MobileShell extends ConsumerStatefulWidget {
   const MobileShell({super.key, required this.state, required this.actions});
 
   final NesState state;
   final NesActions actions;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MobileShell> createState() => _MobileShellState();
+}
+
+class _MobileShellState extends ConsumerState<MobileShell>
+    with WidgetsBindingObserver {
+  Orientation? _lastOrientation;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncFullscreen();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    _syncFullscreen();
+  }
+
+  void _syncFullscreen() {
+    if (!isNativeMobile) return;
+    final orientation = MediaQuery.orientationOf(context);
+    if (_lastOrientation == orientation) return;
+    _lastOrientation = orientation;
+
+    final mode = orientation == Orientation.landscape
+        ? SystemUiMode.immersiveSticky
+        : SystemUiMode.edgeToEdge;
+    unawaited(SystemChrome.setEnabledSystemUIMode(mode));
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (isNativeMobile) {
+      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
@@ -51,14 +100,14 @@ class MobileShell extends ConsumerWidget {
       },
       child: Scaffold(
         appBar: isLandscape ? null : AppBar(title: Text(l10n.appName)),
-        drawer: _MobileDrawer(actions: actions),
+        drawer: _MobileDrawer(actions: widget.actions),
         body: Stack(
           fit: StackFit.expand,
           children: [
             Positioned.fill(
               child: NesScreenView(
-                error: state.error,
-                textureId: state.textureId,
+                error: widget.state.error,
+                textureId: widget.state.textureId,
                 screenVerticalOffset: screenOffsetY,
               ),
             ),
