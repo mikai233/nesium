@@ -65,7 +65,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4
-  build_runner: ^2.10.4
+  build_runner: ^2.10.5
   freezed: ^3.2.3
 
 # For information on the generic Dart part of this file, see the
