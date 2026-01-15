@@ -55,7 +55,7 @@ extension NetplayGameEventPatterns on NetplayGameEvent {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( NetplayGameEvent_LoadRom value)?  loadRom,TResult Function( NetplayGameEvent_StartGame value)?  startGame,TResult Function( NetplayGameEvent_PauseSync value)?  pauseSync,TResult Function( NetplayGameEvent_ResetSync value)?  resetSync,TResult Function( NetplayGameEvent_SyncState value)?  syncState,TResult Function( NetplayGameEvent_PlayerLeft value)?  playerLeft,TResult Function( NetplayGameEvent_Error value)?  error,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( NetplayGameEvent_LoadRom value)?  loadRom,TResult Function( NetplayGameEvent_StartGame value)?  startGame,TResult Function( NetplayGameEvent_PauseSync value)?  pauseSync,TResult Function( NetplayGameEvent_ResetSync value)?  resetSync,TResult Function( NetplayGameEvent_SyncState value)?  syncState,TResult Function( NetplayGameEvent_PlayerLeft value)?  playerLeft,TResult Function( NetplayGameEvent_Error value)?  error,TResult Function( NetplayGameEvent_FallbackToRelay value)?  fallbackToRelay,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case NetplayGameEvent_LoadRom() when loadRom != null:
@@ -65,7 +65,8 @@ return pauseSync(_that);case NetplayGameEvent_ResetSync() when resetSync != null
 return resetSync(_that);case NetplayGameEvent_SyncState() when syncState != null:
 return syncState(_that);case NetplayGameEvent_PlayerLeft() when playerLeft != null:
 return playerLeft(_that);case NetplayGameEvent_Error() when error != null:
-return error(_that);case _:
+return error(_that);case NetplayGameEvent_FallbackToRelay() when fallbackToRelay != null:
+return fallbackToRelay(_that);case _:
   return orElse();
 
 }
@@ -83,7 +84,7 @@ return error(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( NetplayGameEvent_LoadRom value)  loadRom,required TResult Function( NetplayGameEvent_StartGame value)  startGame,required TResult Function( NetplayGameEvent_PauseSync value)  pauseSync,required TResult Function( NetplayGameEvent_ResetSync value)  resetSync,required TResult Function( NetplayGameEvent_SyncState value)  syncState,required TResult Function( NetplayGameEvent_PlayerLeft value)  playerLeft,required TResult Function( NetplayGameEvent_Error value)  error,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( NetplayGameEvent_LoadRom value)  loadRom,required TResult Function( NetplayGameEvent_StartGame value)  startGame,required TResult Function( NetplayGameEvent_PauseSync value)  pauseSync,required TResult Function( NetplayGameEvent_ResetSync value)  resetSync,required TResult Function( NetplayGameEvent_SyncState value)  syncState,required TResult Function( NetplayGameEvent_PlayerLeft value)  playerLeft,required TResult Function( NetplayGameEvent_Error value)  error,required TResult Function( NetplayGameEvent_FallbackToRelay value)  fallbackToRelay,}){
 final _that = this;
 switch (_that) {
 case NetplayGameEvent_LoadRom():
@@ -93,7 +94,8 @@ return pauseSync(_that);case NetplayGameEvent_ResetSync():
 return resetSync(_that);case NetplayGameEvent_SyncState():
 return syncState(_that);case NetplayGameEvent_PlayerLeft():
 return playerLeft(_that);case NetplayGameEvent_Error():
-return error(_that);}
+return error(_that);case NetplayGameEvent_FallbackToRelay():
+return fallbackToRelay(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -107,7 +109,7 @@ return error(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( NetplayGameEvent_LoadRom value)?  loadRom,TResult? Function( NetplayGameEvent_StartGame value)?  startGame,TResult? Function( NetplayGameEvent_PauseSync value)?  pauseSync,TResult? Function( NetplayGameEvent_ResetSync value)?  resetSync,TResult? Function( NetplayGameEvent_SyncState value)?  syncState,TResult? Function( NetplayGameEvent_PlayerLeft value)?  playerLeft,TResult? Function( NetplayGameEvent_Error value)?  error,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( NetplayGameEvent_LoadRom value)?  loadRom,TResult? Function( NetplayGameEvent_StartGame value)?  startGame,TResult? Function( NetplayGameEvent_PauseSync value)?  pauseSync,TResult? Function( NetplayGameEvent_ResetSync value)?  resetSync,TResult? Function( NetplayGameEvent_SyncState value)?  syncState,TResult? Function( NetplayGameEvent_PlayerLeft value)?  playerLeft,TResult? Function( NetplayGameEvent_Error value)?  error,TResult? Function( NetplayGameEvent_FallbackToRelay value)?  fallbackToRelay,}){
 final _that = this;
 switch (_that) {
 case NetplayGameEvent_LoadRom() when loadRom != null:
@@ -117,7 +119,8 @@ return pauseSync(_that);case NetplayGameEvent_ResetSync() when resetSync != null
 return resetSync(_that);case NetplayGameEvent_SyncState() when syncState != null:
 return syncState(_that);case NetplayGameEvent_PlayerLeft() when playerLeft != null:
 return playerLeft(_that);case NetplayGameEvent_Error() when error != null:
-return error(_that);case _:
+return error(_that);case NetplayGameEvent_FallbackToRelay() when fallbackToRelay != null:
+return fallbackToRelay(_that);case _:
   return null;
 
 }
@@ -134,7 +137,7 @@ return error(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Uint8List data)?  loadRom,TResult Function()?  startGame,TResult Function( bool paused)?  pauseSync,TResult Function( int kind)?  resetSync,TResult Function( int frame,  Uint8List data)?  syncState,TResult Function( int playerIndex)?  playerLeft,TResult Function( int errorCode)?  error,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Uint8List data)?  loadRom,TResult Function()?  startGame,TResult Function( bool paused)?  pauseSync,TResult Function( int kind)?  resetSync,TResult Function( int frame,  Uint8List data)?  syncState,TResult Function( int playerIndex)?  playerLeft,TResult Function( int errorCode)?  error,TResult Function( String relayAddr,  int relayRoomCode,  String reason)?  fallbackToRelay,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case NetplayGameEvent_LoadRom() when loadRom != null:
 return loadRom(_that.data);case NetplayGameEvent_StartGame() when startGame != null:
@@ -143,7 +146,8 @@ return pauseSync(_that.paused);case NetplayGameEvent_ResetSync() when resetSync 
 return resetSync(_that.kind);case NetplayGameEvent_SyncState() when syncState != null:
 return syncState(_that.frame,_that.data);case NetplayGameEvent_PlayerLeft() when playerLeft != null:
 return playerLeft(_that.playerIndex);case NetplayGameEvent_Error() when error != null:
-return error(_that.errorCode);case _:
+return error(_that.errorCode);case NetplayGameEvent_FallbackToRelay() when fallbackToRelay != null:
+return fallbackToRelay(_that.relayAddr,_that.relayRoomCode,_that.reason);case _:
   return orElse();
 
 }
@@ -161,7 +165,7 @@ return error(_that.errorCode);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Uint8List data)  loadRom,required TResult Function()  startGame,required TResult Function( bool paused)  pauseSync,required TResult Function( int kind)  resetSync,required TResult Function( int frame,  Uint8List data)  syncState,required TResult Function( int playerIndex)  playerLeft,required TResult Function( int errorCode)  error,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Uint8List data)  loadRom,required TResult Function()  startGame,required TResult Function( bool paused)  pauseSync,required TResult Function( int kind)  resetSync,required TResult Function( int frame,  Uint8List data)  syncState,required TResult Function( int playerIndex)  playerLeft,required TResult Function( int errorCode)  error,required TResult Function( String relayAddr,  int relayRoomCode,  String reason)  fallbackToRelay,}) {final _that = this;
 switch (_that) {
 case NetplayGameEvent_LoadRom():
 return loadRom(_that.data);case NetplayGameEvent_StartGame():
@@ -170,7 +174,8 @@ return pauseSync(_that.paused);case NetplayGameEvent_ResetSync():
 return resetSync(_that.kind);case NetplayGameEvent_SyncState():
 return syncState(_that.frame,_that.data);case NetplayGameEvent_PlayerLeft():
 return playerLeft(_that.playerIndex);case NetplayGameEvent_Error():
-return error(_that.errorCode);}
+return error(_that.errorCode);case NetplayGameEvent_FallbackToRelay():
+return fallbackToRelay(_that.relayAddr,_that.relayRoomCode,_that.reason);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -184,7 +189,7 @@ return error(_that.errorCode);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Uint8List data)?  loadRom,TResult? Function()?  startGame,TResult? Function( bool paused)?  pauseSync,TResult? Function( int kind)?  resetSync,TResult? Function( int frame,  Uint8List data)?  syncState,TResult? Function( int playerIndex)?  playerLeft,TResult? Function( int errorCode)?  error,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Uint8List data)?  loadRom,TResult? Function()?  startGame,TResult? Function( bool paused)?  pauseSync,TResult? Function( int kind)?  resetSync,TResult? Function( int frame,  Uint8List data)?  syncState,TResult? Function( int playerIndex)?  playerLeft,TResult? Function( int errorCode)?  error,TResult? Function( String relayAddr,  int relayRoomCode,  String reason)?  fallbackToRelay,}) {final _that = this;
 switch (_that) {
 case NetplayGameEvent_LoadRom() when loadRom != null:
 return loadRom(_that.data);case NetplayGameEvent_StartGame() when startGame != null:
@@ -193,7 +198,8 @@ return pauseSync(_that.paused);case NetplayGameEvent_ResetSync() when resetSync 
 return resetSync(_that.kind);case NetplayGameEvent_SyncState() when syncState != null:
 return syncState(_that.frame,_that.data);case NetplayGameEvent_PlayerLeft() when playerLeft != null:
 return playerLeft(_that.playerIndex);case NetplayGameEvent_Error() when error != null:
-return error(_that.errorCode);case _:
+return error(_that.errorCode);case NetplayGameEvent_FallbackToRelay() when fallbackToRelay != null:
+return fallbackToRelay(_that.relayAddr,_that.relayRoomCode,_that.reason);case _:
   return null;
 
 }
@@ -625,6 +631,76 @@ class _$NetplayGameEvent_ErrorCopyWithImpl<$Res>
   return _then(NetplayGameEvent_Error(
 errorCode: null == errorCode ? _self.errorCode : errorCode // ignore: cast_nullable_to_non_nullable
 as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class NetplayGameEvent_FallbackToRelay extends NetplayGameEvent {
+  const NetplayGameEvent_FallbackToRelay({required this.relayAddr, required this.relayRoomCode, required this.reason}): super._();
+  
+
+ final  String relayAddr;
+ final  int relayRoomCode;
+ final  String reason;
+
+/// Create a copy of NetplayGameEvent
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$NetplayGameEvent_FallbackToRelayCopyWith<NetplayGameEvent_FallbackToRelay> get copyWith => _$NetplayGameEvent_FallbackToRelayCopyWithImpl<NetplayGameEvent_FallbackToRelay>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_FallbackToRelay&&(identical(other.relayAddr, relayAddr) || other.relayAddr == relayAddr)&&(identical(other.relayRoomCode, relayRoomCode) || other.relayRoomCode == relayRoomCode)&&(identical(other.reason, reason) || other.reason == reason));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,relayAddr,relayRoomCode,reason);
+
+@override
+String toString() {
+  return 'NetplayGameEvent.fallbackToRelay(relayAddr: $relayAddr, relayRoomCode: $relayRoomCode, reason: $reason)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $NetplayGameEvent_FallbackToRelayCopyWith<$Res> implements $NetplayGameEventCopyWith<$Res> {
+  factory $NetplayGameEvent_FallbackToRelayCopyWith(NetplayGameEvent_FallbackToRelay value, $Res Function(NetplayGameEvent_FallbackToRelay) _then) = _$NetplayGameEvent_FallbackToRelayCopyWithImpl;
+@useResult
+$Res call({
+ String relayAddr, int relayRoomCode, String reason
+});
+
+
+
+
+}
+/// @nodoc
+class _$NetplayGameEvent_FallbackToRelayCopyWithImpl<$Res>
+    implements $NetplayGameEvent_FallbackToRelayCopyWith<$Res> {
+  _$NetplayGameEvent_FallbackToRelayCopyWithImpl(this._self, this._then);
+
+  final NetplayGameEvent_FallbackToRelay _self;
+  final $Res Function(NetplayGameEvent_FallbackToRelay) _then;
+
+/// Create a copy of NetplayGameEvent
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? relayAddr = null,Object? relayRoomCode = null,Object? reason = null,}) {
+  return _then(NetplayGameEvent_FallbackToRelay(
+relayAddr: null == relayAddr ? _self.relayAddr : relayAddr // ignore: cast_nullable_to_non_nullable
+as String,relayRoomCode: null == relayRoomCode ? _self.relayRoomCode : relayRoomCode // ignore: cast_nullable_to_non_nullable
+as int,reason: null == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 

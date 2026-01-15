@@ -14,8 +14,12 @@ mod hello;
 mod input_batch;
 mod join_room;
 mod load_rom;
+mod p2p_create_room;
+mod p2p_join_room;
+mod p2p_request_fallback;
 mod pause_game;
 mod provide_state;
+mod request_fallback_relay;
 mod request_state;
 mod reset_game;
 mod rom_loaded;
@@ -50,6 +54,14 @@ pub(crate) async fn dispatch_packet(
         MsgId::RequestState => request_state::handle(ctx, room_mgr).await,
         MsgId::SyncState => sync_state::handle(ctx, &packet.payload, room_mgr).await,
         MsgId::ProvideState => provide_state::handle(ctx, &packet.payload, room_mgr).await,
+        MsgId::P2PCreateRoom => p2p_create_room::handle(ctx, peer, &packet.payload, room_mgr).await,
+        MsgId::P2PJoinRoom => p2p_join_room::handle(ctx, peer, &packet.payload, room_mgr).await,
+        MsgId::P2PRequestFallback => {
+            p2p_request_fallback::handle(ctx, peer, &packet.payload, room_mgr).await
+        }
+        MsgId::RequestFallbackRelay => {
+            request_fallback_relay::handle(ctx, peer, &packet.payload, room_mgr).await
+        }
         _ => {
             warn!(
                 conn_id,

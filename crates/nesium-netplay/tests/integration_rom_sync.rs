@@ -1,3 +1,5 @@
+use nesium_netd::net::quic_config;
+use nesium_netd::net::tcp::run_tcp_listener_with_listener;
 // use nesium_netd::run_server;
 use nesium_netplay::{
     NetplayCommand, NetplayConfig, NetplayEvent, SessionHandler, connect, create_input_provider,
@@ -10,21 +12,25 @@ use tokio::time::{Duration, sleep};
 
 #[tokio::test]
 async fn test_rom_sync_flow() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     // 1. Start Server
+    let app_name = "test_netplay_1";
+    let cert_dir = nesium_netd::net::quic_config::default_quic_data_dir(app_name);
+    if cert_dir.exists() {
+        let _ = std::fs::remove_dir_all(&cert_dir);
+    }
+
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
     let (event_tx, event_rx) = mpsc::channel(1024);
 
     // Pick a free port for this test instance.
-    let server_addr = {
-        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-        let local_addr = listener.local_addr().unwrap();
-        drop(listener);
-        local_addr
-    };
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let server_addr = listener.local_addr().unwrap();
 
     let tx_clone = event_tx.clone();
     tokio::spawn(async move {
-        let _ = nesium_netd::net::tcp::run_tcp_listener(server_addr, tx_clone).await;
+        let _ = nesium_netd::net::tcp::run_tcp_listener_with_listener(listener, tx_clone, app_name)
+            .await;
     });
 
     // Spawn server loop
@@ -132,20 +138,23 @@ async fn test_rom_sync_flow() {
 
 #[tokio::test]
 async fn test_late_join_receives_cached_rom_and_state() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     // 1. Start Server
+    let app_name = "test_netplay_2";
+    let cert_dir = quic_config::default_quic_data_dir(app_name);
+    if cert_dir.exists() {
+        let _ = std::fs::remove_dir_all(&cert_dir);
+    }
+
     let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
     let (event_tx, event_rx) = mpsc::channel(1024);
 
-    let server_addr = {
-        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-        let local_addr = listener.local_addr().unwrap();
-        drop(listener);
-        local_addr
-    };
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let server_addr = listener.local_addr().unwrap();
 
     let tx_clone = event_tx.clone();
     tokio::spawn(async move {
-        let _ = nesium_netd::net::tcp::run_tcp_listener(server_addr, tx_clone).await;
+        let _ = run_tcp_listener_with_listener(listener, tx_clone, app_name).await;
     });
 
     tokio::spawn(async move {

@@ -56,6 +56,12 @@ impl HandlerError {
             code: ErrorCode::InvalidState,
         }
     }
+
+    pub fn host_not_available() -> Self {
+        Self {
+            code: ErrorCode::HostNotAvailable,
+        }
+    }
 }
 
 /// Convenient Result type for handlers.

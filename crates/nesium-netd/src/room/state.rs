@@ -4,6 +4,7 @@
 //! and optional spectators.
 
 use std::collections::{HashMap, VecDeque};
+use std::net::SocketAddr;
 
 use crate::net::inbound::ConnId;
 use crate::net::outbound::OutboundTx;
@@ -15,6 +16,22 @@ use nesium_netproto::{
 
 /// Maximum number of players per room.
 pub const MAX_PLAYERS: usize = 4;
+
+/// Direct-connect information for Host-as-server P2P mode (netd as signaling).
+#[derive(Debug, Clone)]
+pub struct P2PHostInfo {
+    pub host_signal_client_id: u32,
+    pub host_addrs: Vec<SocketAddr>,
+    pub host_room_code: u32,
+    pub host_quic_cert_sha256_fingerprint: Option<String>,
+    pub host_quic_server_name: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct P2PFallbackState {
+    pub reason: String,
+    pub requested_by_client_id: u32,
+}
 
 #[derive(Debug, Clone)]
 pub struct ClientOutbounds {
@@ -97,10 +114,6 @@ pub struct Room {
     pub current_frame: u32,
     /// Input buffer per player (frame -> buttons).
     pub input_buffers: [VecDeque<(u32, u16)>; MAX_PLAYERS],
-    /// Last confirmed frame for each player.
-    pub last_confirmed_frame: [u32; MAX_PLAYERS],
-    /// Configured input delay frames.
-    pub input_delay_frames: u8,
     /// Whether the game started.
     pub started: bool,
     /// Players that have loaded the ROM.
@@ -111,6 +124,14 @@ pub struct Room {
     pub cached_state: Option<(u32, Vec<u8>)>,
     /// ROM data for late joiners.
     pub rom_data: Option<Vec<u8>>,
+    /// Host-as-server P2P direct-connect info (when this room code is used for P2P matchmaking).
+    pub p2p_host: Option<P2PHostInfo>,
+    /// Clients currently watching this room via P2P signaling (client_id -> outbound).
+    pub p2p_watchers: HashMap<u32, OutboundTx>,
+    /// Whether relay fallback was requested for this room code.
+    pub p2p_fallback: Option<P2PFallbackState>,
+    /// Synchronization mode for this room (Lockstep or Rollback).
+    pub sync_mode: nesium_netproto::messages::session::SyncMode,
 }
 
 impl Room {
@@ -124,14 +145,38 @@ impl Room {
             spectators: Vec::new(),
             current_frame: 0,
             input_buffers: Default::default(),
-            last_confirmed_frame: [0; MAX_PLAYERS],
-            input_delay_frames: 2,
             started: false,
             loaded_players: std::collections::HashSet::new(),
             paused: false,
             cached_state: None,
             rom_data: None,
+            p2p_host: None,
+            p2p_watchers: HashMap::new(),
+            p2p_fallback: None,
+            sync_mode: Default::default(),
         }
+    }
+
+    pub fn set_p2p_host(&mut self, host: P2PHostInfo) {
+        self.p2p_host = Some(host);
+    }
+
+    pub fn upsert_p2p_watcher(&mut self, client_id: u32, outbound: OutboundTx) {
+        self.p2p_watchers.insert(client_id, outbound);
+    }
+
+    pub fn remove_p2p_watcher(&mut self, client_id: u32) {
+        self.p2p_watchers.remove(&client_id);
+    }
+
+    pub fn request_p2p_fallback(&mut self, requested_by_client_id: u32, reason: String) {
+        if self.p2p_fallback.is_some() {
+            return;
+        }
+        self.p2p_fallback = Some(P2PFallbackState {
+            reason,
+            requested_by_client_id,
+        });
     }
 
     /// Add a player to the room.
@@ -199,25 +244,41 @@ impl Room {
     /// Returns Vec<(player_index, base_frame, buttons)>.
     pub fn get_input_history(&self, start_frame: u32) -> Vec<(u8, u32, Vec<u16>)> {
         let mut history = Vec::new();
-        for (i, buffer) in self.input_buffers.iter().enumerate() {
-            let mut buttons = Vec::new();
-            let mut base_frame = start_frame;
-            let mut first = true;
 
-            for (f, b) in buffer {
-                if *f >= start_frame {
-                    if first {
-                        base_frame = *f;
-                        first = false;
-                    }
-                    buttons.push(*b);
+        for (player_index, buffer) in self.input_buffers.iter().enumerate() {
+            let mut current_base: Option<u32> = None;
+            let mut current_buttons: Vec<u16> = Vec::new();
+            let mut prev_frame: Option<u32> = None;
+
+            for (frame, buttons) in buffer {
+                if *frame < start_frame {
+                    continue;
+                }
+
+                let contiguous = prev_frame
+                    .and_then(|prev| prev.checked_add(1))
+                    .map(|expected| expected == *frame)
+                    .unwrap_or(false);
+
+                if current_base.is_none() {
+                    current_base = Some(*frame);
+                } else if !contiguous {
+                    history.push((player_index as u8, current_base.unwrap(), current_buttons));
+                    current_base = Some(*frame);
+                    current_buttons = Vec::new();
+                }
+
+                current_buttons.push(*buttons);
+                prev_frame = Some(*frame);
+            }
+
+            if let Some(base_frame) = current_base {
+                if !current_buttons.is_empty() {
+                    history.push((player_index as u8, base_frame, current_buttons));
                 }
             }
-
-            if !buttons.is_empty() {
-                history.push((i as u8, base_frame, buttons));
-            }
         }
+
         history
     }
 
@@ -303,14 +364,16 @@ impl Room {
             return;
         };
 
-        let mut last = buffer.back().map(|(f, _)| *f).unwrap_or(u32::MIN);
+        let mut last = buffer.back().map(|(f, _)| *f);
         for (offset, &mask) in buttons.iter().enumerate() {
             let frame = start_frame.wrapping_add(offset as u32);
-            if frame <= last {
-                continue;
+            if let Some(prev) = last {
+                if frame <= prev {
+                    continue;
+                }
             }
             buffer.push_back((frame, mask));
-            last = frame;
+            last = Some(frame);
         }
 
         if let Some((snap_frame, _)) = &self.cached_state {
@@ -378,24 +441,24 @@ impl Room {
             if current_spectator_pos.is_some() {
                 return Ok(vec![]);
             }
-        } else if let Some(idx) = current_player_index {
-            if idx == new_role {
-                return Ok(vec![]);
-            }
+        } else if let Some(idx) = current_player_index
+            && idx == new_role
+        {
+            return Ok(vec![]);
         }
 
         if new_role == SPECTATOR_PLAYER_INDEX {
             // Switch to spectator
-            if let Some(p_idx) = current_player_index {
-                if let Some(p) = self.players.remove(&p_idx) {
-                    self.spectators.push(Spectator {
-                        conn_id: p.conn_id,
-                        client_id: p.client_id,
-                        name: p.name,
-                        outbounds: p.outbounds,
-                    });
-                    return Ok(vec![(client_id, SPECTATOR_PLAYER_INDEX)]);
-                }
+            if let Some(p_idx) = current_player_index
+                && let Some(p) = self.players.remove(&p_idx)
+            {
+                self.spectators.push(Spectator {
+                    conn_id: p.conn_id,
+                    client_id: p.client_id,
+                    name: p.name,
+                    outbounds: p.outbounds,
+                });
+                return Ok(vec![(client_id, SPECTATOR_PLAYER_INDEX)]);
             }
         } else if new_role < MAX_PLAYERS as u8 {
             // Switch to player slot
@@ -627,6 +690,11 @@ impl RoomManager {
         self.rooms.values().find(|r| r.code == code)
     }
 
+    /// Find room by code (mutable).
+    pub fn find_by_code_mut(&mut self, code: u32) -> Option<&mut Room> {
+        self.rooms.values_mut().find(|r| r.code == code)
+    }
+
     /// Get room for a client.
     pub fn get_client_room(&self, client_id: u32) -> Option<u32> {
         self.client_rooms.get(&client_id).copied()
@@ -645,5 +713,59 @@ impl RoomManager {
     /// Remove empty room.
     pub fn remove_room(&mut self, room_id: u32) {
         self.rooms.remove(&room_id);
+    }
+
+    /// Remove a client from all P2P signaling watcher lists.
+    pub fn remove_p2p_watcher(&mut self, client_id: u32) {
+        let mut to_remove = Vec::new();
+        for (room_id, room) in self.rooms.iter_mut() {
+            room.remove_p2p_watcher(client_id);
+            if room.is_empty() && room.p2p_watchers.is_empty() {
+                // If this room was only used for signaling, drop it when unused.
+                to_remove.push(*room_id);
+            }
+        }
+        for room_id in to_remove {
+            self.rooms.remove(&room_id);
+        }
+    }
+
+    /// Clear P2P host info for rooms where the given client was the host.
+    ///
+    /// Returns a list of (room_code, watchers) for each room where the host was cleared,
+    /// so the caller can broadcast `P2PHostDisconnected` to all watchers.
+    pub fn clear_p2p_host_for_client(&mut self, client_id: u32) -> Vec<(u32, Vec<OutboundTx>)> {
+        let mut result = Vec::new();
+        for room in self.rooms.values_mut() {
+            if let Some(host) = &room.p2p_host {
+                if host.host_signal_client_id == client_id {
+                    let room_code = room.code;
+                    let watchers: Vec<OutboundTx> = room.p2p_watchers.values().cloned().collect();
+                    room.p2p_host = None;
+                    if !watchers.is_empty() {
+                        result.push((room_code, watchers));
+                    }
+                }
+            }
+        }
+        result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn input_history_splits_on_holes() {
+        let mut room = Room::new(1, 1, 1);
+
+        room.record_inputs(0, 0, &[1, 2]); // frames 0,1
+        room.record_inputs(0, 3, &[4, 5]); // frames 3,4 (hole at 2)
+
+        let history = room.get_input_history(0);
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0], (0, 0, vec![1, 2]));
+        assert_eq!(history[1], (0, 3, vec![4, 5]));
     }
 }

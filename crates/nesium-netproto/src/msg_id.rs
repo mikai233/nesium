@@ -40,4 +40,22 @@ pub enum MsgId {
     ProvideState = 66,
     /// Server tells a late joiner to begin catch-up from a snapshot.
     BeginCatchUp = 67,
+
+    // --- P2P signaling (netd as signaling server) ---
+    P2PCreateRoom = 80,
+    P2PRoomCreated = 81,
+    P2PJoinRoom = 82,
+    P2PJoinAck = 83,
+    /// Request switching the room to relay mode (netd authoritative).
+    P2PRequestFallback = 84,
+    /// Server broadcasts that relay fallback is required/active.
+    P2PFallbackNotice = 85,
+    /// Server notifies watchers that the P2P host has disconnected.
+    P2PHostDisconnected = 86,
+
+    // --- Direct-session control (host server -> clients) ---
+    /// Host requests the server to broadcast a relay fallback instruction.
+    RequestFallbackRelay = 90,
+    /// Server instructs clients to disconnect and reconnect to relay server.
+    FallbackToRelay = 91,
 }

@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64};
 use nesium_netproto::{
     channel::ChannelKind,
     header::Header,
-    messages::session::{AttachChannel, PlayerLeft},
+    messages::session::{AttachChannel, P2PHostDisconnected, PlayerLeft},
     msg_id::MsgId,
 };
 use tokio::sync::mpsc;
@@ -158,25 +158,46 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
 
                                 room_mgr.remove_client(ctx.assigned_client_id);
                             }
+
+                            // Also remove from any P2P signaling watch lists (host/joiners).
+                            if ctx.assigned_client_id != 0 {
+                                // Check if this client is the P2P host of any room and broadcast disconnect
+                                let host_rooms_to_notify =
+                                    room_mgr.clear_p2p_host_for_client(ctx.assigned_client_id);
+                                for (room_code, watchers) in host_rooms_to_notify {
+                                    let notice = P2PHostDisconnected { room_code };
+                                    let h = Header::new(MsgId::P2PHostDisconnected as u8);
+                                    for tx in &watchers {
+                                        let _ = send_msg_tcp(
+                                            tx,
+                                            h,
+                                            MsgId::P2PHostDisconnected,
+                                            &notice,
+                                        )
+                                        .await;
+                                    }
+                                    info!(room_code, "Notified watchers of P2P host disconnect");
+                                }
+
+                                room_mgr.remove_p2p_watcher(ctx.assigned_client_id);
+                            }
                         }
                         ConnRole::Channel(ch) => {
                             let client_id = ctx.assigned_client_id;
                             let token = ctx.session_token;
 
-                            if client_id != 0 {
-                                if let Some(room_id) = room_mgr.get_client_room(client_id) {
-                                    if let Some(room) = room_mgr.get_room_mut(room_id) {
-                                        room.clear_client_channel_outbound(client_id, ch);
-                                    }
-                                }
+                            if client_id != 0
+                                && let Some(room_id) = room_mgr.get_client_room(client_id)
+                                && let Some(room) = room_mgr.get_room_mut(room_id)
+                            {
+                                room.clear_client_channel_outbound(client_id, ch);
                             }
 
-                            if token != 0 {
-                                if let Some(control_conn_id) = token_to_control_conn.get(&token) {
-                                    if let Some(control_ctx) = conns.get_mut(&control_conn_id) {
-                                        control_ctx.channels.remove(&ch);
-                                    }
-                                }
+                            if token != 0
+                                && let Some(control_conn_id) = token_to_control_conn.get(&token)
+                                && let Some(control_ctx) = conns.get_mut(control_conn_id)
+                            {
+                                control_ctx.channels.remove(&ch);
                             }
                         }
                         ConnRole::Unbound => {}
@@ -242,14 +263,10 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
                         control_ctx.channels.insert(msg.channel, outbound.clone());
                     }
 
-                    if let Some(room_id) = room_mgr.get_client_room(control_client_id) {
-                        if let Some(room) = room_mgr.get_room_mut(room_id) {
-                            room.set_client_channel_outbound(
-                                control_client_id,
-                                msg.channel,
-                                outbound,
-                            );
-                        }
+                    if let Some(room_id) = room_mgr.get_client_room(control_client_id)
+                        && let Some(room) = room_mgr.get_room_mut(room_id)
+                    {
+                        room.set_client_channel_outbound(control_client_id, msg.channel, outbound);
                     }
 
                     debug!(

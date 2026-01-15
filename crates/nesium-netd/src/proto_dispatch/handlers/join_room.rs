@@ -45,6 +45,12 @@ pub(crate) async fn handle(
             client_id = ctx.assigned_client_id,
             "Room created"
         );
+        // The room's sync mode is decided at creation time by the host.
+        if let Some(room) = room_mgr.get_room_mut(id) {
+            if let Some(preferred) = join.preferred_sync_mode {
+                room.sync_mode = preferred;
+            }
+        }
         id
     } else {
         match room_mgr.find_by_code(join.room_code) {
@@ -110,9 +116,10 @@ pub(crate) async fn handle(
     }
 
     // Determine start_frame for late joiners: use cached state frame if available
-    let start_frame = {
+    let (start_frame, sync_mode) = {
         let room = room_mgr.get_room_mut(room_id).unwrap();
-        room.cached_state.as_ref().map(|(f, _)| *f).unwrap_or(0)
+        let frame = room.cached_state.as_ref().map(|(f, _)| *f).unwrap_or(0);
+        (frame, room.sync_mode)
     };
 
     let ack = JoinAck {
@@ -120,6 +127,7 @@ pub(crate) async fn handle(
         player_index,
         start_frame,
         room_id,
+        sync_mode,
     };
 
     let h = Header::new(MsgId::JoinAck as u8);

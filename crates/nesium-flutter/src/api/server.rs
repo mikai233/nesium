@@ -2,6 +2,8 @@
 //!
 //! Allows starting/stopping a netplay server directly within the app.
 
+use nesium_netd::net::inbound::{InboundEvent, next_conn_id};
+use nesium_netd::net::tcp::{get_or_create_server_tls_acceptor, handle_tcp_connection};
 use parking_lot::Mutex;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
@@ -26,25 +28,25 @@ pub struct ServerStatus {
 }
 
 #[frb(ignore)]
-struct EmbeddedServer {
+pub struct EmbeddedServer {
     /// Sender to broadcast shutdown signal.
-    shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
+    pub shutdown_tx: Option<tokio::sync::watch::Sender<bool>>,
     /// Current bind address.
-    bind_addr: Option<SocketAddr>,
+    pub bind_addr: Option<SocketAddr>,
     /// QUIC bind address (UDP).
-    quic_bind_addr: Option<SocketAddr>,
+    pub quic_bind_addr: Option<SocketAddr>,
     /// QUIC cert leaf SHA-256 fingerprint (AA:BB:..).
-    quic_cert_sha256_fingerprint: Option<String>,
+    pub quic_cert_sha256_fingerprint: Option<String>,
     /// Status stream sink.
-    status_sink: Arc<Mutex<Option<StreamSink<ServerStatus>>>>,
+    pub status_sink: Arc<Mutex<Option<StreamSink<ServerStatus>>>>,
     /// Number of connected clients.
-    client_count: u32,
+    pub client_count: u32,
     /// Task handles to abort on shutdown.
-    task_handles: Vec<JoinHandle<()>>,
+    pub task_handles: Vec<JoinHandle<()>>,
 }
 
 impl EmbeddedServer {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             shutdown_tx: None,
             bind_addr: None,
@@ -56,14 +58,14 @@ impl EmbeddedServer {
         }
     }
 
-    fn is_running(&self) -> bool {
+    pub fn is_running(&self) -> bool {
         self.shutdown_tx.is_some()
     }
 }
 
 static SERVER: OnceLock<Mutex<EmbeddedServer>> = OnceLock::new();
 
-fn get_server() -> &'static Mutex<EmbeddedServer> {
+pub fn get_server() -> &'static Mutex<EmbeddedServer> {
     SERVER.get_or_init(|| Mutex::new(EmbeddedServer::new()))
 }
 
@@ -130,17 +132,27 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
     let event_tx_listener = event_tx.clone();
     let listener_handle = tokio::spawn(async move {
         loop {
+            let tls_acceptor = match get_or_create_server_tls_acceptor("nesium_flutter") {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::error!("Failed to create TLS acceptor: {}", e);
+                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                    continue;
+                }
+            };
+
             tokio::select! {
                 result = listener.accept() => {
                     match result {
                         Ok((stream, peer)) => {
-                            let conn_id = nesium_netd::net::inbound::next_conn_id();
+                            let conn_id = next_conn_id();
                             let tx_clone = event_tx_listener.clone();
                             let mut shutdown_rx_conn = shutdown_tx_clone.subscribe();
+                            let tls_acceptor = tls_acceptor.clone();
                             tokio::spawn(async move {
                                 tokio::select! {
-                                    _ = nesium_netd::net::tcp::handle_tcp_connection(
-                                        stream, peer, conn_id, tx_clone
+                                    _ = handle_tcp_connection(
+                                        stream, peer, conn_id, tx_clone, tls_acceptor
                                     ) => {},
                                     _ = shutdown_rx_conn.changed() => {
                                         tracing::debug!(conn_id, "Closing connection task due to server shutdown");
@@ -179,8 +191,6 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
     let quic_fingerprint_clone = quic_fingerprint.clone();
     let mut shutdown_rx_monitor = shutdown_tx.subscribe();
     let monitor_handle = tokio::spawn(async move {
-        use nesium_netd::net::inbound::InboundEvent;
-
         loop {
             tokio::select! {
                 ev_opt = event_rx.recv() => {
@@ -288,6 +298,15 @@ pub async fn netserver_stop() -> Result<(), String> {
         // Abort all handles
         for handle in task_handles {
             handle.abort();
+        }
+
+        // Stop any active P2P host watcher (best effort).
+        if let Some(task) = crate::api::netplay::get_manager()
+            .p2p_watch_task
+            .lock()
+            .take()
+        {
+            task.abort();
         }
 
         // Notify status update

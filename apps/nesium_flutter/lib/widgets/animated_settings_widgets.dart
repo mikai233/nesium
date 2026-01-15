@@ -69,6 +69,7 @@ class _AnimatedSettingsCardState extends State<AnimatedSettingsCard>
               ? AnimatedSize(
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
                   child: _buildContainer(colorScheme),
                 )
               : _buildContainer(colorScheme),
@@ -94,7 +95,7 @@ class _AnimatedSettingsCardState extends State<AnimatedSettingsCard>
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: widget.child,
+        child: Material(type: MaterialType.transparency, child: widget.child),
       ),
     );
   }

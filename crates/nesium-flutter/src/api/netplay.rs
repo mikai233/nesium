@@ -1,14 +1,42 @@
 //! Netplay control API for Flutter.
 
+use crate::api::net_utils::try_upnp_mapping;
+use crate::api::net_utils::{get_local_addrs, get_public_ip};
+use crate::api::server::get_server;
+use crate::api::server::{netserver_get_port, netserver_is_running, netserver_start};
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use nesium_netplay::{
     NetplayCommand, NetplayConfig, SPECTATOR_PLAYER_INDEX, SessionHandler, SessionState,
     SharedInputProvider,
 };
+use nesium_netproto::codec_tcp::{encode_tcp_frame, try_decode_tcp_frames};
+use nesium_netproto::header::Header;
+use nesium_netproto::messages::session::P2PFallbackNotice;
+use nesium_netproto::messages::session::{
+    ErrorMsg, P2PCreateRoom, P2PJoinAck, P2PJoinRoom, P2PRoomCreated, Welcome,
+};
+use nesium_netproto::messages::session::{Hello, TransportKind};
+use nesium_netproto::msg_id::MsgId;
 use parking_lot::Mutex;
+use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::lookup_host;
 use tokio::sync::mpsc;
+
+async fn resolve_addr(addr_str: &str) -> Result<SocketAddr, String> {
+    if let Ok(addr) = addr_str.parse::<SocketAddr>() {
+        return Ok(addr);
+    }
+    let mut addrs = lookup_host(addr_str)
+        .await
+        .map_err(|e| format!("Failed to resolve address '{}': {}", addr_str, e))?;
+    addrs
+        .next()
+        .ok_or_else(|| format!("No addresses found for '{}'", addr_str))
+}
 
 /// Netplay connection state.
 #[frb]
@@ -77,6 +105,132 @@ pub enum NetplayGameEvent {
     Error {
         error_code: u16,
     },
+    /// Server instructed this client to reconnect to relay mode.
+    FallbackToRelay {
+        relay_addr: String,
+        relay_room_code: u32,
+        reason: String,
+    },
+}
+
+#[frb]
+#[derive(Debug, Clone)]
+pub struct P2PJoinInfo {
+    pub ok: bool,
+    pub room_code: u32,
+    pub host_addrs: Vec<String>,
+    pub host_room_code: u32,
+    pub host_quic_cert_sha256_fingerprint: Option<String>,
+    pub host_quic_server_name: Option<String>,
+    pub fallback_required: bool,
+    pub fallback_reason: Option<String>,
+}
+
+#[frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum P2PConnectMode {
+    Direct,
+    Relay,
+}
+
+async fn start_netplay_session_with_client(
+    client: nesium_netplay::TcpClientHandle,
+    event_rx: mpsc::Receiver<nesium_netplay::TcpClientEvent>,
+    transport: TransportKind,
+    tcp_fallback_from_quic: bool,
+    player_name: String,
+    room_code: u32,
+) -> Result<(), String> {
+    let mgr = get_manager();
+
+    let _ = netplay_disconnect_inner(false).await;
+
+    let (game_event_tx, mut game_event_rx) = mpsc::channel(32);
+
+    // `client` is already connected; we just need to wire it into the handler.
+    mgr.input_provider.with_session(|s| {
+        s.tcp_fallback_from_quic = tcp_fallback_from_quic;
+    });
+
+    let config = NetplayConfig {
+        name: player_name,
+        transport,
+        spectator: false,
+        room_code,
+    };
+
+    let (mut handler, cmd_tx) = SessionHandler::new(
+        client,
+        config,
+        mgr.input_provider.clone(),
+        event_rx,
+        game_event_tx,
+    );
+
+    *lock_unpoison(&mgr.command_tx) = Some(cmd_tx);
+
+    let status_sink = mgr.status_sink.clone();
+    let game_event_sink = mgr.game_event_sink.clone();
+    let input_provider = mgr.input_provider.clone();
+
+    tokio::spawn(async move {
+        while let Some(event) = game_event_rx.recv().await {
+            if let Some(sink) = lock_unpoison(&game_event_sink).as_ref() {
+                let frb_event = match event {
+                    nesium_netplay::NetplayEvent::LoadRom(data) => {
+                        NetplayGameEvent::LoadRom { data }
+                    }
+                    nesium_netplay::NetplayEvent::StartGame => NetplayGameEvent::StartGame,
+                    nesium_netplay::NetplayEvent::PauseSync { paused } => {
+                        NetplayGameEvent::PauseSync { paused }
+                    }
+                    nesium_netplay::NetplayEvent::ResetSync(kind) => {
+                        NetplayGameEvent::ResetSync { kind }
+                    }
+                    nesium_netplay::NetplayEvent::SyncState(frame, data) => {
+                        NetplayGameEvent::SyncState { frame, data }
+                    }
+                    nesium_netplay::NetplayEvent::PlayerLeft { player_index } => {
+                        NetplayGameEvent::PlayerLeft { player_index }
+                    }
+                    nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
+                        error_code: code as u16,
+                    },
+                    nesium_netplay::NetplayEvent::FallbackToRelay {
+                        relay_addr,
+                        relay_room_code,
+                        reason,
+                    } => NetplayGameEvent::FallbackToRelay {
+                        relay_addr: relay_addr.to_string(),
+                        relay_room_code,
+                        reason,
+                    },
+                };
+                let _ = sink.add(frb_event);
+            }
+        }
+    });
+
+    let task = tokio::spawn(async move {
+        notify_status(&status_sink, &input_provider, None);
+
+        if let Err(e) = handler.run().await {
+            let err_msg = e.to_string();
+            notify_status(&status_sink, &input_provider, Some(err_msg.clone()));
+            return Err(err_msg);
+        }
+
+        notify_status(&status_sink, &input_provider, None);
+        Ok(())
+    });
+
+    *lock_unpoison(&mgr.session_task) = Some(task);
+
+    crate::runtime_handle()
+        .enable_netplay(mgr.input_provider.clone())
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[frb(ignore)]
@@ -87,6 +241,7 @@ pub struct NetplayManager {
     pub status_sink: Arc<Mutex<Option<StreamSink<NetplayStatus>>>>,
     pub game_event_sink: Arc<Mutex<Option<StreamSink<NetplayGameEvent>>>>,
     pub polling_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    pub p2p_watch_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 static MANAGER: OnceLock<NetplayManager> = OnceLock::new();
@@ -102,6 +257,7 @@ pub fn get_manager() -> &'static NetplayManager {
             status_sink: Arc::new(Mutex::new(None)),
             game_event_sink: Arc::new(Mutex::new(None)),
             polling_task: Mutex::new(None),
+            p2p_watch_task: Mutex::new(None),
         }
     })
 }
@@ -114,9 +270,7 @@ pub async fn netplay_connect(server_addr: String, player_name: String) -> Result
     // Stop any existing session
     let _ = netplay_disconnect().await;
 
-    let addr = server_addr
-        .parse()
-        .map_err(|e| format!("Invalid address: {}", e))?;
+    let addr = resolve_addr(&server_addr).await?;
 
     // Create event channel for TCP client -> handler
     let (event_tx, event_rx) = mpsc::channel(256);
@@ -177,6 +331,15 @@ pub async fn netplay_connect(server_addr: String, player_name: String) -> Result
                     nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
                         error_code: code as u16,
                     },
+                    nesium_netplay::NetplayEvent::FallbackToRelay {
+                        relay_addr,
+                        relay_room_code,
+                        reason,
+                    } => NetplayGameEvent::FallbackToRelay {
+                        relay_addr: relay_addr.to_string(),
+                        relay_room_code,
+                        reason,
+                    },
                 };
                 let _ = sink.add(frb_event);
             }
@@ -218,9 +381,7 @@ pub async fn netplay_connect_auto(
 
     let _ = netplay_disconnect().await;
 
-    let addr = server_addr
-        .parse()
-        .map_err(|e| format!("Invalid address: {}", e))?;
+    let addr = resolve_addr(&server_addr).await?;
 
     let (event_tx, event_rx) = mpsc::channel(256);
     let (game_event_tx, mut game_event_rx) = mpsc::channel(32);
@@ -279,6 +440,15 @@ pub async fn netplay_connect_auto(
                     nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
                         error_code: code as u16,
                     },
+                    nesium_netplay::NetplayEvent::FallbackToRelay {
+                        relay_addr,
+                        relay_room_code,
+                        reason,
+                    } => NetplayGameEvent::FallbackToRelay {
+                        relay_addr: relay_addr.to_string(),
+                        relay_room_code,
+                        reason,
+                    },
                 };
                 let _ = sink.add(frb_event);
             }
@@ -319,9 +489,7 @@ pub async fn netplay_connect_auto_pinned(
 
     let _ = netplay_disconnect().await;
 
-    let addr = server_addr
-        .parse()
-        .map_err(|e| format!("Invalid address: {}", e))?;
+    let addr = resolve_addr(&server_addr).await?;
 
     let (event_tx, event_rx) = mpsc::channel(256);
     let (game_event_tx, mut game_event_rx) = mpsc::channel(32);
@@ -384,6 +552,15 @@ pub async fn netplay_connect_auto_pinned(
                     nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
                         error_code: code as u16,
                     },
+                    nesium_netplay::NetplayEvent::FallbackToRelay {
+                        relay_addr,
+                        relay_room_code,
+                        reason,
+                    } => NetplayGameEvent::FallbackToRelay {
+                        relay_addr: relay_addr.to_string(),
+                        relay_room_code,
+                        reason,
+                    },
                 };
                 let _ = sink.add(frb_event);
             }
@@ -423,9 +600,7 @@ pub async fn netplay_connect_quic(
 
     let _ = netplay_disconnect().await;
 
-    let addr = server_addr
-        .parse()
-        .map_err(|e| format!("Invalid address: {}", e))?;
+    let addr = resolve_addr(&server_addr).await?;
 
     let (event_tx, event_rx) = mpsc::channel(256);
     let (game_event_tx, mut game_event_rx) = mpsc::channel(32);
@@ -482,6 +657,15 @@ pub async fn netplay_connect_quic(
                     nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
                         error_code: code as u16,
                     },
+                    nesium_netplay::NetplayEvent::FallbackToRelay {
+                        relay_addr,
+                        relay_room_code,
+                        reason,
+                    } => NetplayGameEvent::FallbackToRelay {
+                        relay_addr: relay_addr.to_string(),
+                        relay_room_code,
+                        reason,
+                    },
                 };
                 let _ = sink.add(frb_event);
             }
@@ -522,9 +706,7 @@ pub async fn netplay_connect_quic_pinned(
 
     let _ = netplay_disconnect().await;
 
-    let addr = server_addr
-        .parse()
-        .map_err(|e| format!("Invalid address: {}", e))?;
+    let addr = resolve_addr(&server_addr).await?;
 
     let (event_tx, event_rx) = mpsc::channel(256);
     let (game_event_tx, mut game_event_rx) = mpsc::channel(32);
@@ -585,6 +767,15 @@ pub async fn netplay_connect_quic_pinned(
                     }
                     nesium_netplay::NetplayEvent::Error { code } => NetplayGameEvent::Error {
                         error_code: code as u16,
+                    },
+                    nesium_netplay::NetplayEvent::FallbackToRelay {
+                        relay_addr,
+                        relay_room_code,
+                        reason,
+                    } => NetplayGameEvent::FallbackToRelay {
+                        relay_addr: relay_addr.to_string(),
+                        relay_room_code,
+                        reason,
                     },
                 };
                 let _ = sink.add(frb_event);
@@ -659,23 +850,38 @@ pub async fn netplay_switch_role(role: u8) -> Result<(), String> {
     }
 }
 
+/// Host-only: ask the current server to instruct all connected clients to reconnect to relay mode.
+#[frb]
+pub async fn netplay_request_fallback_relay(
+    relay_addr: String,
+    relay_room_code: u32,
+    reason: String,
+) -> Result<(), String> {
+    let mgr = get_manager();
+    let relay_addr_parsed = resolve_addr(&relay_addr).await?;
+
+    let tx = lock_unpoison(&mgr.command_tx).clone();
+    if let Some(tx) = tx {
+        tx.send(NetplayCommand::RequestFallbackRelay {
+            relay_addr: relay_addr_parsed,
+            relay_room_code,
+            reason,
+        })
+        .await
+        .map_err(|e| format!("Failed to send command: {}", e))?;
+        Ok(())
+    } else {
+        Err("Not connected".to_string())
+    }
+}
+
 /// Disconnect from netplay server.
 #[frb]
 pub async fn netplay_disconnect() -> Result<(), String> {
-    let mgr = get_manager();
-
-    if let Some(task) = lock_unpoison(&mgr.session_task).take() {
-        task.abort();
-    }
-    *lock_unpoison(&mgr.command_tx) = None;
-
-    mgr.input_provider.set_active(false);
-    mgr.input_provider.with_session(|s| s.reset());
-    let _ = crate::runtime_handle().disable_netplay();
-
-    notify_status(&mgr.status_sink, &mgr.input_provider, None);
-
-    Ok(())
+    // Do not stop P2P host signaling watcher here.
+    // Hosting is controlled by the embedded server lifecycle (see `netserver_stop`), and
+    // disconnecting from a netplay session should not implicitly de-register an active P2P host.
+    netplay_disconnect_inner(false).await
 }
 
 #[frb]
@@ -723,6 +929,602 @@ pub async fn netplay_status_stream(sink: StreamSink<NetplayStatus>) -> Result<()
 pub async fn netplay_game_event_stream(sink: StreamSink<NetplayGameEvent>) -> Result<(), String> {
     let mgr = get_manager();
     *lock_unpoison(&mgr.game_event_sink) = Some(sink);
+    Ok(())
+}
+
+async fn netplay_disconnect_inner(stop_p2p_watch: bool) -> Result<(), String> {
+    let mgr = get_manager();
+
+    if let Some(task) = lock_unpoison(&mgr.session_task).take() {
+        task.abort();
+    }
+    if stop_p2p_watch {
+        if let Some(task) = lock_unpoison(&mgr.p2p_watch_task).take() {
+            task.abort();
+        }
+    }
+
+    *lock_unpoison(&mgr.command_tx) = None;
+
+    mgr.input_provider.set_active(false);
+    mgr.input_provider.with_session(|s| s.reset());
+    let _ = crate::runtime_handle().disable_netplay();
+
+    notify_status(&mgr.status_sink, &mgr.input_provider, None);
+    Ok(())
+}
+
+async fn signaling_connect_and_handshake(
+    signaling_addr: SocketAddr,
+    name: &str,
+) -> Result<tokio::net::TcpStream, String> {
+    let mut stream = tokio::net::TcpStream::connect(signaling_addr)
+        .await
+        .map_err(|e| format!("Failed to connect signaling server: {e}"))?;
+
+    let hello = Hello {
+        client_nonce: 0,
+        transport: TransportKind::Tcp,
+        proto_min: nesium_netproto::constants::VERSION,
+        proto_max: nesium_netproto::constants::VERSION,
+        name: name.to_string(),
+    };
+    let h = Header::new(MsgId::Hello as u8);
+    let frame = encode_tcp_frame(h, MsgId::Hello, &hello, 4096)
+        .map_err(|e| format!("Failed to encode Hello: {e}"))?;
+    stream
+        .write_all(&frame)
+        .await
+        .map_err(|e| format!("Failed to send Hello: {e}"))?;
+
+    let mut buf = Vec::<u8>::with_capacity(4096);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    loop {
+        if tokio::time::Instant::now() > deadline {
+            return Err("Timed out waiting for Welcome".to_string());
+        }
+
+        let mut tmp = [0u8; 4096];
+        let n = tokio::time::timeout(Duration::from_millis(500), stream.read(&mut tmp))
+            .await
+            .map_err(|_| "Timed out waiting for Welcome".to_string())?
+            .map_err(|e| format!("Failed to read Welcome: {e}"))?;
+        if n == 0 {
+            return Err("Signaling server closed connection".to_string());
+        }
+
+        buf.extend_from_slice(&tmp[..n]);
+        let (packets, consumed) =
+            try_decode_tcp_frames(&buf).map_err(|e| format!("Protocol decode error: {e}"))?;
+
+        if let Some(pkt) = packets.iter().find(|p| p.msg_id == MsgId::Welcome) {
+            let _: Welcome =
+                postcard::from_bytes(pkt.payload).map_err(|e| format!("Bad Welcome: {e}"))?;
+            break;
+        }
+
+        buf.drain(..consumed);
+    }
+
+    Ok(stream)
+}
+
+async fn signaling_request<TReq: serde::Serialize, TResp: serde::de::DeserializeOwned>(
+    signaling_addr: SocketAddr,
+    name: &str,
+    msg_id: MsgId,
+    req: &TReq,
+    want: MsgId,
+) -> Result<TResp, String> {
+    let mut stream = signaling_connect_and_handshake(signaling_addr, name).await?;
+
+    let h = Header::new(msg_id as u8);
+    let frame =
+        encode_tcp_frame(h, msg_id, req, 4096).map_err(|e| format!("Encode failed: {e}"))?;
+    stream
+        .write_all(&frame)
+        .await
+        .map_err(|e| format!("Send failed: {e}"))?;
+
+    let mut buf = Vec::<u8>::with_capacity(4096);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    loop {
+        if tokio::time::Instant::now() > deadline {
+            return Err(format!("Timed out waiting for {:?}", want));
+        }
+
+        let mut tmp = [0u8; 4096];
+        let n = tokio::time::timeout(Duration::from_millis(500), stream.read(&mut tmp))
+            .await
+            .map_err(|_| format!("Timed out waiting for {:?}", want))?
+            .map_err(|e| format!("Read failed: {e}"))?;
+        if n == 0 {
+            return Err("Signaling server closed connection".to_string());
+        }
+
+        buf.extend_from_slice(&tmp[..n]);
+        let (packets, consumed) =
+            try_decode_tcp_frames(&buf).map_err(|e| format!("Protocol decode error: {e}"))?;
+
+        if let Some(pkt) = packets.iter().find(|p| p.msg_id == MsgId::Error) {
+            let msg: ErrorMsg =
+                postcard::from_bytes(pkt.payload).map_err(|e| format!("Bad error msg: {e}"))?;
+            return Err(format!("Signaling server error: {:?}", msg.code));
+        }
+
+        if let Some(pkt) = packets.iter().find(|p| p.msg_id == want) {
+            let resp: TResp =
+                postcard::from_bytes(pkt.payload).map_err(|e| format!("Bad response: {e}"))?;
+            return Ok(resp);
+        }
+
+        buf.drain(..consumed);
+    }
+}
+
+/// Create a P2P signaling room on `nesium-netd` and publish direct-connect info for the host.
+///
+/// Returns the room code that joiners should use on the signaling server (and for relay fallback).
+#[frb]
+pub async fn netplay_p2p_create_room(
+    signaling_addr: String,
+    host_addrs: Vec<String>,
+    host_room_code: u32,
+    host_quic_cert_sha256_fingerprint: Option<String>,
+    host_quic_server_name: Option<String>,
+    name: String,
+) -> Result<u32, String> {
+    let signaling_addr = resolve_addr(&signaling_addr).await?;
+
+    let host_addrs: Vec<SocketAddr> = host_addrs
+        .into_iter()
+        .map(|s| {
+            s.parse()
+                .map_err(|e| format!("Invalid host addr '{s}': {e}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let req = P2PCreateRoom {
+        host_addrs,
+        host_room_code,
+        host_quic_cert_sha256_fingerprint,
+        host_quic_server_name,
+    };
+
+    let resp: P2PRoomCreated = signaling_request(
+        signaling_addr,
+        &name,
+        MsgId::P2PCreateRoom,
+        &req,
+        MsgId::P2PRoomCreated,
+    )
+    .await?;
+    Ok(resp.room_code)
+}
+
+/// Start the full P2P host workflow:
+/// 1. Start embedded server (OS-assigned port).
+/// 2. Discover local IPs and Public IP.
+/// 3. Create P2P room on signaling server.
+/// 4. Watch for fallback notices.
+///
+/// Returns the P2P room code.
+#[frb]
+pub async fn netplay_p2p_host_start(
+    signaling_addr: String,
+    relay_addr: String,
+    player_name: String,
+) -> Result<u32, String> {
+    // Preflight: ensure signaling server is reachable before starting the embedded server.
+    // This avoids leaving a running embedded server when P2P signaling is misconfigured.
+    let signaling_addr_parsed = resolve_addr(&signaling_addr).await?;
+    let _ = signaling_connect_and_handshake(signaling_addr_parsed, &player_name).await?;
+
+    // 1. Ensure server is running
+    let started_server = !netserver_is_running();
+    let port = if started_server {
+        netserver_start(0).await?
+    } else {
+        netserver_get_port()
+    };
+
+    // 2. Try UPnP mapping (best effort)
+    try_upnp_mapping(port, "nesium");
+
+    // 3. Discover addresses
+    let mut host_addrs = get_local_addrs();
+    if let Some(pub_ip) = get_public_ip() {
+        if !host_addrs.contains(&pub_ip) {
+            host_addrs.push(pub_ip);
+        }
+    }
+
+    let host_addrs_str: Vec<String> = host_addrs
+        .into_iter()
+        .map(|ip| format!("{}:{}", ip, port))
+        .collect();
+
+    // 3. Get QUIC fingerprint (if available)
+    let fingerprint = get_server().lock().quic_cert_sha256_fingerprint.clone();
+
+    // 4. Register and watch fallback
+    let res = netplay_p2p_host_create_and_watch_fallback(
+        signaling_addr,
+        relay_addr,
+        host_addrs_str,
+        0, // host_room_code = 0 means default room
+        fingerprint,
+        Some("localhost".to_string()),
+        player_name,
+    )
+    .await;
+
+    if res.is_err() && started_server {
+        let _ = crate::api::server::netserver_stop().await;
+    }
+
+    res
+}
+
+/// Host flow:
+/// - Creates a P2P signaling room on `signaling_addr` (netd).
+/// - Spawns a background watcher for `P2PFallbackNotice`.
+/// - On fallback notice: tells direct clients to reconnect to `relay_addr`, stops the embedded
+///   server (best-effort), and connects this device to relay mode as a client.
+///
+/// UI requirement:
+/// - `relay_addr` is user-provided (manual input), e.g. `example.com:15000` or `1.2.3.4:15000`.
+#[frb]
+pub async fn netplay_p2p_host_create_and_watch_fallback(
+    signaling_addr: String,
+    relay_addr: String,
+    host_addrs: Vec<String>,
+    host_room_code: u32,
+    host_quic_cert_sha256_fingerprint: Option<String>,
+    host_quic_server_name: Option<String>,
+    player_name: String,
+) -> Result<u32, String> {
+    let signaling_addr_parsed = resolve_addr(&signaling_addr).await?;
+    let relay_addr_parsed = resolve_addr(&relay_addr).await?;
+
+    let host_addrs: Vec<SocketAddr> = host_addrs
+        .into_iter()
+        .map(|s| {
+            s.parse()
+                .map_err(|e| format!("Invalid host addr '{s}': {e}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut stream = signaling_connect_and_handshake(signaling_addr_parsed, &player_name).await?;
+    let create = P2PCreateRoom {
+        host_addrs,
+        host_room_code,
+        host_quic_cert_sha256_fingerprint,
+        host_quic_server_name,
+    };
+
+    let h = Header::new(MsgId::P2PCreateRoom as u8);
+    let frame = encode_tcp_frame(h, MsgId::P2PCreateRoom, &create, 4096)
+        .map_err(|e| format!("Encode P2PCreateRoom failed: {e}"))?;
+    stream
+        .write_all(&frame)
+        .await
+        .map_err(|e| format!("Send P2PCreateRoom failed: {e}"))?;
+
+    // Read P2PRoomCreated on the same connection.
+    let mut buf = Vec::<u8>::with_capacity(4096);
+    let created: P2PRoomCreated = {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            if tokio::time::Instant::now() > deadline {
+                return Err("Timed out waiting for P2PRoomCreated".to_string());
+            }
+            let mut tmp = [0u8; 4096];
+            let n = tokio::time::timeout(Duration::from_millis(500), stream.read(&mut tmp))
+                .await
+                .map_err(|_| "Timed out waiting for P2PRoomCreated".to_string())?
+                .map_err(|e| format!("Read failed: {e}"))?;
+            if n == 0 {
+                return Err("Signaling server closed connection".to_string());
+            }
+            buf.extend_from_slice(&tmp[..n]);
+            let (packets, consumed) =
+                try_decode_tcp_frames(&buf).map_err(|e| format!("Decode failed: {e}"))?;
+            if let Some(pkt) = packets.iter().find(|p| p.msg_id == MsgId::Error) {
+                let msg: ErrorMsg =
+                    postcard::from_bytes(pkt.payload).map_err(|e| format!("Bad error msg: {e}"))?;
+                return Err(format!("Signaling server error: {:?}", msg.code));
+            }
+            if let Some(pkt) = packets.iter().find(|p| p.msg_id == MsgId::P2PRoomCreated) {
+                let v: P2PRoomCreated =
+                    postcard::from_bytes(pkt.payload).map_err(|e| format!("Bad response: {e}"))?;
+                buf.drain(..consumed);
+                break v;
+            }
+            buf.drain(..consumed);
+        }
+    };
+
+    let room_code = created.room_code;
+    if room_code == 0 {
+        return Err("Signaling server returned room_code=0".to_string());
+    }
+
+    // Replace any existing watcher.
+    let mgr = get_manager();
+    if let Some(task) = lock_unpoison(&mgr.p2p_watch_task).take() {
+        task.abort();
+    }
+
+    let player_name_clone = player_name.clone();
+
+    let watch = tokio::spawn(async move {
+        let mut buf = buf;
+        let mut stream = stream;
+
+        loop {
+            let mut fallback_triggered = false;
+            let mut tmp = [0u8; 4096];
+            let n = match stream.read(&mut tmp).await {
+                Ok(n) => n,
+                Err(e) => {
+                    tracing::warn!(error = %e, "P2P signaling watch read error");
+                    break;
+                }
+            };
+            if n == 0 {
+                tracing::warn!("P2P signaling watch EOF");
+                break;
+            }
+
+            buf.extend_from_slice(&tmp[..n]);
+            let (packets, consumed) = match try_decode_tcp_frames(&buf) {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!(error = %e, "P2P signaling watch decode error");
+                    break;
+                }
+            };
+
+            for pkt in packets {
+                if pkt.msg_id != MsgId::P2PFallbackNotice {
+                    continue;
+                }
+
+                let notice: P2PFallbackNotice = match postcard::from_bytes(pkt.payload) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Bad P2PFallbackNotice");
+                        continue;
+                    }
+                };
+
+                tracing::warn!(
+                    room_code = notice.room_code,
+                    reason = %notice.reason,
+                    requested_by_client_id = notice.requested_by_client_id,
+                    "P2P fallback notice received"
+                );
+
+                let _ = netplay_request_fallback_relay(
+                    relay_addr.clone(),
+                    room_code,
+                    notice.reason.clone(),
+                )
+                .await;
+
+                // 2) Stop embedded server (best-effort) to avoid confusing users with an active local host server.
+                let _ = crate::api::server::netserver_stop().await;
+
+                // 3) Switch this device to relay mode and join the same room_code on relay server.
+                let (event_tx, event_rx) = mpsc::channel(256);
+                match nesium_netplay::connect(relay_addr_parsed, event_tx).await {
+                    Ok(client) => {
+                        let _ = start_netplay_session_with_client(
+                            client,
+                            event_rx,
+                            nesium_netproto::messages::session::TransportKind::Tcp,
+                            false,
+                            player_name_clone.clone(),
+                            room_code,
+                        )
+                        .await;
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "Failed to connect relay after fallback");
+                    }
+                }
+
+                fallback_triggered = true;
+                break;
+            }
+
+            buf.drain(..consumed);
+            if fallback_triggered {
+                break;
+            }
+        }
+    });
+
+    *lock_unpoison(&mgr.p2p_watch_task) = Some(watch);
+    Ok(room_code)
+}
+
+/// Fetch host direct-connect info for a given P2P signaling room.
+#[frb]
+pub async fn netplay_p2p_join_room(
+    signaling_addr: String,
+    room_code: u32,
+    name: String,
+) -> Result<P2PJoinInfo, String> {
+    let signaling_addr = resolve_addr(&signaling_addr).await?;
+
+    let req = nesium_netproto::messages::session::P2PJoinRoom { room_code };
+    let ack: nesium_netproto::messages::session::P2PJoinAck = signaling_request(
+        signaling_addr,
+        &name,
+        nesium_netproto::msg_id::MsgId::P2PJoinRoom,
+        &req,
+        nesium_netproto::msg_id::MsgId::P2PJoinAck,
+    )
+    .await?;
+
+    Ok(P2PJoinInfo {
+        ok: ack.ok,
+        room_code: ack.room_code,
+        host_addrs: ack.host_addrs.iter().map(|a| a.to_string()).collect(),
+        host_room_code: ack.host_room_code,
+        host_quic_cert_sha256_fingerprint: ack.host_quic_cert_sha256_fingerprint,
+        host_quic_server_name: ack.host_quic_server_name,
+        fallback_required: ack.fallback_required,
+        fallback_reason: ack.fallback_reason,
+    })
+}
+
+/// Join a P2P room via signaling, then try direct-connect to the host server.
+///
+/// If direct-connect fails, requests relay fallback on the signaling server and connects to the
+/// user-provided relay server address (netd authoritative mode).
+///
+/// Notes:
+/// - `relay_addr` must point to a running `nesium-netd` instance.
+/// - `room_code` is the P2P signaling room code, and is reused as the relay room code in fallback mode.
+#[frb]
+pub async fn netplay_p2p_connect_join_auto(
+    signaling_addr: String,
+    relay_addr: String,
+    room_code: u32,
+    player_name: String,
+) -> Result<P2PConnectMode, String> {
+    let signaling_addr_parsed = resolve_addr(&signaling_addr).await?;
+    let relay_addr_parsed = resolve_addr(&relay_addr).await?;
+
+    let ack: P2PJoinAck = signaling_request(
+        signaling_addr_parsed,
+        &player_name,
+        MsgId::P2PJoinRoom,
+        &P2PJoinRoom { room_code },
+        MsgId::P2PJoinAck,
+    )
+    .await?;
+
+    if !ack.ok {
+        return Err("P2P join rejected by signaling server".to_string());
+    }
+
+    if ack.fallback_required {
+        // Skip direct connect and use relay immediately.
+        let (event_tx, event_rx) = mpsc::channel(256);
+        let client = nesium_netplay::connect(relay_addr_parsed, event_tx)
+            .await
+            .map_err(|e| format!("Failed to connect relay: {e}"))?;
+        start_netplay_session_with_client(
+            client,
+            event_rx,
+            TransportKind::Tcp,
+            false,
+            player_name,
+            room_code,
+        )
+        .await?;
+        return Ok(P2PConnectMode::Relay);
+    }
+
+    // Try direct connect to host addresses in order.
+    let mut last_err: Option<String> = None;
+    for host_addr in &ack.host_addrs {
+        let (event_tx, event_rx) = mpsc::channel(256);
+
+        let attempt = async {
+            if let (Some(fp), Some(server_name)) = (
+                ack.host_quic_cert_sha256_fingerprint.as_deref(),
+                ack.host_quic_server_name.as_deref(),
+            ) {
+                nesium_netplay::connect_auto_pinned(*host_addr, server_name, fp, event_tx)
+                    .await
+                    .map(|(c, t)| (c, t))
+            } else if let Some(server_name) = ack.host_quic_server_name.as_deref() {
+                nesium_netplay::connect_auto(*host_addr, Some(server_name), event_tx)
+                    .await
+                    .map(|(c, t)| (c, t))
+            } else {
+                nesium_netplay::connect(*host_addr, event_tx)
+                    .await
+                    .map(|c| (c, TransportKind::Tcp))
+            }
+        };
+
+        match attempt.await {
+            Ok((client, transport)) => {
+                let tcp_fallback_from_quic = match transport {
+                    TransportKind::Tcp => ack.host_quic_server_name.is_some(),
+                    TransportKind::Quic => false,
+                };
+                start_netplay_session_with_client(
+                    client,
+                    event_rx,
+                    transport,
+                    tcp_fallback_from_quic,
+                    player_name,
+                    ack.host_room_code,
+                )
+                .await?;
+                return Ok(P2PConnectMode::Direct);
+            }
+            Err(e) => {
+                last_err = Some(format!("{e}"));
+            }
+        }
+    }
+
+    // Direct connect failed -> request fallback, then connect to relay server.
+    let reason = last_err.unwrap_or_else(|| "direct connect failed".to_string());
+    let _ = netplay_p2p_request_fallback(
+        signaling_addr.clone(),
+        room_code,
+        reason.clone(),
+        player_name.clone(),
+    )
+    .await;
+
+    let (event_tx, event_rx) = mpsc::channel(256);
+    let client = nesium_netplay::connect(relay_addr_parsed, event_tx)
+        .await
+        .map_err(|e| format!("Failed to connect relay: {e}"))?;
+    start_netplay_session_with_client(
+        client,
+        event_rx,
+        TransportKind::Tcp,
+        false,
+        player_name,
+        room_code,
+    )
+    .await?;
+
+    Ok(P2PConnectMode::Relay)
+}
+
+/// Request switching a P2P signaling room into relay fallback mode (netd authoritative C/S).
+#[frb]
+pub async fn netplay_p2p_request_fallback(
+    signaling_addr: String,
+    room_code: u32,
+    reason: String,
+    name: String,
+) -> Result<(), String> {
+    let signaling_addr: SocketAddr = signaling_addr
+        .parse()
+        .map_err(|e| format!("Invalid signaling address: {e}"))?;
+
+    let mut stream = signaling_connect_and_handshake(signaling_addr, &name).await?;
+    let req = nesium_netproto::messages::session::P2PRequestFallback { room_code, reason };
+    let h = Header::new(MsgId::P2PRequestFallback as u8);
+    let frame = encode_tcp_frame(h, MsgId::P2PRequestFallback, &req, 4096)
+        .map_err(|e| format!("Encode failed: {e}"))?;
+    stream
+        .write_all(&frame)
+        .await
+        .map_err(|e| format!("Send failed: {e}"))?;
     Ok(())
 }
 

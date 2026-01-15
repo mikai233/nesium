@@ -580,13 +580,40 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter this to use pinned QUIC. Leave empty to use system trust (QUIC) or fallback to TCP.';
 
   @override
-  String get netplayConnect => 'Connect';
+  String get netplayConnect => 'Join Game';
+
+  @override
+  String get netplayJoinViaP2P => 'Join via P2P';
+
+  @override
+  String get netplayJoinGame => 'Join Game';
 
   @override
   String get netplayCreateRoom => 'Create Room';
 
   @override
-  String get netplayJoinRoom => 'Join Room';
+  String get netplayJoinRoom => 'Join Game';
+
+  @override
+  String get netplayAddressOrRoomCode => 'Room Code or Server Address';
+
+  @override
+  String get netplayHostingTitle => 'Hosting';
+
+  @override
+  String get netplayRoomCodeLabel => 'Your Room Code';
+
+  @override
+  String get netplayP2PEnabled => 'P2P Mode';
+
+  @override
+  String get netplayDirectServerLabel => 'Server Address';
+
+  @override
+  String get netplayAdvancedSettings => 'Advanced Connection Settings';
+
+  @override
+  String get netplayP2PServerLabel => 'P2P Server';
 
   @override
   String get netplayRoomCode => 'Room Code';
@@ -1346,4 +1373,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get longPressToClear => 'Long press to clear';
+
+  @override
+  String get netplayBackToSetup => 'Back to Setup';
+
+  @override
+  String get netplayP2PMode => 'P2P Mode';
+
+  @override
+  String get netplaySignalingServer => 'Signaling Server';
+
+  @override
+  String get netplayRelayServer => 'Relay Server (Fallback)';
+
+  @override
+  String get netplayP2PRoomCode => 'P2P Room Code';
+
+  @override
+  String get netplayStartP2PSession => 'Start P2P Session';
+
+  @override
+  String get netplayJoinP2PSession => 'Join P2P Session';
+
+  @override
+  String get netplayInvalidP2PServerAddr => 'Invalid P2P server address';
+
+  @override
+  String get netplayProceed => 'Proceed';
 }

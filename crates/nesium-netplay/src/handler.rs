@@ -6,6 +6,7 @@
 //! - Input relay
 //! - State synchronization
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use nesium_netproto::{
@@ -15,9 +16,10 @@ use nesium_netproto::{
     messages::{
         input::{InputBatch, RelayInputs},
         session::{
-            BeginCatchUp, ErrorCode, ErrorMsg, Hello, JoinAck, JoinRoom, LoadRom, PauseGame,
-            PauseSync, ProvideState, RequestState, ResetGame, ResetSync, RomLoaded, StartGame,
-            SyncState, TransportKind, Welcome,
+            BeginCatchUp, ErrorCode, ErrorMsg, FallbackToRelay, Hello, JoinAck, JoinRoom, LoadRom,
+            PauseGame, PauseSync, ProvideState, RequestFallbackRelay, RequestState, ResetGame,
+            ResetSync, RomLoaded, StartGame, SyncMode as ProtoSyncMode, SyncState, TransportKind,
+            Welcome,
         },
         sync::{Ping, Pong},
     },
@@ -30,6 +32,7 @@ use crate::{
     error::NetplayError,
     input_provider::SharedInputProvider,
     session::SessionState,
+    sync::SyncMode as ClientSyncMode,
     tcp_client::{PacketOwned, TcpClientEvent, TcpClientHandle},
 };
 
@@ -63,6 +66,12 @@ pub enum NetplayEvent {
     Error {
         code: ErrorCode,
     },
+    /// Server instructed us to switch to relay mode on `relay_addr`.
+    FallbackToRelay {
+        relay_addr: SocketAddr,
+        relay_room_code: u32,
+        reason: String,
+    },
 }
 
 #[derive(Debug)]
@@ -78,6 +87,12 @@ pub enum NetplayCommand {
     ProvideState(u32, Vec<u8>),
     /// Send local input for a frame: (frame_number, buttons)
     SendInput(u32, u16),
+    /// Host-only: ask the server to instruct all clients to reconnect to a relay server.
+    RequestFallbackRelay {
+        relay_addr: SocketAddr,
+        relay_room_code: u32,
+        reason: String,
+    },
 }
 
 /// Session handler that processes events and updates session state.
@@ -110,13 +125,12 @@ impl SessionHandler {
         // Setup input sending callback
         let tx_clone = tx.clone();
         input_provider.set_on_send_input(Box::new(move |frame, buttons| {
-            let _ = tx_clone.blocking_send(NetplayCommand::SendInput(frame, buttons));
+            let _ = tx_clone.try_send(NetplayCommand::SendInput(frame, buttons));
         }));
 
         let tx_clone_state = tx.clone();
         input_provider.set_on_send_state(Box::new(move |frame, data| {
-            let _ =
-                tx_clone_state.blocking_send(NetplayCommand::ProvideState(frame, data.to_vec()));
+            let _ = tx_clone_state.try_send(NetplayCommand::ProvideState(frame, data.to_vec()));
         }));
 
         input_provider.with_session_mut(|s| {
@@ -201,6 +215,9 @@ impl SessionHandler {
                         Some(NetplayCommand::SendInput(frame, buttons)) => {
                             self.send_input(frame, buttons).await?;
                         }
+                        Some(NetplayCommand::RequestFallbackRelay { relay_addr, relay_room_code, reason }) => {
+                            self.send_request_fallback_relay(relay_addr, relay_room_code, reason).await?;
+                        }
                         None => {
                             debug!("Command channel closed");
                         }
@@ -268,6 +285,7 @@ impl SessionHandler {
             MsgId::ResetSync => self.handle_reset_sync(&packet).await?,
             MsgId::SyncState => self.handle_sync_state(&packet).await?,
             MsgId::PlayerLeft => self.handle_player_left(&packet).await?,
+            MsgId::FallbackToRelay => self.handle_fallback_to_relay(&packet).await?,
             MsgId::Error => self.handle_error(&packet).await?,
             msg => {
                 debug!("Ignoring unhandled message type: {:?}", msg);
@@ -311,6 +329,9 @@ impl SessionHandler {
             session.rewind_capacity = welcome.rewind_capacity;
             session.state = SessionState::WaitingForRoom;
         });
+        // Keep sync strategy's delay in sync with negotiated session delay.
+        self.input_provider
+            .set_input_delay(welcome.input_delay_frames as u32);
 
         // If we have a room code, join it; otherwise wait for assignment
         if self.config.room_code != 0 {
@@ -322,7 +343,21 @@ impl SessionHandler {
 
     /// Send JoinRoom request.
     async fn send_join_room(&mut self, room_code: u32) -> Result<(), NetplayError> {
-        let join = JoinRoom { room_code };
+        // Sync mode is decided by the room at creation time (host sets it once).
+        // When joining an existing room, do not send any preference.
+        let preferred_sync_mode = if room_code == 0 {
+            Some(match self.input_provider.sync_mode() {
+                ClientSyncMode::Lockstep => ProtoSyncMode::Lockstep,
+                ClientSyncMode::Rollback => ProtoSyncMode::Rollback,
+            })
+        } else {
+            None
+        };
+
+        let join = JoinRoom {
+            room_code,
+            preferred_sync_mode,
+        };
 
         let header = Header::new(MsgId::JoinRoom as u8);
 
@@ -356,55 +391,49 @@ impl SessionHandler {
         }
 
         info!(
-            "Joined room: player_index={}, start_frame={}",
-            ack.player_index, ack.start_frame
+            "Joined room: player_index={}, start_frame={}, sync_mode={:?}",
+            ack.player_index, ack.start_frame, ack.sync_mode
         );
 
-        // The server is authoritative on role assignment: it may assign us as spectator if all
-        // player slots are taken, even if we didn't request it.
+        // Room is authoritative: always switch to the server-selected sync mode.
+        self.input_provider.set_sync_mode(match ack.sync_mode {
+            ProtoSyncMode::Lockstep => ClientSyncMode::Lockstep,
+            ProtoSyncMode::Rollback => ClientSyncMode::Rollback,
+        });
+
         let is_spectator = ack.player_index == SPECTATOR_PLAYER_INDEX;
-        if self.config.spectator != is_spectator {
-            warn!(
-                requested_spectator = self.config.spectator,
-                assigned_spectator = is_spectator,
-                assigned_player_index = ack.player_index,
-                "Server role assignment differs from requested role"
-            );
-        }
-        self.input_provider.with_session_mut(|session| {
-            if is_spectator {
+        if is_spectator {
+            self.input_provider.with_session_mut(|session| {
                 session.state = SessionState::Spectating {
                     start_frame: ack.start_frame,
                 };
                 session.local_player_index = None;
-                // Current server logic only assigns spectators when there are already >=2 players.
-                // Mark known player ports active so we don't advance using implicit 0 inputs.
-                if session.active_ports.len() >= 2 {
-                    session.active_ports[0] = true;
-                    session.active_ports[1] = true;
-                } else if !session.active_ports.is_empty() {
-                    session.active_ports[0] = true;
-                }
-            } else {
+                session.current_frame = ack.start_frame;
+                session.room_id = ack.room_id;
+            });
+            // Current server logic only assigns spectators when there are already >=2 players.
+            // Mark known player ports active so we don't advance using implicit 0 inputs.
+            self.input_provider.set_port_active(0, true);
+            self.input_provider.set_port_active(1, true);
+        } else {
+            self.input_provider.with_session_mut(|session| {
                 session.state = SessionState::Playing {
                     start_frame: ack.start_frame,
                     player_index: ack.player_index,
                 };
                 session.local_player_index = Some(ack.player_index);
-                // Mark own port as active to prevent lockstep deadlock in solo play
-                if (ack.player_index as usize) < session.active_ports.len() {
-                    session.active_ports[ack.player_index as usize] = true;
-                }
-                // If we joined as player 2 (index 1), we know player 1 (index 0) exists.
-                // Mark it active immediately so we block until its inputs arrive, preventing
-                // a 1–2 frame drift window during late-join catch-up.
-                if ack.player_index == 1 && !session.active_ports.is_empty() {
-                    session.active_ports[0] = true;
-                }
+                session.current_frame = ack.start_frame;
+                session.room_id = ack.room_id;
+            });
+            // Mark own port as active to prevent lockstep deadlock in solo play
+            self.input_provider
+                .set_port_active(ack.player_index as usize, true);
+
+            // If we joined as player 2 (index 1), we know player 1 (index 0) exists.
+            if ack.player_index == 1 {
+                self.input_provider.set_port_active(0, true);
             }
-            session.current_frame = ack.start_frame;
-            session.room_id = ack.room_id;
-        });
+        }
 
         self.input_provider.set_local_player(if is_spectator {
             None
@@ -414,6 +443,54 @@ impl SessionHandler {
         // NOTE: Do NOT call set_active(true) here. Lockstep should only start after StartGame.
 
         Ok(())
+    }
+
+    fn build_input_batches(items: Vec<(u32, u16)>) -> Vec<InputBatch> {
+        use std::collections::BTreeMap;
+
+        if items.is_empty() {
+            return Vec::new();
+        }
+
+        // Ensure deterministic ordering and collapse duplicates (last write wins).
+        let mut by_frame = BTreeMap::<u32, u16>::new();
+        for (frame, buttons) in items {
+            by_frame.insert(frame, buttons);
+        }
+
+        let mut batches = Vec::<InputBatch>::new();
+        let mut current_start: Option<u32> = None;
+        let mut current_buttons: Vec<u16> = Vec::new();
+        let mut prev_frame: Option<u32> = None;
+
+        for (frame, buttons) in by_frame {
+            let contiguous = prev_frame
+                .and_then(|prev| prev.checked_add(1))
+                .map(|expected| expected == frame)
+                .unwrap_or(false);
+
+            if current_start.is_none() {
+                current_start = Some(frame);
+            } else if !contiguous {
+                batches.push(InputBatch {
+                    start_frame: current_start.unwrap(),
+                    buttons: std::mem::take(&mut current_buttons),
+                });
+                current_start = Some(frame);
+            }
+
+            current_buttons.push(buttons);
+            prev_frame = Some(frame);
+        }
+
+        if let Some(start_frame) = current_start {
+            batches.push(InputBatch {
+                start_frame,
+                buttons: current_buttons,
+            });
+        }
+
+        batches
     }
 
     /// Handle RoleChanged - server notified us of a role change.
@@ -498,14 +575,12 @@ impl SessionHandler {
                     player_index: msg.player_index,
                 },
             );
-
-            if msg.player_index != SPECTATOR_PLAYER_INDEX {
-                let idx = msg.player_index as usize;
-                if idx < session.active_ports.len() {
-                    session.active_ports[idx] = true;
-                }
-            }
         });
+
+        if msg.player_index != SPECTATOR_PLAYER_INDEX {
+            self.input_provider
+                .set_port_active(msg.player_index as usize, true);
+        }
 
         Ok(())
     }
@@ -563,7 +638,7 @@ impl SessionHandler {
 
     /// Process and buffer local input.
     async fn send_input(&mut self, frame: u32, buttons: u16) -> Result<(), NetplayError> {
-        let (should_send, batch) = self.input_provider.with_session_mut(|session| {
+        let batches = self.input_provider.with_session_mut(|session| {
             session.queue_local_input(frame, buttons);
 
             // Check if we have enough pending inputs to send a batch
@@ -572,32 +647,17 @@ impl SessionHandler {
             if pending_count >= 1 {
                 // Drain and send
                 let items = session.drain_pending_inputs(30); // Max batch size
-                if items.is_empty() {
-                    return (false, None);
-                }
-
-                let start_frame = items[0].0;
-                let buttons: Vec<u16> = items.iter().map(|(_, b)| *b).collect();
-
-                (
-                    true,
-                    Some(InputBatch {
-                        start_frame,
-                        buttons,
-                    }),
-                )
+                Self::build_input_batches(items)
             } else {
-                (false, None)
+                Vec::new()
             }
         });
 
-        if should_send {
-            if let Some(batch) = batch {
-                let header = Header::new(MsgId::InputBatch as u8);
-                self.client
-                    .send_message(header, MsgId::InputBatch, &batch)
-                    .await?;
-            }
+        for batch in batches {
+            let header = Header::new(MsgId::InputBatch as u8);
+            self.client
+                .send_message(header, MsgId::InputBatch, &batch)
+                .await?;
         }
         Ok(())
     }
@@ -645,18 +705,12 @@ impl SessionHandler {
         // Initialize active ports from server-provided mask BEFORE activating lockstep.
         // This prevents the deadlock where is_frame_ready() returns false because
         // no ports are marked active yet.
-        self.input_provider.with_session_mut(|session| {
-            for i in 0..session.active_ports.len().min(8) {
-                session.active_ports[i] = (msg.active_ports_mask & (1u8 << i)) != 0;
+        for i in 0..8 {
+            let active = (msg.active_ports_mask & (1u8 << i)) != 0;
+            if active {
+                self.input_provider.set_port_active(i as usize, true);
             }
-            // Always keep local port active
-            if let Some(idx) = session.local_player_index {
-                let i = idx as usize;
-                if i < session.active_ports.len() {
-                    session.active_ports[i] = true;
-                }
-            }
-        });
+        }
 
         // NOW activate lockstep - game is ready to begin
         self.input_provider.set_active(true);
@@ -681,18 +735,12 @@ impl SessionHandler {
             "Received BeginCatchUp - activating lockstep"
         );
 
-        self.input_provider.with_session_mut(|session| {
-            for i in 0..session.active_ports.len().min(8) {
-                session.active_ports[i] = (msg.active_ports_mask & (1u8 << i)) != 0;
+        for i in 0..8 {
+            let active = (msg.active_ports_mask & (1u8 << i)) != 0;
+            if active {
+                self.input_provider.set_port_active(i as usize, true);
             }
-            // Always keep the local port active if we're a player.
-            if let Some(idx) = session.local_player_index {
-                let i = idx as usize;
-                if i < session.active_ports.len() {
-                    session.active_ports[i] = true;
-                }
-            }
-        });
+        }
 
         self.input_provider.set_active(true);
 
@@ -846,6 +894,54 @@ impl SessionHandler {
             .await?;
         Ok(())
     }
+
+    /// Host-only: ask server to broadcast a relay fallback instruction.
+    async fn send_request_fallback_relay(
+        &mut self,
+        relay_addr: SocketAddr,
+        relay_room_code: u32,
+        reason: String,
+    ) -> Result<(), NetplayError> {
+        let msg = RequestFallbackRelay {
+            relay_addr,
+            relay_room_code,
+            reason,
+        };
+        let header = Header::new(MsgId::RequestFallbackRelay as u8);
+        self.client
+            .send_message(header, MsgId::RequestFallbackRelay, &msg)
+            .await?;
+        Ok(())
+    }
+
+    async fn handle_fallback_to_relay(&mut self, packet: &PacketOwned) -> Result<(), NetplayError> {
+        let msg: FallbackToRelay =
+            postcard::from_bytes(&packet.payload).map_err(|e| NetplayError::Protocol(e.into()))?;
+
+        warn!(
+            relay_addr = %msg.relay_addr,
+            relay_room_code = msg.relay_room_code,
+            reason = %msg.reason,
+            "Received FallbackToRelay"
+        );
+
+        let _ = self
+            .game_event_tx
+            .send(NetplayEvent::FallbackToRelay {
+                relay_addr: msg.relay_addr,
+                relay_room_code: msg.relay_room_code,
+                reason: msg.reason.clone(),
+            })
+            .await;
+
+        // Stop lockstep immediately; the caller is expected to reconnect.
+        self.input_provider.set_active(false);
+        self.input_provider.with_session(|s| {
+            s.state = SessionState::Disconnected;
+        });
+        let _ = self.client.disconnect().await;
+        Ok(())
+    }
 }
 
 /// Generate a random nonce.
@@ -877,5 +973,23 @@ mod tests {
         let n2 = rand_nonce();
         // They should differ (with very high probability)
         assert_ne!(n1, n2);
+    }
+
+    #[test]
+    fn build_input_batches_splits_on_holes() {
+        let batches = SessionHandler::build_input_batches(vec![(0, 1), (1, 2), (3, 4)]);
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches[0].start_frame, 0);
+        assert_eq!(batches[0].buttons, vec![1, 2]);
+        assert_eq!(batches[1].start_frame, 3);
+        assert_eq!(batches[1].buttons, vec![4]);
+    }
+
+    #[test]
+    fn build_input_batches_sorts_and_dedupes() {
+        let batches = SessionHandler::build_input_batches(vec![(2, 20), (0, 1), (2, 21), (1, 2)]);
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].start_frame, 0);
+        assert_eq!(batches[0].buttons, vec![1, 2, 21]);
     }
 }

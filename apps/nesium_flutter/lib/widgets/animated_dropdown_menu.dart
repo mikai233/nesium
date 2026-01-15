@@ -279,6 +279,7 @@ class _AnimatedDropdownMenuState<T> extends State<AnimatedDropdownMenu<T>>
       labelText: widget.labelText,
       helperText: widget.helperText,
       enabled: widget.enabled,
+      floatingLabelBehavior: FloatingLabelBehavior.always,
       suffixIcon: AnimatedRotation(
         turns: _isOpen ? 0.5 : 0.0,
         duration: const Duration(milliseconds: 180),

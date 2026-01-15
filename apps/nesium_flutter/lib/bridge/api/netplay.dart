@@ -8,9 +8,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'netplay.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `lock_unpoison`, `notify_status`
+// These functions are ignored because they are not marked as `pub`: `lock_unpoison`, `netplay_disconnect_inner`, `notify_status`, `signaling_connect_and_handshake`, `signaling_request`, `start_netplay_session_with_client`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `NetplayManager`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `get_manager`
 
 /// Connect to netplay server and perform handshake.
@@ -82,6 +82,17 @@ Future<void> netplayJoinRoom({required int roomCode}) =>
 Future<void> netplaySwitchRole({required int role}) =>
     RustLib.instance.api.crateApiNetplayNetplaySwitchRole(role: role);
 
+/// Host-only: ask the current server to instruct all connected clients to reconnect to relay mode.
+Future<void> netplayRequestFallbackRelay({
+  required String relayAddr,
+  required int relayRoomCode,
+  required String reason,
+}) => RustLib.instance.api.crateApiNetplayNetplayRequestFallbackRelay(
+  relayAddr: relayAddr,
+  relayRoomCode: relayRoomCode,
+  reason: reason,
+);
+
 /// Disconnect from netplay server.
 Future<void> netplayDisconnect() =>
     RustLib.instance.api.crateApiNetplayNetplayDisconnect();
@@ -96,6 +107,112 @@ Stream<NetplayStatus> netplayStatusStream() =>
 /// Subscribe to Game events (LoadRom, StartGame).
 Stream<NetplayGameEvent> netplayGameEventStream() =>
     RustLib.instance.api.crateApiNetplayNetplayGameEventStream();
+
+/// Create a P2P signaling room on `nesium-netd` and publish direct-connect info for the host.
+///
+/// Returns the room code that joiners should use on the signaling server (and for relay fallback).
+Future<int> netplayP2PCreateRoom({
+  required String signalingAddr,
+  required List<String> hostAddrs,
+  required int hostRoomCode,
+  String? hostQuicCertSha256Fingerprint,
+  String? hostQuicServerName,
+  required String name,
+}) => RustLib.instance.api.crateApiNetplayNetplayP2PCreateRoom(
+  signalingAddr: signalingAddr,
+  hostAddrs: hostAddrs,
+  hostRoomCode: hostRoomCode,
+  hostQuicCertSha256Fingerprint: hostQuicCertSha256Fingerprint,
+  hostQuicServerName: hostQuicServerName,
+  name: name,
+);
+
+/// Start the full P2P host workflow:
+/// 1. Start embedded server (OS-assigned port).
+/// 2. Discover local IPs and Public IP.
+/// 3. Create P2P room on signaling server.
+/// 4. Watch for fallback notices.
+///
+/// Returns the P2P room code.
+Future<int> netplayP2PHostStart({
+  required String signalingAddr,
+  required String relayAddr,
+  required String playerName,
+}) => RustLib.instance.api.crateApiNetplayNetplayP2PHostStart(
+  signalingAddr: signalingAddr,
+  relayAddr: relayAddr,
+  playerName: playerName,
+);
+
+/// Host flow:
+/// - Creates a P2P signaling room on `signaling_addr` (netd).
+/// - Spawns a background watcher for `P2PFallbackNotice`.
+/// - On fallback notice: tells direct clients to reconnect to `relay_addr`, stops the embedded
+///   server (best-effort), and connects this device to relay mode as a client.
+///
+/// UI requirement:
+/// - `relay_addr` is user-provided (manual input), e.g. `example.com:15000` or `1.2.3.4:15000`.
+Future<int> netplayP2PHostCreateAndWatchFallback({
+  required String signalingAddr,
+  required String relayAddr,
+  required List<String> hostAddrs,
+  required int hostRoomCode,
+  String? hostQuicCertSha256Fingerprint,
+  String? hostQuicServerName,
+  required String playerName,
+}) => RustLib.instance.api.crateApiNetplayNetplayP2PHostCreateAndWatchFallback(
+  signalingAddr: signalingAddr,
+  relayAddr: relayAddr,
+  hostAddrs: hostAddrs,
+  hostRoomCode: hostRoomCode,
+  hostQuicCertSha256Fingerprint: hostQuicCertSha256Fingerprint,
+  hostQuicServerName: hostQuicServerName,
+  playerName: playerName,
+);
+
+/// Fetch host direct-connect info for a given P2P signaling room.
+Future<P2PJoinInfo> netplayP2PJoinRoom({
+  required String signalingAddr,
+  required int roomCode,
+  required String name,
+}) => RustLib.instance.api.crateApiNetplayNetplayP2PJoinRoom(
+  signalingAddr: signalingAddr,
+  roomCode: roomCode,
+  name: name,
+);
+
+/// Join a P2P room via signaling, then try direct-connect to the host server.
+///
+/// If direct-connect fails, requests relay fallback on the signaling server and connects to the
+/// user-provided relay server address (netd authoritative mode).
+///
+/// Notes:
+/// - `relay_addr` must point to a running `nesium-netd` instance.
+/// - `room_code` is the P2P signaling room code, and is reused as the relay room code in fallback mode.
+Future<P2PConnectMode> netplayP2PConnectJoinAuto({
+  required String signalingAddr,
+  required String relayAddr,
+  required int roomCode,
+  required String playerName,
+}) => RustLib.instance.api.crateApiNetplayNetplayP2PConnectJoinAuto(
+  signalingAddr: signalingAddr,
+  relayAddr: relayAddr,
+  roomCode: roomCode,
+  playerName: playerName,
+);
+
+/// Request switching a P2P signaling room into relay fallback mode (netd authoritative C/S).
+Future<void> netplayP2PRequestFallback({
+  required String signalingAddr,
+  required int roomCode,
+  required String reason,
+  required String name,
+}) => RustLib.instance.api.crateApiNetplayNetplayP2PRequestFallback(
+  signalingAddr: signalingAddr,
+  roomCode: roomCode,
+  reason: reason,
+  name: name,
+);
 
 /// Send ROM to other players.
 Future<void> netplaySendRom({required List<int> data}) =>
@@ -147,6 +264,13 @@ sealed class NetplayGameEvent with _$NetplayGameEvent {
   /// Server error (e.g., room not found, permission denied)
   const factory NetplayGameEvent.error({required int errorCode}) =
       NetplayGameEvent_Error;
+
+  /// Server instructed this client to reconnect to relay mode.
+  const factory NetplayGameEvent.fallbackToRelay({
+    required String relayAddr,
+    required int relayRoomCode,
+    required String reason,
+  }) = NetplayGameEvent_FallbackToRelay;
 }
 
 class NetplayPlayer {
@@ -230,3 +354,53 @@ class NetplayStatus {
 
 /// Actual transport used by the current netplay session.
 enum NetplayTransport { unknown, tcp, quic }
+
+enum P2PConnectMode { direct, relay }
+
+class P2PJoinInfo {
+  final bool ok;
+  final int roomCode;
+  final List<String> hostAddrs;
+  final int hostRoomCode;
+  final String? hostQuicCertSha256Fingerprint;
+  final String? hostQuicServerName;
+  final bool fallbackRequired;
+  final String? fallbackReason;
+
+  const P2PJoinInfo({
+    required this.ok,
+    required this.roomCode,
+    required this.hostAddrs,
+    required this.hostRoomCode,
+    this.hostQuicCertSha256Fingerprint,
+    this.hostQuicServerName,
+    required this.fallbackRequired,
+    this.fallbackReason,
+  });
+
+  @override
+  int get hashCode =>
+      ok.hashCode ^
+      roomCode.hashCode ^
+      hostAddrs.hashCode ^
+      hostRoomCode.hashCode ^
+      hostQuicCertSha256Fingerprint.hashCode ^
+      hostQuicServerName.hashCode ^
+      fallbackRequired.hashCode ^
+      fallbackReason.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is P2PJoinInfo &&
+          runtimeType == other.runtimeType &&
+          ok == other.ok &&
+          roomCode == other.roomCode &&
+          hostAddrs == other.hostAddrs &&
+          hostRoomCode == other.hostRoomCode &&
+          hostQuicCertSha256Fingerprint ==
+              other.hostQuicCertSha256Fingerprint &&
+          hostQuicServerName == other.hostQuicServerName &&
+          fallbackRequired == other.fallbackRequired &&
+          fallbackReason == other.fallbackReason;
+}

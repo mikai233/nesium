@@ -8,6 +8,7 @@ import 'api/events.dart';
 import 'api/gamepad.dart';
 import 'api/input.dart';
 import 'api/load_rom.dart';
+import 'api/net_utils.dart';
 import 'api/netplay.dart';
 import 'api/palette.dart';
 import 'api/pause.dart';
@@ -133,6 +134,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
   List<GamepadButtonFfi> dco_decode_list_gamepad_button_ffi(dynamic raw);
 
   @protected
@@ -179,6 +183,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  P2PConnectMode dco_decode_p_2_p_connect_mode(dynamic raw);
+
+  @protected
+  P2PJoinInfo dco_decode_p_2_p_join_info(dynamic raw);
 
   @protected
   PaletteKind dco_decode_palette_kind(dynamic raw);
@@ -354,6 +364,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
   List<GamepadButtonFfi> sse_decode_list_gamepad_button_ffi(
     SseDeserializer deserializer,
   );
@@ -410,6 +423,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  P2PConnectMode sse_decode_p_2_p_connect_mode(SseDeserializer deserializer);
+
+  @protected
+  P2PJoinInfo sse_decode_p_2_p_join_info(SseDeserializer deserializer);
 
   @protected
   PaletteKind sse_decode_palette_kind(SseDeserializer deserializer);
@@ -618,6 +637,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_gamepad_button_ffi(
     List<GamepadButtonFfi> self,
     SseSerializer serializer,
@@ -694,6 +716,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     Uint8List? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_p_2_p_connect_mode(
+    P2PConnectMode self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_p_2_p_join_info(P2PJoinInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_palette_kind(PaletteKind self, SseSerializer serializer);

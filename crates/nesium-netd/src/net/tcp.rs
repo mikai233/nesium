@@ -1,30 +1,76 @@
 use std::net::SocketAddr;
 
+use futures_util::{SinkExt, StreamExt};
 use nesium_netproto::limits::TCP_RX_BUFFER_SIZE;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
+use tokio_tungstenite::{accept_async, tungstenite};
+use tokio_util::codec::{BytesCodec, FramedWrite};
+use tracing::warn;
+
+use crate::net::quic_config;
+use crate::net::stream_adapter::WebSocketStream;
 
 use super::framing::TcpFramer;
 use super::inbound::{ConnId, InboundEvent, TransportKind, next_conn_id};
 use super::outbound::spawn_tcp_writer;
 
+pub use tokio_rustls::TlsAcceptor;
+
 /// Start a TCP listener. All decoded packets and connection events are sent to `tx`.
 pub async fn run_tcp_listener(
     bind: SocketAddr,
     tx: mpsc::Sender<InboundEvent>,
+    app_name: &str,
 ) -> anyhow::Result<()> {
     let listener = TcpListener::bind(bind).await?;
+    run_tcp_listener_with_listener(listener, tx, app_name).await
+}
+
+/// Run the accept loop on an existing listener.
+pub async fn run_tcp_listener_with_listener(
+    listener: TcpListener,
+    tx: mpsc::Sender<InboundEvent>,
+    app_name: &str,
+) -> anyhow::Result<()> {
+    let tls_acceptor = get_or_create_server_tls_acceptor(app_name)?;
 
     loop {
         let (stream, peer) = listener.accept().await?;
         let conn_id = next_conn_id();
 
         let tx_clone = tx.clone();
+        let tls_acceptor_clone = tls_acceptor.clone();
         tokio::spawn(async move {
-            handle_tcp_connection(stream, peer, conn_id, tx_clone).await;
+            handle_tcp_connection(stream, peer, conn_id, tx_clone, tls_acceptor_clone).await;
         });
     }
+}
+
+pub fn get_or_create_server_tls_acceptor(
+    app_name: &str,
+) -> anyhow::Result<std::sync::Arc<tokio_rustls::TlsAcceptor>> {
+    let dir = quic_config::default_quic_data_dir(app_name);
+    let (cert_path, key_path) = quic_config::ensure_quic_cert_pair(&dir)?;
+
+    let certs = rustls_pemfile::certs(&mut std::io::BufReader::new(std::fs::File::open(
+        &cert_path,
+    )?))
+    .collect::<Result<Vec<_>, _>>()?;
+    let key = rustls_pemfile::private_key(&mut std::io::BufReader::new(std::fs::File::open(
+        &key_path,
+    )?))?
+    .ok_or_else(|| anyhow::anyhow!("No private key found in {}", key_path.display()))?;
+
+    let server_config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .map_err(|e| anyhow::anyhow!("Failed to build server config: {}", e))?;
+
+    Ok(std::sync::Arc::new(tokio_rustls::TlsAcceptor::from(
+        std::sync::Arc::new(server_config),
+    )))
 }
 
 /// Handle a single TCP connection. Public to allow embedding server in other crates.
@@ -33,12 +79,103 @@ pub async fn handle_tcp_connection(
     peer: SocketAddr,
     conn_id: ConnId,
     tx: mpsc::Sender<InboundEvent>,
+    tls_acceptor: std::sync::Arc<tokio_rustls::TlsAcceptor>,
 ) {
     let _ = stream.set_nodelay(true);
 
-    // Split the stream so read/write can progress independently.
-    let (mut read, write) = stream.into_split();
+    // Protocol Sniffing via Peeking
+    let mut peek_buf = [0u8; 4];
+    let protocol = match stream.peek(&mut peek_buf).await {
+        Ok(n) if n >= 2 => {
+            if &peek_buf[0..2] == b"NS" {
+                ParsedProtocol::Native
+            } else if n >= 4 && &peek_buf[0..4] == b"GET " {
+                ParsedProtocol::WebSocket
+            } else if n >= 2 && peek_buf[0] == 0x16 && peek_buf[1] == 0x03 {
+                ParsedProtocol::Tls
+            } else {
+                ParsedProtocol::Native // Default fallback
+            }
+        }
+        Ok(_) => ParsedProtocol::Native, // Too short, fallback
+        Err(e) => {
+            warn!("Failed to peek stream: {}", e);
+            return;
+        }
+    };
 
+    match protocol {
+        ParsedProtocol::WebSocket => {
+            match accept_async(stream).await {
+                Ok(ws_stream) => {
+                    let (write, read) = ws_stream.split();
+                    // Adapt the WebSocket frame sink to a Bytes sink
+                    let sink = write.sink_map_err(|e| std::io::Error::other(e)).with(
+                        |msg: bytes::Bytes| {
+                            std::future::ready(Ok(tungstenite::Message::Binary(msg)))
+                        },
+                    );
+
+                    let adapted_read = WebSocketStream::new(read);
+                    handle_connection_inner(adapted_read, sink, peer, conn_id, tx).await;
+                }
+                Err(e) => {
+                    warn!("WebSocket handshake failed: {}", e);
+                }
+            }
+        }
+        ParsedProtocol::Tls => {
+            match tls_acceptor.accept(stream).await {
+                Ok(tls_stream) => {
+                    // Inside TLS, we assume usage of WebSocket (WSS).
+                    match accept_async(tls_stream).await {
+                        Ok(ws_stream) => {
+                            let (write, read) = ws_stream.split();
+                            let sink = write.sink_map_err(|e| std::io::Error::other(e)).with(
+                                |msg: bytes::Bytes| {
+                                    std::future::ready(Ok(tungstenite::Message::Binary(msg)))
+                                },
+                            );
+
+                            let adapted_read = WebSocketStream::new(read);
+                            handle_connection_inner(adapted_read, sink, peer, conn_id, tx).await;
+                        }
+                        Err(e) => {
+                            warn!("WSS handshake failed: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("TLS handshake failed: {}", e);
+                }
+            }
+        }
+        ParsedProtocol::Native => {
+            let (read, write) = stream.into_split();
+            // Adapt the AsyncWrite to a Bytes sink using FramedWrite
+            // bytes::BytesCodec handles writing Bytes trait to AsyncWrite
+            let sink = FramedWrite::new(write, BytesCodec::new());
+            handle_connection_inner(read, sink, peer, conn_id, tx).await;
+        }
+    }
+}
+
+enum ParsedProtocol {
+    Native,
+    WebSocket,
+    Tls,
+}
+
+async fn handle_connection_inner<R, S>(
+    mut read: R,
+    write: S,
+    peer: SocketAddr,
+    conn_id: ConnId,
+    tx: mpsc::Sender<InboundEvent>,
+) where
+    R: tokio::io::AsyncRead + Unpin,
+    S: futures_util::Sink<bytes::Bytes, Error = std::io::Error> + Unpin + Send + 'static,
+{
     // Outbound queue (framed bytes).
     let (out_tx, out_rx) = mpsc::channel::<bytes::Bytes>(1024);
     let writer = spawn_tcp_writer(write, out_rx);

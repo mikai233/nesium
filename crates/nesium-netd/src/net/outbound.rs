@@ -1,9 +1,9 @@
 use bytes::Bytes;
+use futures_util::{Sink, SinkExt};
 use nesium_netproto::codec_tcp::encode_tcp_frame_auto;
 use nesium_netproto::error::ProtoError;
 use nesium_netproto::header::Header;
 use nesium_netproto::msg_id::MsgId;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
 
 /// Outbound channel sender type.
@@ -15,13 +15,16 @@ pub type OutboundTx = mpsc::Sender<bytes::Bytes>;
 /// Current behavior:
 /// - Exits when the channel is closed.
 /// - Returns an error if socket write fails.
-pub fn spawn_tcp_writer(
-    mut write: tokio::net::tcp::OwnedWriteHalf,
+pub fn spawn_tcp_writer<S>(
+    mut write: S,
     mut rx: mpsc::Receiver<bytes::Bytes>,
-) -> tokio::task::JoinHandle<anyhow::Result<()>> {
+) -> tokio::task::JoinHandle<anyhow::Result<()>>
+where
+    S: Sink<bytes::Bytes, Error = std::io::Error> + Unpin + Send + 'static,
+{
     tokio::spawn(async move {
         while let Some(frame) = rx.recv().await {
-            write.write_all(&frame).await?;
+            write.send(frame).await?;
         }
         Ok(())
     })

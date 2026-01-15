@@ -268,6 +268,19 @@ class _NesShellState extends ConsumerState<NesShell>
                   _showSnack('Netplay error: $msg');
                 }
               },
+              fallbackToRelay: (relayAddr, relayRoomCode, reason) async {
+                try {
+                  _pausedByLifecycle = true;
+                  await nes_pause.setPaused(paused: true);
+                  ref.read(emulationStatusProvider.notifier).setPaused(true);
+                } catch (_) {}
+
+                if (mounted) {
+                  _showSnack(
+                    'Netplay: fallback to relay $relayAddr (room $relayRoomCode): $reason',
+                  );
+                }
+              },
             );
           })
           .catchError((Object e, StackTrace st) {

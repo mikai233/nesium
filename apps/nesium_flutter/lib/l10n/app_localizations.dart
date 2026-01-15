@@ -1145,8 +1145,20 @@ abstract class AppLocalizations {
   /// No description provided for @netplayConnect.
   ///
   /// In en, this message translates to:
-  /// **'Connect'**
+  /// **'Join Game'**
   String get netplayConnect;
+
+  /// No description provided for @netplayJoinViaP2P.
+  ///
+  /// In en, this message translates to:
+  /// **'Join via P2P'**
+  String get netplayJoinViaP2P;
+
+  /// No description provided for @netplayJoinGame.
+  ///
+  /// In en, this message translates to:
+  /// **'Join Game'**
+  String get netplayJoinGame;
 
   /// No description provided for @netplayCreateRoom.
   ///
@@ -1157,8 +1169,50 @@ abstract class AppLocalizations {
   /// No description provided for @netplayJoinRoom.
   ///
   /// In en, this message translates to:
-  /// **'Join Room'**
+  /// **'Join Game'**
   String get netplayJoinRoom;
+
+  /// No description provided for @netplayAddressOrRoomCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Room Code or Server Address'**
+  String get netplayAddressOrRoomCode;
+
+  /// No description provided for @netplayHostingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosting'**
+  String get netplayHostingTitle;
+
+  /// No description provided for @netplayRoomCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your Room Code'**
+  String get netplayRoomCodeLabel;
+
+  /// No description provided for @netplayP2PEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'P2P Mode'**
+  String get netplayP2PEnabled;
+
+  /// No description provided for @netplayDirectServerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Server Address'**
+  String get netplayDirectServerLabel;
+
+  /// No description provided for @netplayAdvancedSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced Connection Settings'**
+  String get netplayAdvancedSettings;
+
+  /// No description provided for @netplayP2PServerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'P2P Server'**
+  String get netplayP2PServerLabel;
 
   /// No description provided for @netplayRoomCode.
   ///
@@ -2563,6 +2617,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Long press to clear'**
   String get longPressToClear;
+
+  /// No description provided for @netplayBackToSetup.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to Setup'**
+  String get netplayBackToSetup;
+
+  /// No description provided for @netplayP2PMode.
+  ///
+  /// In en, this message translates to:
+  /// **'P2P Mode'**
+  String get netplayP2PMode;
+
+  /// No description provided for @netplaySignalingServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Signaling Server'**
+  String get netplaySignalingServer;
+
+  /// No description provided for @netplayRelayServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Relay Server (Fallback)'**
+  String get netplayRelayServer;
+
+  /// No description provided for @netplayP2PRoomCode.
+  ///
+  /// In en, this message translates to:
+  /// **'P2P Room Code'**
+  String get netplayP2PRoomCode;
+
+  /// No description provided for @netplayStartP2PSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Start P2P Session'**
+  String get netplayStartP2PSession;
+
+  /// No description provided for @netplayJoinP2PSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Join P2P Session'**
+  String get netplayJoinP2PSession;
+
+  /// No description provided for @netplayInvalidP2PServerAddr.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid P2P server address'**
+  String get netplayInvalidP2PServerAddr;
+
+  /// No description provided for @netplayProceed.
+  ///
+  /// In en, this message translates to:
+  /// **'Proceed'**
+  String get netplayProceed;
 }
 
 class _AppLocalizationsDelegate

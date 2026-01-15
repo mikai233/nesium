@@ -1,11 +1,11 @@
 pub mod emulation;
 pub mod events;
+pub mod gamepad;
 pub mod input;
 pub mod load_rom;
+pub mod net_utils;
 pub mod netplay;
 pub mod palette;
 pub mod pause;
 pub mod server;
 pub mod simple;
-
-pub mod gamepad;

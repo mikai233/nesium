@@ -10,6 +10,7 @@ use std::sync::{
 };
 
 use crate::session::NetplaySession;
+use crate::sync::{SyncMode, SyncStrategy, lockstep::LockstepSync};
 
 fn frame_offset(session: &NetplaySession) -> u32 {
     match session.state {
@@ -62,6 +63,15 @@ pub trait NetplayInputProvider: Send + Sync {
 
     /// Send a state snapshot to the server.
     fn send_state(&self, frame: u32, data: &[u8]);
+
+    /// Get current sync mode (Lockstep or Rollback).
+    fn sync_mode(&self) -> SyncMode;
+
+    /// Check if a rollback is pending (Rollback mode only).
+    fn pending_rollback(&self) -> Option<crate::sync::RollbackRequest>;
+
+    /// Clear the pending rollback after it has been processed.
+    fn clear_rollback(&self);
 }
 
 /// Shared netplay input provider implementation.
@@ -71,6 +81,9 @@ pub trait NetplayInputProvider: Send + Sync {
 pub struct SharedInputProvider {
     /// The underlying session (protected by mutex for state machine).
     session: Mutex<NetplaySession>,
+
+    /// Synchronization strategy (lockstep or rollback).
+    sync_strategy: Mutex<Box<dyn SyncStrategy>>,
 
     /// Flag indicating we're waiting for remote input.
     waiting: AtomicBool,
@@ -101,10 +114,20 @@ impl Default for SharedInputProvider {
 }
 
 impl SharedInputProvider {
-    /// Create a new shared input provider.
+    /// Create a new shared input provider with default Lockstep sync mode.
     pub fn new() -> Self {
+        Self::with_sync_mode(SyncMode::Lockstep)
+    }
+
+    /// Create a new shared input provider with the specified sync mode.
+    pub fn with_sync_mode(mode: SyncMode) -> Self {
+        let strategy: Box<dyn SyncStrategy> = match mode {
+            SyncMode::Lockstep => Box::new(LockstepSync::new(2)),
+            SyncMode::Rollback => Box::new(crate::sync::rollback::RollbackSync::new(2)),
+        };
         Self {
             session: Mutex::new(NetplaySession::new()),
+            sync_strategy: Mutex::new(strategy),
             waiting: AtomicBool::new(false),
             active: AtomicBool::new(false),
             current_frame: AtomicU32::new(0),
@@ -113,6 +136,46 @@ impl SharedInputProvider {
             on_send_input: Mutex::new(None),
             on_send_state: Mutex::new(None),
         }
+    }
+
+    /// Get the current sync mode.
+    pub fn sync_mode(&self) -> SyncMode {
+        self.sync_strategy.lock().mode()
+    }
+
+    /// Set the sync mode (clears existing input state).
+    pub fn set_sync_mode(&self, mode: SyncMode) {
+        let (input_delay, active_ports) =
+            self.with_session(|s| (s.input_delay_frames as u32, s.active_ports));
+        let mut new_strategy: Box<dyn SyncStrategy> = match mode {
+            SyncMode::Lockstep => Box::new(LockstepSync::new(input_delay)),
+            SyncMode::Rollback => Box::new(crate::sync::rollback::RollbackSync::new(input_delay)),
+        };
+
+        // Transfer active ports to the new strategy
+        for (i, &active) in active_ports.iter().enumerate() {
+            new_strategy.set_port_active(i, active);
+        }
+
+        let mut strategy = self.sync_strategy.lock();
+        *strategy = new_strategy;
+
+        let mut session = self.session.lock();
+        session.clear_inputs();
+    }
+
+    /// Set a port as active or inactive.
+    pub fn set_port_active(&self, port: usize, active: bool) {
+        self.sync_strategy.lock().set_port_active(port, active);
+        let mut session = self.session.lock();
+        if port < session.active_ports.len() {
+            session.active_ports[port] = active;
+        }
+    }
+    /// Get mutable access to the sync strategy.
+    pub fn with_sync<R>(&self, f: impl FnOnce(&mut dyn SyncStrategy) -> R) -> R {
+        let mut strategy = self.sync_strategy.lock();
+        f(strategy.as_mut())
     }
 
     /// Get mutable access to the session.
@@ -151,19 +214,36 @@ impl SharedInputProvider {
 
     /// Push confirmed input from network into the queue.
     pub fn push_remote_input(&self, port: usize, frame: u32, buttons: u16) {
+        // Forward to sync strategy
+        self.sync_strategy
+            .lock()
+            .on_remote_input(port as u8, frame, buttons);
+
+        // Also push to session for backward compatibility
         let mut session = self.session.lock();
         session.push_input(port, frame, buttons);
 
         // Signal that we might no longer be waiting
-        // We can't easily check specific frame readiness without current frame context,
-        // but any input might unblock the waiter.
         self.waiting.store(false, Ordering::Release);
     }
 
     /// Clear all input queues.
     pub fn clear_queues(&self) {
+        self.sync_strategy.lock().clear();
         let mut session = self.session.lock();
         session.clear_inputs();
+    }
+
+    /// Get the last confirmed frame.
+    pub fn last_confirmed_frame(&self) -> u32 {
+        self.sync_strategy.lock().last_confirmed_frame()
+    }
+
+    /// Set the input delay in frames.
+    pub fn set_input_delay(&self, delay: u32) {
+        self.sync_strategy.lock().set_input_delay(delay);
+        let mut session = self.session.lock();
+        session.input_delay_frames = delay as u8;
     }
 
     /// Set callback for sending inputs.
@@ -181,26 +261,19 @@ impl SharedInputProvider {
 
 impl NetplayInputProvider for SharedInputProvider {
     fn poll_inputs(&self, frame: u32) -> Option<[u16; 4]> {
-        let mut session = self.session.lock();
-        let effective_frame = frame.wrapping_add(frame_offset(&session));
+        let effective_frame =
+            self.with_session(|session| frame.wrapping_add(frame_offset(session)));
 
-        // Check if we have valid inputs for THIS specific frame
-        if !session.is_frame_ready(effective_frame) {
+        // Delegate to sync strategy
+        let result = self.sync_strategy.lock().inputs_for_frame(effective_frame);
+
+        if result.is_none() {
             self.waiting.store(true, Ordering::Release);
-            return None;
+        } else {
+            self.waiting.store(false, Ordering::Release);
         }
 
-        // Retrieve inputs for this frame
-        let mut inputs = [0u16; 4];
-        for (i, input) in inputs.iter_mut().enumerate() {
-            // get_input returns Some(buttons) or Some(0) if inactive,
-            // or None if data missing (but is_frame_ready checked that).
-            // So unwrap_or(0) is safe fallback.
-            *input = session.get_input(i, effective_frame).unwrap_or(0);
-        }
-
-        self.waiting.store(false, Ordering::Release);
-        Some(inputs)
+        result
     }
 
     fn submit_local_input(&self, pad: usize, buttons: u16) {
@@ -237,13 +310,19 @@ impl NetplayInputProvider for SharedInputProvider {
     }
 
     fn send_input_to_server(&self, frame: u32, buttons: u16) {
-        let effective_frame = self.with_session_mut(|session| {
+        let (effective_frame, local_player) = self.with_session_mut(|session| {
             let effective = frame.wrapping_add(frame_offset(session));
             if let Some(idx) = session.local_player_index {
                 session.push_input(idx as usize, effective, buttons);
             }
-            effective
+            (effective, session.local_player_index)
         });
+
+        if let Some(idx) = local_player {
+            self.sync_strategy
+                .lock()
+                .on_local_input(idx, effective_frame, buttons);
+        }
 
         // CRITICAL: Push to own queue immediately to prevent lockstep deadlock.
         // Without this, the game waits for server relay which causes latency-induced freeze.
@@ -255,13 +334,17 @@ impl NetplayInputProvider for SharedInputProvider {
     }
 
     fn is_frame_ready(&self, frame: u32) -> bool {
-        let session = self.session.lock();
-        session.is_frame_ready(frame.wrapping_add(frame_offset(&session)))
+        let effective_frame =
+            self.with_session(|session| frame.wrapping_add(frame_offset(session)));
+        self.sync_strategy.lock().can_advance(effective_frame)
     }
 
     fn should_fast_forward(&self, frame: u32) -> bool {
-        let session = self.session.lock();
-        session.should_fast_forward(frame.wrapping_add(frame_offset(&session)))
+        let effective_frame =
+            self.with_session(|session| frame.wrapping_add(frame_offset(session)));
+        self.sync_strategy
+            .lock()
+            .should_fast_forward(effective_frame)
     }
 
     fn send_state(&self, frame: u32, data: &[u8]) {
@@ -271,6 +354,18 @@ impl NetplayInputProvider for SharedInputProvider {
         if let Some(f) = cb.as_ref() {
             f(effective_frame, data);
         }
+    }
+
+    fn sync_mode(&self) -> SyncMode {
+        self.sync_strategy.lock().mode()
+    }
+
+    fn pending_rollback(&self) -> Option<crate::sync::RollbackRequest> {
+        self.sync_strategy.lock().pending_rollback()
+    }
+
+    fn clear_rollback(&self) {
+        self.sync_strategy.lock().clear_rollback();
     }
 }
 
@@ -294,6 +389,7 @@ mod tests {
     fn poll_returns_none_when_empty() {
         let provider = SharedInputProvider::new();
         provider.set_active(true);
+        provider.set_port_active(0, true);
         assert!(provider.poll_inputs(0).is_none());
         assert!(provider.is_waiting());
     }
@@ -305,6 +401,7 @@ mod tests {
 
         // Push inputs for all ports
         for port in 0..4 {
+            provider.set_port_active(port, true);
             provider.push_remote_input(port, 0, (port + 1) as u16);
         }
 

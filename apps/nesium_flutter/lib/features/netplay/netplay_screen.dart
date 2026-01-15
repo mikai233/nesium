@@ -10,6 +10,8 @@ import '../../domain/nes_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../bridge/api/netplay.dart';
 import 'netplay_constants.dart';
+import '../../persistence/app_storage.dart';
+import '../../persistence/keys.dart';
 
 enum _NetplayTransportOption { auto, tcp, quic }
 
@@ -22,10 +24,15 @@ class NetplayScreen extends ConsumerStatefulWidget {
 
 class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   final _serverAddrController = TextEditingController(text: '127.0.0.1:5233');
-  final _serverNameController = TextEditingController(text: 'localhost');
   final _pinnedFingerprintController = TextEditingController();
   final _playerNameController = TextEditingController(text: 'Player');
   final _roomCodeController = TextEditingController();
+  final _p2pRoomCodeController = TextEditingController();
+  final _p2pServerAddrController = TextEditingController(
+    text: 'nesium.mikai.link:5233',
+  );
+
+  bool _p2pJoinEnabled = false;
 
   Stream<NetplayStatus>? _statusStream;
   _NetplayTransportOption _transport = _NetplayTransportOption.auto;
@@ -34,16 +41,102 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   void initState() {
     super.initState();
     _statusStream = netplayStatusStream();
+    _loadJoinPrefs();
   }
 
   @override
   void dispose() {
     _serverAddrController.dispose();
-    _serverNameController.dispose();
     _pinnedFingerprintController.dispose();
     _playerNameController.dispose();
     _roomCodeController.dispose();
+    _p2pRoomCodeController.dispose();
+    _p2pServerAddrController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadJoinPrefs() async {
+    try {
+      final storage = ref.read(appStorageProvider);
+      final enabled =
+          storage.get(StorageKeys.settingsNetplayJoinP2PEnabled) as bool?;
+      final addr =
+          storage.get(StorageKeys.settingsNetplayJoinP2PServerAddr) as String?;
+      if (!mounted) return;
+      setState(() {
+        _p2pJoinEnabled = enabled ?? false;
+        if (addr != null && addr.trim().isNotEmpty) {
+          _p2pServerAddrController.text = addr.trim();
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _persistJoinEnabled(bool enabled) async {
+    try {
+      await ref
+          .read(appStorageProvider)
+          .put(StorageKeys.settingsNetplayJoinP2PEnabled, enabled);
+    } catch (_) {}
+  }
+
+  Future<void> _persistJoinServerAddr(String value) async {
+    try {
+      await ref
+          .read(appStorageProvider)
+          .put(StorageKeys.settingsNetplayJoinP2PServerAddr, value.trim());
+    } catch (_) {}
+  }
+
+  String _deriveServerNameFromAddr(String serverAddr) {
+    final trimmed = serverAddr.trim();
+    if (trimmed.isEmpty) return 'localhost';
+
+    try {
+      final uri = trimmed.contains('://')
+          ? Uri.parse(trimmed)
+          : Uri.parse('dummy://$trimmed');
+      final host = uri.host.trim();
+      if (host.isNotEmpty) return host;
+    } catch (_) {}
+
+    return 'localhost';
+  }
+
+  InputDecoration _roundedInputDecoration({
+    required String labelText,
+    String? hintText,
+    required Widget prefixIcon,
+    Widget? suffixIcon,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    const radius = 12.0;
+    final enabledBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(radius),
+      borderSide: BorderSide(
+        color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+      ),
+    );
+    final focusedBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(radius),
+      borderSide: BorderSide(
+        color: colorScheme.primary.withValues(alpha: 0.9),
+        width: 1.2,
+      ),
+    );
+    return InputDecoration(
+      labelText: labelText,
+      hintText: hintText,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: colorScheme.surface,
+      isDense: true,
+      contentPadding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+      border: enabledBorder,
+      enabledBorder: enabledBorder,
+      focusedBorder: focusedBorder,
+    );
   }
 
   Future<void> _connect() async {
@@ -52,8 +145,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       final serverAddr = _serverAddrController.text.trim();
       final playerName = _playerNameController.text.trim();
 
-      final serverNameRaw = _serverNameController.text.trim();
-      final serverName = serverNameRaw.isEmpty ? 'localhost' : serverNameRaw;
+      final serverName = _deriveServerNameFromAddr(serverAddr);
 
       final pinned = _pinnedFingerprintController.text.trim();
       final usePinned = pinned.isNotEmpty;
@@ -95,6 +187,44 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
           }
           break;
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.netplayConnectFailed(e.toString()))),
+        );
+      }
+    }
+  }
+
+  Future<void> _connectP2P() async {
+    final l10n = AppLocalizations.of(context)!;
+    final signalingAddr = _p2pServerAddrController.text.trim();
+    if (signalingAddr.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.netplayInvalidP2PServerAddr)),
+        );
+      }
+      return;
+    }
+
+    final code = int.tryParse(_p2pRoomCodeController.text.trim());
+    if (code == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.netplayInvalidRoomCode)));
+      return;
+    }
+    final playerNameRaw = _playerNameController.text.trim();
+    final playerName = playerNameRaw.isEmpty ? 'Player' : playerNameRaw;
+
+    try {
+      await netplayP2PConnectJoinAuto(
+        signalingAddr: signalingAddr,
+        relayAddr: signalingAddr,
+        roomCode: code,
+        playerName: playerName,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -215,7 +345,11 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
               _buildStatusCard(l10n, status),
               const SizedBox(height: 24),
               AnimatedSize(
-                duration: const Duration(milliseconds: 300),
+                // Avoid double size animations (outer + inner) which can cause jitter
+                // when toggling P2P join section in the disconnected/connect form.
+                duration: state == NetplayState.disconnected
+                    ? Duration.zero
+                    : const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
                 child: PageTransitionSwitcher(
                   duration: const Duration(milliseconds: 300),
@@ -422,82 +556,166 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   }
 
   Widget _buildConnectForm(AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    final directConnectDisabled = _p2pJoinEnabled;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AnimatedDropdownMenu<_NetplayTransportOption>(
-          labelText: l10n.netplayTransportLabel,
-          value: _transport,
-          entries: [
-            DropdownMenuEntry(
-              value: _NetplayTransportOption.auto,
-              label: l10n.netplayTransportAuto,
+        AbsorbPointer(
+          absorbing: directConnectDisabled,
+          child: Opacity(
+            opacity: directConnectDisabled ? 0.5 : 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AnimatedDropdownMenu<_NetplayTransportOption>(
+                  labelText: l10n.netplayTransportLabel,
+                  value: _transport,
+                  entries: [
+                    DropdownMenuEntry(
+                      value: _NetplayTransportOption.auto,
+                      label: l10n.netplayTransportAuto,
+                    ),
+                    DropdownMenuEntry(
+                      value: _NetplayTransportOption.tcp,
+                      label: l10n.netplayTransportTcp,
+                    ),
+                    DropdownMenuEntry(
+                      value: _NetplayTransportOption.quic,
+                      label: l10n.netplayTransportQuic,
+                    ),
+                  ],
+                  enabled: !directConnectDisabled,
+                  onSelected: (value) => setState(() => _transport = value),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _serverAddrController,
+                  enabled: !directConnectDisabled,
+                  decoration: _roundedInputDecoration(
+                    labelText: l10n.netplayServerAddress,
+                    hintText: '127.0.0.1:5233',
+                    prefixIcon: const Icon(Icons.dns_rounded),
+                  ),
+                ),
+                if (_transport != _NetplayTransportOption.tcp) ...[
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _pinnedFingerprintController,
+                    enabled: !directConnectDisabled,
+                    decoration: _roundedInputDecoration(
+                      labelText: l10n.netplayQuicFingerprintLabel,
+                      hintText: l10n.netplayQuicFingerprintHint,
+                      prefixIcon: const Icon(Icons.key_rounded),
+                      suffixIcon: IconButton(
+                        onPressed: _pastePinnedFingerprint,
+                        tooltip: l10n.paste,
+                        icon: const Icon(Icons.content_paste_rounded),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.netplayQuicFingerprintHelper,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
             ),
-            DropdownMenuEntry(
-              value: _NetplayTransportOption.tcp,
-              label: l10n.netplayTransportTcp,
-            ),
-            DropdownMenuEntry(
-              value: _NetplayTransportOption.quic,
-              label: l10n.netplayTransportQuic,
-            ),
-          ],
-          onSelected: (value) => setState(() => _transport = value),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _serverAddrController,
-          decoration: InputDecoration(
-            labelText: l10n.netplayServerAddress,
-            hintText: '127.0.0.1:5233',
-            prefixIcon: const Icon(Icons.dns_rounded),
-            border: const OutlineInputBorder(),
           ),
         ),
-        if (_transport != _NetplayTransportOption.tcp) ...[
-          const SizedBox(height: 16),
-          TextField(
-            controller: _serverNameController,
-            decoration: InputDecoration(
-              labelText: l10n.netplayServerNameLabel,
-              hintText: l10n.netplayServerNameHint,
-              prefixIcon: const Icon(Icons.badge_rounded),
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _pinnedFingerprintController,
-            decoration: InputDecoration(
-              labelText: l10n.netplayQuicFingerprintLabel,
-              hintText: l10n.netplayQuicFingerprintHint,
-              prefixIcon: const Icon(Icons.key_rounded),
-              border: const OutlineInputBorder(),
-              suffixIcon: IconButton(
-                onPressed: _pastePinnedFingerprint,
-                tooltip: l10n.paste,
-                icon: const Icon(Icons.content_paste_rounded),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.netplayQuicFingerprintHelper,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
         const SizedBox(height: 16),
         TextField(
           controller: _playerNameController,
-          decoration: InputDecoration(
+          decoration: _roundedInputDecoration(
             labelText: l10n.netplayPlayerName,
             prefixIcon: const Icon(Icons.person_rounded),
-            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          elevation: 0,
+          color: theme.colorScheme.surfaceContainerLow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Column(
+            children: [
+              SwitchListTile(
+                value: _p2pJoinEnabled,
+                onChanged: (enabled) {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  setState(() => _p2pJoinEnabled = enabled);
+                  unawaited(_persistJoinEnabled(enabled));
+                },
+                secondary: Icon(
+                  _p2pJoinEnabled
+                      ? Icons.wifi_tethering_rounded
+                      : Icons.lan_rounded,
+                  color: theme.colorScheme.primary,
+                ),
+                title: Text(l10n.netplayJoinViaP2P),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topCenter,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (child, animation) =>
+                      FadeTransition(opacity: animation, child: child),
+                  child: _p2pJoinEnabled
+                      ? Column(
+                          key: const ValueKey('p2p_on'),
+                          children: [
+                            const Divider(height: 1),
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                children: [
+                                  TextField(
+                                    controller: _p2pServerAddrController,
+                                    decoration: _roundedInputDecoration(
+                                      labelText: l10n.netplayP2PServerLabel,
+                                      prefixIcon: const Icon(Icons.hub_rounded),
+                                    ),
+                                    onChanged: (value) => unawaited(
+                                      _persistJoinServerAddr(value),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  TextField(
+                                    controller: _p2pRoomCodeController,
+                                    decoration: _roundedInputDecoration(
+                                      labelText: l10n.netplayP2PRoomCode,
+                                      prefixIcon: const Icon(
+                                        Icons.numbers_rounded,
+                                      ),
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      : const SizedBox(
+                          key: ValueKey('p2p_off'),
+                          width: double.infinity,
+                          height: 0,
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 24),
         FilledButton.icon(
-          onPressed: _connect,
+          onPressed: _p2pJoinEnabled ? _connectP2P : _connect,
           icon: const Icon(Icons.login_rounded),
           label: Text(l10n.netplayConnect),
         ),
@@ -533,10 +751,9 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
         const SizedBox(height: 24),
         TextField(
           controller: _roomCodeController,
-          decoration: InputDecoration(
+          decoration: _roundedInputDecoration(
             labelText: l10n.netplayRoomCode,
             prefixIcon: const Icon(Icons.numbers_rounded),
-            border: const OutlineInputBorder(),
           ),
           keyboardType: TextInputType.number,
         ),

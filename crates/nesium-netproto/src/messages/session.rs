@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use serde::{Deserialize, Serialize};
 
 use crate::channel::ChannelKind;
@@ -6,6 +8,18 @@ use crate::channel::ChannelKind;
 pub enum TransportKind {
     Tcp,
     Quic,
+}
+
+/// Synchronization mode for netplay sessions.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SyncMode {
+    /// Wait for all players' confirmed inputs before advancing each frame.
+    /// Best for low-latency networks (LAN, same region).
+    #[default]
+    Lockstep = 0,
+    /// Predict remote inputs and rollback/resimulate on misprediction.
+    /// Best for high-latency networks (cross-region, internet).
+    Rollback = 1,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -43,6 +57,8 @@ pub struct AttachChannel {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JoinRoom {
     pub room_code: u32,
+    /// Preferred sync mode (if None, server decides based on room settings).
+    pub preferred_sync_mode: Option<SyncMode>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -51,6 +67,8 @@ pub struct JoinAck {
     pub player_index: u8,
     pub start_frame: u32,
     pub room_id: u32,
+    /// The sync mode that will be used for this room.
+    pub sync_mode: SyncMode,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -80,6 +98,8 @@ pub enum ErrorCode {
     GameAlreadyStarted = 7,
     /// Invalid game or protocol state for this operation
     InvalidState = 8,
+    /// P2P host is not available (disconnected or never set)
+    HostNotAvailable = 9,
 }
 
 /// Server sends an error response to the client.
@@ -189,4 +209,94 @@ pub struct BeginCatchUp {
     pub target_frame: u32,
     /// Bitmask of controller ports that must be treated as active (bit 0..3).
     pub active_ports_mask: u8,
+}
+
+// ---- P2P signaling (netd as signaling server) ----
+
+/// Host asks the signaling server to create a new relay room code and publish direct-connect info.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct P2PCreateRoom {
+    /// Addresses peers should try when connecting to the host server directly.
+    ///
+    /// This is an ordered list; clients should try QUIC first (if fingerprint is present),
+    /// then fall back to TCP, iterating addresses in order.
+    pub host_addrs: Vec<SocketAddr>,
+    /// Host server room code to join when connecting directly to the host server.
+    pub host_room_code: u32,
+    /// Host QUIC certificate leaf SHA-256 fingerprint (base64url/hex/colon-hex are all accepted by netplay).
+    pub host_quic_cert_sha256_fingerprint: Option<String>,
+    /// SNI/server_name to use for QUIC connections (pinning mode does not rely on SAN validation).
+    pub host_quic_server_name: Option<String>,
+}
+
+/// Signaling server response: allocated relay room code.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct P2PRoomCreated {
+    /// Room code clients should use for both signaling and (if needed) relay fallback on this server.
+    pub room_code: u32,
+}
+
+/// Join a P2P room on the signaling server and obtain direct-connect info for the host.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct P2PJoinRoom {
+    pub room_code: u32,
+}
+
+/// Signaling server response containing host direct-connect information.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct P2PJoinAck {
+    pub ok: bool,
+    pub room_code: u32,
+    pub host_addrs: Vec<SocketAddr>,
+    pub host_room_code: u32,
+    pub host_quic_cert_sha256_fingerprint: Option<String>,
+    pub host_quic_server_name: Option<String>,
+    /// If true, clients should skip direct connect and immediately use relay mode on this server.
+    pub fallback_required: bool,
+    pub fallback_reason: Option<String>,
+}
+
+/// Request switching this room to relay fallback mode on the signaling server.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct P2PRequestFallback {
+    pub room_code: u32,
+    pub reason: String,
+}
+
+/// Signaling server broadcast indicating relay fallback is required.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct P2PFallbackNotice {
+    pub room_code: u32,
+    pub reason: String,
+    pub requested_by_client_id: u32,
+}
+
+/// Signaling server notifies watchers that the P2P host has disconnected.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct P2PHostDisconnected {
+    pub room_code: u32,
+}
+
+/// Maximum number of host addresses allowed in P2PCreateRoom.
+pub const P2P_MAX_HOST_ADDRS: usize = 8;
+
+/// Maximum length of reason strings in P2P messages (bytes).
+pub const P2P_MAX_REASON_LEN: usize = 256;
+
+// ---- Direct-session control (host server -> clients) ----
+
+/// Host asks its own server to broadcast a relay fallback instruction to all connected clients.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RequestFallbackRelay {
+    pub relay_addr: SocketAddr,
+    pub relay_room_code: u32,
+    pub reason: String,
+}
+
+/// Server instructs clients to disconnect and reconnect to the relay server/room.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FallbackToRelay {
+    pub relay_addr: SocketAddr,
+    pub relay_room_code: u32,
+    pub reason: String,
 }

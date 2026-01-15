@@ -559,26 +559,53 @@ class AppLocalizationsZh extends AppLocalizations {
   String get netplayPlayerName => '玩家名称';
 
   @override
-  String get netplayQuicFingerprintLabel => 'QUIC 证书指纹（可选）';
+  String get netplayQuicFingerprintLabel => 'QUIC 证书指纹 (可选)';
 
   @override
-  String get netplayQuicFingerprintHint => 'base64url（43 字符）';
+  String get netplayQuicFingerprintHint => 'base64url (43 字符)';
 
   @override
   String get netplayQuicFingerprintHelper =>
-      '填入后启用指纹 Pinning（推荐）。留空则使用系统信任（QUIC）或回退到 TCP。';
+      '填入此项以使用 Pinning。留空则使用系统信任 (QUIC) 或回退到 TCP。';
 
   @override
-  String get netplayConnect => '连接';
+  String get netplayConnect => '加入游戏';
+
+  @override
+  String get netplayJoinViaP2P => '通过 P2P 加入';
+
+  @override
+  String get netplayJoinGame => '加入游戏';
 
   @override
   String get netplayCreateRoom => '创建房间';
 
   @override
-  String get netplayJoinRoom => '加入房间';
+  String get netplayJoinRoom => '加入游戏';
 
   @override
-  String get netplayRoomCode => '房间代码';
+  String get netplayAddressOrRoomCode => '房间码或服务器地址';
+
+  @override
+  String get netplayHostingTitle => '正在托管';
+
+  @override
+  String get netplayRoomCodeLabel => '你的房间码';
+
+  @override
+  String get netplayP2PEnabled => '开启 P2P 网联';
+
+  @override
+  String get netplayDirectServerLabel => '服务器地址';
+
+  @override
+  String get netplayAdvancedSettings => '高级连接设置';
+
+  @override
+  String get netplayP2PServerLabel => 'P2P 服务器地址';
+
+  @override
+  String get netplayRoomCode => '房间码';
 
   @override
   String get netplayRoleLabel => '角色';
@@ -1329,4 +1356,31 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get longPressToClear => '长按清除';
+
+  @override
+  String get netplayBackToSetup => '返回设置';
+
+  @override
+  String get netplayP2PMode => 'P2P 模式';
+
+  @override
+  String get netplaySignalingServer => '信令服务器';
+
+  @override
+  String get netplayRelayServer => '中转服务器 (备用)';
+
+  @override
+  String get netplayP2PRoomCode => 'P2P 房间码';
+
+  @override
+  String get netplayStartP2PSession => '开启 P2P 会话';
+
+  @override
+  String get netplayJoinP2PSession => '加入 P2P 会话';
+
+  @override
+  String get netplayInvalidP2PServerAddr => 'P2P 服务器地址无效';
+
+  @override
+  String get netplayProceed => '继续';
 }

@@ -21,3 +21,14 @@ ring.workspace = true
 rcgen.workspace = true
 hex.workspace = true
 base64.workspace = true
+tokio-rustls = { version = "0.26.4", default-features = false, features = [
+    "logging",
+    "tls12",
+    "ring",
+] }
+tokio-tungstenite = { version = "0.28.0", features = [
+    "rustls-tls-native-roots",
+] }
+futures-util = "0.3.31"
+tokio-util = { version = "0.7.18", features = ["codec"] }
+rustls-pemfile = "2.1.0"

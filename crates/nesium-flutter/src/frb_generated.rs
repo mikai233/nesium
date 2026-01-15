@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1244013903;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1618385119;
 
 // Section: executor
 
@@ -326,6 +326,70 @@ fn wire__crate__api__gamepad__get_gamepad_pressed_buttons_impl(
         },
     )
 }
+fn wire__crate__api__net_utils__get_local_addrs_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_local_addrs",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::net_utils::get_local_addrs())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__net_utils__get_public_ip_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_public_ip",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::net_utils::get_public_ip())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__load_rom__get_rom_hash_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -352,6 +416,40 @@ fn wire__crate__api__load_rom__get_rom_hash_impl(
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(crate::api::load_rom::get_rom_hash())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__server__get_server_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_server",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok({
+                        crate::api::server::get_server();
+                    })?;
                     Ok(output_ok)
                 })())
             }
@@ -1085,6 +1183,285 @@ fn wire__crate__api__netplay__netplay_join_room_impl(
         },
     )
 }
+fn wire__crate__api__netplay__netplay_p2p_connect_join_auto_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "netplay_p2p_connect_join_auto",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_signaling_addr = <String>::sse_decode(&mut deserializer);
+            let api_relay_addr = <String>::sse_decode(&mut deserializer);
+            let api_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_player_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::netplay::netplay_p2p_connect_join_auto(
+                            api_signaling_addr,
+                            api_relay_addr,
+                            api_room_code,
+                            api_player_name,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__netplay__netplay_p2p_create_room_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "netplay_p2p_create_room",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_signaling_addr = <String>::sse_decode(&mut deserializer);
+            let api_host_addrs = <Vec<String>>::sse_decode(&mut deserializer);
+            let api_host_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_host_quic_cert_sha256_fingerprint =
+                <Option<String>>::sse_decode(&mut deserializer);
+            let api_host_quic_server_name = <Option<String>>::sse_decode(&mut deserializer);
+            let api_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::netplay::netplay_p2p_create_room(
+                            api_signaling_addr,
+                            api_host_addrs,
+                            api_host_room_code,
+                            api_host_quic_cert_sha256_fingerprint,
+                            api_host_quic_server_name,
+                            api_name,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__netplay__netplay_p2p_host_create_and_watch_fallback_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "netplay_p2p_host_create_and_watch_fallback",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_signaling_addr = <String>::sse_decode(&mut deserializer);
+            let api_relay_addr = <String>::sse_decode(&mut deserializer);
+            let api_host_addrs = <Vec<String>>::sse_decode(&mut deserializer);
+            let api_host_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_host_quic_cert_sha256_fingerprint =
+                <Option<String>>::sse_decode(&mut deserializer);
+            let api_host_quic_server_name = <Option<String>>::sse_decode(&mut deserializer);
+            let api_player_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::netplay::netplay_p2p_host_create_and_watch_fallback(
+                                api_signaling_addr,
+                                api_relay_addr,
+                                api_host_addrs,
+                                api_host_room_code,
+                                api_host_quic_cert_sha256_fingerprint,
+                                api_host_quic_server_name,
+                                api_player_name,
+                            )
+                            .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__netplay__netplay_p2p_host_start_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "netplay_p2p_host_start",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_signaling_addr = <String>::sse_decode(&mut deserializer);
+            let api_relay_addr = <String>::sse_decode(&mut deserializer);
+            let api_player_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::netplay::netplay_p2p_host_start(
+                            api_signaling_addr,
+                            api_relay_addr,
+                            api_player_name,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__netplay__netplay_p2p_join_room_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "netplay_p2p_join_room",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_signaling_addr = <String>::sse_decode(&mut deserializer);
+            let api_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::netplay::netplay_p2p_join_room(
+                            api_signaling_addr,
+                            api_room_code,
+                            api_name,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__netplay__netplay_p2p_request_fallback_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "netplay_p2p_request_fallback",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_signaling_addr = <String>::sse_decode(&mut deserializer);
+            let api_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_reason = <String>::sse_decode(&mut deserializer);
+            let api_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::netplay::netplay_p2p_request_fallback(
+                            api_signaling_addr,
+                            api_room_code,
+                            api_reason,
+                            api_name,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__netplay__netplay_provide_state_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1115,6 +1492,49 @@ fn wire__crate__api__netplay__netplay_provide_state_impl(
                     (move || async move {
                         let output_ok =
                             crate::api::netplay::netplay_provide_state(api_frame, api_data).await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__netplay__netplay_request_fallback_relay_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "netplay_request_fallback_relay",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_relay_addr = <String>::sse_decode(&mut deserializer);
+            let api_relay_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_reason = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::netplay::netplay_request_fallback_relay(
+                            api_relay_addr,
+                            api_relay_room_code,
+                            api_reason,
+                        )
+                        .await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -3369,6 +3789,42 @@ fn wire__crate__api__pause__toggle_pause_impl(
         },
     )
 }
+fn wire__crate__api__net_utils__try_upnp_mapping_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "try_upnp_mapping",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api__port = <u16>::sse_decode(&mut deserializer);
+            let api__label_prefix = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok({
+                        crate::api::net_utils::try_upnp_mapping(api__port, &api__label_prefix);
+                    })?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__events__unsubscribe_debug_state_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3914,6 +4370,18 @@ impl SseDecode for i32 {
     }
 }
 
+impl SseDecode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::gamepad::GamepadButtonFfi> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4034,6 +4502,16 @@ impl SseDecode for crate::api::netplay::NetplayGameEvent {
                     error_code: var_errorCode,
                 };
             }
+            7 => {
+                let mut var_relayAddr = <String>::sse_decode(deserializer);
+                let mut var_relayRoomCode = <u32>::sse_decode(deserializer);
+                let mut var_reason = <String>::sse_decode(deserializer);
+                return crate::api::netplay::NetplayGameEvent::FallbackToRelay {
+                    relay_addr: var_relayAddr,
+                    relay_room_code: var_relayRoomCode,
+                    reason: var_reason,
+                };
+            }
             _ => {
                 unimplemented!("");
             }
@@ -4149,6 +4627,42 @@ impl SseDecode for Option<Vec<u8>> {
         } else {
             return None;
         }
+    }
+}
+
+impl SseDecode for crate::api::netplay::P2PConnectMode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::netplay::P2PConnectMode::Direct,
+            1 => crate::api::netplay::P2PConnectMode::Relay,
+            _ => unreachable!("Invalid variant for P2PConnectMode: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::netplay::P2PJoinInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_ok = <bool>::sse_decode(deserializer);
+        let mut var_roomCode = <u32>::sse_decode(deserializer);
+        let mut var_hostAddrs = <Vec<String>>::sse_decode(deserializer);
+        let mut var_hostRoomCode = <u32>::sse_decode(deserializer);
+        let mut var_hostQuicCertSha256Fingerprint = <Option<String>>::sse_decode(deserializer);
+        let mut var_hostQuicServerName = <Option<String>>::sse_decode(deserializer);
+        let mut var_fallbackRequired = <bool>::sse_decode(deserializer);
+        let mut var_fallbackReason = <Option<String>>::sse_decode(deserializer);
+        return crate::api::netplay::P2PJoinInfo {
+            ok: var_ok,
+            room_code: var_roomCode,
+            host_addrs: var_hostAddrs,
+            host_room_code: var_hostRoomCode,
+            host_quic_cert_sha256_fingerprint: var_hostQuicCertSha256Fingerprint,
+            host_quic_server_name: var_hostQuicServerName,
+            fallback_required: var_fallbackRequired,
+            fallback_reason: var_fallbackReason,
+        };
     }
 }
 
@@ -4446,294 +4960,339 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__load_rom__get_rom_hash_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__gamepad__init_gamepad_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__pause__is_paused_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__gamepad__list_gamepads_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__load_rom__load_rom_impl(port, ptr, rust_vec_len, data_len),
-        16 => {
+        9 => wire__crate__api__net_utils__get_local_addrs_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__net_utils__get_public_ip_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__load_rom__get_rom_hash_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__server__get_server_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__gamepad__init_gamepad_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__pause__is_paused_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__gamepad__list_gamepads_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__load_rom__load_rom_impl(port, ptr, rust_vec_len, data_len),
+        19 => {
             wire__crate__api__load_rom__load_rom_from_bytes_impl(port, ptr, rust_vec_len, data_len)
         }
-        17 => wire__crate__api__emulation__load_state_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__emulation__load_state_from_memory_impl(
+        20 => wire__crate__api__emulation__load_state_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__emulation__load_state_from_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__emulation__load_tas_movie_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__netplay__netplay_connect_impl(port, ptr, rust_vec_len, data_len),
-        21 => {
+        22 => wire__crate__api__emulation__load_tas_movie_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__netplay__netplay_connect_impl(port, ptr, rust_vec_len, data_len),
+        24 => {
             wire__crate__api__netplay__netplay_connect_auto_impl(port, ptr, rust_vec_len, data_len)
         }
-        22 => wire__crate__api__netplay__netplay_connect_auto_pinned_impl(
+        25 => wire__crate__api__netplay__netplay_connect_auto_pinned_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => {
+        26 => {
             wire__crate__api__netplay__netplay_connect_quic_impl(port, ptr, rust_vec_len, data_len)
         }
-        24 => wire__crate__api__netplay__netplay_connect_quic_pinned_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        25 => {
-            wire__crate__api__netplay__netplay_create_room_impl(port, ptr, rust_vec_len, data_len)
-        }
-        26 => wire__crate__api__netplay__netplay_disconnect_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__netplay__netplay_game_event_stream_impl(
+        27 => wire__crate__api__netplay__netplay_connect_quic_pinned_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
         28 => {
+            wire__crate__api__netplay__netplay_create_room_impl(port, ptr, rust_vec_len, data_len)
+        }
+        29 => wire__crate__api__netplay__netplay_disconnect_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__netplay__netplay_game_event_stream_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        31 => {
             wire__crate__api__netplay__netplay_is_connected_impl(port, ptr, rust_vec_len, data_len)
         }
-        29 => wire__crate__api__netplay__netplay_join_room_impl(port, ptr, rust_vec_len, data_len),
-        30 => {
+        32 => wire__crate__api__netplay__netplay_join_room_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__netplay__netplay_p2p_connect_join_auto_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        34 => wire__crate__api__netplay__netplay_p2p_create_room_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        35 => wire__crate__api__netplay__netplay_p2p_host_create_and_watch_fallback_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        36 => wire__crate__api__netplay__netplay_p2p_host_start_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        37 => {
+            wire__crate__api__netplay__netplay_p2p_join_room_impl(port, ptr, rust_vec_len, data_len)
+        }
+        38 => wire__crate__api__netplay__netplay_p2p_request_fallback_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        39 => {
             wire__crate__api__netplay__netplay_provide_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        31 => {
+        40 => wire__crate__api__netplay__netplay_request_fallback_relay_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        41 => {
             wire__crate__api__netplay__netplay_request_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        32 => wire__crate__api__netplay__netplay_send_pause_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__netplay__netplay_send_reset_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__netplay__netplay_send_rom_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__netplay__netplay_send_rom_loaded_impl(
+        42 => wire__crate__api__netplay__netplay_send_pause_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__netplay__netplay_send_reset_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__netplay__netplay_send_rom_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__netplay__netplay_send_rom_loaded_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => {
+        46 => {
             wire__crate__api__netplay__netplay_status_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        37 => {
+        47 => {
             wire__crate__api__netplay__netplay_switch_role_impl(port, ptr, rust_vec_len, data_len)
         }
-        38 => wire__crate__api__server__netserver_get_port_impl(port, ptr, rust_vec_len, data_len),
-        39 => {
+        48 => wire__crate__api__server__netserver_get_port_impl(port, ptr, rust_vec_len, data_len),
+        49 => {
             wire__crate__api__server__netserver_is_running_impl(port, ptr, rust_vec_len, data_len)
         }
-        40 => wire__crate__api__server__netserver_start_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__server__netserver_status_stream_impl(
+        50 => wire__crate__api__server__netserver_start_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__server__netserver_status_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__api__server__netserver_stop_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__palette__palette_presets_impl(port, ptr, rust_vec_len, data_len),
-        44 => {
+        52 => wire__crate__api__server__netserver_stop_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__palette__palette_presets_impl(port, ptr, rust_vec_len, data_len),
+        54 => {
             wire__crate__api__events__palette_state_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        45 => wire__crate__api__gamepad__poll_gamepads_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__load_rom__power_off_console_impl(port, ptr, rust_vec_len, data_len),
-        47 => {
+        55 => wire__crate__api__gamepad__poll_gamepads_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__load_rom__power_off_console_impl(port, ptr, rust_vec_len, data_len),
+        57 => {
             wire__crate__api__load_rom__power_reset_console_impl(port, ptr, rust_vec_len, data_len)
         }
-        48 => wire__crate__api__events__replay_event_stream_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__gamepad__rumble_gamepad_impl(port, ptr, rust_vec_len, data_len),
-        51 => {
+        58 => wire__crate__api__events__replay_event_stream_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__gamepad__rumble_gamepad_impl(port, ptr, rust_vec_len, data_len),
+        61 => {
             wire__crate__api__events__runtime_notifications_impl(port, ptr, rust_vec_len, data_len)
         }
-        52 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__emulation__save_state_to_memory_impl(
+        62 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__emulation__save_state_to_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__api__emulation__set_fast_forward_speed_impl(
+        64 => wire__crate__api__emulation__set_fast_forward_speed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => {
+        65 => {
             wire__crate__api__emulation__set_fast_forwarding_impl(port, ptr, rust_vec_len, data_len)
         }
-        56 => {
+        66 => {
             wire__crate__api__gamepad__set_gamepad_mapping_impl(port, ptr, rust_vec_len, data_len)
         }
-        57 => wire__crate__api__emulation__set_integer_fps_mode_impl(
+        67 => wire__crate__api__emulation__set_integer_fps_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__events__set_palette_capture_frame_start_impl(
+        68 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__events__set_palette_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__events__set_palette_capture_scanline_impl(
+        70 => wire__crate__api__events__set_palette_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__events__set_palette_capture_vblank_start_impl(
+        71 => wire__crate__api__events__set_palette_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => {
+        72 => {
             wire__crate__api__palette__set_palette_pal_data_impl(port, ptr, rust_vec_len, data_len)
         }
-        63 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
-        65 => {
+        73 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
+        75 => {
             wire__crate__api__emulation__set_rewind_config_impl(port, ptr, rust_vec_len, data_len)
         }
-        66 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__events__set_sprite_capture_frame_start_impl(
+        76 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__events__set_sprite_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__api__events__set_sprite_capture_scanline_impl(
+        78 => wire__crate__api__events__set_sprite_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__crate__api__events__set_sprite_capture_vblank_start_impl(
+        79 => wire__crate__api__events__set_sprite_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        70 => wire__crate__api__events__set_tile_viewer_background_impl(
+        80 => wire__crate__api__events__set_tile_viewer_background_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        71 => wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
+        81 => wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
+        82 => wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        73 => wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
+        83 => wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => wire__crate__api__events__set_tile_viewer_display_mode_impl(
+        84 => wire__crate__api__events__set_tile_viewer_display_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        75 => {
+        85 => {
             wire__crate__api__events__set_tile_viewer_layout_impl(port, ptr, rust_vec_len, data_len)
         }
-        76 => wire__crate__api__events__set_tile_viewer_palette_impl(
+        86 => wire__crate__api__events__set_tile_viewer_palette_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => {
+        87 => {
             wire__crate__api__events__set_tile_viewer_size_impl(port, ptr, rust_vec_len, data_len)
         }
-        78 => {
+        88 => {
             wire__crate__api__events__set_tile_viewer_source_impl(port, ptr, rust_vec_len, data_len)
         }
-        79 => wire__crate__api__events__set_tile_viewer_start_address_impl(
+        89 => wire__crate__api__events__set_tile_viewer_start_address_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
+        90 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        81 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
+        91 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        82 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
+        92 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__api__events__set_tilemap_display_mode_impl(
+        93 => wire__crate__api__events__set_tilemap_display_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        84 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
+        94 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        85 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
-        86 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
-        87 => wire__crate__api__gamepad__shutdown_gamepad_impl(port, ptr, rust_vec_len, data_len),
-        88 => wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__events__subscribe_tilemap_texture_impl(
+        95 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
+        96 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
+        97 => wire__crate__api__gamepad__shutdown_gamepad_impl(port, ptr, rust_vec_len, data_len),
+        98 => wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        99 => wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len),
+        100 => wire__crate__api__events__subscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__api__events__tile_state_stream_impl(port, ptr, rust_vec_len, data_len),
-        92 => {
+        101 => wire__crate__api__events__tile_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        102 => {
             wire__crate__api__events__tilemap_state_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        93 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
-        94 => wire__crate__api__events__unsubscribe_debug_state_impl(
+        103 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
+        104 => {
+            wire__crate__api__net_utils__try_upnp_mapping_impl(port, ptr, rust_vec_len, data_len)
+        }
+        105 => wire__crate__api__events__unsubscribe_debug_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__api__events__unsubscribe_palette_state_impl(
+        106 => wire__crate__api__events__unsubscribe_palette_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__api__events__unsubscribe_sprite_state_impl(
+        107 => wire__crate__api__events__unsubscribe_sprite_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => {
+        108 => {
             wire__crate__api__events__unsubscribe_tile_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        98 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
+        109 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
@@ -4751,7 +5310,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        10 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5003,6 +5562,17 @@ impl flutter_rust_bridge::IntoDart for crate::api::netplay::NetplayGameEvent {
             crate::api::netplay::NetplayGameEvent::Error { error_code } => {
                 [6.into_dart(), error_code.into_into_dart().into_dart()].into_dart()
             }
+            crate::api::netplay::NetplayGameEvent::FallbackToRelay {
+                relay_addr,
+                relay_room_code,
+                reason,
+            } => [
+                7.into_dart(),
+                relay_addr.into_into_dart().into_dart(),
+                relay_room_code.into_into_dart().into_dart(),
+                reason.into_into_dart().into_dart(),
+            ]
+            .into_dart(),
             _ => {
                 unimplemented!("");
             }
@@ -5111,6 +5681,56 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::netplay::NetplayTransport>
     for crate::api::netplay::NetplayTransport
 {
     fn into_into_dart(self) -> crate::api::netplay::NetplayTransport {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::netplay::P2PConnectMode {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Direct => 0.into_dart(),
+            Self::Relay => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::netplay::P2PConnectMode
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::netplay::P2PConnectMode>
+    for crate::api::netplay::P2PConnectMode
+{
+    fn into_into_dart(self) -> crate::api::netplay::P2PConnectMode {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::netplay::P2PJoinInfo {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.ok.into_into_dart().into_dart(),
+            self.room_code.into_into_dart().into_dart(),
+            self.host_addrs.into_into_dart().into_dart(),
+            self.host_room_code.into_into_dart().into_dart(),
+            self.host_quic_cert_sha256_fingerprint
+                .into_into_dart()
+                .into_dart(),
+            self.host_quic_server_name.into_into_dart().into_dart(),
+            self.fallback_required.into_into_dart().into_dart(),
+            self.fallback_reason.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::netplay::P2PJoinInfo
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::netplay::P2PJoinInfo>
+    for crate::api::netplay::P2PJoinInfo
+{
+    fn into_into_dart(self) -> crate::api::netplay::P2PJoinInfo {
         self
     }
 }
@@ -5697,6 +6317,16 @@ impl SseEncode for i32 {
     }
 }
 
+impl SseEncode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <String>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::gamepad::GamepadButtonFfi> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5788,6 +6418,16 @@ impl SseEncode for crate::api::netplay::NetplayGameEvent {
             crate::api::netplay::NetplayGameEvent::Error { error_code } => {
                 <i32>::sse_encode(6, serializer);
                 <u16>::sse_encode(error_code, serializer);
+            }
+            crate::api::netplay::NetplayGameEvent::FallbackToRelay {
+                relay_addr,
+                relay_room_code,
+                reason,
+            } => {
+                <i32>::sse_encode(7, serializer);
+                <String>::sse_encode(relay_addr, serializer);
+                <u32>::sse_encode(relay_room_code, serializer);
+                <String>::sse_encode(reason, serializer);
             }
             _ => {
                 unimplemented!("");
@@ -5891,6 +6531,36 @@ impl SseEncode for Option<Vec<u8>> {
         if let Some(value) = self {
             <Vec<u8>>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::netplay::P2PConnectMode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::netplay::P2PConnectMode::Direct => 0,
+                crate::api::netplay::P2PConnectMode::Relay => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::netplay::P2PJoinInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.ok, serializer);
+        <u32>::sse_encode(self.room_code, serializer);
+        <Vec<String>>::sse_encode(self.host_addrs, serializer);
+        <u32>::sse_encode(self.host_room_code, serializer);
+        <Option<String>>::sse_encode(self.host_quic_cert_sha256_fingerprint, serializer);
+        <Option<String>>::sse_encode(self.host_quic_server_name, serializer);
+        <bool>::sse_encode(self.fallback_required, serializer);
+        <Option<String>>::sse_encode(self.fallback_reason, serializer);
     }
 }
 

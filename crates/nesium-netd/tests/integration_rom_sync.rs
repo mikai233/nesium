@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use nesium_netd::net::{quic_config, tcp::run_tcp_listener_with_listener};
 use nesium_netproto::{
     codec_tcp::{encode_tcp_frame, try_decode_tcp_frames},
     header::Header,
@@ -66,7 +67,10 @@ impl TestClient {
     }
 
     async fn send_join_room(&mut self, room_code: u32) -> anyhow::Result<()> {
-        let join = JoinRoom { room_code };
+        let join = JoinRoom {
+            room_code,
+            preferred_sync_mode: None,
+        };
 
         let header = Header::new(MsgId::JoinRoom as u8);
 
@@ -163,15 +167,31 @@ impl TestClient {
     }
 }
 
+fn install_crypto_provider() {
+    let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
+}
+
 /// Spawn test server on a given address.
-async fn spawn_test_server(addr: SocketAddr) -> mpsc::Sender<()> {
+async fn spawn_test_server(app_name: &str) -> (SocketAddr, mpsc::Sender<()>) {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
     let (event_tx, event_rx) = mpsc::channel(1024);
 
+    let cert_dir = quic_config::default_quic_data_dir(app_name);
+    if cert_dir.exists() {
+        let _ = std::fs::remove_dir_all(&cert_dir);
+    }
+
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let server_addr = listener.local_addr().unwrap();
+
     // Spawn TCP listener
     let tx_clone = event_tx.clone();
+    let app_name_owned = app_name.to_string();
     tokio::spawn(async move {
-        let _ = nesium_netd::net::tcp::run_tcp_listener(addr, tx_clone).await;
+        if let Err(e) = run_tcp_listener_with_listener(listener, tx_clone, &app_name_owned).await {
+            eprintln!("Listener error: {}", e);
+        }
     });
 
     // Spawn server loop
@@ -183,15 +203,15 @@ async fn spawn_test_server(addr: SocketAddr) -> mpsc::Sender<()> {
     });
 
     // Give server time to start
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
 
-    shutdown_tx
+    (server_addr, shutdown_tx)
 }
 
 #[tokio::test]
 async fn test_rom_sync_flow() -> anyhow::Result<()> {
-    let addr: SocketAddr = "127.0.0.1:14009".parse()?;
-    let _shutdown = spawn_test_server(addr).await;
+    install_crypto_provider();
+    let (addr, _shutdown) = spawn_test_server("test_rom_sync").await;
 
     // 1. Client 1 (Host) Connects and Creates Room
     let mut c1 = TestClient::connect(addr).await?;

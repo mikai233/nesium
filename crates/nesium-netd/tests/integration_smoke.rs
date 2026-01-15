@@ -9,6 +9,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use nesium_netd::net::{quic_config, tcp::run_tcp_listener_with_listener};
 use nesium_netproto::{
     codec_tcp::{encode_tcp_frame, try_decode_tcp_frames},
     constants::SPECTATOR_PLAYER_INDEX,
@@ -74,7 +75,10 @@ impl TestClient {
     }
 
     async fn send_join_room(&mut self, room_code: u32) -> anyhow::Result<()> {
-        let join = JoinRoom { room_code };
+        let join = JoinRoom {
+            room_code,
+            preferred_sync_mode: None,
+        };
 
         let header = Header::new(MsgId::JoinRoom as u8);
 
@@ -189,34 +193,51 @@ impl TestClient {
 }
 
 /// Spawn test server on a given address.
-async fn spawn_test_server(addr: SocketAddr) -> mpsc::Sender<()> {
+fn install_crypto_provider() {
+    let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
+}
+
+/// Spawn test server on a given address.
+async fn spawn_test_server(app_name: &str) -> (SocketAddr, mpsc::Sender<()>) {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
     let (event_tx, event_rx) = mpsc::channel(1024);
 
+    let cert_dir = quic_config::default_quic_data_dir(app_name);
+    if cert_dir.exists() {
+        let _ = std::fs::remove_dir_all(&cert_dir);
+    }
+
+    let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let server_addr = listener.local_addr().unwrap();
+
     // Spawn TCP listener
     let tx_clone = event_tx.clone();
+    let app_name_owned = app_name.to_string();
     tokio::spawn(async move {
-        let _ = nesium_netd::net::tcp::run_tcp_listener(addr, tx_clone).await;
+        if let Err(e) = run_tcp_listener_with_listener(listener, tx_clone, &app_name_owned).await {
+            eprintln!("Listener error: {}", e);
+        }
     });
 
     // Spawn server loop
     tokio::spawn(async move {
         tokio::select! {
-            _ = nesium_netd::run_server(event_rx) => {},
-            _ = shutdown_rx.recv() => {},
+             _ = nesium_netd::run_server(event_rx) => {},
+             _ = shutdown_rx.recv() => {},
         }
     });
 
     // Give server time to start
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(50)).await;
 
-    shutdown_tx
+    (server_addr, shutdown_tx)
 }
 
 #[tokio::test]
 async fn test_handshake() -> anyhow::Result<()> {
-    let addr: SocketAddr = "127.0.0.1:14001".parse()?;
-    let _shutdown = spawn_test_server(addr).await;
+    install_crypto_provider();
+    let (addr, _shutdown) = spawn_test_server("test_smoke_handshake").await;
 
     let mut client = TestClient::connect(addr).await?;
 
@@ -231,8 +252,8 @@ async fn test_handshake() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_room_creation_and_join() -> anyhow::Result<()> {
-    let addr: SocketAddr = "127.0.0.1:14002".parse()?;
-    let _shutdown = spawn_test_server(addr).await;
+    install_crypto_provider();
+    let (addr, _shutdown) = spawn_test_server("test_smoke_room").await;
 
     // Client 1: Create room
     let mut client1 = TestClient::connect(addr).await?;
@@ -264,8 +285,8 @@ async fn test_room_creation_and_join() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_input_relay() -> anyhow::Result<()> {
-    let addr: SocketAddr = "127.0.0.1:14003".parse()?;
-    let _shutdown = spawn_test_server(addr).await;
+    install_crypto_provider();
+    let (addr, _shutdown) = spawn_test_server("test_smoke_input").await;
 
     // Setup two players in a room
     let mut client1 = TestClient::connect(addr).await?;
@@ -293,8 +314,8 @@ async fn test_input_relay() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_spectator_mode() -> anyhow::Result<()> {
-    let addr: SocketAddr = "127.0.0.1:14004".parse()?;
-    let _shutdown = spawn_test_server(addr).await;
+    install_crypto_provider();
+    let (addr, _shutdown) = spawn_test_server("test_smoke_spectator").await;
 
     // Fill room with 2 players
     let mut p1 = TestClient::connect(addr).await?;
@@ -325,8 +346,8 @@ async fn test_spectator_mode() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_unique_client_ids() -> anyhow::Result<()> {
-    let addr: SocketAddr = "127.0.0.1:14005".parse()?;
-    let _shutdown = spawn_test_server(addr).await;
+    install_crypto_provider();
+    let (addr, _shutdown) = spawn_test_server("test_smoke_ids").await;
 
     let mut c1 = TestClient::connect(addr).await?;
     c1.send_hello("C1").await?;
@@ -350,8 +371,8 @@ async fn test_unique_client_ids() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_role_switching() -> anyhow::Result<()> {
-    let addr: SocketAddr = "127.0.0.1:14006".parse()?;
-    let _shutdown = spawn_test_server(addr).await;
+    install_crypto_provider();
+    let (addr, _shutdown) = spawn_test_server("test_smoke_role").await;
 
     // Client 1 (P1)
     let mut c1 = TestClient::connect(addr).await?;

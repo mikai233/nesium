@@ -1,4 +1,6 @@
 use clap::Parser;
+use nesium_netd::net::quic::run_quic_listener;
+use nesium_netd::net::tcp::run_tcp_listener;
 use tokio::sync::mpsc;
 use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
@@ -72,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
     let bind_addr: SocketAddr = args.bind.parse()?;
     let tx_tcp = tx.clone();
     tokio::spawn(async move {
-        let _ = nesium_netd::net::tcp::run_tcp_listener(bind_addr, tx_tcp).await;
+        let _ = run_tcp_listener(bind_addr, tx_tcp, "nesium-netd").await;
     });
 
     // Start QUIC listener (optional).
@@ -101,8 +103,7 @@ async fn main() -> anyhow::Result<()> {
 
         let tx_quic = tx.clone();
         tokio::spawn(async move {
-            let _ =
-                nesium_netd::net::quic::run_quic_listener(quic_addr, server_config, tx_quic).await;
+            let _ = run_quic_listener(quic_addr, server_config, tx_quic).await;
         });
 
         info!("QUIC enabled on {}", quic_bind);
