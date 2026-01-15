@@ -364,16 +364,28 @@ impl Room {
             return;
         };
 
-        let mut last = buffer.back().map(|(f, _)| *f);
         for (offset, &mask) in buttons.iter().enumerate() {
             let frame = start_frame.wrapping_add(offset as u32);
-            if let Some(prev) = last {
-                if frame <= prev {
-                    continue;
+            match buffer.back() {
+                None => {
+                    buffer.push_back((frame, mask));
+                }
+                Some((last_frame, _)) if frame > *last_frame => {
+                    buffer.push_back((frame, mask));
+                }
+                _ => {
+                    // Out-of-order or duplicate frame: insert in sorted order, overwriting if present.
+                    if let Some(pos) = buffer.iter().position(|(f, _)| *f >= frame) {
+                        if buffer[pos].0 == frame {
+                            buffer[pos].1 = mask;
+                        } else {
+                            buffer.insert(pos, (frame, mask));
+                        }
+                    } else {
+                        buffer.push_back((frame, mask));
+                    }
                 }
             }
-            buffer.push_back((frame, mask));
-            last = Some(frame);
         }
 
         if let Some((snap_frame, _)) = &self.cached_state {
@@ -767,5 +779,23 @@ mod tests {
         assert_eq!(history.len(), 2);
         assert_eq!(history[0], (0, 0, vec![1, 2]));
         assert_eq!(history[1], (0, 3, vec![4, 5]));
+    }
+
+    #[test]
+    fn record_inputs_inserts_out_of_order_and_overwrites() {
+        let mut room = Room::new(1, 1, 1);
+
+        // Receive later frames first.
+        room.record_inputs(0, 3, &[4, 5]); // frames 3,4
+
+        // Fill earlier frames out-of-order.
+        room.record_inputs(0, 0, &[1, 2, 3]); // frames 0,1,2
+
+        // Overwrite an existing frame (rollback correction).
+        room.record_inputs(0, 2, &[99]); // frame 2
+
+        // History should be continuous and reflect the overwrite.
+        let history = room.get_input_history(0);
+        assert_eq!(history, vec![(0, 0, vec![1, 2, 99, 4, 5])]);
     }
 }
