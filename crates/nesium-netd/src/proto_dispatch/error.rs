@@ -68,6 +68,12 @@ impl HandlerError {
             code: ErrorCode::ServerFull,
         }
     }
+
+    pub fn rate_limited() -> Self {
+        Self {
+            code: ErrorCode::RateLimited,
+        }
+    }
 }
 
 /// Convenient Result type for handlers.

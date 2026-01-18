@@ -6,8 +6,8 @@ use std::time::Duration;
 use nesium_netd::net::quic_config;
 use nesium_netd::net::tcp::run_tcp_listener_with_listener;
 use nesium_netproto::constants::AUTO_PLAYER_INDEX;
-use nesium_netproto::messages::session::{JoinAck, JoinRoom};
 use nesium_netproto::messages::Message;
+use nesium_netproto::messages::session::{JoinAck, JoinRoom};
 use nesium_netproto::{
     codec::{encode_message, try_decode_tcp_frames},
     messages::session::{
@@ -51,10 +51,7 @@ impl RawClient {
         self.recv_one::<Welcome>(MsgId::Welcome).await
     }
 
-    async fn send<T: Message>(
-        &mut self,
-        payload: &T,
-    ) -> anyhow::Result<()> {
+    async fn send<T: Message>(&mut self, payload: &T) -> anyhow::Result<()> {
         let frame = encode_message(payload)?;
         self.stream.write_all(&frame).await?;
         Ok(())
@@ -102,19 +99,15 @@ async fn spawn_server(app_name: &str) -> anyhow::Result<SocketAddr> {
     let app_name_owned = app_name.to_string();
     tokio::spawn(async move {
         // Use run_tcp_listener_with_listener to use the existing listener
-        if let Err(e) = run_tcp_listener_with_listener(
-            listener,
-            tx_clone,
-            &app_name_owned,
-        )
-        .await
+        if let Err(e) =
+            run_tcp_listener_with_listener(listener, tx_clone, &app_name_owned, None).await
         {
             eprintln!("Server error: {}", e);
         }
     });
 
     tokio::spawn(async move {
-        let _ = nesium_netd::run_server(event_rx).await;
+        let _ = nesium_netd::run_server(event_rx, None).await;
     });
 
     // Validated: listener is active immediately, but give a tiny slack for spawn
@@ -250,8 +243,7 @@ async fn host_can_broadcast_fallback_to_direct_clients() -> anyhow::Result<()> {
             has_rom: false,
         })
         .await?;
-    let _ack2: JoinAck =
-        joiner.recv_one(MsgId::JoinAck).await?;
+    let _ack2: JoinAck = joiner.recv_one(MsgId::JoinAck).await?;
 
     // Host requests fallback broadcast.
     host.send(&RequestFallbackRelay {

@@ -10,7 +10,12 @@ use std::pin::Pin;
 use std::sync::OnceLock;
 
 use nesium_netproto::messages::Message;
-use nesium_netproto::messages::session::ErrorMsg;
+use nesium_netproto::messages::input::InputBatch;
+use nesium_netproto::messages::session::{
+    ErrorCode, ErrorMsg, Hello, JoinRoom, LoadRom, P2PCreateRoom, P2PJoinRoom, P2PRequestFallback,
+    PauseGame, ProvideState, QueryRoom, RejoinReady, RequestFallbackRelay, RequestState, ResetGame,
+    RomLoaded, SetSyncMode, SwitchRole, SyncState,
+};
 use tracing::warn;
 
 use super::error::{HandlerError, HandlerResult};
@@ -140,15 +145,6 @@ static REGISTRY: OnceLock<HandlerRegistry> = OnceLock::new();
 
 /// Build the handler registry with all message handlers.
 fn build_registry() -> HandlerRegistry {
-    use nesium_netproto::messages::{
-        input::InputBatch,
-        session::{
-            Hello, JoinRoom, LoadRom, P2PCreateRoom, P2PJoinRoom, P2PRequestFallback, PauseGame,
-            ProvideState, QueryRoom, RejoinReady, RequestFallbackRelay, RequestState, ResetGame,
-            RomLoaded, SetSyncMode, SwitchRole, SyncState,
-        },
-    };
-
     crate::register_handlers! {
         Hello => hello::HelloHandler,
         JoinRoom => join_room::JoinRoomHandler,
@@ -177,7 +173,7 @@ fn get_registry() -> &'static HandlerRegistry {
 }
 
 /// Sends an error response to the client.
-async fn send_error_response(ctx: &mut ConnCtx, error: HandlerError) {
+pub(crate) async fn send_error_response(ctx: &mut ConnCtx, error: HandlerError) {
     let msg = ErrorMsg { code: error.code };
     let _ = send_msg_tcp(&ctx.outbound, &msg).await;
 }
@@ -192,7 +188,7 @@ pub(crate) async fn dispatch_packet(
     peer: &SocketAddr,
     packet: &PacketOwned,
     room_mgr: &mut RoomManager,
-) {
+) -> bool {
     let mut handler_ctx = HandlerContext {
         conn_ctx: ctx,
         conn_id,
@@ -205,9 +201,13 @@ pub(crate) async fn dispatch_packet(
         .await;
 
     match result {
-        Some(Ok(())) => {}
+        Some(Ok(())) => true,
         Some(Err(e)) => {
+            let code = e.code;
             send_error_response(handler_ctx.conn_ctx, e).await;
+            // Only disconnect if it's a protocol-level error like BadMessage.
+            // Business errors (RoomNotFound, etc.) should not close the connection.
+            code != ErrorCode::BadMessage
         }
         None => {
             warn!(
@@ -216,8 +216,9 @@ pub(crate) async fn dispatch_packet(
                 msg_id = ?packet.msg_id(),
                 payload_len = packet.payload.len(),
                 %peer,
-                "Unhandled message (ignored)"
+                "Unhandled message (will disconnect)"
             );
+            false
         }
     }
 }

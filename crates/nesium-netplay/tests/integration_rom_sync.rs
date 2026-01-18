@@ -30,13 +30,15 @@ async fn test_rom_sync_flow() {
 
     let tx_clone = event_tx.clone();
     tokio::spawn(async move {
-        let _ = nesium_netd::net::tcp::run_tcp_listener_with_listener(listener, tx_clone, app_name)
-            .await;
+        let _ = nesium_netd::net::tcp::run_tcp_listener_with_listener(
+            listener, tx_clone, app_name, None,
+        )
+        .await;
     });
 
     // Spawn server loop
     tokio::spawn(async move {
-        let _ = nesium_netd::run_server(event_rx).await;
+        let _ = nesium_netd::run_server(event_rx, None).await;
     });
 
     // Wait for server to start
@@ -159,11 +161,11 @@ async fn test_late_join_receives_cached_rom_and_state() {
 
     let tx_clone = event_tx.clone();
     tokio::spawn(async move {
-        let _ = run_tcp_listener_with_listener(listener, tx_clone, app_name).await;
+        let _ = run_tcp_listener_with_listener(listener, tx_clone, app_name, None).await;
     });
 
     tokio::spawn(async move {
-        let _ = nesium_netd::run_server(event_rx).await;
+        let _ = nesium_netd::run_server(event_rx, None).await;
     });
 
     sleep(Duration::from_millis(100)).await;

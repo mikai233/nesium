@@ -4,5 +4,6 @@ pub mod limits;
 pub mod outbound;
 pub mod quic;
 pub mod quic_config;
+pub mod rate_limit;
 pub mod stream_adapter;
 pub mod tcp;

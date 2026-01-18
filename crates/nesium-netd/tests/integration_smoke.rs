@@ -211,7 +211,9 @@ async fn spawn_test_server(app_name: &str) -> (SocketAddr, mpsc::Sender<()>) {
     let tx_clone = event_tx.clone();
     let app_name_owned = app_name.to_string();
     tokio::spawn(async move {
-        if let Err(e) = run_tcp_listener_with_listener(listener, tx_clone, &app_name_owned).await {
+        if let Err(e) =
+            run_tcp_listener_with_listener(listener, tx_clone, &app_name_owned, None).await
+        {
             eprintln!("Listener error: {}", e);
         }
     });
@@ -219,7 +221,7 @@ async fn spawn_test_server(app_name: &str) -> (SocketAddr, mpsc::Sender<()>) {
     // Spawn server loop
     tokio::spawn(async move {
         tokio::select! {
-             _ = nesium_netd::run_server(event_rx) => {},
+             _ = nesium_netd::run_server(event_rx, None) => {},
              _ = shutdown_rx.recv() => {},
         }
     });

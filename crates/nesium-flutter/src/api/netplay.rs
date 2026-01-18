@@ -565,8 +565,7 @@ pub async fn netplay_connect_auto_pinned(
     .map_err(|e| format!("Failed to connect (auto pinned): {}", e))?;
 
     mgr.input_provider.with_session(|s| {
-        s.tcp_fallback_from_quic =
-            chosen_transport == TransportKind::Tcp;
+        s.tcp_fallback_from_quic = chosen_transport == TransportKind::Tcp;
     });
 
     let config = NetplayConfig {
@@ -1469,13 +1468,7 @@ pub async fn netplay_p2p_join_room(
     let signaling_addr = resolve_addr(&signaling_addr).await?;
 
     let req = P2PJoinRoom { room_id };
-    let ack: P2PJoinAck = signaling_request(
-        signaling_addr,
-        &name,
-        &req,
-        MsgId::P2PJoinAck,
-    )
-    .await?;
+    let ack: P2PJoinAck = signaling_request(signaling_addr, &name, &req, MsgId::P2PJoinAck).await?;
 
     Ok(P2PJoinInfo {
         ok: ack.ok,
@@ -1780,12 +1773,8 @@ fn notify_status(
                 };
 
                 let transport = match s.transport {
-                    Some(TransportKind::Tcp) => {
-                        NetplayTransport::Tcp
-                    }
-                    Some(TransportKind::Quic) => {
-                        NetplayTransport::Quic
-                    }
+                    Some(TransportKind::Tcp) => NetplayTransport::Tcp,
+                    Some(TransportKind::Quic) => NetplayTransport::Quic,
                     None => NetplayTransport::Unknown,
                 };
 

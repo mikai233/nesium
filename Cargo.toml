@@ -109,3 +109,8 @@ rcgen = { version = "0.14.6", default-features = false, features = [
   "ring",
 ] }
 parking_lot = "0.12.5"
+governor = { version = "0.8", default-features = false, features = [
+  "std",
+  "dashmap",
+  "jitter",
+] }

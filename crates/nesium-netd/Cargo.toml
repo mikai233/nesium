@@ -32,3 +32,5 @@ tokio-tungstenite = { version = "0.28.0", features = [
 futures-util = "0.3.31"
 tokio-util = { version = "0.7.18", features = ["codec"] }
 rustls-pemfile = "2.1.0"
+governor.workspace = true
+dashmap.workspace = true

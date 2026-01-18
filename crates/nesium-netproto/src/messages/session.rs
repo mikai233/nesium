@@ -111,6 +111,8 @@ pub enum ErrorCode {
     HostNotAvailable = 9,
     /// Server is at maximum capacity (no room IDs available)
     ServerFull = 10,
+    /// Client is sending too many requests (rate limited)
+    RateLimited = 11,
 }
 
 /// Server sends an error response to the client.

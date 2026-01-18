@@ -18,7 +18,7 @@ async fn run_mock_server(app_name: &str) -> (SocketAddr, mpsc::Receiver<InboundE
 
     let app_name = app_name.to_string();
     tokio::spawn(async move {
-        if let Err(e) = run_tcp_listener_with_listener(listener, tx, &app_name).await {
+        if let Err(e) = run_tcp_listener_with_listener(listener, tx, &app_name, None).await {
             eprintln!("Server error: {}", e);
         }
     });

@@ -27,10 +27,10 @@ async fn setup_server(app_name: &str) -> SocketAddr {
     let tx_clone = event_tx.clone();
     let app_name_owned = app_name.to_string();
     tokio::spawn(async move {
-        let _ = run_tcp_listener_with_listener(listener, tx_clone, &app_name_owned).await;
+        let _ = run_tcp_listener_with_listener(listener, tx_clone, &app_name_owned, None).await;
     });
     tokio::spawn(async move {
-        let _ = nesium_netd::run_server(event_rx).await;
+        let _ = nesium_netd::run_server(event_rx, None).await;
     });
 
     sleep(Duration::from_millis(100)).await;
@@ -343,10 +343,7 @@ async fn query_room_reports_occupied_mask_before_join() {
     let (tx, rx) = oneshot::channel();
     querier
         .cmd
-        .send(NetplayCommand::QueryRoom {
-            room_id,
-            resp: tx,
-        })
+        .send(NetplayCommand::QueryRoom { room_id, resp: tx })
         .await
         .unwrap();
 

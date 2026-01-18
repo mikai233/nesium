@@ -1,15 +1,20 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
 use nesium_netproto::limits::TCP_RX_BUFFER_SIZE;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio_tungstenite::{accept_async, tungstenite};
 use tokio_util::codec::{BytesCodec, FramedWrite};
 use tracing::warn;
 
+use nesium_netproto::codec::encode_message;
+use nesium_netproto::messages::session::{ErrorCode, ErrorMsg};
+
 use crate::net::quic_config;
+use crate::net::rate_limit::IpRateLimiter;
 use crate::net::stream_adapter::WebSocketStream;
 
 use super::framing::TcpFramer;
@@ -25,7 +30,7 @@ pub async fn run_tcp_listener(
     app_name: &str,
 ) -> anyhow::Result<()> {
     let listener = TcpListener::bind(bind).await?;
-    run_tcp_listener_with_listener(listener, tx, app_name).await
+    run_tcp_listener_with_listener(listener, tx, app_name, None).await
 }
 
 /// Run the accept loop on an existing listener.
@@ -33,11 +38,22 @@ pub async fn run_tcp_listener_with_listener(
     listener: TcpListener,
     tx: mpsc::Sender<InboundEvent>,
     app_name: &str,
+    ip_rate_limiter: Option<Arc<IpRateLimiter>>,
 ) -> anyhow::Result<()> {
     let tls_acceptor = get_or_create_server_tls_acceptor(app_name)?;
 
     loop {
         let (stream, peer) = listener.accept().await?;
+
+        // Check IP-based rate limit before processing connection
+        if let Some(ref limiter) = ip_rate_limiter {
+            if !limiter.check(peer.ip()) {
+                warn!(%peer, "Connection rejected: IP rate limit exceeded");
+                let _ = reject_with_rate_limit(stream).await;
+                continue;
+            }
+        }
+
         let conn_id = next_conn_id();
 
         let tx_clone = tx.clone();
@@ -164,6 +180,46 @@ enum ParsedProtocol {
     Native,
     WebSocket,
     Tls,
+}
+
+async fn reject_with_rate_limit(mut stream: TcpStream) {
+    // Protocol Sniffing via Peeking (similar to handle_tcp_connection)
+    let mut peek_buf = [0u8; 4];
+    let protocol = match stream.peek(&mut peek_buf).await {
+        Ok(n) if n >= 2 => {
+            if &peek_buf[0..2] == b"NS" {
+                ParsedProtocol::Native
+            } else if n >= 4 && &peek_buf[0..4] == b"GET " {
+                ParsedProtocol::WebSocket
+            } else if n >= 2 && peek_buf[0] == 0x16 && peek_buf[1] == 0x03 {
+                ParsedProtocol::Tls
+            } else {
+                ParsedProtocol::Native // Default fallback
+            }
+        }
+        _ => ParsedProtocol::Native,
+    };
+
+    match protocol {
+        ParsedProtocol::WebSocket => {
+            let _ = stream
+                .write_all(b"HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n")
+                .await;
+        }
+        ParsedProtocol::Native => {
+            let msg = ErrorMsg {
+                code: ErrorCode::RateLimited,
+            };
+            if let Ok(frame) = encode_message(&msg) {
+                let _ = stream.write_all(&frame).await;
+            }
+        }
+        ParsedProtocol::Tls => {
+            // Can't easily send TLS error without handshake, just drop
+        }
+    }
+    let _ = stream.flush().await;
+    let _ = stream.shutdown().await;
 }
 
 async fn handle_connection_inner<R, S>(

@@ -6,6 +6,7 @@ use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
 
 use nesium_netd::net::quic_config;
+use nesium_netd::net::rate_limit::RateLimitConfig;
 use nesium_netd::run_server;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -49,6 +50,18 @@ struct Args {
     /// Maximum payload size in bytes
     #[arg(long, default_value = "4096")]
     max_payload: usize,
+
+    /// Max new connections per IP per second (0 = disabled)
+    #[arg(long, default_value = "10")]
+    rate_conn_per_ip: u32,
+
+    /// Max messages per connection per second (0 = disabled)
+    #[arg(long, default_value = "100")]
+    rate_msg_per_conn: u32,
+
+    /// Rate limit burst multiplier
+    #[arg(long, default_value = "3")]
+    rate_burst_multiplier: u32,
 }
 
 #[tokio::main]
@@ -123,6 +136,23 @@ async fn main() -> anyhow::Result<()> {
     info!("Netplay server started on {}", args.bind);
     info!("Log level: {}", args.log_level);
 
+    // Build rate limit config (if any rate limiting is enabled)
+    let rate_config = if args.rate_conn_per_ip > 0 || args.rate_msg_per_conn > 0 {
+        let config = RateLimitConfig {
+            conn_per_ip_per_sec: args.rate_conn_per_ip,
+            msg_per_conn_per_sec: args.rate_msg_per_conn,
+            burst_multiplier: args.rate_burst_multiplier,
+        };
+        info!(
+            "Rate limiting enabled: {} conn/ip/s, {} msg/conn/s (burst x{})",
+            args.rate_conn_per_ip, args.rate_msg_per_conn, args.rate_burst_multiplier
+        );
+        Some(config)
+    } else {
+        info!("Rate limiting disabled");
+        None
+    };
+
     // Run server loop
-    run_server(rx).await
+    run_server(rx, rate_config).await
 }
