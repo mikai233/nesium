@@ -42,7 +42,7 @@ impl Handler<RequestFallbackRelay> for RequestFallbackRelayHandler {
 
         let msg = FallbackToRelay {
             relay_addr: req.relay_addr,
-            relay_room_code: req.relay_room_code,
+            relay_room_id: req.relay_room_id,
             reason: req.reason,
         };
 

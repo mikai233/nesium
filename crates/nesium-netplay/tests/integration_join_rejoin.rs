@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use nesium_netd::net::quic_config;
+use nesium_netd::net::tcp::run_tcp_listener_with_listener;
 use nesium_netplay::{
     NetplayCommand, NetplayConfig, NetplayEvent, NetplayInputProvider, SessionHandler, SyncMode,
     connect, create_input_provider,
@@ -12,7 +14,7 @@ use tokio::sync::oneshot;
 use tokio::time::{sleep, timeout};
 
 async fn setup_server(app_name: &str) -> SocketAddr {
-    let cert_dir = nesium_netd::net::quic_config::default_quic_data_dir(app_name);
+    let cert_dir = quic_config::default_quic_data_dir(app_name);
     if cert_dir.exists() {
         let _ = std::fs::remove_dir_all(&cert_dir);
     }
@@ -25,12 +27,7 @@ async fn setup_server(app_name: &str) -> SocketAddr {
     let tx_clone = event_tx.clone();
     let app_name_owned = app_name.to_string();
     tokio::spawn(async move {
-        let _ = nesium_netd::net::tcp::run_tcp_listener_with_listener(
-            listener,
-            tx_clone,
-            &app_name_owned,
-        )
-        .await;
+        let _ = run_tcp_listener_with_listener(listener, tx_clone, &app_name_owned).await;
     });
     tokio::spawn(async move {
         let _ = nesium_netd::run_server(event_rx).await;
@@ -50,7 +47,7 @@ struct ClientHarness {
 async fn spawn_client(
     server_addr: SocketAddr,
     name: &str,
-    room_code: u32,
+    room_id: u32,
     desired_role: u8,
     has_rom: bool,
     sync_mode: SyncMode,
@@ -67,7 +64,7 @@ async fn spawn_client(
             name: name.to_string(),
             transport: TransportKind::Tcp,
             spectator: desired_role == SPECTATOR_PLAYER_INDEX,
-            room_code,
+            room_id,
             desired_role,
             has_rom,
         },
@@ -329,7 +326,7 @@ async fn query_room_reports_occupied_mask_before_join() {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let server_addr = setup_server("test_query_room_occupied_mask").await;
 
-    let mut host = spawn_client(server_addr, "P1", 0, 0, false, SyncMode::Lockstep).await;
+    let host = spawn_client(server_addr, "P1", 0, 0, false, SyncMode::Lockstep).await;
     let room_id = start_solo_room(&host).await;
 
     // Query client: do not join any room.
@@ -347,7 +344,7 @@ async fn query_room_reports_occupied_mask_before_join() {
     querier
         .cmd
         .send(NetplayCommand::QueryRoom {
-            room_code: room_id,
+            room_id,
             resp: tx,
         })
         .await

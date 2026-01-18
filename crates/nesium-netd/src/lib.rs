@@ -161,12 +161,12 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
                                 // Check if this client is the P2P host of any room and broadcast disconnect
                                 let host_rooms_to_notify =
                                     room_mgr.clear_p2p_host_for_client(ctx.assigned_client_id);
-                                for (room_code, watchers) in host_rooms_to_notify {
-                                    let notice = P2PHostDisconnected { room_code };
+                                for (room_id, watchers) in host_rooms_to_notify {
+                                    let notice = P2PHostDisconnected { room_id };
                                     for tx in &watchers {
                                         let _ = send_msg_tcp(tx, &notice).await;
                                     }
-                                    info!(room_code, "Notified watchers of P2P host disconnect");
+                                    info!(room_id, "Notified watchers of P2P host disconnect");
                                 }
 
                                 room_mgr.remove_p2p_watcher(ctx.assigned_client_id);

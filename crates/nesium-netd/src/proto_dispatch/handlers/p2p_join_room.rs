@@ -15,7 +15,7 @@ impl Handler<P2PJoinRoom> for P2PJoinRoomHandler {
             return Err(HandlerError::invalid_state());
         }
 
-        let Some(room) = ctx.room_mgr.find_by_code_mut(join.room_code) else {
+        let Some(room) = ctx.room_mgr.get_room_mut(join.room_id) else {
             return Err(HandlerError::room_not_found());
         };
 
@@ -33,9 +33,9 @@ impl Handler<P2PJoinRoom> for P2PJoinRoomHandler {
 
         let ack = P2PJoinAck {
             ok: true,
-            room_code: room.code,
+            room_id: room.id,
             host_addrs: host.host_addrs,
-            host_room_code: host.host_room_code,
+            host_room_id: host.host_room_id,
             host_quic_cert_sha256_fingerprint: host.host_quic_cert_sha256_fingerprint,
             host_quic_server_name: host.host_quic_server_name,
             fallback_required,

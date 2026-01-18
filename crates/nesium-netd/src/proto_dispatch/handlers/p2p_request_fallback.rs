@@ -26,7 +26,7 @@ impl Handler<P2PRequestFallback> for P2PRequestFallbackHandler {
         };
 
         let (recipients, notice) = {
-            let Some(room) = ctx.room_mgr.find_by_code_mut(req.room_code) else {
+            let Some(room) = ctx.room_mgr.get_room_mut(req.room_id) else {
                 return Err(HandlerError::room_not_found());
             };
 
@@ -39,7 +39,7 @@ impl Handler<P2PRequestFallback> for P2PRequestFallbackHandler {
             (
                 recipients,
                 P2PFallbackNotice {
-                    room_code: room.code,
+                    room_id: room.id,
                     reason: fallback.reason,
                     requested_by_client_id: fallback.requested_by_client_id,
                 },
@@ -50,7 +50,7 @@ impl Handler<P2PRequestFallback> for P2PRequestFallbackHandler {
         }
 
         info!(
-            room_code = notice.room_code,
+            room_id = notice.room_id,
             requested_by_client_id = notice.requested_by_client_id,
             "P2P relay fallback requested"
         );

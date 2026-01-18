@@ -56,7 +56,7 @@ pub struct AttachChannel {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JoinRoom {
-    pub room_code: u32,
+    pub room_id: u32,
     /// Preferred sync mode (if None, server decides based on room settings).
     pub preferred_sync_mode: Option<SyncMode>,
     /// Desired role at join time.
@@ -109,6 +109,8 @@ pub enum ErrorCode {
     InvalidState = 8,
     /// P2P host is not available (disconnected or never set)
     HostNotAvailable = 9,
+    /// Server is at maximum capacity (no room IDs available)
+    ServerFull = 10,
 }
 
 /// Server sends an error response to the client.
@@ -217,7 +219,7 @@ pub struct ActivatePort {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct QueryRoom {
     pub request_id: u32,
-    pub room_code: u32,
+    pub room_id: u32,
 }
 
 /// Room info response for a `QueryRoom` request.
@@ -268,7 +270,7 @@ pub struct BeginCatchUp {
 
 // ---- P2P signaling (netd as signaling server) ----
 
-/// Host asks the signaling server to create a new relay room code and publish direct-connect info.
+/// Host asks the signaling server to create a new relay room ID and publish direct-connect info.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct P2PCreateRoom {
     /// Addresses peers should try when connecting to the host server directly.
@@ -276,34 +278,34 @@ pub struct P2PCreateRoom {
     /// This is an ordered list; clients should try QUIC first (if fingerprint is present),
     /// then fall back to TCP, iterating addresses in order.
     pub host_addrs: Vec<SocketAddr>,
-    /// Host server room code to join when connecting directly to the host server.
-    pub host_room_code: u32,
+    /// Host server room ID to join when connecting directly to the host server.
+    pub host_room_id: u32,
     /// Host QUIC certificate leaf SHA-256 fingerprint (base64url/hex/colon-hex are all accepted by netplay).
     pub host_quic_cert_sha256_fingerprint: Option<String>,
     /// SNI/server_name to use for QUIC connections (pinning mode does not rely on SAN validation).
     pub host_quic_server_name: Option<String>,
 }
 
-/// Signaling server response: allocated relay room code.
+/// Signaling server response: allocated relay room ID.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct P2PRoomCreated {
-    /// Room code clients should use for both signaling and (if needed) relay fallback on this server.
-    pub room_code: u32,
+    /// Room ID clients should use for both signaling and (if needed) relay fallback on this server.
+    pub room_id: u32,
 }
 
 /// Join a P2P room on the signaling server and obtain direct-connect info for the host.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct P2PJoinRoom {
-    pub room_code: u32,
+    pub room_id: u32,
 }
 
 /// Signaling server response containing host direct-connect information.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct P2PJoinAck {
     pub ok: bool,
-    pub room_code: u32,
+    pub room_id: u32,
     pub host_addrs: Vec<SocketAddr>,
-    pub host_room_code: u32,
+    pub host_room_id: u32,
     pub host_quic_cert_sha256_fingerprint: Option<String>,
     pub host_quic_server_name: Option<String>,
     /// If true, clients should skip direct connect and immediately use relay mode on this server.
@@ -314,14 +316,14 @@ pub struct P2PJoinAck {
 /// Request switching this room to relay fallback mode on the signaling server.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct P2PRequestFallback {
-    pub room_code: u32,
+    pub room_id: u32,
     pub reason: String,
 }
 
 /// Signaling server broadcast indicating relay fallback is required.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct P2PFallbackNotice {
-    pub room_code: u32,
+    pub room_id: u32,
     pub reason: String,
     pub requested_by_client_id: u32,
 }
@@ -329,7 +331,7 @@ pub struct P2PFallbackNotice {
 /// Signaling server notifies watchers that the P2P host has disconnected.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct P2PHostDisconnected {
-    pub room_code: u32,
+    pub room_id: u32,
 }
 
 /// Maximum number of host addresses allowed in P2PCreateRoom.
@@ -344,7 +346,7 @@ pub const P2P_MAX_REASON_LEN: usize = 256;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RequestFallbackRelay {
     pub relay_addr: SocketAddr,
-    pub relay_room_code: u32,
+    pub relay_room_id: u32,
     pub reason: String,
 }
 
@@ -352,6 +354,6 @@ pub struct RequestFallbackRelay {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FallbackToRelay {
     pub relay_addr: SocketAddr,
-    pub relay_room_code: u32,
+    pub relay_room_id: u32,
     pub reason: String,
 }

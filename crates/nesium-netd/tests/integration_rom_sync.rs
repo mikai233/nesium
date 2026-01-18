@@ -65,9 +65,9 @@ impl TestClient {
         Ok(welcome)
     }
 
-    async fn send_join_room(&mut self, room_code: u32) -> anyhow::Result<()> {
+    async fn send_join_room(&mut self, room_id: u32) -> anyhow::Result<()> {
         let join = JoinRoom {
-            room_code,
+            room_id,
             preferred_sync_mode: None,
             desired_role: AUTO_PLAYER_INDEX,
             has_rom: false,
@@ -165,7 +165,7 @@ impl TestClient {
 }
 
 fn install_crypto_provider() {
-    let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
+    let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
 /// Spawn test server on a given address.
@@ -217,13 +217,13 @@ async fn test_rom_sync_flow() -> anyhow::Result<()> {
     c1.send_join_room(0).await?;
     let ack1 = c1.recv_join_ack().await?;
     assert_eq!(ack1.player_index, 0);
-    let room_code = c1.room_id;
+    let room_id = c1.room_id;
 
     // 2. Client 2 (Joiner) Connects
     let mut c2 = TestClient::connect(addr).await?;
     c2.send_hello("Joiner").await?;
     c2.recv_welcome().await?;
-    c2.send_join_room(room_code).await?;
+    c2.send_join_room(room_id).await?;
     let ack2 = c2.recv_join_ack().await?;
     assert_eq!(ack2.player_index, 1);
 

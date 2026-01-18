@@ -44,8 +44,8 @@ pub struct NetplayConfig {
     pub transport: TransportKind,
     /// Whether to join as spectator.
     pub spectator: bool,
-    /// Room code to join (0 = create new room).
-    pub room_code: u32,
+    /// Room ID to join (0 = create new room).
+    pub room_id: u32,
     /// Desired role on join (0-3 player, 0xFE auto, 0xFF spectator).
     pub desired_role: u8,
     /// True if the local runtime already has the ROM loaded.
@@ -72,7 +72,7 @@ pub enum NetplayEvent {
     /// Server instructed us to switch to relay mode on `relay_addr`.
     FallbackToRelay {
         relay_addr: SocketAddr,
-        relay_room_code: u32,
+        relay_room_id: u32,
         reason: String,
     },
 }
@@ -81,7 +81,7 @@ pub enum NetplayEvent {
 pub enum NetplayCommand {
     CreateRoom,
     JoinRoom {
-        room_code: u32,
+        room_id: u32,
         desired_role: u8,
         has_rom: bool,
     },
@@ -99,12 +99,12 @@ pub enum NetplayCommand {
     /// Host-only: ask the server to instruct all clients to reconnect to a relay server.
     RequestFallbackRelay {
         relay_addr: SocketAddr,
-        relay_room_code: u32,
+        relay_room_id: u32,
         reason: String,
     },
     /// Query room occupancy/state before joining (pre-join UI).
     QueryRoom {
-        room_code: u32,
+        room_id: u32,
         resp: oneshot::Sender<Result<RoomInfo, String>>,
     },
 }
@@ -214,8 +214,8 @@ impl SessionHandler {
                         Some(NetplayCommand::CreateRoom) => {
                             self.send_join_room(0, 0, false).await?;
                         }
-                        Some(NetplayCommand::JoinRoom { room_code, desired_role, has_rom }) => {
-                            self.send_join_room(room_code, desired_role, has_rom).await?;
+                        Some(NetplayCommand::JoinRoom { room_id, desired_role, has_rom }) => {
+                            self.send_join_room(room_id, desired_role, has_rom).await?;
                         }
                         Some(NetplayCommand::SwitchRole(role)) => {
                             self.send_switch_role(role).await?;
@@ -244,11 +244,11 @@ impl SessionHandler {
                         Some(NetplayCommand::RejoinReady(frame)) => {
                             self.send_rejoin_ready(frame).await?;
                         }
-                        Some(NetplayCommand::RequestFallbackRelay { relay_addr, relay_room_code, reason }) => {
-                            self.send_request_fallback_relay(relay_addr, relay_room_code, reason).await?;
+                        Some(NetplayCommand::RequestFallbackRelay { relay_addr, relay_room_id, reason }) => {
+                            self.send_request_fallback_relay(relay_addr, relay_room_id, reason).await?;
                         }
-                        Some(NetplayCommand::QueryRoom { room_code, resp }) => {
-                            self.send_query_room(room_code, resp).await?;
+                        Some(NetplayCommand::QueryRoom { room_id, resp }) => {
+                            self.send_query_room(room_id, resp).await?;
                         }
                         None => {
                             debug!("Command channel closed");
@@ -367,10 +367,10 @@ impl SessionHandler {
         self.input_provider
             .set_input_delay(welcome.input_delay_frames as u32);
 
-        // If we have a room code, join it; otherwise wait for assignment
-        if self.config.room_code != 0 {
+        // If we have a room ID, join it; otherwise wait for assignment
+        if self.config.room_id != 0 {
             self.send_join_room(
-                self.config.room_code,
+                self.config.room_id,
                 self.config.desired_role,
                 self.config.has_rom,
             )
@@ -383,13 +383,13 @@ impl SessionHandler {
     /// Send JoinRoom request.
     async fn send_join_room(
         &mut self,
-        room_code: u32,
+        room_id: u32,
         desired_role: u8,
         has_rom: bool,
     ) -> Result<(), NetplayError> {
         // Sync mode is decided by the room at creation time (host sets it once).
         // When joining an existing room, do not send any preference.
-        let preferred_sync_mode = if room_code == 0 {
+        let preferred_sync_mode = if room_id == 0 {
             Some(match self.input_provider.sync_mode() {
                 ClientSyncMode::Lockstep => ProtoSyncMode::Lockstep,
                 ClientSyncMode::Rollback => ProtoSyncMode::Rollback,
@@ -399,7 +399,7 @@ impl SessionHandler {
         };
 
         // For room creation, the host is always P1 and ROM is handled via LoadRom.
-        let (desired_role, has_rom) = if room_code == 0 {
+        let (desired_role, has_rom) = if room_id == 0 {
             (0u8, false)
         } else {
             (
@@ -414,7 +414,7 @@ impl SessionHandler {
         self.last_join_has_rom = has_rom;
 
         let join = JoinRoom {
-            room_code,
+            room_id,
             preferred_sync_mode,
             desired_role,
             has_rom,
@@ -513,7 +513,7 @@ impl SessionHandler {
 
     async fn send_query_room(
         &mut self,
-        room_code: u32,
+        room_id: u32,
         resp: oneshot::Sender<Result<RoomInfo, String>>,
     ) -> Result<(), NetplayError> {
         // Only one outstanding query is supported (UI can debounce).
@@ -523,7 +523,7 @@ impl SessionHandler {
 
         let msg = QueryRoom {
             request_id,
-            room_code,
+            room_id,
         };
         self.client.send_message(&msg).await?;
         Ok(())
@@ -1054,12 +1054,12 @@ impl SessionHandler {
     async fn send_request_fallback_relay(
         &mut self,
         relay_addr: SocketAddr,
-        relay_room_code: u32,
+        relay_room_id: u32,
         reason: String,
     ) -> Result<(), NetplayError> {
         let msg = RequestFallbackRelay {
             relay_addr,
-            relay_room_code,
+            relay_room_id,
             reason,
         };
         self.client.send_message(&msg).await?;
@@ -1072,7 +1072,7 @@ impl SessionHandler {
 
         warn!(
             relay_addr = %msg.relay_addr,
-            relay_room_code = msg.relay_room_code,
+            relay_room_id = msg.relay_room_id,
             reason = %msg.reason,
             "Received FallbackToRelay"
         );
@@ -1081,7 +1081,7 @@ impl SessionHandler {
             .game_event_tx
             .send(NetplayEvent::FallbackToRelay {
                 relay_addr: msg.relay_addr,
-                relay_room_code: msg.relay_room_code,
+                relay_room_id: msg.relay_room_id,
                 reason: msg.reason.clone(),
             })
             .await;

@@ -178,7 +178,7 @@ abstract class RustLibApi extends BaseApi {
   Future<bool> crateApiNetplayNetplayIsConnected();
 
   Future<void> crateApiNetplayNetplayJoinRoom({
-    required int roomCode,
+    required int roomId,
     required int desiredRole,
     required bool hasRom,
   });
@@ -186,7 +186,7 @@ abstract class RustLibApi extends BaseApi {
   Future<P2PConnectMode> crateApiNetplayNetplayP2PConnectJoinAuto({
     required String signalingAddr,
     required String relayAddr,
-    required int roomCode,
+    required int roomId,
     required String playerName,
     required int desiredRole,
     required bool hasRom,
@@ -195,7 +195,7 @@ abstract class RustLibApi extends BaseApi {
   Future<int> crateApiNetplayNetplayP2PCreateRoom({
     required String signalingAddr,
     required List<String> hostAddrs,
-    required int hostRoomCode,
+    required int hostRoomId,
     String? hostQuicCertSha256Fingerprint,
     String? hostQuicServerName,
     required String name,
@@ -205,7 +205,7 @@ abstract class RustLibApi extends BaseApi {
     required String signalingAddr,
     required String relayAddr,
     required List<String> hostAddrs,
-    required int hostRoomCode,
+    required int hostRoomId,
     String? hostQuicCertSha256Fingerprint,
     String? hostQuicServerName,
     required String playerName,
@@ -219,13 +219,13 @@ abstract class RustLibApi extends BaseApi {
 
   Future<P2PJoinInfo> crateApiNetplayNetplayP2PJoinRoom({
     required String signalingAddr,
-    required int roomCode,
+    required int roomId,
     required String name,
   });
 
   Future<void> crateApiNetplayNetplayP2PRequestFallback({
     required String signalingAddr,
-    required int roomCode,
+    required int roomId,
     required String reason,
     required String name,
   });
@@ -236,12 +236,12 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<NetplayRoomInfo> crateApiNetplayNetplayQueryRoom({
-    required int roomCode,
+    required int roomId,
   });
 
   Future<void> crateApiNetplayNetplayRequestFallbackRelay({
     required String relayAddr,
-    required int relayRoomCode,
+    required int relayRoomId,
     required String reason,
   });
 
@@ -1422,7 +1422,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<void> crateApiNetplayNetplayJoinRoom({
-    required int roomCode,
+    required int roomId,
     required int desiredRole,
     required bool hasRom,
   }) {
@@ -1430,7 +1430,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_32(roomCode, serializer);
+          sse_encode_u_32(roomId, serializer);
           sse_encode_u_8(desiredRole, serializer);
           sse_encode_bool(hasRom, serializer);
           pdeCallFfi(
@@ -1445,7 +1445,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiNetplayNetplayJoinRoomConstMeta,
-        argValues: [roomCode, desiredRole, hasRom],
+        argValues: [roomId, desiredRole, hasRom],
         apiImpl: this,
       ),
     );
@@ -1454,14 +1454,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiNetplayNetplayJoinRoomConstMeta =>
       const TaskConstMeta(
         debugName: "netplay_join_room",
-        argNames: ["roomCode", "desiredRole", "hasRom"],
+        argNames: ["roomId", "desiredRole", "hasRom"],
       );
 
   @override
   Future<P2PConnectMode> crateApiNetplayNetplayP2PConnectJoinAuto({
     required String signalingAddr,
     required String relayAddr,
-    required int roomCode,
+    required int roomId,
     required String playerName,
     required int desiredRole,
     required bool hasRom,
@@ -1472,7 +1472,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(signalingAddr, serializer);
           sse_encode_String(relayAddr, serializer);
-          sse_encode_u_32(roomCode, serializer);
+          sse_encode_u_32(roomId, serializer);
           sse_encode_String(playerName, serializer);
           sse_encode_u_8(desiredRole, serializer);
           sse_encode_bool(hasRom, serializer);
@@ -1491,7 +1491,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argValues: [
           signalingAddr,
           relayAddr,
-          roomCode,
+          roomId,
           playerName,
           desiredRole,
           hasRom,
@@ -1507,7 +1507,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: [
           "signalingAddr",
           "relayAddr",
-          "roomCode",
+          "roomId",
           "playerName",
           "desiredRole",
           "hasRom",
@@ -1518,7 +1518,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<int> crateApiNetplayNetplayP2PCreateRoom({
     required String signalingAddr,
     required List<String> hostAddrs,
-    required int hostRoomCode,
+    required int hostRoomId,
     String? hostQuicCertSha256Fingerprint,
     String? hostQuicServerName,
     required String name,
@@ -1529,7 +1529,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(signalingAddr, serializer);
           sse_encode_list_String(hostAddrs, serializer);
-          sse_encode_u_32(hostRoomCode, serializer);
+          sse_encode_u_32(hostRoomId, serializer);
           sse_encode_opt_String(hostQuicCertSha256Fingerprint, serializer);
           sse_encode_opt_String(hostQuicServerName, serializer);
           sse_encode_String(name, serializer);
@@ -1548,7 +1548,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argValues: [
           signalingAddr,
           hostAddrs,
-          hostRoomCode,
+          hostRoomId,
           hostQuicCertSha256Fingerprint,
           hostQuicServerName,
           name,
@@ -1564,7 +1564,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: [
           "signalingAddr",
           "hostAddrs",
-          "hostRoomCode",
+          "hostRoomId",
           "hostQuicCertSha256Fingerprint",
           "hostQuicServerName",
           "name",
@@ -1576,7 +1576,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String signalingAddr,
     required String relayAddr,
     required List<String> hostAddrs,
-    required int hostRoomCode,
+    required int hostRoomId,
     String? hostQuicCertSha256Fingerprint,
     String? hostQuicServerName,
     required String playerName,
@@ -1588,7 +1588,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(signalingAddr, serializer);
           sse_encode_String(relayAddr, serializer);
           sse_encode_list_String(hostAddrs, serializer);
-          sse_encode_u_32(hostRoomCode, serializer);
+          sse_encode_u_32(hostRoomId, serializer);
           sse_encode_opt_String(hostQuicCertSha256Fingerprint, serializer);
           sse_encode_opt_String(hostQuicServerName, serializer);
           sse_encode_String(playerName, serializer);
@@ -1609,7 +1609,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           signalingAddr,
           relayAddr,
           hostAddrs,
-          hostRoomCode,
+          hostRoomId,
           hostQuicCertSha256Fingerprint,
           hostQuicServerName,
           playerName,
@@ -1627,7 +1627,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "signalingAddr",
           "relayAddr",
           "hostAddrs",
-          "hostRoomCode",
+          "hostRoomId",
           "hostQuicCertSha256Fingerprint",
           "hostQuicServerName",
           "playerName",
@@ -1674,7 +1674,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<P2PJoinInfo> crateApiNetplayNetplayP2PJoinRoom({
     required String signalingAddr,
-    required int roomCode,
+    required int roomId,
     required String name,
   }) {
     return handler.executeNormal(
@@ -1682,7 +1682,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(signalingAddr, serializer);
-          sse_encode_u_32(roomCode, serializer);
+          sse_encode_u_32(roomId, serializer);
           sse_encode_String(name, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -1696,7 +1696,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiNetplayNetplayP2PJoinRoomConstMeta,
-        argValues: [signalingAddr, roomCode, name],
+        argValues: [signalingAddr, roomId, name],
         apiImpl: this,
       ),
     );
@@ -1705,13 +1705,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiNetplayNetplayP2PJoinRoomConstMeta =>
       const TaskConstMeta(
         debugName: "netplay_p2p_join_room",
-        argNames: ["signalingAddr", "roomCode", "name"],
+        argNames: ["signalingAddr", "roomId", "name"],
       );
 
   @override
   Future<void> crateApiNetplayNetplayP2PRequestFallback({
     required String signalingAddr,
-    required int roomCode,
+    required int roomId,
     required String reason,
     required String name,
   }) {
@@ -1720,7 +1720,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(signalingAddr, serializer);
-          sse_encode_u_32(roomCode, serializer);
+          sse_encode_u_32(roomId, serializer);
           sse_encode_String(reason, serializer);
           sse_encode_String(name, serializer);
           pdeCallFfi(
@@ -1735,7 +1735,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiNetplayNetplayP2PRequestFallbackConstMeta,
-        argValues: [signalingAddr, roomCode, reason, name],
+        argValues: [signalingAddr, roomId, reason, name],
         apiImpl: this,
       ),
     );
@@ -1744,7 +1744,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiNetplayNetplayP2PRequestFallbackConstMeta =>
       const TaskConstMeta(
         debugName: "netplay_p2p_request_fallback",
-        argNames: ["signalingAddr", "roomCode", "reason", "name"],
+        argNames: ["signalingAddr", "roomId", "reason", "name"],
       );
 
   @override
@@ -1784,13 +1784,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<NetplayRoomInfo> crateApiNetplayNetplayQueryRoom({
-    required int roomCode,
+    required int roomId,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_32(roomCode, serializer);
+          sse_encode_u_32(roomId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1803,7 +1803,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiNetplayNetplayQueryRoomConstMeta,
-        argValues: [roomCode],
+        argValues: [roomId],
         apiImpl: this,
       ),
     );
@@ -1812,13 +1812,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiNetplayNetplayQueryRoomConstMeta =>
       const TaskConstMeta(
         debugName: "netplay_query_room",
-        argNames: ["roomCode"],
+        argNames: ["roomId"],
       );
 
   @override
   Future<void> crateApiNetplayNetplayRequestFallbackRelay({
     required String relayAddr,
-    required int relayRoomCode,
+    required int relayRoomId,
     required String reason,
   }) {
     return handler.executeNormal(
@@ -1826,7 +1826,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(relayAddr, serializer);
-          sse_encode_u_32(relayRoomCode, serializer);
+          sse_encode_u_32(relayRoomId, serializer);
           sse_encode_String(reason, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -1840,7 +1840,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiNetplayNetplayRequestFallbackRelayConstMeta,
-        argValues: [relayAddr, relayRoomCode, reason],
+        argValues: [relayAddr, relayRoomId, reason],
         apiImpl: this,
       ),
     );
@@ -1849,7 +1849,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiNetplayNetplayRequestFallbackRelayConstMeta =>
       const TaskConstMeta(
         debugName: "netplay_request_fallback_relay",
-        argNames: ["relayAddr", "relayRoomCode", "reason"],
+        argNames: ["relayAddr", "relayRoomId", "reason"],
       );
 
   @override
@@ -4354,7 +4354,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 7:
         return NetplayGameEvent_FallbackToRelay(
           relayAddr: dco_decode_String(raw[1]),
-          relayRoomCode: dco_decode_u_32(raw[2]),
+          relayRoomId: dco_decode_u_32(raw[2]),
           reason: dco_decode_String(raw[3]),
         );
       default:
@@ -4459,9 +4459,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return P2PJoinInfo(
       ok: dco_decode_bool(arr[0]),
-      roomCode: dco_decode_u_32(arr[1]),
+      roomId: dco_decode_u_32(arr[1]),
       hostAddrs: dco_decode_list_String(arr[2]),
-      hostRoomCode: dco_decode_u_32(arr[3]),
+      hostRoomId: dco_decode_u_32(arr[3]),
       hostQuicCertSha256Fingerprint: dco_decode_opt_String(arr[4]),
       hostQuicServerName: dco_decode_opt_String(arr[5]),
       fallbackRequired: dco_decode_bool(arr[6]),
@@ -5109,11 +5109,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return NetplayGameEvent_Error(errorCode: var_errorCode);
       case 7:
         var var_relayAddr = sse_decode_String(deserializer);
-        var var_relayRoomCode = sse_decode_u_32(deserializer);
+        var var_relayRoomId = sse_decode_u_32(deserializer);
         var var_reason = sse_decode_String(deserializer);
         return NetplayGameEvent_FallbackToRelay(
           relayAddr: var_relayAddr,
-          relayRoomCode: var_relayRoomCode,
+          relayRoomId: var_relayRoomId,
           reason: var_reason,
         );
       default:
@@ -5247,18 +5247,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   P2PJoinInfo sse_decode_p_2_p_join_info(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_ok = sse_decode_bool(deserializer);
-    var var_roomCode = sse_decode_u_32(deserializer);
+    var var_roomId = sse_decode_u_32(deserializer);
     var var_hostAddrs = sse_decode_list_String(deserializer);
-    var var_hostRoomCode = sse_decode_u_32(deserializer);
+    var var_hostRoomId = sse_decode_u_32(deserializer);
     var var_hostQuicCertSha256Fingerprint = sse_decode_opt_String(deserializer);
     var var_hostQuicServerName = sse_decode_opt_String(deserializer);
     var var_fallbackRequired = sse_decode_bool(deserializer);
     var var_fallbackReason = sse_decode_opt_String(deserializer);
     return P2PJoinInfo(
       ok: var_ok,
-      roomCode: var_roomCode,
+      roomId: var_roomId,
       hostAddrs: var_hostAddrs,
-      hostRoomCode: var_hostRoomCode,
+      hostRoomId: var_hostRoomId,
       hostQuicCertSha256Fingerprint: var_hostQuicCertSha256Fingerprint,
       hostQuicServerName: var_hostQuicServerName,
       fallbackRequired: var_fallbackRequired,
@@ -5974,12 +5974,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_16(errorCode, serializer);
       case NetplayGameEvent_FallbackToRelay(
         relayAddr: final relayAddr,
-        relayRoomCode: final relayRoomCode,
+        relayRoomId: final relayRoomId,
         reason: final reason,
       ):
         sse_encode_i_32(7, serializer);
         sse_encode_String(relayAddr, serializer);
-        sse_encode_u_32(relayRoomCode, serializer);
+        sse_encode_u_32(relayRoomId, serializer);
         sse_encode_String(reason, serializer);
     }
   }
@@ -6093,9 +6093,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_p_2_p_join_info(P2PJoinInfo self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.ok, serializer);
-    sse_encode_u_32(self.roomCode, serializer);
+    sse_encode_u_32(self.roomId, serializer);
     sse_encode_list_String(self.hostAddrs, serializer);
-    sse_encode_u_32(self.hostRoomCode, serializer);
+    sse_encode_u_32(self.hostRoomId, serializer);
     sse_encode_opt_String(self.hostQuicCertSha256Fingerprint, serializer);
     sse_encode_opt_String(self.hostQuicServerName, serializer);
     sse_encode_bool(self.fallbackRequired, serializer);

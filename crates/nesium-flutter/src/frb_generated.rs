@@ -1201,7 +1201,7 @@ fn wire__crate__api__netplay__netplay_join_room_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_room_id = <u32>::sse_decode(&mut deserializer);
             let api_desired_role = <u8>::sse_decode(&mut deserializer);
             let api_has_rom = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -1209,7 +1209,7 @@ fn wire__crate__api__netplay__netplay_join_room_impl(
                 transform_result_sse::<_, String>(
                     (move || async move {
                         let output_ok = crate::api::netplay::netplay_join_room(
-                            api_room_code,
+                            api_room_id,
                             api_desired_role,
                             api_has_rom,
                         )
@@ -1246,7 +1246,7 @@ fn wire__crate__api__netplay__netplay_p2p_connect_join_auto_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_signaling_addr = <String>::sse_decode(&mut deserializer);
             let api_relay_addr = <String>::sse_decode(&mut deserializer);
-            let api_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_room_id = <u32>::sse_decode(&mut deserializer);
             let api_player_name = <String>::sse_decode(&mut deserializer);
             let api_desired_role = <u8>::sse_decode(&mut deserializer);
             let api_has_rom = <bool>::sse_decode(&mut deserializer);
@@ -1257,7 +1257,7 @@ fn wire__crate__api__netplay__netplay_p2p_connect_join_auto_impl(
                         let output_ok = crate::api::netplay::netplay_p2p_connect_join_auto(
                             api_signaling_addr,
                             api_relay_addr,
-                            api_room_code,
+                            api_room_id,
                             api_player_name,
                             api_desired_role,
                             api_has_rom,
@@ -1295,7 +1295,7 @@ fn wire__crate__api__netplay__netplay_p2p_create_room_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_signaling_addr = <String>::sse_decode(&mut deserializer);
             let api_host_addrs = <Vec<String>>::sse_decode(&mut deserializer);
-            let api_host_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_host_room_id = <u32>::sse_decode(&mut deserializer);
             let api_host_quic_cert_sha256_fingerprint =
                 <Option<String>>::sse_decode(&mut deserializer);
             let api_host_quic_server_name = <Option<String>>::sse_decode(&mut deserializer);
@@ -1307,7 +1307,7 @@ fn wire__crate__api__netplay__netplay_p2p_create_room_impl(
                         let output_ok = crate::api::netplay::netplay_p2p_create_room(
                             api_signaling_addr,
                             api_host_addrs,
-                            api_host_room_code,
+                            api_host_room_id,
                             api_host_quic_cert_sha256_fingerprint,
                             api_host_quic_server_name,
                             api_name,
@@ -1346,7 +1346,7 @@ fn wire__crate__api__netplay__netplay_p2p_host_create_and_watch_fallback_impl(
             let api_signaling_addr = <String>::sse_decode(&mut deserializer);
             let api_relay_addr = <String>::sse_decode(&mut deserializer);
             let api_host_addrs = <Vec<String>>::sse_decode(&mut deserializer);
-            let api_host_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_host_room_id = <u32>::sse_decode(&mut deserializer);
             let api_host_quic_cert_sha256_fingerprint =
                 <Option<String>>::sse_decode(&mut deserializer);
             let api_host_quic_server_name = <Option<String>>::sse_decode(&mut deserializer);
@@ -1360,7 +1360,7 @@ fn wire__crate__api__netplay__netplay_p2p_host_create_and_watch_fallback_impl(
                                 api_signaling_addr,
                                 api_relay_addr,
                                 api_host_addrs,
-                                api_host_room_code,
+                                api_host_room_id,
                                 api_host_quic_cert_sha256_fingerprint,
                                 api_host_quic_server_name,
                                 api_player_name,
@@ -1440,7 +1440,7 @@ fn wire__crate__api__netplay__netplay_p2p_join_room_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_signaling_addr = <String>::sse_decode(&mut deserializer);
-            let api_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_room_id = <u32>::sse_decode(&mut deserializer);
             let api_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
@@ -1448,7 +1448,7 @@ fn wire__crate__api__netplay__netplay_p2p_join_room_impl(
                     (move || async move {
                         let output_ok = crate::api::netplay::netplay_p2p_join_room(
                             api_signaling_addr,
-                            api_room_code,
+                            api_room_id,
                             api_name,
                         )
                         .await?;
@@ -1483,7 +1483,7 @@ fn wire__crate__api__netplay__netplay_p2p_request_fallback_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_signaling_addr = <String>::sse_decode(&mut deserializer);
-            let api_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_room_id = <u32>::sse_decode(&mut deserializer);
             let api_reason = <String>::sse_decode(&mut deserializer);
             let api_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -1492,7 +1492,7 @@ fn wire__crate__api__netplay__netplay_p2p_request_fallback_impl(
                     (move || async move {
                         let output_ok = crate::api::netplay::netplay_p2p_request_fallback(
                             api_signaling_addr,
-                            api_room_code,
+                            api_room_id,
                             api_reason,
                             api_name,
                         )
@@ -1565,13 +1565,13 @@ fn wire__crate__api__netplay__netplay_query_room_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_room_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, String>(
                     (move || async move {
                         let output_ok =
-                            crate::api::netplay::netplay_query_room(api_room_code).await?;
+                            crate::api::netplay::netplay_query_room(api_room_id).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -1603,7 +1603,7 @@ fn wire__crate__api__netplay__netplay_request_fallback_relay_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_relay_addr = <String>::sse_decode(&mut deserializer);
-            let api_relay_room_code = <u32>::sse_decode(&mut deserializer);
+            let api_relay_room_id = <u32>::sse_decode(&mut deserializer);
             let api_reason = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
@@ -1611,7 +1611,7 @@ fn wire__crate__api__netplay__netplay_request_fallback_relay_impl(
                     (move || async move {
                         let output_ok = crate::api::netplay::netplay_request_fallback_relay(
                             api_relay_addr,
-                            api_relay_room_code,
+                            api_relay_room_id,
                             api_reason,
                         )
                         .await?;
@@ -4649,11 +4649,11 @@ impl SseDecode for crate::api::netplay::NetplayGameEvent {
             }
             7 => {
                 let mut var_relayAddr = <String>::sse_decode(deserializer);
-                let mut var_relayRoomCode = <u32>::sse_decode(deserializer);
+                let mut var_relayRoomId = <u32>::sse_decode(deserializer);
                 let mut var_reason = <String>::sse_decode(deserializer);
                 return crate::api::netplay::NetplayGameEvent::FallbackToRelay {
                     relay_addr: var_relayAddr,
-                    relay_room_code: var_relayRoomCode,
+                    relay_room_id: var_relayRoomId,
                     reason: var_reason,
                 };
             }
@@ -4811,18 +4811,18 @@ impl SseDecode for crate::api::netplay::P2PJoinInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_ok = <bool>::sse_decode(deserializer);
-        let mut var_roomCode = <u32>::sse_decode(deserializer);
+        let mut var_roomId = <u32>::sse_decode(deserializer);
         let mut var_hostAddrs = <Vec<String>>::sse_decode(deserializer);
-        let mut var_hostRoomCode = <u32>::sse_decode(deserializer);
+        let mut var_hostRoomId = <u32>::sse_decode(deserializer);
         let mut var_hostQuicCertSha256Fingerprint = <Option<String>>::sse_decode(deserializer);
         let mut var_hostQuicServerName = <Option<String>>::sse_decode(deserializer);
         let mut var_fallbackRequired = <bool>::sse_decode(deserializer);
         let mut var_fallbackReason = <Option<String>>::sse_decode(deserializer);
         return crate::api::netplay::P2PJoinInfo {
             ok: var_ok,
-            room_code: var_roomCode,
+            room_id: var_roomId,
             host_addrs: var_hostAddrs,
-            host_room_code: var_hostRoomCode,
+            host_room_id: var_hostRoomId,
             host_quic_cert_sha256_fingerprint: var_hostQuicCertSha256Fingerprint,
             host_quic_server_name: var_hostQuicServerName,
             fallback_required: var_fallbackRequired,
@@ -5753,12 +5753,12 @@ impl flutter_rust_bridge::IntoDart for crate::api::netplay::NetplayGameEvent {
             }
             crate::api::netplay::NetplayGameEvent::FallbackToRelay {
                 relay_addr,
-                relay_room_code,
+                relay_room_id,
                 reason,
             } => [
                 7.into_dart(),
                 relay_addr.into_into_dart().into_dart(),
-                relay_room_code.into_into_dart().into_dart(),
+                relay_room_id.into_into_dart().into_dart(),
                 reason.into_into_dart().into_dart(),
             ]
             .into_dart(),
@@ -5924,9 +5924,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::netplay::P2PJoinInfo {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.ok.into_into_dart().into_dart(),
-            self.room_code.into_into_dart().into_dart(),
+            self.room_id.into_into_dart().into_dart(),
             self.host_addrs.into_into_dart().into_dart(),
-            self.host_room_code.into_into_dart().into_dart(),
+            self.host_room_id.into_into_dart().into_dart(),
             self.host_quic_cert_sha256_fingerprint
                 .into_into_dart()
                 .into_dart(),
@@ -6653,12 +6653,12 @@ impl SseEncode for crate::api::netplay::NetplayGameEvent {
             }
             crate::api::netplay::NetplayGameEvent::FallbackToRelay {
                 relay_addr,
-                relay_room_code,
+                relay_room_id,
                 reason,
             } => {
                 <i32>::sse_encode(7, serializer);
                 <String>::sse_encode(relay_addr, serializer);
-                <u32>::sse_encode(relay_room_code, serializer);
+                <u32>::sse_encode(relay_room_id, serializer);
                 <String>::sse_encode(reason, serializer);
             }
             _ => {
@@ -6798,9 +6798,9 @@ impl SseEncode for crate::api::netplay::P2PJoinInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.ok, serializer);
-        <u32>::sse_encode(self.room_code, serializer);
+        <u32>::sse_encode(self.room_id, serializer);
         <Vec<String>>::sse_encode(self.host_addrs, serializer);
-        <u32>::sse_encode(self.host_room_code, serializer);
+        <u32>::sse_encode(self.host_room_id, serializer);
         <Option<String>>::sse_encode(self.host_quic_cert_sha256_fingerprint, serializer);
         <Option<String>>::sse_encode(self.host_quic_server_name, serializer);
         <bool>::sse_encode(self.fallback_required, serializer);

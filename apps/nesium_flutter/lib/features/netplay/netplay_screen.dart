@@ -25,8 +25,8 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   final _serverAddrController = TextEditingController(text: '127.0.0.1:5233');
   final _pinnedFingerprintController = TextEditingController();
   final _playerNameController = TextEditingController(text: 'Player');
-  final _roomCodeController = TextEditingController();
-  final _p2pRoomCodeController = TextEditingController();
+  final _roomIdController = TextEditingController();
+  final _p2pRoomIdController = TextEditingController();
   final _p2pServerAddrController = TextEditingController(
     text: 'nesium.mikai.link:5233',
   );
@@ -39,7 +39,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   _NetplayTransportOption _transport = _NetplayTransportOption.auto;
 
   Timer? _roomQueryDebounce;
-  int? _queriedRoomCode;
+  int? _queriedRoomId;
   int _queriedOccupiedMask = 0;
 
   @override
@@ -47,7 +47,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
     super.initState();
     _statusStream = netplayStatusStream();
     _loadJoinPrefs();
-    _roomCodeController.addListener(_scheduleRoomQuery);
+    _roomIdController.addListener(_scheduleRoomQuery);
   }
 
   @override
@@ -55,8 +55,8 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
     _serverAddrController.dispose();
     _pinnedFingerprintController.dispose();
     _playerNameController.dispose();
-    _roomCodeController.dispose();
-    _p2pRoomCodeController.dispose();
+    _roomIdController.dispose();
+    _p2pRoomIdController.dispose();
     _p2pServerAddrController.dispose();
     _roomQueryDebounce?.cancel();
     super.dispose();
@@ -64,34 +64,34 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
 
   bool _isSlotOccupied(int slot) {
     if (slot < 0 || slot > 3) return false;
-    final code = int.tryParse(_roomCodeController.text.trim());
+    final code = int.tryParse(_roomIdController.text.trim());
     if (code == null || code <= 0) return false;
-    if (_queriedRoomCode != code) return false;
+    if (_queriedRoomId != code) return false;
     return (_queriedOccupiedMask & (1 << slot)) != 0;
   }
 
   void _scheduleRoomQuery() {
     _roomQueryDebounce?.cancel();
     _roomQueryDebounce = Timer(const Duration(milliseconds: 220), () async {
-      final code = int.tryParse(_roomCodeController.text.trim());
+      final code = int.tryParse(_roomIdController.text.trim());
       if (!mounted) return;
 
       if (code == null || code <= 0) {
         setState(() {
-          _queriedRoomCode = null;
+          _queriedRoomId = null;
           _queriedOccupiedMask = 0;
         });
         return;
       }
 
       // Avoid spamming the server on the same code.
-      if (_queriedRoomCode == code) return;
+      if (_queriedRoomId == code) return;
 
       try {
-        final info = await netplayQueryRoom(roomCode: code);
+        final info = await netplayQueryRoom(roomId: code);
         if (!mounted) return;
         setState(() {
-          _queriedRoomCode = code;
+          _queriedRoomId = code;
           _queriedOccupiedMask = info.ok ? info.occupiedMask : 0;
           if (_joinDesiredRole >= 0 &&
               _joinDesiredRole <= 3 &&
@@ -102,7 +102,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       } catch (_) {
         if (!mounted) return;
         setState(() {
-          _queriedRoomCode = code;
+          _queriedRoomId = code;
           _queriedOccupiedMask = 0;
         });
       }
@@ -262,7 +262,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       return;
     }
 
-    final code = int.tryParse(_p2pRoomCodeController.text.trim());
+    final code = int.tryParse(_p2pRoomIdController.text.trim());
     if (code == null) {
       ScaffoldMessenger.of(
         context,
@@ -278,7 +278,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       await netplayP2PConnectJoinAuto(
         signalingAddr: signalingAddr,
         relayAddr: signalingAddr,
-        roomCode: code,
+        roomId: code,
         playerName: playerName,
         desiredRole: _joinDesiredRole,
         hasRom: hasRom,
@@ -357,7 +357,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
 
   Future<void> _joinRoom() async {
     final l10n = AppLocalizations.of(context)!;
-    final code = int.tryParse(_roomCodeController.text);
+    final code = int.tryParse(_roomIdController.text);
     if (code == null) {
       ScaffoldMessenger.of(
         context,
@@ -368,7 +368,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       // Best-effort: refresh occupancy before joining to avoid "stale enabled slot" races.
       if (_joinDesiredRole >= 0 && _joinDesiredRole <= 3) {
         try {
-          final info = await netplayQueryRoom(roomCode: code);
+          final info = await netplayQueryRoom(roomId: code);
           if (info.ok && ((info.occupiedMask & (1 << _joinDesiredRole)) != 0)) {
             if (mounted) {
               setState(() => _joinDesiredRole = spectatorPlayerIndex);
@@ -380,7 +380,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       final nesState = ref.read(nesControllerProvider);
       final hasRom = nesState.romBytes != null;
       await netplayJoinRoom(
-        roomCode: code,
+        roomId: code,
         desiredRole: _joinDesiredRole,
         hasRom: hasRom,
       );
@@ -403,6 +403,16 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
           SnackBar(content: Text(l10n.netplaySwitchRoleFailed(e.toString()))),
         );
       }
+    }
+  }
+
+  Future<void> _copyToClipboard(String text) async {
+    final l10n = AppLocalizations.of(context)!;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.netplayCopiedToClipboard)));
     }
   }
 
@@ -783,7 +793,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
                           ),
                           const SizedBox(height: 16),
                           TextField(
-                            controller: _p2pRoomCodeController,
+                            controller: _p2pRoomIdController,
                             decoration: _roundedInputDecoration(
                               labelText: l10n.netplayP2PRoomCode,
                               prefixIcon: const Icon(Icons.numbers_rounded),
@@ -884,7 +894,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
         ),
         const SizedBox(height: 24),
         TextField(
-          controller: _roomCodeController,
+          controller: _roomIdController,
           decoration: _roundedInputDecoration(
             labelText: l10n.netplayRoomCode,
             prefixIcon: const Icon(Icons.numbers_rounded),
@@ -947,6 +957,14 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
               l10n.netplayRoomCode,
               status.roomId.toString(),
               icon: Icons.tag_rounded,
+              trailing: IconButton(
+                onPressed: () => _copyToClipboard(status.roomId.toString()),
+                icon: const Icon(Icons.content_copy_rounded, size: 18),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: l10n.netplayCopyRoomId,
+              ),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
@@ -1085,7 +1103,12 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value, {IconData? icon}) {
+  Widget _buildInfoRow(
+    String label,
+    String value, {
+    IconData? icon,
+    Widget? trailing,
+  }) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1109,6 +1132,7 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
               fontFamily: 'RobotoMono',
             ),
           ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing],
         ],
       ),
     );

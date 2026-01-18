@@ -73,9 +73,9 @@ impl TestClient {
         Ok(welcome)
     }
 
-    async fn send_join_room(&mut self, room_code: u32) -> anyhow::Result<()> {
+    async fn send_join_room(&mut self, room_id: u32) -> anyhow::Result<()> {
         let join = JoinRoom {
-            room_code,
+            room_id,
             preferred_sync_mode: None,
             desired_role: AUTO_PLAYER_INDEX,
             has_rom: false,
@@ -190,7 +190,7 @@ impl TestClient {
 
 /// Spawn test server on a given address.
 fn install_crypto_provider() {
-    let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
+    let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
 /// Spawn test server on a given address.
@@ -261,7 +261,7 @@ async fn test_room_creation_and_join() -> anyhow::Result<()> {
     let ack1 = client1.recv_join_ack().await?;
     assert!(ack1.ok);
     assert_eq!(ack1.player_index, 0);
-    let room_code = client1.room_id;
+    let room_id = client1.room_id;
 
     // Client 2: Join room
     let mut client2 = TestClient::connect(addr).await?;
@@ -270,11 +270,11 @@ async fn test_room_creation_and_join() -> anyhow::Result<()> {
     assert!(welcome2.assigned_client_id > 0);
     assert_ne!(client1.client_id, client2.client_id);
 
-    client2.send_join_room(room_code).await?;
+    client2.send_join_room(room_id).await?;
     let ack2 = client2.recv_join_ack().await?;
     assert!(ack2.ok);
     assert_eq!(ack2.player_index, 1);
-    assert_eq!(client2.room_id, room_code);
+    assert_eq!(client2.room_id, room_id);
 
     Ok(())
 }
@@ -290,12 +290,12 @@ async fn test_input_relay() -> anyhow::Result<()> {
     client1.recv_welcome().await?;
     client1.send_join_room(0).await?;
     let _ack1 = client1.recv_join_ack().await?;
-    let room_code = client1.room_id;
+    let room_id = client1.room_id;
 
     let mut client2 = TestClient::connect(addr).await?;
     client2.send_hello("Player2").await?;
     client2.recv_welcome().await?;
-    client2.send_join_room(room_code).await?;
+    client2.send_join_room(room_id).await?;
     client2.recv_join_ack().await?;
 
     // Client 1 sends input
@@ -319,19 +319,26 @@ async fn test_spectator_mode() -> anyhow::Result<()> {
     p1.recv_welcome().await?;
     p1.send_join_room(0).await?;
     let _ack1 = p1.recv_join_ack().await?;
-    let room_code = p1.room_id;
+    let room_id = p1.room_id;
 
     let mut p2 = TestClient::connect(addr).await?;
     p2.send_hello("P2").await?;
     p2.recv_welcome().await?;
-    p2.send_join_room(room_code).await?;
+    p2.send_join_room(room_id).await?;
     p2.recv_join_ack().await?;
 
     // Third client becomes spectator
     let mut spectator = TestClient::connect(addr).await?;
     spectator.send_hello("Spectator").await?;
     spectator.recv_welcome().await?;
-    spectator.send_join_room(room_code).await?;
+    let req = JoinRoom {
+        room_id,
+        preferred_sync_mode: None,
+        desired_role: SPECTATOR_PLAYER_INDEX,
+        has_rom: false,
+    };
+    let frame = encode_message(&req)?;
+    spectator.stream.write_all(&frame).await?;
     let ack_spec = spectator.recv_join_ack().await?;
 
     assert!(ack_spec.ok);
@@ -377,13 +384,13 @@ async fn test_role_switching() -> anyhow::Result<()> {
     c1.send_join_room(0).await?;
     let ack1 = c1.recv_join_ack().await?;
     assert_eq!(ack1.player_index, 0);
-    let room_code = c1.room_id;
+    let room_id = c1.room_id;
 
     // Client 2 (P2)
     let mut c2 = TestClient::connect(addr).await?;
     c2.send_hello("C2").await?;
     c2.recv_welcome().await?;
-    c2.send_join_room(room_code).await?;
+    c2.send_join_room(room_id).await?;
     let ack2 = c2.recv_join_ack().await?;
     assert_eq!(ack2.player_index, 1);
 
@@ -391,7 +398,14 @@ async fn test_role_switching() -> anyhow::Result<()> {
     let mut c3 = TestClient::connect(addr).await?;
     c3.send_hello("C3").await?;
     c3.recv_welcome().await?;
-    c3.send_join_room(room_code).await?;
+    let req = JoinRoom {
+        room_id,
+        preferred_sync_mode: None,
+        desired_role: SPECTATOR_PLAYER_INDEX,
+        has_rom: false,
+    };
+    let frame = encode_message(&req)?;
+    c3.stream.write_all(&frame).await?;
     let ack3 = c3.recv_join_ack().await?;
     assert_eq!(ack3.player_index, SPECTATOR_PLAYER_INDEX);
 
@@ -430,7 +444,7 @@ async fn test_late_join_spectator() -> anyhow::Result<()> {
     p1.recv_welcome().await?;
     p1.send_join_room(0).await?;
     let _ack1 = p1.recv_join_ack().await?;
-    let room_code = p1.room_id;
+    let room_id = p1.room_id;
 
     // Late join spectator
     let mut spec = TestClient::connect(addr).await?;
@@ -438,7 +452,7 @@ async fn test_late_join_spectator() -> anyhow::Result<()> {
     spec.recv_welcome().await?;
 
     let req = JoinRoom {
-        room_code,
+        room_id,
         preferred_sync_mode: None,
         desired_role: SPECTATOR_PLAYER_INDEX,
         has_rom: false,

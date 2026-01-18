@@ -137,7 +137,7 @@ pub enum NetplayGameEvent {
     /// Server instructed this client to reconnect to relay mode.
     FallbackToRelay {
         relay_addr: String,
-        relay_room_code: u32,
+        relay_room_id: u32,
         reason: String,
     },
 }
@@ -146,9 +146,9 @@ pub enum NetplayGameEvent {
 #[derive(Debug, Clone)]
 pub struct P2PJoinInfo {
     pub ok: bool,
-    pub room_code: u32,
+    pub room_id: u32,
     pub host_addrs: Vec<String>,
-    pub host_room_code: u32,
+    pub host_room_id: u32,
     pub host_quic_cert_sha256_fingerprint: Option<String>,
     pub host_quic_server_name: Option<String>,
     pub fallback_required: bool,
@@ -192,7 +192,7 @@ async fn start_netplay_session_with_client(
     transport: TransportKind,
     tcp_fallback_from_quic: bool,
     player_name: String,
-    room_code: u32,
+    room_id: u32,
     desired_role: u8,
     has_rom: bool,
 ) -> Result<(), String> {
@@ -211,7 +211,7 @@ async fn start_netplay_session_with_client(
         name: player_name,
         transport,
         spectator: false,
-        room_code,
+        room_id,
         desired_role,
         has_rom,
     };
@@ -255,11 +255,11 @@ async fn start_netplay_session_with_client(
                     },
                     nesium_netplay::NetplayEvent::FallbackToRelay {
                         relay_addr,
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     } => NetplayGameEvent::FallbackToRelay {
                         relay_addr: relay_addr.to_string(),
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     },
                 };
@@ -345,9 +345,9 @@ pub async fn netplay_connect(server_addr: String, player_name: String) -> Result
 
     let config = NetplayConfig {
         name: player_name,
-        transport: nesium_netproto::messages::session::TransportKind::Tcp,
+        transport: TransportKind::Tcp,
         spectator: false,
-        room_code: 0,
+        room_id: 0,
         desired_role: AUTO_PLAYER_INDEX,
         has_rom: false,
     };
@@ -392,11 +392,11 @@ pub async fn netplay_connect(server_addr: String, player_name: String) -> Result
                     },
                     nesium_netplay::NetplayEvent::FallbackToRelay {
                         relay_addr,
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     } => NetplayGameEvent::FallbackToRelay {
                         relay_addr: relay_addr.to_string(),
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     },
                 };
@@ -459,7 +459,7 @@ pub async fn netplay_connect_auto(
         name: player_name,
         transport: chosen_transport,
         spectator: false,
-        room_code: 0,
+        room_id: 0,
         desired_role: AUTO_PLAYER_INDEX,
         has_rom: false,
     };
@@ -503,11 +503,11 @@ pub async fn netplay_connect_auto(
                     },
                     nesium_netplay::NetplayEvent::FallbackToRelay {
                         relay_addr,
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     } => NetplayGameEvent::FallbackToRelay {
                         relay_addr: relay_addr.to_string(),
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     },
                 };
@@ -566,14 +566,14 @@ pub async fn netplay_connect_auto_pinned(
 
     mgr.input_provider.with_session(|s| {
         s.tcp_fallback_from_quic =
-            chosen_transport == nesium_netproto::messages::session::TransportKind::Tcp;
+            chosen_transport == TransportKind::Tcp;
     });
 
     let config = NetplayConfig {
         name: player_name,
         transport: chosen_transport,
         spectator: false,
-        room_code: 0,
+        room_id: 0,
         desired_role: AUTO_PLAYER_INDEX,
         has_rom: false,
     };
@@ -617,11 +617,11 @@ pub async fn netplay_connect_auto_pinned(
                     },
                     nesium_netplay::NetplayEvent::FallbackToRelay {
                         relay_addr,
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     } => NetplayGameEvent::FallbackToRelay {
                         relay_addr: relay_addr.to_string(),
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     },
                 };
@@ -678,9 +678,9 @@ pub async fn netplay_connect_quic(
 
     let config = NetplayConfig {
         name: player_name,
-        transport: nesium_netproto::messages::session::TransportKind::Quic,
+        transport: TransportKind::Quic,
         spectator: false,
-        room_code: 0,
+        room_id: 0,
         desired_role: AUTO_PLAYER_INDEX,
         has_rom: false,
     };
@@ -724,11 +724,11 @@ pub async fn netplay_connect_quic(
                     },
                     nesium_netplay::NetplayEvent::FallbackToRelay {
                         relay_addr,
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     } => NetplayGameEvent::FallbackToRelay {
                         relay_addr: relay_addr.to_string(),
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     },
                 };
@@ -791,9 +791,9 @@ pub async fn netplay_connect_quic_pinned(
 
     let config = NetplayConfig {
         name: player_name,
-        transport: nesium_netproto::messages::session::TransportKind::Quic,
+        transport: TransportKind::Quic,
         spectator: false,
-        room_code: 0,
+        room_id: 0,
         desired_role: AUTO_PLAYER_INDEX,
         has_rom: false,
     };
@@ -837,11 +837,11 @@ pub async fn netplay_connect_quic_pinned(
                     },
                     nesium_netplay::NetplayEvent::FallbackToRelay {
                         relay_addr,
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     } => NetplayGameEvent::FallbackToRelay {
                         relay_addr: relay_addr.to_string(),
-                        relay_room_code,
+                        relay_room_id,
                         reason,
                     },
                 };
@@ -890,7 +890,7 @@ pub async fn netplay_create_room() -> Result<(), String> {
 /// Join an existing netplay room by code.
 #[frb]
 pub async fn netplay_join_room(
-    room_code: u32,
+    room_id: u32,
     desired_role: u8,
     has_rom: bool,
 ) -> Result<(), String> {
@@ -905,7 +905,7 @@ pub async fn netplay_join_room(
     let tx = lock_unpoison(&mgr.command_tx).clone();
     if let Some(tx) = tx {
         tx.send(NetplayCommand::JoinRoom {
-            room_code,
+            room_id,
             desired_role,
             has_rom,
         })
@@ -919,7 +919,7 @@ pub async fn netplay_join_room(
 
 /// Query room occupancy/state by join code (before joining).
 #[frb]
-pub async fn netplay_query_room(room_code: u32) -> Result<NetplayRoomInfo, String> {
+pub async fn netplay_query_room(room_id: u32) -> Result<NetplayRoomInfo, String> {
     let mgr = get_manager();
     let tx = lock_unpoison(&mgr.command_tx).clone();
     let Some(tx) = tx else {
@@ -928,7 +928,7 @@ pub async fn netplay_query_room(room_code: u32) -> Result<NetplayRoomInfo, Strin
 
     let (resp_tx, resp_rx) = oneshot::channel();
     tx.send(NetplayCommand::QueryRoom {
-        room_code,
+        room_id,
         resp: resp_tx,
     })
     .await
@@ -971,7 +971,7 @@ pub async fn netplay_switch_role(role: u8) -> Result<(), String> {
 #[frb]
 pub async fn netplay_request_fallback_relay(
     relay_addr: String,
-    relay_room_code: u32,
+    relay_room_id: u32,
     reason: String,
 ) -> Result<(), String> {
     let mgr = get_manager();
@@ -981,7 +981,7 @@ pub async fn netplay_request_fallback_relay(
     if let Some(tx) = tx {
         tx.send(NetplayCommand::RequestFallbackRelay {
             relay_addr: relay_addr_parsed,
-            relay_room_code,
+            relay_room_id,
             reason,
         })
         .await
@@ -1028,7 +1028,7 @@ pub async fn netplay_status_stream(sink: StreamSink<NetplayStatus>) -> Result<()
 
     let task = tokio::spawn(async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
             notify_status(&status_sink, &input_provider, None);
         }
     });
@@ -1179,12 +1179,12 @@ async fn signaling_request<
 
 /// Create a P2P signaling room on `nesium-netd` and publish direct-connect info for the host.
 ///
-/// Returns the room code that joiners should use on the signaling server (and for relay fallback).
+/// Returns the room ID that joiners should use on the signaling server (and for relay fallback).
 #[frb]
 pub async fn netplay_p2p_create_room(
     signaling_addr: String,
     host_addrs: Vec<String>,
-    host_room_code: u32,
+    host_room_id: u32,
     host_quic_cert_sha256_fingerprint: Option<String>,
     host_quic_server_name: Option<String>,
     name: String,
@@ -1201,14 +1201,14 @@ pub async fn netplay_p2p_create_room(
 
     let req = P2PCreateRoom {
         host_addrs,
-        host_room_code,
+        host_room_id,
         host_quic_cert_sha256_fingerprint,
         host_quic_server_name,
     };
 
     let resp: P2PRoomCreated =
         signaling_request(signaling_addr, &name, &req, MsgId::P2PRoomCreated).await?;
-    Ok(resp.room_code)
+    Ok(resp.room_id)
 }
 
 /// Start the full P2P host workflow:
@@ -1217,7 +1217,7 @@ pub async fn netplay_p2p_create_room(
 /// 3. Create P2P room on signaling server.
 /// 4. Watch for fallback notices.
 ///
-/// Returns the P2P room code.
+/// Returns the P2P room ID.
 #[frb]
 pub async fn netplay_p2p_host_start(
     signaling_addr: String,
@@ -1253,7 +1253,7 @@ pub async fn netplay_p2p_host_start(
         .map(|ip| format!("{}:{}", ip, port))
         .collect();
 
-    // 3. Get QUIC fingerprint (if available)
+    // 3. Get Room ID fingerprint (if available)
     let fingerprint = get_server().lock().quic_cert_sha256_fingerprint.clone();
 
     // 4. Register and watch fallback
@@ -1261,7 +1261,7 @@ pub async fn netplay_p2p_host_start(
         signaling_addr,
         relay_addr,
         host_addrs_str,
-        0, // host_room_code = 0 means default room
+        0, // host_room_id = 0 means default room
         fingerprint,
         Some("localhost".to_string()),
         player_name,
@@ -1288,7 +1288,7 @@ pub async fn netplay_p2p_host_create_and_watch_fallback(
     signaling_addr: String,
     relay_addr: String,
     host_addrs: Vec<String>,
-    host_room_code: u32,
+    host_room_id: u32,
     host_quic_cert_sha256_fingerprint: Option<String>,
     host_quic_server_name: Option<String>,
     player_name: String,
@@ -1307,7 +1307,7 @@ pub async fn netplay_p2p_host_create_and_watch_fallback(
     let mut stream = signaling_connect_and_handshake(signaling_addr_parsed, &player_name).await?;
     let create = P2PCreateRoom {
         host_addrs,
-        host_room_code,
+        host_room_id,
         host_quic_cert_sha256_fingerprint,
         host_quic_server_name,
     };
@@ -1352,9 +1352,9 @@ pub async fn netplay_p2p_host_create_and_watch_fallback(
         }
     };
 
-    let room_code = created.room_code;
-    if room_code == 0 {
-        return Err("Signaling server returned room_code=0".to_string());
+    let room_id = created.room_id;
+    if room_id == 0 {
+        return Err("Signaling server returned room_id=0".to_string());
     }
 
     // Replace any existing watcher.
@@ -1407,7 +1407,7 @@ pub async fn netplay_p2p_host_create_and_watch_fallback(
                 };
 
                 tracing::warn!(
-                    room_code = notice.room_code,
+                    room_id = notice.room_id,
                     reason = %notice.reason,
                     requested_by_client_id = notice.requested_by_client_id,
                     "P2P fallback notice received"
@@ -1415,7 +1415,7 @@ pub async fn netplay_p2p_host_create_and_watch_fallback(
 
                 let _ = netplay_request_fallback_relay(
                     relay_addr.clone(),
-                    room_code,
+                    room_id,
                     notice.reason.clone(),
                 )
                 .await;
@@ -1423,17 +1423,17 @@ pub async fn netplay_p2p_host_create_and_watch_fallback(
                 // 2) Stop embedded server (best-effort) to avoid confusing users with an active local host server.
                 let _ = crate::api::server::netserver_stop().await;
 
-                // 3) Switch this device to relay mode and join the same room_code on relay server.
+                // 3) Switch this device to relay mode and join the same room_id on relay server.
                 let (event_tx, event_rx) = mpsc::channel(256);
                 match nesium_netplay::connect(relay_addr_parsed, event_tx).await {
                     Ok(client) => {
                         let _ = start_netplay_session_with_client(
                             client,
                             event_rx,
-                            nesium_netproto::messages::session::TransportKind::Tcp,
+                            TransportKind::Tcp,
                             false,
                             player_name_clone.clone(),
-                            room_code,
+                            room_id,
                             0,
                             true,
                         )
@@ -1456,32 +1456,32 @@ pub async fn netplay_p2p_host_create_and_watch_fallback(
     });
 
     *lock_unpoison(&mgr.p2p_watch_task) = Some(watch);
-    Ok(room_code)
+    Ok(room_id)
 }
 
 /// Fetch host direct-connect info for a given P2P signaling room.
 #[frb]
 pub async fn netplay_p2p_join_room(
     signaling_addr: String,
-    room_code: u32,
+    room_id: u32,
     name: String,
 ) -> Result<P2PJoinInfo, String> {
     let signaling_addr = resolve_addr(&signaling_addr).await?;
 
-    let req = nesium_netproto::messages::session::P2PJoinRoom { room_code };
-    let ack: nesium_netproto::messages::session::P2PJoinAck = signaling_request(
+    let req = P2PJoinRoom { room_id };
+    let ack: P2PJoinAck = signaling_request(
         signaling_addr,
         &name,
         &req,
-        nesium_netproto::msg_id::MsgId::P2PJoinAck,
+        MsgId::P2PJoinAck,
     )
     .await?;
 
     Ok(P2PJoinInfo {
         ok: ack.ok,
-        room_code: ack.room_code,
+        room_id: ack.room_id,
         host_addrs: ack.host_addrs.iter().map(|a| a.to_string()).collect(),
-        host_room_code: ack.host_room_code,
+        host_room_id: ack.host_room_id,
         host_quic_cert_sha256_fingerprint: ack.host_quic_cert_sha256_fingerprint,
         host_quic_server_name: ack.host_quic_server_name,
         fallback_required: ack.fallback_required,
@@ -1496,12 +1496,12 @@ pub async fn netplay_p2p_join_room(
 ///
 /// Notes:
 /// - `relay_addr` must point to a running `nesium-netd` instance.
-/// - `room_code` is the P2P signaling room code, and is reused as the relay room code in fallback mode.
+/// - `room_id` is the P2P signaling room ID, and is reused as the relay room ID in fallback mode.
 #[frb]
 pub async fn netplay_p2p_connect_join_auto(
     signaling_addr: String,
     relay_addr: String,
-    room_code: u32,
+    room_id: u32,
     player_name: String,
     desired_role: u8,
     has_rom: bool,
@@ -1519,7 +1519,7 @@ pub async fn netplay_p2p_connect_join_auto(
     let ack: P2PJoinAck = signaling_request(
         signaling_addr_parsed,
         &player_name,
-        &P2PJoinRoom { room_code },
+        &P2PJoinRoom { room_id },
         MsgId::P2PJoinAck,
     )
     .await?;
@@ -1540,7 +1540,7 @@ pub async fn netplay_p2p_connect_join_auto(
             TransportKind::Tcp,
             false,
             player_name,
-            room_code,
+            room_id,
             desired_role,
             has_rom,
         )
@@ -1584,7 +1584,7 @@ pub async fn netplay_p2p_connect_join_auto(
                     transport,
                     tcp_fallback_from_quic,
                     player_name,
-                    ack.host_room_code,
+                    ack.host_room_id,
                     desired_role,
                     has_rom,
                 )
@@ -1601,7 +1601,7 @@ pub async fn netplay_p2p_connect_join_auto(
     let reason = last_err.unwrap_or_else(|| "direct connect failed".to_string());
     let _ = netplay_p2p_request_fallback(
         signaling_addr.clone(),
-        room_code,
+        room_id,
         reason.clone(),
         player_name.clone(),
     )
@@ -1617,7 +1617,7 @@ pub async fn netplay_p2p_connect_join_auto(
         TransportKind::Tcp,
         false,
         player_name,
-        room_code,
+        room_id,
         desired_role,
         has_rom,
     )
@@ -1630,7 +1630,7 @@ pub async fn netplay_p2p_connect_join_auto(
 #[frb]
 pub async fn netplay_p2p_request_fallback(
     signaling_addr: String,
-    room_code: u32,
+    room_id: u32,
     reason: String,
     name: String,
 ) -> Result<(), String> {
@@ -1639,7 +1639,7 @@ pub async fn netplay_p2p_request_fallback(
         .map_err(|e| format!("Invalid signaling address: {e}"))?;
 
     let mut stream = signaling_connect_and_handshake(signaling_addr, &name).await?;
-    let req = nesium_netproto::messages::session::P2PRequestFallback { room_code, reason };
+    let req = nesium_netproto::messages::session::P2PRequestFallback { room_id, reason };
     let frame = encode_message(&req).map_err(|e| format!("Encode failed: {e}"))?;
     stream
         .write_all(&frame)
@@ -1780,10 +1780,10 @@ fn notify_status(
                 };
 
                 let transport = match s.transport {
-                    Some(nesium_netproto::messages::session::TransportKind::Tcp) => {
+                    Some(TransportKind::Tcp) => {
                         NetplayTransport::Tcp
                     }
-                    Some(nesium_netproto::messages::session::TransportKind::Quic) => {
+                    Some(TransportKind::Quic) => {
                         NetplayTransport::Quic
                     }
                     None => NetplayTransport::Unknown,

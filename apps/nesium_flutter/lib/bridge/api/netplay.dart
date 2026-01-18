@@ -86,18 +86,18 @@ Future<void> netplayCreateRoom() =>
 
 /// Join an existing netplay room by code.
 Future<void> netplayJoinRoom({
-  required int roomCode,
+  required int roomId,
   required int desiredRole,
   required bool hasRom,
 }) => RustLib.instance.api.crateApiNetplayNetplayJoinRoom(
-  roomCode: roomCode,
+  roomId: roomId,
   desiredRole: desiredRole,
   hasRom: hasRom,
 );
 
 /// Query room occupancy/state by join code (before joining).
-Future<NetplayRoomInfo> netplayQueryRoom({required int roomCode}) =>
-    RustLib.instance.api.crateApiNetplayNetplayQueryRoom(roomCode: roomCode);
+Future<NetplayRoomInfo> netplayQueryRoom({required int roomId}) =>
+    RustLib.instance.api.crateApiNetplayNetplayQueryRoom(roomId: roomId);
 
 /// Switch player role (1P, 2P, Spectator).
 Future<void> netplaySwitchRole({required int role}) =>
@@ -106,11 +106,11 @@ Future<void> netplaySwitchRole({required int role}) =>
 /// Host-only: ask the current server to instruct all connected clients to reconnect to relay mode.
 Future<void> netplayRequestFallbackRelay({
   required String relayAddr,
-  required int relayRoomCode,
+  required int relayRoomId,
   required String reason,
 }) => RustLib.instance.api.crateApiNetplayNetplayRequestFallbackRelay(
   relayAddr: relayAddr,
-  relayRoomCode: relayRoomCode,
+  relayRoomId: relayRoomId,
   reason: reason,
 );
 
@@ -131,18 +131,18 @@ Stream<NetplayGameEvent> netplayGameEventStream() =>
 
 /// Create a P2P signaling room on `nesium-netd` and publish direct-connect info for the host.
 ///
-/// Returns the room code that joiners should use on the signaling server (and for relay fallback).
+/// Returns the room ID that joiners should use on the signaling server (and for relay fallback).
 Future<int> netplayP2PCreateRoom({
   required String signalingAddr,
   required List<String> hostAddrs,
-  required int hostRoomCode,
+  required int hostRoomId,
   String? hostQuicCertSha256Fingerprint,
   String? hostQuicServerName,
   required String name,
 }) => RustLib.instance.api.crateApiNetplayNetplayP2PCreateRoom(
   signalingAddr: signalingAddr,
   hostAddrs: hostAddrs,
-  hostRoomCode: hostRoomCode,
+  hostRoomId: hostRoomId,
   hostQuicCertSha256Fingerprint: hostQuicCertSha256Fingerprint,
   hostQuicServerName: hostQuicServerName,
   name: name,
@@ -154,7 +154,7 @@ Future<int> netplayP2PCreateRoom({
 /// 3. Create P2P room on signaling server.
 /// 4. Watch for fallback notices.
 ///
-/// Returns the P2P room code.
+/// Returns the P2P room ID.
 Future<int> netplayP2PHostStart({
   required String signalingAddr,
   required String relayAddr,
@@ -177,7 +177,7 @@ Future<int> netplayP2PHostCreateAndWatchFallback({
   required String signalingAddr,
   required String relayAddr,
   required List<String> hostAddrs,
-  required int hostRoomCode,
+  required int hostRoomId,
   String? hostQuicCertSha256Fingerprint,
   String? hostQuicServerName,
   required String playerName,
@@ -185,7 +185,7 @@ Future<int> netplayP2PHostCreateAndWatchFallback({
   signalingAddr: signalingAddr,
   relayAddr: relayAddr,
   hostAddrs: hostAddrs,
-  hostRoomCode: hostRoomCode,
+  hostRoomId: hostRoomId,
   hostQuicCertSha256Fingerprint: hostQuicCertSha256Fingerprint,
   hostQuicServerName: hostQuicServerName,
   playerName: playerName,
@@ -194,11 +194,11 @@ Future<int> netplayP2PHostCreateAndWatchFallback({
 /// Fetch host direct-connect info for a given P2P signaling room.
 Future<P2PJoinInfo> netplayP2PJoinRoom({
   required String signalingAddr,
-  required int roomCode,
+  required int roomId,
   required String name,
 }) => RustLib.instance.api.crateApiNetplayNetplayP2PJoinRoom(
   signalingAddr: signalingAddr,
-  roomCode: roomCode,
+  roomId: roomId,
   name: name,
 );
 
@@ -209,18 +209,18 @@ Future<P2PJoinInfo> netplayP2PJoinRoom({
 ///
 /// Notes:
 /// - `relay_addr` must point to a running `nesium-netd` instance.
-/// - `room_code` is the P2P signaling room code, and is reused as the relay room code in fallback mode.
+/// - `room_id` is the P2P signaling room ID, and is reused as the relay room ID in fallback mode.
 Future<P2PConnectMode> netplayP2PConnectJoinAuto({
   required String signalingAddr,
   required String relayAddr,
-  required int roomCode,
+  required int roomId,
   required String playerName,
   required int desiredRole,
   required bool hasRom,
 }) => RustLib.instance.api.crateApiNetplayNetplayP2PConnectJoinAuto(
   signalingAddr: signalingAddr,
   relayAddr: relayAddr,
-  roomCode: roomCode,
+  roomId: roomId,
   playerName: playerName,
   desiredRole: desiredRole,
   hasRom: hasRom,
@@ -229,12 +229,12 @@ Future<P2PConnectMode> netplayP2PConnectJoinAuto({
 /// Request switching a P2P signaling room into relay fallback mode (netd authoritative C/S).
 Future<void> netplayP2PRequestFallback({
   required String signalingAddr,
-  required int roomCode,
+  required int roomId,
   required String reason,
   required String name,
 }) => RustLib.instance.api.crateApiNetplayNetplayP2PRequestFallback(
   signalingAddr: signalingAddr,
-  roomCode: roomCode,
+  roomId: roomId,
   reason: reason,
   name: name,
 );
@@ -293,7 +293,7 @@ sealed class NetplayGameEvent with _$NetplayGameEvent {
   /// Server instructed this client to reconnect to relay mode.
   const factory NetplayGameEvent.fallbackToRelay({
     required String relayAddr,
-    required int relayRoomCode,
+    required int relayRoomId,
     required String reason,
   }) = NetplayGameEvent_FallbackToRelay;
 }
@@ -428,9 +428,9 @@ enum P2PConnectMode { direct, relay }
 
 class P2PJoinInfo {
   final bool ok;
-  final int roomCode;
+  final int roomId;
   final List<String> hostAddrs;
-  final int hostRoomCode;
+  final int hostRoomId;
   final String? hostQuicCertSha256Fingerprint;
   final String? hostQuicServerName;
   final bool fallbackRequired;
@@ -438,9 +438,9 @@ class P2PJoinInfo {
 
   const P2PJoinInfo({
     required this.ok,
-    required this.roomCode,
+    required this.roomId,
     required this.hostAddrs,
-    required this.hostRoomCode,
+    required this.hostRoomId,
     this.hostQuicCertSha256Fingerprint,
     this.hostQuicServerName,
     required this.fallbackRequired,
@@ -450,9 +450,9 @@ class P2PJoinInfo {
   @override
   int get hashCode =>
       ok.hashCode ^
-      roomCode.hashCode ^
+      roomId.hashCode ^
       hostAddrs.hashCode ^
-      hostRoomCode.hashCode ^
+      hostRoomId.hashCode ^
       hostQuicCertSha256Fingerprint.hashCode ^
       hostQuicServerName.hashCode ^
       fallbackRequired.hashCode ^
@@ -464,9 +464,9 @@ class P2PJoinInfo {
       other is P2PJoinInfo &&
           runtimeType == other.runtimeType &&
           ok == other.ok &&
-          roomCode == other.roomCode &&
+          roomId == other.roomId &&
           hostAddrs == other.hostAddrs &&
-          hostRoomCode == other.hostRoomCode &&
+          hostRoomId == other.hostRoomId &&
           hostQuicCertSha256Fingerprint ==
               other.hostQuicCertSha256Fingerprint &&
           hostQuicServerName == other.hostQuicServerName &&

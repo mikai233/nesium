@@ -595,13 +595,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get netplayJoinRoom => 'Join Game';
 
   @override
-  String get netplayAddressOrRoomCode => 'Room Code or Server Address';
+  String get netplayAddressOrRoomCode => 'Room ID or Server Address';
 
   @override
   String get netplayHostingTitle => 'Hosting';
 
   @override
-  String get netplayRoomCodeLabel => 'Your Room Code';
+  String get netplayRoomCodeLabel => 'Your Room ID';
 
   @override
   String get netplayP2PEnabled => 'P2P Mode';
@@ -616,7 +616,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get netplayP2PServerLabel => 'P2P Server';
 
   @override
-  String get netplayRoomCode => 'Room Code';
+  String get netplayRoomCode => 'Room ID';
 
   @override
   String get netplayRoleLabel => 'Role';
@@ -681,7 +681,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get netplayInvalidRoomCode => 'Invalid room code';
+  String get netplayInvalidRoomCode => 'Invalid room ID';
 
   @override
   String get netplayRomBroadcasted => 'Netplay: ROM broadcasted to room';
@@ -1401,7 +1401,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get netplayRelayServer => 'Relay Server (Fallback)';
 
   @override
-  String get netplayP2PRoomCode => 'P2P Room Code';
+  String get netplayP2PRoomCode => 'P2P Room ID';
 
   @override
   String get netplayStartP2PSession => 'Start P2P Session';
@@ -1414,4 +1414,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get netplayProceed => 'Proceed';
+
+  @override
+  String get netplayCopyRoomId => 'Copy Room ID';
+
+  @override
+  String get netplayCopiedToClipboard => 'Copied to clipboard';
 }

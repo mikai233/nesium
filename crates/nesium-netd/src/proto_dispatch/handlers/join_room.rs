@@ -30,8 +30,10 @@ impl Handler<JoinRoom> for JoinRoomHandler {
             return Err(HandlerError::already_in_room());
         }
 
-        let room_id = if join.room_code == 0 {
-            let id = ctx.room_mgr.create_room(ctx.conn_ctx.assigned_client_id);
+        let room_id = if join.room_id == 0 {
+            let Some(id) = ctx.room_mgr.create_room(ctx.conn_ctx.assigned_client_id) else {
+                return Err(HandlerError::server_full());
+            };
             info!(
                 room_id = id,
                 client_id = ctx.conn_ctx.assigned_client_id,
@@ -45,10 +47,10 @@ impl Handler<JoinRoom> for JoinRoomHandler {
             }
             id
         } else {
-            match ctx.room_mgr.find_by_code(join.room_code) {
+            match ctx.room_mgr.get_room(join.room_id) {
                 Some(r) => r.id,
                 None => {
-                    warn!(room_code = join.room_code, "Room code not found");
+                    warn!(room_id = join.room_id, "Room not found");
                     return Err(HandlerError::room_not_found());
                 }
             }
@@ -81,7 +83,7 @@ impl Handler<JoinRoom> for JoinRoomHandler {
                 (true, SPECTATOR_PLAYER_INDEX, false)
             } else {
                 let desired = join.desired_role;
-                if join.room_code == 0 {
+                if join.room_id == 0 {
                     // Creating room: host is always P1.
                     let ok = room.add_player_at_index(
                         0,

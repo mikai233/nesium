@@ -62,6 +62,12 @@ impl HandlerError {
             code: ErrorCode::HostNotAvailable,
         }
     }
+
+    pub fn server_full() -> Self {
+        Self {
+            code: ErrorCode::ServerFull,
+        }
+    }
 }
 
 /// Convenient Result type for handlers.

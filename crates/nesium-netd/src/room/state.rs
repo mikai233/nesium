@@ -8,21 +8,30 @@ use std::net::SocketAddr;
 
 use crate::net::inbound::ConnId;
 use crate::net::outbound::OutboundTx;
+use nesium_netproto::messages::session::SyncMode;
 use nesium_netproto::{
     channel::{ChannelKind, channel_for_msg},
     constants::SPECTATOR_PLAYER_INDEX,
     msg_id::MsgId,
 };
+use rand::Rng;
 
 /// Maximum number of players per room.
 pub const MAX_PLAYERS: usize = 4;
+
+/// Minimum 6-digit Room ID (inclusive).
+pub const ROOM_ID_MIN: u32 = 100_000;
+/// Maximum 6-digit Room ID (inclusive).
+pub const ROOM_ID_MAX: u32 = 999_999;
+/// Total number of available Room IDs in the 6-digit space.
+pub const ROOM_ID_COUNT: u32 = ROOM_ID_MAX - ROOM_ID_MIN + 1;
 
 /// Direct-connect information for Host-as-server P2P mode (netd as signaling).
 #[derive(Debug, Clone)]
 pub struct P2PHostInfo {
     pub host_signal_client_id: u32,
     pub host_addrs: Vec<SocketAddr>,
-    pub host_room_code: u32,
+    pub host_room_id: u32,
     pub host_quic_cert_sha256_fingerprint: Option<String>,
     pub host_quic_server_name: Option<String>,
 }
@@ -102,8 +111,6 @@ pub struct Spectator {
 pub struct Room {
     /// Unique room ID.
     pub id: u32,
-    /// Room code for joining.
-    pub code: u32,
     /// Host client ID (first player to join).
     pub host_client_id: u32,
     /// Players in the room (player_index -> Player).
@@ -134,22 +141,21 @@ pub struct Room {
     pub pending_catch_up_clients: Vec<u32>,
     /// ROM data for late joiners.
     pub rom_data: Option<Vec<u8>>,
-    /// Host-as-server P2P direct-connect info (when this room code is used for P2P matchmaking).
+    /// Host-as-server P2P direct-connect info (when this room ID is used for P2P matchmaking).
     pub p2p_host: Option<P2PHostInfo>,
     /// Clients currently watching this room via P2P signaling (client_id -> outbound).
     pub p2p_watchers: HashMap<u32, OutboundTx>,
-    /// Whether relay fallback was requested for this room code.
+    /// Whether relay fallback was requested for this room ID.
     pub p2p_fallback: Option<P2PFallbackState>,
     /// Synchronization mode for this room (Lockstep or Rollback).
-    pub sync_mode: nesium_netproto::messages::session::SyncMode,
+    pub sync_mode: SyncMode,
 }
 
 impl Room {
     /// Create a new room.
-    pub fn new(id: u32, code: u32, host_client_id: u32) -> Self {
+    pub fn new(id: u32, host_client_id: u32) -> Self {
         Self {
             id,
-            code,
             host_client_id,
             players: HashMap::new(),
             active_ports: [false; MAX_PLAYERS],
@@ -170,8 +176,21 @@ impl Room {
         }
     }
 
-    pub fn set_p2p_host(&mut self, host: P2PHostInfo) {
-        self.p2p_host = Some(host);
+    pub fn set_p2p_host(
+        &mut self,
+        host_signal_client_id: u32,
+        host_addrs: Vec<SocketAddr>,
+        host_room_id: u32,
+        host_quic_cert_sha256_fingerprint: Option<String>,
+        host_quic_server_name: Option<String>,
+    ) {
+        self.p2p_host = Some(P2PHostInfo {
+            host_signal_client_id,
+            host_addrs,
+            host_room_id,
+            host_quic_cert_sha256_fingerprint,
+            host_quic_server_name,
+        });
     }
 
     pub fn upsert_p2p_watcher(&mut self, client_id: u32, outbound: OutboundTx) {
@@ -776,43 +795,99 @@ impl Room {
 #[derive(Default)]
 pub struct RoomManager {
     rooms: HashMap<u32, Room>,
-    next_room_id: u32,
     /// Map client_id -> room_id for quick lookup.
     client_rooms: HashMap<u32, u32>,
+    /// Random seed for ID permutation.
+    id_seed: u32,
+    /// Counter for stateless ID generation.
+    next_room_index: u32,
 }
 
 impl RoomManager {
     pub fn new() -> Self {
+        let mut rng = rand::rng();
         Self {
             rooms: HashMap::new(),
-            next_room_id: 1,
             client_rooms: HashMap::new(),
+            id_seed: rng.random(),
+            next_room_index: 0,
         }
     }
 
-    /// Create a new room.
-    pub fn create_room(&mut self, host_client_id: u32) -> u32 {
-        let id = self.next_room_id;
-        self.next_room_id += 1;
-        let code = id; // Simple: room code = room id for now
-        let room = Room::new(id, code, host_client_id);
+    /// Create a new room with a random-looking 6-digit ID.
+    /// Returns None if the ID space is exhausted.
+    pub fn create_room(&mut self, host_client_id: u32) -> Option<u32> {
+        if self.rooms.len() >= ROOM_ID_COUNT as usize {
+            return None;
+        }
+
+        // We use a Feistel Network (Format-Preserving Encryption) to map
+        // 0..ROOM_ID_COUNT to a unique 6-digit ID sequence.
+        // This is O(1) time and O(1) memory.
+        let mut attempts = 0;
+        let id = loop {
+            let index = self.next_room_index;
+            self.next_room_index = (self.next_room_index + 1) % ROOM_ID_COUNT;
+
+            let permuted = self.permute_id(index);
+            let candidate = ROOM_ID_MIN + permuted;
+
+            if !self.rooms.contains_key(&candidate) {
+                break candidate;
+            }
+
+            attempts += 1;
+            if attempts >= ROOM_ID_COUNT {
+                return None;
+            }
+        };
+
+        let room = Room::new(id, host_client_id);
         self.rooms.insert(id, room);
-        id
+        Some(id)
+    }
+
+    /// 20-bit Feistel Network to shuffle IDs in the range 0..ROOM_ID_COUNT.
+    /// maps 0..2^20-1 to 0..2^20-1 uniquely.
+    fn permute_id(&self, index: u32) -> u32 {
+        let mut val = index;
+
+        // Space: 2^20 = 1,048,576.
+        // We cycle-walk if the result is >= ROOM_ID_COUNT.
+        loop {
+            let mut l = (val >> 10) & 0x3FF;
+            let mut r = val & 0x3FF;
+
+            for round in 0..3 {
+                // Round function: simple mix of R, seed, and round.
+                let f = ((r ^ self.id_seed ^ round)
+                    .wrapping_mul(0x45d9f3b)
+                    .wrapping_add(0x9e3779b9))
+                    & 0x3FF;
+                let next_l = r;
+                let next_r = l ^ f;
+                l = next_l;
+                r = next_r;
+            }
+
+            val = (l << 10) | r;
+
+            if val < ROOM_ID_COUNT {
+                return val;
+            }
+            // Cycle walk: if outside range, permute again.
+            // This is guaranteed to eventually hit a value in range.
+        }
+    }
+
+    /// Get room by ID.
+    pub fn get_room(&self, room_id: u32) -> Option<&Room> {
+        self.rooms.get(&room_id)
     }
 
     /// Get room by ID (mutable).
     pub fn get_room_mut(&mut self, room_id: u32) -> Option<&mut Room> {
         self.rooms.get_mut(&room_id)
-    }
-
-    /// Find room by code.
-    pub fn find_by_code(&self, code: u32) -> Option<&Room> {
-        self.rooms.values().find(|r| r.code == code)
-    }
-
-    /// Find room by code (mutable).
-    pub fn find_by_code_mut(&mut self, code: u32) -> Option<&mut Room> {
-        self.rooms.values_mut().find(|r| r.code == code)
     }
 
     /// Get room for a client.
@@ -852,18 +927,18 @@ impl RoomManager {
 
     /// Clear P2P host info for rooms where the given client was the host.
     ///
-    /// Returns a list of (room_code, watchers) for each room where the host was cleared,
+    /// Returns a list of (room_id, watchers) for each room where the host was cleared,
     /// so the caller can broadcast `P2PHostDisconnected` to all watchers.
     pub fn clear_p2p_host_for_client(&mut self, client_id: u32) -> Vec<(u32, Vec<OutboundTx>)> {
         let mut result = Vec::new();
         for room in self.rooms.values_mut() {
             if let Some(host) = &room.p2p_host {
                 if host.host_signal_client_id == client_id {
-                    let room_code = room.code;
+                    let room_id = room.id;
                     let watchers: Vec<OutboundTx> = room.p2p_watchers.values().cloned().collect();
                     room.p2p_host = None;
                     if !watchers.is_empty() {
-                        result.push((room_code, watchers));
+                        result.push((room_id, watchers));
                     }
                 }
             }
@@ -878,7 +953,7 @@ mod tests {
 
     #[test]
     fn input_history_splits_on_holes() {
-        let mut room = Room::new(1, 1, 1);
+        let mut room = Room::new(1, 1);
 
         room.record_inputs(0, 0, &[1, 2]); // frames 0,1
         room.record_inputs(0, 3, &[4, 5]); // frames 3,4 (hole at 2)
@@ -891,7 +966,7 @@ mod tests {
 
     #[test]
     fn record_inputs_inserts_out_of_order_and_overwrites() {
-        let mut room = Room::new(1, 1, 1);
+        let mut room = Room::new(1, 1);
 
         // Receive later frames first.
         room.record_inputs(0, 3, &[4, 5]); // frames 3,4
@@ -905,5 +980,27 @@ mod tests {
         // History should be continuous and reflect the overwrite.
         let history = room.get_input_history(0);
         assert_eq!(history, vec![(0, 0, vec![1, 2, 99, 4, 5])]);
+    }
+
+    #[test]
+    fn room_id_uniqueness_and_range() {
+        let mgr = RoomManager::new();
+        let mut seen = std::collections::HashSet::new();
+
+        // Testing all 900k is slow in debug, let's test a sample.
+        // But for verification, let's at least test 10,000 consecutive ones.
+        for i in 0..10000 {
+            let id = mgr.permute_id(i);
+            assert!(id < ROOM_ID_COUNT, "ID {} out of range: {}", i, id);
+            assert!(
+                seen.insert(id),
+                "Duplicate ID produced at index {}: {}",
+                i,
+                id
+            );
+
+            let room_id = ROOM_ID_MIN + id;
+            assert!(room_id >= ROOM_ID_MIN && room_id <= ROOM_ID_MAX);
+        }
     }
 }

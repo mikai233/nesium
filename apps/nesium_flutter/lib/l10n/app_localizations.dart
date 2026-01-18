@@ -1175,7 +1175,7 @@ abstract class AppLocalizations {
   /// No description provided for @netplayAddressOrRoomCode.
   ///
   /// In en, this message translates to:
-  /// **'Room Code or Server Address'**
+  /// **'Room ID or Server Address'**
   String get netplayAddressOrRoomCode;
 
   /// No description provided for @netplayHostingTitle.
@@ -1187,7 +1187,7 @@ abstract class AppLocalizations {
   /// No description provided for @netplayRoomCodeLabel.
   ///
   /// In en, this message translates to:
-  /// **'Your Room Code'**
+  /// **'Your Room ID'**
   String get netplayRoomCodeLabel;
 
   /// No description provided for @netplayP2PEnabled.
@@ -1217,7 +1217,7 @@ abstract class AppLocalizations {
   /// No description provided for @netplayRoomCode.
   ///
   /// In en, this message translates to:
-  /// **'Room Code'**
+  /// **'Room ID'**
   String get netplayRoomCode;
 
   /// No description provided for @netplayRoleLabel.
@@ -1319,7 +1319,7 @@ abstract class AppLocalizations {
   /// No description provided for @netplayInvalidRoomCode.
   ///
   /// In en, this message translates to:
-  /// **'Invalid room code'**
+  /// **'Invalid room ID'**
   String get netplayInvalidRoomCode;
 
   /// No description provided for @netplayRomBroadcasted.
@@ -2669,7 +2669,7 @@ abstract class AppLocalizations {
   /// No description provided for @netplayP2PRoomCode.
   ///
   /// In en, this message translates to:
-  /// **'P2P Room Code'**
+  /// **'P2P Room ID'**
   String get netplayP2PRoomCode;
 
   /// No description provided for @netplayStartP2PSession.
@@ -2695,6 +2695,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Proceed'**
   String get netplayProceed;
+
+  /// No description provided for @netplayCopyRoomId.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Room ID'**
+  String get netplayCopyRoomId;
+
+  /// No description provided for @netplayCopiedToClipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get netplayCopiedToClipboard;
 }
 
 class _AppLocalizationsDelegate

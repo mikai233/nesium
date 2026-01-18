@@ -22,7 +22,7 @@ impl Handler<QueryRoom> for QueryRoomHandler {
             occupied_mask: 0,
         };
 
-        if let Some(found) = ctx.room_mgr.find_by_code(msg.room_code) {
+        if let Some(found) = ctx.room_mgr.get_room(msg.room_id) {
             resp.ok = true;
             resp.room_id = found.id;
             resp.started = found.started;
@@ -41,7 +41,7 @@ impl Handler<QueryRoom> for QueryRoomHandler {
 
         info!(
             client_id = ctx.conn_ctx.assigned_client_id,
-            room_code = msg.room_code,
+            room_id = msg.room_id,
             ok = resp.ok,
             occupied_mask = resp.occupied_mask,
             "QueryRoom handled"

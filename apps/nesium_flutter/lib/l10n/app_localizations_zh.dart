@@ -584,13 +584,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get netplayJoinRoom => '加入游戏';
 
   @override
-  String get netplayAddressOrRoomCode => '房间码或服务器地址';
+  String get netplayAddressOrRoomCode => '房间 ID 或服务器地址';
 
   @override
   String get netplayHostingTitle => '正在托管';
 
   @override
-  String get netplayRoomCodeLabel => '你的房间码';
+  String get netplayRoomCodeLabel => '你的房间 ID';
 
   @override
   String get netplayP2PEnabled => '开启 P2P 网联';
@@ -605,7 +605,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get netplayP2PServerLabel => 'P2P 服务器地址';
 
   @override
-  String get netplayRoomCode => '房间码';
+  String get netplayRoomCode => '房间 ID';
 
   @override
   String get netplayRoleLabel => '角色';
@@ -670,7 +670,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get netplayInvalidRoomCode => '房间代码无效';
+  String get netplayInvalidRoomCode => '房间 ID 无效';
 
   @override
   String get netplayRomBroadcasted => '联机游戏: ROM 已广播至房间';
@@ -1384,7 +1384,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get netplayRelayServer => '中转服务器 (备用)';
 
   @override
-  String get netplayP2PRoomCode => 'P2P 房间码';
+  String get netplayP2PRoomCode => 'P2P 房间 ID';
 
   @override
   String get netplayStartP2PSession => '开启 P2P 会话';
@@ -1397,4 +1397,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get netplayProceed => '继续';
+
+  @override
+  String get netplayCopyRoomId => '复制房间 ID';
+
+  @override
+  String get netplayCopiedToClipboard => '已复制到剪贴板';
 }

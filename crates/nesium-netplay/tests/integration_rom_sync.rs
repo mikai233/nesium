@@ -51,7 +51,7 @@ async fn test_rom_sync_flow() {
         name: "Player1".to_string(),
         transport: TransportKind::Tcp,
         spectator: false,
-        room_code: 0, // Create room
+        room_id: 0, // Create room
         desired_role: AUTO_PLAYER_INDEX,
         has_rom: false,
     };
@@ -73,7 +73,7 @@ async fn test_rom_sync_flow() {
     // Wait for room creation
     sleep(Duration::from_millis(100)).await;
 
-    // 3. Get Room Code
+    // 3. Get Room ID
     let room_id = c1_input.with_session(|s| s.room_id);
     assert_ne!(room_id, 0, "Room should be created");
 
@@ -86,7 +86,7 @@ async fn test_rom_sync_flow() {
         name: "Player2".to_string(),
         transport: nesium_netproto::messages::session::TransportKind::Tcp,
         spectator: false,
-        room_code: room_id,
+        room_id,
         desired_role: AUTO_PLAYER_INDEX,
         has_rom: false,
     };
@@ -175,9 +175,9 @@ async fn test_late_join_receives_cached_rom_and_state() {
     let c1_input = create_input_provider();
     let c1_config = NetplayConfig {
         name: "Host".to_string(),
-        transport: nesium_netproto::messages::session::TransportKind::Tcp,
+        transport: TransportKind::Tcp,
         spectator: false,
-        room_code: 0, // Create room
+        room_id: 0, // Create room
         desired_role: AUTO_PLAYER_INDEX,
         has_rom: false,
     };
@@ -230,7 +230,6 @@ async fn test_late_join_receives_cached_rom_and_state() {
             .await
             .unwrap();
     }
-
     sleep(Duration::from_millis(50)).await;
 
     // 5. Connect Client 2 (Late Joiner)
@@ -240,9 +239,9 @@ async fn test_late_join_receives_cached_rom_and_state() {
     let c2_input = create_input_provider();
     let c2_config = NetplayConfig {
         name: "LateJoiner".to_string(),
-        transport: nesium_netproto::messages::session::TransportKind::Tcp,
+        transport: TransportKind::Tcp,
         spectator: false,
-        room_code: room_id,
+        room_id,
         desired_role: AUTO_PLAYER_INDEX,
         has_rom: false,
     };

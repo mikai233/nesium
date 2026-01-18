@@ -314,14 +314,14 @@
   "netplayJoinGame": "Join Game",
   "netplayCreateRoom": "Create Room",
   "netplayJoinRoom": "Join Game",
-  "netplayAddressOrRoomCode": "Room Code or Server Address",
+  "netplayAddressOrRoomCode": "Room ID or Server Address",
   "netplayHostingTitle": "Hosting",
-  "netplayRoomCodeLabel": "Your Room Code",
+  "netplayRoomCodeLabel": "Your Room ID",
   "netplayP2PEnabled": "P2P Mode",
   "netplayDirectServerLabel": "Server Address",
   "netplayAdvancedSettings": "Advanced Connection Settings",
   "netplayP2PServerLabel": "P2P Server",
-  "netplayRoomCode": "Room Code",
+  "netplayRoomCode": "Room ID",
   "netplayRoleLabel": "Role",
   "netplayPlayerIndex": "Player {index}",
   "@netplayPlayerIndex": {
@@ -387,7 +387,7 @@
       }
     }
   },
-  "netplayInvalidRoomCode": "Invalid room code",
+  "netplayInvalidRoomCode": "Invalid room ID",
   "netplayRomBroadcasted": "Netplay: ROM broadcasted to room",
   "menuLoadTasMovie": "Load TAS Movie...",
   "menuPreferences": "Preferences...",
@@ -720,9 +720,11 @@
   "netplayP2PMode": "P2P Mode",
   "netplaySignalingServer": "Signaling Server",
   "netplayRelayServer": "Relay Server (Fallback)",
-  "netplayP2PRoomCode": "P2P Room Code",
+  "netplayP2PRoomCode": "P2P Room ID",
   "netplayStartP2PSession": "Start P2P Session",
   "netplayJoinP2PSession": "Join P2P Session",
   "netplayInvalidP2PServerAddr": "Invalid P2P server address",
-  "netplayProceed": "Proceed"
+  "netplayProceed": "Proceed",
+  "netplayCopyRoomId": "Copy Room ID",
+  "netplayCopiedToClipboard": "Copied to clipboard"
 }
