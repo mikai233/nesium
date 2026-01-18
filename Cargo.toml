@@ -13,6 +13,7 @@ members = [
   "crates/nesium-netplay",
   "crates/nesium-netd",
   "crates/nesium-netproto",
+  "crates/nesium-netproto-derive",
   "crates/nesium-support",
 ]
 

@@ -59,6 +59,12 @@ pub struct JoinRoom {
     pub room_code: u32,
     /// Preferred sync mode (if None, server decides based on room settings).
     pub preferred_sync_mode: Option<SyncMode>,
+    /// Desired role at join time.
+    ///
+    /// 0-3 for a player slot, `0xFE` for auto-assign, or `0xFF` for spectator.
+    pub desired_role: u8,
+    /// True if the client already has the ROM loaded and does not need `LoadRom`.
+    pub has_rom: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -69,6 +75,9 @@ pub struct JoinAck {
     pub room_id: u32,
     /// The sync mode that will be used for this room.
     pub sync_mode: SyncMode,
+    /// If true, the client must keep its local port inactive and wait for `ActivatePort`
+    /// before sending non-zero inputs (lockstep reconnect).
+    pub pending_activation: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -175,6 +184,52 @@ pub struct ResetGame {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ResetSync {
     pub kind: u8,
+}
+
+/// Host requests to change the room's synchronization mode.
+/// Only valid before the game starts.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SetSyncMode {
+    pub mode: SyncMode,
+}
+
+/// Server broadcasts sync mode change to all players.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SyncModeChanged {
+    pub mode: SyncMode,
+}
+
+/// Client informs the server it finished catch-up and is ready for port activation.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RejoinReady {
+    /// Best-effort: the frame the client believes it has caught up to.
+    pub caught_up_to_frame: u32,
+}
+
+/// Server schedules a port to become active from a given frame.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ActivatePort {
+    pub player_index: u8,
+    pub active_from_frame: u32,
+}
+
+/// Query room info by join code (before joining).
+#[derive(Serialize, Deserialize, Debug)]
+pub struct QueryRoom {
+    pub request_id: u32,
+    pub room_code: u32,
+}
+
+/// Room info response for a `QueryRoom` request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RoomInfo {
+    pub request_id: u32,
+    pub ok: bool,
+    pub room_id: u32,
+    pub started: bool,
+    pub sync_mode: SyncMode,
+    /// Bitmask: bit N set if player slot N is occupied (0..3).
+    pub occupied_mask: u8,
 }
 
 /// Client requests current game state (for reconnection/late join).

@@ -23,6 +23,7 @@ final netplayProvider = Provider<NetplayAppState>((ref) {
         roomId: 0,
         playerIndex: 100, // spectator placeholder
         players: [],
+        syncMode: SyncMode.lockstep,
       );
   return NetplayAppState(status: status);
 });

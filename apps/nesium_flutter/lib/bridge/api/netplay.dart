@@ -8,10 +8,20 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'netplay.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `lock_unpoison`, `netplay_disconnect_inner`, `notify_status`, `signaling_connect_and_handshake`, `signaling_request`, `start_netplay_session_with_client`
+// These functions are ignored because they are not marked as `pub`: `lock_unpoison`, `netplay_disconnect_inner`, `notify_status`, `resolve_addr`, `signaling_connect_and_handshake`, `signaling_request`, `start_netplay_session_with_client`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `NetplayManager`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `get_manager`
+
+/// Set the netplay synchronization mode.
+///
+/// Host only, should be called before game starts.
+Future<void> netplaySetSyncMode({required SyncMode mode}) =>
+    RustLib.instance.api.crateApiNetplayNetplaySetSyncMode(mode: mode);
+
+/// Get the current netplay synchronization mode.
+Future<SyncMode> netplayGetSyncMode() =>
+    RustLib.instance.api.crateApiNetplayNetplayGetSyncMode();
 
 /// Connect to netplay server and perform handshake.
 Future<void> netplayConnect({
@@ -75,8 +85,19 @@ Future<void> netplayCreateRoom() =>
     RustLib.instance.api.crateApiNetplayNetplayCreateRoom();
 
 /// Join an existing netplay room by code.
-Future<void> netplayJoinRoom({required int roomCode}) =>
-    RustLib.instance.api.crateApiNetplayNetplayJoinRoom(roomCode: roomCode);
+Future<void> netplayJoinRoom({
+  required int roomCode,
+  required int desiredRole,
+  required bool hasRom,
+}) => RustLib.instance.api.crateApiNetplayNetplayJoinRoom(
+  roomCode: roomCode,
+  desiredRole: desiredRole,
+  hasRom: hasRom,
+);
+
+/// Query room occupancy/state by join code (before joining).
+Future<NetplayRoomInfo> netplayQueryRoom({required int roomCode}) =>
+    RustLib.instance.api.crateApiNetplayNetplayQueryRoom(roomCode: roomCode);
 
 /// Switch player role (1P, 2P, Spectator).
 Future<void> netplaySwitchRole({required int role}) =>
@@ -194,11 +215,15 @@ Future<P2PConnectMode> netplayP2PConnectJoinAuto({
   required String relayAddr,
   required int roomCode,
   required String playerName,
+  required int desiredRole,
+  required bool hasRom,
 }) => RustLib.instance.api.crateApiNetplayNetplayP2PConnectJoinAuto(
   signalingAddr: signalingAddr,
   relayAddr: relayAddr,
   roomCode: roomCode,
   playerName: playerName,
+  desiredRole: desiredRole,
+  hasRom: hasRom,
 );
 
 /// Request switching a P2P signaling room into relay fallback mode (netd authoritative C/S).
@@ -297,6 +322,44 @@ class NetplayPlayer {
           playerIndex == other.playerIndex;
 }
 
+/// Room snapshot for pre-join UI (which slots are occupied, etc.).
+class NetplayRoomInfo {
+  final bool ok;
+  final int roomId;
+  final bool started;
+  final SyncMode syncMode;
+
+  /// Bitmask: bit N set if slot N is occupied (0..3).
+  final int occupiedMask;
+
+  const NetplayRoomInfo({
+    required this.ok,
+    required this.roomId,
+    required this.started,
+    required this.syncMode,
+    required this.occupiedMask,
+  });
+
+  @override
+  int get hashCode =>
+      ok.hashCode ^
+      roomId.hashCode ^
+      started.hashCode ^
+      syncMode.hashCode ^
+      occupiedMask.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NetplayRoomInfo &&
+          runtimeType == other.runtimeType &&
+          ok == other.ok &&
+          roomId == other.roomId &&
+          started == other.started &&
+          syncMode == other.syncMode &&
+          occupiedMask == other.occupiedMask;
+}
+
 /// Netplay connection state.
 enum NetplayState { disconnected, connecting, connected, inRoom }
 
@@ -313,6 +376,9 @@ class NetplayStatus {
   /// Player index: 0, 1, or `SPECTATOR_PLAYER_INDEX` for spectator
   final int playerIndex;
   final List<NetplayPlayer> players;
+
+  /// Current synchronization mode for the room
+  final SyncMode syncMode;
   final String? error;
 
   const NetplayStatus({
@@ -323,6 +389,7 @@ class NetplayStatus {
     required this.roomId,
     required this.playerIndex,
     required this.players,
+    required this.syncMode,
     this.error,
   });
 
@@ -335,6 +402,7 @@ class NetplayStatus {
       roomId.hashCode ^
       playerIndex.hashCode ^
       players.hashCode ^
+      syncMode.hashCode ^
       error.hashCode;
 
   @override
@@ -349,6 +417,7 @@ class NetplayStatus {
           roomId == other.roomId &&
           playerIndex == other.playerIndex &&
           players == other.players &&
+          syncMode == other.syncMode &&
           error == other.error;
 }
 
@@ -403,4 +472,18 @@ class P2PJoinInfo {
           hostQuicServerName == other.hostQuicServerName &&
           fallbackRequired == other.fallbackRequired &&
           fallbackReason == other.fallbackReason;
+}
+
+/// Netplay synchronization mode.
+enum SyncMode {
+  /// Wait for all players' confirmed inputs before advancing each frame.
+  /// Best for low-latency networks (LAN, same region).
+  lockstep,
+
+  /// Predict remote inputs and rollback/resimulate on misprediction.
+  /// Best for high-latency networks (cross-region, internet).
+  rollback;
+
+  static Future<SyncMode> default_() =>
+      RustLib.instance.api.crateApiNetplaySyncModeDefault();
 }

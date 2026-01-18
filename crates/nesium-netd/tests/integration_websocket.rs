@@ -5,9 +5,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use nesium_netd::net::tcp::run_tcp_listener_with_listener;
 use nesium_netd::net::{inbound::InboundEvent, quic_config};
-use nesium_netproto::{
-    codec_tcp::encode_tcp_frame, header::Header, messages::sync::Ping, msg_id::MsgId,
-};
+use nesium_netproto::{codec::encode_message, messages::sync::Ping, msg_id::MsgId};
 use tokio::sync::mpsc;
 use tokio_rustls::rustls;
 use tokio_tungstenite::tungstenite::Message;
@@ -45,8 +43,7 @@ async fn test_ws_connection() {
 
     // 1. Send data from Client to Server
     let ping = Ping { t_ms: 42 };
-    let header = Header::new(MsgId::Ping as u8);
-    let frame_bytes = encode_tcp_frame(header, MsgId::Ping, &ping, 1024).unwrap();
+    let frame_bytes = encode_message(&ping).unwrap();
 
     ws_stream
         .send(Message::Binary(Bytes::from(frame_bytes)))
@@ -64,7 +61,7 @@ async fn test_ws_connection() {
     let event = rx.recv().await.expect("Expected packet");
     match event {
         InboundEvent::Packet { packet, .. } => {
-            assert_eq!(packet.msg_id, MsgId::Ping);
+            assert_eq!(packet.msg_id(), MsgId::Ping);
             let received_ping: Ping = postcard::from_bytes(&packet.payload).unwrap();
             assert_eq!(received_ping.t_ms, 42);
 
@@ -122,8 +119,7 @@ async fn test_wss_connection() {
 
     // 1. Send
     let ping = Ping { t_ms: 99 };
-    let header = Header::new(MsgId::Ping as u8);
-    let frame_bytes = encode_tcp_frame(header, MsgId::Ping, &ping, 1024).unwrap();
+    let frame_bytes = encode_message(&ping).unwrap();
 
     ws_stream
         .send(Message::Binary(Bytes::from(frame_bytes)))
@@ -140,7 +136,7 @@ async fn test_wss_connection() {
 
     let event = rx.recv().await.unwrap();
     if let InboundEvent::Packet { packet, .. } = event {
-        assert_eq!(packet.msg_id, MsgId::Ping);
+        assert_eq!(packet.msg_id(), MsgId::Ping);
         // We know payload is correct if ID matches and verification above passed
         outbound_tx
             .send(Bytes::from_static(b"secure_reply"))

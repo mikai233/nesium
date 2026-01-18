@@ -108,6 +108,14 @@ pub struct Room {
     pub host_client_id: u32,
     /// Players in the room (player_index -> Player).
     pub players: HashMap<u8, Player>,
+    /// Whether each player port is considered active for lockstep progression.
+    ///
+    /// In lockstep reconnect, a player may be present but inactive (treated as 0 input)
+    /// until the server schedules activation.
+    pub active_ports: [bool; MAX_PLAYERS],
+    /// Resume tokens for reclaiming each player slot after disconnect.
+    /// Scheduled activations: player_index -> active_from_frame.
+    pub scheduled_port_activations: HashMap<u8, u32>,
     /// Spectators in the room.
     pub spectators: Vec<Spectator>,
     /// Current authoritative frame number.
@@ -122,6 +130,8 @@ pub struct Room {
     pub paused: bool,
     /// Cached save state for reconnection/late join (frame, data).
     pub cached_state: Option<(u32, Vec<u8>)>,
+    /// Late joiners waiting for an up-to-date cached state before starting catch-up.
+    pub pending_catch_up_clients: Vec<u32>,
     /// ROM data for late joiners.
     pub rom_data: Option<Vec<u8>>,
     /// Host-as-server P2P direct-connect info (when this room code is used for P2P matchmaking).
@@ -142,6 +152,8 @@ impl Room {
             code,
             host_client_id,
             players: HashMap::new(),
+            active_ports: [false; MAX_PLAYERS],
+            scheduled_port_activations: HashMap::new(),
             spectators: Vec::new(),
             current_frame: 0,
             input_buffers: Default::default(),
@@ -149,6 +161,7 @@ impl Room {
             loaded_players: std::collections::HashSet::new(),
             paused: false,
             cached_state: None,
+            pending_catch_up_clients: Vec::new(),
             rom_data: None,
             p2p_host: None,
             p2p_watchers: HashMap::new(),
@@ -192,10 +205,31 @@ impl Room {
                         ..player
                     },
                 );
+                if (player_index as usize) < MAX_PLAYERS {
+                    self.active_ports[player_index as usize] = true;
+                }
                 return Some(player_index);
             }
         }
         None // Room is full
+    }
+
+    pub fn add_player_at_index(&mut self, player_index: u8, player: Player, active: bool) -> bool {
+        if player_index as usize >= MAX_PLAYERS {
+            return false;
+        }
+        if self.players.contains_key(&player_index) {
+            return false;
+        }
+        self.players.insert(
+            player_index,
+            Player {
+                player_index,
+                ..player
+            },
+        );
+        self.active_ports[player_index as usize] = active;
+        true
     }
 
     /// Add a spectator to the room.
@@ -215,6 +249,10 @@ impl Room {
             // Clear input buffer for this player to prevent lockstep deadlock
             if let Some(buffer) = self.input_buffers.get_mut(k as usize) {
                 buffer.clear();
+            }
+            if (k as usize) < MAX_PLAYERS {
+                self.active_ports[k as usize] = false;
+                self.scheduled_port_activations.remove(&k);
             }
             self.players.remove(&k)
         } else {
@@ -291,12 +329,43 @@ impl Room {
     /// Bit N is set if player index N is present.
     pub fn get_active_ports_mask(&self) -> u8 {
         let mut mask = 0u8;
-        for idx in self.players.keys() {
-            if (*idx as usize) < 8 {
-                mask |= 1u8 << *idx;
+        for idx in 0..MAX_PLAYERS {
+            if self.active_ports[idx] && idx < 8 {
+                mask |= 1u8 << (idx as u8);
             }
         }
         mask
+    }
+
+    pub fn schedule_port_activation(&mut self, player_index: u8, active_from_frame: u32) {
+        if (player_index as usize) < MAX_PLAYERS {
+            self.active_ports[player_index as usize] = false;
+            self.scheduled_port_activations
+                .insert(player_index, active_from_frame);
+        }
+    }
+
+    fn apply_scheduled_activations(&mut self) {
+        let current = self.current_frame;
+        let mut to_activate = Vec::<u8>::new();
+        for (&idx, &from) in &self.scheduled_port_activations {
+            if current >= from {
+                to_activate.push(idx);
+            }
+        }
+        for idx in to_activate {
+            if (idx as usize) < MAX_PLAYERS {
+                self.active_ports[idx as usize] = true;
+            }
+            self.scheduled_port_activations.remove(&idx);
+        }
+    }
+
+    fn refresh_active_ports_from_players(&mut self) {
+        for idx in 0..MAX_PLAYERS {
+            self.active_ports[idx] = self.players.contains_key(&(idx as u8));
+        }
+        self.scheduled_port_activations.clear();
     }
 
     pub fn cache_state(&mut self, frame: u32, data: Vec<u8>) {
@@ -396,6 +465,8 @@ impl Room {
             let end_frame = start_frame.wrapping_add(buttons.len().saturating_sub(1) as u32);
             self.current_frame = self.current_frame.max(end_frame);
         }
+
+        self.apply_scheduled_activations();
     }
 
     fn prune_inputs_before(&mut self, frame: u32) {
@@ -470,6 +541,7 @@ impl Room {
                     name: p.name,
                     outbounds: p.outbounds,
                 });
+                self.refresh_active_ports_from_players();
                 return Ok(vec![(client_id, SPECTATOR_PLAYER_INDEX)]);
             }
         } else if new_role < MAX_PLAYERS as u8 {
@@ -528,6 +600,7 @@ impl Room {
                     SPECTATOR_PLAYER_INDEX
                 };
 
+                self.refresh_active_ports_from_players();
                 return Ok(vec![
                     (requestor_cid, new_role),
                     (occupant.client_id, occupant_new_role),
@@ -559,6 +632,7 @@ impl Room {
                         ..requestor
                     },
                 );
+                self.refresh_active_ports_from_players();
                 return Ok(vec![(client_id, new_role)]);
             }
         }
@@ -661,6 +735,40 @@ impl Room {
         );
 
         self.all_outbounds_msg(MsgId::ResetSync)
+    }
+
+    /// Handle SetSyncMode from a client.
+    ///
+    /// Only the host can change sync mode, and only before the game starts.
+    /// Returns list of recipients to broadcast SyncModeChanged to, or error.
+    pub fn handle_set_sync_mode(
+        &mut self,
+        sender_id: u32,
+        mode: nesium_netproto::messages::session::SyncMode,
+    ) -> Result<Vec<OutboundTx>, crate::proto_dispatch::error::HandlerError> {
+        use crate::proto_dispatch::error::HandlerError;
+
+        // Only host can change sync mode
+        if sender_id != self.host_client_id {
+            return Err(HandlerError::permission_denied());
+        }
+
+        // Cannot change sync mode after game has started
+        if self.started {
+            return Err(HandlerError::game_already_started());
+        }
+
+        // Update room sync mode
+        self.sync_mode = mode;
+
+        tracing::info!(
+            room_id = self.id,
+            sync_mode = ?mode,
+            "Sync mode changed"
+        );
+
+        // Broadcast to all players
+        Ok(self.all_outbounds_msg(MsgId::SyncModeChanged))
     }
 }
 

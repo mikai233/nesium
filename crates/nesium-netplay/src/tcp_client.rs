@@ -11,10 +11,9 @@ use std::sync::Arc;
 use bytes::{Buf, BytesMut};
 use nesium_netproto::{
     channel::{ChannelKind, channel_for_msg},
-    codec_tcp::{encode_tcp_frame_auto, try_decode_tcp_frames},
+    codec::try_decode_tcp_frames,
     header::Header,
-    messages::session::AttachChannel,
-    messages::session::TransportKind,
+    messages::session::{AttachChannel, TransportKind},
     msg_id::MsgId,
     packet::PacketView,
 };
@@ -32,15 +31,19 @@ use crate::error::NetplayError;
 #[derive(Debug, Clone)]
 pub struct PacketOwned {
     pub header: Header,
-    pub msg_id: MsgId,
     pub payload: bytes::Bytes,
+}
+
+impl PacketOwned {
+    pub fn msg_id(&self) -> MsgId {
+        self.header.msg_id
+    }
 }
 
 impl<'a> From<PacketView<'a>> for PacketOwned {
     fn from(view: PacketView<'a>) -> Self {
         Self {
             header: view.header,
-            msg_id: view.msg_id,
             payload: bytes::Bytes::copy_from_slice(view.payload),
         }
     }
@@ -97,16 +100,14 @@ impl TcpClientHandle {
     /// Send a message to the server.
     ///
     /// The payload size limit is automatically selected based on the message type.
-    pub async fn send_message<T: serde::Serialize>(
+    pub async fn send_message<T: nesium_netproto::messages::Message>(
         &self,
-        header: Header,
-        msg_id: MsgId,
         payload: &T,
     ) -> Result<(), NetplayError> {
-        let bytes = encode_tcp_frame_auto(header, msg_id, payload)?;
+        let bytes = nesium_netproto::codec::encode_message(payload)?;
         let raw = bytes::Bytes::from(bytes);
 
-        let preferred = channel_for_msg(msg_id);
+        let preferred = channel_for_msg(T::msg_id());
         let cmd_tx = match preferred {
             ChannelKind::Control => self.inner.control_cmd_tx.clone(),
             ChannelKind::Input => self
@@ -167,8 +168,7 @@ impl TcpClientHandle {
             session_token,
             channel,
         };
-        let header = Header::new(MsgId::AttachChannel as u8);
-        let bytes = encode_tcp_frame_auto(header, MsgId::AttachChannel, &msg)?;
+        let bytes = nesium_netproto::codec::encode_message(&msg)?;
         cmd_tx
             .send(TcpClientCommand::SendRaw(bytes::Bytes::from(bytes)))
             .await
@@ -647,7 +647,7 @@ async fn reader_loop(
                     Ok((views, consumed)) => {
                         for view in views {
                             let packet = PacketOwned::from(view);
-                            debug!("Received {:?} from server", packet.msg_id);
+                            debug!("Received {:?} from server", packet.msg_id());
                             if event_tx.send(TcpClientEvent::Packet(packet)).await.is_err() {
                                 warn!("Event channel closed");
                                 return;
@@ -692,12 +692,12 @@ mod tests {
 
     #[test]
     fn packet_owned_conversion() {
-        let header = Header::new(MsgId::Ping as u8);
+        let header = Header::new(MsgId::Ping);
         let payload = &[1, 2, 3];
-        let view = PacketView::new(header, MsgId::Ping, payload);
+        let view = PacketView::new(header, payload);
 
         let owned = PacketOwned::from(view);
-        assert_eq!(owned.msg_id, MsgId::Ping);
+        assert_eq!(owned.msg_id(), MsgId::Ping);
         assert_eq!(owned.payload.as_ref(), &[1, 2, 3]);
     }
 }

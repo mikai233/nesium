@@ -309,7 +309,7 @@
   "netplayQuicFingerprintLabel": "QUIC cert fingerprint (optional)",
   "netplayQuicFingerprintHint": "base64url (43 chars)",
   "netplayQuicFingerprintHelper": "Enter this to use pinned QUIC. Leave empty to use system trust (QUIC) or fallback to TCP.",
-  "netplayConnect": "Join Game",
+  "netplayConnect": "Connect",
   "netplayJoinViaP2P": "Join via P2P",
   "netplayJoinGame": "Join Game",
   "netplayCreateRoom": "Create Room",
@@ -332,6 +332,17 @@
     }
   },
   "netplaySpectator": "Spectator",
+  "netplaySyncModeLabel": "Sync Mode",
+  "netplaySyncModeLockstep": "Lockstep",
+  "netplaySyncModeRollback": "Rollback",
+  "netplaySyncModeChangeFailed": "Change sync mode failed: {error}",
+  "@netplaySyncModeChangeFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "netplayClientId": "Client ID",
   "netplayPlayerListHeader": "Players",
   "netplayYouIndicator": "(You)",

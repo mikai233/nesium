@@ -1,5 +1,9 @@
 use std::path::{Path, PathBuf};
 
+use base64::Engine as _;
+use rustls::pki_types::pem::PemObject;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+
 /// Return a default directory for storing QUIC cert/key material for the given application.
 ///
 /// This is used by both the standalone `nesium-netd` binary and the embedded server inside
@@ -49,9 +53,6 @@ pub fn build_quic_server_config(
     cert_path: &Path,
     key_path: &Path,
 ) -> anyhow::Result<quinn::ServerConfig> {
-    use rustls::pki_types::pem::PemObject;
-    use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-
     let certs: Vec<CertificateDer<'static>> =
         CertificateDer::pem_file_iter(cert_path)?.collect::<Result<Vec<_>, _>>()?;
     let key: PrivateKeyDer<'static> = PrivateKeyDer::from_pem_file(key_path)?;
@@ -62,9 +63,6 @@ pub fn build_quic_server_config(
 }
 
 pub fn sha256_fingerprint_from_pem(cert_path: &Path) -> anyhow::Result<String> {
-    use rustls::pki_types::CertificateDer;
-    use rustls::pki_types::pem::PemObject;
-
     let Some(cert) = CertificateDer::pem_file_iter(cert_path)?.next() else {
         anyhow::bail!("No certificate found in {}", cert_path.display());
     };
@@ -88,10 +86,6 @@ pub fn sha256_fingerprint_from_pem(cert_path: &Path) -> anyhow::Result<String> {
 ///
 /// This is shorter and copy-friendly (43 chars) while still representing the full 32 bytes.
 pub fn sha256_fingerprint_base64url_from_pem(cert_path: &Path) -> anyhow::Result<String> {
-    use base64::Engine as _;
-    use rustls::pki_types::CertificateDer;
-    use rustls::pki_types::pem::PemObject;
-
     let Some(cert) = CertificateDer::pem_file_iter(cert_path)?.next() else {
         anyhow::bail!("No certificate found in {}", cert_path.display());
     };

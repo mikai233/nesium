@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:animations/animations.dart';
 import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
 
 import '../../domain/nes_controller.dart';
@@ -33,15 +32,22 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   );
 
   bool _p2pJoinEnabled = false;
+  SyncMode _selectedSyncMode = SyncMode.lockstep;
+  int _joinDesiredRole = spectatorPlayerIndex;
 
   Stream<NetplayStatus>? _statusStream;
   _NetplayTransportOption _transport = _NetplayTransportOption.auto;
+
+  Timer? _roomQueryDebounce;
+  int? _queriedRoomCode;
+  int _queriedOccupiedMask = 0;
 
   @override
   void initState() {
     super.initState();
     _statusStream = netplayStatusStream();
     _loadJoinPrefs();
+    _roomCodeController.addListener(_scheduleRoomQuery);
   }
 
   @override
@@ -52,7 +58,55 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
     _roomCodeController.dispose();
     _p2pRoomCodeController.dispose();
     _p2pServerAddrController.dispose();
+    _roomQueryDebounce?.cancel();
     super.dispose();
+  }
+
+  bool _isSlotOccupied(int slot) {
+    if (slot < 0 || slot > 3) return false;
+    final code = int.tryParse(_roomCodeController.text.trim());
+    if (code == null || code <= 0) return false;
+    if (_queriedRoomCode != code) return false;
+    return (_queriedOccupiedMask & (1 << slot)) != 0;
+  }
+
+  void _scheduleRoomQuery() {
+    _roomQueryDebounce?.cancel();
+    _roomQueryDebounce = Timer(const Duration(milliseconds: 220), () async {
+      final code = int.tryParse(_roomCodeController.text.trim());
+      if (!mounted) return;
+
+      if (code == null || code <= 0) {
+        setState(() {
+          _queriedRoomCode = null;
+          _queriedOccupiedMask = 0;
+        });
+        return;
+      }
+
+      // Avoid spamming the server on the same code.
+      if (_queriedRoomCode == code) return;
+
+      try {
+        final info = await netplayQueryRoom(roomCode: code);
+        if (!mounted) return;
+        setState(() {
+          _queriedRoomCode = code;
+          _queriedOccupiedMask = info.ok ? info.occupiedMask : 0;
+          if (_joinDesiredRole >= 0 &&
+              _joinDesiredRole <= 3 &&
+              _isSlotOccupied(_joinDesiredRole)) {
+            _joinDesiredRole = spectatorPlayerIndex;
+          }
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _queriedRoomCode = code;
+          _queriedOccupiedMask = 0;
+        });
+      }
+    });
   }
 
   Future<void> _loadJoinPrefs() async {
@@ -219,11 +273,15 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
     final playerName = playerNameRaw.isEmpty ? 'Player' : playerNameRaw;
 
     try {
+      final nesState = ref.read(nesControllerProvider);
+      final hasRom = nesState.romBytes != null;
       await netplayP2PConnectJoinAuto(
         signalingAddr: signalingAddr,
         relayAddr: signalingAddr,
         roomCode: code,
         playerName: playerName,
+        desiredRole: _joinDesiredRole,
+        hasRom: hasRom,
       );
     } catch (e) {
       if (mounted) {
@@ -271,6 +329,9 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   Future<void> _createRoom() async {
     final l10n = AppLocalizations.of(context)!;
     try {
+      // Set sync mode preference before creating the room.
+      await netplaySetSyncMode(mode: _selectedSyncMode);
+
       await netplayCreateRoom();
 
       // If we have a ROM loaded, send it to the server so late joiners can sync
@@ -304,7 +365,25 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       return;
     }
     try {
-      await netplayJoinRoom(roomCode: code);
+      // Best-effort: refresh occupancy before joining to avoid "stale enabled slot" races.
+      if (_joinDesiredRole >= 0 && _joinDesiredRole <= 3) {
+        try {
+          final info = await netplayQueryRoom(roomCode: code);
+          if (info.ok && ((info.occupiedMask & (1 << _joinDesiredRole)) != 0)) {
+            if (mounted) {
+              setState(() => _joinDesiredRole = spectatorPlayerIndex);
+            }
+          }
+        } catch (_) {}
+      }
+
+      final nesState = ref.read(nesControllerProvider);
+      final hasRom = nesState.romBytes != null;
+      await netplayJoinRoom(
+        roomCode: code,
+        desiredRole: _joinDesiredRole,
+        hasRom: hasRom,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -344,30 +423,9 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
             children: [
               _buildStatusCard(l10n, status),
               const SizedBox(height: 24),
-              AnimatedSize(
-                // Avoid double size animations (outer + inner) which can cause jitter
-                // when toggling P2P join section in the disconnected/connect form.
-                duration: state == NetplayState.disconnected
-                    ? Duration.zero
-                    : const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                child: PageTransitionSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  transitionBuilder:
-                      (
-                        Widget child,
-                        Animation<double> animation,
-                        Animation<double> secondaryAnimation,
-                      ) {
-                        return FadeThroughTransition(
-                          animation: animation,
-                          secondaryAnimation: secondaryAnimation,
-                          fillColor: Colors.transparent,
-                          child: child,
-                        );
-                      },
-                  child: _buildContent(l10n, state, status),
-                ),
+              _StateTransitionSwitcher(
+                state: state,
+                child: _buildContent(l10n, state, status),
               ),
             ],
           ),
@@ -469,12 +527,51 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
         break;
     }
 
-    return Card(
-      elevation: 0,
-      color: statusColor.withAlpha(25),
-      shape: RoundedRectangleBorder(
+    return _buildCard(state, statusColor, statusText, statusIcon, l10n, status);
+  }
+
+  Widget _buildStatusBadge(String label, IconData icon) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard(
+    NetplayState state,
+    Color statusColor,
+    String statusText,
+    IconData statusIcon,
+    AppLocalizations l10n,
+    NetplayStatus? status,
+  ) {
+    final theme = Theme.of(context);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: statusColor.withAlpha(25),
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: statusColor.withAlpha(51)),
+        border: Border.all(color: statusColor.withAlpha(51)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -484,69 +581,70 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
             Icon(statusIcon, color: statusColor),
             const SizedBox(width: 16),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          statusText,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: statusColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (status != null &&
-                          state != NetplayState.disconnected &&
-                          state != NetplayState.connecting &&
-                          status.transport != NetplayTransport.unknown) ...[
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: theme.colorScheme.outlineVariant,
-                            ),
-                          ),
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
                           child: Text(
-                            _transportName(l10n, status.transport),
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.onSurfaceVariant,
+                            statusText,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: statusColor,
+                              fontWeight: FontWeight.bold,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (status != null &&
+                            state != NetplayState.disconnected &&
+                            state != NetplayState.connecting) ...[
+                          if (status.transport != NetplayTransport.unknown) ...[
+                            const SizedBox(width: 8),
+                            _buildStatusBadge(
+                              _transportName(l10n, status.transport),
+                              Icons.compare_arrows_rounded,
+                            ),
+                          ],
+                          if (state == NetplayState.inRoom) ...[
+                            const SizedBox(width: 8),
+                            _buildStatusBadge(
+                              status.syncMode == SyncMode.lockstep
+                                  ? l10n.netplaySyncModeLockstep
+                                  : l10n.netplaySyncModeRollback,
+                              status.syncMode == SyncMode.lockstep
+                                  ? Icons.lock_clock_rounded
+                                  : Icons.history_rounded,
+                            ),
+                          ],
+                        ],
                       ],
+                    ),
+                    if (status?.tcpFallbackFromQuic == true) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.netplayUsingTcpFallback,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ],
-                  ),
-                  if (status?.tcpFallbackFromQuic == true) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      l10n.netplayUsingTcpFallback,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                    if (status?.error != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        status!.error!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
+                    ],
                   ],
-                  if (status?.error != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      status!.error!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.error,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
           ],
@@ -658,56 +756,69 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
                 ),
                 title: Text(l10n.netplayJoinViaP2P),
               ),
-              AnimatedSize(
+              AnimatedCrossFade(
                 duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
-                alignment: Alignment.topCenter,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  switchInCurve: Curves.easeOut,
-                  switchOutCurve: Curves.easeIn,
-                  transitionBuilder: (child, animation) =>
-                      FadeTransition(opacity: animation, child: child),
-                  child: _p2pJoinEnabled
-                      ? Column(
-                          key: const ValueKey('p2p_on'),
-                          children: [
-                            const Divider(height: 1),
-                            Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                children: [
-                                  TextField(
-                                    controller: _p2pServerAddrController,
-                                    decoration: _roundedInputDecoration(
-                                      labelText: l10n.netplayP2PServerLabel,
-                                      prefixIcon: const Icon(Icons.hub_rounded),
-                                    ),
-                                    onChanged: (value) => unawaited(
-                                      _persistJoinServerAddr(value),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  TextField(
-                                    controller: _p2pRoomCodeController,
-                                    decoration: _roundedInputDecoration(
-                                      labelText: l10n.netplayP2PRoomCode,
-                                      prefixIcon: const Icon(
-                                        Icons.numbers_rounded,
-                                      ),
-                                    ),
-                                    keyboardType: TextInputType.number,
-                                  ),
-                                ],
-                              ),
+                sizeCurve: Curves.easeInOut,
+                firstCurve: Curves.easeOut,
+                secondCurve: Curves.easeIn,
+                crossFadeState: _p2pJoinEnabled
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+                firstChild: const SizedBox(width: double.infinity, height: 0),
+                secondChild: Column(
+                  children: [
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _p2pServerAddrController,
+                            decoration: _roundedInputDecoration(
+                              labelText: l10n.netplayP2PServerLabel,
+                              prefixIcon: const Icon(Icons.hub_rounded),
                             ),
-                          ],
-                        )
-                      : const SizedBox(
-                          key: ValueKey('p2p_off'),
-                          width: double.infinity,
-                          height: 0,
-                        ),
+                            onChanged: (value) =>
+                                unawaited(_persistJoinServerAddr(value)),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _p2pRoomCodeController,
+                            decoration: _roundedInputDecoration(
+                              labelText: l10n.netplayP2PRoomCode,
+                              prefixIcon: const Icon(Icons.numbers_rounded),
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                          const SizedBox(height: 16),
+                          AnimatedDropdownMenu<int>(
+                            labelText: l10n.netplayRoleLabel,
+                            value: _joinDesiredRole,
+                            entries: [
+                              DropdownMenuEntry<int>(
+                                value: spectatorPlayerIndex,
+                                label: l10n.netplaySpectator,
+                                leadingIcon: const Icon(
+                                  Icons.visibility_rounded,
+                                ),
+                              ),
+                              for (var idx = 0; idx < 4; idx++)
+                                DropdownMenuEntry<int>(
+                                  value: idx,
+                                  label: l10n.netplayPlayerIndex(idx + 1),
+                                  leadingIcon: const Icon(
+                                    Icons.sports_esports_rounded,
+                                  ),
+                                ),
+                            ],
+                            onSelected: (value) {
+                              setState(() => _joinDesiredRole = value);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -727,8 +838,31 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Sync mode selector
+        AnimatedDropdownMenu<SyncMode>(
+          labelText: l10n.netplaySyncModeLabel,
+          value: _selectedSyncMode,
+          entries: [
+            DropdownMenuEntry(
+              value: SyncMode.lockstep,
+              label: l10n.netplaySyncModeLockstep,
+              leadingIcon: const Icon(Icons.lock_clock_rounded),
+            ),
+            DropdownMenuEntry(
+              value: SyncMode.rollback,
+              label: l10n.netplaySyncModeRollback,
+              leadingIcon: const Icon(Icons.history_rounded),
+            ),
+          ],
+          onSelected: (value) {
+            setState(() => _selectedSyncMode = value);
+          },
+        ),
+        const SizedBox(height: 16),
         FilledButton.icon(
-          onPressed: _createRoom,
+          onPressed: () {
+            _createRoom();
+          },
           icon: const Icon(Icons.add_circle_outline_rounded),
           label: Text(l10n.netplayCreateRoom),
         ),
@@ -758,6 +892,28 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
           keyboardType: TextInputType.number,
         ),
         const SizedBox(height: 16),
+        AnimatedDropdownMenu<int>(
+          labelText: l10n.netplayRoleLabel,
+          value: _joinDesiredRole,
+          entries: [
+            DropdownMenuEntry<int>(
+              value: spectatorPlayerIndex,
+              label: l10n.netplaySpectator,
+              leadingIcon: const Icon(Icons.visibility_rounded),
+            ),
+            for (var idx = 0; idx < 4; idx++)
+              DropdownMenuEntry<int>(
+                value: idx,
+                label: l10n.netplayPlayerIndex(idx + 1),
+                leadingIcon: const Icon(Icons.sports_esports_rounded),
+                enabled: !_isSlotOccupied(idx),
+              ),
+          ],
+          onSelected: (value) {
+            setState(() => _joinDesiredRole = value);
+          },
+        ),
+        const SizedBox(height: 16),
         FilledButton.tonalIcon(
           onPressed: _joinRoom,
           icon: const Icon(Icons.meeting_room_rounded),
@@ -768,6 +924,13 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
   }
 
   Widget _buildInRoomInfo(AppLocalizations l10n, NetplayStatus status) {
+    bool roleOccupiedByOther(int role) {
+      if (role == spectatorPlayerIndex) return false;
+      return status.players.any(
+        (p) => p.playerIndex == role && p.clientId != status.clientId,
+      );
+    }
+
     return Card(
       elevation: 0,
       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -808,10 +971,26 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
               labelText: l10n.netplayRoleLabel,
               value: status.playerIndex,
               entries: [
-                DropdownMenuEntry(value: 0, label: l10n.netplayPlayerIndex(1)),
-                DropdownMenuEntry(value: 1, label: l10n.netplayPlayerIndex(2)),
-                DropdownMenuEntry(value: 2, label: l10n.netplayPlayerIndex(3)),
-                DropdownMenuEntry(value: 3, label: l10n.netplayPlayerIndex(4)),
+                DropdownMenuEntry(
+                  value: 0,
+                  label: l10n.netplayPlayerIndex(1),
+                  enabled: status.playerIndex == 0 || !roleOccupiedByOther(0),
+                ),
+                DropdownMenuEntry(
+                  value: 1,
+                  label: l10n.netplayPlayerIndex(2),
+                  enabled: status.playerIndex == 1 || !roleOccupiedByOther(1),
+                ),
+                DropdownMenuEntry(
+                  value: 2,
+                  label: l10n.netplayPlayerIndex(3),
+                  enabled: status.playerIndex == 2 || !roleOccupiedByOther(2),
+                ),
+                DropdownMenuEntry(
+                  value: 3,
+                  label: l10n.netplayPlayerIndex(4),
+                  enabled: status.playerIndex == 3 || !roleOccupiedByOther(3),
+                ),
                 DropdownMenuEntry(
                   value: spectatorPlayerIndex,
                   label: l10n.netplaySpectator,
@@ -932,6 +1111,139 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Custom animated switcher that performs sequential transitions:
+/// 1. Fade out old content
+/// 2. Fade in new content with slide-up effect
+class _StateTransitionSwitcher extends StatefulWidget {
+  final NetplayState state;
+  final Widget child;
+
+  const _StateTransitionSwitcher({required this.state, required this.child});
+
+  @override
+  State<_StateTransitionSwitcher> createState() =>
+      _StateTransitionSwitcherState();
+}
+
+class _StateTransitionSwitcherState extends State<_StateTransitionSwitcher>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeOutAnimation;
+  late Animation<double> _fadeInAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  Widget? _oldChild;
+  Widget? _currentChild;
+  NetplayState? _previousState;
+  bool _isAnimating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    // Fade out happens in first half (0.0 - 0.4)
+    _fadeOutAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.4, curve: Curves.easeIn),
+      ),
+    );
+
+    // Fade in happens in second half (0.4 - 1.0)
+    _fadeInAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
+      ),
+    );
+
+    // Slide up happens during fade in (0.4 - 1.0)
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic),
+          ),
+        );
+
+    _currentChild = widget.child;
+    _previousState = widget.state;
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          _isAnimating = false;
+          _oldChild = null;
+        });
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_StateTransitionSwitcher oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Check if state actually changed
+    if (widget.state != _previousState) {
+      _previousState = widget.state;
+      _startTransition();
+    } else {
+      // State unchanged, just update the current child
+      _currentChild = widget.child;
+    }
+  }
+
+  void _startTransition() {
+    if (_isAnimating) {
+      // Already animating, just capture the new target
+      _controller.reset();
+    }
+
+    setState(() {
+      _oldChild = _currentChild;
+      _currentChild = widget.child;
+      _isAnimating = true;
+    });
+
+    _controller.forward(from: 0.0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isAnimating) {
+      // Not animating, show current child directly
+      return _currentChild ?? const SizedBox.shrink();
+    }
+
+    // During animation: show either old (fading out) or new (fading in)
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        // First half: show old child fading out
+        if (_controller.value < 0.4 && _oldChild != null) {
+          return Opacity(opacity: _fadeOutAnimation.value, child: _oldChild);
+        }
+
+        // Second half: show new child fading in with slide
+        return SlideTransition(
+          position: _slideAnimation,
+          child: Opacity(opacity: _fadeInAnimation.value, child: _currentChild),
+        );
+      },
     );
   }
 }

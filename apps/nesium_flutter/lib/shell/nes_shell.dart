@@ -212,12 +212,15 @@ class _NesShellState extends ConsumerState<NesShell>
             await event.when(
               loadRom: (data) async {
                 try {
-                  await nes_api.loadRomFromBytes(bytes: data);
                   _pausedByLifecycle = true;
-                  // setPaused(true) might fail if emulation not started?
-                  // But we just loaded ROM, so it should be fine.
-                  await nes_pause.setPaused(paused: true);
-                  ref.read(emulationStatusProvider.notifier).setPaused(true);
+                  try {
+                    await nes_pause.setPaused(paused: true);
+                    ref.read(emulationStatusProvider.notifier).setPaused(true);
+                  } catch (_) {}
+
+                  await nes_api
+                      .loadRomFromBytes(bytes: data)
+                      .timeout(const Duration(seconds: 10));
                   await nes_netplay.netplaySendRomLoaded();
                   if (mounted) _showSnack('Netplay: ROM loaded');
                 } catch (e) {

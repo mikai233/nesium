@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use nesium_netd::net::{quic_config, tcp::run_tcp_listener_with_listener};
 use nesium_netproto::{
-    codec_tcp::{encode_tcp_frame, try_decode_tcp_frames},
-    header::Header,
+    codec::{encode_message, try_decode_tcp_frames},
+    constants::AUTO_PLAYER_INDEX,
     messages::session::{
         Hello, JoinAck, JoinRoom, LoadRom, RomLoaded, StartGame, TransportKind, Welcome,
     },
@@ -45,8 +45,7 @@ impl TestClient {
             name: name.to_string(),
         };
 
-        let header = Header::new(MsgId::Hello as u8);
-        let frame = encode_tcp_frame(header, MsgId::Hello, &hello, 4096)?;
+        let frame = encode_message(&hello)?;
         self.stream.write_all(&frame).await?;
         Ok(())
     }
@@ -59,7 +58,7 @@ impl TestClient {
         let (packets, _) = try_decode_tcp_frames(&buf)?;
         assert_eq!(packets.len(), 1, "Expected 1 Welcome packet");
         let packet = &packets[0];
-        assert_eq!(packet.msg_id, MsgId::Welcome);
+        assert_eq!(packet.msg_id(), MsgId::Welcome);
 
         let welcome: Welcome = postcard::from_bytes(packet.payload)?;
         self.client_id = welcome.assigned_client_id;
@@ -70,11 +69,11 @@ impl TestClient {
         let join = JoinRoom {
             room_code,
             preferred_sync_mode: None,
+            desired_role: AUTO_PLAYER_INDEX,
+            has_rom: false,
         };
 
-        let header = Header::new(MsgId::JoinRoom as u8);
-
-        let frame = encode_tcp_frame(header, MsgId::JoinRoom, &join, 4096)?;
+        let frame = encode_message(&join)?;
         self.stream.write_all(&frame).await?;
         Ok(())
     }
@@ -88,11 +87,11 @@ impl TestClient {
         // Find the JoinAck packet (may be bundled with PlayerJoined notifications)
         let packet = packets
             .iter()
-            .find(|p| p.msg_id == MsgId::JoinAck)
+            .find(|p| p.msg_id() == MsgId::JoinAck)
             .ok_or_else(|| {
                 anyhow::anyhow!(
                     "Expected JoinAck packet, got {:?}",
-                    packets.iter().map(|p| p.msg_id).collect::<Vec<_>>()
+                    packets.iter().map(|p| p.msg_id()).collect::<Vec<_>>()
                 )
             })?;
 
@@ -105,9 +104,8 @@ impl TestClient {
 
     async fn send_load_rom(&mut self, data: Vec<u8>) -> anyhow::Result<()> {
         let msg = LoadRom { data };
-        let header = Header::new(MsgId::LoadRom as u8);
 
-        let frame = encode_tcp_frame(header, MsgId::LoadRom, &msg, 4096)?;
+        let frame = encode_message(&msg)?;
         self.stream.write_all(&frame).await?;
         Ok(())
     }
@@ -120,7 +118,7 @@ impl TestClient {
         let (packets, _) = try_decode_tcp_frames(&buf)?;
         assert_eq!(packets.len(), 1, "Expected 1 LoadRom packet");
         let packet = &packets[0];
-        assert_eq!(packet.msg_id, MsgId::LoadRom);
+        assert_eq!(packet.msg_id(), MsgId::LoadRom);
 
         let msg: LoadRom = postcard::from_bytes(packet.payload)?;
         Ok(msg.data)
@@ -128,9 +126,8 @@ impl TestClient {
 
     async fn send_rom_loaded(&mut self) -> anyhow::Result<()> {
         let msg = RomLoaded {};
-        let header = Header::new(MsgId::RomLoaded as u8);
 
-        let frame = encode_tcp_frame(header, MsgId::RomLoaded, &msg, 4096)?;
+        let frame = encode_message(&msg)?;
         self.stream.write_all(&frame).await?;
         Ok(())
     }
@@ -157,7 +154,7 @@ impl TestClient {
             buf.truncate(n);
 
             if let Ok((packets, _)) = try_decode_tcp_frames(&buf) {
-                if let Some(packet) = packets.iter().find(|p| p.msg_id == MsgId::StartGame) {
+                if let Some(packet) = packets.iter().find(|p| p.msg_id() == MsgId::StartGame) {
                     let _: StartGame = postcard::from_bytes(packet.payload)?;
                     return Ok(());
                 }

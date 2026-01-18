@@ -569,7 +569,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '填入此项以使用 Pinning。留空则使用系统信任 (QUIC) 或回退到 TCP。';
 
   @override
-  String get netplayConnect => '加入游戏';
+  String get netplayConnect => '连接服务器';
 
   @override
   String get netplayJoinViaP2P => '通过 P2P 加入';
@@ -617,6 +617,20 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get netplaySpectator => '旁观者';
+
+  @override
+  String get netplaySyncModeLabel => '同步模式';
+
+  @override
+  String get netplaySyncModeLockstep => '锁步';
+
+  @override
+  String get netplaySyncModeRollback => '回滚';
+
+  @override
+  String netplaySyncModeChangeFailed(String error) {
+    return '切换同步模式失败: $error';
+  }
 
   @override
   String get netplayClientId => '客户端 ID';

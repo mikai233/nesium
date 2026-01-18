@@ -1,57 +1,49 @@
-use std::net::SocketAddr;
+//! LoadRomHandler - handles LoadRom messages.
 
-use nesium_netproto::{header::Header, messages::session::LoadRom, msg_id::MsgId};
+use nesium_netproto::messages::session::LoadRom;
 use tracing::{info, warn};
 
-use crate::ConnCtx;
+use super::{Handler, HandlerContext};
 use crate::net::outbound::send_msg_tcp;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
-use crate::room::state::RoomManager;
 
-pub(crate) async fn handle(
-    ctx: &mut ConnCtx,
-    peer: &SocketAddr,
-    payload: &[u8],
-    room_mgr: &mut RoomManager,
-) -> HandlerResult {
-    let msg: LoadRom = match postcard::from_bytes(payload) {
-        Ok(v) => v,
-        Err(e) => {
-            warn!(%peer, error = %e, "Bad LoadRom message");
-            return Err(HandlerError::bad_message());
-        }
-    };
+/// Handler for LoadRom messages.
+pub(crate) struct LoadRomHandler;
 
-    let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id) else {
-        warn!(%peer, "LoadRom: client not in a room");
-        return Err(HandlerError::not_in_room());
-    };
-    let Some(room) = room_mgr.get_room_mut(room_id) else {
-        return Err(HandlerError::not_in_room());
-    };
+impl Handler<LoadRom> for LoadRomHandler {
+    async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: LoadRom) -> HandlerResult {
+        let Some(room_id) = ctx
+            .room_mgr
+            .get_client_room(ctx.conn_ctx.assigned_client_id)
+        else {
+            warn!(%ctx.peer, "LoadRom: client not in a room");
+            return Err(HandlerError::not_in_room());
+        };
+        let Some(room) = ctx.room_mgr.get_room_mut(room_id) else {
+            return Err(HandlerError::not_in_room());
+        };
 
-    match room.handle_load_rom(ctx.assigned_client_id) {
-        Ok(recipients) => {
-            // Forward ROM to others
-            info!(
-                client_id = ctx.assigned_client_id,
-                room_id, "Host loaded ROM, forwarding..."
-            );
+        match room.handle_load_rom(ctx.conn_ctx.assigned_client_id) {
+            Ok(recipients) => {
+                // Forward ROM to others
+                info!(
+                    client_id = ctx.conn_ctx.assigned_client_id,
+                    room_id, "Host loaded ROM, forwarding..."
+                );
 
-            room.cache_rom(msg.data.clone());
+                room.cache_rom(msg.data.clone());
 
-            let h = Header::new(MsgId::LoadRom as u8);
-
-            for recipient in &recipients {
-                if let Err(e) = send_msg_tcp(recipient, h, MsgId::LoadRom, &msg).await {
-                    warn!(error = %e, "Failed to forward LoadRom");
+                for recipient in &recipients {
+                    if let Err(e) = send_msg_tcp(recipient, &msg).await {
+                        warn!(error = %e, "Failed to forward LoadRom");
+                    }
                 }
+                Ok(())
             }
-            Ok(())
-        }
-        Err(e) => {
-            warn!(%peer, error = %e, "LoadRom rejected");
-            Err(HandlerError::permission_denied())
+            Err(e) => {
+                warn!(%ctx.peer, error = %e, "LoadRom rejected");
+                Err(HandlerError::permission_denied())
+            }
         }
     }
 }

@@ -1145,7 +1145,7 @@ abstract class AppLocalizations {
   /// No description provided for @netplayConnect.
   ///
   /// In en, this message translates to:
-  /// **'Join Game'**
+  /// **'Connect'**
   String get netplayConnect;
 
   /// No description provided for @netplayJoinViaP2P.
@@ -1237,6 +1237,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Spectator'**
   String get netplaySpectator;
+
+  /// No description provided for @netplaySyncModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync Mode'**
+  String get netplaySyncModeLabel;
+
+  /// No description provided for @netplaySyncModeLockstep.
+  ///
+  /// In en, this message translates to:
+  /// **'Lockstep'**
+  String get netplaySyncModeLockstep;
+
+  /// No description provided for @netplaySyncModeRollback.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollback'**
+  String get netplaySyncModeRollback;
+
+  /// No description provided for @netplaySyncModeChangeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Change sync mode failed: {error}'**
+  String netplaySyncModeChangeFailed(String error);
 
   /// No description provided for @netplayClientId.
   ///

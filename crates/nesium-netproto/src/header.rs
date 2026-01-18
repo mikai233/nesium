@@ -1,6 +1,7 @@
 use crate::{
     constants::{HEADER_LEN, MAGIC, VERSION},
     error::ProtoError,
+    msg_id::MsgId,
 };
 
 /// Packet header (wire format).
@@ -20,8 +21,8 @@ pub struct Header {
     /// Wire-format version. `decode()` rejects versions != `VERSION`.
     pub version: u8,
 
-    /// Message identifier. `decode()` does not validate it; upper layers should.
-    pub msg_id: u8,
+    /// Message identifier. `decode()` returns error for unknown values.
+    pub msg_id: MsgId,
 
     /// Payload length in bytes. `decode()` requires `buf.len() == HEADER_LEN + payload_len`.
     pub payload_len: u32,
@@ -32,7 +33,7 @@ impl Header {
     pub const LEN: usize = HEADER_LEN;
 
     /// Create a header with default values and a specific `msg_id`.
-    pub fn new(msg_id: u8) -> Self {
+    pub fn new(msg_id: MsgId) -> Self {
         Self {
             version: VERSION,
             msg_id,
@@ -50,7 +51,7 @@ impl Header {
     pub fn encode_into(&self, out: &mut [u8; HEADER_LEN]) {
         out[0..2].copy_from_slice(&MAGIC);
         out[2] = self.version;
-        out[3] = self.msg_id;
+        out[3] = self.msg_id as u8;
         out[4..8].copy_from_slice(&self.payload_len.to_le_bytes());
     }
 
@@ -75,7 +76,8 @@ impl Header {
             return Err(ProtoError::UnsupportedVersion(version));
         }
 
-        let msg_id = buf[3];
+        let msg_id_raw = buf[3];
+        let msg_id = MsgId::from_repr(msg_id_raw).ok_or(ProtoError::UnknownMsgId(msg_id_raw))?;
         let payload_len = read_u32_le(buf, 4)?;
 
         let payload_len_usize = payload_len as usize;
@@ -106,6 +108,7 @@ fn read_u32_le(buf: &[u8], start: usize) -> Result<u32, ProtoError> {
 mod tests {
     use super::Header;
     use crate::constants::{HEADER_LEN, MAGIC};
+    use crate::msg_id::MsgId;
 
     #[test]
     fn header_len_is_locked() {
@@ -115,7 +118,7 @@ mod tests {
 
     #[test]
     fn header_encode_offsets_are_locked() {
-        let mut h = Header::new(0x12);
+        let mut h = Header::new(MsgId::SwitchRole);
         h.payload_len = 0x3344;
 
         let mut buf = [0u8; HEADER_LEN];
@@ -123,7 +126,7 @@ mod tests {
 
         assert_eq!(&buf[0..2], &MAGIC);
         assert_eq!(buf[2], h.version);
-        assert_eq!(buf[3], h.msg_id);
+        assert_eq!(buf[3], h.msg_id as u8);
         assert_eq!(
             u32::from_le_bytes(buf[4..8].try_into().unwrap()),
             h.payload_len
@@ -134,7 +137,7 @@ mod tests {
 
     #[test]
     fn header_decode_requires_exact_total_length() {
-        let mut h = Header::new(1);
+        let mut h = Header::new(MsgId::Hello);
         h.payload_len = 3;
 
         let mut packet = vec![0u8; HEADER_LEN + 3];

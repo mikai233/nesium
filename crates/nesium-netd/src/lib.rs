@@ -5,7 +5,6 @@ use std::sync::atomic::{AtomicU32, AtomicU64};
 
 use nesium_netproto::{
     channel::ChannelKind,
-    header::Header,
     messages::session::{AttachChannel, P2PHostDisconnected, PlayerLeft},
     msg_id::MsgId,
 };
@@ -148,11 +147,9 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
                                         client_id: ctx.assigned_client_id,
                                         player_index: p_idx,
                                     };
-                                    let h = Header::new(MsgId::PlayerLeft as u8);
 
                                     for recipient in &recipients {
-                                        let _ = send_msg_tcp(recipient, h, MsgId::PlayerLeft, &msg)
-                                            .await;
+                                        let _ = send_msg_tcp(recipient, &msg).await;
                                     }
                                 }
 
@@ -166,15 +163,8 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
                                     room_mgr.clear_p2p_host_for_client(ctx.assigned_client_id);
                                 for (room_code, watchers) in host_rooms_to_notify {
                                     let notice = P2PHostDisconnected { room_code };
-                                    let h = Header::new(MsgId::P2PHostDisconnected as u8);
                                     for tx in &watchers {
-                                        let _ = send_msg_tcp(
-                                            tx,
-                                            h,
-                                            MsgId::P2PHostDisconnected,
-                                            &notice,
-                                        )
-                                        .await;
+                                        let _ = send_msg_tcp(tx, &notice).await;
                                     }
                                     info!(room_code, "Notified watchers of P2P host disconnect");
                                 }
@@ -214,7 +204,7 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
                 packet,
                 ..
             } => {
-                if packet.msg_id == MsgId::AttachChannel {
+                if packet.msg_id() == MsgId::AttachChannel {
                     let Ok(msg) = postcard::from_bytes::<AttachChannel>(&packet.payload) else {
                         warn!(conn_id, %peer, "Bad AttachChannel message");
                         continue;
@@ -285,7 +275,7 @@ pub async fn run_server(mut rx: mpsc::Receiver<InboundEvent>) -> anyhow::Result<
 
                 dispatch_packet(ctx, conn_id, &peer, &packet, &mut room_mgr).await;
 
-                if packet.msg_id == MsgId::Hello
+                if packet.msg_id() == MsgId::Hello
                     && ctx.role == ConnRole::Control
                     && ctx.session_token != 0
                 {

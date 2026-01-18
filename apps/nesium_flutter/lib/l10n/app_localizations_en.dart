@@ -580,7 +580,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter this to use pinned QUIC. Leave empty to use system trust (QUIC) or fallback to TCP.';
 
   @override
-  String get netplayConnect => 'Join Game';
+  String get netplayConnect => 'Connect';
 
   @override
   String get netplayJoinViaP2P => 'Join via P2P';
@@ -628,6 +628,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get netplaySpectator => 'Spectator';
+
+  @override
+  String get netplaySyncModeLabel => 'Sync Mode';
+
+  @override
+  String get netplaySyncModeLockstep => 'Lockstep';
+
+  @override
+  String get netplaySyncModeRollback => 'Rollback';
+
+  @override
+  String netplaySyncModeChangeFailed(String error) {
+    return 'Change sync mode failed: $error';
+  }
 
   @override
   String get netplayClientId => 'Client ID';

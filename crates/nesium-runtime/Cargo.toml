@@ -16,3 +16,15 @@ crossbeam-channel.workspace = true
 thiserror.workspace = true
 lz4_flex.workspace = true
 parking_lot.workspace = true
+postcard.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "macros",
+    "time",
+    "sync",
+] }
+nesium-netd = { workspace = true }
+nesium-netproto = { workspace = true }
+rustls.workspace = true

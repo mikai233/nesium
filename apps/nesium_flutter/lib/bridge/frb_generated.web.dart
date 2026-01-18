@@ -166,6 +166,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NetplayPlayer dco_decode_netplay_player(dynamic raw);
 
   @protected
+  NetplayRoomInfo dco_decode_netplay_room_info(dynamic raw);
+
+  @protected
   NetplayState dco_decode_netplay_state(dynamic raw);
 
   @protected
@@ -218,6 +221,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SpriteSnapshot dco_decode_sprite_snapshot(dynamic raw);
+
+  @protected
+  SyncMode dco_decode_sync_mode(dynamic raw);
 
   @protected
   TileSnapshot dco_decode_tile_snapshot(dynamic raw);
@@ -404,6 +410,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NetplayPlayer sse_decode_netplay_player(SseDeserializer deserializer);
 
   @protected
+  NetplayRoomInfo sse_decode_netplay_room_info(SseDeserializer deserializer);
+
+  @protected
   NetplayState sse_decode_netplay_state(SseDeserializer deserializer);
 
   @protected
@@ -466,6 +475,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SpriteSnapshot sse_decode_sprite_snapshot(SseDeserializer deserializer);
+
+  @protected
+  SyncMode sse_decode_sync_mode(SseDeserializer deserializer);
 
   @protected
   TileSnapshot sse_decode_tile_snapshot(SseDeserializer deserializer);
@@ -690,6 +702,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_netplay_player(NetplayPlayer self, SseSerializer serializer);
 
   @protected
+  void sse_encode_netplay_room_info(
+    NetplayRoomInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_netplay_state(NetplayState self, SseSerializer serializer);
 
   @protected
@@ -772,6 +790,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     SpriteSnapshot self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_sync_mode(SyncMode self, SseSerializer serializer);
 
   @protected
   void sse_encode_tile_snapshot(TileSnapshot self, SseSerializer serializer);

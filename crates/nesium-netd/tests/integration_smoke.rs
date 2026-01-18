@@ -11,9 +11,9 @@ use std::time::Duration;
 
 use nesium_netd::net::{quic_config, tcp::run_tcp_listener_with_listener};
 use nesium_netproto::{
-    codec_tcp::{encode_tcp_frame, try_decode_tcp_frames},
+    codec::{encode_message, try_decode_tcp_frames},
+    constants::AUTO_PLAYER_INDEX,
     constants::SPECTATOR_PLAYER_INDEX,
-    header::Header,
     messages::{
         input::InputBatch,
         session::{Hello, JoinAck, JoinRoom, RoleChanged, SwitchRole, TransportKind, Welcome},
@@ -53,8 +53,7 @@ impl TestClient {
             name: name.to_string(),
         };
 
-        let header = Header::new(MsgId::Hello as u8);
-        let frame = encode_tcp_frame(header, MsgId::Hello, &hello, 4096)?;
+        let frame = encode_message(&hello)?;
         self.stream.write_all(&frame).await?;
         Ok(())
     }
@@ -67,7 +66,7 @@ impl TestClient {
         let (packets, _) = try_decode_tcp_frames(&buf)?;
         assert_eq!(packets.len(), 1, "Expected 1 Welcome packet");
         let packet = &packets[0];
-        assert_eq!(packet.msg_id, MsgId::Welcome);
+        assert_eq!(packet.msg_id(), MsgId::Welcome);
 
         let welcome: Welcome = postcard::from_bytes(packet.payload)?;
         self.client_id = welcome.assigned_client_id;
@@ -78,11 +77,11 @@ impl TestClient {
         let join = JoinRoom {
             room_code,
             preferred_sync_mode: None,
+            desired_role: AUTO_PLAYER_INDEX,
+            has_rom: false,
         };
 
-        let header = Header::new(MsgId::JoinRoom as u8);
-
-        let frame = encode_tcp_frame(header, MsgId::JoinRoom, &join, 4096)?;
+        let frame = encode_message(&join)?;
         self.stream.write_all(&frame).await?;
         Ok(())
     }
@@ -95,7 +94,7 @@ impl TestClient {
         let (packets, _) = try_decode_tcp_frames(&buf)?;
         let packet = packets
             .iter()
-            .find(|p| p.msg_id == MsgId::JoinAck)
+            .find(|p| p.msg_id() == MsgId::JoinAck)
             .ok_or_else(|| anyhow::anyhow!("JoinAck not found in received packets"))?;
 
         let ack: JoinAck = postcard::from_bytes(packet.payload)?;
@@ -107,9 +106,8 @@ impl TestClient {
 
     async fn send_switch_role(&mut self, new_role: u8) -> anyhow::Result<()> {
         let msg = SwitchRole { new_role };
-        let header = Header::new(MsgId::SwitchRole as u8);
 
-        let frame = encode_tcp_frame(header, MsgId::SwitchRole, &msg, 4096)?;
+        let frame = encode_message(&msg)?;
         self.stream.write_all(&frame).await?;
         Ok(())
     }
@@ -133,7 +131,7 @@ impl TestClient {
 
             let (packets, _) = try_decode_tcp_frames(&buf)?;
             for packet in packets {
-                if packet.msg_id == MsgId::RoleChanged {
+                if packet.msg_id() == MsgId::RoleChanged {
                     let msg: RoleChanged = postcard::from_bytes(packet.payload)?;
                     results.push(msg);
                 }
@@ -158,9 +156,7 @@ impl TestClient {
             ],
         };
 
-        let header = Header::new(MsgId::InputBatch as u8);
-
-        let frame = encode_tcp_frame(header, MsgId::InputBatch, &batch, 4096)?;
+        let frame = encode_message(&batch)?;
         self.stream.write_all(&frame).await?;
         Ok(())
     }
@@ -183,8 +179,8 @@ impl TestClient {
 
             let (packets, _) = try_decode_tcp_frames(&buf)?;
             for packet in packets {
-                if packet.msg_id == MsgId::RelayInputs {
-                    return Ok(packet.msg_id);
+                if packet.msg_id() == MsgId::RelayInputs {
+                    return Ok(packet.msg_id());
                 }
             }
             // PlayerJoined or other messages, continue reading
@@ -410,11 +406,6 @@ async fn test_role_switching() -> anyhow::Result<()> {
     // Check C1 notifications
     let changes1 = c1.recv_role_changed().await?;
     assert!(!changes1.is_empty());
-    // Note: order is not strictly guaranteed in broadcast loop vs parsing, but likely sequential.
-    // Logic: requestor (C1) gets updated to new role, occupant (C2) gets updated to old role.
-    // The server broadcasts them individually.
-
-    // We expect to find (C1, 1) and (C2, 0) in the messages received by everyone.
 
     let has_c1_move = changes1
         .iter()
@@ -423,13 +414,41 @@ async fn test_role_switching() -> anyhow::Result<()> {
         .iter()
         .any(|m| m.client_id == c2.client_id && m.new_role == 0);
 
-    // It's possible we only got one packet so far if they were split.
-    // But `recv_role_changed` reads once. If they are sent back-to-back, they might be in one read.
-    // If not, we might need to read again.
-
-    // Let's just assert we got at least one valid change and try to read more if needed?
-    // For simplicity in this smoke test, just checking C1 got its own update is good progress.
     assert!(has_c1_move || has_c2_move);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_late_join_spectator() -> anyhow::Result<()> {
+    install_crypto_provider();
+    let (addr, _shutdown) = spawn_test_server("test_smoke_late_join").await;
+
+    // Player 1 joins
+    let mut p1 = TestClient::connect(addr).await?;
+    p1.send_hello("P1").await?;
+    p1.recv_welcome().await?;
+    p1.send_join_room(0).await?;
+    let _ack1 = p1.recv_join_ack().await?;
+    let room_code = p1.room_id;
+
+    // Late join spectator
+    let mut spec = TestClient::connect(addr).await?;
+    spec.send_hello("Spec").await?;
+    spec.recv_welcome().await?;
+
+    let req = JoinRoom {
+        room_code,
+        preferred_sync_mode: None,
+        desired_role: SPECTATOR_PLAYER_INDEX,
+        has_rom: false,
+    };
+    let frame = encode_message(&req)?;
+    spec.stream.write_all(&frame).await?;
+
+    let ack = spec.recv_join_ack().await?;
+    assert!(ack.ok);
+    assert_eq!(ack.player_index, SPECTATOR_PLAYER_INDEX);
 
     Ok(())
 }

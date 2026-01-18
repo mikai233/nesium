@@ -4,8 +4,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use nesium_netproto::{
-    codec_tcp::{encode_tcp_frame, try_decode_tcp_frames},
-    header::Header,
+    codec::{encode_message, try_decode_tcp_frames},
     messages::session::{
         FallbackToRelay, Hello, P2PCreateRoom, P2PFallbackNotice, P2PJoinAck, P2PJoinRoom,
         P2PRequestFallback, P2PRoomCreated, RequestFallbackRelay, TransportKind, Welcome,
@@ -42,19 +41,16 @@ impl RawClient {
             proto_max: nesium_netproto::constants::VERSION,
             name: name.to_string(),
         };
-        let h = Header::new(MsgId::Hello as u8);
-        let frame = encode_tcp_frame(h, MsgId::Hello, &hello, 4096)?;
+        let frame = encode_message(&hello)?;
         self.stream.write_all(&frame).await?;
         self.recv_one::<Welcome>(MsgId::Welcome).await
     }
 
-    async fn send<T: serde::Serialize>(
+    async fn send<T: nesium_netproto::messages::Message>(
         &mut self,
-        msg_id: MsgId,
         payload: &T,
     ) -> anyhow::Result<()> {
-        let h = Header::new(msg_id as u8);
-        let frame = encode_tcp_frame(h, msg_id, payload, 4096)?;
+        let frame = encode_message(payload)?;
         self.stream.write_all(&frame).await?;
         Ok(())
     }
@@ -66,7 +62,7 @@ impl RawClient {
         let (packets, _) = try_decode_tcp_frames(&buf)?;
         let pkt = packets
             .iter()
-            .find(|p| p.msg_id == want)
+            .find(|p| p.msg_id() == want)
             .ok_or_else(|| anyhow::anyhow!("Expected {:?}, got {:?}", want, packets))?;
         Ok(postcard::from_bytes(pkt.payload)?)
     }
@@ -78,7 +74,7 @@ impl RawClient {
         let (packets, _) = try_decode_tcp_frames(&buf)?;
         Ok(packets
             .into_iter()
-            .map(|p| (p.msg_id, p.payload.to_vec()))
+            .map(|p| (p.msg_id(), p.payload.to_vec()))
             .collect())
     }
 }
@@ -129,18 +125,15 @@ async fn p2p_signaling_room_create_and_join() -> anyhow::Result<()> {
     // Host creates signaling room.
     let mut host = RawClient::connect(server_addr).await?;
     let _welcome = host.hello("host").await?;
-    host.send(
-        MsgId::P2PCreateRoom,
-        &P2PCreateRoom {
-            host_addrs: vec![
-                "10.0.0.2:9999".parse().unwrap(),
-                "127.0.0.1:9999".parse().unwrap(),
-            ],
-            host_room_code: 4242,
-            host_quic_cert_sha256_fingerprint: Some("deadbeef".to_string()),
-            host_quic_server_name: Some("nesium".to_string()),
-        },
-    )
+    host.send(&P2PCreateRoom {
+        host_addrs: vec![
+            "10.0.0.2:9999".parse().unwrap(),
+            "127.0.0.1:9999".parse().unwrap(),
+        ],
+        host_room_code: 4242,
+        host_quic_cert_sha256_fingerprint: Some("deadbeef".to_string()),
+        host_quic_server_name: Some("nesium".to_string()),
+    })
     .await?;
     let created: P2PRoomCreated = host.recv_one(MsgId::P2PRoomCreated).await?;
     assert!(created.room_code != 0);
@@ -149,12 +142,9 @@ async fn p2p_signaling_room_create_and_join() -> anyhow::Result<()> {
     let mut joiner = RawClient::connect(server_addr).await?;
     let _welcome = joiner.hello("joiner").await?;
     joiner
-        .send(
-            MsgId::P2PJoinRoom,
-            &P2PJoinRoom {
-                room_code: created.room_code,
-            },
-        )
+        .send(&P2PJoinRoom {
+            room_code: created.room_code,
+        })
         .await?;
     let ack: P2PJoinAck = joiner.recv_one(MsgId::P2PJoinAck).await?;
     assert!(ack.ok);
@@ -179,15 +169,12 @@ async fn p2p_fallback_notice_is_broadcast_to_watchers() -> anyhow::Result<()> {
     // Host creates signaling room.
     let mut host = RawClient::connect(server_addr).await?;
     let _welcome = host.hello("host").await?;
-    host.send(
-        MsgId::P2PCreateRoom,
-        &P2PCreateRoom {
-            host_addrs: vec!["127.0.0.1:9999".parse().unwrap()],
-            host_room_code: 1,
-            host_quic_cert_sha256_fingerprint: None,
-            host_quic_server_name: None,
-        },
-    )
+    host.send(&P2PCreateRoom {
+        host_addrs: vec!["127.0.0.1:9999".parse().unwrap()],
+        host_room_code: 1,
+        host_quic_cert_sha256_fingerprint: None,
+        host_quic_server_name: None,
+    })
     .await?;
     let created: P2PRoomCreated = host.recv_one(MsgId::P2PRoomCreated).await?;
 
@@ -195,24 +182,18 @@ async fn p2p_fallback_notice_is_broadcast_to_watchers() -> anyhow::Result<()> {
     let mut joiner = RawClient::connect(server_addr).await?;
     let _welcome = joiner.hello("joiner").await?;
     joiner
-        .send(
-            MsgId::P2PJoinRoom,
-            &P2PJoinRoom {
-                room_code: created.room_code,
-            },
-        )
+        .send(&P2PJoinRoom {
+            room_code: created.room_code,
+        })
         .await?;
     let _ack: P2PJoinAck = joiner.recv_one(MsgId::P2PJoinAck).await?;
 
     // Joiner requests fallback.
     joiner
-        .send(
-            MsgId::P2PRequestFallback,
-            &P2PRequestFallback {
-                room_code: created.room_code,
-                reason: "direct connect failed".to_string(),
-            },
-        )
+        .send(&P2PRequestFallback {
+            room_code: created.room_code,
+            reason: "direct connect failed".to_string(),
+        })
         .await?;
 
     // Both should receive a notice (order not guaranteed).
@@ -243,13 +224,12 @@ async fn host_can_broadcast_fallback_to_direct_clients() -> anyhow::Result<()> {
     // Host joins a normal netplay room (acts as authoritative server for direct clients).
     let mut host = RawClient::connect(server_addr).await?;
     let _welcome = host.hello("host").await?;
-    host.send(
-        MsgId::JoinRoom,
-        &nesium_netproto::messages::session::JoinRoom {
-            room_code: 0,
-            preferred_sync_mode: None,
-        },
-    )
+    host.send(&nesium_netproto::messages::session::JoinRoom {
+        room_code: 0,
+        preferred_sync_mode: None,
+        desired_role: nesium_netproto::constants::AUTO_PLAYER_INDEX,
+        has_rom: false,
+    })
     .await?;
     let ack: nesium_netproto::messages::session::JoinAck = host.recv_one(MsgId::JoinAck).await?;
     let room_id = ack.room_id;
@@ -258,26 +238,22 @@ async fn host_can_broadcast_fallback_to_direct_clients() -> anyhow::Result<()> {
     let mut joiner = RawClient::connect(server_addr).await?;
     let _welcome = joiner.hello("joiner").await?;
     joiner
-        .send(
-            MsgId::JoinRoom,
-            &nesium_netproto::messages::session::JoinRoom {
-                room_code: room_id,
-                preferred_sync_mode: None,
-            },
-        )
+        .send(&nesium_netproto::messages::session::JoinRoom {
+            room_code: room_id,
+            preferred_sync_mode: None,
+            desired_role: nesium_netproto::constants::AUTO_PLAYER_INDEX,
+            has_rom: false,
+        })
         .await?;
     let _ack2: nesium_netproto::messages::session::JoinAck =
         joiner.recv_one(MsgId::JoinAck).await?;
 
     // Host requests fallback broadcast.
-    host.send(
-        MsgId::RequestFallbackRelay,
-        &RequestFallbackRelay {
-            relay_addr: server_addr,
-            relay_room_code: room_id,
-            reason: "switching to relay".to_string(),
-        },
-    )
+    host.send(&RequestFallbackRelay {
+        relay_addr: server_addr,
+        relay_room_code: room_id,
+        reason: "switching to relay".to_string(),
+    })
     .await?;
 
     // Joiner receives instruction.

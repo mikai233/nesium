@@ -61,11 +61,37 @@ pub trait NetplayInputProvider: Send + Sync {
     /// Check if we should fast-forward (catch up).
     fn should_fast_forward(&self, frame: u32) -> bool;
 
+    /// Consume a pending "state sync requested" flag (host-only).
+    ///
+    /// When true, the runtime should send a fresh state snapshot to the server for caching,
+    /// to help late joiners/reconnects catch up quickly.
+    fn take_state_sync_request(&self) -> bool {
+        false
+    }
+
     /// Send a state snapshot to the server.
     fn send_state(&self, frame: u32, data: &[u8]);
 
     /// Get current sync mode (Lockstep or Rollback).
     fn sync_mode(&self) -> SyncMode;
+
+    /// Frame offset used to map the local (0-based) runtime timeline onto the network timeline.
+    ///
+    /// Late joiners start at a non-zero network frame, but the runtime still counts frames from 0.
+    /// This offset makes `poll_inputs(frame)` refer to the correct network frame.
+    fn frame_offset(&self) -> u32 {
+        0
+    }
+
+    /// Convert a local runtime frame into a network/effective frame.
+    fn to_effective_frame(&self, local_frame: u32) -> u32 {
+        local_frame.wrapping_add(self.frame_offset())
+    }
+
+    /// Convert a network/effective frame into a local runtime frame.
+    fn to_local_frame(&self, effective_frame: u32) -> u32 {
+        effective_frame.wrapping_sub(self.frame_offset())
+    }
 
     /// Check if a rollback is pending (Rollback mode only).
     fn pending_rollback(&self) -> Option<crate::sync::RollbackRequest>;
@@ -84,6 +110,28 @@ pub struct SharedInputProvider {
 
     /// Synchronization strategy (lockstep or rollback).
     sync_strategy: Mutex<Box<dyn SyncStrategy>>,
+
+    /// Absolute (effective) frame to catch up to for late joiners.
+    ///
+    /// `u32::MAX` means no catch-up target.
+    catch_up_target_frame: AtomicU32,
+
+    /// Host-only: request an immediate state snapshot upload (ProvideState).
+    state_sync_requested: AtomicBool,
+
+    /// Local inputs are treated as 0 until this effective frame (inclusive start).
+    ///
+    /// This is used for lockstep reconnect: during catch-up, the local player must not
+    /// contribute non-zero inputs until the server schedules activation.
+    local_input_allowed_from_effective_frame: AtomicU32,
+
+    /// Schedule: port becomes active from this effective frame.
+    /// `u32::MAX` means no scheduled activation.
+    scheduled_port_active_from: [AtomicU32; 4],
+
+    /// Reconnect flow: once catch-up is done and fast-forward settles, send `RejoinReady`.
+    rejoin_ready_armed: AtomicBool,
+    rejoin_ready_waiting_for_settle: AtomicBool,
 
     /// Flag indicating we're waiting for remote input.
     waiting: AtomicBool,
@@ -105,6 +153,9 @@ pub struct SharedInputProvider {
 
     /// Callback to send state to server.
     on_send_state: Mutex<Option<Box<dyn Fn(u32, &[u8]) + Send + Sync>>>,
+
+    /// Callback to notify server we're ready to reactivate (lockstep reconnect).
+    on_send_rejoin_ready: Mutex<Option<Box<dyn Fn(u32) + Send + Sync>>>,
 }
 
 impl Default for SharedInputProvider {
@@ -128,6 +179,17 @@ impl SharedInputProvider {
         Self {
             session: Mutex::new(NetplaySession::new()),
             sync_strategy: Mutex::new(strategy),
+            catch_up_target_frame: AtomicU32::new(u32::MAX),
+            state_sync_requested: AtomicBool::new(false),
+            local_input_allowed_from_effective_frame: AtomicU32::new(0),
+            scheduled_port_active_from: [
+                AtomicU32::new(u32::MAX),
+                AtomicU32::new(u32::MAX),
+                AtomicU32::new(u32::MAX),
+                AtomicU32::new(u32::MAX),
+            ],
+            rejoin_ready_armed: AtomicBool::new(false),
+            rejoin_ready_waiting_for_settle: AtomicBool::new(false),
             waiting: AtomicBool::new(false),
             active: AtomicBool::new(false),
             current_frame: AtomicU32::new(0),
@@ -135,7 +197,44 @@ impl SharedInputProvider {
             local_buttons: Default::default(),
             on_send_input: Mutex::new(None),
             on_send_state: Mutex::new(None),
+            on_send_rejoin_ready: Mutex::new(None),
         }
+    }
+
+    /// Host-only: request uploading a fresh state snapshot to the server.
+    pub fn request_state_sync(&self) {
+        self.state_sync_requested.store(true, Ordering::Release);
+    }
+
+    pub fn set_local_input_allowed_from_effective_frame(&self, frame: u32) {
+        self.local_input_allowed_from_effective_frame
+            .store(frame, Ordering::Release);
+    }
+
+    pub fn schedule_port_active_from(&self, port: usize, active_from_frame: u32) {
+        if port >= 4 {
+            return;
+        }
+        let prev = self.scheduled_port_active_from[port].load(Ordering::Acquire);
+        let next = if prev == u32::MAX {
+            active_from_frame
+        } else {
+            prev.min(active_from_frame)
+        };
+        self.scheduled_port_active_from[port].store(next, Ordering::Release);
+    }
+
+    pub fn arm_rejoin_ready(&self) {
+        self.rejoin_ready_armed.store(true, Ordering::Release);
+        self.rejoin_ready_waiting_for_settle
+            .store(false, Ordering::Release);
+        self.set_local_input_allowed_from_effective_frame(u32::MAX);
+    }
+
+    /// Set/clear the late-join catch-up target frame (absolute/effective frame number).
+    pub fn set_catch_up_target_frame(&self, target_frame: Option<u32>) {
+        let value = target_frame.unwrap_or(u32::MAX);
+        self.catch_up_target_frame.store(value, Ordering::Release);
     }
 
     /// Get the current sync mode.
@@ -167,9 +266,22 @@ impl SharedInputProvider {
     /// Set a port as active or inactive.
     pub fn set_port_active(&self, port: usize, active: bool) {
         self.sync_strategy.lock().set_port_active(port, active);
+        if port < 4 {
+            self.scheduled_port_active_from[port].store(u32::MAX, Ordering::Release);
+        }
         let mut session = self.session.lock();
         if port < session.active_ports.len() {
             session.active_ports[port] = active;
+        }
+    }
+
+    fn maybe_activate_scheduled_ports(&self, effective_frame: u32) {
+        for port in 0..4 {
+            let from = self.scheduled_port_active_from[port].load(Ordering::Acquire);
+            if from != u32::MAX && effective_frame >= from {
+                self.set_port_active(port, true);
+                self.scheduled_port_active_from[port].store(u32::MAX, Ordering::Release);
+            }
         }
     }
     /// Get mutable access to the sync strategy.
@@ -257,12 +369,19 @@ impl SharedInputProvider {
         let mut guard = self.on_send_state.lock();
         *guard = Some(cb);
     }
+
+    pub fn set_on_send_rejoin_ready(&self, cb: Box<dyn Fn(u32) + Send + Sync>) {
+        let mut guard = self.on_send_rejoin_ready.lock();
+        *guard = Some(cb);
+    }
 }
 
 impl NetplayInputProvider for SharedInputProvider {
     fn poll_inputs(&self, frame: u32) -> Option<[u16; 4]> {
         let effective_frame =
             self.with_session(|session| frame.wrapping_add(frame_offset(session)));
+
+        self.maybe_activate_scheduled_ports(effective_frame);
 
         // Delegate to sync strategy
         let result = self.sync_strategy.lock().inputs_for_frame(effective_frame);
@@ -310,12 +429,23 @@ impl NetplayInputProvider for SharedInputProvider {
     }
 
     fn send_input_to_server(&self, frame: u32, buttons: u16) {
-        let (effective_frame, local_player) = self.with_session_mut(|session| {
-            let effective = frame.wrapping_add(frame_offset(session));
+        let (effective_frame, local_player) = self.with_session(|session| {
+            (
+                frame.wrapping_add(frame_offset(session)),
+                session.local_player_index,
+            )
+        });
+        let allowed_from = self
+            .local_input_allowed_from_effective_frame
+            .load(Ordering::Acquire);
+        if effective_frame < allowed_from {
+            return;
+        }
+
+        self.with_session_mut(|session| {
             if let Some(idx) = session.local_player_index {
-                session.push_input(idx as usize, effective, buttons);
+                session.push_input(idx as usize, effective_frame, buttons);
             }
-            (effective, session.local_player_index)
         });
 
         if let Some(idx) = local_player {
@@ -342,9 +472,42 @@ impl NetplayInputProvider for SharedInputProvider {
     fn should_fast_forward(&self, frame: u32) -> bool {
         let effective_frame =
             self.with_session(|session| frame.wrapping_add(frame_offset(session)));
-        self.sync_strategy
+
+        let target = self.catch_up_target_frame.load(Ordering::Acquire);
+        if target != u32::MAX {
+            if effective_frame < target {
+                return true;
+            }
+            self.catch_up_target_frame
+                .store(u32::MAX, Ordering::Release);
+            if self.rejoin_ready_armed.load(Ordering::Acquire) {
+                self.rejoin_ready_waiting_for_settle
+                    .store(true, Ordering::Release);
+            }
+        }
+
+        let should_ff = self
+            .sync_strategy
             .lock()
-            .should_fast_forward(effective_frame)
+            .should_fast_forward(effective_frame);
+        if !should_ff
+            && self.rejoin_ready_waiting_for_settle.load(Ordering::Acquire)
+            && self
+                .rejoin_ready_waiting_for_settle
+                .swap(false, Ordering::AcqRel)
+            && self.rejoin_ready_armed.swap(false, Ordering::AcqRel)
+        {
+            let cb = self.on_send_rejoin_ready.lock();
+            if let Some(f) = cb.as_ref() {
+                f(effective_frame);
+            }
+        }
+
+        should_ff
+    }
+
+    fn take_state_sync_request(&self) -> bool {
+        self.state_sync_requested.swap(false, Ordering::AcqRel)
     }
 
     fn send_state(&self, frame: u32, data: &[u8]) {
@@ -358,6 +521,10 @@ impl NetplayInputProvider for SharedInputProvider {
 
     fn sync_mode(&self) -> SyncMode {
         self.sync_strategy.lock().mode()
+    }
+
+    fn frame_offset(&self) -> u32 {
+        self.with_session(|session| frame_offset(session))
     }
 
     fn pending_rollback(&self) -> Option<crate::sync::RollbackRequest> {

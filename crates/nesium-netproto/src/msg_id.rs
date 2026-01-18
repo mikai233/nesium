@@ -1,61 +1,69 @@
-use strum::FromRepr;
+//! Message ID definitions and protocol registry.
+//!
+//! This module uses the `define_protocol!` macro to generate:
+//! - `MsgId` enum with auto-assigned values
+//! - `Message` trait implementations for all message types
+//! - `MessageKind` enum for type-erased dispatch
+//! - `decode_message` function for deserializing by MsgId
 
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
-pub enum MsgId {
-    Hello = 1,
-    Welcome = 2,
-    JoinRoom = 3,
-    JoinAck = 4,
-    Leave = 5,
-    Error = 6,
-    AttachChannel = 7,
+use nesium_netproto_derive::define_protocol;
 
-    SwitchRole = 10,
-    RoleChanged = 11,
-    PlayerLeft = 12,
-    PlayerJoined = 13,
-
-    InputBatch = 20,
-    RelayInputs = 21,
-    InputAck = 22,
-
-    Ping = 30,
-    Pong = 31,
-    SyncHint = 32,
-
-    ResyncReq = 40,
-    SnapshotFrag = 41,
-
-    LoadRom = 50,
-    RomLoaded = 51,
-    StartGame = 52,
-
-    PauseGame = 60,
-    PauseSync = 61,
-    ResetGame = 62,
-    ResetSync = 63,
-    RequestState = 64,
-    SyncState = 65,
-    ProvideState = 66,
-    /// Server tells a late joiner to begin catch-up from a snapshot.
-    BeginCatchUp = 67,
-
-    // --- P2P signaling (netd as signaling server) ---
-    P2PCreateRoom = 80,
-    P2PRoomCreated = 81,
-    P2PJoinRoom = 82,
-    P2PJoinAck = 83,
-    /// Request switching the room to relay mode (netd authoritative).
-    P2PRequestFallback = 84,
-    /// Server broadcasts that relay fallback is required/active.
-    P2PFallbackNotice = 85,
-    /// Server notifies watchers that the P2P host has disconnected.
-    P2PHostDisconnected = 86,
-
-    // --- Direct-session control (host server -> clients) ---
-    /// Host requests the server to broadcast a relay fallback instruction.
-    RequestFallbackRelay = 90,
-    /// Server instructs clients to disconnect and reconnect to relay server.
-    FallbackToRelay = 91,
+define_protocol! {
+    // Session messages
+    session: {
+        Hello,
+        Welcome,
+        AttachChannel,
+        JoinRoom,
+        JoinAck,
+        Leave,
+        ErrorMsg,
+        SwitchRole,
+        RoleChanged,
+        PlayerLeft,
+        PlayerJoined,
+        LoadRom,
+        RomLoaded,
+        StartGame,
+        PauseGame,
+        PauseSync,
+        ResetGame,
+        ResetSync,
+        SetSyncMode,
+        SyncModeChanged,
+        RejoinReady,
+        ActivatePort,
+        QueryRoom,
+        RoomInfo,
+        RequestState,
+        ProvideState,
+        SyncState,
+        BeginCatchUp,
+        P2PCreateRoom,
+        P2PRoomCreated,
+        P2PJoinRoom,
+        P2PJoinAck,
+        P2PRequestFallback,
+        P2PFallbackNotice,
+        P2PHostDisconnected,
+        RequestFallbackRelay,
+        FallbackToRelay,
+    },
+    // Input messages
+    input: {
+        InputBatch,
+        RelayInputs,
+        InputAck,
+    },
+    // Sync messages
+    sync: {
+        Ping,
+        Pong,
+        SyncHint,
+    },
+    // Resync messages
+    resync: {
+        ResyncReq,
+        SnapshotFrag,
+    },
 }

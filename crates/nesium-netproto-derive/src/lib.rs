@@ -1,0 +1,207 @@
+//! Procedural macros for nesium-netproto message definitions.
+//!
+//! This crate provides:
+//! - `define_protocol!` - Define the protocol message registry
+
+use proc_macro::TokenStream;
+use quote::quote;
+use syn::{Ident, Token, punctuated::Punctuated};
+
+/// Define the protocol message types and generate the MsgId enum and registry.
+///
+/// This macro generates:
+/// 1. `MsgId` enum with auto-assigned u8 values
+/// 2. `impl Message for T` for each message type
+/// 3. `decode_message` function for deserializing by MsgId
+/// 4. `MessageKind` enum wrapping all message types
+///
+/// # Example
+/// ```ignore
+/// define_protocol! {
+///     session: {
+///         Hello,
+///         Welcome,
+///         JoinRoom,
+///     },
+///     input: {
+///         InputBatch,
+///     },
+/// }
+/// ```
+#[proc_macro]
+pub fn define_protocol(input: TokenStream) -> TokenStream {
+    let parser = ProtocolParser::parse(input);
+    parser.generate()
+}
+
+struct MessageDef {
+    name: Ident,
+    module: Ident,
+}
+
+struct ProtocolParser {
+    messages: Vec<MessageDef>,
+}
+
+impl ProtocolParser {
+    fn parse(input: TokenStream) -> Self {
+        use syn::braced;
+        use syn::parse::{Parse, ParseStream};
+
+        struct ProtocolInput {
+            groups: Vec<(Ident, Vec<Ident>)>,
+        }
+
+        impl Parse for ProtocolInput {
+            fn parse(input: ParseStream) -> syn::Result<Self> {
+                let mut groups = Vec::new();
+
+                while !input.is_empty() {
+                    let module: Ident = input.parse()?;
+                    input.parse::<Token![:]>()?;
+
+                    let content;
+                    braced!(content in input);
+
+                    let names: Punctuated<Ident, Token![,]> =
+                        content.parse_terminated(Ident::parse, Token![,])?;
+
+                    groups.push((module, names.into_iter().collect()));
+
+                    // Optional trailing comma between groups
+                    let _ = input.parse::<Token![,]>();
+                }
+
+                Ok(ProtocolInput { groups })
+            }
+        }
+
+        let parsed =
+            syn::parse::<ProtocolInput>(input).expect("Failed to parse protocol definition");
+
+        let mut messages = Vec::new();
+        for (module, names) in parsed.groups {
+            for name in names {
+                messages.push(MessageDef {
+                    name,
+                    module: module.clone(),
+                });
+            }
+        }
+
+        ProtocolParser { messages }
+    }
+
+    fn generate(self) -> TokenStream {
+        let msg_count = self.messages.len();
+
+        // Generate MsgId enum variants
+        let enum_variants: Vec<_> = self
+            .messages
+            .iter()
+            .enumerate()
+            .map(|(idx, msg)| {
+                let name = &msg.name;
+                let idx = (idx + 1) as u8; // Start from 1
+                quote! { #name = #idx }
+            })
+            .collect();
+
+        // Generate Message trait implementations
+        let message_impls: Vec<_> = self
+            .messages
+            .iter()
+            .map(|msg| {
+                let name = &msg.name;
+                let module = &msg.module;
+                quote! {
+                    impl crate::messages::Message for crate::messages::#module::#name {
+                        fn msg_id() -> MsgId {
+                            MsgId::#name
+                        }
+                    }
+                }
+            })
+            .collect();
+
+        // Generate MessageKind enum for type-erased dispatch
+        let kind_variants: Vec<_> = self
+            .messages
+            .iter()
+            .map(|msg| {
+                let name = &msg.name;
+                let module = &msg.module;
+                quote! { #name(crate::messages::#module::#name) }
+            })
+            .collect();
+
+        // Generate decode_message arms
+        let decode_arms: Vec<_> = self
+            .messages
+            .iter()
+            .map(|msg| {
+                let name = &msg.name;
+                let module = &msg.module;
+                quote! {
+                    MsgId::#name => {
+                        let msg: crate::messages::#module::#name = postcard::from_bytes(payload)?;
+                        Ok(MessageKind::#name(msg))
+                    }
+                }
+            })
+            .collect();
+
+        // Generate MsgId::from_u8 arms
+        let from_u8_arms: Vec<_> = self
+            .messages
+            .iter()
+            .enumerate()
+            .map(|(idx, msg)| {
+                let name = &msg.name;
+                let idx = (idx + 1) as u8;
+                quote! { #idx => Some(MsgId::#name) }
+            })
+            .collect();
+
+        let expanded = quote! {
+            use strum::FromRepr;
+
+            /// Message identifier enum, auto-generated by `define_protocol!`
+            #[repr(u8)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromRepr)]
+            pub enum MsgId {
+                #(#enum_variants),*
+            }
+
+            impl MsgId {
+                /// Total number of registered message types
+                pub const COUNT: usize = #msg_count;
+
+                /// Convert from u8 to MsgId
+                pub fn from_u8(value: u8) -> Option<Self> {
+                    match value {
+                        #(#from_u8_arms,)*
+                        _ => None,
+                    }
+                }
+            }
+
+            #(#message_impls)*
+
+            /// Enum wrapping all message types for type-erased handling
+            #[derive(Debug)]
+            pub enum MessageKind {
+                #(#kind_variants),*
+            }
+
+            /// Decode a message payload by its MsgId
+            pub fn decode_message(msg_id: MsgId, payload: &[u8]) -> Result<MessageKind, postcard::Error> {
+                match msg_id {
+                    #(#decode_arms)*
+                }
+            }
+        };
+
+        TokenStream::from(expanded)
+    }
+}

@@ -1,7 +1,7 @@
 use bytes::Buf;
 use bytes::Bytes;
 use bytes::BytesMut;
-use nesium_netproto::codec_tcp::try_decode_tcp_frames;
+use nesium_netproto::codec::try_decode_tcp_frames;
 use nesium_netproto::error::ProtoError;
 use nesium_netproto::header::Header;
 use nesium_netproto::msg_id::MsgId;
@@ -11,8 +11,13 @@ use nesium_netproto::msg_id::MsgId;
 #[derive(Debug, Clone)]
 pub struct PacketOwned {
     pub header: Header,
-    pub msg_id: MsgId,
     pub payload: bytes::Bytes,
+}
+
+impl PacketOwned {
+    pub fn msg_id(&self) -> MsgId {
+        self.header.msg_id
+    }
 }
 
 /// A small TCP framing helper:
@@ -61,7 +66,6 @@ impl TcpFramer {
 
             out.push(PacketOwned {
                 header: v.header,
-                msg_id: v.msg_id,
                 payload,
             });
         }
@@ -74,9 +78,7 @@ impl TcpFramer {
 
 #[cfg(test)]
 mod tests {
-    use nesium_netproto::{
-        codec_tcp::encode_tcp_frame, header::Header, messages::sync::Ping, msg_id::MsgId,
-    };
+    use nesium_netproto::{codec::encode_message, messages::sync::Ping, msg_id::MsgId};
 
     use super::TcpFramer;
 
@@ -85,15 +87,14 @@ mod tests {
         let mut framer = TcpFramer::new(1024);
 
         // Build a valid TCP frame using netproto encoder.
-        let h = Header::new(MsgId::Ping as u8);
         let payload = Ping { t_ms: 123 };
 
-        let bytes = encode_tcp_frame(h, MsgId::Ping, &payload, 4096).unwrap();
+        let bytes = encode_message(&payload).unwrap();
 
         framer.buf_mut().extend_from_slice(&bytes);
 
         let packets = framer.drain_packets().unwrap();
         assert_eq!(packets.len(), 1);
-        assert_eq!(packets[0].msg_id, MsgId::Ping);
+        assert_eq!(packets[0].msg_id(), MsgId::Ping);
     }
 }

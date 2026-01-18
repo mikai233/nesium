@@ -15,6 +15,7 @@ Future<String?> getPublicIp() =>
     RustLib.instance.api.crateApiNetUtilsGetPublicIp();
 
 /// Try to map a port using UPnP.
+/// TODO: Implement actual UPnP port mapping.
 Future<void> tryUpnpMapping({required int port, required String labelPrefix}) =>
     RustLib.instance.api.crateApiNetUtilsTryUpnpMapping(
       port: port,

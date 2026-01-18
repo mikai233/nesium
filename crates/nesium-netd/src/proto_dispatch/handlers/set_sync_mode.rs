@@ -1,17 +1,17 @@
-//! PauseGameHandler - handles PauseGame messages.
+//! SetSyncModeHandler - handles SetSyncMode messages.
 
-use nesium_netproto::messages::session::{PauseGame, PauseSync};
+use nesium_netproto::messages::session::{SetSyncMode, SyncModeChanged};
 use tracing::{info, warn};
 
 use super::{Handler, HandlerContext};
 use crate::net::outbound::send_msg_tcp;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
-/// Handler for PauseGame messages.
-pub(crate) struct PauseGameHandler;
+/// Handler for SetSyncMode messages.
+pub(crate) struct SetSyncModeHandler;
 
-impl Handler<PauseGame> for PauseGameHandler {
-    async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: PauseGame) -> HandlerResult {
+impl Handler<SetSyncMode> for SetSyncModeHandler {
+    async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: SetSyncMode) -> HandlerResult {
         let Some(room_id) = ctx
             .room_mgr
             .get_client_room(ctx.conn_ctx.assigned_client_id)
@@ -22,7 +22,8 @@ impl Handler<PauseGame> for PauseGameHandler {
             return Err(HandlerError::not_in_room());
         };
 
-        let recipients = room.handle_pause_game(ctx.conn_ctx.assigned_client_id, msg.paused);
+        let recipients = room.handle_set_sync_mode(ctx.conn_ctx.assigned_client_id, msg.mode)?;
+
         if recipients.is_empty() {
             return Ok(());
         }
@@ -30,15 +31,15 @@ impl Handler<PauseGame> for PauseGameHandler {
         info!(
             client_id = ctx.conn_ctx.assigned_client_id,
             room_id,
-            paused = msg.paused,
-            "Broadcasting pause sync"
+            sync_mode = ?msg.mode,
+            "Broadcasting sync mode change"
         );
 
-        let sync_msg = PauseSync { paused: msg.paused };
+        let sync_msg = SyncModeChanged { mode: msg.mode };
 
         for recipient in &recipients {
             if let Err(e) = send_msg_tcp(recipient, &sync_msg).await {
-                warn!(error = %e, "Failed to broadcast PauseSync");
+                warn!(error = %e, "Failed to broadcast SyncModeChanged");
             }
         }
         Ok(())

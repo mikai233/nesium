@@ -4,6 +4,7 @@ use nesium_netd::net::tcp::run_tcp_listener_with_listener;
 use nesium_netplay::{
     NetplayCommand, NetplayConfig, NetplayEvent, SessionHandler, connect, create_input_provider,
 };
+use nesium_netproto::constants::AUTO_PLAYER_INDEX;
 use nesium_netproto::messages::session::TransportKind;
 // use nesium_netproto::messages::session::LoadRom;
 use std::net::SocketAddr;
@@ -51,6 +52,8 @@ async fn test_rom_sync_flow() {
         transport: TransportKind::Tcp,
         spectator: false,
         room_code: 0, // Create room
+        desired_role: AUTO_PLAYER_INDEX,
+        has_rom: false,
     };
     let (mut c1_handler, c1_cmd) = SessionHandler::new(
         c1_handle,
@@ -84,6 +87,8 @@ async fn test_rom_sync_flow() {
         transport: nesium_netproto::messages::session::TransportKind::Tcp,
         spectator: false,
         room_code: room_id,
+        desired_role: AUTO_PLAYER_INDEX,
+        has_rom: false,
     };
     let (mut c2_handler, c2_cmd) = SessionHandler::new(
         c2_handle,
@@ -173,6 +178,8 @@ async fn test_late_join_receives_cached_rom_and_state() {
         transport: nesium_netproto::messages::session::TransportKind::Tcp,
         spectator: false,
         room_code: 0, // Create room
+        desired_role: AUTO_PLAYER_INDEX,
+        has_rom: false,
     };
     let (mut c1_handler, c1_cmd) = SessionHandler::new(
         c1_handle,
@@ -236,6 +243,8 @@ async fn test_late_join_receives_cached_rom_and_state() {
         transport: nesium_netproto::messages::session::TransportKind::Tcp,
         spectator: false,
         room_code: room_id,
+        desired_role: AUTO_PLAYER_INDEX,
+        has_rom: false,
     };
     let (mut c2_handler, c2_cmd) = SessionHandler::new(
         c2_handle,

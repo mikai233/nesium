@@ -9,3 +9,4 @@ thiserror.workspace = true
 serde = { workspace = true, features = ["derive"] }
 postcard = { workspace = true, features = ["use-std"] }
 strum = { workspace = true, features = ["derive"] }
+nesium-netproto-derive = { path = "../nesium-netproto-derive" }

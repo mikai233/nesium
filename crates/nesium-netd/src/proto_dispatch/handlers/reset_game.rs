@@ -1,64 +1,58 @@
+//! ResetGameHandler - handles ResetGame messages.
+
 use bytes::Bytes;
 use nesium_netproto::{
-    codec_tcp::encode_tcp_frame,
-    header::Header,
+    codec::encode_message,
     messages::session::{ResetGame, ResetSync},
-    msg_id::MsgId,
 };
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
-use crate::ConnCtx;
+use super::{Handler, HandlerContext};
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
-use crate::room::state::RoomManager;
 
-pub(crate) async fn handle(
-    ctx: &mut ConnCtx,
-    payload: &[u8],
-    room_mgr: &mut RoomManager,
-) -> HandlerResult {
-    let msg: ResetGame = match postcard::from_bytes(payload) {
-        Ok(v) => v,
-        Err(e) => {
-            warn!(error = %e, "Bad ResetGame message");
-            return Err(HandlerError::bad_message());
+/// Handler for ResetGame messages.
+pub(crate) struct ResetGameHandler;
+
+impl Handler<ResetGame> for ResetGameHandler {
+    async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: ResetGame) -> HandlerResult {
+        let Some(room_id) = ctx
+            .room_mgr
+            .get_client_room(ctx.conn_ctx.assigned_client_id)
+        else {
+            return Err(HandlerError::not_in_room());
+        };
+        let Some(room) = ctx.room_mgr.get_room_mut(room_id) else {
+            return Err(HandlerError::not_in_room());
+        };
+
+        let recipients = room.handle_reset_game(ctx.conn_ctx.assigned_client_id);
+        if recipients.is_empty() {
+            return Ok(());
         }
-    };
 
-    let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id) else {
-        return Err(HandlerError::not_in_room());
-    };
-    let Some(room) = room_mgr.get_room_mut(room_id) else {
-        return Err(HandlerError::not_in_room());
-    };
+        info!(
+            client_id = ctx.conn_ctx.assigned_client_id,
+            room_id,
+            kind = msg.kind,
+            "Broadcasting reset sync"
+        );
 
-    let recipients = room.handle_reset_game(ctx.assigned_client_id);
-    if recipients.is_empty() {
-        return Ok(());
-    }
+        let sync_msg = ResetSync { kind: msg.kind };
 
-    info!(
-        client_id = ctx.assigned_client_id,
-        room_id,
-        kind = msg.kind,
-        "Broadcasting reset sync"
-    );
+        let frame = match encode_message(&sync_msg) {
+            Ok(f) => Bytes::from(f),
+            Err(e) => {
+                error!("Failed to serialize ResetSync: {}", e);
+                return Err(HandlerError::invalid_state());
+            }
+        };
 
-    let sync_msg = ResetSync { kind: msg.kind };
-    let h = Header::new(MsgId::ResetSync as u8);
-
-    let frame = match encode_tcp_frame(h, MsgId::ResetSync, &sync_msg, 4096) {
-        Ok(f) => Bytes::from(f),
-        Err(e) => {
-            error!("Failed to serialize ResetSync: {}", e);
-            return Err(HandlerError::invalid_state());
+        for tx in recipients {
+            let frame = frame.clone();
+            tokio::spawn(async move {
+                let _ = tx.send(frame).await;
+            });
         }
-    };
-
-    for tx in recipients {
-        let frame = frame.clone();
-        tokio::spawn(async move {
-            let _ = tx.send(frame).await;
-        });
+        Ok(())
     }
-    Ok(())
 }

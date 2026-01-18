@@ -12,25 +12,24 @@ use std::sync::Arc;
 use nesium_netproto::{
     channel::ChannelKind,
     constants::SPECTATOR_PLAYER_INDEX,
-    header::Header,
     messages::{
         input::{InputBatch, RelayInputs},
         session::{
-            BeginCatchUp, ErrorCode, ErrorMsg, FallbackToRelay, Hello, JoinAck, JoinRoom, LoadRom,
-            PauseGame, PauseSync, ProvideState, RequestFallbackRelay, RequestState, ResetGame,
-            ResetSync, RomLoaded, StartGame, SyncMode as ProtoSyncMode, SyncState, TransportKind,
-            Welcome,
+            ActivatePort, BeginCatchUp, ErrorCode, ErrorMsg, FallbackToRelay, Hello, JoinAck,
+            JoinRoom, LoadRom, PauseGame, PauseSync, ProvideState, QueryRoom, RejoinReady,
+            RequestFallbackRelay, RequestState, ResetGame, ResetSync, RomLoaded, RoomInfo,
+            StartGame, SyncMode as ProtoSyncMode, SyncState, TransportKind, Welcome,
         },
         sync::{Ping, Pong},
     },
     msg_id::MsgId,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 
 use crate::{
     error::NetplayError,
-    input_provider::SharedInputProvider,
+    input_provider::{NetplayInputProvider, SharedInputProvider},
     session::SessionState,
     sync::SyncMode as ClientSyncMode,
     tcp_client::{PacketOwned, TcpClientEvent, TcpClientHandle},
@@ -47,6 +46,10 @@ pub struct NetplayConfig {
     pub spectator: bool,
     /// Room code to join (0 = create new room).
     pub room_code: u32,
+    /// Desired role on join (0-3 player, 0xFE auto, 0xFF spectator).
+    pub desired_role: u8,
+    /// True if the local runtime already has the ROM loaded.
+    pub has_rom: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -77,7 +80,11 @@ pub enum NetplayEvent {
 #[derive(Debug)]
 pub enum NetplayCommand {
     CreateRoom,
-    JoinRoom(u32),
+    JoinRoom {
+        room_code: u32,
+        desired_role: u8,
+        has_rom: bool,
+    },
     SwitchRole(u8),
     SendRom(Vec<u8>),
     RomLoaded,
@@ -87,11 +94,18 @@ pub enum NetplayCommand {
     ProvideState(u32, Vec<u8>),
     /// Send local input for a frame: (frame_number, buttons)
     SendInput(u32, u16),
+    /// Lockstep reconnect: client finished catch-up and is ready for activation.
+    RejoinReady(u32),
     /// Host-only: ask the server to instruct all clients to reconnect to a relay server.
     RequestFallbackRelay {
         relay_addr: SocketAddr,
         relay_room_code: u32,
         reason: String,
+    },
+    /// Query room occupancy/state before joining (pre-join UI).
+    QueryRoom {
+        room_code: u32,
+        resp: oneshot::Sender<Result<RoomInfo, String>>,
     },
 }
 
@@ -109,6 +123,10 @@ pub struct SessionHandler {
     command_rx: mpsc::Receiver<NetplayCommand>,
     /// Channel to send game events up to the runtime/UI.
     game_event_tx: mpsc::Sender<NetplayEvent>,
+    /// Cached per-join flag: whether the local runtime already has the ROM.
+    last_join_has_rom: bool,
+    next_query_id: u32,
+    pending_query: Option<(u32, oneshot::Sender<Result<RoomInfo, String>>)>,
 }
 
 impl SessionHandler {
@@ -133,6 +151,11 @@ impl SessionHandler {
             let _ = tx_clone_state.try_send(NetplayCommand::ProvideState(frame, data.to_vec()));
         }));
 
+        let tx_clone_rejoin = tx.clone();
+        input_provider.set_on_send_rejoin_ready(Box::new(move |frame| {
+            let _ = tx_clone_rejoin.try_send(NetplayCommand::RejoinReady(frame));
+        }));
+
         input_provider.with_session_mut(|s| {
             s.local_name = config.name.clone();
         });
@@ -145,6 +168,9 @@ impl SessionHandler {
                 event_rx,
                 command_rx: rx,
                 game_event_tx,
+                last_join_has_rom: false,
+                next_query_id: 1,
+                pending_query: None,
             },
             tx,
         )
@@ -186,10 +212,10 @@ impl SessionHandler {
                 cmd = self.command_rx.recv() => {
                     match cmd {
                         Some(NetplayCommand::CreateRoom) => {
-                            self.send_join_room(0).await?;
+                            self.send_join_room(0, 0, false).await?;
                         }
-                        Some(NetplayCommand::JoinRoom(code)) => {
-                            self.send_join_room(code).await?;
+                        Some(NetplayCommand::JoinRoom { room_code, desired_role, has_rom }) => {
+                            self.send_join_room(room_code, desired_role, has_rom).await?;
                         }
                         Some(NetplayCommand::SwitchRole(role)) => {
                             self.send_switch_role(role).await?;
@@ -215,8 +241,14 @@ impl SessionHandler {
                         Some(NetplayCommand::SendInput(frame, buttons)) => {
                             self.send_input(frame, buttons).await?;
                         }
+                        Some(NetplayCommand::RejoinReady(frame)) => {
+                            self.send_rejoin_ready(frame).await?;
+                        }
                         Some(NetplayCommand::RequestFallbackRelay { relay_addr, relay_room_code, reason }) => {
                             self.send_request_fallback_relay(relay_addr, relay_room_code, reason).await?;
+                        }
+                        Some(NetplayCommand::QueryRoom { room_code, resp }) => {
+                            self.send_query_room(room_code, resp).await?;
                         }
                         None => {
                             debug!("Command channel closed");
@@ -243,11 +275,7 @@ impl SessionHandler {
             name: self.config.name.clone(),
         };
 
-        let header = Header::new(MsgId::Hello as u8);
-
-        self.client
-            .send_message(header, MsgId::Hello, &hello)
-            .await?;
+        self.client.send_message(&hello).await?;
 
         self.input_provider.with_session(|session| {
             session.state = SessionState::Handshake;
@@ -259,6 +287,9 @@ impl SessionHandler {
     /// Handle disconnection.
     fn handle_disconnected(&mut self, reason: &str) {
         warn!("Session disconnected: {}", reason);
+        if let Some((_id, resp)) = self.pending_query.take() {
+            let _ = resp.send(Err(format!("Disconnected: {reason}")));
+        }
         self.input_provider.set_active(false);
         self.input_provider.with_session(|session| {
             session.state = SessionState::Disconnected;
@@ -269,9 +300,9 @@ impl SessionHandler {
 
     /// Handle incoming packet.
     async fn handle_packet(&mut self, packet: PacketOwned) -> Result<(), NetplayError> {
-        debug!("Received {:?}", packet.msg_id);
+        debug!("Received {:?}", packet.msg_id());
 
-        match packet.msg_id {
+        match packet.msg_id() {
             MsgId::Welcome => self.handle_welcome(&packet).await?,
             MsgId::JoinAck => self.handle_join_ack(&packet).await?,
             MsgId::RoleChanged => self.handle_role_changed(&packet).await?,
@@ -284,9 +315,12 @@ impl SessionHandler {
             MsgId::PauseSync => self.handle_pause_sync(&packet).await?,
             MsgId::ResetSync => self.handle_reset_sync(&packet).await?,
             MsgId::SyncState => self.handle_sync_state(&packet).await?,
+            MsgId::RequestState => self.handle_request_state(&packet).await?,
             MsgId::PlayerLeft => self.handle_player_left(&packet).await?,
+            MsgId::ActivatePort => self.handle_activate_port(&packet).await?,
             MsgId::FallbackToRelay => self.handle_fallback_to_relay(&packet).await?,
-            MsgId::Error => self.handle_error(&packet).await?,
+            MsgId::RoomInfo => self.handle_room_info(&packet).await?,
+            MsgId::ErrorMsg => self.handle_error(&packet).await?,
             msg => {
                 debug!("Ignoring unhandled message type: {:?}", msg);
             }
@@ -335,14 +369,24 @@ impl SessionHandler {
 
         // If we have a room code, join it; otherwise wait for assignment
         if self.config.room_code != 0 {
-            self.send_join_room(self.config.room_code).await?;
+            self.send_join_room(
+                self.config.room_code,
+                self.config.desired_role,
+                self.config.has_rom,
+            )
+            .await?;
         }
 
         Ok(())
     }
 
     /// Send JoinRoom request.
-    async fn send_join_room(&mut self, room_code: u32) -> Result<(), NetplayError> {
+    async fn send_join_room(
+        &mut self,
+        room_code: u32,
+        desired_role: u8,
+        has_rom: bool,
+    ) -> Result<(), NetplayError> {
         // Sync mode is decided by the room at creation time (host sets it once).
         // When joining an existing room, do not send any preference.
         let preferred_sync_mode = if room_code == 0 {
@@ -354,16 +398,29 @@ impl SessionHandler {
             None
         };
 
+        // For room creation, the host is always P1 and ROM is handled via LoadRom.
+        let (desired_role, has_rom) = if room_code == 0 {
+            (0u8, false)
+        } else {
+            (
+                if self.config.spectator {
+                    SPECTATOR_PLAYER_INDEX
+                } else {
+                    desired_role
+                },
+                has_rom,
+            )
+        };
+        self.last_join_has_rom = has_rom;
+
         let join = JoinRoom {
             room_code,
             preferred_sync_mode,
+            desired_role,
+            has_rom,
         };
 
-        let header = Header::new(MsgId::JoinRoom as u8);
-
-        self.client
-            .send_message(header, MsgId::JoinRoom, &join)
-            .await?;
+        self.client.send_message(&join).await?;
 
         Ok(())
     }
@@ -372,11 +429,7 @@ impl SessionHandler {
     async fn send_switch_role(&mut self, new_role: u8) -> Result<(), NetplayError> {
         let req = nesium_netproto::messages::session::SwitchRole { new_role };
 
-        let header = Header::new(MsgId::SwitchRole as u8);
-
-        self.client
-            .send_message(header, MsgId::SwitchRole, &req)
-            .await?;
+        self.client.send_message(&req).await?;
 
         Ok(())
     }
@@ -403,6 +456,8 @@ impl SessionHandler {
 
         let is_spectator = ack.player_index == SPECTATOR_PLAYER_INDEX;
         if is_spectator {
+            self.input_provider
+                .set_local_input_allowed_from_effective_frame(0);
             self.input_provider.with_session_mut(|session| {
                 session.state = SessionState::Spectating {
                     start_frame: ack.start_frame,
@@ -411,10 +466,6 @@ impl SessionHandler {
                 session.current_frame = ack.start_frame;
                 session.room_id = ack.room_id;
             });
-            // Current server logic only assigns spectators when there are already >=2 players.
-            // Mark known player ports active so we don't advance using implicit 0 inputs.
-            self.input_provider.set_port_active(0, true);
-            self.input_provider.set_port_active(1, true);
         } else {
             self.input_provider.with_session_mut(|session| {
                 session.state = SessionState::Playing {
@@ -425,9 +476,18 @@ impl SessionHandler {
                 session.current_frame = ack.start_frame;
                 session.room_id = ack.room_id;
             });
-            // Mark own port as active to prevent lockstep deadlock in solo play
-            self.input_provider
-                .set_port_active(ack.player_index as usize, true);
+            if ack.pending_activation {
+                // Lockstep reconnect: stay inactive (0 input) until the server schedules activation.
+                self.input_provider.arm_rejoin_ready();
+                self.input_provider
+                    .set_port_active(ack.player_index as usize, false);
+            } else {
+                self.input_provider
+                    .set_local_input_allowed_from_effective_frame(0);
+                // Mark own port as active to prevent lockstep deadlock in solo play
+                self.input_provider
+                    .set_port_active(ack.player_index as usize, true);
+            }
 
             // If we joined as player 2 (index 1), we know player 1 (index 0) exists.
             if ack.player_index == 1 {
@@ -442,6 +502,30 @@ impl SessionHandler {
         });
         // NOTE: Do NOT call set_active(true) here. Lockstep should only start after StartGame.
 
+        // If we already have the ROM loaded locally, confirm immediately so the server can begin
+        // late-join catch-up (started rooms) or pre-start synchronization without waiting for LoadRom.
+        if self.last_join_has_rom {
+            self.send_rom_loaded().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn send_query_room(
+        &mut self,
+        room_code: u32,
+        resp: oneshot::Sender<Result<RoomInfo, String>>,
+    ) -> Result<(), NetplayError> {
+        // Only one outstanding query is supported (UI can debounce).
+        let request_id = self.next_query_id;
+        self.next_query_id = self.next_query_id.wrapping_add(1).max(1);
+        self.pending_query = Some((request_id, resp));
+
+        let msg = QueryRoom {
+            request_id,
+            room_code,
+        };
+        self.client.send_message(&msg).await?;
         Ok(())
     }
 
@@ -577,7 +661,8 @@ impl SessionHandler {
             );
         });
 
-        if msg.player_index != SPECTATOR_PLAYER_INDEX {
+        // If the game is already running, do not activate immediately; wait for server `ActivatePort`.
+        if msg.player_index != SPECTATOR_PLAYER_INDEX && !self.input_provider.is_active() {
             self.input_provider
                 .set_port_active(msg.player_index as usize, true);
         }
@@ -654,10 +739,7 @@ impl SessionHandler {
         });
 
         for batch in batches {
-            let header = Header::new(MsgId::InputBatch as u8);
-            self.client
-                .send_message(header, MsgId::InputBatch, &batch)
-                .await?;
+            self.client.send_message(&batch).await?;
         }
         Ok(())
     }
@@ -668,9 +750,7 @@ impl SessionHandler {
             t_ms: current_time_ms(),
         };
 
-        let header = Header::new(MsgId::Ping as u8);
-
-        self.client.send_message(header, MsgId::Ping, &ping).await?;
+        self.client.send_message(&ping).await?;
 
         Ok(())
     }
@@ -703,17 +783,18 @@ impl SessionHandler {
         );
 
         // Initialize active ports from server-provided mask BEFORE activating lockstep.
-        // This prevents the deadlock where is_frame_ready() returns false because
-        // no ports are marked active yet.
-        for i in 0..8 {
-            let active = (msg.active_ports_mask & (1u8 << i)) != 0;
-            if active {
-                self.input_provider.set_port_active(i as usize, true);
-            }
+        // Always clear stale port state first (important across reconnects / role changes).
+        for i in 0..4 {
+            self.input_provider.set_port_active(i, false);
+        }
+        for i in 0..4 {
+            let active = (msg.active_ports_mask & (1u8 << (i as u8))) != 0;
+            self.input_provider.set_port_active(i, active);
         }
 
         // NOW activate lockstep - game is ready to begin
         self.input_provider.set_active(true);
+        self.input_provider.set_catch_up_target_frame(None);
 
         if let Err(e) = self.game_event_tx.send(NetplayEvent::StartGame).await {
             error!("Failed to send StartGame event: {}", e);
@@ -735,14 +816,18 @@ impl SessionHandler {
             "Received BeginCatchUp - activating lockstep"
         );
 
-        for i in 0..8 {
-            let active = (msg.active_ports_mask & (1u8 << i)) != 0;
-            if active {
-                self.input_provider.set_port_active(i as usize, true);
-            }
+        // Always clear stale port state first (important across reconnects / role changes).
+        for i in 0..4 {
+            self.input_provider.set_port_active(i, false);
+        }
+        for i in 0..4 {
+            let active = (msg.active_ports_mask & (1u8 << (i as u8))) != 0;
+            self.input_provider.set_port_active(i, active);
         }
 
         self.input_provider.set_active(true);
+        self.input_provider
+            .set_catch_up_target_frame(Some(msg.target_frame));
 
         // Reuse StartGame event: it tells the UI/runtime to unpause and begin running frames.
         if let Err(e) = self.game_event_tx.send(NetplayEvent::StartGame).await {
@@ -756,11 +841,7 @@ impl SessionHandler {
     async fn send_load_rom(&mut self, data: Vec<u8>) -> Result<(), NetplayError> {
         let req = LoadRom { data };
 
-        let header = Header::new(MsgId::LoadRom as u8);
-
-        self.client
-            .send_message(header, MsgId::LoadRom, &req)
-            .await?;
+        self.client.send_message(&req).await?;
 
         Ok(())
     }
@@ -769,11 +850,7 @@ impl SessionHandler {
     async fn send_rom_loaded(&mut self) -> Result<(), NetplayError> {
         let req = RomLoaded {};
 
-        let header = Header::new(MsgId::RomLoaded as u8);
-
-        self.client
-            .send_message(header, MsgId::RomLoaded, &req)
-            .await?;
+        self.client.send_message(&req).await?;
 
         Ok(())
     }
@@ -814,10 +891,53 @@ impl SessionHandler {
             frame = msg.frame,
             "Received SyncState"
         );
+
+        // Late-join resync: update the network frame offset to match the incoming snapshot frame.
+        // We only do this when netplay is not yet active to avoid disrupting a running session.
+        if !self.input_provider.is_active() {
+            self.input_provider.with_sync(|sync| sync.clear());
+            self.input_provider.with_session_mut(|session| {
+                session.clear_inputs();
+                session.current_frame = msg.frame;
+                match &session.state {
+                    SessionState::Playing { player_index, .. } => {
+                        session.state = SessionState::Playing {
+                            start_frame: msg.frame,
+                            player_index: *player_index,
+                        };
+                    }
+                    SessionState::Spectating { .. } => {
+                        session.state = SessionState::Spectating {
+                            start_frame: msg.frame,
+                        };
+                    }
+                    _ => {}
+                }
+            });
+        }
+
         let _ = self
             .game_event_tx
             .send(NetplayEvent::SyncState(msg.frame, msg.data))
             .await;
+        Ok(())
+    }
+
+    /// Handle RequestState message (server -> host).
+    async fn handle_request_state(&mut self, packet: &PacketOwned) -> Result<(), NetplayError> {
+        let _msg: RequestState =
+            postcard::from_bytes(&packet.payload).map_err(|e| NetplayError::Protocol(e.into()))?;
+
+        // Only the host (P1) can provide authoritative state snapshots.
+        if self.input_provider.local_player() == Some(0) {
+            info!("Received RequestState from server, setting state_sync_requested flag");
+            self.input_provider.request_state_sync();
+        } else {
+            info!(
+                local_player = ?self.input_provider.local_player(),
+                "Ignoring RequestState (not host)"
+            );
+        }
         Ok(())
     }
 
@@ -837,6 +957,10 @@ impl SessionHandler {
             session.players.remove(&msg.client_id);
             session.clear_port(msg.player_index as usize);
         });
+        if msg.player_index != SPECTATOR_PLAYER_INDEX {
+            self.input_provider
+                .set_port_active(msg.player_index as usize, false);
+        }
 
         let _ = self
             .game_event_tx
@@ -848,15 +972,58 @@ impl SessionHandler {
         Ok(())
     }
 
+    async fn handle_activate_port(&mut self, packet: &PacketOwned) -> Result<(), NetplayError> {
+        let msg: ActivatePort =
+            postcard::from_bytes(&packet.payload).map_err(|e| NetplayError::Protocol(e.into()))?;
+
+        info!(
+            player_index = msg.player_index,
+            active_from_frame = msg.active_from_frame,
+            "ActivatePort"
+        );
+
+        if msg.player_index != SPECTATOR_PLAYER_INDEX {
+            self.input_provider
+                .schedule_port_active_from(msg.player_index as usize, msg.active_from_frame);
+
+            if self.input_provider.local_player() == Some(msg.player_index) {
+                self.input_provider
+                    .set_local_input_allowed_from_effective_frame(msg.active_from_frame);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_room_info(&mut self, packet: &PacketOwned) -> Result<(), NetplayError> {
+        let msg: RoomInfo =
+            postcard::from_bytes(&packet.payload).map_err(|e| NetplayError::Protocol(e.into()))?;
+
+        let Some((pending_id, resp)) = self.pending_query.take() else {
+            return Ok(());
+        };
+        if pending_id != msg.request_id {
+            let _ = resp.send(Err("Stale RoomInfo response".to_string()));
+            return Ok(());
+        }
+
+        let _ = resp.send(Ok(msg));
+        Ok(())
+    }
+
+    async fn send_rejoin_ready(&mut self, frame: u32) -> Result<(), NetplayError> {
+        let msg = RejoinReady {
+            caught_up_to_frame: frame,
+        };
+        self.client.send_message(&msg).await?;
+        Ok(())
+    }
+
     /// Send PauseGame message.
     async fn send_pause_game(&mut self, paused: bool) -> Result<(), NetplayError> {
         let req = PauseGame { paused };
 
-        let header = Header::new(MsgId::PauseGame as u8);
-
-        self.client
-            .send_message(header, MsgId::PauseGame, &req)
-            .await?;
+        self.client.send_message(&req).await?;
         Ok(())
     }
 
@@ -864,11 +1031,7 @@ impl SessionHandler {
     async fn send_reset_game(&mut self, kind: u8) -> Result<(), NetplayError> {
         let req = ResetGame { kind };
 
-        let header = Header::new(MsgId::ResetGame as u8);
-
-        self.client
-            .send_message(header, MsgId::ResetGame, &req)
-            .await?;
+        self.client.send_message(&req).await?;
         Ok(())
     }
 
@@ -876,22 +1039,14 @@ impl SessionHandler {
     async fn send_request_state(&mut self) -> Result<(), NetplayError> {
         let req = RequestState {};
 
-        let header = Header::new(MsgId::RequestState as u8);
-
-        self.client
-            .send_message(header, MsgId::RequestState, &req)
-            .await?;
+        self.client.send_message(&req).await?;
         Ok(())
     }
 
     /// Send ProvideState (provide state to server for caching).
     async fn send_provide_state(&mut self, frame: u32, data: Vec<u8>) -> Result<(), NetplayError> {
         let msg = ProvideState { frame, data };
-        let header = Header::new(MsgId::ProvideState as u8);
-
-        self.client
-            .send_message(header, MsgId::ProvideState, &msg)
-            .await?;
+        self.client.send_message(&msg).await?;
         Ok(())
     }
 
@@ -907,10 +1062,7 @@ impl SessionHandler {
             relay_room_code,
             reason,
         };
-        let header = Header::new(MsgId::RequestFallbackRelay as u8);
-        self.client
-            .send_message(header, MsgId::RequestFallbackRelay, &msg)
-            .await?;
+        self.client.send_message(&msg).await?;
         Ok(())
     }
 

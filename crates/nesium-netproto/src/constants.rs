@@ -26,3 +26,8 @@ pub const TCP_LEN_PREFIX: usize = 4;
 ///
 /// This value appears in session messages such as `JoinAck`, `PlayerJoined`, and `RoleChanged`.
 pub const SPECTATOR_PLAYER_INDEX: u8 = 0xFF;
+
+/// Player index marker used to request "auto-assign a free player slot" on join.
+///
+/// This value is only used in `JoinRoom.desired_role`.
+pub const AUTO_PLAYER_INDEX: u8 = 0xFE;

@@ -237,7 +237,7 @@
   "netplayAddressOrRoomCode": "房间码或服务器地址",
   "netplayHostingTitle": "正在托管",
   "netplayRoomCodeLabel": "你的房间码",
-  "netplayConnect": "加入游戏",
+  "netplayConnect": "连接服务器",
   "netplayJoinViaP2P": "通过 P2P 加入",
   "netplayJoinGame": "加入游戏",
   "netplayCreateRoom": "创建房间",
@@ -250,6 +250,17 @@
   "netplayRoleLabel": "角色",
   "netplayPlayerIndex": "玩家 {index}",
   "netplaySpectator": "旁观者",
+  "netplaySyncModeLabel": "同步模式",
+  "netplaySyncModeLockstep": "锁步",
+  "netplaySyncModeRollback": "回滚",
+  "netplaySyncModeChangeFailed": "切换同步模式失败: {error}",
+  "@netplaySyncModeChangeFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "netplayClientId": "客户端 ID",
   "netplayPlayerListHeader": "房间玩家列表",
   "netplayYouIndicator": " (你)",

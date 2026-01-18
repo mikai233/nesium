@@ -1,6 +1,5 @@
 pub mod channel;
-pub mod codec_tcp;
-pub mod codec_udp;
+pub mod codec;
 pub mod constants;
 pub mod error;
 pub mod header;

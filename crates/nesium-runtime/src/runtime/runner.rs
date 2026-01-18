@@ -1,4 +1,4 @@
-use nesium_netplay::NetplayInputProvider;
+use nesium_netplay::{NetplayInputProvider, SnapshotBuffer, SyncMode};
 use nesium_support::rewind::RewindState;
 use nesium_support::tas::{self, FrameFlags, InputFrame};
 use sha1::{Digest, Sha1};
@@ -91,6 +91,8 @@ pub(crate) struct Runner {
     movie_frame: usize,
     netplay_input: Option<Arc<dyn NetplayInputProvider>>,
     netplay_active: bool,
+    /// Snapshot buffer for rollback resimulation (Rollback mode only)
+    netplay_snapshots: SnapshotBuffer,
 }
 
 impl Runner {
@@ -143,6 +145,7 @@ impl Runner {
             movie_frame: 0,
             netplay_input: None,
             netplay_active: false,
+            netplay_snapshots: SnapshotBuffer::default(),
         }
     }
 
@@ -554,6 +557,21 @@ impl Runner {
 
     fn step_frame(&mut self) {
         let frame_seq = self.state.frame_seq.load(Ordering::Relaxed);
+
+        // Check for pending rollback (Rollback mode only)
+        // This must happen BEFORE advancing the frame to restore correct state
+        let pending_rollback = self
+            .netplay_input
+            .as_ref()
+            .and_then(|np| np.pending_rollback());
+
+        if let Some(rollback) = pending_rollback {
+            self.handle_netplay_rollback(rollback.target_frame, rollback.current_frame);
+            if let Some(np) = &self.netplay_input {
+                np.clear_rollback();
+            }
+        }
+
         let movie_frame = self.movie_frame_for_seq(frame_seq);
         self.maybe_apply_movie_frame(&movie_frame);
 
@@ -594,6 +612,9 @@ impl Runner {
 
             // Capture history for future rewind
             self.maybe_capture_rewind_history();
+
+            // Capture snapshot for netplay rollback (Rollback mode only)
+            self.maybe_capture_netplay_snapshot(frame_seq);
         }
 
         self.state.frame_seq.fetch_add(1, Ordering::Relaxed);
@@ -752,19 +773,24 @@ impl Runner {
     }
 
     fn maybe_send_periodic_netplay_state(&mut self, frame_seq: u64) {
-        // Periodic Netplay State Sync (Host Only)
-        // Every second (60 frames), the host sends a compressed state snapshot to the server.
-        // This allows late joiners (and spectators) to catch up quickly without replaying the entire history.
-        if !self.netplay_active || frame_seq == 0 || frame_seq % 60 != 0 {
-            return;
-        }
-
         // Clone the Arc to avoid borrowing self while mutating self for capture.
         let Some(np) = self.netplay_input.clone() else {
             return;
         };
         // Only the host (P1) is responsible for providing state.
         if np.local_player() != Some(0) {
+            return;
+        }
+
+        // On-demand state sync (requested by server) for late joiners/reconnects.
+        let requested = np.take_state_sync_request();
+
+        // Periodic Netplay State Sync (Host Only)
+        // Every second (60 frames), the host sends a compressed state snapshot to the server.
+        // This allows late joiners (and spectators) to catch up quickly without replaying the entire history.
+        let periodic_due = self.netplay_active && frame_seq != 0 && frame_seq % 60 == 0;
+
+        if !requested && !periodic_due {
             return;
         }
 
@@ -795,6 +821,120 @@ impl Runner {
             let cap = self.state.rewind_capacity.load(Ordering::Acquire) as usize;
             self.rewind.push_frame(&snap, indices, cap);
         }
+    }
+
+    /// Captures a snapshot for netplay rollback resimulation (Rollback mode only).
+    fn maybe_capture_netplay_snapshot(&mut self, frame_seq: u64) {
+        let Some(np) = &self.netplay_input else {
+            return;
+        };
+
+        // Only capture snapshots in Rollback mode
+        if np.sync_mode() != SyncMode::Rollback {
+            return;
+        }
+
+        let effective_frame = np.to_effective_frame(frame_seq as u32);
+
+        // Check if we should save this frame (respects save interval)
+        if !self.netplay_snapshots.should_save(effective_frame) {
+            return;
+        }
+
+        // Use compressed snapshot for memory efficiency
+        let meta = SnapshotMeta {
+            tick: self.nes.master_clock(),
+            ..Default::default()
+        };
+
+        if let Ok(snap) = self.nes.save_snapshot(meta) {
+            // Serialize and compress the snapshot
+            if let Ok(bytes) = postcard::to_allocvec(&snap) {
+                let compressed = compress_prepend_size(&bytes);
+                self.netplay_snapshots.push(effective_frame, compressed);
+            }
+        }
+    }
+
+    /// Handles rollback: restores state and resimulates frames with confirmed inputs.
+    fn handle_netplay_rollback(&mut self, target_frame: u32, current_frame: u32) {
+        eprintln!(
+            "[Netplay] Rollback requested: {} -> {}",
+            current_frame, target_frame
+        );
+
+        // 1. Find snapshot strictly before the target frame.
+        // Our snapshots are captured after each executed frame, so to re-simulate `target_frame`
+        // we need a snapshot at or before `target_frame - 1`.
+        let snapshot_search_frame = target_frame.saturating_sub(1);
+        let Some(snapshot) = self.netplay_snapshots.find_before(snapshot_search_frame) else {
+            eprintln!(
+                "[Netplay] No snapshot found for rollback to frame {}",
+                target_frame
+            );
+            return;
+        };
+
+        let snapshot_frame = snapshot.frame;
+        let snapshot_data = snapshot.data.clone();
+
+        // 2. Decompress and restore the snapshot
+        let Ok(decompressed) = decompress_size_prepended(&snapshot_data) else {
+            eprintln!(
+                "[Netplay] Failed to decompress snapshot for frame {}",
+                snapshot_frame
+            );
+            return;
+        };
+
+        let Ok(nes_snapshot) = postcard::from_bytes::<NesSnapshot>(&decompressed) else {
+            eprintln!(
+                "[Netplay] Failed to deserialize snapshot for frame {}",
+                snapshot_frame
+            );
+            return;
+        };
+
+        if self.nes.load_snapshot(&nes_snapshot).is_err() {
+            eprintln!(
+                "[Netplay] Failed to load snapshot for frame {}",
+                snapshot_frame
+            );
+            return;
+        }
+
+        // 3. Clear audio to prevent glitches during resimulation
+        if let Some(audio) = &self.audio {
+            audio.clear();
+        }
+
+        // 4. Resimulate frames from snapshot_frame to current_frame using confirmed inputs
+        // Clone the Arc to avoid borrow conflict with mutable self methods
+        let np = match self.netplay_input.clone() {
+            Some(np) => np,
+            None => return,
+        };
+
+        for effective_frame in (snapshot_frame + 1)..=current_frame {
+            // `rollback.*_frame` are network/effective frames; `poll_inputs` expects local frames.
+            let local_frame = np.to_local_frame(effective_frame);
+
+            // Get inputs for this frame (Rollback mode predicts when missing).
+            if let Some(inputs) = np.poll_inputs(local_frame) {
+                // Apply inputs to all pads
+                for (pad, &buttons) in inputs.iter().enumerate() {
+                    self.apply_pad_mask(pad, (buttons & 0xFF) as u8);
+                }
+            }
+
+            // Run the frame without audio during resimulation
+            let _ = self.nes.run_frame(false);
+        }
+
+        eprintln!(
+            "[Netplay] Rollback complete: resimulated {} frames",
+            current_frame - snapshot_frame
+        );
     }
 
     /// Returns the current TAS frame if playback is active.
@@ -1680,6 +1820,7 @@ impl Runner {
                 if self.netplay_input.is_some() {
                     self.state.frame_seq.store(0, Ordering::Release);
                     self.next_frame_deadline = Instant::now();
+                    self.netplay_snapshots.clear();
                 }
                 let _ = reply.send(Ok(()));
             }

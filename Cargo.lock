@@ -3018,10 +3018,20 @@ dependencies = [
 name = "nesium-netproto"
 version = "0.1.0"
 dependencies = [
+ "nesium-netproto-derive",
  "postcard",
  "serde",
  "strum",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "nesium-netproto-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -3033,12 +3043,17 @@ dependencies = [
  "crossbeam-channel",
  "lz4_flex",
  "nesium-core",
+ "nesium-netd",
  "nesium-netplay",
+ "nesium-netproto",
  "nesium-support",
  "parking_lot",
+ "postcard",
  "ringbuf",
+ "rustls",
  "sha1",
  "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]
