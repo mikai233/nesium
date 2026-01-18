@@ -42,6 +42,8 @@ pub struct Welcome {
     pub input_delay_frames: u8,
     pub max_payload: u16,
     pub rewind_capacity: u32,
+    /// Room inactivity timeout in seconds. Client should send Ping before this expires.
+    pub room_idle_timeout_secs: u16,
 }
 
 /// Attach a secondary channel connection to an existing session.

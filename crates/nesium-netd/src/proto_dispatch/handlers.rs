@@ -16,6 +16,7 @@ use nesium_netproto::messages::session::{
     PauseGame, ProvideState, QueryRoom, RejoinReady, RequestFallbackRelay, RequestState, ResetGame,
     RomLoaded, SetSyncMode, SwitchRole, SyncState,
 };
+use nesium_netproto::messages::sync::Ping;
 use tracing::warn;
 
 use super::error::{HandlerError, HandlerResult};
@@ -34,6 +35,7 @@ mod p2p_create_room;
 mod p2p_join_room;
 mod p2p_request_fallback;
 mod pause_game;
+mod ping;
 mod provide_state;
 mod query_room;
 mod rejoin_ready;
@@ -61,6 +63,8 @@ pub(crate) struct HandlerContext<'a> {
     pub(crate) peer: &'a SocketAddr,
     /// The room manager for accessing/modifying room state.
     pub(crate) room_mgr: &'a mut RoomManager,
+    /// Room inactivity timeout in seconds (for Welcome message).
+    pub(crate) room_idle_timeout_secs: u16,
 }
 
 /// Async trait for type-safe message handlers.
@@ -164,6 +168,7 @@ fn build_registry() -> HandlerRegistry {
         P2PRequestFallback => p2p_request_fallback::P2PRequestFallbackHandler,
         RequestFallbackRelay => request_fallback_relay::RequestFallbackRelayHandler,
         SetSyncMode => set_sync_mode::SetSyncModeHandler,
+        Ping => ping::PingHandler,
     }
 }
 
@@ -188,12 +193,14 @@ pub(crate) async fn dispatch_packet(
     peer: &SocketAddr,
     packet: &PacketOwned,
     room_mgr: &mut RoomManager,
+    room_idle_timeout_secs: u16,
 ) -> bool {
     let mut handler_ctx = HandlerContext {
         conn_ctx: ctx,
         conn_id,
         peer,
         room_mgr,
+        room_idle_timeout_secs,
     };
 
     let result = get_registry()

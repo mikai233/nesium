@@ -39,6 +39,7 @@ impl Handler<Hello> for HelloHandler {
             input_delay_frames: 2,
             max_payload: 4096,
             rewind_capacity: 600,
+            room_idle_timeout_secs: ctx.room_idle_timeout_secs,
         };
 
         match send_msg_tcp(&ctx.conn_ctx.outbound, &welcome).await {

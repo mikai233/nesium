@@ -127,6 +127,8 @@ pub struct SessionHandler {
     last_join_has_rom: bool,
     next_query_id: u32,
     pending_query: Option<(u32, oneshot::Sender<Result<RoomInfo, String>>)>,
+    /// Room inactivity timeout in seconds, received from server.
+    room_idle_timeout_secs: u16,
 }
 
 impl SessionHandler {
@@ -171,6 +173,7 @@ impl SessionHandler {
                 last_join_has_rom: false,
                 next_query_id: 1,
                 pending_query: None,
+                room_idle_timeout_secs: 60, // Default to 60s until Welcome
             },
             tx,
         )
@@ -180,82 +183,137 @@ impl SessionHandler {
     ///
     /// This processes events from the TCP client and updates session state accordingly.
     pub async fn run(&mut self) -> Result<(), NetplayError> {
+        // Keep-alive timer: send Ping at half the idle timeout to prevent server room cleanup
+        let mut current_timeout = self.room_idle_timeout_secs;
+        let mut ping_interval =
+            tokio::time::interval(std::time::Duration::from_secs((current_timeout / 2).into()));
+
         loop {
+            // If the timeout was updated (e.g. after Welcome), adjust our ping interval.
+            // We don't call .tick().await here to avoid blocking the main loop.
+            // The first tick will happen immediately in the select! block.
+            if self.room_idle_timeout_secs != current_timeout {
+                current_timeout = self.room_idle_timeout_secs;
+                ping_interval = tokio::time::interval(std::time::Duration::from_secs(
+                    (current_timeout / 2).into(),
+                ));
+            }
+
             // We use biased select to prioritize incoming network packets over outgoing commands.
             // This is crucial for lockstep netplay to reduce input latency.
             tokio::select! {
                 biased;
 
                 event = self.event_rx.recv() => {
-                    match event {
-                        Some(TcpClientEvent::Connected) => {
-                            info!("Connected to server");
-                            self.handle_connected().await?;
-                        }
-                        Some(TcpClientEvent::Disconnected { reason }) => {
-                            self.handle_disconnected(&reason);
-                            return Ok(());
-                        }
-                        Some(TcpClientEvent::Packet(packet)) => {
-                            self.handle_packet(packet).await?;
-                        }
-                        Some(TcpClientEvent::Error(e)) => {
-                            error!("Connection error: {}", e);
-                            return Err(NetplayError::ConnectionFailed(e));
-                        }
-                        None => {
-                            debug!("Event channel closed");
-                            return Ok(());
-                        }
+                    if let Some(result) = self.handle_tcp_event(event).await? {
+                        return result;
                     }
                 }
                 cmd = self.command_rx.recv() => {
-                    match cmd {
-                        Some(NetplayCommand::CreateRoom) => {
-                            self.send_join_room(0, 0, false).await?;
-                        }
-                        Some(NetplayCommand::JoinRoom { room_id, desired_role, has_rom }) => {
-                            self.send_join_room(room_id, desired_role, has_rom).await?;
-                        }
-                        Some(NetplayCommand::SwitchRole(role)) => {
-                            self.send_switch_role(role).await?;
-                        }
-                        Some(NetplayCommand::SendRom(data)) => {
-                            self.send_load_rom(data).await?;
-                        }
-                        Some(NetplayCommand::RomLoaded) => {
-                            self.send_rom_loaded().await?;
-                        }
-                        Some(NetplayCommand::SendPause(paused)) => {
-                            self.send_pause_game(paused).await?;
-                        }
-                        Some(NetplayCommand::SendReset(kind)) => {
-                            self.send_reset_game(kind).await?;
-                        }
-                        Some(NetplayCommand::RequestState) => {
-                            self.send_request_state().await?;
-                        }
-                        Some(NetplayCommand::ProvideState(frame, data)) => {
-                            self.send_provide_state(frame, data).await?;
-                        }
-                        Some(NetplayCommand::SendInput(frame, buttons)) => {
-                            self.send_input(frame, buttons).await?;
-                        }
-                        Some(NetplayCommand::RejoinReady(frame)) => {
-                            self.send_rejoin_ready(frame).await?;
-                        }
-                        Some(NetplayCommand::RequestFallbackRelay { relay_addr, relay_room_id, reason }) => {
-                            self.send_request_fallback_relay(relay_addr, relay_room_id, reason).await?;
-                        }
-                        Some(NetplayCommand::QueryRoom { room_id, resp }) => {
-                            self.send_query_room(room_id, resp).await?;
-                        }
-                        None => {
-                            debug!("Command channel closed");
-                        }
-                    }
+                    self.handle_command(cmd).await?;
+                }
+                _ = ping_interval.tick() => {
+                    self.handle_ping_tick().await;
                 }
             }
+        }
+    }
+
+    /// Handle a TCP client event.
+    /// Returns `Some(Ok(()))` if the session should terminate normally,
+    /// or `None` to continue the loop.
+    async fn handle_tcp_event(
+        &mut self,
+        event: Option<TcpClientEvent>,
+    ) -> Result<Option<Result<(), NetplayError>>, NetplayError> {
+        match event {
+            Some(TcpClientEvent::Connected) => {
+                info!("Connected to server");
+                self.handle_connected().await?;
+            }
+            Some(TcpClientEvent::Disconnected { reason }) => {
+                self.handle_disconnected(&reason);
+                return Ok(Some(Ok(())));
+            }
+            Some(TcpClientEvent::Packet(packet)) => {
+                self.handle_packet(packet).await?;
+            }
+            Some(TcpClientEvent::Error(e)) => {
+                error!("Connection error: {}", e);
+                return Err(NetplayError::ConnectionFailed(e));
+            }
+            None => {
+                debug!("Event channel closed");
+                return Ok(Some(Ok(())));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Handle a command from the command channel.
+    async fn handle_command(&mut self, cmd: Option<NetplayCommand>) -> Result<(), NetplayError> {
+        match cmd {
+            Some(NetplayCommand::CreateRoom) => {
+                self.send_join_room(0, 0, false).await?;
+            }
+            Some(NetplayCommand::JoinRoom {
+                room_id,
+                desired_role,
+                has_rom,
+            }) => {
+                self.send_join_room(room_id, desired_role, has_rom).await?;
+            }
+            Some(NetplayCommand::SwitchRole(role)) => {
+                self.send_switch_role(role).await?;
+            }
+            Some(NetplayCommand::SendRom(data)) => {
+                self.send_load_rom(data).await?;
+            }
+            Some(NetplayCommand::RomLoaded) => {
+                self.send_rom_loaded().await?;
+            }
+            Some(NetplayCommand::SendPause(paused)) => {
+                self.send_pause_game(paused).await?;
+            }
+            Some(NetplayCommand::SendReset(kind)) => {
+                self.send_reset_game(kind).await?;
+            }
+            Some(NetplayCommand::RequestState) => {
+                self.send_request_state().await?;
+            }
+            Some(NetplayCommand::ProvideState(frame, data)) => {
+                self.send_provide_state(frame, data).await?;
+            }
+            Some(NetplayCommand::SendInput(frame, buttons)) => {
+                self.send_input(frame, buttons).await?;
+            }
+            Some(NetplayCommand::RejoinReady(frame)) => {
+                self.send_rejoin_ready(frame).await?;
+            }
+            Some(NetplayCommand::RequestFallbackRelay {
+                relay_addr,
+                relay_room_id,
+                reason,
+            }) => {
+                self.send_request_fallback_relay(relay_addr, relay_room_id, reason)
+                    .await?;
+            }
+            Some(NetplayCommand::QueryRoom { room_id, resp }) => {
+                self.send_query_room(room_id, resp).await?;
+            }
+            None => {
+                debug!("Command channel closed");
+            }
+        }
+        Ok(())
+    }
+
+    /// Handle periodic ping tick for room keep-alive.
+    async fn handle_ping_tick(&mut self) {
+        // Send Ping for room keep-alive and RTT measurement.
+        // Errors are non-fatal (server may not respond immediately).
+        if let Err(e) = self.send_ping().await {
+            debug!("Failed to send keep-alive Ping: {}", e);
         }
     }
 
@@ -366,6 +424,8 @@ impl SessionHandler {
         // Keep sync strategy's delay in sync with negotiated session delay.
         self.input_provider
             .set_input_delay(welcome.input_delay_frames as u32);
+
+        self.room_idle_timeout_secs = welcome.room_idle_timeout_secs;
 
         // If we have a room ID, join it; otherwise wait for assignment
         if self.config.room_id != 0 {

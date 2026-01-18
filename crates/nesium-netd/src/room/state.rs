@@ -5,6 +5,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
+use std::time::{Duration, Instant};
 
 use crate::net::inbound::ConnId;
 use crate::net::outbound::OutboundTx;
@@ -149,6 +150,8 @@ pub struct Room {
     pub p2p_fallback: Option<P2PFallbackState>,
     /// Synchronization mode for this room (Lockstep or Rollback).
     pub sync_mode: SyncMode,
+    /// Last activity timestamp for cleanup.
+    pub last_activity: Instant,
 }
 
 impl Room {
@@ -173,6 +176,7 @@ impl Room {
             p2p_watchers: HashMap::new(),
             p2p_fallback: None,
             sync_mode: Default::default(),
+            last_activity: Instant::now(),
         }
     }
 
@@ -789,6 +793,11 @@ impl Room {
         // Broadcast to all players
         Ok(self.all_outbounds_msg(MsgId::SyncModeChanged))
     }
+
+    /// Update the last activity timestamp.
+    pub fn touch(&mut self) {
+        self.last_activity = Instant::now();
+    }
 }
 
 /// Room manager.
@@ -944,6 +953,33 @@ impl RoomManager {
             }
         }
         result
+    }
+
+    /// Remove rooms that have been inactive for longer than `max_idle`.
+    ///
+    /// Returns the list of room IDs that were cleaned up.
+    pub fn cleanup_inactive_rooms(&mut self, max_idle: Duration) -> Vec<u32> {
+        let now = Instant::now();
+        let to_remove: Vec<u32> = self
+            .rooms
+            .iter()
+            .filter_map(|(&room_id, room)| {
+                if now.duration_since(room.last_activity) > max_idle {
+                    Some(room_id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for room_id in &to_remove {
+            self.rooms.remove(room_id);
+            // Also clean up client_rooms entries for clients in this room
+            self.client_rooms.retain(|_, &mut rid| rid != *room_id);
+            tracing::info!(room_id, "Cleaned up inactive room");
+        }
+
+        to_remove
     }
 }
 

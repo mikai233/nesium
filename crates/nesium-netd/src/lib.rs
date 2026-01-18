@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, AtomicU64};
+use std::time::Duration;
 
 use nesium_netproto::{
     channel::ChannelKind,
@@ -56,64 +57,111 @@ struct ConnCtx {
     rate_limiter: Option<ConnRateLimiter>,
 }
 
+/// Configuration for automatic room cleanup.
+#[derive(Debug, Clone)]
+pub struct RoomCleanupConfig {
+    /// How often to check for inactive rooms.
+    pub check_interval: Duration,
+    /// Maximum allowed idle time before a room is cleaned up.
+    pub max_idle_duration: Duration,
+}
+
+impl Default for RoomCleanupConfig {
+    fn default() -> Self {
+        Self {
+            check_interval: Duration::from_secs(10),
+            max_idle_duration: Duration::from_secs(60),
+        }
+    }
+}
+
 /// Run the server main loop.
 ///
 /// This is the core server logic, extracted for testability.
 ///
 /// If `rate_config` is provided, per-connection message rate limiting will be enabled.
+/// If `cleanup_config` is provided, rooms will be automatically cleaned up after inactivity.
 pub async fn run_server(
     mut rx: mpsc::Receiver<InboundEvent>,
     rate_config: Option<RateLimitConfig>,
+    cleanup_config: Option<RoomCleanupConfig>,
 ) -> anyhow::Result<()> {
     let mut conns: HashMap<ConnId, ConnCtx> = HashMap::new();
     let mut room_mgr = RoomManager::new();
     let mut token_to_control_conn: HashMap<u64, ConnId> = HashMap::new();
 
+    // Setup cleanup timer if configured
+    let cleanup_interval = cleanup_config
+        .as_ref()
+        .map(|c| c.check_interval)
+        .unwrap_or(Duration::from_secs(3600)); // Fallback to 1 hour if disabled
+    let max_idle = cleanup_config
+        .as_ref()
+        .map(|c| c.max_idle_duration)
+        .unwrap_or(Duration::MAX);
+    let cleanup_enabled = cleanup_config.is_some();
+
+    let mut cleanup_timer = tokio::time::interval(cleanup_interval);
+
     info!("Server main loop started");
 
-    while let Some(ev) = rx.recv().await {
-        match ev {
-            InboundEvent::Connected {
-                conn_id,
-                peer,
-                outbound,
-                ..
-            } => {
-                handle_connected(&mut conns, conn_id, peer, outbound, rate_config.as_ref());
-            }
+    loop {
+        tokio::select! {
+            ev = rx.recv() => {
+                let Some(ev) = ev else {
+                    break;
+                };
+                match ev {
+                    InboundEvent::Connected {
+                        conn_id,
+                        peer,
+                        outbound,
+                        ..
+                    } => {
+                        handle_connected(&mut conns, conn_id, peer, outbound, rate_config.as_ref());
+                    }
 
-            InboundEvent::Disconnected {
-                conn_id,
-                peer,
-                reason,
-                ..
-            } => {
-                handle_disconnected(
-                    &mut conns,
-                    &mut room_mgr,
-                    &mut token_to_control_conn,
-                    conn_id,
-                    peer,
-                    reason,
-                )
-                .await;
-            }
+                    InboundEvent::Disconnected {
+                        conn_id,
+                        peer,
+                        reason,
+                        ..
+                    } => {
+                        handle_disconnected(
+                            &mut conns,
+                            &mut room_mgr,
+                            &mut token_to_control_conn,
+                            conn_id,
+                            peer,
+                            reason,
+                        )
+                        .await;
+                    }
 
-            InboundEvent::Packet {
-                conn_id,
-                peer,
-                packet,
-                ..
-            } => {
-                handle_packet(
-                    &mut conns,
-                    &mut room_mgr,
-                    &mut token_to_control_conn,
-                    conn_id,
-                    peer,
-                    packet,
-                )
-                .await;
+                    InboundEvent::Packet {
+                        conn_id,
+                        peer,
+                        packet,
+                        ..
+                    } => {
+                        handle_packet(
+                            &mut conns,
+                            &mut room_mgr,
+                            &mut token_to_control_conn,
+                            conn_id,
+                            peer,
+                            packet,
+                            max_idle.as_secs() as u16,
+                        )
+                        .await;
+                    }
+                }
+            }
+            _ = cleanup_timer.tick(), if cleanup_enabled => {
+                let cleaned = room_mgr.cleanup_inactive_rooms(max_idle);
+                if !cleaned.is_empty() {
+                    info!(count = cleaned.len(), "Cleaned up inactive rooms");
+                }
             }
         }
     }
@@ -257,6 +305,7 @@ async fn handle_packet(
     conn_id: ConnId,
     peer: SocketAddr,
     packet: PacketOwned,
+    room_idle_timeout_secs: u16,
 ) {
     if packet.msg_id() == MsgId::AttachChannel {
         let res: Result<(), &'static str> = (|| {
@@ -344,7 +393,16 @@ async fn handle_packet(
         }
     }
 
-    if !dispatch_packet(ctx, conn_id, &peer, &packet, room_mgr).await {
+    if !dispatch_packet(
+        ctx,
+        conn_id,
+        &peer,
+        &packet,
+        room_mgr,
+        room_idle_timeout_secs,
+    )
+    .await
+    {
         // Remove from conns - this drops the outbound sender and triggers disconnect
         conns.remove(&conn_id);
         return;

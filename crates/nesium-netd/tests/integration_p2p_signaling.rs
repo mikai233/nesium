@@ -107,7 +107,7 @@ async fn spawn_server(app_name: &str) -> anyhow::Result<SocketAddr> {
     });
 
     tokio::spawn(async move {
-        let _ = nesium_netd::run_server(event_rx, None).await;
+        let _ = nesium_netd::run_server(event_rx, None, None).await;
     });
 
     // Validated: listener is active immediately, but give a tiny slack for spawn

@@ -62,6 +62,14 @@ struct Args {
     /// Rate limit burst multiplier
     #[arg(long, default_value = "3")]
     rate_burst_multiplier: u32,
+
+    /// How often to check for inactive rooms (seconds)
+    #[arg(long, default_value = "10")]
+    room_cleanup_interval: u64,
+
+    /// Maximum idle time for a room before cleanup (seconds)
+    #[arg(long, default_value = "60")]
+    room_max_idle: u64,
 }
 
 #[tokio::main]
@@ -154,5 +162,13 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Run server loop
-    run_server(rx, rate_config).await
+    run_server(
+        rx,
+        rate_config,
+        Some(nesium_netd::RoomCleanupConfig {
+            check_interval: std::time::Duration::from_secs(args.room_cleanup_interval),
+            max_idle_duration: std::time::Duration::from_secs(args.room_max_idle),
+        }),
+    )
+    .await
 }

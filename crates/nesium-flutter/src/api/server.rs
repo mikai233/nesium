@@ -243,7 +243,12 @@ pub async fn netserver_start(port: u16) -> Result<u16, String> {
 
     // Spawn the server main loop
     let server_handle = tokio::spawn(async move {
-        let _ = nesium_netd::run_server(server_rx, None).await;
+        let _ = nesium_netd::run_server(
+            server_rx,
+            None,
+            Some(nesium_netd::RoomCleanupConfig::default()),
+        )
+        .await;
     });
     server.task_handles.push(server_handle);
 

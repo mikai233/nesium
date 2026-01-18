@@ -31,7 +31,7 @@ async fn setup_server(app_name: &str) -> SocketAddr {
         .await;
     });
     tokio::spawn(async move {
-        let _ = nesium_netd::run_server(event_rx, None).await;
+        let _ = nesium_netd::run_server(event_rx, None, None).await;
     });
     sleep(Duration::from_millis(100)).await;
     server_addr

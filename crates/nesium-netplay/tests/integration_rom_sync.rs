@@ -38,7 +38,7 @@ async fn test_rom_sync_flow() {
 
     // Spawn server loop
     tokio::spawn(async move {
-        let _ = nesium_netd::run_server(event_rx, None).await;
+        let _ = nesium_netd::run_server(event_rx, None, None).await;
     });
 
     // Wait for server to start
@@ -165,7 +165,7 @@ async fn test_late_join_receives_cached_rom_and_state() {
     });
 
     tokio::spawn(async move {
-        let _ = nesium_netd::run_server(event_rx, None).await;
+        let _ = nesium_netd::run_server(event_rx, None, None).await;
     });
 
     sleep(Duration::from_millis(100)).await;

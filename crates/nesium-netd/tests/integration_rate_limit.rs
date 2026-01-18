@@ -63,7 +63,7 @@ async fn spawn_rate_limited_server(
     let rate_config_clone = Some(rate_config);
     tokio::spawn(async move {
         tokio::select! {
-            _ = nesium_netd::run_server(event_rx, rate_config_clone) => {},
+            _ = nesium_netd::run_server(event_rx, rate_config_clone, None) => {},
             _ = shutdown_rx.recv() => {},
         }
     });

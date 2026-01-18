@@ -196,7 +196,7 @@ async fn spawn_test_server(app_name: &str) -> (SocketAddr, mpsc::Sender<()>) {
     // Spawn server loop
     tokio::spawn(async move {
         tokio::select! {
-            _ = nesium_netd::run_server(event_rx, None) => {},
+            _ = nesium_netd::run_server(event_rx, None, None) => {},
             _ = shutdown_rx.recv() => {},
         }
     });
