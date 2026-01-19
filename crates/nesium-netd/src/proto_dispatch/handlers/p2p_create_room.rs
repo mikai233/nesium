@@ -4,7 +4,7 @@ use nesium_netproto::messages::session::{P2P_MAX_HOST_ADDRS, P2PCreateRoom, P2PR
 use tracing::{info, warn};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
 /// Handler for P2PCreateRoom messages.
@@ -42,7 +42,7 @@ impl Handler<P2PCreateRoom> for P2PCreateRoomHandler {
         );
 
         let resp = P2PRoomCreated { room_id: room.id };
-        send_msg_tcp(&ctx.conn_ctx.outbound, &resp)
+        send_msg(&ctx.conn_ctx.outbound, &resp)
             .await
             .map_err(|_| HandlerError::invalid_state())?;
 

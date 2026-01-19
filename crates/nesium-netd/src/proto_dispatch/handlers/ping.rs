@@ -4,7 +4,7 @@ use nesium_netproto::messages::sync::{Ping, Pong};
 use tracing::trace;
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::HandlerResult;
 
 /// Handler for Ping messages.
@@ -22,7 +22,7 @@ impl Handler<Ping> for PingHandler {
 
         // Respond with Pong
         let pong = Pong { t_ms: msg.t_ms };
-        let _ = send_msg_tcp(&ctx.conn_ctx.outbound, &pong).await;
+        let _ = send_msg(&ctx.conn_ctx.outbound, &pong).await;
 
         Ok(())
     }

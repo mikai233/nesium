@@ -4,7 +4,7 @@ use nesium_netproto::messages::session::{SetSyncMode, SyncModeChanged};
 use tracing::{info, warn};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
 /// Handler for SetSyncMode messages.
@@ -35,7 +35,7 @@ impl Handler<SetSyncMode> for SetSyncModeHandler {
         let sync_msg = SyncModeChanged { mode: msg.mode };
 
         for recipient in &recipients {
-            if let Err(e) = send_msg_tcp(recipient, &sync_msg).await {
+            if let Err(e) = send_msg(recipient, &sync_msg).await {
                 warn!(error = %e, "Failed to broadcast SyncModeChanged");
             }
         }

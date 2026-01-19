@@ -6,7 +6,7 @@ use nesium_netproto::messages::session::{Hello, Welcome};
 use tracing::{error, info};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::HandlerResult;
 use crate::{NEXT_CLIENT_ID, NEXT_SERVER_NONCE, NEXT_SESSION_TOKEN};
 
@@ -42,7 +42,7 @@ impl Handler<Hello> for HelloHandler {
             room_idle_timeout_secs: ctx.room_idle_timeout_secs,
         };
 
-        match send_msg_tcp(&ctx.conn_ctx.outbound, &welcome).await {
+        match send_msg(&ctx.conn_ctx.outbound, &welcome).await {
             Ok(()) => {
                 info!(
                     client_id = ctx.conn_ctx.assigned_client_id,

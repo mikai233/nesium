@@ -7,7 +7,7 @@ use nesium_netproto::{
 use tracing::{debug, info};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::HandlerResult;
 use crate::room::broadcast::broadcast_inputs_required;
 
@@ -59,7 +59,7 @@ impl Handler<ProvideState> for ProvideStateHandler {
                     frame,
                     data: state_data.clone(),
                 };
-                let _ = send_msg_tcp(&state_outbound, &sync_state).await;
+                let _ = send_msg(&state_outbound, &sync_state).await;
 
                 if let Some(input_outbound) =
                     room.outbound_for_client_msg(client_id, MsgId::RelayInputs)
@@ -75,7 +75,7 @@ impl Handler<ProvideState> for ProvideStateHandler {
                     target_frame,
                     active_ports_mask,
                 };
-                let _ = send_msg_tcp(&begin_outbound, &msg).await;
+                let _ = send_msg(&begin_outbound, &msg).await;
             }
         }
         Ok(())

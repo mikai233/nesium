@@ -7,7 +7,7 @@ use nesium_netproto::{
 use tracing::info;
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
 const ACTIVATION_LEAD_FRAMES: u32 = 8;
@@ -51,7 +51,7 @@ impl Handler<RejoinReady> for RejoinReadyHandler {
         };
 
         for tx in room.all_outbounds_msg(MsgId::ActivatePort) {
-            let _ = send_msg_tcp(&tx, &msg).await;
+            let _ = send_msg(&tx, &msg).await;
         }
 
         info!(

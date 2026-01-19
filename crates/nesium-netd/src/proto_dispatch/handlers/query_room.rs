@@ -4,7 +4,7 @@ use nesium_netproto::messages::session::{QueryRoom, RoomInfo};
 use tracing::{info, warn};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::HandlerResult;
 use crate::room::state::MAX_PLAYERS;
 
@@ -35,7 +35,7 @@ impl Handler<QueryRoom> for QueryRoomHandler {
             }
             resp.occupied_mask = mask;
         }
-        if let Err(e) = send_msg_tcp(&ctx.conn_ctx.outbound, &resp).await {
+        if let Err(e) = send_msg(&ctx.conn_ctx.outbound, &resp).await {
             warn!(error = %e, "Failed to send RoomInfo");
         }
 

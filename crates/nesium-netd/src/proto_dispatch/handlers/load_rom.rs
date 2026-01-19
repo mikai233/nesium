@@ -4,7 +4,7 @@ use nesium_netproto::messages::session::LoadRom;
 use tracing::{info, warn};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
 /// Handler for LoadRom messages.
@@ -32,7 +32,7 @@ impl Handler<LoadRom> for LoadRomHandler {
                 room.cache_rom(msg.data.clone());
 
                 for recipient in &recipients {
-                    if let Err(e) = send_msg_tcp(recipient, &msg).await {
+                    if let Err(e) = send_msg(recipient, &msg).await {
                         warn!(error = %e, "Failed to forward LoadRom");
                     }
                 }

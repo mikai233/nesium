@@ -24,7 +24,7 @@ use super::registry::HandlerRegistry;
 use crate::ConnCtx;
 use crate::net::framing::PacketOwned;
 use crate::net::inbound::ConnId;
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::room::state::RoomManager;
 
 mod hello;
@@ -180,7 +180,7 @@ fn get_registry() -> &'static HandlerRegistry {
 /// Sends an error response to the client.
 pub(crate) async fn send_error_response(ctx: &mut ConnCtx, error: HandlerError) {
     let msg = ErrorMsg { code: error.code };
-    let _ = send_msg_tcp(&ctx.outbound, &msg).await;
+    let _ = send_msg(&ctx.outbound, &msg).await;
 }
 
 /// Dispatch an incoming packet to its registered handler.

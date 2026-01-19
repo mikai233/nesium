@@ -5,7 +5,7 @@ use nesium_netproto::msg_id::MsgId;
 use tracing::{debug, info, warn};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
 /// Handler for RequestState messages.
@@ -38,7 +38,7 @@ impl Handler<RequestState> for RequestStateHandler {
                 .outbound_for_client_msg(ctx.conn_ctx.assigned_client_id, MsgId::SyncState)
                 .unwrap_or_else(|| ctx.conn_ctx.outbound.clone());
 
-            if let Err(e) = send_msg_tcp(&tx, &sync_msg).await {
+            if let Err(e) = send_msg(&tx, &sync_msg).await {
                 warn!(error = %e, "Failed to send SyncState");
             }
         } else {

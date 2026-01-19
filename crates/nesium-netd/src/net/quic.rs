@@ -5,10 +5,12 @@ use nesium_netproto::limits::TCP_RX_BUFFER_SIZE;
 use quinn::{Endpoint, ServerConfig};
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
+use tokio_util::codec::{BytesCodec, FramedWrite};
 use tracing::{debug, warn};
 
 use super::framing::TcpFramer;
 use super::inbound::{ConnId, InboundEvent, TransportKind, next_conn_id};
+use super::outbound::spawn_writer;
 
 /// Start a QUIC listener. All decoded packets and connection events are sent to `tx`.
 ///
@@ -59,10 +61,10 @@ async fn handle_quic_stream(
     conn_id: ConnId,
     peer: SocketAddr,
     mut recv: quinn::RecvStream,
-    mut send: quinn::SendStream,
+    send: quinn::SendStream,
     tx: mpsc::Sender<InboundEvent>,
 ) {
-    let (out_tx, mut out_rx) = mpsc::channel::<Bytes>(1024);
+    let (out_tx, out_rx) = mpsc::channel::<Bytes>(1024);
 
     tx.send(InboundEvent::Connected {
         conn_id,
@@ -73,14 +75,8 @@ async fn handle_quic_stream(
     .await
     .ok();
 
-    let writer = tokio::spawn(async move {
-        while let Some(frame) = out_rx.recv().await {
-            if send.write_all(&frame).await.is_err() {
-                break;
-            }
-        }
-        let _ = send.finish();
-    });
+    let sink = FramedWrite::new(send, BytesCodec::new());
+    let writer = spawn_writer(sink, out_rx);
 
     let mut framer = TcpFramer::new(8 * 1024);
     let mut disconnect_reason = "eof".to_string();

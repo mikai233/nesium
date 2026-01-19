@@ -6,7 +6,7 @@ use nesium_netproto::{
 };
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
 /// Handler for RequestFallbackRelay messages.
@@ -55,7 +55,7 @@ impl Handler<RequestFallbackRelay> for RequestFallbackRelayHandler {
             )
             .collect::<Vec<_>>();
         for tx in &recipients {
-            let _ = send_msg_tcp(tx, &msg).await;
+            let _ = send_msg(tx, &msg).await;
         }
 
         Ok(())

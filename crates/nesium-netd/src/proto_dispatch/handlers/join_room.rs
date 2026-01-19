@@ -9,7 +9,7 @@ use nesium_netproto::{
 use tracing::{error, info, warn};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::{OutboundTx, send_msg_tcp};
+use crate::net::outbound::{OutboundTx, send_msg};
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 use crate::room::state::{ClientOutbounds, Player, Room, Spectator};
 
@@ -65,7 +65,7 @@ impl Handler<JoinRoom> for JoinRoomHandler {
             pending_activation,
         };
 
-        if let Err(e) = send_msg_tcp(&ctx.conn_ctx.outbound, &ack).await {
+        if let Err(e) = send_msg(&ctx.conn_ctx.outbound, &ack).await {
             error!(peer = %ctx.conn_ctx.peer, error = %e, "Failed to send JoinAck");
         }
 
@@ -272,7 +272,7 @@ impl JoinRoomHandler {
             };
 
             for recipient in &existing_outbounds {
-                let _ = send_msg_tcp(recipient, &joined_msg).await;
+                let _ = send_msg(recipient, &joined_msg).await;
             }
             info!(
                 client_id,
@@ -309,7 +309,7 @@ impl JoinRoomHandler {
                 name: p_name,
             };
 
-            let _ = send_msg_tcp(outbound, &joined_msg).await;
+            let _ = send_msg(outbound, &joined_msg).await;
         }
 
         // 2. Late joiners: if there's a cached ROM, send it immediately.
@@ -320,7 +320,7 @@ impl JoinRoomHandler {
                 let tx = room
                     .outbound_for_client_msg(client_id, MsgId::LoadRom)
                     .unwrap_or_else(|| outbound.clone());
-                let _ = send_msg_tcp(&tx, &load_rom).await;
+                let _ = send_msg(&tx, &load_rom).await;
             }
         }
     }

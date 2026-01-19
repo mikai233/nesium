@@ -3,7 +3,7 @@
 use nesium_netproto::messages::session::{P2PJoinAck, P2PJoinRoom};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
 /// Handler for P2PJoinRoom messages.
@@ -41,7 +41,7 @@ impl Handler<P2PJoinRoom> for P2PJoinRoomHandler {
             fallback_required,
             fallback_reason,
         };
-        send_msg_tcp(&ctx.conn_ctx.outbound, &ack)
+        send_msg(&ctx.conn_ctx.outbound, &ack)
             .await
             .map_err(|_| HandlerError::invalid_state())?;
         Ok(())

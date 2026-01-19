@@ -7,7 +7,7 @@ use nesium_netproto::msg_id::MsgId;
 use tracing::{debug, info, warn};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::HandlerResult;
 use crate::room::broadcast::broadcast_inputs_required;
 
@@ -45,7 +45,7 @@ impl Handler<RomLoaded> for RomLoadedHandler {
             };
 
             for recipient in &start_recipients {
-                if let Err(e) = send_msg_tcp(recipient, &msg).await {
+                if let Err(e) = send_msg(recipient, &msg).await {
                     warn!(error = %e, "Failed to broadcast StartGame");
                 }
             }
@@ -71,7 +71,7 @@ impl Handler<RomLoaded> for RomLoadedHandler {
                     frame,
                     data: state_data,
                 };
-                let _ = send_msg_tcp(&state_outbound, &sync_state).await;
+                let _ = send_msg(&state_outbound, &sync_state).await;
 
                 let history = room.get_input_history(frame);
                 let Some(input_outbound) = sender_input_outbound else {
@@ -89,7 +89,7 @@ impl Handler<RomLoaded> for RomLoadedHandler {
                     target_frame,
                     active_ports_mask,
                 };
-                let _ = send_msg_tcp(&begin_outbound, &msg).await;
+                let _ = send_msg(&begin_outbound, &msg).await;
             } else {
                 // No cached state yet: request a fresh snapshot from host and defer catch-up.
                 let host_id = room.host_client_id;
@@ -100,7 +100,7 @@ impl Handler<RomLoaded> for RomLoadedHandler {
                         room.pending_catch_up_clients.push(sender_id);
                     }
                     let msg = RequestState {};
-                    if let Err(e) = send_msg_tcp(&host_outbound, &msg).await {
+                    if let Err(e) = send_msg(&host_outbound, &msg).await {
                         warn!(error = %e, "Failed to request fresh state from host");
                         room.pending_catch_up_clients.retain(|&id| id != sender_id);
                     } else {

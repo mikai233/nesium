@@ -15,7 +15,7 @@ use tracing::{debug, info, warn};
 
 use crate::net::framing::PacketOwned;
 use crate::net::inbound::{ConnId, InboundEvent};
-use crate::net::outbound::{OutboundTx, send_msg_tcp};
+use crate::net::outbound::{OutboundTx, send_msg};
 use crate::net::rate_limit::{ConnRateLimiter, RateLimitConfig};
 use crate::proto_dispatch::error::HandlerError;
 use crate::proto_dispatch::handlers::{dispatch_packet, send_error_response};
@@ -270,7 +270,7 @@ async fn handle_disconnected(
                         };
 
                         for recipient in &recipients {
-                            let _ = send_msg_tcp(recipient, &msg).await;
+                            let _ = send_msg(recipient, &msg).await;
                         }
                     }
 
@@ -285,7 +285,7 @@ async fn handle_disconnected(
                     for (room_id, watchers) in host_rooms_to_notify {
                         let notice = P2PHostDisconnected { room_id };
                         for tx in &watchers {
-                            let _ = send_msg_tcp(tx, &notice).await;
+                            let _ = send_msg(tx, &notice).await;
                         }
                         info!(room_id, "Notified watchers of P2P host disconnect");
                     }

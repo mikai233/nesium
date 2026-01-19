@@ -6,7 +6,7 @@ use nesium_netproto::messages::session::{
 use tracing::info;
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
 /// Handler for P2PRequestFallback messages.
@@ -38,7 +38,7 @@ impl Handler<P2PRequestFallback> for P2PRequestFallbackHandler {
         room.request_p2p_fallback(ctx.conn_ctx.assigned_client_id, reason);
 
         for tx in room.p2p_watchers.values() {
-            let _ = send_msg_tcp(tx, &notice).await;
+            let _ = send_msg(tx, &notice).await;
         }
 
         info!(

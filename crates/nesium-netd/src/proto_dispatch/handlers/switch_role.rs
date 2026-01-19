@@ -7,7 +7,7 @@ use nesium_netproto::{
 use tracing::{info, warn};
 
 use super::{Handler, HandlerContext};
-use crate::net::outbound::send_msg_tcp;
+use crate::net::outbound::send_msg;
 use crate::proto_dispatch::error::{HandlerError, HandlerResult};
 
 /// Handler for SwitchRole messages.
@@ -41,7 +41,7 @@ impl Handler<SwitchRole> for SwitchRoleHandler {
                     };
 
                     for recipient in &recipients {
-                        if let Err(e) = send_msg_tcp(recipient, &broadcast).await {
+                        if let Err(e) = send_msg(recipient, &broadcast).await {
                             warn!(error = %e, "Failed to broadcast RoleChanged");
                         }
                     }

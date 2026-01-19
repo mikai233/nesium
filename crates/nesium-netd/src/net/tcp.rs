@@ -19,7 +19,7 @@ use crate::net::stream_adapter::WebSocketStream;
 
 use super::framing::TcpFramer;
 use super::inbound::{ConnId, InboundEvent, TransportKind, next_conn_id};
-use super::outbound::spawn_tcp_writer;
+use super::outbound::spawn_writer;
 
 pub use tokio_rustls::TlsAcceptor;
 
@@ -234,7 +234,7 @@ async fn handle_connection_inner<R, S>(
 {
     // Outbound queue (framed bytes).
     let (out_tx, out_rx) = mpsc::channel::<bytes::Bytes>(1024);
-    let writer = spawn_tcp_writer(write, out_rx);
+    let writer = spawn_writer(write, out_rx);
 
     // Notify upper layer that a connection is established.
     tx.send(InboundEvent::Connected {
