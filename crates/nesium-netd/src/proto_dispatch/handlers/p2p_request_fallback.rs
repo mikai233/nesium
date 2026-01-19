@@ -25,27 +25,19 @@ impl Handler<P2PRequestFallback> for P2PRequestFallbackHandler {
             req.reason
         };
 
-        let (recipients, notice) = {
-            let Some(room) = ctx.room_mgr.get_room_mut(req.room_id) else {
-                return Err(HandlerError::room_not_found());
-            };
-
-            room.request_p2p_fallback(ctx.conn_ctx.assigned_client_id, reason);
-            let Some(fallback) = room.p2p_fallback.clone() else {
-                return Err(HandlerError::invalid_state());
-            };
-
-            let recipients = room.p2p_watchers.values().cloned().collect::<Vec<_>>();
-            (
-                recipients,
-                P2PFallbackNotice {
-                    room_id: room.id,
-                    reason: fallback.reason,
-                    requested_by_client_id: fallback.requested_by_client_id,
-                },
-            )
+        let notice = P2PFallbackNotice {
+            room_id: req.room_id,
+            reason: reason.clone(),
+            requested_by_client_id: ctx.conn_ctx.assigned_client_id,
         };
-        for tx in &recipients {
+
+        let Some(room) = ctx.room_mgr.room_mut(req.room_id) else {
+            return Err(HandlerError::room_not_found());
+        };
+
+        room.request_p2p_fallback(ctx.conn_ctx.assigned_client_id, reason);
+
+        for tx in room.p2p_watchers.values() {
             let _ = send_msg_tcp(tx, &notice).await;
         }
 

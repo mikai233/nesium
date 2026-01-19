@@ -5,7 +5,6 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
-use std::time::{Duration, Instant};
 
 use crate::net::inbound::ConnId;
 use crate::net::outbound::OutboundTx;
@@ -150,8 +149,6 @@ pub struct Room {
     pub p2p_fallback: Option<P2PFallbackState>,
     /// Synchronization mode for this room (Lockstep or Rollback).
     pub sync_mode: SyncMode,
-    /// Last activity timestamp for cleanup.
-    pub last_activity: Instant,
 }
 
 impl Room {
@@ -176,7 +173,6 @@ impl Room {
             p2p_watchers: HashMap::new(),
             p2p_fallback: None,
             sync_mode: Default::default(),
-            last_activity: Instant::now(),
         }
     }
 
@@ -793,11 +789,6 @@ impl Room {
         // Broadcast to all players
         Ok(self.all_outbounds_msg(MsgId::SyncModeChanged))
     }
-
-    /// Update the last activity timestamp.
-    pub fn touch(&mut self) {
-        self.last_activity = Instant::now();
-    }
 }
 
 /// Room manager.
@@ -889,32 +880,39 @@ impl RoomManager {
         }
     }
 
-    /// Get room by ID.
-    pub fn get_room(&self, room_id: u32) -> Option<&Room> {
+    /// Get room by ID (immutable).
+    pub fn room(&self, room_id: u32) -> Option<&Room> {
         self.rooms.get(&room_id)
     }
 
     /// Get room by ID (mutable).
-    pub fn get_room_mut(&mut self, room_id: u32) -> Option<&mut Room> {
+    pub fn room_mut(&mut self, room_id: u32) -> Option<&mut Room> {
         self.rooms.get_mut(&room_id)
     }
 
-    /// Get room for a client.
-    pub fn get_client_room(&self, client_id: u32) -> Option<u32> {
+    /// Get room ID for a client (returns None if client is not in any room).
+    pub fn client_room_id(&self, client_id: u32) -> Option<u32> {
         self.client_rooms.get(&client_id).copied()
     }
 
+    /// Get mutable room reference for a client by their client_id.
+    /// This is the most common lookup pattern in handlers.
+    pub fn client_room_mut(&mut self, client_id: u32) -> Option<&mut Room> {
+        let room_id = self.client_rooms.get(&client_id).copied()?;
+        self.rooms.get_mut(&room_id)
+    }
+
     /// Associate client with room.
-    pub fn set_client_room(&mut self, client_id: u32, room_id: u32) {
+    pub fn register_client(&mut self, client_id: u32, room_id: u32) {
         self.client_rooms.insert(client_id, room_id);
     }
 
     /// Remove client from tracking.
-    pub fn remove_client(&mut self, client_id: u32) {
+    pub fn unregister_client(&mut self, client_id: u32) {
         self.client_rooms.remove(&client_id);
     }
 
-    /// Remove empty room.
+    /// Remove room by ID.
     pub fn remove_room(&mut self, room_id: u32) {
         self.rooms.remove(&room_id);
     }
@@ -953,33 +951,6 @@ impl RoomManager {
             }
         }
         result
-    }
-
-    /// Remove rooms that have been inactive for longer than `max_idle`.
-    ///
-    /// Returns the list of room IDs that were cleaned up.
-    pub fn cleanup_inactive_rooms(&mut self, max_idle: Duration) -> Vec<u32> {
-        let now = Instant::now();
-        let to_remove: Vec<u32> = self
-            .rooms
-            .iter()
-            .filter_map(|(&room_id, room)| {
-                if now.duration_since(room.last_activity) > max_idle {
-                    Some(room_id)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        for room_id in &to_remove {
-            self.rooms.remove(room_id);
-            // Also clean up client_rooms entries for clients in this room
-            self.client_rooms.retain(|_, &mut rid| rid != *room_id);
-            tracing::info!(room_id, "Cleaned up inactive room");
-        }
-
-        to_remove
     }
 }
 

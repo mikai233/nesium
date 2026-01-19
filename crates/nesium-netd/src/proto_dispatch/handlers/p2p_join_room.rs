@@ -15,7 +15,7 @@ impl Handler<P2PJoinRoom> for P2PJoinRoomHandler {
             return Err(HandlerError::invalid_state());
         }
 
-        let Some(room) = ctx.room_mgr.get_room_mut(join.room_id) else {
+        let Some(room) = ctx.room_mgr.room_mut(join.room_id) else {
             return Err(HandlerError::room_not_found());
         };
 

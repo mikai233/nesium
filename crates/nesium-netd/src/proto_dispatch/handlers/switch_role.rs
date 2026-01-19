@@ -15,14 +15,11 @@ pub(crate) struct SwitchRoleHandler;
 
 impl Handler<SwitchRole> for SwitchRoleHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: SwitchRole) -> HandlerResult {
-        let Some(room_id) = ctx
+        let Some(room) = ctx
             .room_mgr
-            .get_client_room(ctx.conn_ctx.assigned_client_id)
+            .client_room_mut(ctx.conn_ctx.assigned_client_id)
         else {
             warn!(%ctx.peer, "SwitchRole: client not in a room");
-            return Err(HandlerError::not_in_room());
-        };
-        let Some(room) = ctx.room_mgr.get_room_mut(room_id) else {
             return Err(HandlerError::not_in_room());
         };
 
@@ -30,7 +27,7 @@ impl Handler<SwitchRole> for SwitchRoleHandler {
         // existing players will start waiting for inputs from the newly-promoted role,
         // but the switching client may still be catching up.
         if room.started {
-            warn!(%ctx.peer, room_id, "Rejecting SwitchRole while game is running");
+            warn!(%ctx.peer, room_id = room.id, "Rejecting SwitchRole while game is running");
             return Err(HandlerError::game_already_started());
         }
 
@@ -49,7 +46,12 @@ impl Handler<SwitchRole> for SwitchRoleHandler {
                         }
                     }
 
-                    info!(client_id = cid, room_id, new_role = role, "Role changed");
+                    info!(
+                        client_id = cid,
+                        room_id = room.id,
+                        new_role = role,
+                        "Role changed"
+                    );
                 }
             }
             Err(e) => {

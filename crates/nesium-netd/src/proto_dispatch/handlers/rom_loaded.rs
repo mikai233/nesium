@@ -16,20 +16,18 @@ pub(crate) struct RomLoadedHandler;
 
 impl Handler<RomLoaded> for RomLoadedHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, _msg: RomLoaded) -> HandlerResult {
-        let Some(room_id) = ctx
+        let Some(room) = ctx
             .room_mgr
-            .get_client_room(ctx.conn_ctx.assigned_client_id)
+            .client_room_mut(ctx.conn_ctx.assigned_client_id)
         else {
             // Not an error - just ignore if not in room
-            return Ok(());
-        };
-        let Some(room) = ctx.room_mgr.get_room_mut(room_id) else {
             return Ok(());
         };
 
         info!(
             client_id = ctx.conn_ctx.assigned_client_id,
-            room_id, "Client confirmed ROM loaded"
+            room_id = room.id,
+            "Client confirmed ROM loaded"
         );
 
         let sender_id = ctx.conn_ctx.assigned_client_id;
@@ -40,7 +38,7 @@ impl Handler<RomLoaded> for RomLoadedHandler {
 
         let start_recipients = room.handle_rom_loaded(sender_id);
         if !start_recipients.is_empty() {
-            info!(room_id, "All players loaded ROM, starting game");
+            info!(room_id = room.id, "All players loaded ROM, starting game");
 
             let msg = StartGame {
                 active_ports_mask: room.get_active_ports_mask(),
@@ -109,14 +107,15 @@ impl Handler<RomLoaded> for RomLoadedHandler {
                         info!(
                             client_id = sender_id,
                             host_client_id = host_id,
-                            room_id,
+                            room_id = room.id,
                             "Requested fresh state from host for late joiner"
                         );
                     }
                 } else {
                     debug!(
                         client_id = sender_id,
-                        room_id, "No cached state available for late joiner"
+                        room_id = room.id,
+                        "No cached state available for late joiner"
                     );
                 }
             }

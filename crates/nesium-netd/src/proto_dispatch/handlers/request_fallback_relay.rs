@@ -23,10 +23,7 @@ impl Handler<RequestFallbackRelay> for RequestFallbackRelayHandler {
             return Err(HandlerError::invalid_state());
         }
 
-        let Some(room_id) = ctx.room_mgr.get_client_room(sender_id) else {
-            return Err(HandlerError::not_in_room());
-        };
-        let Some(room) = ctx.room_mgr.get_room_mut(room_id) else {
+        let Some(room) = ctx.room_mgr.client_room_mut(sender_id) else {
             return Err(HandlerError::not_in_room());
         };
 

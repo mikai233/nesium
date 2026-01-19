@@ -25,7 +25,7 @@ impl Handler<P2PCreateRoom> for P2PCreateRoomHandler {
         let Some(room_id) = ctx.room_mgr.create_room(ctx.conn_ctx.assigned_client_id) else {
             return Err(HandlerError::server_full());
         };
-        let Some(room) = ctx.room_mgr.get_room_mut(room_id) else {
+        let Some(room) = ctx.room_mgr.room_mut(room_id) else {
             return Err(HandlerError::invalid_state());
         };
 

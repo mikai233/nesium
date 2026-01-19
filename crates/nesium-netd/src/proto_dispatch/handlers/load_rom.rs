@@ -12,14 +12,11 @@ pub(crate) struct LoadRomHandler;
 
 impl Handler<LoadRom> for LoadRomHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: LoadRom) -> HandlerResult {
-        let Some(room_id) = ctx
+        let Some(room) = ctx
             .room_mgr
-            .get_client_room(ctx.conn_ctx.assigned_client_id)
+            .client_room_mut(ctx.conn_ctx.assigned_client_id)
         else {
             warn!(%ctx.peer, "LoadRom: client not in a room");
-            return Err(HandlerError::not_in_room());
-        };
-        let Some(room) = ctx.room_mgr.get_room_mut(room_id) else {
             return Err(HandlerError::not_in_room());
         };
 
@@ -28,7 +25,8 @@ impl Handler<LoadRom> for LoadRomHandler {
                 // Forward ROM to others
                 info!(
                     client_id = ctx.conn_ctx.assigned_client_id,
-                    room_id, "Host loaded ROM, forwarding..."
+                    room_id = room.id,
+                    "Host loaded ROM, forwarding..."
                 );
 
                 room.cache_rom(msg.data.clone());

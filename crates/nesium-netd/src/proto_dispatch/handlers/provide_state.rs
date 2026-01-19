@@ -16,18 +16,15 @@ pub(crate) struct ProvideStateHandler;
 
 impl Handler<ProvideState> for ProvideStateHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: ProvideState) -> HandlerResult {
-        let Some(room_id) = ctx
+        let Some(room) = ctx
             .room_mgr
-            .get_client_room(ctx.conn_ctx.assigned_client_id)
+            .client_room_mut(ctx.conn_ctx.assigned_client_id)
         else {
             return Ok(()); // Not an error - host might not be in room yet
         };
-        let Some(room) = ctx.room_mgr.get_room_mut(room_id) else {
-            return Ok(());
-        };
 
         room.cache_state(msg.frame, msg.data);
-        debug!(room_id, frame = msg.frame, "Cached game state");
+        debug!(room_id = room.id, frame = msg.frame, "Cached game state");
 
         // Late joiners waiting for a fresh state: send SyncState + input history + BeginCatchUp now.
         if room.started && !room.pending_catch_up_clients.is_empty() {
@@ -41,7 +38,7 @@ impl Handler<ProvideState> for ProvideStateHandler {
             let active_ports_mask = room.get_active_ports_mask();
 
             info!(
-                room_id,
+                room_id = room.id,
                 frame,
                 target_frame,
                 recipients = pending.len(),

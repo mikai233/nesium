@@ -12,13 +12,10 @@ pub(crate) struct PauseGameHandler;
 
 impl Handler<PauseGame> for PauseGameHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: PauseGame) -> HandlerResult {
-        let Some(room_id) = ctx
+        let Some(room) = ctx
             .room_mgr
-            .get_client_room(ctx.conn_ctx.assigned_client_id)
+            .client_room_mut(ctx.conn_ctx.assigned_client_id)
         else {
-            return Err(HandlerError::not_in_room());
-        };
-        let Some(room) = ctx.room_mgr.get_room_mut(room_id) else {
             return Err(HandlerError::not_in_room());
         };
 
@@ -29,7 +26,7 @@ impl Handler<PauseGame> for PauseGameHandler {
 
         info!(
             client_id = ctx.conn_ctx.assigned_client_id,
-            room_id,
+            room_id = room.id,
             paused = msg.paused,
             "Broadcasting pause sync"
         );

@@ -22,7 +22,7 @@ impl Handler<QueryRoom> for QueryRoomHandler {
             occupied_mask: 0,
         };
 
-        if let Some(found) = ctx.room_mgr.get_room(msg.room_id) {
+        if let Some(found) = ctx.room_mgr.room(msg.room_id) {
             resp.ok = true;
             resp.room_id = found.id;
             resp.started = found.started;

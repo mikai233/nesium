@@ -1,4 +1,4 @@
-//! PingHandler - handles Ping messages for room keep-alive.
+//! PingHandler - handles Ping messages for connection keep-alive.
 
 use nesium_netproto::messages::sync::{Ping, Pong};
 use tracing::trace;
@@ -9,25 +9,16 @@ use crate::proto_dispatch::error::HandlerResult;
 
 /// Handler for Ping messages.
 ///
-/// Updates room activity timestamp and responds with Pong.
+/// Connection activity is tracked at the connection level in handle_packet().
+/// This handler simply responds with Pong for RTT measurement.
 pub(crate) struct PingHandler;
 
 impl Handler<Ping> for PingHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: Ping) -> HandlerResult {
-        // Get client's room and touch it to update activity timestamp
-        if let Some(room_id) = ctx
-            .room_mgr
-            .get_client_room(ctx.conn_ctx.assigned_client_id)
-        {
-            if let Some(room) = ctx.room_mgr.get_room_mut(room_id) {
-                room.touch();
-                trace!(
-                    room_id,
-                    client_id = ctx.conn_ctx.assigned_client_id,
-                    "Room activity updated via Ping"
-                );
-            }
-        }
+        trace!(
+            client_id = ctx.conn_ctx.assigned_client_id,
+            "Received Ping, responding with Pong"
+        );
 
         // Respond with Pong
         let pong = Pong { t_ms: msg.t_ms };

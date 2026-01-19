@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, AtomicU64};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use nesium_netproto::{
     channel::ChannelKind,
@@ -55,6 +55,10 @@ struct ConnCtx {
     channels: HashMap<ChannelKind, OutboundTx>,
     /// Per-connection message rate limiter (None if rate limiting is disabled).
     rate_limiter: Option<ConnRateLimiter>,
+    /// Last time this connection received a message (for idle cleanup).
+    last_activity: Instant,
+    /// Real peer address of the connection.
+    peer: SocketAddr,
 }
 
 /// Configuration for automatic room cleanup.
@@ -158,9 +162,26 @@ pub async fn run_server(
                 }
             }
             _ = cleanup_timer.tick(), if cleanup_enabled => {
-                let cleaned = room_mgr.cleanup_inactive_rooms(max_idle);
-                if !cleaned.is_empty() {
-                    info!(count = cleaned.len(), "Cleaned up inactive rooms");
+                // Collect idle connections to disconnect
+                let now = Instant::now();
+                let idle_conns: Vec<ConnId> = conns
+                    .iter()
+                    .filter(|(_, ctx)| now.duration_since(ctx.last_activity) > max_idle)
+                    .map(|(&id, _)| id)
+                    .collect();
+
+                for conn_id in idle_conns {
+                    let peer = conns.get(&conn_id).map(|ctx| ctx.peer).unwrap_or(SocketAddr::from(([0, 0, 0, 0], 0)));
+                    info!(conn_id, %peer, "Disconnecting idle connection");
+                    handle_disconnected(
+                        &mut conns,
+                        &mut room_mgr,
+                        &mut token_to_control_conn,
+                        conn_id,
+                        peer,
+                        "idle timeout".to_string(),
+                    )
+                    .await;
                 }
             }
         }
@@ -186,6 +207,8 @@ fn handle_connected(
             session_token: 0,
             channels: HashMap::new(),
             rate_limiter: rate_config.and_then(ConnRateLimiter::new),
+            last_activity: Instant::now(),
+            peer,
         },
     );
     debug!(conn_id, %peer, "Client connected");
@@ -206,40 +229,38 @@ async fn handle_disconnected(
                     token_to_control_conn.remove(&ctx.session_token);
                 }
 
-                if let Some(room_id) = room_mgr.get_client_room(ctx.assigned_client_id) {
-                    let mut player_index = None;
+                if let Some(room) = room_mgr.client_room_mut(ctx.assigned_client_id) {
+                    let room_id = room.id;
                     let mut recipients = Vec::new();
 
-                    if let Some(room) = room_mgr.get_room_mut(room_id) {
-                        player_index =
-                            if let Some(player) = room.remove_player(ctx.assigned_client_id) {
-                                info!(
-                                    client_id = ctx.assigned_client_id,
-                                    room_id,
-                                    player_index = player.player_index,
-                                    "Player left room"
-                                );
-                                Some(player.player_index)
-                            } else if room.remove_spectator(ctx.assigned_client_id).is_some() {
-                                info!(
-                                    client_id = ctx.assigned_client_id,
-                                    room_id,
-                                    role = "spectator",
-                                    "Client left room"
-                                );
-                                None // Spectators don't have a player_index
-                            } else {
-                                None
-                            };
+                    let player_index =
+                        if let Some(player) = room.remove_player(ctx.assigned_client_id) {
+                            info!(
+                                client_id = ctx.assigned_client_id,
+                                room_id,
+                                player_index = player.player_index,
+                                "Player left room"
+                            );
+                            Some(player.player_index)
+                        } else if room.remove_spectator(ctx.assigned_client_id).is_some() {
+                            info!(
+                                client_id = ctx.assigned_client_id,
+                                room_id,
+                                role = "spectator",
+                                "Client left room"
+                            );
+                            None // Spectators don't have a player_index
+                        } else {
+                            None
+                        };
 
-                        if player_index.is_some() {
-                            recipients = room.all_outbounds_msg(MsgId::PlayerLeft);
-                        }
+                    if player_index.is_some() {
+                        recipients = room.all_outbounds_msg(MsgId::PlayerLeft);
+                    }
 
-                        if room.is_empty() {
-                            room_mgr.remove_room(room_id);
-                            info!(room_id, "Removed empty room");
-                        }
+                    if room.is_empty() {
+                        room_mgr.remove_room(room_id);
+                        info!(room_id, "Removed empty room");
                     }
 
                     if let Some(p_idx) = player_index {
@@ -253,7 +274,7 @@ async fn handle_disconnected(
                         }
                     }
 
-                    room_mgr.remove_client(ctx.assigned_client_id);
+                    room_mgr.unregister_client(ctx.assigned_client_id);
                 }
 
                 // Also remove from any P2P signaling watch lists (host/joiners).
@@ -276,11 +297,10 @@ async fn handle_disconnected(
                 let client_id = ctx.assigned_client_id;
                 let token = ctx.session_token;
 
-                if client_id != 0
-                    && let Some(room_id) = room_mgr.get_client_room(client_id)
-                    && let Some(room) = room_mgr.get_room_mut(room_id)
-                {
-                    room.clear_client_channel_outbound(client_id, ch);
+                if client_id != 0 {
+                    if let Some(room) = room_mgr.client_room_mut(client_id) {
+                        room.clear_client_channel_outbound(client_id, ch);
+                    }
                 }
 
                 if token != 0
@@ -359,14 +379,8 @@ async fn handle_packet(
             }
 
             // 3. Update room if already in one
-            if let Some(room_id) = room_mgr.get_client_room(control_client_id) {
-                if let Some(room) = room_mgr.get_room_mut(room_id) {
-                    room.set_client_channel_outbound(
-                        control_client_id,
-                        msg.channel,
-                        channel_outbound,
-                    );
-                }
+            if let Some(room) = room_mgr.client_room_mut(control_client_id) {
+                room.set_client_channel_outbound(control_client_id, msg.channel, channel_outbound);
             }
 
             Ok(())
@@ -392,6 +406,9 @@ async fn handle_packet(
             return;
         }
     }
+
+    // Update connection activity timestamp
+    ctx.last_activity = Instant::now();
 
     if !dispatch_packet(
         ctx,
