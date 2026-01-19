@@ -245,17 +245,15 @@ async fn handle_disconnected(
     peer: SocketAddr,
     reason: String,
 ) {
-    let (role, session_token, assigned_client_id, cancel_token) =
-        if let Some(ctx) = conns.get(&conn_id) {
-            (
-                ctx.role,
-                ctx.session_token,
-                ctx.assigned_client_id,
-                ctx.cancel_token.clone(),
-            )
-        } else {
-            return;
-        };
+    let (role, session_token, assigned_client_id, cancel_token) = match conns.get(&conn_id) {
+        Some(ctx) => (
+            ctx.role,
+            ctx.session_token,
+            ctx.assigned_client_id,
+            ctx.cancel_token.clone(),
+        ),
+        None => return,
+    };
 
     match role {
         ConnRole::Control => {
@@ -268,19 +266,22 @@ async fn handle_disconnected(
                     let room_id = room.id;
                     let mut recipients = Vec::new();
 
-                    let player_index = if let Some(player) = room.remove_player(client_id) {
-                        info!(
-                            client_id,
-                            room_id,
-                            player_index = player.player_index,
-                            "Player left room"
-                        );
-                        Some(player.player_index)
-                    } else if room.remove_spectator(client_id).is_some() {
-                        info!(client_id, room_id, role = "spectator", "Client left room");
-                        None // Spectators don't have a player_index
-                    } else {
-                        None
+                    let player_index = match room.remove_player(client_id) {
+                        Some(player) => {
+                            info!(
+                                client_id,
+                                room_id,
+                                player_index = player.player_index,
+                                "Player left room"
+                            );
+                            Some(player.player_index)
+                        }
+                        None => {
+                            if room.remove_spectator(client_id).is_some() {
+                                info!(client_id, room_id, role = "spectator", "Client left room");
+                            }
+                            None
+                        }
                     };
 
                     if player_index.is_some() {
@@ -354,11 +355,12 @@ async fn handle_packet(
     room_idle_timeout_secs: u16,
 ) {
     let now = Instant::now();
-    let (role, session_token) = if let Some(ctx) = conns.get_mut(&conn_id) {
-        ctx.last_activity = now;
-        (ctx.role, ctx.session_token)
-    } else {
-        return;
+    let (role, session_token) = match conns.get_mut(&conn_id) {
+        Some(ctx) => {
+            ctx.last_activity = now;
+            (ctx.role, ctx.session_token)
+        }
+        None => return,
     };
 
     if packet.msg_id() == MsgId::AttachChannel {

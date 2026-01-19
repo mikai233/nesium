@@ -37,10 +37,9 @@ impl HandlerRegistry {
         ctx: &mut HandlerContext<'_>,
         payload: &[u8],
     ) -> Option<HandlerResult> {
-        if let Some(handler) = self.handlers.get(&msg_id) {
-            Some(handler.handle_erased(ctx, payload).await)
-        } else {
-            None
+        match self.handlers.get(&msg_id) {
+            Some(handler) => Some(handler.handle_erased(ctx, payload).await),
+            None => None,
         }
     }
 
