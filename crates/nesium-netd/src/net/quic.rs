@@ -6,6 +6,7 @@ use quinn::{Endpoint, ServerConfig};
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio_util::codec::{BytesCodec, FramedWrite};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use super::framing::TcpFramer;
@@ -66,11 +67,14 @@ async fn handle_quic_stream(
 ) {
     let (out_tx, out_rx) = mpsc::channel::<Bytes>(1024);
 
+    let cancel_token = CancellationToken::new();
+
     tx.send(InboundEvent::Connected {
         conn_id,
         peer,
         transport: TransportKind::Quic,
         outbound: out_tx.clone(),
+        cancel_token: cancel_token.clone(),
     })
     .await
     .ok();
@@ -88,7 +92,15 @@ async fn handle_quic_stream(
         }
 
         framer.buf_mut().reserve(4096);
-        match recv.read_buf(framer.buf_mut()).await {
+        let read_res = tokio::select! {
+            res = recv.read_buf(framer.buf_mut()) => res,
+            _ = cancel_token.cancelled() => {
+                disconnect_reason = "cancelled by server".to_string();
+                break;
+            }
+        };
+
+        match read_res {
             Ok(0) => {
                 disconnect_reason = "eof".to_string();
                 break;

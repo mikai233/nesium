@@ -15,23 +15,19 @@ pub(crate) struct SwitchRoleHandler;
 
 impl Handler<SwitchRole> for SwitchRoleHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: SwitchRole) -> HandlerResult {
-        let Some(room) = ctx
-            .room_mgr
-            .client_room_mut(ctx.conn_ctx.assigned_client_id)
-        else {
-            warn!(%ctx.peer, "SwitchRole: client not in a room");
-            return Err(HandlerError::not_in_room());
-        };
+        let peer = *ctx.peer;
+        let client_id = ctx.require_client_id()?;
+        let room = ctx.require_room_mut()?;
 
         // Role switching during an active game can deadlock lockstep:
         // existing players will start waiting for inputs from the newly-promoted role,
         // but the switching client may still be catching up.
         if room.started {
-            warn!(%ctx.peer, room_id = room.id, "Rejecting SwitchRole while game is running");
+            warn!(%peer, room_id = room.id, "Rejecting SwitchRole while game is running");
             return Err(HandlerError::game_already_started());
         }
 
-        match room.switch_player_role(ctx.conn_ctx.assigned_client_id, msg.new_role) {
+        match room.switch_player_role(client_id, msg.new_role) {
             Ok(changes) => {
                 let recipients = room.all_outbounds_msg(MsgId::RoleChanged);
                 for (cid, role) in changes {
@@ -55,7 +51,7 @@ impl Handler<SwitchRole> for SwitchRoleHandler {
                 }
             }
             Err(e) => {
-                warn!(%ctx.peer, error = %e, "Failed to switch role");
+                warn!(%peer, error = %e, "Failed to switch role");
                 return Err(HandlerError::invalid_state());
             }
         }

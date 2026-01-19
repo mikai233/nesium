@@ -15,8 +15,8 @@ pub(crate) struct HelloHandler;
 
 impl Handler<Hello> for HelloHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: Hello) -> HandlerResult {
-        if ctx.conn_ctx.assigned_client_id == 0 {
-            ctx.conn_ctx.assigned_client_id = NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
+        if ctx.conn_ctx.assigned_client_id.is_none() {
+            ctx.conn_ctx.assigned_client_id = Some(NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed));
             ctx.conn_ctx.name = msg.name.clone();
         }
 
@@ -24,16 +24,16 @@ impl Handler<Hello> for HelloHandler {
 
         let server_nonce = NEXT_SERVER_NONCE.fetch_add(1, Ordering::Relaxed);
         // If the client retries Hello on the same connection, keep the existing token.
-        if ctx.conn_ctx.session_token == 0 {
+        if ctx.conn_ctx.session_token.is_none() {
             let counter = NEXT_SESSION_TOKEN.fetch_add(1, Ordering::Relaxed);
             let rand_low: u32 = rand::random();
-            ctx.conn_ctx.session_token = (counter << 32) | (rand_low as u64);
+            ctx.conn_ctx.session_token = Some((counter << 32) | (rand_low as u64));
         }
 
         let welcome = Welcome {
             server_nonce,
-            session_token: ctx.conn_ctx.session_token,
-            assigned_client_id: ctx.conn_ctx.assigned_client_id,
+            session_token: ctx.conn_ctx.session_token.unwrap_or(0),
+            assigned_client_id: ctx.conn_ctx.assigned_client_id.unwrap_or(0),
             room_id: 0,
             tick_hz: 60,
             input_delay_frames: 2,
@@ -45,7 +45,7 @@ impl Handler<Hello> for HelloHandler {
         match send_msg(&ctx.conn_ctx.outbound, &welcome).await {
             Ok(()) => {
                 info!(
-                    client_id = ctx.conn_ctx.assigned_client_id,
+                    client_id = ctx.conn_ctx.assigned_client_id.unwrap_or(0),
                     name = %msg.name,
                     "Hello/Welcome handshake completed"
                 );

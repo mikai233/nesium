@@ -12,9 +12,7 @@ pub(crate) struct P2PCreateRoomHandler;
 
 impl Handler<P2PCreateRoom> for P2PCreateRoomHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: P2PCreateRoom) -> HandlerResult {
-        if ctx.conn_ctx.assigned_client_id == 0 {
-            return Err(HandlerError::invalid_state());
-        }
+        let client_id = ctx.require_client_id()?;
 
         // Validate input limits
         if msg.host_addrs.len() > P2P_MAX_HOST_ADDRS {
@@ -22,7 +20,7 @@ impl Handler<P2PCreateRoom> for P2PCreateRoomHandler {
             return Err(HandlerError::bad_message());
         }
 
-        let Some(room_id) = ctx.room_mgr.create_room(ctx.conn_ctx.assigned_client_id) else {
+        let Some(room_id) = ctx.room_mgr.create_room(client_id) else {
             return Err(HandlerError::server_full());
         };
         let Some(room) = ctx.room_mgr.room_mut(room_id) else {
@@ -30,27 +28,20 @@ impl Handler<P2PCreateRoom> for P2PCreateRoomHandler {
         };
 
         room.set_p2p_host(
-            ctx.conn_ctx.assigned_client_id,
+            client_id,
             msg.host_addrs,
             msg.host_room_id,
             msg.host_quic_cert_sha256_fingerprint,
             msg.host_quic_server_name,
         );
-        room.upsert_p2p_watcher(
-            ctx.conn_ctx.assigned_client_id,
-            ctx.conn_ctx.outbound.clone(),
-        );
+        room.upsert_p2p_watcher(client_id, ctx.conn_ctx.outbound.clone());
 
         let resp = P2PRoomCreated { room_id: room.id };
         send_msg(&ctx.conn_ctx.outbound, &resp)
             .await
             .map_err(|_| HandlerError::invalid_state())?;
 
-        info!(
-            client_id = ctx.conn_ctx.assigned_client_id,
-            room_id = room.id,
-            "Created P2P signaling room"
-        );
+        info!(client_id, room_id = room.id, "Created P2P signaling room");
 
         Ok(())
     }

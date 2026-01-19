@@ -19,15 +19,9 @@ pub(crate) struct JoinRoomHandler;
 impl Handler<JoinRoom> for JoinRoomHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, join: JoinRoom) -> HandlerResult {
         // 1. Check if already in a room
-        if ctx
-            .room_mgr
-            .client_room_id(ctx.conn_ctx.assigned_client_id)
-            .is_some()
-        {
-            warn!(
-                client_id = ctx.conn_ctx.assigned_client_id,
-                "Client already in a room, ignoring join request"
-            );
+        let client_id = ctx.conn_ctx.assigned_client_id.unwrap_or(0);
+        if ctx.room_mgr.client_room_id(client_id).is_some() {
+            warn!(client_id, "Client already in a room, ignoring join request");
             return Err(HandlerError::already_in_room());
         }
 
@@ -40,8 +34,7 @@ impl Handler<JoinRoom> for JoinRoomHandler {
 
         // 4. Register client in manager if successful
         if is_joined {
-            ctx.room_mgr
-                .register_client(ctx.conn_ctx.assigned_client_id, room_id);
+            ctx.room_mgr.register_client(client_id, room_id);
         }
 
         // 5. Get room reference for Ack and Sync
@@ -74,22 +67,10 @@ impl Handler<JoinRoom> for JoinRoomHandler {
         }
 
         // 7. Broadcast PlayerJoined to existing members
-        Self::broadcast_new_player(
-            ctx.conn_ctx.assigned_client_id,
-            &ctx.conn_ctx.name,
-            room,
-            player_index,
-        )
-        .await;
+        Self::broadcast_new_player(client_id, &ctx.conn_ctx.name, room, player_index).await;
 
         // 8. Sync existing state to new member (Other players + cached ROM)
-        Self::sync_initial_state(
-            ctx.conn_ctx.assigned_client_id,
-            &ctx.conn_ctx.outbound,
-            room,
-            join.has_rom,
-        )
-        .await;
+        Self::sync_initial_state(client_id, &ctx.conn_ctx.outbound, room, join.has_rom).await;
 
         Ok(())
     }
@@ -100,15 +81,12 @@ impl JoinRoomHandler {
         ctx: &mut HandlerContext<'_>,
         join: &JoinRoom,
     ) -> Result<u32, HandlerError> {
+        let client_id = ctx.conn_ctx.assigned_client_id.unwrap_or(0);
         if join.room_id == 0 {
-            let Some(id) = ctx.room_mgr.create_room(ctx.conn_ctx.assigned_client_id) else {
+            let Some(id) = ctx.room_mgr.create_room(client_id) else {
                 return Err(HandlerError::server_full());
             };
-            info!(
-                room_id = id,
-                client_id = ctx.conn_ctx.assigned_client_id,
-                "Room created"
-            );
+            info!(room_id = id, client_id, "Room created");
             // The room's sync mode is decided at creation time by the host.
             if let Some(room) = ctx.room_mgr.room_mut(id) {
                 if let Some(preferred) = join.preferred_sync_mode {
@@ -134,6 +112,7 @@ impl JoinRoomHandler {
     ) -> (bool, u8, bool) {
         let room = ctx.room_mgr.room_mut(room_id).unwrap();
         let is_spectator = join.desired_role == SPECTATOR_PLAYER_INDEX;
+        let client_id = ctx.conn_ctx.assigned_client_id.unwrap_or(0);
 
         let mut outbounds = ClientOutbounds::new(ctx.conn_ctx.outbound.clone());
         if let Some(tx) = ctx.conn_ctx.channels.get(&ChannelKind::Input) {
@@ -146,14 +125,11 @@ impl JoinRoomHandler {
         if is_spectator {
             room.add_spectator(Spectator {
                 conn_id: ctx.conn_id,
-                client_id: ctx.conn_ctx.assigned_client_id,
+                client_id,
                 name: ctx.conn_ctx.name.clone(),
                 outbounds,
             });
-            info!(
-                client_id = ctx.conn_ctx.assigned_client_id,
-                room_id, "Added spectator to room"
-            );
+            info!(client_id, room_id, "Added spectator to room");
             return (true, SPECTATOR_PLAYER_INDEX, false);
         }
 
@@ -164,7 +140,7 @@ impl JoinRoomHandler {
                 0,
                 Player {
                     conn_id: ctx.conn_id,
-                    client_id: ctx.conn_ctx.assigned_client_id,
+                    client_id,
                     player_index: 0,
                     name: ctx.conn_ctx.name.clone(),
                     outbounds,
@@ -177,7 +153,7 @@ impl JoinRoomHandler {
             if room.started {
                 room.add_spectator(Spectator {
                     conn_id: ctx.conn_id,
-                    client_id: ctx.conn_ctx.assigned_client_id,
+                    client_id,
                     name: ctx.conn_ctx.name.clone(),
                     outbounds,
                 });
@@ -185,7 +161,7 @@ impl JoinRoomHandler {
             } else {
                 match room.add_player(Player {
                     conn_id: ctx.conn_id,
-                    client_id: ctx.conn_ctx.assigned_client_id,
+                    client_id,
                     player_index: 0,
                     name: ctx.conn_ctx.name.clone(),
                     outbounds: outbounds.clone(),
@@ -194,7 +170,7 @@ impl JoinRoomHandler {
                     None => {
                         room.add_spectator(Spectator {
                             conn_id: ctx.conn_id,
-                            client_id: ctx.conn_ctx.assigned_client_id,
+                            client_id,
                             name: ctx.conn_ctx.name.clone(),
                             outbounds,
                         });
@@ -210,7 +186,7 @@ impl JoinRoomHandler {
                 desired,
                 Player {
                     conn_id: ctx.conn_id,
-                    client_id: ctx.conn_ctx.assigned_client_id,
+                    client_id,
                     player_index: desired,
                     name: ctx.conn_ctx.name.clone(),
                     outbounds: outbounds.clone(),
@@ -219,7 +195,7 @@ impl JoinRoomHandler {
             );
             if added {
                 info!(
-                    client_id = ctx.conn_ctx.assigned_client_id,
+                    client_id,
                     player_index = desired,
                     pending_activation,
                     room_id,
@@ -229,7 +205,7 @@ impl JoinRoomHandler {
             } else {
                 room.add_spectator(Spectator {
                     conn_id: ctx.conn_id,
-                    client_id: ctx.conn_ctx.assigned_client_id,
+                    client_id,
                     name: ctx.conn_ctx.name.clone(),
                     outbounds,
                 });
@@ -239,7 +215,7 @@ impl JoinRoomHandler {
             // Requested slot is occupied or invalid -> spectator fallback.
             room.add_spectator(Spectator {
                 conn_id: ctx.conn_id,
-                client_id: ctx.conn_ctx.assigned_client_id,
+                client_id,
                 name: ctx.conn_ctx.name.clone(),
                 outbounds,
             });

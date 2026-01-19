@@ -17,12 +17,8 @@ pub(crate) struct RejoinReadyHandler;
 
 impl Handler<RejoinReady> for RejoinReadyHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, ready: RejoinReady) -> HandlerResult {
-        let Some(room) = ctx
-            .room_mgr
-            .client_room_mut(ctx.conn_ctx.assigned_client_id)
-        else {
-            return Err(HandlerError::not_in_room());
-        };
+        let client_id = ctx.require_client_id()?;
+        let room = ctx.require_room_mut()?;
 
         if !room.started {
             return Ok(());
@@ -31,7 +27,7 @@ impl Handler<RejoinReady> for RejoinReadyHandler {
         let player_index = room
             .players
             .values()
-            .find(|p| p.client_id == ctx.conn_ctx.assigned_client_id)
+            .find(|p| p.client_id == client_id)
             .map(|p| p.player_index)
             .ok_or_else(HandlerError::permission_denied)?;
 
@@ -56,7 +52,7 @@ impl Handler<RejoinReady> for RejoinReadyHandler {
 
         info!(
             room_id = room.id,
-            client_id = ctx.conn_ctx.assigned_client_id,
+            client_id,
             player_index,
             caught_up_to_frame = ready.caught_up_to_frame,
             active_from_frame,

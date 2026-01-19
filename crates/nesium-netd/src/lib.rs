@@ -11,7 +11,8 @@ use nesium_netproto::{
 };
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tokio_util::sync::CancellationToken;
+use tracing::{info, warn};
 
 use crate::net::framing::PacketOwned;
 use crate::net::inbound::{ConnId, InboundEvent};
@@ -46,11 +47,11 @@ enum ConnRole {
 /// Per-connection server-side context.
 struct ConnCtx {
     outbound: OutboundTx,
-    assigned_client_id: u32,
+    assigned_client_id: Option<u32>,
     name: String,
     role: ConnRole,
     /// Assigned on `Hello` and used to attach secondary channels.
-    session_token: u64,
+    session_token: Option<u64>,
     /// Secondary channel outbounds (stored on the control connection).
     channels: HashMap<ChannelKind, OutboundTx>,
     /// Per-connection message rate limiter (None if rate limiting is disabled).
@@ -59,6 +60,8 @@ struct ConnCtx {
     last_activity: Instant,
     /// Real peer address of the connection.
     peer: SocketAddr,
+    /// Cancellation token to shut down the connection handler.
+    cancel_token: CancellationToken,
 }
 
 /// Configuration for automatic room cleanup.
@@ -120,9 +123,17 @@ pub async fn run_server(
                         conn_id,
                         peer,
                         outbound,
+                        cancel_token,
                         ..
                     } => {
-                        handle_connected(&mut conns, conn_id, peer, outbound, rate_config.as_ref());
+                        handle_connected(
+                            &mut conns,
+                            conn_id,
+                            peer,
+                            outbound,
+                            cancel_token,
+                            rate_config.as_ref(),
+                        );
                     }
 
                     InboundEvent::Disconnected {
@@ -166,7 +177,17 @@ pub async fn run_server(
                 let now = Instant::now();
                 let idle_conns: Vec<ConnId> = conns
                     .iter()
-                    .filter(|(_, ctx)| now.duration_since(ctx.last_activity) > max_idle)
+                    .filter(|(_, ctx)| {
+                        // If this is a secondary channel, take the max of its activity and its parent's activity
+                        let last_activity = ctx.session_token
+                            .filter(|_| matches!(ctx.role, ConnRole::Channel(_)))
+                            .and_then(|t| token_to_control_conn.get(&t))
+                            .and_then(|id| conns.get(id))
+                            .map(|control_ctx| ctx.last_activity.max(control_ctx.last_activity))
+                            .unwrap_or(ctx.last_activity);
+
+                        now.duration_since(last_activity) > max_idle
+                    })
                     .map(|(&id, _)| id)
                     .collect();
 
@@ -195,23 +216,25 @@ fn handle_connected(
     conn_id: ConnId,
     peer: SocketAddr,
     outbound: OutboundTx,
+    cancel_token: CancellationToken,
     rate_config: Option<&RateLimitConfig>,
 ) {
     conns.insert(
         conn_id,
         ConnCtx {
             outbound,
-            assigned_client_id: 0,
+            assigned_client_id: None,
             name: String::new(),
             role: ConnRole::Unbound,
-            session_token: 0,
+            session_token: None,
             channels: HashMap::new(),
             rate_limiter: rate_config.and_then(ConnRateLimiter::new),
             last_activity: Instant::now(),
             peer,
+            cancel_token,
         },
     );
-    debug!(conn_id, %peer, "Client connected");
+    info!(conn_id, %peer, "Connection established");
 }
 
 async fn handle_disconnected(
@@ -222,37 +245,43 @@ async fn handle_disconnected(
     peer: SocketAddr,
     reason: String,
 ) {
-    if let Some(ctx) = conns.get(&conn_id) {
-        match ctx.role {
-            ConnRole::Control => {
-                if ctx.session_token != 0 {
-                    token_to_control_conn.remove(&ctx.session_token);
-                }
+    let (role, session_token, assigned_client_id, cancel_token) =
+        if let Some(ctx) = conns.get(&conn_id) {
+            (
+                ctx.role,
+                ctx.session_token,
+                ctx.assigned_client_id,
+                ctx.cancel_token.clone(),
+            )
+        } else {
+            return;
+        };
 
-                if let Some(room) = room_mgr.client_room_mut(ctx.assigned_client_id) {
+    match role {
+        ConnRole::Control => {
+            if let Some(token) = session_token {
+                token_to_control_conn.remove(&token);
+            }
+
+            if let Some(client_id) = assigned_client_id {
+                if let Some(room) = room_mgr.client_room_mut(client_id) {
                     let room_id = room.id;
                     let mut recipients = Vec::new();
 
-                    let player_index =
-                        if let Some(player) = room.remove_player(ctx.assigned_client_id) {
-                            info!(
-                                client_id = ctx.assigned_client_id,
-                                room_id,
-                                player_index = player.player_index,
-                                "Player left room"
-                            );
-                            Some(player.player_index)
-                        } else if room.remove_spectator(ctx.assigned_client_id).is_some() {
-                            info!(
-                                client_id = ctx.assigned_client_id,
-                                room_id,
-                                role = "spectator",
-                                "Client left room"
-                            );
-                            None // Spectators don't have a player_index
-                        } else {
-                            None
-                        };
+                    let player_index = if let Some(player) = room.remove_player(client_id) {
+                        info!(
+                            client_id,
+                            room_id,
+                            player_index = player.player_index,
+                            "Player left room"
+                        );
+                        Some(player.player_index)
+                    } else if room.remove_spectator(client_id).is_some() {
+                        info!(client_id, room_id, role = "spectator", "Client left room");
+                        None // Spectators don't have a player_index
+                    } else {
+                        None
+                    };
 
                     if player_index.is_some() {
                         recipients = room.all_outbounds_msg(MsgId::PlayerLeft);
@@ -265,7 +294,7 @@ async fn handle_disconnected(
 
                     if let Some(p_idx) = player_index {
                         let msg = PlayerLeft {
-                            client_id: ctx.assigned_client_id,
+                            client_id,
                             player_index: p_idx,
                         };
 
@@ -274,45 +303,42 @@ async fn handle_disconnected(
                         }
                     }
 
-                    room_mgr.unregister_client(ctx.assigned_client_id);
+                    room_mgr.unregister_client(client_id);
                 }
 
-                // Also remove from any P2P signaling watch lists (host/joiners).
-                if ctx.assigned_client_id != 0 {
-                    // Check if this client is the P2P host of any room and broadcast disconnect
-                    let host_rooms_to_notify =
-                        room_mgr.clear_p2p_host_for_client(ctx.assigned_client_id);
-                    for (room_id, watchers) in host_rooms_to_notify {
-                        let notice = P2PHostDisconnected { room_id };
-                        for tx in &watchers {
-                            let _ = send_msg(tx, &notice).await;
-                        }
-                        info!(room_id, "Notified watchers of P2P host disconnect");
+                // Check if this client is the P2P host of any room and broadcast disconnect
+                let host_rooms_to_notify = room_mgr.clear_p2p_host_for_client(client_id);
+                for (room_id, watchers) in host_rooms_to_notify {
+                    let notice = P2PHostDisconnected { room_id };
+                    for tx in &watchers {
+                        let _ = send_msg(tx, &notice).await;
                     }
-
-                    room_mgr.remove_p2p_watcher(ctx.assigned_client_id);
+                    info!(room_id, "Notified watchers of P2P host disconnect");
                 }
+
+                room_mgr.remove_p2p_watcher(client_id);
             }
-            ConnRole::Channel(ch) => {
-                let client_id = ctx.assigned_client_id;
-                let token = ctx.session_token;
-
-                if client_id != 0 {
-                    if let Some(room) = room_mgr.client_room_mut(client_id) {
-                        room.clear_client_channel_outbound(client_id, ch);
-                    }
-                }
-
-                if token != 0
-                    && let Some(control_conn_id) = token_to_control_conn.get(&token)
-                    && let Some(control_ctx) = conns.get_mut(control_conn_id)
-                {
-                    control_ctx.channels.remove(&ch);
-                }
-            }
-            ConnRole::Unbound => {}
         }
+        ConnRole::Channel(ch) => {
+            if let Some(client_id) = assigned_client_id {
+                if let Some(room) = room_mgr.client_room_mut(client_id) {
+                    room.clear_client_channel_outbound(client_id, ch);
+                }
+            }
+
+            if let Some(token) = session_token {
+                if let Some(control_conn_id) = token_to_control_conn.get(&token) {
+                    if let Some(control_ctx) = conns.get_mut(control_conn_id) {
+                        control_ctx.channels.remove(&ch);
+                    }
+                }
+            }
+        }
+        ConnRole::Unbound => {}
     }
+
+    // Trigger cancellation to stop the reader/writer tasks
+    cancel_token.cancel();
 
     conns.remove(&conn_id);
     info!(conn_id, %peer, %reason, "Client disconnected");
@@ -327,6 +353,14 @@ async fn handle_packet(
     packet: PacketOwned,
     room_idle_timeout_secs: u16,
 ) {
+    let now = Instant::now();
+    let (role, session_token) = if let Some(ctx) = conns.get_mut(&conn_id) {
+        ctx.last_activity = now;
+        (ctx.role, ctx.session_token)
+    } else {
+        return;
+    };
+
     if packet.msg_id() == MsgId::AttachChannel {
         let res: Result<(), &'static str> = (|| {
             let msg = postcard::from_bytes::<AttachChannel>(&packet.payload)
@@ -350,7 +384,7 @@ async fn handle_packet(
                     .get(&control_conn_id)
                     .ok_or("AttachChannel: control connection gone")?;
 
-                if control_ctx.assigned_client_id == 0 {
+                if control_ctx.assigned_client_id.is_none() {
                     return Err("AttachChannel: control connection not handshaked yet");
                 }
                 (control_ctx.assigned_client_id, control_ctx.name.clone())
@@ -375,12 +409,14 @@ async fn handle_packet(
                 ctx.assigned_client_id = control_client_id;
                 ctx.name = control_name;
                 ctx.role = ConnRole::Channel(msg.channel);
-                ctx.session_token = msg.session_token;
+                ctx.session_token = Some(msg.session_token);
             }
 
             // 3. Update room if already in one
-            if let Some(room) = room_mgr.client_room_mut(control_client_id) {
-                room.set_client_channel_outbound(control_client_id, msg.channel, channel_outbound);
+            if let Some(client_id) = control_client_id {
+                if let Some(room) = room_mgr.client_room_mut(client_id) {
+                    room.set_client_channel_outbound(client_id, msg.channel, channel_outbound);
+                }
             }
 
             Ok(())
@@ -389,6 +425,11 @@ async fn handle_packet(
         if let Err(reason) = res {
             warn!(conn_id, %peer, %reason, "AttachChannel failed (will disconnect)");
             conns.remove(&conn_id);
+        } else {
+            // Update activity for successful AttachChannel too
+            if let Some(ctx) = conns.get_mut(&conn_id) {
+                ctx.last_activity = Instant::now();
+            }
         }
         return;
     }
@@ -407,8 +448,20 @@ async fn handle_packet(
         }
     }
 
-    // Update connection activity timestamp
-    ctx.last_activity = Instant::now();
+    // Propagate activity to parent control connection if this is a secondary channel
+    if matches!(role, ConnRole::Channel(_)) {
+        if let Some(control_ctx) = session_token
+            .and_then(|t| token_to_control_conn.get(&t))
+            .filter(|&&id| id != conn_id)
+            .and_then(|&id| conns.get_mut(&id))
+        {
+            control_ctx.last_activity = now;
+        }
+    }
+
+    let Some(ctx) = conns.get_mut(&conn_id) else {
+        return;
+    };
 
     if !dispatch_packet(
         ctx,
@@ -420,6 +473,7 @@ async fn handle_packet(
     )
     .await
     {
+        warn!(conn_id, "Dispatch failed for connection");
         // Remove from conns - this drops the outbound sender and triggers disconnect
         conns.remove(&conn_id);
         return;
@@ -427,10 +481,12 @@ async fn handle_packet(
 
     // Refresh context and update lookup table if needed
     if packet.msg_id() == MsgId::Hello {
-        if let Some(ctx) = conns.get(&conn_id) {
-            if ctx.role == ConnRole::Control && ctx.session_token != 0 {
-                token_to_control_conn.insert(ctx.session_token, conn_id);
-            }
+        if let Some(token) = conns
+            .get(&conn_id)
+            .filter(|c| c.role == ConnRole::Control)
+            .and_then(|c| c.session_token)
+        {
+            token_to_control_conn.insert(token, conn_id);
         }
     }
 }

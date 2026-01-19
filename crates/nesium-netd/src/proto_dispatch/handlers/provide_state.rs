@@ -16,10 +16,12 @@ pub(crate) struct ProvideStateHandler;
 
 impl Handler<ProvideState> for ProvideStateHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: ProvideState) -> HandlerResult {
-        let Some(room) = ctx
-            .room_mgr
-            .client_room_mut(ctx.conn_ctx.assigned_client_id)
-        else {
+        let client_id = match ctx.require_client_id() {
+            Ok(id) => id,
+            Err(_) => return Ok(()),
+        };
+
+        let Some(room) = ctx.room_mgr.client_room_mut(client_id) else {
             return Ok(()); // Not an error - host might not be in room yet
         };
 

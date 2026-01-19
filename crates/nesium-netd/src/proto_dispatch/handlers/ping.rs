@@ -16,7 +16,7 @@ pub(crate) struct PingHandler;
 impl Handler<Ping> for PingHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: Ping) -> HandlerResult {
         trace!(
-            client_id = ctx.conn_ctx.assigned_client_id,
+            client_id = ctx.conn_ctx.assigned_client_id.unwrap_or(0),
             "Received Ping, responding with Pong"
         );
 

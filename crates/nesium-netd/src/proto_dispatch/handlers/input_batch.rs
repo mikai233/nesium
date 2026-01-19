@@ -12,17 +12,13 @@ pub(crate) struct InputBatchHandler;
 
 impl Handler<InputBatch> for InputBatchHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, batch: InputBatch) -> HandlerResult {
-        let Some(room) = ctx
-            .room_mgr
-            .client_room_mut(ctx.conn_ctx.assigned_client_id)
-        else {
-            return Err(HandlerError::not_in_room());
-        };
+        let client_id = ctx.require_client_id()?;
+        let room = ctx.require_room_mut()?;
 
         let player_index = room
             .players
             .values()
-            .find(|p| p.client_id == ctx.conn_ctx.assigned_client_id)
+            .find(|p| p.client_id == client_id)
             .map(|p| p.player_index);
 
         let Some(player_index) = player_index else {

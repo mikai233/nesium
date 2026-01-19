@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use std::net::SocketAddr;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use super::framing::PacketOwned;
 
@@ -39,6 +40,7 @@ pub enum InboundEvent {
         peer: SocketAddr,
         transport: TransportKind,
         outbound: OutboundTx,
+        cancel_token: CancellationToken,
     },
 
     Packet {

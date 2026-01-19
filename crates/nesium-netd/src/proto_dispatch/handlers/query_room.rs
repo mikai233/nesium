@@ -40,7 +40,7 @@ impl Handler<QueryRoom> for QueryRoomHandler {
         }
 
         info!(
-            client_id = ctx.conn_ctx.assigned_client_id,
+            client_id = ctx.conn_ctx.assigned_client_id.unwrap_or(0),
             room_id = msg.room_id,
             ok = resp.ok,
             occupied_mask = resp.occupied_mask,

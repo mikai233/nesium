@@ -14,9 +14,10 @@ pub(crate) struct P2PRequestFallbackHandler;
 
 impl Handler<P2PRequestFallback> for P2PRequestFallbackHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, req: P2PRequestFallback) -> HandlerResult {
-        if ctx.conn_ctx.assigned_client_id == 0 {
-            return Err(HandlerError::invalid_state());
-        }
+        let client_id = match ctx.conn_ctx.assigned_client_id {
+            Some(id) => id,
+            None => return Err(HandlerError::invalid_state()),
+        };
 
         // Truncate reason to prevent abuse
         let reason = if req.reason.len() > P2P_MAX_REASON_LEN {
@@ -28,14 +29,14 @@ impl Handler<P2PRequestFallback> for P2PRequestFallbackHandler {
         let notice = P2PFallbackNotice {
             room_id: req.room_id,
             reason: reason.clone(),
-            requested_by_client_id: ctx.conn_ctx.assigned_client_id,
+            requested_by_client_id: client_id,
         };
 
         let Some(room) = ctx.room_mgr.room_mut(req.room_id) else {
             return Err(HandlerError::room_not_found());
         };
 
-        room.request_p2p_fallback(ctx.conn_ctx.assigned_client_id, reason);
+        room.request_p2p_fallback(client_id, reason);
 
         for tx in room.p2p_watchers.values() {
             let _ = send_msg(tx, &notice).await;

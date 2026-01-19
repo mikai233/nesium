@@ -8,6 +8,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio_tungstenite::{accept_async, tungstenite};
 use tokio_util::codec::{BytesCodec, FramedWrite};
+use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use nesium_netproto::codec::encode_message;
@@ -236,12 +237,15 @@ async fn handle_connection_inner<R, S>(
     let (out_tx, out_rx) = mpsc::channel::<bytes::Bytes>(1024);
     let writer = spawn_writer(write, out_rx);
 
+    let cancel_token = CancellationToken::new();
+
     // Notify upper layer that a connection is established.
     tx.send(InboundEvent::Connected {
         conn_id,
         peer,
         transport: TransportKind::Tcp,
         outbound: out_tx.clone(),
+        cancel_token: cancel_token.clone(),
     })
     .await
     .ok();
@@ -259,7 +263,15 @@ async fn handle_connection_inner<R, S>(
         }
 
         framer.buf_mut().reserve(4096);
-        match read.read_buf(framer.buf_mut()).await {
+        let read_res = tokio::select! {
+            res = read.read_buf(framer.buf_mut()) => res,
+            _ = cancel_token.cancelled() => {
+                disconnect_reason = "cancelled by server".to_string();
+                break;
+            }
+        };
+
+        match read_res {
             Ok(n) => {
                 if n == 0 {
                     disconnect_reason = "eof".to_string();

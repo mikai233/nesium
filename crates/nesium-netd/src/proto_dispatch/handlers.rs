@@ -25,7 +25,7 @@ use crate::ConnCtx;
 use crate::net::framing::PacketOwned;
 use crate::net::inbound::ConnId;
 use crate::net::outbound::send_msg;
-use crate::room::state::RoomManager;
+use crate::room::state::{Room, RoomManager};
 
 mod hello;
 mod input_batch;
@@ -65,6 +65,31 @@ pub(crate) struct HandlerContext<'a> {
     pub(crate) room_mgr: &'a mut RoomManager,
     /// Room inactivity timeout in seconds (for Welcome message).
     pub(crate) room_idle_timeout_secs: u16,
+}
+
+impl HandlerContext<'_> {
+    /// Get the assigned client ID or return an error.
+    pub(crate) fn require_client_id(&self) -> Result<u32, HandlerError> {
+        self.conn_ctx
+            .assigned_client_id
+            .ok_or_else(HandlerError::invalid_state)
+    }
+
+    /// Get the room the client is in or return an error.
+    pub(crate) fn require_room(&self) -> Result<&Room, HandlerError> {
+        let client_id = self.require_client_id()?;
+        self.room_mgr
+            .client_room(client_id)
+            .ok_or_else(HandlerError::not_in_room)
+    }
+
+    /// Get the mutable room the client is in or return an error.
+    pub(crate) fn require_room_mut(&mut self) -> Result<&mut Room, HandlerError> {
+        let client_id = self.require_client_id()?;
+        self.room_mgr
+            .client_room_mut(client_id)
+            .ok_or_else(HandlerError::not_in_room)
+    }
 }
 
 /// Async trait for type-safe message handlers.
@@ -219,7 +244,7 @@ pub(crate) async fn dispatch_packet(
         None => {
             warn!(
                 conn_id,
-                client_id = handler_ctx.conn_ctx.assigned_client_id,
+                client_id = handler_ctx.conn_ctx.assigned_client_id.unwrap_or(0),
                 msg_id = ?packet.msg_id(),
                 payload_len = packet.payload.len(),
                 %peer,

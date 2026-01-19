@@ -890,6 +890,12 @@ impl RoomManager {
         self.rooms.get_mut(&room_id)
     }
 
+    /// Get immutable room reference for a client by their client_id.
+    pub fn client_room(&self, client_id: u32) -> Option<&Room> {
+        let room_id = self.client_rooms.get(&client_id).copied()?;
+        self.rooms.get(&room_id)
+    }
+
     /// Get room ID for a client (returns None if client is not in any room).
     pub fn client_room_id(&self, client_id: u32) -> Option<u32> {
         self.client_rooms.get(&client_id).copied()

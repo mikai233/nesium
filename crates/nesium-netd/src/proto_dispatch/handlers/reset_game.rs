@@ -15,20 +15,16 @@ pub(crate) struct ResetGameHandler;
 
 impl Handler<ResetGame> for ResetGameHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, msg: ResetGame) -> HandlerResult {
-        let Some(room) = ctx
-            .room_mgr
-            .client_room_mut(ctx.conn_ctx.assigned_client_id)
-        else {
-            return Err(HandlerError::not_in_room());
-        };
+        let client_id = ctx.require_client_id()?;
+        let room = ctx.require_room_mut()?;
 
-        let recipients = room.handle_reset_game(ctx.conn_ctx.assigned_client_id);
+        let recipients = room.handle_reset_game(client_id);
         if recipients.is_empty() {
             return Ok(());
         }
 
         info!(
-            client_id = ctx.conn_ctx.assigned_client_id,
+            client_id,
             room_id = room.id,
             kind = msg.kind,
             "Broadcasting reset sync"

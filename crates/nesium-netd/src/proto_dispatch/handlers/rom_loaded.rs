@@ -16,21 +16,19 @@ pub(crate) struct RomLoadedHandler;
 
 impl Handler<RomLoaded> for RomLoadedHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, _msg: RomLoaded) -> HandlerResult {
-        let Some(room) = ctx
-            .room_mgr
-            .client_room_mut(ctx.conn_ctx.assigned_client_id)
-        else {
+        let client_id = match ctx.require_client_id() {
+            Ok(id) => id,
+            Err(_) => return Ok(()),
+        };
+
+        let Some(room) = ctx.room_mgr.client_room_mut(client_id) else {
             // Not an error - just ignore if not in room
             return Ok(());
         };
 
-        info!(
-            client_id = ctx.conn_ctx.assigned_client_id,
-            room_id = room.id,
-            "Client confirmed ROM loaded"
-        );
+        info!(client_id, room_id = room.id, "Client confirmed ROM loaded");
 
-        let sender_id = ctx.conn_ctx.assigned_client_id;
+        let sender_id = client_id;
         let was_started = room.started;
         let sender_was_loaded = room.loaded_players.contains(&sender_id);
         let sender_state_outbound = room.outbound_for_client_msg(sender_id, MsgId::SyncState);

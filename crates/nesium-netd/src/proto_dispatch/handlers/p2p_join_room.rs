@@ -11,18 +11,13 @@ pub(crate) struct P2PJoinRoomHandler;
 
 impl Handler<P2PJoinRoom> for P2PJoinRoomHandler {
     async fn handle(&self, ctx: &mut HandlerContext<'_>, join: P2PJoinRoom) -> HandlerResult {
-        if ctx.conn_ctx.assigned_client_id == 0 {
-            return Err(HandlerError::invalid_state());
-        }
+        let client_id = ctx.require_client_id()?;
 
         let Some(room) = ctx.room_mgr.room_mut(join.room_id) else {
             return Err(HandlerError::room_not_found());
         };
 
-        room.upsert_p2p_watcher(
-            ctx.conn_ctx.assigned_client_id,
-            ctx.conn_ctx.outbound.clone(),
-        );
+        room.upsert_p2p_watcher(client_id, ctx.conn_ctx.outbound.clone());
 
         let Some(host) = room.p2p_host.clone() else {
             return Err(HandlerError::host_not_available());

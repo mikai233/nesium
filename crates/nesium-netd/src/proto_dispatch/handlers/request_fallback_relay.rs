@@ -18,14 +18,8 @@ impl Handler<RequestFallbackRelay> for RequestFallbackRelayHandler {
         ctx: &mut HandlerContext<'_>,
         req: RequestFallbackRelay,
     ) -> HandlerResult {
-        let sender_id = ctx.conn_ctx.assigned_client_id;
-        if sender_id == 0 {
-            return Err(HandlerError::invalid_state());
-        }
-
-        let Some(room) = ctx.room_mgr.client_room_mut(sender_id) else {
-            return Err(HandlerError::not_in_room());
-        };
+        let sender_id = ctx.require_client_id()?;
+        let room = ctx.require_room_mut()?;
 
         // Only the room host can request forcing clients to reconnect to relay.
         if room.host_client_id != sender_id {
