@@ -384,6 +384,14 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get rewindMinutesTitle => '倒带时长';
+
+  @override
+  String rewindMinutesValue(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
   String get autoSlotLabel => '自动存档位';
 
   @override

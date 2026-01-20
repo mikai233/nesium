@@ -69,7 +69,7 @@ class EmulationSettings {
       quickSaveSlot: 1,
       fastForwardSpeedPercent: 300,
       rewindEnabled: true,
-      rewindSeconds: 10,
+      rewindSeconds: 60,
       showEmulationStatusOverlay: true,
     );
   }
@@ -153,9 +153,9 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
   }
 
   void setRewindSeconds(int seconds) {
-    final clamped = seconds.clamp(10, 300);
-    if (clamped == state.rewindSeconds) return;
-    state = state.copyWith(rewindSeconds: clamped);
+    final validated = seconds.clamp(60, 3600);
+    if (validated == state.rewindSeconds) return;
+    state = state.copyWith(rewindSeconds: validated);
     _applyRewindConfig();
     _persist(state);
   }

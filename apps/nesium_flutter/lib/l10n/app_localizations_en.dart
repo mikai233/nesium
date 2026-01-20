@@ -392,6 +392,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get rewindMinutesTitle => 'Rewind Duration';
+
+  @override
+  String rewindMinutesValue(int minutes) {
+    return '$minutes minutes';
+  }
+
+  @override
   String get autoSlotLabel => 'Auto Slot';
 
   @override

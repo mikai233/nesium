@@ -222,9 +222,18 @@
   "rewindEnabledSubtitle": "Enable real-time rewind support (Long-press Backspace on Desktop).",
   "rewindSecondsTitle": "Rewind Duration",
   "rewindSecondsValue": "{seconds} seconds",
+  "rewindMinutesTitle": "Rewind Duration",
+  "rewindMinutesValue": "{minutes} minutes",
   "@rewindSecondsValue": {
     "placeholders": {
       "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindMinutesValue": {
+    "placeholders": {
+      "minutes": {
         "type": "int"
       }
     }

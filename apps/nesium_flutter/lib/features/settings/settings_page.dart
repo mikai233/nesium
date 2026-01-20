@@ -1304,15 +1304,15 @@ class _EmulationTab extends ConsumerWidget {
                             key: const ValueKey('rewindSeconds'),
                             padding: const EdgeInsets.fromLTRB(56, 0, 0, 4),
                             child: AnimatedSliderTile(
-                              label: l10n.rewindSecondsTitle,
+                              label: l10n.rewindMinutesTitle,
                               value: emulationSettings.rewindSeconds.toDouble(),
-                              min: 10,
-                              max: 300,
-                              divisions: 29,
+                              min: 60,
+                              max: 3600,
+                              divisions: 59,
                               onChanged: (v) => emulationController
                                   .setRewindSeconds(v.toInt()),
-                              valueLabel: l10n.rewindSecondsValue(
-                                emulationSettings.rewindSeconds,
+                              valueLabel: l10n.rewindMinutesValue(
+                                emulationSettings.rewindSeconds ~/ 60,
                               ),
                             ),
                           )

@@ -788,6 +788,18 @@ abstract class AppLocalizations {
   /// **'{seconds} seconds'**
   String rewindSecondsValue(int seconds);
 
+  /// No description provided for @rewindMinutesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind Duration'**
+  String get rewindMinutesTitle;
+
+  /// No description provided for @rewindMinutesValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} minutes'**
+  String rewindMinutesValue(int minutes);
+
   /// No description provided for @autoSlotLabel.
   ///
   /// In en, this message translates to:

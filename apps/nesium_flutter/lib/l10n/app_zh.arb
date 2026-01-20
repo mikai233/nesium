@@ -166,9 +166,18 @@
   "rewindEnabledSubtitle": "开启实时倒带功能（桌面端长按退格键 Backspace 触发）。",
   "rewindSecondsTitle": "倒带时长",
   "rewindSecondsValue": "{seconds} 秒",
+  "rewindMinutesTitle": "倒带时长",
+  "rewindMinutesValue": "{minutes} 分钟",
   "@rewindSecondsValue": {
     "placeholders": {
       "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindMinutesValue": {
+    "placeholders": {
+      "minutes": {
         "type": "int"
       }
     }
