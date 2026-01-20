@@ -167,7 +167,7 @@ pub async fn unsubscribe_debug_state() -> Result<(), String> {
 #[frb]
 pub async fn subscribe_tilemap_texture() -> Result<(), String> {
     let handle = runtime_handle();
-    let sender = Box::new(TilemapTextureSender);
+    let sender = Box::new(TilemapTextureSender {});
 
     handle
         .subscribe_event(EventTopic::Tilemap, sender)

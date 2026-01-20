@@ -94,7 +94,7 @@ impl AuxTexture {
 /// This ensures texture IDs 1, 2, 3, 4 (our aux textures) distribute to
 /// separate DashMap shards, eliminating lock contention between concurrent updates.
 #[derive(Clone, Default)]
-pub struct TextureIdHasher;
+pub struct TextureIdHasher {}
 
 impl BuildHasher for TextureIdHasher {
     type Hasher = TextureIdHasherState;
@@ -127,7 +127,7 @@ impl Hasher for TextureIdHasherState {
 static AUX_TEXTURES: OnceLock<DashMap<u32, AuxTexture, TextureIdHasher>> = OnceLock::new();
 
 fn registry() -> &'static DashMap<u32, AuxTexture, TextureIdHasher> {
-    AUX_TEXTURES.get_or_init(|| DashMap::with_hasher(TextureIdHasher))
+    AUX_TEXTURES.get_or_init(|| DashMap::with_hasher(TextureIdHasher {}))
 }
 
 /// Creates an auxiliary texture with the given ID and dimensions.

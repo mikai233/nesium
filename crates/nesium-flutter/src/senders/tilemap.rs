@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use flutter_rust_bridge::frb;
 use nesium_core::cartridge::header::Mirroring;
 use nesium_runtime::{Event, RuntimeEventSender};
 
@@ -42,7 +43,7 @@ pub fn set_tilemap_display_mode(mode: u8) {
 }
 
 /// Sender that renders TilemapState directly to auxiliary texture (no stream).
-pub struct TilemapTextureSender;
+pub struct TilemapTextureSender {}
 
 impl RuntimeEventSender for TilemapTextureSender {
     fn send(&self, event: Box<dyn Event>) -> bool {

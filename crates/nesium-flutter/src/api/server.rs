@@ -65,6 +65,7 @@ impl EmbeddedServer {
 
 static SERVER: OnceLock<Mutex<EmbeddedServer>> = OnceLock::new();
 
+#[frb(ignore)]
 pub fn get_server() -> &'static Mutex<EmbeddedServer> {
     SERVER.get_or_init(|| Mutex::new(EmbeddedServer::new()))
 }

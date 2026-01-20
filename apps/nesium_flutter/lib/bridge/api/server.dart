@@ -9,9 +9,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `notify_server_status`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `EmbeddedServer`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `get_server`
 // These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `is_running`, `new`
-
-Future<void> getServer() => RustLib.instance.api.crateApiServerGetServer();
 
 /// Start the embedded netplay server on the specified port.
 ///
