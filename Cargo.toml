@@ -40,7 +40,7 @@ repository = "https://github.com/mikai233/nesium"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
 
 [workspace.lints.clippy]
-unwrap_used = "deny"
+unwrap_used = "warn"
 
 [workspace.dependencies]
 libretro-bridge = { path = "crates/libretro-bridge" }
