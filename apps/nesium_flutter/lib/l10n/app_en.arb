@@ -219,7 +219,7 @@
     }
   },
   "rewindEnabledTitle": "Rewind",
-  "rewindEnabledSubtitle": "Enable real-time rewind support (Long-press Backspace on Desktop).",
+  "rewindEnabledSubtitle": "Enable real-time rewind functionality.",
   "rewindSecondsTitle": "Rewind Duration",
   "rewindSecondsValue": "{seconds} seconds",
   "rewindMinutesTitle": "Rewind Duration",
