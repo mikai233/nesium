@@ -47,12 +47,12 @@ pub async fn run_tcp_listener_with_listener(
         let (stream, peer) = listener.accept().await?;
 
         // Check IP-based rate limit before processing connection
-        if let Some(ref limiter) = ip_rate_limiter {
-            if !limiter.check(peer.ip()) {
-                warn!(%peer, "Connection rejected: IP rate limit exceeded");
-                let _ = reject_with_rate_limit(stream).await;
-                continue;
-            }
+        if let Some(ref limiter) = ip_rate_limiter
+            && !limiter.check(peer.ip())
+        {
+            warn!(%peer, "Connection rejected: IP rate limit exceeded");
+            let _ = reject_with_rate_limit(stream).await;
+            continue;
         }
 
         let conn_id = next_conn_id();

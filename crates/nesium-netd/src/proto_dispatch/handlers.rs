@@ -76,6 +76,7 @@ impl HandlerContext<'_> {
     }
 
     /// Get the room the client is in or return an error.
+    #[allow(dead_code)]
     pub(crate) fn require_room(&self) -> Result<&Room, HandlerError> {
         let client_id = self.require_client_id()?;
         self.room_mgr

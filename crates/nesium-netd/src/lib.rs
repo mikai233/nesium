@@ -321,18 +321,17 @@ async fn handle_disconnected(
             }
         }
         ConnRole::Channel(ch) => {
-            if let Some(client_id) = assigned_client_id {
-                if let Some(room) = room_mgr.client_room_mut(client_id) {
-                    room.clear_client_channel_outbound(client_id, ch);
-                }
+            if let Some(client_id) = assigned_client_id
+                && let Some(room) = room_mgr.client_room_mut(client_id)
+            {
+                room.clear_client_channel_outbound(client_id, ch);
             }
 
-            if let Some(token) = session_token {
-                if let Some(control_conn_id) = token_to_control_conn.get(&token) {
-                    if let Some(control_ctx) = conns.get_mut(control_conn_id) {
-                        control_ctx.channels.remove(&ch);
-                    }
-                }
+            if let Some(token) = session_token
+                && let Some(control_conn_id) = token_to_control_conn.get(&token)
+                && let Some(control_ctx) = conns.get_mut(control_conn_id)
+            {
+                control_ctx.channels.remove(&ch);
             }
         }
         ConnRole::Unbound => {}
@@ -415,10 +414,10 @@ async fn handle_packet(
             }
 
             // 3. Update room if already in one
-            if let Some(client_id) = control_client_id {
-                if let Some(room) = room_mgr.client_room_mut(client_id) {
-                    room.set_client_channel_outbound(client_id, msg.channel, channel_outbound);
-                }
+            if let Some(client_id) = control_client_id
+                && let Some(room) = room_mgr.client_room_mut(client_id)
+            {
+                room.set_client_channel_outbound(client_id, msg.channel, channel_outbound);
             }
 
             Ok(())
@@ -441,24 +440,23 @@ async fn handle_packet(
     };
 
     // Check per-connection message rate limit
-    if let Some(ref limiter) = ctx.rate_limiter {
-        if !limiter.check() {
-            warn!(conn_id, %peer, "Connection closed: message rate limit exceeded");
-            send_error_response(ctx, HandlerError::rate_limited()).await;
-            conns.remove(&conn_id);
-            return;
-        }
+    if let Some(ref limiter) = ctx.rate_limiter
+        && !limiter.check()
+    {
+        warn!(conn_id, %peer, "Connection closed: message rate limit exceeded");
+        send_error_response(ctx, HandlerError::rate_limited()).await;
+        conns.remove(&conn_id);
+        return;
     }
 
     // Propagate activity to parent control connection if this is a secondary channel
-    if matches!(role, ConnRole::Channel(_)) {
-        if let Some(control_ctx) = session_token
+    if matches!(role, ConnRole::Channel(_))
+        && let Some(control_ctx) = session_token
             .and_then(|t| token_to_control_conn.get(&t))
             .filter(|&&id| id != conn_id)
             .and_then(|&id| conns.get_mut(&id))
-        {
-            control_ctx.last_activity = now;
-        }
+    {
+        control_ctx.last_activity = now;
     }
 
     let Some(ctx) = conns.get_mut(&conn_id) else {
@@ -482,13 +480,12 @@ async fn handle_packet(
     }
 
     // Refresh context and update lookup table if needed
-    if packet.msg_id() == MsgId::Hello {
-        if let Some(token) = conns
+    if packet.msg_id() == MsgId::Hello
+        && let Some(token) = conns
             .get(&conn_id)
             .filter(|c| c.role == ConnRole::Control)
             .and_then(|c| c.session_token)
-        {
-            token_to_control_conn.insert(token, conn_id);
-        }
+    {
+        token_to_control_conn.insert(token, conn_id);
     }
 }

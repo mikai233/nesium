@@ -88,10 +88,10 @@ impl JoinRoomHandler {
             };
             info!(room_id = id, client_id, "Room created");
             // The room's sync mode is decided at creation time by the host.
-            if let Some(room) = ctx.room_mgr.room_mut(id) {
-                if let Some(preferred) = join.preferred_sync_mode {
-                    room.sync_mode = preferred;
-                }
+            if let Some(room) = ctx.room_mgr.room_mut(id)
+                && let Some(preferred) = join.preferred_sync_mode
+            {
+                room.sync_mode = preferred;
             }
             Ok(id)
         } else {
@@ -110,7 +110,10 @@ impl JoinRoomHandler {
         room_id: u32,
         join: &JoinRoom,
     ) -> (bool, u8, bool) {
-        let room = ctx.room_mgr.room_mut(room_id).unwrap();
+        let room = ctx
+            .room_mgr
+            .room_mut(room_id)
+            .expect("room should exist after join");
         let is_spectator = join.desired_role == SPECTATOR_PLAYER_INDEX;
         let client_id = ctx.conn_ctx.assigned_client_id.unwrap_or(0);
 
@@ -289,15 +292,13 @@ impl JoinRoomHandler {
         }
 
         // 2. Late joiners: if there's a cached ROM, send it immediately.
-        if !join_has_rom {
-            if let Some(rom_data) = room.rom_data.clone() {
-                info!(client_id, "Sending cached ROM to joiner");
-                let load_rom = LoadRom { data: rom_data };
-                let tx = room
-                    .outbound_for_client_msg(client_id, MsgId::LoadRom)
-                    .unwrap_or_else(|| outbound.clone());
-                let _ = send_msg(&tx, &load_rom).await;
-            }
+        if !join_has_rom && let Some(rom_data) = room.rom_data.clone() {
+            info!(client_id, "Sending cached ROM to joiner");
+            let load_rom = LoadRom { data: rom_data };
+            let tx = room
+                .outbound_for_client_msg(client_id, MsgId::LoadRom)
+                .unwrap_or_else(|| outbound.clone());
+            let _ = send_msg(&tx, &load_rom).await;
         }
     }
 }

@@ -71,6 +71,7 @@ pub fn broadcast_inputs_optional(
 }
 
 /// Broadcast already-encoded relay frames.
+#[allow(dead_code)]
 pub async fn broadcast_relay_frames(recipients: &[OutboundTx], frames: &[Bytes]) {
     for frame in frames {
         for tx in recipients {
@@ -80,11 +81,13 @@ pub async fn broadcast_relay_frames(recipients: &[OutboundTx], frames: &[Bytes])
 }
 
 /// Send a single relay frame to one recipient.
+#[allow(dead_code)]
 pub async fn send_relay_frame(tx: &OutboundTx, frame: Bytes) {
     let _ = tx.send(frame).await;
 }
 
 /// Send input history to a single recipient (e.g., late joiner or reconnect).
+#[allow(dead_code)]
 pub async fn send_input_history(
     tx: &OutboundTx,
     player_index: u8,

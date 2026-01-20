@@ -8,6 +8,7 @@ use std::net::SocketAddr;
 
 use crate::net::inbound::ConnId;
 use crate::net::outbound::OutboundTx;
+use crate::proto_dispatch::error::HandlerError;
 use nesium_netproto::messages::session::SyncMode;
 use nesium_netproto::{
     channel::{ChannelKind, channel_for_msg},
@@ -39,6 +40,7 @@ pub struct P2PHostInfo {
 #[derive(Debug, Clone)]
 pub struct P2PFallbackState {
     pub reason: String,
+    #[allow(dead_code)]
     pub requested_by_client_id: u32,
 }
 
@@ -303,36 +305,26 @@ impl Room {
         let mut history = Vec::new();
 
         for (player_index, buffer) in self.input_buffers.iter().enumerate() {
-            let mut current_base: Option<u32> = None;
-            let mut current_buttons: Vec<u16> = Vec::new();
-            let mut prev_frame: Option<u32> = None;
+            // Find the first frame >= start_frame. VecDeque::partition_point is O(log N).
+            let start_idx = buffer.partition_point(|(f, _)| *f < start_frame);
+            let mut iter = buffer.iter().skip(start_idx).peekable();
 
-            for (frame, buttons) in buffer {
-                if *frame < start_frame {
-                    continue;
+            while let Some(&(frame, buttons)) = iter.next() {
+                let mut chunk = vec![buttons];
+                let mut expected_frame = frame + 1;
+
+                // Group contiguous frames into a single history entry
+                while let Some(&(next_frame, next_buttons)) = iter.peek() {
+                    if *next_frame == expected_frame {
+                        chunk.push(*next_buttons);
+                        expected_frame += 1;
+                        iter.next();
+                    } else {
+                        break;
+                    }
                 }
 
-                let contiguous = prev_frame
-                    .and_then(|prev| prev.checked_add(1))
-                    .map(|expected| expected == *frame)
-                    .unwrap_or(false);
-
-                if current_base.is_none() {
-                    current_base = Some(*frame);
-                } else if !contiguous {
-                    history.push((player_index as u8, current_base.unwrap(), current_buttons));
-                    current_base = Some(*frame);
-                    current_buttons = Vec::new();
-                }
-
-                current_buttons.push(*buttons);
-                prev_frame = Some(*frame);
-            }
-
-            if let Some(base_frame) = current_base {
-                if !current_buttons.is_empty() {
-                    history.push((player_index as u8, base_frame, current_buttons));
-                }
+                history.push((player_index as u8, frame, chunk));
             }
         }
 
@@ -340,6 +332,7 @@ impl Room {
     }
 
     /// Get player count.
+    #[allow(dead_code)]
     pub fn player_count(&self) -> usize {
         self.players.len()
     }
@@ -763,10 +756,8 @@ impl Room {
     pub fn handle_set_sync_mode(
         &mut self,
         sender_id: u32,
-        mode: nesium_netproto::messages::session::SyncMode,
-    ) -> Result<Vec<OutboundTx>, crate::proto_dispatch::error::HandlerError> {
-        use crate::proto_dispatch::error::HandlerError;
-
+        mode: SyncMode,
+    ) -> Result<Vec<OutboundTx>, HandlerError> {
         // Only host can change sync mode
         if sender_id != self.host_client_id {
             return Err(HandlerError::permission_denied());
@@ -891,6 +882,7 @@ impl RoomManager {
     }
 
     /// Get immutable room reference for a client by their client_id.
+    #[allow(dead_code)]
     pub fn client_room(&self, client_id: u32) -> Option<&Room> {
         let room_id = self.client_rooms.get(&client_id).copied()?;
         self.rooms.get(&room_id)
@@ -945,14 +937,14 @@ impl RoomManager {
     pub fn clear_p2p_host_for_client(&mut self, client_id: u32) -> Vec<(u32, Vec<OutboundTx>)> {
         let mut result = Vec::new();
         for room in self.rooms.values_mut() {
-            if let Some(host) = &room.p2p_host {
-                if host.host_signal_client_id == client_id {
-                    let room_id = room.id;
-                    let watchers: Vec<OutboundTx> = room.p2p_watchers.values().cloned().collect();
-                    room.p2p_host = None;
-                    if !watchers.is_empty() {
-                        result.push((room_id, watchers));
-                    }
+            if let Some(host) = &room.p2p_host
+                && host.host_signal_client_id == client_id
+            {
+                let room_id = room.id;
+                let watchers: Vec<OutboundTx> = room.p2p_watchers.values().cloned().collect();
+                room.p2p_host = None;
+                if !watchers.is_empty() {
+                    result.push((room_id, watchers));
                 }
             }
         }

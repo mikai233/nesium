@@ -79,9 +79,11 @@ impl IpRateLimiter {
 
         let limiter = self.limiters.entry(ip).or_insert_with(|| {
             let burst = self.config.conn_per_ip_per_sec * self.config.burst_multiplier;
-            let quota =
-                Quota::per_second(NonZeroU32::new(self.config.conn_per_ip_per_sec).unwrap())
-                    .allow_burst(NonZeroU32::new(burst).unwrap());
+            let quota = Quota::per_second(
+                NonZeroU32::new(self.config.conn_per_ip_per_sec)
+                    .expect("conn_per_ip_per_sec should be non-zero"),
+            )
+            .allow_burst(NonZeroU32::new(burst).expect("burst should be non-zero"));
             RateLimiter::direct(quota)
         });
 
