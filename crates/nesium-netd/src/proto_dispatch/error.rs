@@ -21,12 +21,6 @@ impl HandlerError {
         }
     }
 
-    pub fn room_full() -> Self {
-        Self {
-            code: ErrorCode::RoomFull,
-        }
-    }
-
     pub fn already_in_room() -> Self {
         Self {
             code: ErrorCode::AlreadyInRoom,

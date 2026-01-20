@@ -37,6 +37,12 @@ license = "GPL-3.0-or-later"
 description = "Nesium - a cross-platform NES emulator"
 repository = "https://github.com/mikai233/nesium"
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+
 [workspace.dependencies]
 libretro-bridge = { path = "crates/libretro-bridge" }
 nesium-blip = { path = "crates/nesium-blip" }

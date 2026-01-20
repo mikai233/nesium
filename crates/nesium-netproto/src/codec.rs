@@ -59,7 +59,8 @@ pub fn try_decode_tcp_frames<'a>(
             break;
         }
         let len_bytes = &in_buf[offset..offset + TCP_LEN_PREFIX];
-        let frame_len = u32::from_le_bytes(len_bytes.try_into().unwrap()) as usize;
+        let frame_len =
+            u32::from_le_bytes(len_bytes.try_into().expect("slice length is 4")) as usize;
 
         if frame_len < HEADER_LEN {
             return Err(ProtoError::LengthMismatch);

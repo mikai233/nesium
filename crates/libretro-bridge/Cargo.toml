@@ -7,6 +7,9 @@ description = "Safe Rust bindings and runtime helpers for implementing libretro 
 readme = "README.md"
 build = "build.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 once_cell.workspace = true
 parking_lot.workspace = true

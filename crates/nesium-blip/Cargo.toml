@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 license.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 # Compile against the vendored C++ implementation.
 c-impl = ["dep:cc", "dep:bindgen"]

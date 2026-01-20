@@ -6,6 +6,7 @@
 // instead of failing the entire worker module load with an opaque "Worker error".
 let wasm = null;
 let wasmMemory = null;
+let wasmInitPromise = null;
 
 let nes = null;
 
@@ -82,6 +83,28 @@ async function ensureWasmLoaded() {
     wasm = await import("./pkg/nesium_wasm.js");
     postLog("wasm module loaded");
     return wasm;
+}
+
+async function ensureWasmInitialized() {
+    if (wasmInitPromise) return wasmInitPromise;
+
+    wasmInitPromise = (async () => {
+        const mod = await ensureWasmLoaded();
+        postLog("initializing wasm...");
+        const exports = await mod.default();
+        wasmMemory = exports.memory;
+        postLog("wasm initialized");
+        mod.init_panic_hook();
+        return mod;
+    })();
+
+    try {
+        return await wasmInitPromise;
+    } catch (e) {
+        // Allow retry on subsequent calls.
+        wasmInitPromise = null;
+        throw e;
+    }
 }
 
 // Utility: stop loop
@@ -215,13 +238,8 @@ async function handleInit(msg) {
     width = msg.width ?? 256;
     height = msg.height ?? 240;
 
-    // Initialize wasm and panic hook
-    const mod = await ensureWasmLoaded();
-    postLog("initializing wasm...");
-    const exports = await mod.default();
-    wasmMemory = exports.memory;
-    postLog("wasm initialized");
-    mod.init_panic_hook();
+    // Initialize wasm and panic hook (can be pre-warmed via {type:'preload'})
+    const mod = await ensureWasmInitialized();
 
     // Create NES instance with sampleRate (AudioContext.sampleRate from main thread)
     const sr = msg.sampleRate ?? 48000;
@@ -272,6 +290,17 @@ onmessage = async (ev) => {
     if (!msg || typeof msg.type !== "string") return;
 
     try {
+        if (msg.type === "preload") {
+            try {
+                await ensureWasmInitialized();
+            } catch (e) {
+                // Preload is best-effort. Do not surface a persistent UI error
+                // until the real {type:'init'} flow needs the wasm.
+                postLog(`wasm preload failed: ${e?.message ?? e}`);
+            }
+            return;
+        }
+
         if (msg.type === "init") {
             await handleInit(msg);
             return;

@@ -127,11 +127,12 @@ pub async fn handle_tcp_connection(
                 Ok(ws_stream) => {
                     let (write, read) = ws_stream.split();
                     // Adapt the WebSocket frame sink to a Bytes sink
-                    let sink = write.sink_map_err(|e| std::io::Error::other(e)).with(
-                        |msg: bytes::Bytes| {
-                            std::future::ready(Ok(tungstenite::Message::Binary(msg)))
-                        },
-                    );
+                    let sink =
+                        write
+                            .sink_map_err(std::io::Error::other)
+                            .with(|msg: bytes::Bytes| {
+                                std::future::ready(Ok(tungstenite::Message::Binary(msg)))
+                            });
 
                     let adapted_read = WebSocketStream::new(read);
                     handle_connection_inner(adapted_read, sink, peer, conn_id, tx).await;
@@ -148,7 +149,7 @@ pub async fn handle_tcp_connection(
                     match accept_async(tls_stream).await {
                         Ok(ws_stream) => {
                             let (write, read) = ws_stream.split();
-                            let sink = write.sink_map_err(|e| std::io::Error::other(e)).with(
+                            let sink = write.sink_map_err(std::io::Error::other).with(
                                 |msg: bytes::Bytes| {
                                     std::future::ready(Ok(tungstenite::Message::Binary(msg)))
                                 },
