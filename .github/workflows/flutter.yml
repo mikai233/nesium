@@ -71,7 +71,7 @@ jobs:
           # Use python to safely remove the fonts section from the flutter block
           python3 -c "
           import re
-          p = 'apps/nesium_flutter/pubspec.yaml'
+          p = 'pubspec.yaml'
           content = open(p).read()
           # Remove the fonts: block under flutter:
           content = re.sub(r'  fonts:\s*\n(\s+- family:.*\n(\s+.*\n)*)', '', content)
