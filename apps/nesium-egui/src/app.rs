@@ -84,6 +84,8 @@ impl RuntimeEventSender for EguiDebugEventSender {
 
 pub struct AppConfig {
     pub rom_path: Option<PathBuf>,
+    #[allow(dead_code)]
+    pub lua_script_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

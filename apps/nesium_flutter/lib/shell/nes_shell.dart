@@ -36,6 +36,7 @@ import '../l10n/app_localizations.dart';
 import '../logging/app_logger.dart';
 import '../platform/desktop_window_manager.dart';
 import '../platform/platform_capabilities.dart';
+import '../startup/launch_args.dart';
 import 'desktop_shell.dart';
 import 'nes_actions.dart';
 import 'mobile_shell.dart';
@@ -59,6 +60,8 @@ class _NesShellState extends ConsumerState<NesShell>
       const DesktopWindowManager();
   final FocusNode _focusNode = FocusNode();
   bool _pausedByLifecycle = false;
+  late final Future<void> _runtimeInitFuture;
+  bool _launchArgsHandled = false;
   StreamSubscription<nes_events.RuntimeNotification>? _runtimeNotificationsSub;
   StreamSubscription<nes_netplay.NetplayGameEvent>? _netplayEventsSub;
   StreamSubscription<nes_events.EmulationStatusNotification>?
@@ -72,7 +75,7 @@ class _NesShellState extends ConsumerState<NesShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Future.microtask(() async {
+    _runtimeInitFuture = Future.microtask(() async {
       // Start the NES runtime thread on the Rust side via FRB,
       // then initialize the texture used for rendering.
       try {
@@ -97,6 +100,23 @@ class _NesShellState extends ConsumerState<NesShell>
             );
           });
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_handleLaunchArgsAfterInit());
+    });
+  }
+
+  Future<void> _handleLaunchArgsAfterInit() async {
+    if (_launchArgsHandled) return;
+    _launchArgsHandled = true;
+
+    await _runtimeInitFuture;
+    if (!mounted) return;
+
+    final launchArgs = ref.read(launchArgsProvider);
+    final romPath = launchArgs.romPath;
+    if (romPath == null || romPath.isEmpty) return;
+
+    await _loadRomFromPath(romPath);
   }
 
   @override
@@ -387,6 +407,65 @@ class _NesShellState extends ConsumerState<NesShell>
       final l10n = AppLocalizations.of(context)!;
       _showSnack('${l10n.commandFailed(label)}: $e');
     }
+  }
+
+  Future<void> _loadRomFromPath(String path) async {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    final name = p.basenameWithoutExtension(path);
+
+    await _runRustCommand(l10n.actionLoadRom, () async {
+      final isNetplay = await nes_netplay.netplayIsConnected();
+
+      Uint8List? bytes;
+      try {
+        bytes = await File(path).readAsBytes();
+      } catch (_) {
+        // Best-effort: ROM can still be loaded from path.
+      }
+
+      await nes_api.loadRom(path: path);
+
+      if (bytes != null) {
+        ref.read(nesControllerProvider.notifier).updateRomBytes(bytes);
+      }
+
+      if (isNetplay && bytes != null) {
+        // Pause immediately to wait for sync
+        _pausedByLifecycle = true;
+        await nes_pause.setPaused(paused: true);
+        ref.read(emulationStatusProvider.notifier).setPaused(true);
+
+        try {
+          // In netplay mode, any player (non-spectator) may broadcast the ROM.
+          // Spectators will be rejected and should wait for the server to push `LoadRom`.
+          await nes_netplay.netplaySendRom(data: bytes);
+        } catch (e) {
+          _pausedByLifecycle = false;
+          await nes_pause.setPaused(paused: false);
+          ref.read(emulationStatusProvider.notifier).setPaused(false);
+          rethrow;
+        }
+
+        // Host already loaded the ROM locally; confirm immediately so the server can StartGame.
+        try {
+          await nes_netplay.netplaySendRomLoaded();
+        } catch (e) {
+          _pausedByLifecycle = false;
+          await nes_pause.setPaused(paused: false);
+          ref.read(emulationStatusProvider.notifier).setPaused(false);
+          rethrow;
+        }
+      }
+
+      await ref.read(nesControllerProvider.notifier).refreshRomHash();
+      ref
+          .read(nesControllerProvider.notifier)
+          .updateRomInfo(
+            hash: ref.read(nesControllerProvider).romHash,
+            name: name,
+          );
+    });
   }
 
   Future<void> _promptAndLoadRom() async {
