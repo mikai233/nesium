@@ -32,6 +32,11 @@
 
   <title>Nesium</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Warm up wasm fetch/compile as early as possible. -->
+  <link rel="modulepreload" href="nes/nes_worker.js">
+  <link rel="modulepreload" href="nes/pkg/nesium_wasm.js">
+  <link rel="preload" href="nes/pkg/nesium_wasm_bg.wasm" as="fetch" type="application/wasm" crossorigin="anonymous">
   <style>
     body {
       margin: 0;

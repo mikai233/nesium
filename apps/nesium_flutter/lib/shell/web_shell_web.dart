@@ -80,6 +80,11 @@ class _WebShellState extends ConsumerState<WebShell> {
     super.initState();
     _viewType = 'nesium-canvas-${DateTime.now().microsecondsSinceEpoch}';
     _initCanvasView();
+    unawaitedLogged(
+      _warmupNesWasm(),
+      message: 'warmup NES wasm',
+      logger: 'web_shell',
+    );
   }
 
   @override
@@ -175,6 +180,12 @@ class _WebShellState extends ConsumerState<WebShell> {
       );
       _handleFatalWorkerFailure(details ?? 'Worker message error', error: e);
     }).toJS;
+  }
+
+  Future<void> _warmupNesWasm() async {
+    _ensureWorker();
+    final payload = JSObject()..['type'] = 'preload'.toJS;
+    _worker?.postMessage(payload);
   }
 
   Future<void> _ensureInitialized() async {
