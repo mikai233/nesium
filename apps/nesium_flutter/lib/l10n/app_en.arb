@@ -238,6 +238,16 @@
       }
     }
   },
+  "rewindSpeedTitle": "Rewind Speed",
+  "rewindSpeedSubtitle": "Speed while rewinding is active.",
+  "rewindSpeedValue": "{percent}%",
+  "@rewindSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "autoSlotLabel": "Auto Slot",
   "menuAutoSave": "Auto Save...",
   "stateAutoSaved": "Auto save created",

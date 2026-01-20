@@ -305,15 +305,22 @@ impl Runner {
     }
 
     fn current_frame_duration(&self) -> Duration {
-        if !self.state.fast_forwarding.load(Ordering::Acquire) {
+        let is_fast_forwarding = self.state.fast_forwarding.load(Ordering::Acquire);
+        let is_rewinding = self.state.rewinding.load(Ordering::Acquire);
+
+        if !is_fast_forwarding && !is_rewinding {
             return self.frame_duration;
         }
 
-        let speed = self
-            .state
-            .fast_forward_speed_percent
-            .load(Ordering::Acquire)
-            .clamp(100, 1000) as u128;
+        let speed = if is_fast_forwarding {
+            self.state
+                .fast_forward_speed_percent
+                .load(Ordering::Acquire)
+        } else {
+            self.state.rewind_speed_percent.load(Ordering::Acquire)
+        }
+        .clamp(100, 1000) as u128;
+
         let base = self.frame_duration.as_nanos();
         let scaled = (base.saturating_mul(100) / speed).max(1);
         Duration::from_nanos(scaled.min(u128::from(u64::MAX)) as u64)
@@ -357,6 +364,12 @@ impl Runner {
             ControlMessage::SetFastForwardSpeed(speed, reply) => {
                 self.state
                     .fast_forward_speed_percent
+                    .store(speed.clamp(100, 1000), Ordering::Release);
+                let _ = reply.send(Ok(()));
+            }
+            ControlMessage::SetRewindSpeed(speed, reply) => {
+                self.state
+                    .rewind_speed_percent
                     .store(speed.clamp(100, 1000), Ordering::Release);
                 let _ = reply.send(Ok(()));
             }

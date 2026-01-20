@@ -182,6 +182,16 @@
       }
     }
   },
+  "rewindSpeedTitle": "倒带速度",
+  "rewindSpeedSubtitle": "倒带时的运行速度百分比。",
+  "rewindSpeedValue": "{percent}%",
+  "@rewindSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "autoSlotLabel": "自动存档位",
   "menuAutoSave": "自动存档…",
   "stateAutoSaved": "自动存档已创建",

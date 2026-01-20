@@ -392,6 +392,17 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get rewindSpeedTitle => '倒带速度';
+
+  @override
+  String get rewindSpeedSubtitle => '倒带时的运行速度百分比。';
+
+  @override
+  String rewindSpeedValue(int percent) {
+    return '$percent%';
+  }
+
+  @override
   String get autoSlotLabel => '自动存档位';
 
   @override

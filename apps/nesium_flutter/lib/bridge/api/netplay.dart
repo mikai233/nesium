@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'netplay.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `lock_unpoison`, `netplay_disconnect_inner`, `notify_status`, `signaling_connect_and_handshake`, `signaling_request`, `start_netplay_session_with_client`
+// These functions are ignored because they are not marked as `pub`: `lock_unpoison`, `netplay_disconnect_inner`, `notify_status`, `resolve_addr`, `signaling_connect_and_handshake`, `signaling_request`, `start_netplay_session_with_client`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `NetplayManager`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `get_manager`

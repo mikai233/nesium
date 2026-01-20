@@ -18,6 +18,9 @@ Future<void> setFastForwarding({required bool fastForwarding}) =>
 Future<void> setFastForwardSpeed({required int speedPercent}) =>
     frb_emulation.setFastForwardSpeed(speedPercent: speedPercent);
 
+Future<void> setRewindSpeed({required int speedPercent}) =>
+    frb_emulation.setRewindSpeed(speedPercent: speedPercent);
+
 Future<void> loadTasMovie({required String data}) =>
     frb_emulation.loadTasMovie(data: data);
 

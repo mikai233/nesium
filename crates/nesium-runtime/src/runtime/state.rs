@@ -6,6 +6,7 @@ use super::types::TileViewerConfig;
 pub(crate) const TURBO_ON_FRAMES_DEFAULT: u8 = 2;
 pub(crate) const TURBO_OFF_FRAMES_DEFAULT: u8 = 2;
 pub(crate) const FAST_FORWARD_SPEED_PERCENT_DEFAULT: u16 = 300;
+pub(crate) const REWIND_SPEED_PERCENT_DEFAULT: u16 = 100;
 
 pub(crate) struct RuntimeState {
     pub(crate) paused: AtomicBool,
@@ -21,6 +22,7 @@ pub(crate) struct RuntimeState {
     pub(crate) rewinding: AtomicBool,
     pub(crate) fast_forwarding: AtomicBool,
     pub(crate) fast_forward_speed_percent: AtomicU16,
+    pub(crate) rewind_speed_percent: AtomicU16,
 }
 
 impl RuntimeState {
@@ -39,6 +41,7 @@ impl RuntimeState {
             rewinding: AtomicBool::new(false),
             fast_forwarding: AtomicBool::new(false),
             fast_forward_speed_percent: AtomicU16::new(FAST_FORWARD_SPEED_PERCENT_DEFAULT),
+            rewind_speed_percent: AtomicU16::new(REWIND_SPEED_PERCENT_DEFAULT),
         }
     }
 }

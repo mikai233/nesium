@@ -400,6 +400,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get rewindSpeedTitle => 'Rewind Speed';
+
+  @override
+  String get rewindSpeedSubtitle => 'Speed while rewinding is active.';
+
+  @override
+  String rewindSpeedValue(int percent) {
+    return '$percent%';
+  }
+
+  @override
   String get autoSlotLabel => 'Auto Slot';
 
   @override

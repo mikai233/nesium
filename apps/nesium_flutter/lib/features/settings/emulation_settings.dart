@@ -20,6 +20,7 @@ class EmulationSettings {
     required this.fastForwardSpeedPercent,
     required this.rewindEnabled,
     required this.rewindSeconds,
+    required this.rewindSpeedPercent,
     required this.showEmulationStatusOverlay,
   });
 
@@ -31,6 +32,7 @@ class EmulationSettings {
   final int fastForwardSpeedPercent;
   final bool rewindEnabled;
   final int rewindSeconds;
+  final int rewindSpeedPercent;
   final bool showEmulationStatusOverlay;
 
   EmulationSettings copyWith({
@@ -42,6 +44,7 @@ class EmulationSettings {
     int? fastForwardSpeedPercent,
     bool? rewindEnabled,
     int? rewindSeconds,
+    int? rewindSpeedPercent,
     bool? showEmulationStatusOverlay,
   }) {
     return EmulationSettings(
@@ -55,6 +58,7 @@ class EmulationSettings {
           fastForwardSpeedPercent ?? this.fastForwardSpeedPercent,
       rewindEnabled: rewindEnabled ?? this.rewindEnabled,
       rewindSeconds: rewindSeconds ?? this.rewindSeconds,
+      rewindSpeedPercent: rewindSpeedPercent ?? this.rewindSpeedPercent,
       showEmulationStatusOverlay:
           showEmulationStatusOverlay ?? this.showEmulationStatusOverlay,
     );
@@ -70,6 +74,7 @@ class EmulationSettings {
       fastForwardSpeedPercent: 300,
       rewindEnabled: true,
       rewindSeconds: 60,
+      rewindSpeedPercent: 100,
       showEmulationStatusOverlay: true,
     );
   }
@@ -98,6 +103,7 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     );
     _applyFastForwardSpeed();
     _applyRewindConfig();
+    _applyRewindSpeed();
   }
 
   void setIntegerFpsMode(bool enabled) {
@@ -160,6 +166,14 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     _persist(state);
   }
 
+  void setRewindSpeedPercent(int percent) {
+    final clamped = percent.clamp(100, 1000);
+    if (clamped == state.rewindSpeedPercent) return;
+    state = state.copyWith(rewindSpeedPercent: clamped);
+    _applyRewindSpeed();
+    _persist(state);
+  }
+
   void setShowEmulationStatusOverlay(bool enabled) {
     if (enabled == state.showEmulationStatusOverlay) return;
     state = state.copyWith(showEmulationStatusOverlay: enabled);
@@ -173,6 +187,14 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
         capacity: BigInt.from(state.rewindSeconds * 60),
       ),
       message: 'setRewindConfig',
+      logger: 'emulation_settings',
+    );
+  }
+
+  void _applyRewindSpeed() {
+    unawaitedLogged(
+      nes_emulation.setRewindSpeed(speedPercent: state.rewindSpeedPercent),
+      message: 'setRewindSpeed',
       logger: 'emulation_settings',
     );
   }
@@ -218,6 +240,7 @@ Map<String, Object?> _emulationSettingsToStorage(EmulationSettings value) =>
       'fastForwardSpeedPercent': value.fastForwardSpeedPercent,
       'rewindEnabled': value.rewindEnabled,
       'rewindSeconds': value.rewindSeconds,
+      'rewindSpeedPercent': value.rewindSpeedPercent,
       'showEmulationStatusOverlay': value.showEmulationStatusOverlay,
     };
 
@@ -251,6 +274,9 @@ EmulationSettings? _emulationSettingsFromStorage(
   final rewindSeconds = map['rewindSeconds'] is int
       ? map['rewindSeconds'] as int
       : null;
+  final rewindSpeedPercent = map['rewindSpeedPercent'] is int
+      ? map['rewindSpeedPercent'] as int
+      : null;
   final showEmulationStatusOverlay = map['showEmulationStatusOverlay'] is bool
       ? map['showEmulationStatusOverlay'] as bool
       : null;
@@ -265,6 +291,7 @@ EmulationSettings? _emulationSettingsFromStorage(
         fastForwardSpeedPercent ?? defaults.fastForwardSpeedPercent,
     rewindEnabled: rewindEnabled ?? defaults.rewindEnabled,
     rewindSeconds: rewindSeconds ?? defaults.rewindSeconds,
+    rewindSpeedPercent: rewindSpeedPercent ?? defaults.rewindSpeedPercent,
     showEmulationStatusOverlay:
         showEmulationStatusOverlay ?? defaults.showEmulationStatusOverlay,
   );

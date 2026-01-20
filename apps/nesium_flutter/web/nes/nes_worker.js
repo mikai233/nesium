@@ -33,6 +33,7 @@ let integerFpsMode = false;
 let rewinding = false;
 let fastForwarding = false;
 let fastForwardSpeedPercent = 100;
+let rewindSpeedPercent = 100;
 let baseFps = EXACT_NTSC_FPS;
 
 // Input
@@ -47,8 +48,14 @@ let turboPhaseOn = true;
 let turboPhaseRemaining = turboOnFrames;
 
 function updateTargetFps() {
-    const speed = Math.max(100, Math.min(1000, fastForwardSpeedPercent | 0));
-    const multiplier = fastForwarding ? (speed / 100) : 1;
+    let multiplier = 1;
+    if (fastForwarding) {
+        const speed = Math.max(100, Math.min(1000, fastForwardSpeedPercent | 0));
+        multiplier = speed / 100;
+    } else if (rewinding) {
+        const speed = Math.max(100, Math.min(1000, rewindSpeedPercent | 0));
+        multiplier = speed / 100;
+    }
     targetFps = baseFps * multiplier;
 }
 
@@ -166,7 +173,7 @@ function recomputeHasTurboInput() {
     hasTurboInput = (((t0 | t1) & 0xff) !== 0);
 }
 
-// Render one frame (and optionally send audio)
+// Render one or more frames (catch up if behind)
 function tick() {
     if (!running && !rewinding) {
         stopLoop();
@@ -174,63 +181,68 @@ function tick() {
     }
 
     try {
-        if (!rewinding) {
-            // Always sync pads during forward simulation to avoid ghost inputs 
-            // restored from snapshots.
-            applyAllPads();
-            if (hasTurboInput) {
-                advanceTurboPhase();
+        const now = performance.now();
+        if (nextFrameAt === 0) nextFrameAt = now;
+
+        const frameDuration = 1000 / targetFps;
+        let framesRun = 0;
+        // Limit catch-up to avoid "spiral of death" if the worker is too slow.
+        // 10 frames is ~166ms at 60fps, enough to handle most bursts.
+        const maxCatchUp = 10;
+
+        while (now >= nextFrameAt && framesRun < maxCatchUp) {
+            if (!rewinding) {
+                // Always sync pads during forward simulation to avoid ghost inputs 
+                // restored from snapshots.
+                applyAllPads();
+                if (hasTurboInput) {
+                    advanceTurboPhase();
+                }
             }
-        }
-        
-        // WASM nes.run_frame handles internal state management based on its own internal 'rewinding' flag.
-        nes.run_frame(emitAudio && !rewinding);
 
-        // ----- Video: copy RGBA bytes from WASM memory into ImageData -----
-        const fptr = nes.frame_ptr();
-        const flen = nes.frame_len(); // should be width*height*4
-        const rgbaView = new Uint8Array(wasmMemory.buffer, fptr, flen);
+            // WASM nes.run_frame handles internal state management based on its own internal 'rewinding' flag.
+            nes.run_frame(emitAudio && !rewinding);
 
-        // Copy into ImageData.data (Uint8ClampedArray). This avoids lifetime issues.
-        imageData.data.set(rgbaView);
-        ctx2d.putImageData(imageData, 0, 0);
+            // ----- Audio: post interleaved stereo f32 (must do for every frame) -----
+            if (emitAudio && !rewinding) {
+                const aptr = nes.audio_ptr();
+                const alen = nes.audio_len();
 
-        // ----- Audio: post interleaved stereo f32 -----
-        if (emitAudio && !rewinding) {
-            const aptr = nes.audio_ptr();
-            const alen = nes.audio_len();
-
-            if (alen > 0) {
-                const audioView = new Float32Array(wasmMemory.buffer, aptr, alen);
-
-                // Copy to a transferable buffer so the main thread/worklet gets a stable chunk.
-                const copy = new Float32Array(alen);
-                copy.set(audioView);
-
-                postMessage({ type: "audio", buffer: copy.buffer }, [copy.buffer]);
+                if (alen > 0) {
+                    const audioView = new Float32Array(wasmMemory.buffer, aptr, alen);
+                    const copy = new Float32Array(alen);
+                    copy.set(audioView);
+                    postMessage({ type: "audio", buffer: copy.buffer }, [copy.buffer]);
+                }
             }
+
+            nextFrameAt += frameDuration;
+            framesRun++;
         }
+
+        if (framesRun > 0) {
+            // ----- Video: copy RGBA bytes from WASM memory into ImageData (only once per tick) -----
+            const fptr = nes.frame_ptr();
+            const flen = nes.frame_len(); // should be width*height*4
+            const rgbaView = new Uint8Array(wasmMemory.buffer, fptr, flen);
+
+            // Copy into ImageData.data (Uint8ClampedArray). This avoids lifetime issues.
+            imageData.data.set(rgbaView);
+            ctx2d.putImageData(imageData, 0, 0);
+        }
+
+        // If we are STILL behind (extreme stall), reset the deadline.
+        if (now - nextFrameAt > 200) {
+            nextFrameAt = now;
+        }
+
+        const delay = Math.max(0, nextFrameAt - now);
+        timer = setTimeout(tick, delay);
     } catch (e) {
         running = false;
         stopLoop();
         postError(e);
-        return;
     }
-
-    // Drift-corrected pacing.
-    const now = performance.now();
-    if (nextFrameAt === 0) nextFrameAt = now;
-    nextFrameAt += 1000 / targetFps;
-
-    // If we were stalled for too long (tab jank / scheduler delay), do not try to
-    // "catch up" by running frames in a tight loop: that can build up a large
-    // audio buffer and make audio lag behind video.
-    if (now - nextFrameAt > 250) {
-        nextFrameAt = now;
-    }
-
-    const delay = Math.max(0, nextFrameAt - now);
-    timer = setTimeout(tick, delay);
 }
 
 async function handleInit(msg) {
@@ -250,6 +262,7 @@ async function handleInit(msg) {
     integerFpsMode = false;
     fastForwarding = false;
     fastForwardSpeedPercent = 100;
+    rewindSpeedPercent = 100;
     updateTargetFps();
     if (typeof nes.reset_audio_integer_fps_scale === "function") {
         nes.reset_audio_integer_fps_scale();
@@ -314,13 +327,13 @@ onmessage = async (ev) => {
                     // msg.rom is ArrayBuffer
                     const romBytes = new Uint8Array(msg.rom);
                     nes.load_rom(romBytes);
-                    
+
                     let hash = null;
                     if (typeof nes.get_rom_hash === "function") {
                         const hashBytes = nes.get_rom_hash(romBytes);
                         hash = Array.from(hashBytes);
                     }
-                    
+
                     postMessage({ type: "romLoaded", hash: hash });
                     break;
                 }
@@ -330,10 +343,10 @@ onmessage = async (ev) => {
                         throw new Error("Missing wasm export: save_state. Rebuild `web/nes/pkg`.");
                     }
                     const data = nes.save_state();
-                    postMessage({ 
-                        type: "saveStateResult", 
-                        data: data.buffer, 
-                        requestId: msg.requestId 
+                    postMessage({
+                        type: "saveStateResult",
+                        data: data.buffer,
+                        requestId: msg.requestId
                     }, [data.buffer]);
                     break;
                 }
@@ -344,10 +357,10 @@ onmessage = async (ev) => {
                     }
                     const bytes = new Uint8Array(msg.data);
                     nes.load_state(bytes);
-                    postMessage({ 
-                        type: "loadStateResult", 
-                        success: true, 
-                        requestId: msg.requestId 
+                    postMessage({
+                        type: "loadStateResult",
+                        success: true,
+                        requestId: msg.requestId
                     });
                     break;
                 }
@@ -379,8 +392,10 @@ onmessage = async (ev) => {
                         throw new Error("Missing wasm export: set_rewinding. Rebuild `web/nes/pkg`.");
                     }
                     nes.set_rewinding(nextRewinding);
-                    
+
                     if (nextRewinding !== rewinding) {
+                        rewinding = nextRewinding;
+                        updateTargetFps();
                         nextFrameAt = 0; // Reset pacing to avoid delay
                         if (nextRewinding) {
                             if (!timer) tick(); // Wake up the loop
@@ -389,7 +404,6 @@ onmessage = async (ev) => {
                             applyAllPads();
                         }
                     }
-                    rewinding = nextRewinding;
                     break;
                 }
 
@@ -406,6 +420,17 @@ onmessage = async (ev) => {
                 case "setFastForwardSpeed": {
                     const nextSpeed = msg.speedPercent ?? 100;
                     fastForwardSpeedPercent = Math.max(100, Math.min(1000, nextSpeed | 0));
+                    updateTargetFps();
+                    nextFrameAt = 0;
+                    break;
+                }
+
+                case "setRewindSpeed": {
+                    const nextSpeed = msg.speedPercent ?? 100;
+                    rewindSpeedPercent = Math.max(100, Math.min(1000, nextSpeed | 0));
+                    if (typeof nes.set_rewind_speed === "function") {
+                        nes.set_rewind_speed(rewindSpeedPercent);
+                    }
                     updateTargetFps();
                     nextFrameAt = 0;
                     break;

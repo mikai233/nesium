@@ -800,6 +800,24 @@ abstract class AppLocalizations {
   /// **'{minutes} minutes'**
   String rewindMinutesValue(int minutes);
 
+  /// No description provided for @rewindSpeedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind Speed'**
+  String get rewindSpeedTitle;
+
+  /// No description provided for @rewindSpeedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed while rewinding is active.'**
+  String get rewindSpeedSubtitle;
+
+  /// No description provided for @rewindSpeedValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String rewindSpeedValue(int percent);
+
   /// No description provided for @autoSlotLabel.
   ///
   /// In en, this message translates to:
