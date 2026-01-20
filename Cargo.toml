@@ -103,7 +103,7 @@ rustls = { version = "0.23.36", default-features = false, features = [
 ] }
 rustls-native-certs = "0.8.3"
 ring = "0.17.14"
-rcgen = { version = "0.14.6", default-features = false, features = [
+rcgen = { version = "0.14.7", default-features = false, features = [
   "pem",
   "ring",
 ] }
