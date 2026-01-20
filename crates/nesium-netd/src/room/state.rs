@@ -246,36 +246,31 @@ impl Room {
         let mut history = Vec::new();
 
         for (player_index, buffer) in self.input_buffers.iter().enumerate() {
-            let mut current_base: Option<u32> = None;
-            let mut current_buttons: Vec<u16> = Vec::new();
-            let mut prev_frame: Option<u32> = None;
+            let mut current_span: Option<(u32, Vec<u16>)> = None;
+            let mut last_frame = 0;
 
             for (frame, buttons) in buffer {
                 if *frame < start_frame {
                     continue;
                 }
 
-                let contiguous = prev_frame
-                    .and_then(|prev| prev.checked_add(1))
-                    .map(|expected| expected == *frame)
-                    .unwrap_or(false);
-
-                if current_base.is_none() {
-                    current_base = Some(*frame);
-                } else if !contiguous {
-                    history.push((player_index as u8, current_base.unwrap(), current_buttons));
-                    current_base = Some(*frame);
-                    current_buttons = Vec::new();
+                match current_span.as_mut() {
+                    Some((_, buttons_vec)) if *frame == last_frame + 1 => {
+                        buttons_vec.push(*buttons);
+                        last_frame = *frame;
+                    }
+                    _ => {
+                        if let Some((base, buttons_vec)) = current_span.take() {
+                            history.push((player_index as u8, base, buttons_vec));
+                        }
+                        current_span = Some((*frame, vec![*buttons]));
+                        last_frame = *frame;
+                    }
                 }
-
-                current_buttons.push(*buttons);
-                prev_frame = Some(*frame);
             }
 
-            if let Some(base_frame) = current_base {
-                if !current_buttons.is_empty() {
-                    history.push((player_index as u8, base_frame, current_buttons));
-                }
+            if let Some((base, buttons_vec)) = current_span {
+                history.push((player_index as u8, base, buttons_vec));
             }
         }
 
@@ -749,14 +744,14 @@ impl RoomManager {
     pub fn clear_p2p_host_for_client(&mut self, client_id: u32) -> Vec<(u32, Vec<OutboundTx>)> {
         let mut result = Vec::new();
         for room in self.rooms.values_mut() {
-            if let Some(host) = &room.p2p_host {
-                if host.host_signal_client_id == client_id {
-                    let room_code = room.code;
-                    let watchers: Vec<OutboundTx> = room.p2p_watchers.values().cloned().collect();
-                    room.p2p_host = None;
-                    if !watchers.is_empty() {
-                        result.push((room_code, watchers));
-                    }
+            if let Some(host) = &room.p2p_host
+                && host.host_signal_client_id == client_id
+            {
+                let room_code = room.code;
+                let watchers: Vec<OutboundTx> = room.p2p_watchers.values().cloned().collect();
+                room.p2p_host = None;
+                if !watchers.is_empty() {
+                    result.push((room_code, watchers));
                 }
             }
         }

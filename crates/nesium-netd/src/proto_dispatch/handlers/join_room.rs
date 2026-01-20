@@ -46,10 +46,10 @@ pub(crate) async fn handle(
             "Room created"
         );
         // The room's sync mode is decided at creation time by the host.
-        if let Some(room) = room_mgr.get_room_mut(id) {
-            if let Some(preferred) = join.preferred_sync_mode {
-                room.sync_mode = preferred;
-            }
+        if let Some(room) = room_mgr.get_room_mut(id)
+            && let Some(preferred) = join.preferred_sync_mode
+        {
+            room.sync_mode = preferred;
         }
         id
     } else {
@@ -63,7 +63,9 @@ pub(crate) async fn handle(
     };
 
     let (ok, player_index) = {
-        let room = room_mgr.get_room_mut(room_id).unwrap();
+        let room = room_mgr
+            .get_room_mut(room_id)
+            .expect("room should exist as we either just created it or found it by code");
         let is_spectator = room.player_count() >= 2;
 
         let mut outbounds = ClientOutbounds::new(ctx.outbound.clone());
@@ -117,7 +119,7 @@ pub(crate) async fn handle(
 
     // Determine start_frame for late joiners: use cached state frame if available
     let (start_frame, sync_mode) = {
-        let room = room_mgr.get_room_mut(room_id).unwrap();
+        let room = room_mgr.get_room_mut(room_id).expect("room should exist");
         let frame = room.cached_state.as_ref().map(|(f, _)| *f).unwrap_or(0);
         (frame, room.sync_mode)
     };
@@ -138,7 +140,7 @@ pub(crate) async fn handle(
 
     // Broadcast PlayerJoined to existing players (not to the joiner).
     if ok && player_index != SPECTATOR_PLAYER_INDEX {
-        let room = room_mgr.get_room_mut(room_id).unwrap();
+        let room = room_mgr.get_room_mut(room_id).expect("room should exist");
         let existing_outbounds: Vec<_> = room
             .players
             .values()
@@ -173,7 +175,7 @@ pub(crate) async fn handle(
 
     // Inform the new joiner about all existing players and spectators.
     if ok {
-        let room = room_mgr.get_room_mut(room_id).unwrap();
+        let room = room_mgr.get_room_mut(room_id).expect("room should exist");
         let mut existing_players = Vec::new();
         for p in room.players.values() {
             if p.client_id != ctx.assigned_client_id {
