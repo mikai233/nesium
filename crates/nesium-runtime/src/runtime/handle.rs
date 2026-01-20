@@ -542,6 +542,13 @@ impl RuntimeHandle {
         })
     }
 
+    pub fn set_rewind_speed(&self, speed_percent: u16) -> Result<(), RuntimeError> {
+        let clamped = speed_percent.clamp(100, 1000);
+        self.send_with_reply("set_rewind_speed", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetRewindSpeed(clamped, reply)
+        })
+    }
+
     pub fn load_movie(&self, movie: nesium_support::tas::Movie) -> Result<(), RuntimeError> {
         self.send_with_reply("load_movie", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::LoadMovie(movie, reply)

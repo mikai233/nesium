@@ -42,5 +42,8 @@ Future<void> setFastForwardSpeed({required int speedPercent}) => RustLib
     .api
     .crateApiEmulationSetFastForwardSpeed(speedPercent: speedPercent);
 
+Future<void> setRewindSpeed({required int speedPercent}) => RustLib.instance.api
+    .crateApiEmulationSetRewindSpeed(speedPercent: speedPercent);
+
 Future<void> loadTasMovie({required String data}) =>
     RustLib.instance.api.crateApiEmulationLoadTasMovie(data: data);

@@ -42,6 +42,7 @@ pub(crate) enum ControlMessage {
     SetRewinding(bool, ControlReplySender),
     SetFastForwarding(bool, ControlReplySender),
     SetFastForwardSpeed(u16, ControlReplySender),
+    SetRewindSpeed(u16, ControlReplySender),
     LoadMovie(nesium_support::tas::Movie, ControlReplySender),
     SubscribeEvent(EventTopic, Box<dyn RuntimeEventSender>, ControlReplySender),
     UnsubscribeEvent(EventTopic, ControlReplySender),

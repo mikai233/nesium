@@ -90,6 +90,9 @@ pub struct WasmNes {
     /// Whether the emulator is currently in rewind mode.
     rewinding: bool,
 
+    /// Rewind speed percent.
+    rewind_speed_percent: u16,
+
     /// TAS movie playback.
     movie: Option<nesium_support::tas::Movie>,
     movie_frame: usize,
@@ -127,6 +130,7 @@ impl WasmNes {
             rewind_enabled: false,
             rewind_capacity: 600,
             rewinding: false,
+            rewind_speed_percent: 100,
             movie: None,
             movie_frame: 0,
         }
@@ -263,6 +267,11 @@ impl WasmNes {
     /// Sets the rewinding state.
     pub fn set_rewinding(&mut self, rewinding: bool) {
         self.rewinding = rewinding;
+    }
+
+    /// Sets the rewind speed.
+    pub fn set_rewind_speed(&mut self, speed_percent: u16) {
+        self.rewind_speed_percent = speed_percent;
     }
 
     fn rewind_one_frame(&mut self) -> Result<(), JsValue> {

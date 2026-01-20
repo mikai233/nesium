@@ -29,6 +29,11 @@ Future<void> setFastForwardSpeed({required int speedPercent}) async {
   webPostCmd('setFastForwardSpeed', {'speedPercent': speedPercent});
 }
 
+Future<void> setRewindSpeed({required int speedPercent}) async {
+  if (!isWebNesReady) return;
+  webPostCmd('setRewindSpeed', {'speedPercent': speedPercent});
+}
+
 Future<void> saveState({required String path}) async {
   // handled in web_shell_web
 }

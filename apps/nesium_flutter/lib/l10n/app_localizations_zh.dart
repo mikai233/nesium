@@ -373,7 +373,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get rewindEnabledTitle => '倒带';
 
   @override
-  String get rewindEnabledSubtitle => '开启实时倒带功能（桌面端长按退格键 Backspace 触发）。';
+  String get rewindEnabledSubtitle => '开启实时倒带功能。';
 
   @override
   String get rewindSecondsTitle => '倒带时长';
@@ -381,6 +381,25 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String rewindSecondsValue(int seconds) {
     return '$seconds 秒';
+  }
+
+  @override
+  String get rewindMinutesTitle => '倒带时长';
+
+  @override
+  String rewindMinutesValue(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String get rewindSpeedTitle => '倒带速度';
+
+  @override
+  String get rewindSpeedSubtitle => '倒带时的运行速度百分比。';
+
+  @override
+  String rewindSpeedValue(int percent) {
+    return '$percent%';
   }
 
   @override

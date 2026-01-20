@@ -219,12 +219,31 @@
     }
   },
   "rewindEnabledTitle": "Rewind",
-  "rewindEnabledSubtitle": "Enable real-time rewind support (Long-press Backspace on Desktop).",
+  "rewindEnabledSubtitle": "Enable real-time rewind functionality.",
   "rewindSecondsTitle": "Rewind Duration",
   "rewindSecondsValue": "{seconds} seconds",
+  "rewindMinutesTitle": "Rewind Duration",
+  "rewindMinutesValue": "{minutes} minutes",
   "@rewindSecondsValue": {
     "placeholders": {
       "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindMinutesValue": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "rewindSpeedTitle": "Rewind Speed",
+  "rewindSpeedSubtitle": "Speed while rewinding is active.",
+  "rewindSpeedValue": "{percent}%",
+  "@rewindSpeedValue": {
+    "placeholders": {
+      "percent": {
         "type": "int"
       }
     }

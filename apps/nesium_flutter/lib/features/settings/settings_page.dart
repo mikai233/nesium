@@ -1301,23 +1301,53 @@ class _EmulationTab extends ConsumerWidget {
                     },
                     child: emulationSettings.rewindEnabled
                         ? Padding(
-                            key: const ValueKey('rewindSeconds'),
+                            key: const ValueKey('rewindSettings'),
                             padding: const EdgeInsets.fromLTRB(56, 0, 0, 4),
-                            child: AnimatedSliderTile(
-                              label: l10n.rewindSecondsTitle,
-                              value: emulationSettings.rewindSeconds.toDouble(),
-                              min: 10,
-                              max: 300,
-                              divisions: 29,
-                              onChanged: (v) => emulationController
-                                  .setRewindSeconds(v.toInt()),
-                              valueLabel: l10n.rewindSecondsValue(
-                                emulationSettings.rewindSeconds,
-                              ),
+                            child: Column(
+                              children: [
+                                AnimatedSliderTile(
+                                  label: l10n.rewindMinutesTitle,
+                                  value: emulationSettings.rewindSeconds
+                                      .toDouble(),
+                                  min: 60,
+                                  max: 3600,
+                                  divisions: 59,
+                                  onChanged: (v) => emulationController
+                                      .setRewindSeconds(v.toInt()),
+                                  valueLabel: l10n.rewindMinutesValue(
+                                    emulationSettings.rewindSeconds ~/ 60,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                AnimatedSliderTile(
+                                  label: l10n.rewindSpeedTitle,
+                                  value: emulationSettings.rewindSpeedPercent
+                                      .toDouble(),
+                                  min: 100,
+                                  max: 1000,
+                                  divisions: 9,
+                                  onChanged: (v) => emulationController
+                                      .setRewindSpeedPercent(v.round()),
+                                  valueLabel: l10n.rewindSpeedValue(
+                                    emulationSettings.rewindSpeedPercent,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    l10n.rewindSpeedSubtitle,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                ),
+                              ],
                             ),
                           )
                         : const SizedBox.shrink(
-                            key: ValueKey('rewindSecondsEmpty'),
+                            key: ValueKey('rewindSettingsEmpty'),
                           ),
                   ),
                 ),

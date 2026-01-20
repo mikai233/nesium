@@ -773,7 +773,7 @@ abstract class AppLocalizations {
   /// No description provided for @rewindEnabledSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Enable real-time rewind support (Long-press Backspace on Desktop).'**
+  /// **'Enable real-time rewind functionality.'**
   String get rewindEnabledSubtitle;
 
   /// No description provided for @rewindSecondsTitle.
@@ -787,6 +787,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{seconds} seconds'**
   String rewindSecondsValue(int seconds);
+
+  /// No description provided for @rewindMinutesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind Duration'**
+  String get rewindMinutesTitle;
+
+  /// No description provided for @rewindMinutesValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} minutes'**
+  String rewindMinutesValue(int minutes);
+
+  /// No description provided for @rewindSpeedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind Speed'**
+  String get rewindSpeedTitle;
+
+  /// No description provided for @rewindSpeedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Speed while rewinding is active.'**
+  String get rewindSpeedSubtitle;
+
+  /// No description provided for @rewindSpeedValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String rewindSpeedValue(int percent);
 
   /// No description provided for @autoSlotLabel.
   ///
