@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 nesium-netproto.workspace = true
 clap = { workspace = true, features = ["derive"] }

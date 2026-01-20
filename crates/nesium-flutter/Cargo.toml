@@ -8,8 +8,8 @@ license.workspace = true
 name = "nesium_flutter"
 crate-type = ["staticlib", "cdylib"]
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+[lints]
+workspace = true
 
 [dependencies]
 nesium-core.workspace = true

@@ -5,6 +5,9 @@ edition = "2024"
 license.workspace = true
 default-run = "nesium_egui"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "nesium_egui"
 path = "src/main.rs"
