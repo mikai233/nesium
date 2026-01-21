@@ -237,17 +237,22 @@ jobs:
         working-directory: apps/nesium_flutter
         shell: bash
         run: |
+          set -euo pipefail
           flutter --version
           flutter pub get
 
       - name: Install fonttools (Python)
         shell: bash
-        run: pip install fonttools
+        run: |
+          set -euo pipefail
+          pip install fonttools
 
       - name: Subset fonts
         working-directory: apps/nesium_flutter
         shell: bash
-        run: python3 tool/subset_fonts.py
+        run: |
+          set -euo pipefail
+          python3 tool/subset_fonts.py
 
       - name: Generate icon PNGs (Rust) (Windows)
         if: runner.os == 'Windows'
@@ -301,7 +306,9 @@ jobs:
 
       - name: Create dist directory
         shell: bash
-        run: mkdir -p dist
+        run: |
+          set -euo pipefail
+          mkdir -p dist
 
       # ===================================================
       # FLUTTER LINUX BUILD (TAR.GZ)
@@ -562,7 +569,7 @@ jobs:
           Get-FileHash "$finalZip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\')[-1])" } | Out-File -Encoding ascii "$finalZip.sha256"
           Pop-Location
 
-          ls -la "$env:GITHUB_WORKSPACE/dist"
+          Get-ChildItem -Path "$env:GITHUB_WORKSPACE/dist" | Format-Table -AutoSize
 
       # ===================================================
       # FLUTTER MACOS BUILD & FIX & DMG & PORTABLE
