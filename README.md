@@ -34,7 +34,7 @@ This repository currently ships **two** UI frontends:
 - **`nesium-egui`** (`apps/nesium-egui`) — A lightweight desktop frontend built with `egui`. It has a small footprint and provides the essentials for **quick debugging and development**.
   - ![](https://img.shields.io/badge/Windows-x86_64/arm64-blue?logo=windows) ![](https://img.shields.io/badge/macOS-Universal-black?logo=apple) ![](https://img.shields.io/badge/Linux-x86_64/arm64-orange?logo=linux)
 - **`nesium-flutter`** (`apps/nesium_flutter`) — A modern frontend built with **Flutter**. It aims for a more polished UI and broader cross‑platform reach than the `egui` app.
-  - ![](https://img.shields.io/badge/Windows-x86_64-blue?logo=windows) ![](https://img.shields.io/badge/macOS-Universal-black?logo=apple) ![](https://img.shields.io/badge/Linux-x86_64/arm64-orange?logo=linux) ![](https://img.shields.io/badge/Android-Multi--arch-green?logo=android)
+  - ![](https://img.shields.io/badge/Windows-x86_64-blue?logo=windows) ![](https://img.shields.io/badge/macOS-Universal-black?logo=apple) ![](https://img.shields.io/badge/Linux-x86_64/arm64-orange?logo=linux) ![](https://img.shields.io/badge/Android-Multi--arch-green?logo=android) ![](https://img.shields.io/badge/iOS-Supported-lightgrey?logo=apple)
 - **Web build (play online)** — https://mikai233.github.io/nesium/ (Runs in the browser via high-performance **Flutter WASM (dart2wasm)** + Web Worker + Rust WASM).
   - ![](https://img.shields.io/badge/Web-WasmGC-purple?logo=webassembly) (Chrome/Edge 119+, Firefox 120+)
 
