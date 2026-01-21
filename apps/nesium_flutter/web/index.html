@@ -214,6 +214,33 @@
         opacity: 0;
       }
     }
+
+    /* === Progress Bar === */
+    .progress-container {
+      width: 200px;
+      height: 20px;
+      background-color: #333;
+      border: 4px solid #dcdcdc;
+      margin-top: 20px;
+      position: relative;
+      box-shadow: 4px 4px 0px #000;
+      image-rendering: pixelated;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      background-color: #cc0000;
+      transition: width 0.1s linear;
+    }
+
+    .progress-text {
+      color: #fff;
+      font-size: 10px;
+      margin-top: 8px;
+      text-shadow: 2px 2px 0px #000;
+      font-family: 'Courier New', Courier, monospace;
+    }
   </style>
 </head>
 
@@ -234,30 +261,14 @@
       </div>
     </div>
     <div class="loading-text">System Loading...</div>
+    <div class="progress-container">
+      <div id="progress-fill" class="progress-fill"></div>
+    </div>
+    <div id="progress-text" class="progress-text">0%</div>
   </div>
 
   <script src="flutter_bootstrap.js" async></script>
-  <script>
-    // Fallback: If flutter_bootstrap.js doesn't remove it automatically (it usually doesn't),
-    // we can try to listen for the first frame or remove it after a delay if needed.
-    // Ideally, Flutter calls out to JS, but for a simple fix:
-    // We observe the body for the addition of the flutter-view.
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.tagName === 'FLUTTER-VIEW') {
-            const loader = document.getElementById('loading');
-            if (loader) {
-              loader.style.opacity = '0';
-              setTimeout(() => loader.remove(), 500);
-              observer.disconnect();
-            }
-          }
-        }
-      }
-    });
-    observer.observe(document.body, { childList: true });
-  </script>
+  <script src="loading_progress.js"></script>
 </body>
 
 </html>
