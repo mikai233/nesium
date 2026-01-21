@@ -173,18 +173,6 @@ jobs:
           echo "BASE_HREF=${BASE_HREF}" >> "$GITHUB_ENV"
           echo "Using BASE_HREF=${BASE_HREF}"
 
-      - name: Strip fonts from pubspec (Web only)
-        working-directory: apps/nesium_flutter
-        shell: bash
-        run: |
-          python3 -c "
-          import re
-          p = 'pubspec.yaml'
-          content = open(p).read()
-          content = re.sub(r'  fonts:\s*\n(\s+- family:.*\n(\s+.*\n)*)', '', content)
-          with open(p, 'w') as f: f.write(content)
-          "
-
       - name: Build Flutter web
         working-directory: apps/nesium_flutter
         shell: bash
