@@ -316,7 +316,11 @@ class _MobileDrawer extends StatelessWidget {
     bool enabled = true;
     if (item.id == NesMenuItemId.saveState ||
         item.id == NesMenuItemId.loadState ||
-        item.id == NesMenuItemId.autoSave) {
+        item.id == NesMenuItemId.autoSave ||
+        item.id == NesMenuItemId.reset ||
+        item.id == NesMenuItemId.powerReset ||
+        item.id == NesMenuItemId.powerOff ||
+        item.id == NesMenuItemId.togglePause) {
       enabled = hasRom;
     } else if (item.id == NesMenuItemId.tilemapViewer ||
         item.id == NesMenuItemId.tileViewer ||
