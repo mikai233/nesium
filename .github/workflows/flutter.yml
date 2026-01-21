@@ -65,5 +65,17 @@ jobs:
           wasm-pack build --release --target web --out-dir "${OUT_DIR}"
           popd >/dev/null
 
+      - name: Install fonttools (Python)
+        shell: bash
+        run: |
+          set -euo pipefail
+          pip install fonttools
+
+      - name: Subset fonts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tool/subset_fonts.py
+
       - name: Build web (release)
         run: flutter build web --release --wasm

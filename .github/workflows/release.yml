@@ -129,6 +129,19 @@ jobs:
         shell: bash
         run: flutter pub get
 
+      - name: Install fonttools (Python)
+        shell: bash
+        run: |
+          set -euo pipefail
+          pip install fonttools
+
+      - name: Subset fonts
+        working-directory: apps/nesium_flutter
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tool/subset_fonts.py
+
       - name: Generate icons (Rust + flutter_launcher_icons)
         shell: bash
         run: |
