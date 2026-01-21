@@ -1,10 +1,26 @@
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+static DATA_DIR_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
+
+/// Set a custom data directory for storage, overriding the default behavior.
+///
+/// This should be called early in the application lifecycle, before any server
+/// start attempts.
+pub fn set_data_dir_override(path: PathBuf) {
+    let _ = DATA_DIR_OVERRIDE.set(path);
+}
 
 /// Return a default directory for storing QUIC cert/key material for the given application.
 ///
 /// This is used by both the standalone `nesium-netd` binary and the embedded server inside
 /// the Flutter client, so the path is parameterized by `app_name`.
 pub fn default_quic_data_dir(app_name: &str) -> PathBuf {
+    // If an override is set, use it.
+    if let Some(overridden) = DATA_DIR_OVERRIDE.get() {
+        return overridden.join(app_name).join("quic");
+    }
+
     // Prefer OS-specific app data locations; fall back to current directory.
     #[cfg(windows)]
     {

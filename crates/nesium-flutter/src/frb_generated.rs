@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -474371102;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1711279004;
 
 // Section: executor
 
@@ -517,6 +517,38 @@ fn wire__crate__api__simple__init_app_impl(
                     Ok(output_ok)
                 })())
             }
+        },
+    )
+}
+fn wire__crate__api__simple__init_app_paths_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "init_app_paths",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data_dir = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::simple::init_app_paths(api_data_dir);
+                })?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -4998,337 +5030,339 @@ fn pde_ffi_dispatcher_primary_impl(
         11 => wire__crate__api__load_rom__get_rom_hash_impl(port, ptr, rust_vec_len, data_len),
         12 => wire__crate__api__server__get_server_impl(port, ptr, rust_vec_len, data_len),
         14 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__gamepad__init_gamepad_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__pause__is_paused_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__gamepad__list_gamepads_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__load_rom__load_rom_impl(port, ptr, rust_vec_len, data_len),
-        19 => {
+        16 => wire__crate__api__gamepad__init_gamepad_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__pause__is_paused_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__gamepad__list_gamepads_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__load_rom__load_rom_impl(port, ptr, rust_vec_len, data_len),
+        20 => {
             wire__crate__api__load_rom__load_rom_from_bytes_impl(port, ptr, rust_vec_len, data_len)
         }
-        20 => wire__crate__api__emulation__load_state_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__emulation__load_state_from_memory_impl(
+        21 => wire__crate__api__emulation__load_state_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__emulation__load_state_from_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__emulation__load_tas_movie_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__netplay__netplay_connect_impl(port, ptr, rust_vec_len, data_len),
-        24 => {
+        23 => wire__crate__api__emulation__load_tas_movie_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__netplay__netplay_connect_impl(port, ptr, rust_vec_len, data_len),
+        25 => {
             wire__crate__api__netplay__netplay_connect_auto_impl(port, ptr, rust_vec_len, data_len)
         }
-        25 => wire__crate__api__netplay__netplay_connect_auto_pinned_impl(
+        26 => wire__crate__api__netplay__netplay_connect_auto_pinned_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => {
+        27 => {
             wire__crate__api__netplay__netplay_connect_quic_impl(port, ptr, rust_vec_len, data_len)
         }
-        27 => wire__crate__api__netplay__netplay_connect_quic_pinned_impl(
+        28 => wire__crate__api__netplay__netplay_connect_quic_pinned_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => {
+        29 => {
             wire__crate__api__netplay__netplay_create_room_impl(port, ptr, rust_vec_len, data_len)
         }
-        29 => wire__crate__api__netplay__netplay_disconnect_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__netplay__netplay_game_event_stream_impl(
+        30 => wire__crate__api__netplay__netplay_disconnect_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__netplay__netplay_game_event_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => {
+        32 => {
             wire__crate__api__netplay__netplay_is_connected_impl(port, ptr, rust_vec_len, data_len)
         }
-        32 => wire__crate__api__netplay__netplay_join_room_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__netplay__netplay_p2p_connect_join_auto_impl(
+        33 => wire__crate__api__netplay__netplay_join_room_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__netplay__netplay_p2p_connect_join_auto_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__netplay__netplay_p2p_create_room_impl(
+        35 => wire__crate__api__netplay__netplay_p2p_create_room_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__netplay__netplay_p2p_host_create_and_watch_fallback_impl(
+        36 => wire__crate__api__netplay__netplay_p2p_host_create_and_watch_fallback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__netplay__netplay_p2p_host_start_impl(
+        37 => wire__crate__api__netplay__netplay_p2p_host_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => {
+        38 => {
             wire__crate__api__netplay__netplay_p2p_join_room_impl(port, ptr, rust_vec_len, data_len)
         }
-        38 => wire__crate__api__netplay__netplay_p2p_request_fallback_impl(
+        39 => wire__crate__api__netplay__netplay_p2p_request_fallback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => {
+        40 => {
             wire__crate__api__netplay__netplay_provide_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        40 => wire__crate__api__netplay__netplay_request_fallback_relay_impl(
+        41 => wire__crate__api__netplay__netplay_request_fallback_relay_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => {
+        42 => {
             wire__crate__api__netplay__netplay_request_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        42 => wire__crate__api__netplay__netplay_send_pause_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__netplay__netplay_send_reset_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__netplay__netplay_send_rom_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__netplay__netplay_send_rom_loaded_impl(
+        43 => wire__crate__api__netplay__netplay_send_pause_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__netplay__netplay_send_reset_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__netplay__netplay_send_rom_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__netplay__netplay_send_rom_loaded_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => {
+        47 => {
             wire__crate__api__netplay__netplay_status_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        47 => {
+        48 => {
             wire__crate__api__netplay__netplay_switch_role_impl(port, ptr, rust_vec_len, data_len)
         }
-        48 => wire__crate__api__server__netserver_get_port_impl(port, ptr, rust_vec_len, data_len),
-        49 => {
+        49 => wire__crate__api__server__netserver_get_port_impl(port, ptr, rust_vec_len, data_len),
+        50 => {
             wire__crate__api__server__netserver_is_running_impl(port, ptr, rust_vec_len, data_len)
         }
-        50 => wire__crate__api__server__netserver_start_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__server__netserver_status_stream_impl(
+        51 => wire__crate__api__server__netserver_start_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__server__netserver_status_stream_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__api__server__netserver_stop_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__palette__palette_presets_impl(port, ptr, rust_vec_len, data_len),
-        54 => {
+        53 => wire__crate__api__server__netserver_stop_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__palette__palette_presets_impl(port, ptr, rust_vec_len, data_len),
+        55 => {
             wire__crate__api__events__palette_state_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        55 => wire__crate__api__gamepad__poll_gamepads_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__load_rom__power_off_console_impl(port, ptr, rust_vec_len, data_len),
-        57 => {
+        56 => wire__crate__api__gamepad__poll_gamepads_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__load_rom__power_off_console_impl(port, ptr, rust_vec_len, data_len),
+        58 => {
             wire__crate__api__load_rom__power_reset_console_impl(port, ptr, rust_vec_len, data_len)
         }
-        58 => wire__crate__api__events__replay_event_stream_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__gamepad__rumble_gamepad_impl(port, ptr, rust_vec_len, data_len),
-        61 => {
+        59 => wire__crate__api__events__replay_event_stream_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__load_rom__reset_console_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__gamepad__rumble_gamepad_impl(port, ptr, rust_vec_len, data_len),
+        62 => {
             wire__crate__api__events__runtime_notifications_impl(port, ptr, rust_vec_len, data_len)
         }
-        62 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__emulation__save_state_to_memory_impl(
+        63 => wire__crate__api__emulation__save_state_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__emulation__save_state_to_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        64 => wire__crate__api__emulation__set_fast_forward_speed_impl(
+        65 => wire__crate__api__emulation__set_fast_forward_speed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => {
+        66 => {
             wire__crate__api__emulation__set_fast_forwarding_impl(port, ptr, rust_vec_len, data_len)
         }
-        66 => {
+        67 => {
             wire__crate__api__gamepad__set_gamepad_mapping_impl(port, ptr, rust_vec_len, data_len)
         }
-        67 => wire__crate__api__emulation__set_integer_fps_mode_impl(
+        68 => wire__crate__api__emulation__set_integer_fps_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__events__set_palette_capture_frame_start_impl(
+        69 => wire__crate__api__input__set_pad_mask_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__events__set_palette_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        70 => wire__crate__api__events__set_palette_capture_scanline_impl(
+        71 => wire__crate__api__events__set_palette_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        71 => wire__crate__api__events__set_palette_capture_vblank_start_impl(
+        72 => wire__crate__api__events__set_palette_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => {
+        73 => {
             wire__crate__api__palette__set_palette_pal_data_impl(port, ptr, rust_vec_len, data_len)
         }
-        73 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
-        75 => {
+        74 => wire__crate__api__palette__set_palette_preset_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__pause__set_paused_impl(port, ptr, rust_vec_len, data_len),
+        76 => {
             wire__crate__api__emulation__set_rewind_config_impl(port, ptr, rust_vec_len, data_len)
         }
-        76 => wire__crate__api__emulation__set_rewind_speed_impl(port, ptr, rust_vec_len, data_len),
-        77 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__events__set_sprite_capture_frame_start_impl(
+        77 => wire__crate__api__emulation__set_rewind_speed_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__emulation__set_rewinding_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__events__set_sprite_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        79 => wire__crate__api__events__set_sprite_capture_scanline_impl(
+        80 => wire__crate__api__events__set_sprite_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => wire__crate__api__events__set_sprite_capture_vblank_start_impl(
+        81 => wire__crate__api__events__set_sprite_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        81 => wire__crate__api__events__set_tile_viewer_background_impl(
+        82 => wire__crate__api__events__set_tile_viewer_background_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        82 => wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
+        83 => wire__crate__api__events__set_tile_viewer_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        83 => wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
+        84 => wire__crate__api__events__set_tile_viewer_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        84 => wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
+        85 => wire__crate__api__events__set_tile_viewer_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        85 => wire__crate__api__events__set_tile_viewer_display_mode_impl(
+        86 => wire__crate__api__events__set_tile_viewer_display_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        86 => {
+        87 => {
             wire__crate__api__events__set_tile_viewer_layout_impl(port, ptr, rust_vec_len, data_len)
         }
-        87 => wire__crate__api__events__set_tile_viewer_palette_impl(
+        88 => wire__crate__api__events__set_tile_viewer_palette_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => {
+        89 => {
             wire__crate__api__events__set_tile_viewer_size_impl(port, ptr, rust_vec_len, data_len)
         }
-        89 => {
+        90 => {
             wire__crate__api__events__set_tile_viewer_source_impl(port, ptr, rust_vec_len, data_len)
         }
-        90 => wire__crate__api__events__set_tile_viewer_start_address_impl(
+        91 => wire__crate__api__events__set_tile_viewer_start_address_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
+        92 => wire__crate__api__events__set_tilemap_capture_frame_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
+        93 => wire__crate__api__events__set_tilemap_capture_scanline_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
+        94 => wire__crate__api__events__set_tilemap_capture_vblank_start_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__api__events__set_tilemap_display_mode_impl(
+        95 => wire__crate__api__events__set_tilemap_display_mode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
+        96 => wire__crate__api__input__set_turbo_frames_per_toggle_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
-        97 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
-        98 => wire__crate__api__gamepad__shutdown_gamepad_impl(port, ptr, rust_vec_len, data_len),
-        99 => wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        97 => wire__crate__api__input__set_turbo_mask_impl(port, ptr, rust_vec_len, data_len),
+        98 => wire__crate__api__input__set_turbo_timing_impl(port, ptr, rust_vec_len, data_len),
+        99 => wire__crate__api__gamepad__shutdown_gamepad_impl(port, ptr, rust_vec_len, data_len),
         100 => {
+            wire__crate__api__events__sprite_state_stream_impl(port, ptr, rust_vec_len, data_len)
+        }
+        101 => {
             wire__crate__api__load_rom__start_nes_runtime_impl(port, ptr, rust_vec_len, data_len)
         }
-        101 => wire__crate__api__events__subscribe_tilemap_texture_impl(
+        102 => wire__crate__api__events__subscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        102 => wire__crate__api__events__tile_state_stream_impl(port, ptr, rust_vec_len, data_len),
-        103 => {
+        103 => wire__crate__api__events__tile_state_stream_impl(port, ptr, rust_vec_len, data_len),
+        104 => {
             wire__crate__api__events__tilemap_state_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        104 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
-        105 => {
+        105 => wire__crate__api__pause__toggle_pause_impl(port, ptr, rust_vec_len, data_len),
+        106 => {
             wire__crate__api__net_utils__try_upnp_mapping_impl(port, ptr, rust_vec_len, data_len)
         }
-        106 => wire__crate__api__events__unsubscribe_debug_state_impl(
+        107 => wire__crate__api__events__unsubscribe_debug_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__events__unsubscribe_palette_state_impl(
+        108 => wire__crate__api__events__unsubscribe_palette_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        108 => wire__crate__api__events__unsubscribe_sprite_state_impl(
+        109 => wire__crate__api__events__unsubscribe_sprite_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        109 => {
+        110 => {
             wire__crate__api__events__unsubscribe_tile_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        110 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
+        111 => wire__crate__api__events__unsubscribe_tilemap_texture_impl(
             port,
             ptr,
             rust_vec_len,
@@ -5347,6 +5381,7 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         13 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__simple__init_app_paths_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
