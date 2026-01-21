@@ -99,6 +99,9 @@ async function ensureWasmInitialized() {
         const mod = await ensureWasmLoaded();
         postLog("initializing wasm...");
         const exports = await mod.default();
+        if (!exports || !exports.memory) {
+            throw new Error("WASM initialization returned invalid exports (missing memory)");
+        }
         wasmMemory = exports.memory;
         postLog("wasm initialized");
         mod.init_panic_hook();

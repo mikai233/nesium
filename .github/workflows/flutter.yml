@@ -65,5 +65,18 @@ jobs:
           wasm-pack build --release --target web --out-dir "${OUT_DIR}"
           popd >/dev/null
 
+      - name: Strip fonts from pubspec (Web only)
+        shell: bash
+        run: |
+          # Use python to safely remove the fonts section from the flutter block
+          python3 -c "
+          import re
+          p = 'pubspec.yaml'
+          content = open(p).read()
+          # Remove the fonts: block under flutter:
+          content = re.sub(r'  fonts:\s*\n(\s+- family:.*\n(\s+.*\n)*)', '', content)
+          with open(p, 'w') as f: f.write(content)
+          "
+
       - name: Build web (release)
-        run: flutter build web --release --no-wasm-dry-run
+        run: flutter build web --release --wasm

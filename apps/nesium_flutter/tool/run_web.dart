@@ -20,6 +20,10 @@ Future<void> main(List<String> forwarded) async {
     flutterArgs.insertAll(1, const ['-d', 'chrome']);
   }
 
+  if (!forwarded.contains('--wasm')) {
+    flutterArgs.add('--wasm');
+  }
+
   final exitCode = await _runStreaming(
     executable: 'flutter',
     args: flutterArgs,

@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:nesium_flutter/bridge/api/simple.dart';
+import 'package:path_provider/path_provider.dart';
 
+import '../logging/app_logger.dart';
 import '../bridge/frb_generated.dart';
 
 import 'package:path/path.dart' as p;
@@ -36,4 +39,13 @@ ExternalLibrary _openRustLibrary() {
 
 Future<void> initRustRuntime() async {
   await RustLib.init(externalLibrary: _openRustLibrary());
+
+  // Initialize app paths for Rust (e.g. for QUIC certs on Android)
+  try {
+    final docsDir = await getApplicationDocumentsDirectory();
+    initAppPaths(dataDir: docsDir.path);
+  } catch (e, st) {
+    // Best effort
+    logWarning(e, stackTrace: st, message: 'Failed to initialize app paths');
+  }
 }

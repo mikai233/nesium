@@ -15,7 +15,7 @@ class ServerSettings {
     this.port = 5233,
     this.playerName = 'Player',
     this.p2pServerAddr = 'nesium.mikai.link:5233',
-    this.p2pEnabled = true,
+    this.p2pEnabled = false,
     this.p2pHostRoomCode,
     this.transport = NetplayTransportOption.auto,
     this.sni = 'localhost',
