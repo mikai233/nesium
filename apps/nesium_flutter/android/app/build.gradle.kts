@@ -91,7 +91,6 @@ tasks.register<Exec>("buildRustAndroidSo") {
             when (targetPlatform) {
                 "android-arm" -> requestedAbis.add("armeabi-v7a")
                 "android-arm64" -> requestedAbis.add("arm64-v8a")
-                "android-x86" -> requestedAbis.add("x86")
                 "android-x64" -> requestedAbis.add("x86_64")
             }
         }
@@ -101,17 +100,14 @@ tasks.register<Exec>("buildRustAndroidSo") {
                 when (p.trim()) {
                     "android-arm" -> requestedAbis.add("armeabi-v7a")
                     "android-arm64" -> requestedAbis.add("arm64-v8a")
-                    "android-x86" -> requestedAbis.add("x86")
                     "android-x64" -> requestedAbis.add("x86_64")
                 }
             }
         }
 
-        // Default to all for local dev robustness if no specific ABI is requested
         val finalAbis = if (requestedAbis.isNotEmpty()) requestedAbis else listOf(
             "armeabi-v7a",
             "arm64-v8a",
-            "x86",
             "x86_64"
         )
         val abiArgs = finalAbis.flatMap { listOf("-t", it) }
