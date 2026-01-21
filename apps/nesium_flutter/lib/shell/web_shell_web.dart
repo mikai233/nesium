@@ -1342,62 +1342,96 @@ class _WebShellState extends ConsumerState<WebShell> {
               ),
             const Divider(height: 1),
           ],
-          if (supportsVirtualControls) ...[
-            ListTile(
-              leading: const Icon(Icons.tune),
-              title: Text(l10n.virtualControlsEditTitle),
-              subtitle: Text(
-                editor.enabled
-                    ? l10n.virtualControlsEditSubtitleEnabled
-                    : l10n.virtualControlsEditSubtitleDisabled,
-              ),
-              trailing: Switch(
-                value: editor.enabled,
-                onChanged: (enabled) {
-                  if (enabled &&
-                      inputState.ports[0]!.device !=
-                          InputDevice.virtualController) {
-                    inputCtrl.setDevice(InputDevice.virtualController);
-                  }
-                  editorCtrl.setEnabled(enabled);
-                  closeDrawer();
+          if (supportsVirtualControls)
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      axisAlignment: -1.0,
+                      child: child,
+                    ),
+                  );
                 },
+                child:
+                    (editor.enabled ||
+                        inputState.ports[0]!.device ==
+                            InputDevice.virtualController)
+                    ? Column(
+                        key: const ValueKey('virtual_controls_edit_group'),
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.tune),
+                            title: Text(l10n.virtualControlsEditTitle),
+                            subtitle: Text(
+                              editor.enabled
+                                  ? l10n.virtualControlsEditSubtitleEnabled
+                                  : l10n.virtualControlsEditSubtitleDisabled,
+                            ),
+                            trailing: Switch(
+                              value: editor.enabled,
+                              onChanged: (enabled) {
+                                if (enabled &&
+                                    inputState.ports[0]!.device !=
+                                        InputDevice.virtualController) {
+                                  inputCtrl.setDevice(
+                                    InputDevice.virtualController,
+                                  );
+                                }
+                                editorCtrl.setEnabled(enabled);
+                                closeDrawer();
+                              },
+                            ),
+                          ),
+                          if (editor.enabled) ...[
+                            SwitchListTile(
+                              secondary: const Icon(Icons.grid_4x4),
+                              title: Text(l10n.gridSnappingTitle),
+                              value: editor.gridSnapEnabled,
+                              onChanged: editorCtrl.setGridSnapEnabled,
+                            ),
+                            if (editor.gridSnapEnabled)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 4,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(l10n.gridSpacingLabel),
+                                        ),
+                                        Text(
+                                          '${editor.gridSpacing.toStringAsFixed(0)} px',
+                                        ),
+                                      ],
+                                    ),
+                                    Slider(
+                                      value: editor.gridSpacing.clamp(4, 64),
+                                      min: 4,
+                                      max: 64,
+                                      divisions: 60,
+                                      onChanged: editorCtrl.setGridSpacing,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ],
+                      )
+                    : const SizedBox.shrink(
+                        key: ValueKey('virtual_controls_edit_hidden'),
+                      ),
               ),
             ),
-            if (editor.enabled) ...[
-              SwitchListTile(
-                secondary: const Icon(Icons.grid_4x4),
-                title: Text(l10n.gridSnappingTitle),
-                value: editor.gridSnapEnabled,
-                onChanged: editorCtrl.setGridSnapEnabled,
-              ),
-              if (editor.gridSnapEnabled)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(child: Text(l10n.gridSpacingLabel)),
-                          Text('${editor.gridSpacing.toStringAsFixed(0)} px'),
-                        ],
-                      ),
-                      Slider(
-                        value: editor.gridSpacing.clamp(4, 64),
-                        min: 4,
-                        max: 64,
-                        divisions: 60,
-                        onChanged: editorCtrl.setGridSpacing,
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ],
         ],
       ),
     );

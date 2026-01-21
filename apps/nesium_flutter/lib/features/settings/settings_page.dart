@@ -637,181 +637,271 @@ class _InputTab extends ConsumerWidget {
         ],
         // Virtual Controls
         if (supportsVirtualControls) ...[
-          const SizedBox(height: 12),
-          AnimatedSettingsCard(
-            index: 5,
-            child: ListTile(
-              leading: const Icon(Icons.tune),
-              title: Text(l10n.virtualControlsEditTitle),
-              subtitle: Text(
-                editor.enabled
-                    ? l10n.virtualControlsEditSubtitleEnabled
-                    : l10n.virtualControlsEditSubtitleDisabled,
-              ),
-              trailing: Switch(
-                value: editor.enabled,
-                onChanged: (enabled) {
-                  if (enabled &&
-                      inputSettings.device != InputDevice.virtualController) {
-                    inputController.setDevice(InputDevice.virtualController);
-                  }
-                  editorController.setEnabled(enabled);
-                  if (enabled) {
-                    Navigator.of(context).maybePop();
-                  }
-                },
-              ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1.0,
+                    child: child,
+                  ),
+                );
+              },
+              child: usingVirtual
+                  ? Column(
+                      key: const ValueKey('virtual_controls_edit_group'),
+                      children: [
+                        const SizedBox(height: 12),
+                        AnimatedSettingsCard(
+                          index: 5,
+                          child: ListTile(
+                            leading: const Icon(Icons.tune),
+                            title: Text(l10n.virtualControlsEditTitle),
+                            subtitle: Text(
+                              editor.enabled
+                                  ? l10n.virtualControlsEditSubtitleEnabled
+                                  : l10n.virtualControlsEditSubtitleDisabled,
+                            ),
+                            trailing: Switch(
+                              value: editor.enabled,
+                              onChanged: (enabled) {
+                                if (enabled &&
+                                    inputSettings.device !=
+                                        InputDevice.virtualController) {
+                                  inputController.setDevice(
+                                    InputDevice.virtualController,
+                                  );
+                                }
+                                editorController.setEnabled(enabled);
+                                if (enabled) {
+                                  Navigator.of(context).maybePop();
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                        if (editor.enabled) ...[
+                          const SizedBox(height: 12),
+                          AnimatedSettingsCard(
+                            index: 6,
+                            child: Column(
+                              children: [
+                                SwitchListTile(
+                                  secondary: const Icon(Icons.grid_4x4),
+                                  title: Text(l10n.gridSnappingTitle),
+                                  value: editor.gridSnapEnabled,
+                                  onChanged:
+                                      editorController.setGridSnapEnabled,
+                                ),
+                                if (editor.gridSnapEnabled)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      0,
+                                      16,
+                                      12,
+                                    ),
+                                    child: AnimatedSliderTile(
+                                      label: l10n.gridSpacingLabel,
+                                      value: editor.gridSpacing.clamp(4, 64),
+                                      min: 4,
+                                      max: 64,
+                                      divisions: 60,
+                                      onChanged:
+                                          editorController.setGridSpacing,
+                                      valueLabel:
+                                          '${editor.gridSpacing.toStringAsFixed(0)} px',
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                      ],
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey('virtual_controls_edit_hidden'),
+                    ),
             ),
           ),
-          if (editor.enabled) ...[
-            const SizedBox(height: 12),
-            AnimatedSettingsCard(
-              index: 6,
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    secondary: const Icon(Icons.grid_4x4),
-                    title: Text(l10n.gridSnappingTitle),
-                    value: editor.gridSnapEnabled,
-                    onChanged: editorController.setGridSnapEnabled,
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1.0,
+                    child: child,
                   ),
-                  if (editor.gridSnapEnabled)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: AnimatedSliderTile(
-                        label: l10n.gridSpacingLabel,
-                        value: editor.gridSpacing.clamp(4, 64),
-                        min: 4,
-                        max: 64,
-                        divisions: 60,
-                        onChanged: editorController.setGridSpacing,
-                        valueLabel:
-                            '${editor.gridSpacing.toStringAsFixed(0)} px',
-                      ),
+                );
+              },
+              child: usingVirtual
+                  ? Column(
+                      key: const ValueKey('virtual_controls_settings_group'),
+                      children: [
+                        AnimatedSettingsCard(
+                          index: 7,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  4,
+                                ),
+                                child: Text(
+                                  l10n.virtualControlsTitle,
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: Column(
+                                  children: [
+                                    AnimatedSliderTile(
+                                      label: l10n.virtualControlsButtonSize,
+                                      value: settings.buttonSize,
+                                      min: 40,
+                                      max: 120,
+                                      onChanged: controller.setButtonSize,
+                                      valueLabel:
+                                          '${settings.buttonSize.toStringAsFixed(0)} px',
+                                    ),
+                                    AnimatedSliderTile(
+                                      label: l10n.virtualControlsGap,
+                                      value: settings.gap,
+                                      min: 4,
+                                      max: 24,
+                                      onChanged: controller.setGap,
+                                      valueLabel:
+                                          '${settings.gap.toStringAsFixed(0)} px',
+                                    ),
+                                    AnimatedSliderTile(
+                                      label: l10n.virtualControlsOpacity,
+                                      value: settings.opacity,
+                                      min: 0.2,
+                                      max: 0.8,
+                                      onChanged: controller.setOpacity,
+                                      valueLabel: settings.opacity
+                                          .toStringAsFixed(2),
+                                    ),
+                                    AnimatedSliderTile(
+                                      label: l10n.virtualControlsHitboxScale,
+                                      value: settings.hitboxScale,
+                                      min: 1.0,
+                                      max: 1.4,
+                                      divisions: 40,
+                                      onChanged: controller.setHitboxScale,
+                                      valueLabel: settings.hitboxScale
+                                          .toStringAsFixed(2),
+                                    ),
+                                    AnimatedSwitchTile(
+                                      value: settings.hapticsEnabled,
+                                      title: Text(
+                                        l10n.virtualControlsHapticFeedback,
+                                      ),
+                                      onChanged: controller.setHapticsEnabled,
+                                    ),
+                                    AnimatedSliderTile(
+                                      label: l10n.virtualControlsDpadDeadzone,
+                                      value: settings.dpadDeadzoneRatio,
+                                      min: 0.06,
+                                      max: 0.30,
+                                      divisions: 48,
+                                      onChanged:
+                                          controller.setDpadDeadzoneRatio,
+                                      valueLabel: settings.dpadDeadzoneRatio
+                                          .toStringAsFixed(2),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      child: Text(
+                                        l10n.virtualControlsDpadDeadzoneHelp,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withValues(alpha: 0.75),
+                                            ),
+                                      ),
+                                    ),
+                                    AnimatedSliderTile(
+                                      label: l10n
+                                          .virtualControlsDpadBoundaryDeadzone,
+                                      value: settings.dpadBoundaryDeadzoneRatio,
+                                      min: 0.35,
+                                      max: 0.90,
+                                      divisions: 55,
+                                      onChanged: controller
+                                          .setDpadBoundaryDeadzoneRatio,
+                                      valueLabel: settings
+                                          .dpadBoundaryDeadzoneRatio
+                                          .toStringAsFixed(2),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      child: Text(
+                                        l10n.virtualControlsDpadBoundaryDeadzoneHelp,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withValues(alpha: 0.75),
+                                            ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      l10n.tipAdjustButtonsInDrawer,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
+                        AnimatedSettingsCard(
+                          index: 8,
+                          child: ListTile(
+                            leading: const Icon(Icons.restore),
+                            title: Text(l10n.virtualControlsReset),
+                            onTap: controller.resetToDefault,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey('virtual_controls_hidden_placeholder'),
                     ),
-                ],
-              ),
-            ),
-          ],
-          if (!usingVirtual)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                l10n.virtualControlsSwitchInputTip,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-          const SizedBox(height: 8),
-          Opacity(
-            opacity: usingVirtual ? 1 : 0.5,
-            child: IgnorePointer(
-              ignoring: !usingVirtual,
-              child: Column(
-                children: [
-                  AnimatedSliderTile(
-                    label: l10n.virtualControlsButtonSize,
-                    value: settings.buttonSize,
-                    min: 40,
-                    max: 120,
-                    onChanged: controller.setButtonSize,
-                    valueLabel: '${settings.buttonSize.toStringAsFixed(0)} px',
-                  ),
-                  AnimatedSliderTile(
-                    label: l10n.virtualControlsGap,
-                    value: settings.gap,
-                    min: 4,
-                    max: 24,
-                    onChanged: controller.setGap,
-                    valueLabel: '${settings.gap.toStringAsFixed(0)} px',
-                  ),
-                  AnimatedSliderTile(
-                    label: l10n.virtualControlsOpacity,
-                    value: settings.opacity,
-                    min: 0.2,
-                    max: 0.8,
-                    onChanged: controller.setOpacity,
-                    valueLabel: settings.opacity.toStringAsFixed(2),
-                  ),
-                  AnimatedSliderTile(
-                    label: l10n.virtualControlsHitboxScale,
-                    value: settings.hitboxScale,
-                    min: 1.0,
-                    max: 1.4,
-                    divisions: 40,
-                    onChanged: controller.setHitboxScale,
-                    valueLabel: settings.hitboxScale.toStringAsFixed(2),
-                  ),
-                  AnimatedSwitchTile(
-                    value: settings.hapticsEnabled,
-                    title: Text(l10n.virtualControlsHapticFeedback),
-                    onChanged: controller.setHapticsEnabled,
-                  ),
-                  AnimatedSliderTile(
-                    label: l10n.virtualControlsDpadDeadzone,
-                    value: settings.dpadDeadzoneRatio,
-                    min: 0.06,
-                    max: 0.30,
-                    divisions: 48,
-                    onChanged: controller.setDpadDeadzoneRatio,
-                    valueLabel: settings.dpadDeadzoneRatio.toStringAsFixed(2),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      l10n.virtualControlsDpadDeadzoneHelp,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.75),
-                      ),
-                    ),
-                  ),
-                  AnimatedSliderTile(
-                    label: l10n.virtualControlsDpadBoundaryDeadzone,
-                    value: settings.dpadBoundaryDeadzoneRatio,
-                    min: 0.35,
-                    max: 0.90,
-                    divisions: 55,
-                    onChanged: controller.setDpadBoundaryDeadzoneRatio,
-                    valueLabel: settings.dpadBoundaryDeadzoneRatio
-                        .toStringAsFixed(2),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      l10n.virtualControlsDpadBoundaryDeadzoneHelp,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.75),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      l10n.tipAdjustButtonsInDrawer,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                  const Divider(),
-                  AnimatedSettingsCard(
-                    index: 6,
-                    child: ListTile(
-                      leading: const Icon(Icons.restore),
-                      title: Text(l10n.virtualControlsReset),
-                      onTap: controller.resetToDefault,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
         ],
