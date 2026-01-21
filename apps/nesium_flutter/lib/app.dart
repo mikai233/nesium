@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animations/animations.dart';
 
@@ -48,8 +46,7 @@ class NesiumApp extends ConsumerWidget {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(
-        fontFamily: kIsWeb ? null : 'NotoSansSC',
-        textTheme: kIsWeb ? GoogleFonts.notoSansScTextTheme() : null,
+        fontFamily: 'NotoSansSC',
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blueGrey,
           brightness: Brightness.light,
@@ -68,10 +65,7 @@ class NesiumApp extends ConsumerWidget {
         ),
       ),
       darkTheme: ThemeData(
-        fontFamily: kIsWeb ? null : 'NotoSansSC',
-        textTheme: kIsWeb
-            ? GoogleFonts.notoSansScTextTheme(ThemeData.dark().textTheme)
-            : null,
+        fontFamily: 'NotoSansSC',
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blueGrey,
           brightness: Brightness.dark,

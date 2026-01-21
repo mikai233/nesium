@@ -33,7 +33,9 @@ jobs:
           submodules: recursive
 
       - name: List workspace members
-        run: cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name' | sort
+        run: |
+          set -euo pipefail
+          cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name' | sort
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
@@ -48,6 +50,7 @@ jobs:
 
       - name: Install system development libraries
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y \
             pkg-config \
@@ -105,6 +108,7 @@ jobs:
       - name: Get version from tag
         id: tag
         run: |
+          set -euo pipefail
           version=${GITHUB_REF#refs/tags/}
           echo "version=$version" >> $GITHUB_OUTPUT
 
@@ -112,6 +116,7 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
+          set -euo pipefail
           version=${{ steps.tag.outputs.version }}
           if [[ "$version" =~ -(dev|alpha|beta|rc|prerelease).* ]]; then
             echo "Pre-release version ($version), skip publishing to crates.io"
@@ -125,6 +130,7 @@ jobs:
 
       - name: Package source code
         run: |
+          set -euo pipefail
           version=${{ steps.tag.outputs.version }}
           repo_name=${{ github.event.repository.name }}
           git archive --format=tar.gz --output=${repo_name}-${version}.tar.gz HEAD
@@ -133,6 +139,7 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
+          set -euo pipefail
           prev_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$prev_tag" ]; then
             log=$(git log --pretty=format:"* %s" ${prev_tag}..HEAD)

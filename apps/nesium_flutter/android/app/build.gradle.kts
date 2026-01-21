@@ -78,9 +78,46 @@ tasks.register<Exec>("buildRustAndroidSo") {
     // If you want to avoid any stale artifacts, you can also add a clean step.
 
     workingDir = rustWorkspaceDir
+    outputs.dir(jniLibsOutDir)
 
     doFirst {
-        // Ensure output directory exists.
+        // Detect target architectures from Flutter properties
+        val targetPlatform = project.findProperty("target-platform") as String?
+        val flutterPlatforms =
+            (project.findProperty("flutter.targetPlatforms") as String?)?.split(",") ?: emptyList()
+
+        val requestedAbis = mutableListOf<String>()
+        if (targetPlatform != null) {
+            when (targetPlatform) {
+                "android-arm" -> requestedAbis.add("armeabi-v7a")
+                "android-arm64" -> requestedAbis.add("arm64-v8a")
+                "android-x64" -> requestedAbis.add("x86_64")
+            }
+        }
+
+        if (requestedAbis.isEmpty()) {
+            for (p in flutterPlatforms) {
+                when (p.trim()) {
+                    "android-arm" -> requestedAbis.add("armeabi-v7a")
+                    "android-arm64" -> requestedAbis.add("arm64-v8a")
+                    "android-x64" -> requestedAbis.add("x86_64")
+                }
+            }
+        }
+
+        val finalAbis = if (requestedAbis.isNotEmpty()) requestedAbis else listOf(
+            "armeabi-v7a",
+            "arm64-v8a",
+            "x86_64"
+        )
+        val abiArgs = finalAbis.flatMap { listOf("-t", it) }
+
+        logger.lifecycle("Rust build targeting ABIs: $finalAbis")
+
+        // Clean up jniLibs to avoid stale artifacts from previous builds
+        if (jniLibsOutDir.exists()) {
+            jniLibsOutDir.deleteRecursively()
+        }
         jniLibsOutDir.mkdirs()
 
         // Choose Rust build profile based on the invoked Gradle tasks.
@@ -104,10 +141,7 @@ tasks.register<Exec>("buildRustAndroidSo") {
             cargoCmd() + listOf(
                 "ndk",
                 "--platform", "26",
-                "-t", "armeabi-v7a",
-                "-t", "arm64-v8a",
-                "-t", "x86",
-                "-t", "x86_64",
+            ) + abiArgs + listOf(
                 "-o", jniLibsOutDir.absolutePath,
                 "build",
                 "--profile", rustProfile,
