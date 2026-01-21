@@ -249,10 +249,9 @@ jobs:
             artifacts/**/nesium-egui-*.AppImage
             artifacts/**/nesium-egui-*.AppImage.sha256
 
-            # --- Nesium Libretro ---
-            artifacts/**/nesium-libretro-*.zip
-            artifacts/**/nesium-libretro-*.tar.gz
-            artifacts/**/nesium-libretro-*.sha256
+            # --- Nesium Libretro (Consolidated) ---
+            artifacts/nesium-libretro/nesium-libretro-*.zip
+            artifacts/nesium-libretro/nesium-libretro-*.sha256
 
             # --- Nesium Flutter ---
             artifacts/**/nesium-flutter-*.zip

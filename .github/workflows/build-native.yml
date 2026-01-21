@@ -68,6 +68,28 @@ jobs:
             asset_ext: dmg
             asset_suffix: macos-universal
 
+          # Android Libretro-only builds
+          - name: android-arm64-v8a
+            os: ubuntu-24.04
+            libretro_only: true
+            android_abi: arm64-v8a
+            ndk_target: aarch64-linux-android
+            libretro_folder: android-arm64-v8a
+
+          - name: android-armeabi-v7a
+            os: ubuntu-24.04
+            libretro_only: true
+            android_abi: armeabi-v7a
+            ndk_target: armv7-linux-androideabi
+            libretro_folder: android-armeabi-v7a
+
+          - name: android-x86_64
+            os: ubuntu-24.04
+            libretro_only: true
+            android_abi: x86_64
+            ndk_target: x86_64-linux-android
+            libretro_folder: android-x86_64
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -205,7 +227,7 @@ jobs:
           tar -C "${CONSOLIDATED_DIR}" -czf "${OUT_FINAL}" .
           (cd "$DIST" && sha256sum "$(basename "$OUT_FINAL")" > "$(basename "$OUT_FINAL").sha256")
 
-          # Libretro core package
+          # Libretro core -> staging folder
           cargo build -p nesium-libretro --profile release-dist --target "${{ matrix.target }}"
           core_src="target/${{ matrix.target }}/release-dist/libnesium_libretro.so"
           if [ ! -f "$core_src" ]; then
@@ -213,15 +235,9 @@ jobs:
             exit 1
           fi
 
-          rm -rf dist/libretro
-          mkdir -p dist/libretro
-          cp "$core_src" dist/libretro/nesium_libretro.so
-          cp "crates/nesium-libretro/nesium_libretro.info" dist/libretro/
-          cp "crates/nesium-libretro/README.md" dist/libretro/README.md
-          cp "LICENSE.md" dist/libretro/ 2>/dev/null || true
-
-          tar -czf "dist/nesium-libretro-${LIBRETRO_TAG}-${{ matrix.asset_suffix }}.tar.gz" -C dist/libretro .
-          (cd dist && sha256sum "nesium-libretro-${LIBRETRO_TAG}-${{ matrix.asset_suffix }}.tar.gz" > "nesium-libretro-${LIBRETRO_TAG}-${{ matrix.asset_suffix }}.tar.gz.sha256")
+          LIBRETRO_FOLDER="${{ matrix.asset_suffix == 'Ubuntu24.04' && 'linux-x86_64' || 'linux-aarch64' }}"
+          mkdir -p "dist/libretro-staging/${LIBRETRO_FOLDER}"
+          cp "$core_src" "dist/libretro-staging/${LIBRETRO_FOLDER}/nesium_libretro.so"
 
       # ===================================================
       # LINUX APPIMAGE BUNDLING
@@ -390,7 +406,7 @@ jobs:
           OUT_FINAL="${DIST}/nesium-egui-${EGUI_TAG}-macos-universal.zip"
           (cd "${CONSOLIDATED_DIR}" && zip -r "${OUT_FINAL}" .)
 
-          # Libretro core
+          # Libretro core -> staging folder
           cargo build --manifest-path "$ROOT/Cargo.toml" -p nesium-libretro --profile release-dist --target aarch64-apple-darwin
           cargo build --manifest-path "$ROOT/Cargo.toml" -p nesium-libretro --profile release-dist --target x86_64-apple-darwin
 
@@ -401,13 +417,8 @@ jobs:
             exit 1
           fi
 
-          rm -rf "$DIST/libretro"
-          mkdir -p "$DIST/libretro"
-          lipo -create "$core_arm" "$core_x86" -output "$DIST/libretro/nesium_libretro.dylib"
-          cp "$ROOT/crates/nesium-libretro/nesium_libretro.info" "$DIST/libretro/"
-          cp "$ROOT/crates/nesium-libretro/README.md" "$DIST/libretro/README.md"
-          cp "$ROOT/LICENSE.md" "$DIST/libretro/" 2>/dev/null || true
-          (cd "$DIST/libretro" && zip -r "../nesium-libretro-${LIBRETRO_TAG}-macos-universal.zip" .)
+          mkdir -p "$DIST/libretro-staging/macos-universal"
+          lipo -create "$core_arm" "$core_x86" -output "$DIST/libretro-staging/macos-universal/nesium_libretro.dylib"
 
           ls -la "$DIST"
 
@@ -455,7 +466,7 @@ jobs:
           $finalZip = "nesium-egui-$env:EGUI_TAG-${{ matrix.asset_suffix }}.zip"
           Compress-Archive -Path "$consolidatedDir\\*" -DestinationPath "dist\\$finalZip" -Force
 
-          # Libretro core
+          # Libretro core -> staging folder
           cargo build -p nesium-libretro --profile release-dist --target "${{ matrix.target }}"
           $core = "target\\${{ matrix.target }}\\release-dist\\nesium_libretro.dll"
           if (-not (Test-Path $core)) {
@@ -466,21 +477,123 @@ jobs:
             exit 1
           }
 
-          New-Item -ItemType Directory -Force -Path "dist\\libretro" | Out-Null
-          Copy-Item $core "dist\\libretro\\nesium_libretro.dll" -Force
-          Copy-Item "crates\\nesium-libretro\\nesium_libretro.info" "dist\\libretro\\" -Force
-          Copy-Item "crates\\nesium-libretro\\README.md" "dist\\libretro\\README.md" -Force
-          if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" "dist\\libretro\\" -Force }
-
-          $coreZip = "nesium-libretro-$env:LIBRETRO_TAG-${{ matrix.asset_suffix }}.zip"
-          Compress-Archive -Path "dist\\libretro\\*" -DestinationPath "dist\\$coreZip" -Force
+          $libretroFolder = "${{ matrix.asset_suffix }}"
+          New-Item -ItemType Directory -Force -Path "dist\\libretro-staging\\$libretroFolder" | Out-Null
+          Copy-Item $core "dist\\libretro-staging\\$libretroFolder\\nesium_libretro.dll" -Force
 
           Get-ChildItem -Path dist | Format-Table -AutoSize
 
       - name: Upload artifact
+        if: ${{ !matrix.libretro_only }}
         uses: actions/upload-artifact@v4
         with:
           name: nesium-egui-${{ matrix.name }}
           path: |
             dist/*
           if-no-files-found: ignore
+
+      # ===================================================
+      # ANDROID LIBRETRO BUILD (using cargo-ndk)
+      # ===================================================
+      - name: Setup Android NDK
+        if: ${{ matrix.libretro_only }}
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26d
+          add-to-path: true
+
+      - name: Build Libretro core (Android)
+        if: ${{ matrix.libretro_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rustup target add "${{ matrix.ndk_target }}"
+          cargo install cargo-ndk --locked || true
+
+          cargo ndk -t "${{ matrix.android_abi }}" build -p nesium-libretro --profile release-dist
+
+          CORE_SO="target/${{ matrix.ndk_target }}/release-dist/libnesium_libretro.so"
+          if [ ! -f "$CORE_SO" ]; then
+            echo "Expected libretro core not found at $CORE_SO"
+            exit 1
+          fi
+
+          mkdir -p "dist/libretro-staging/${{ matrix.libretro_folder }}"
+          cp "$CORE_SO" "dist/libretro-staging/${{ matrix.libretro_folder }}/nesium_libretro.so"
+
+      - name: Upload libretro staging artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libretro-staging-${{ matrix.name }}
+          path: dist/libretro-staging/
+          if-no-files-found: ignore
+
+  # ===================================================
+  # CONSOLIDATE LIBRETRO CORES
+  # ===================================================
+  consolidate-libretro:
+    name: Consolidate Libretro Cores
+    needs: build-native
+    runs-on: ubuntu-latest
+    outputs:
+      libretro_tag: ${{ steps.compute-tag.outputs.LIBRETRO_TAG }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Compute Libretro version tag
+        id: compute-tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${MODE}" = "test" ]; then
+            echo "LIBRETRO_TAG=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            PYTHON_BIN="$(command -v python3 || command -v python)"
+            cargo metadata --format-version 1 --no-deps > "$RUNNER_TEMP/metadata.json"
+            TAG=$("${PYTHON_BIN}" -c "import json; m=json.load(open('$RUNNER_TEMP/metadata.json')); print([p['version'] for p in m['packages'] if p['name']=='nesium-libretro'][0])")
+            echo "LIBRETRO_TAG=$TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all libretro staging artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: libretro-staging-*
+          path: staging
+          merge-multiple: true
+
+      - name: Merge and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.compute-tag.outputs.LIBRETRO_TAG }}"
+          OUT_DIR="nesium-libretro-${TAG}"
+          rm -rf "$OUT_DIR"
+          mkdir -p "$OUT_DIR"
+
+          # Copy all platform folders
+          for dir in staging/*/; do
+            folder_name="$(basename "$dir")"
+            cp -R "$dir" "$OUT_DIR/$folder_name"
+          done
+
+          # Add common files
+          cp crates/nesium-libretro/nesium_libretro.info "$OUT_DIR/"
+          cp crates/nesium-libretro/README.md "$OUT_DIR/"
+          cp LICENSE.md "$OUT_DIR/" 2>/dev/null || true
+
+          # Create final archive
+          mkdir -p dist
+          zip -r "dist/nesium-libretro-${TAG}.zip" "$OUT_DIR"
+          (cd dist && sha256sum "nesium-libretro-${TAG}.zip" > "nesium-libretro-${TAG}.zip.sha256")
+
+          ls -la dist/
+
+      - name: Upload consolidated libretro artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nesium-libretro
+          path: dist/nesium-libretro-*
