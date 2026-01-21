@@ -79,4 +79,4 @@ jobs:
           "
 
       - name: Build web (release)
-        run: flutter build web --release --no-wasm-dry-run
+        run: flutter build web --release --wasm

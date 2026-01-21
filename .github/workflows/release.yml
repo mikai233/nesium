@@ -188,7 +188,7 @@ jobs:
       - name: Build Flutter web
         working-directory: apps/nesium_flutter
         shell: bash
-        run: flutter build web --release --no-wasm-dry-run --base-href "${BASE_HREF}"
+        run: flutter build web --release --wasm --base-href "${BASE_HREF}"
 
       - name: Verify web bundle assets
         shell: bash
