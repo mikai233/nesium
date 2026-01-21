@@ -338,11 +338,6 @@ jobs:
           if [ -f "${ROOT}/README.md" ]; then cp -f "${ROOT}/README.md" "${PKG_DIR}/Nesium/"; fi
           if [ -f "${ROOT}/LICENSE.md" ]; then cp -f "${ROOT}/LICENSE.md" "${PKG_DIR}/Nesium/"; fi
 
-          # Portable package (tar.gz)
-          OUT_TAR="${DIST}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-portable.${{ matrix.asset_ext }}"
-          tar -C "${PKG_DIR}" -czf "${OUT_TAR}" Nesium
-          (cd "$DIST" && shasum -a 256 "$(basename "$OUT_TAR")" > "$(basename "$OUT_TAR").sha256")
-
           # Installable package (.deb)
           DEB_ARCH="amd64"
           if [ "${{ matrix.asset_suffix }}" = "linux-aarch64" ]; then
@@ -385,9 +380,24 @@ jobs:
           Description: Nesium (Flutter)
           CONTROL
 
-          OUT_DEB="${DIST}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.deb"
+          OUT_DEB="${RUNNER_TEMP}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.deb"
           dpkg-deb --build "${DEB_ROOT}" "${OUT_DEB}"
-          (cd "$DIST" && shasum -a 256 "$(basename "$OUT_DEB")" > "$(basename "$OUT_DEB").sha256")
+
+          # Consolidate into a single distribution archive
+          CONSOLIDATED_DIR="${RUNNER_TEMP}/nesium-linux-full"
+          rm -rf "${CONSOLIDATED_DIR}"
+          mkdir -p "${CONSOLIDATED_DIR}"
+          
+          # 1. Add Portable version
+          cp -R "${PKG_DIR}/Nesium" "${CONSOLIDATED_DIR}/portable"
+          
+          # 2. Add DEB package
+          cp "${OUT_DEB}" "${CONSOLIDATED_DIR}/"
+          
+          # Create final archive
+          OUT_FINAL="${DIST}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.tar.gz"
+          tar -C "${CONSOLIDATED_DIR}" -czf "${OUT_FINAL}" .
+          (cd "$DIST" && shasum -a 256 "$(basename "$OUT_FINAL")" > "$(basename "$OUT_FINAL").sha256")
 
           ls -la "$DIST"
 
@@ -422,14 +432,17 @@ jobs:
             exit 1
           fi
 
-          APK_OUT="$DIST/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.apk"
-          AAB_OUT="$DIST/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.aab"
-
-          cp -f "$APK_SRC" "$APK_OUT"
-          cp -f "$AAB_SRC" "$AAB_OUT"
-
-          (cd "$DIST" && shasum -a 256 "$(basename "$APK_OUT")" > "$(basename "$APK_OUT").sha256")
-          (cd "$DIST" && shasum -a 256 "$(basename "$AAB_OUT")" > "$(basename "$AAB_OUT").sha256")
+          # Consolidate Android artifacts into a single ZIP
+          ANDROID_BUNDLE_DIR="${RUNNER_TEMP}/nesium-android-bundle"
+          rm -rf "${ANDROID_BUNDLE_DIR}"
+          mkdir -p "${ANDROID_BUNDLE_DIR}"
+          
+          cp -f "$APK_SRC" "${ANDROID_BUNDLE_DIR}/nesium-flutter-${ASSET_TAG}.apk"
+          cp -f "$AAB_SRC" "${ANDROID_BUNDLE_DIR}/nesium-flutter-${ASSET_TAG}.aab"
+          
+          OUT_ZIP="${DIST}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.zip"
+          (cd "${ANDROID_BUNDLE_DIR}" && zip -r "${OUT_ZIP}" .)
+          (cd "$DIST" && shasum -a 256 "$(basename "$OUT_ZIP")" > "$(basename "$OUT_ZIP").sha256")
 
           ls -la "$DIST"
 
@@ -523,11 +536,27 @@ jobs:
             & signtool sign /f $pfxPath /p "${{ secrets.WINDOWS_CERT_PASSWORD }}" /tr http://timestamp.digicert.com /td sha256 /fd sha256 $outMsi
           }
 
-          # 6. Checksums
+          # 6. Consolidation
+          $consolidatedDir = Join-Path $env:RUNNER_TEMP "nesium-windows-full"
+          if (Test-Path $consolidatedDir) { Remove-Item -Recurse -Force $consolidatedDir }
+          New-Item -ItemType Directory -Force -Path $consolidatedDir | Out-Null
+          
+          # Add Portable version
+          Copy-Item -Path $portableDir -Destination (Join-Path $consolidatedDir "portable") -Recurse -Force
+          
+          # Add MSI
+          Copy-Item -Path $outMsi -Destination $consolidatedDir -Force
+          
+          # Create Final ZIP
+          $finalZip = "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.zip"
+          Compress-Archive -Path "$consolidatedDir\*" -DestinationPath (Join-Path $env:GITHUB_WORKSPACE "dist\$finalZip") -Force
+
+          # 7. Checksums
           Push-Location "dist"
-          Get-FileHash "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\')[-1])" } | Out-File -Encoding ascii "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}.sha256"
-          Get-FileHash "$portableZip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\')[-1])" } | Out-File -Encoding ascii "$portableZip.sha256"
+          Get-FileHash "$finalZip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $($_.Path.Split('\')[-1])" } | Out-File -Encoding ascii "$finalZip.sha256"
           Pop-Location
+
+          ls -la "$env:GITHUB_WORKSPACE/dist"
 
       # ===================================================
       # FLUTTER MACOS BUILD & FIX & DMG & PORTABLE
@@ -699,12 +728,22 @@ jobs:
           hdiutil convert "$dmg_rw" -format UDZO -o "$dmg"
           rm -f "$dmg_rw"
 
-          cp -R "$ROOT/dmg-src/$app_name_ext" "$DIST/portable/"
-          cp "$ROOT/README.md" "$ROOT/LICENSE.md" "$DIST/portable/" 2>/dev/null || true
-          (cd "$DIST/portable" && zip -r "../nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-portable.zip" .)
-
-          (cd "$DIST" && shasum -a 256 "$(basename "$dmg")" > "$(basename "$dmg").sha256")
-          (cd "$DIST" && shasum -a 256 "nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-portable.zip" > "nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-portable.zip.sha256")
+          # [STEP 5] Consolidation
+          CONSOLIDATED_DIR="${RUNNER_TEMP}/nesium-macos-full"
+          rm -rf "${CONSOLIDATED_DIR}"
+          mkdir -p "${CONSOLIDATED_DIR}"
+          
+          # Add Portable version (App bundle)
+          cp -R "$ROOT/dmg-src/$app_name_ext" "${CONSOLIDATED_DIR}/portable/"
+          cp "$ROOT/README.md" "$ROOT/LICENSE.md" "${CONSOLIDATED_DIR}/portable/" 2>/dev/null || true
+          
+          # Add DMG
+          cp "$dmg" "${CONSOLIDATED_DIR}/"
+          
+          # Create Final ZIP
+          OUT_FINAL="${DIST}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.zip"
+          (cd "${CONSOLIDATED_DIR}" && zip -r "${OUT_FINAL}" .)
+          (cd "$DIST" && shasum -a 256 "$(basename "$OUT_FINAL")" > "$(basename "$OUT_FINAL").sha256")
 
           ls -la "$DIST"
 
