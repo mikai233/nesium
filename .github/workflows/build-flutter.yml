@@ -420,13 +420,13 @@ jobs:
 
           pushd "$ROOT/apps/nesium_flutter" >/dev/null
 
-          # 1. Build Universal APK (FAT)
-          flutter build apk --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
-          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nesium-universal.apk
-
-          # 2. Build ARM64 APK (Optimized for modern devices)
+          # 1. Build ARM64 APK (Optimized for modern devices)
           flutter build apk --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}" --target-platform android-arm64
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nesium-arm64.apk
+
+          # 2. Build Universal APK (FAT)
+          flutter build apk --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nesium-universal.apk
 
           popd >/dev/null
 
