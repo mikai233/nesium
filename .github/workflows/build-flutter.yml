@@ -240,6 +240,15 @@ jobs:
           flutter --version
           flutter pub get
 
+      - name: Install fonttools (Python)
+        shell: bash
+        run: pip install fonttools
+
+      - name: Subset fonts
+        working-directory: apps/nesium_flutter
+        shell: bash
+        run: python3 tool/subset_fonts.py
+
       - name: Generate icon PNGs (Rust) (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
