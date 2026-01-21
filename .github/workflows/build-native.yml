@@ -322,8 +322,8 @@ jobs:
 
           ln -s /Applications "$ROOT/dmg-src/Applications"
 
-          dmg_rw="$DIST/nesium-egui-${EGUI_TAG}-macos-universal-rw.dmg"
-          dmg="$DIST/nesium-egui-${EGUI_TAG}-macos-universal.dmg"
+          dmg_rw="${RUNNER_TEMP}/nesium-egui-${EGUI_TAG}-macos-universal-rw.dmg"
+          dmg="${RUNNER_TEMP}/nesium-egui-${EGUI_TAG}-macos-universal.dmg"
           vol="Nesium"
 
           hdiutil create -volname "$vol" -srcfolder "$ROOT/dmg-src" -ov -format UDRW "$dmg_rw"

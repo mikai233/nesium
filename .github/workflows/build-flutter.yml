@@ -488,21 +488,19 @@ jobs:
 
           Write-Host "Artifacts located at: $src"
 
-          # 3. Create Portable Zip
-          $portableDir = Join-Path $env:GITHUB_WORKSPACE "dist\portable"
+          # 3. Prepare Portable Directory
+          $portableDir = Join-Path $env:RUNNER_TEMP "nesium-windows-portable"
+          if (Test-Path $portableDir) { Remove-Item -Recurse -Force $portableDir }
           New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
           Copy-Item -Path (Join-Path $src "*") -Destination $portableDir -Recurse -Force
           if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "README.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "README.md") $portableDir -Force }
           if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md") $portableDir -Force }
 
-          $portableZip = "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}-portable.zip"
-          Compress-Archive -Path "$portableDir\*" -DestinationPath (Join-Path $env:GITHUB_WORKSPACE "dist\$portableZip") -Force
-
           # 4. Create MSI
           $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\bin"
           if (-not (Test-Path $wixBin)) { $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.14\bin" }
 
-          $outMsi = Join-Path $env:GITHUB_WORKSPACE "dist\nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          $outMsi = Join-Path $env:RUNNER_TEMP "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
           $wxsAppFiles = Join-Path $env:RUNNER_TEMP "appfiles.wxs"
 
           & (Join-Path $wixBin "heat.exe") dir $src -cg AppFiles -dr INSTALLFOLDER -gg -srd -sreg -var var.SourceDir -out $wxsAppFiles
@@ -727,8 +725,8 @@ jobs:
 
           ln -s /Applications "$ROOT/dmg-src/Applications"
 
-          dmg_rw="$DIST/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-rw.dmg"
-          dmg="$DIST/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          dmg_rw="${RUNNER_TEMP}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}-rw.dmg"
+          dmg="${RUNNER_TEMP}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
           vol="Nesium"
 
           hdiutil create -volname "$vol" -srcfolder "$ROOT/dmg-src" -ov -format UDRW "$dmg_rw"
