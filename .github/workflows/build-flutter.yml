@@ -408,7 +408,7 @@ jobs:
           ls -la "$DIST"
 
       # ===================================================
-      # FLUTTER ANDROID BUILD (APK + AAB)
+      # FLUTTER ANDROID BUILD (APK)
       # ===================================================
       - name: Build + package (Android)
         if: runner.os == 'Linux' && matrix.name == 'android'
@@ -428,16 +428,12 @@ jobs:
           flutter build apk --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}" --target-platform android-arm64
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nesium-arm64.apk
 
-          # 3. Build AAB (FAT)
-          flutter build appbundle --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
-
           popd >/dev/null
 
           APK_UNIVERSAL="$ROOT/apps/nesium_flutter/build/app/outputs/flutter-apk/nesium-universal.apk"
           APK_ARM64="$ROOT/apps/nesium_flutter/build/app/outputs/flutter-apk/nesium-arm64.apk"
-          AAB_SRC="$ROOT/apps/nesium_flutter/build/app/outputs/bundle/release/app-release.aab"
 
-          if [ ! -f "$APK_UNIVERSAL" ] || [ ! -f "$APK_ARM64" ] || [ ! -f "$AAB_SRC" ]; then
+          if [ ! -f "$APK_UNIVERSAL" ] || [ ! -f "$APK_ARM64" ]; then
             echo "ERROR: One or more Android artifacts missing"
             ls -R "$ROOT/apps/nesium_flutter/build/app/outputs/"
             exit 1
@@ -450,7 +446,6 @@ jobs:
           
           cp -f "$APK_ARM64" "${ANDROID_BUNDLE_DIR}/nesium-flutter-${ASSET_TAG}-arm64-v8a.apk"
           cp -f "$APK_UNIVERSAL" "${ANDROID_BUNDLE_DIR}/nesium-flutter-${ASSET_TAG}-universal.apk"
-          cp -f "$AAB_SRC" "${ANDROID_BUNDLE_DIR}/nesium-flutter-${ASSET_TAG}.aab"
           
           OUT_ZIP="${DIST}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.zip"
           (cd "${ANDROID_BUNDLE_DIR}" && zip -r "${OUT_ZIP}" .)
