@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logging/logging.dart';
 import 'package:web/web.dart' as web;
 
 import '../domain/nes_controller.dart';
@@ -71,6 +72,7 @@ class _WebShellState extends ConsumerState<WebShell> {
   String? _lastSnackMessage;
   DateTime? _lastSnackAt;
   String? _lastError;
+  String? _workerBlobUrl;
 
   Timer? _cursorTimer;
   bool _cursorHidden = false;
@@ -98,6 +100,11 @@ class _WebShellState extends ConsumerState<WebShell> {
       worker.terminate();
     }
     _worker = null;
+    final blobUrl = _workerBlobUrl;
+    if (blobUrl != null) {
+      web.URL.revokeObjectURL(blobUrl);
+      _workerBlobUrl = null;
+    }
     _initCompleter = null;
     setWebCmdSender(null);
     setWebNesReady(false);
@@ -156,40 +163,88 @@ class _WebShellState extends ConsumerState<WebShell> {
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (_) => canvas);
   }
 
-  web.Worker _createModuleWorker(String scriptUrl) {
-    return web.Worker(scriptUrl.toJS, web.WorkerOptions(type: 'module'));
+  Future<web.Worker> _createBlobWorker(String scriptUrl) async {
+    final baseUrl = web.window.location.href.substring(
+      0,
+      web.window.location.href.lastIndexOf('/') + 1,
+    );
+    final absoluteScriptUrl = Uri.parse(baseUrl).resolve(scriptUrl).toString();
+
+    // 1. Fetch the worker script
+    final response = await web.window.fetch(absoluteScriptUrl.toJS).toDart;
+    if (!response.ok) {
+      throw StateError(
+        'Failed to fetch worker script: ${response.status} ${response.statusText}',
+      );
+    }
+    var scriptText = (await response.text().toDart).toDart;
+
+    // 2. Rewrite relative imports because Blob URLs don't have a base directory.
+    // Example: import("./pkg/nesium_wasm.js") -> import("http://host/nes/pkg/nesium_wasm.js")
+    final workerBaseUrl = absoluteScriptUrl.substring(
+      0,
+      absoluteScriptUrl.lastIndexOf('/') + 1,
+    );
+    scriptText = scriptText.replaceAll('import("./', 'import("$workerBaseUrl');
+    scriptText = scriptText.replaceAll("import('./", "import('$workerBaseUrl");
+
+    // 3. Create the Blob and ObjectURL
+    // We cast to BlobPart which is required by the Blob constructor.
+    final blob = web.Blob(
+      JSArray<web.BlobPart>()..add(scriptText.toJS as web.BlobPart),
+      web.BlobPropertyBag(type: 'application/javascript'),
+    );
+    final objectUrl = web.URL.createObjectURL(blob);
+    _workerBlobUrl = objectUrl;
+
+    // 4. Instantiate the worker
+    return web.Worker(objectUrl.toJS, web.WorkerOptions(type: 'module'));
   }
 
-  void _ensureWorker() {
+  Future<void> _ensureWorker() async {
     if (_worker != null) return;
 
-    final worker = _createModuleWorker('nes/nes_worker.js');
-    _worker = worker;
-    setWebCmdSender((cmd, extra) => _postCmd(cmd, extra));
-    setWebRequestSender(_requestWorker);
-    worker.onmessage = ((web.MessageEvent e) => _onWorkerMessage(e)).toJS;
-    worker.onerror = ((web.Event e) {
-      final details = _formatWorkerErrorEvent(e);
-      _initCompleter?.completeError(StateError(details ?? 'Worker error'));
-      _handleFatalWorkerFailure(details ?? 'Worker error', error: e);
-    }).toJS;
-    worker.onmessageerror = ((web.Event e) {
-      final details = _formatWorkerErrorEvent(e);
-      _initCompleter?.completeError(
-        StateError(details ?? 'Worker message error'),
+    final url = 'nes/nes_worker.js';
+    Logger('web_shell').info(
+      'Creating blob worker from $url (current location: ${web.window.location.href})',
+    );
+
+    try {
+      final worker = await _createBlobWorker(url);
+      _worker = worker;
+      setWebCmdSender((cmd, extra) => _postCmd(cmd, extra));
+      setWebRequestSender(_requestWorker);
+      worker.onmessage = ((web.MessageEvent e) => _onWorkerMessage(e)).toJS;
+      worker.onerror = ((web.Event e) {
+        final details = _formatWorkerErrorEvent(e);
+        _initCompleter?.completeError(StateError(details ?? 'Worker error'));
+        _handleFatalWorkerFailure(details ?? 'Worker error', error: e);
+      }).toJS;
+      worker.onmessageerror = ((web.Event e) {
+        final details = _formatWorkerErrorEvent(e);
+        _initCompleter?.completeError(
+          StateError(details ?? 'Worker message error'),
+        );
+        _handleFatalWorkerFailure(details ?? 'Worker message error', error: e);
+      }).toJS;
+    } catch (e, st) {
+      _handleFatalWorkerFailure(
+        'Failed to create Blob Worker: $e',
+        error: e,
+        stackTrace: st,
       );
-      _handleFatalWorkerFailure(details ?? 'Worker message error', error: e);
-    }).toJS;
+      rethrow;
+    }
   }
 
   Future<void> _warmupNesWasm() async {
-    _ensureWorker();
+    await _ensureWorker();
     final payload = JSObject()..['type'] = 'preload'.toJS;
     _worker?.postMessage(payload);
   }
 
   Future<void> _ensureInitialized() async {
-    _ensureWorker();
+    await _ensureWorker();
     if (_workerInitialized) return;
     final existing = _initCompleter;
     if (existing != null) return existing.future;
@@ -442,28 +497,72 @@ class _WebShellState extends ConsumerState<WebShell> {
   }
 
   String? _formatWorkerErrorEvent(web.Event e) {
-    final obj = e as JSObject;
-    final message = (obj['message'] as JSString?)?.toDart;
-    final filename = (obj['filename'] as JSString?)?.toDart;
-    final lineno = (obj['lineno'] as JSNumber?)?.toDartInt;
-    final colno = (obj['colno'] as JSNumber?)?.toDartInt;
+    String? type;
+    try {
+      final obj = e as JSObject;
+      type = (obj['type'] as JSString?)?.toDart;
 
-    final parts = <String>[];
-    if (message != null && message.isNotEmpty) parts.add(message);
-    if (filename != null && filename.isNotEmpty) {
-      final loc = (lineno != null && colno != null)
-          ? '$filename:$lineno:$colno'
-          : filename;
-      parts.add(loc);
+      // Try to get structured error info if e is ErrorEvent
+      final message = (obj['message'] as JSString?)?.toDart;
+      final filename = (obj['filename'] as JSString?)?.toDart;
+      final lineno = (obj['lineno'] as JSNumber?)?.toDartInt;
+      final colno = (obj['colno'] as JSNumber?)?.toDartInt;
+
+      final parts = <String>[];
+      if (message != null && message.isNotEmpty) parts.add(message);
+      if (filename != null && filename.isNotEmpty) {
+        final loc = (lineno != null && colno != null)
+            ? '$filename:$lineno:$colno'
+            : filename;
+        parts.add(loc);
+      }
+
+      final out = parts.join('\n');
+      if (out.isNotEmpty) {
+        if (out.contains('nesium_wasm') || out.contains('nes/nes_worker.js')) {
+          return '$out\n\nHint: run `dart run tool/build_wasm.dart` to build `web/nes/pkg/` (wasm-pack output).';
+        }
+        return out;
+      }
+    } catch (err) {
+      logWarning(
+        err,
+        message: 'Failed to format worker error',
+        logger: 'web_shell',
+      );
     }
 
-    final out = parts.join('\n');
-    if (out.isEmpty) return null;
+    // Fallback: search for any info on the event object.
+    try {
+      final obj = e as JSObject;
+      final target = obj['target'];
+      logWarning(
+        e,
+        message: 'Worker error event (type: $type)',
+        logger: 'web_shell',
+      );
 
-    if (out.contains('nesium_wasm') || out.contains('nes/nes_worker.js')) {
-      return '$out\n\nHint: run `dart run tool/run_web.dart` to build `web/nes/pkg/` (wasm-pack output).';
+      if (target != null) {
+        final targetObj = target as JSObject;
+        final url = (targetObj['url'] as JSString?)?.toDart;
+        if (url != null) {
+          return 'Failed to load worker at $url';
+        }
+      }
+
+      final str = e.toString();
+      if (str != '[object Event]') return str;
+      if (type != null) return 'Worker error ($type)';
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Worker error fallback formatting failed',
+        logger: 'web_shell',
+      );
     }
-    return out;
+
+    return null;
   }
 
   Future<void> _preflightWebAssetsOrThrow() async {
@@ -486,7 +585,7 @@ class _WebShellState extends ConsumerState<WebShell> {
 
     final msg =
         'Missing Web assets:\n$missing\n\n'
-        'Run: `cd apps/nesium_flutter && dart run tool/run_web.dart`';
+        'Run: `cd apps/nesium_flutter && dart run tool/build_wasm.dart`';
     _reportError(msg, persistent: true);
     throw StateError(msg);
   }
@@ -1135,6 +1234,11 @@ class _WebShellState extends ConsumerState<WebShell> {
       worker.terminate();
     }
     _worker = null;
+    final blobUrl = _workerBlobUrl;
+    if (blobUrl != null) {
+      web.URL.revokeObjectURL(blobUrl);
+      _workerBlobUrl = null;
+    }
     _initCompleter = null;
     _workerInitialized = false;
     _running = false;
