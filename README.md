@@ -17,7 +17,7 @@
 
 A cycle-accurate NES emulator written in Rust, designed to faithfully replicate the behavior of the Nintendo Entertainment System hardware. This project strives to provide precise emulation of the CPU, PPU, APU, and other critical components, ensuring that every game runs as it would on the original hardware.
 
-This emulator’s design and implementation draw heavily from the excellent Mesen2 project. Mesen2’s documentation, code structure, and many of its implementation ideas (especially around timing, open-bus behaviour, and audio mixing) have been an invaluable reference. Huge thanks to the Mesen2 authors and contributors for making such a high‑quality emulator available.
+This emulator’s design and implementation draw heavily from the excellent [Mesen2](https://github.com/SourMesen/Mesen2) project. Mesen2’s documentation, code structure, and many of its implementation ideas (especially around timing, open-bus behaviour, and audio mixing) have been an invaluable reference. Huge thanks to the Mesen2 authors and contributors for making such a high‑quality emulator available.
 
 ## Key Features
 
@@ -27,6 +27,16 @@ This emulator’s design and implementation draw heavily from the excellent Mese
 - **APU Emulation**: Recreates sound processing with support for the NES sound channels.
 - **Compatibility**: Supports a variety of NES games, with ongoing improvements to compatibility and performance.
 
+## UI frontends
+
+This repository currently ships **two** UI frontends:
+
+- **`nesium-egui`** (`apps/nesium-egui`) — A lightweight desktop frontend built with `egui`. It has a small footprint and provides the essentials for **quick debugging and development**.
+  - ![](https://img.shields.io/badge/Windows-x86_64/arm64-blue?logo=windows) ![](https://img.shields.io/badge/macOS-Universal-black?logo=apple) ![](https://img.shields.io/badge/Linux-x86_64/arm64-orange?logo=linux)
+- **`nesium-flutter`** (`apps/nesium_flutter`) — A modern frontend built with **Flutter**. It aims for a more polished UI and broader cross‑platform reach than the `egui` app.
+  - ![](https://img.shields.io/badge/Windows-x86_64-blue?logo=windows) ![](https://img.shields.io/badge/macOS-Universal-black?logo=apple) ![](https://img.shields.io/badge/Linux-x86_64/arm64-orange?logo=linux) ![](https://img.shields.io/badge/Android-Multi--arch-green?logo=android)
+- **Web build (play online)** — https://mikai233.github.io/nesium/ (Runs in the browser via high-performance **Flutter WASM (dart2wasm)** + Web Worker + Rust WASM).
+  - ![](https://img.shields.io/badge/Web-WasmGC-purple?logo=webassembly) (Chrome/Edge 119+, Firefox 120+)
 
 ## Current Status
 
@@ -55,14 +65,6 @@ The long-term vision for Nesium focuses on precision, tooling, and extensibility
 
 - [ ] **Netplay**:
     Implement networked multiplayer support for two-player games over the internet.
-
-## UI frontends
-
-This repository currently ships **two** UI frontends:
-
-- **`nesium-egui`** (`apps/nesium-egui`) — A lightweight desktop frontend built with `egui`. It has a small footprint and provides the essentials for **quick debugging and development**.
-- **`nesium-flutter`** (`apps/nesium_flutter`) — A modern frontend built with **Flutter**. It aims for a more polished UI and broader cross‑platform reach than the `egui` app, but is typically **larger** and **more complex to build**, since it loads a native dynamic library produced by the Rust glue layer (`crates/nesium-flutter`).
-- **Web build (play online)** — https://mikai233.github.io/nesium/ (Runs in the browser via high-performance **Flutter WASM (dart2wasm)** + Web Worker + Rust WASM; requires a browser with **WasmGC** support: Chrome/Edge 119+, Firefox 120+).
 
 ## Mapper support
 
