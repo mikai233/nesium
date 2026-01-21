@@ -5,6 +5,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// --- Rust/Android isolation logic ---
+val targetPlatform = project.findProperty("target-platform") as String?
+val flutterPlatforms =
+    (project.findProperty("flutter.targetPlatforms") as String?)?.split(",") ?: emptyList()
+val abiSlug = targetPlatform
+    ?: (if (flutterPlatforms.isNotEmpty()) flutterPlatforms.joinToString("-") else "universal")
+
+// Isolated directory in 'build/' ensures total separation between builds (Universal vs ARM64)
+// and forces Gradle to execute the task when switching modes.
+val jniLibsOutDir = file("$buildDir/rustJniLibs/$abiSlug")
+
 android {
     namespace = "io.github.mikai233.nesium"
     compileSdk = flutter.compileSdkVersion
@@ -18,6 +29,9 @@ android {
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
+
+    // Standard JNI libs mapping using a dynamic, isolated "source" directory.
+    sourceSets["main"].jniLibs.setSrcDirs(listOf(jniLibsOutDir))
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
@@ -43,22 +57,9 @@ flutter {
     source = "../.."
 }
 
-
-// --- Rust/Android integration (always rebuild, workspace-friendly) ---
-//
-// This task builds your Rust dynamic library (.so) for all Android ABIs
-// and places the outputs into Android's jniLibs folder so Flutter can load
-// them via dart:ffi.
-//
-// Why workspace root?
-// - In a Cargo workspace with complex dependencies, building from the crate
-//   directory may still be OK, but pointing Cargo at the workspace root is
-//   often more reliable (path deps, workspace patches, shared features, etc).
-
 val repoRootDir = file("../../../../") // from apps/nesium_flutter/android/app -> repo root
 val rustWorkspaceDir = repoRootDir     // adjust if your workspace root is elsewhere
 val rustPackageName = "nesium-flutter" // Cargo package name (with hyphen)
-val jniLibsOutDir = file("$projectDir/src/main/jniLibs")
 
 fun cargoCmd(): List<String> {
     // Windows requires "cmd /c" to run cargo reliably from Gradle Exec.
@@ -72,20 +73,12 @@ fun cargoCmd(): List<String> {
 
 tasks.register<Exec>("buildRustAndroidSo") {
     group = "build"
-    description = "Build Rust cdylib (.so) for Android ABIs and copy into jniLibs (always rebuild)"
-
-    // Always rebuild: no inputs/outputs / no incremental logic on purpose.
-    // If you want to avoid any stale artifacts, you can also add a clean step.
+    description = "Build Rust cdylib (.so) for Android ABIs and copy into isolated jniLibs"
 
     workingDir = rustWorkspaceDir
     outputs.dir(jniLibsOutDir)
 
     doFirst {
-        // Detect target architectures from Flutter properties
-        val targetPlatform = project.findProperty("target-platform") as String?
-        val flutterPlatforms =
-            (project.findProperty("flutter.targetPlatforms") as String?)?.split(",") ?: emptyList()
-
         val requestedAbis = mutableListOf<String>()
         if (targetPlatform != null) {
             when (targetPlatform) {
@@ -105,6 +98,7 @@ tasks.register<Exec>("buildRustAndroidSo") {
             }
         }
 
+        // Default to all for local dev robustness
         val finalAbis = if (requestedAbis.isNotEmpty()) requestedAbis else listOf(
             "armeabi-v7a",
             "arm64-v8a",
@@ -112,17 +106,14 @@ tasks.register<Exec>("buildRustAndroidSo") {
         )
         val abiArgs = finalAbis.flatMap { listOf("-t", it) }
 
-        logger.lifecycle("Rust build targeting ABIs: $finalAbis")
+        logger.lifecycle("Rust build ($abiSlug) targeting ABIs: $finalAbis -> ${jniLibsOutDir.absolutePath}")
 
-        // Clean up jniLibs to avoid stale artifacts from previous builds
+        // Clean isolated directory
         if (jniLibsOutDir.exists()) {
             jniLibsOutDir.deleteRecursively()
         }
         jniLibsOutDir.mkdirs()
 
-        // Choose Rust build profile based on the invoked Gradle tasks.
-        // - For Flutter/Android release builds (assembleRelease / bundleRelease / etc.): use `release-dist`.
-        // - For all other builds: use `release`.
         val buildModeProp = (project.findProperty("flutter.buildMode") as String?)?.lowercase()
         val isReleaseTask =
             gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }
@@ -135,8 +126,6 @@ tasks.register<Exec>("buildRustAndroidSo") {
             buildModeProp == "release" || (isReleaseTask && !isDebugTask && !isProfileTask)
         val rustProfile = if (isFlutterRelease) "release-dist" else "release"
 
-        // Build the specific package inside the workspace.
-        // `--profile <name>` lets us select custom profiles like `release-dist`.
         commandLine(
             cargoCmd() + listOf(
                 "ndk",
@@ -149,20 +138,6 @@ tasks.register<Exec>("buildRustAndroidSo") {
             )
         )
     }
-
-    // Build the specific package inside the workspace.
-    // -P <package> ensures the correct crate is built even in a large workspace.
-    //
-    // Output layout will be:
-    //   android/app/src/main/jniLibs/arm64-v8a/lib<crate_name>.so
-    //   android/app/src/main/jniLibs/armeabi-v7a/lib<crate_name>.so
-    //   android/app/src/main/jniLibs/x86_64/lib<crate_name>.so
-    //   android/app/src/main/jniLibs/x86/lib<crate_name>.so
-    //
-    // Note: The produced library name usually converts '-' to '_' (e.g. libnesium_flutter.so).
-
-    // If your NDK isn't auto-detected, uncomment and set ANDROID_NDK_HOME.
-    // environment("ANDROID_NDK_HOME", System.getenv("ANDROID_NDK_HOME") ?: "/absolute/path/to/ndk")
 }
 
 // Ensure Rust is built before Android builds the APK/AAB.
