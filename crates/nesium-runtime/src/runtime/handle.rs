@@ -32,7 +32,7 @@ use super::{
         RuntimeEventSender, SAVE_STATE_REPLY_TIMEOUT, TileViewerBackground, TileViewerLayout,
         TileViewerSource, VideoConfig,
     },
-    util::button_bit,
+    util::{button_bit, try_raise_current_thread_priority},
 };
 
 struct RuntimeInner {
@@ -118,6 +118,7 @@ impl Runtime {
 
         let ctrl_tx_clone = ctrl_tx.clone();
         let join = thread::spawn(move || {
+            try_raise_current_thread_priority();
             let mut runner = Runner::new(
                 audio_mode,
                 ctrl_rx,
@@ -404,6 +405,19 @@ impl RuntimeHandle {
     ) -> Result<(), RuntimeError> {
         self.send_with_reply("set_frame_ready_callback", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::SetFrameReadyCallback(cb, user_data, reply)
+        })
+    }
+
+    /// Set the color format for frame rendering at runtime.
+    ///
+    /// # Panics (on the runtime thread)
+    /// Panics if the new format has a different `bytes_per_pixel` than the current format.
+    pub fn set_color_format(
+        &self,
+        format: nesium_core::ppu::buffer::ColorFormat,
+    ) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_color_format", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetColorFormat(format, reply)
         })
     }
 

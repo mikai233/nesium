@@ -1,6 +1,10 @@
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final nesTextureServiceProvider = Provider((ref) => NesTextureService());
 
 /// Handles platform channel for creating the external NES texture.
+
 class NesTextureService {
   static const MethodChannel _channel = MethodChannel('nesium');
   static const MethodChannel _auxChannel = MethodChannel('nesium_aux');
@@ -19,6 +23,20 @@ class NesTextureService {
   /// Note: takes effect on next app restart.
   Future<void> setVideoBackend(int mode) =>
       _channel.invokeMethod<void>('setVideoBackend', {'mode': mode});
+
+  Future<void> setAndroidHighPriority(bool enabled) => _channel
+      .invokeMethod<void>('setAndroidHighPriority', {'enabled': enabled});
+
+  /// Switches the Windows video backend.
+  ///
+  /// - `true`: D3D11 GPU texture sharing (zero-copy)
+  /// - `false`: CPU PixelBufferTexture fallback
+  Future<int?> setWindowsVideoBackend(bool useGpu) =>
+      _channel.invokeMethod<int>('setWindowsVideoBackend', {'useGpu': useGpu});
+
+  Future<void> setWindowsHighPriority(bool enabled) async {
+    await _channel.invokeMethod('setWindowsHighPriority', {'enabled': enabled});
+  }
 
   // ---------------------------------------------------------------------------
   // Auxiliary Textures (Tilemap, Pattern, etc.)

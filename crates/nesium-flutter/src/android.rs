@@ -13,7 +13,7 @@ use std::{
 use jni::{
     JNIEnv,
     objects::{GlobalRef, JByteBuffer, JClass, JObject},
-    sys::{jint, jlong, jobject},
+    sys::{jboolean, jint, jlong, jobject},
 };
 
 use crate::{FRAME_HEIGHT, FRAME_WIDTH, ensure_runtime, runtime_handle};
@@ -33,6 +33,34 @@ static VIDEO_BACKEND: AtomicI32 = AtomicI32::new(AndroidVideoBackend::AhbSwapcha
 
 pub fn use_ahb_video_backend() -> bool {
     VIDEO_BACKEND.load(Ordering::Acquire) == AndroidVideoBackend::AhbSwapchain as i32
+}
+
+static RUST_RENDERER_TID: AtomicI32 = AtomicI32::new(-1);
+
+fn try_raise_current_thread_priority() {
+    // Best-effort: Android apps may not be allowed to reduce nice (negative values).
+    // If the call fails, we simply keep the default scheduler behavior.
+    unsafe {
+        let tid = libc::gettid() as i32;
+        RUST_RENDERER_TID.store(tid, Ordering::Release);
+        if !nesium_runtime::runtime::is_high_priority_enabled() {
+            return;
+        }
+        let tid = tid as libc::id_t;
+        let _ = libc::setpriority(libc::PRIO_PROCESS, tid, -2);
+    }
+}
+
+fn apply_rust_renderer_priority(enabled: bool) {
+    let tid = RUST_RENDERER_TID.load(Ordering::Acquire);
+    if tid <= 0 {
+        return;
+    }
+    unsafe {
+        let tid = tid as libc::id_t;
+        let nice = if enabled { -2 } else { 0 };
+        let _ = libc::setpriority(libc::PRIO_PROCESS, tid, nice);
+    }
 }
 
 // === AHardwareBuffer swapchain (Scheme B) ==================================
@@ -377,6 +405,20 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetVide
     VIDEO_BACKEND.store(mode as i32, Ordering::Release);
 }
 
+/// Enables/disables best-effort thread priority boost on Android.
+///
+/// This affects the runtime thread and the Rust renderer thread (if running).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetHighPriority(
+    _env: JNIEnv,
+    _class: JClass,
+    enabled: jboolean,
+) {
+    let enabled = enabled != 0;
+    nesium_runtime::runtime::set_high_priority_enabled(enabled);
+    apply_rust_renderer_priority(enabled);
+}
+
 /// Stores the write-end FD for the frame signal pipe and makes it non-blocking.
 fn set_frame_signal_fd(fd: RawFd) {
     if fd < 0 {
@@ -507,6 +549,8 @@ const EGL_WINDOW_BIT: EGLint = 0x0004;
 const EGL_OPENGL_ES2_BIT: EGLint = 0x0004;
 const EGL_CONTEXT_CLIENT_VERSION: EGLint = 0x3098;
 const EGL_OPENGL_ES_API: EGLint = 0x30A0;
+const EGL_WIDTH: EGLint = 0x3057;
+const EGL_HEIGHT: EGLint = 0x3056;
 
 const EGL_NATIVE_BUFFER_ANDROID: EGLint = 0x3140;
 const EGL_IMAGE_PRESERVED_KHR: EGLint = 0x30D2;
@@ -547,6 +591,12 @@ unsafe extern "C" {
         draw: EGLSurface,
         read: EGLSurface,
         ctx: EGLContext,
+    ) -> EGLBoolean;
+    fn eglQuerySurface(
+        dpy: EGLDisplay,
+        surface: EGLSurface,
+        attribute: EGLint,
+        value: *mut EGLint,
     ) -> EGLBoolean;
     fn eglSwapInterval(dpy: EGLDisplay, interval: EGLint) -> EGLBoolean;
     fn eglSwapBuffers(dpy: EGLDisplay, surface: EGLSurface) -> EGLBoolean;
@@ -749,6 +799,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
     let stop_for_thread = stop.clone();
     let swapchain_ref = std::panic::AssertUnwindSafe(swapchain_ref);
     let join = std::thread::spawn(move || {
+        try_raise_current_thread_priority();
         let window = window_ptr as *mut ANativeWindow;
         let res = std::panic::catch_unwind(|| unsafe {
             run_rust_renderer(window, *swapchain_ref, stop_for_thread);
@@ -1052,10 +1103,6 @@ unsafe fn run_rust_renderer(
     for i in 0..2 {
         unsafe {
             glBindTexture(GL_TEXTURE_2D, textures[i]);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         }
 
         let client_buf = unsafe { get_native_client_buffer(swapchain.buffer(i)) };
@@ -1075,6 +1122,16 @@ unsafe fn run_rust_renderer(
         }
         images[i] = image;
         unsafe { gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void) };
+
+        // Set texture parameters AFTER binding the EGLImage. Some Android GPU drivers
+        // reset texture parameters to defaults (GL_LINEAR) when glEGLImageTargetTexture2DOES
+        // is called, causing blurry rendering if set beforehand.
+        unsafe {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
     }
 
     let _images_cleanup = EglImagesCleanup {
@@ -1161,8 +1218,19 @@ unsafe fn run_rust_renderer(
 
         let _busy = GpuBusyGuard::new(swapchain, idx);
 
+        // Query the actual EGL surface size. When using a SurfaceView without
+        // setFixedSize(), the surface matches the view's pixel dimensions. This allows
+        // our GL renderer to scale the NES frame to fill the screen using NEAREST sampling,
+        // avoiding the system compositor's bilinear scaling.
+        let mut surf_w: EGLint = FRAME_WIDTH as EGLint;
+        let mut surf_h: EGLint = FRAME_HEIGHT as EGLint;
         unsafe {
-            glViewport(0, 0, FRAME_WIDTH as c_int, FRAME_HEIGHT as c_int);
+            let _ = eglQuerySurface(dpy, surf, EGL_WIDTH, &mut surf_w as *mut _);
+            let _ = eglQuerySurface(dpy, surf, EGL_HEIGHT, &mut surf_h as *mut _);
+
+            let w = (surf_w as c_int).max(1);
+            let h = (surf_h as c_int).max(1);
+            glViewport(0, 0, w, h);
             glClearColor(0.0, 0.0, 0.0, 1.0);
             glClear(GL_COLOR_BUFFER_BIT);
         }

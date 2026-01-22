@@ -17,3 +17,4 @@ pub use types::{
     TileState, TileViewerBackground, TileViewerConfig, TileViewerLayout, TileViewerSource,
     TilemapState, VideoConfig, VideoExternalConfig, VideoSwapchainConfig,
 };
+pub use util::{is_high_priority_enabled, set_high_priority_enabled};

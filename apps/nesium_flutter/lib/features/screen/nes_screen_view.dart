@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/nes_controller.dart';
+import '../../platform/platform_capabilities.dart';
 import '../settings/video_settings.dart';
 import 'emulation_status_overlay.dart';
 
@@ -121,9 +122,38 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           Text(widget.error!, textAlign: TextAlign.center),
         ],
       );
-    } else if (widget.textureId == null) {
-      content = const SizedBox.shrink();
-    } else {
+    } else if (useAndroidNativeGameView) {
+      content = LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = NesScreenView.computeViewportSize(
+            constraints,
+            integerScaling: integerScaling,
+            aspectRatio: aspectRatio,
+          );
+          if (viewport == null) return const SizedBox.shrink();
+
+          final child = SizedBox(
+            width: viewport.width,
+            height: viewport.height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const AndroidView(viewType: 'nesium_game_view'),
+                if (hasRom) const EmulationStatusOverlay(),
+              ],
+            ),
+          );
+
+          return MouseRegion(
+            cursor: _cursorHidden ? SystemMouseCursors.none : MouseCursor.defer,
+            onEnter: (_) => _showCursorAndArmTimer(),
+            onHover: (_) => _showCursorAndArmTimer(),
+            onExit: (_) => _showCursorAndCancelTimer(),
+            child: child,
+          );
+        },
+      );
+    } else if (widget.textureId != null) {
       content = LayoutBuilder(
         builder: (context, constraints) {
           final viewport = NesScreenView.computeViewportSize(
@@ -157,6 +187,8 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           );
         },
       );
+    } else {
+      content = const SizedBox.shrink();
     }
 
     return Container(

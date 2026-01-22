@@ -2,9 +2,9 @@
 name = "nesium-wasm"
 version = "0.1.0"
 edition = "2024"
-license.workspace = true
+license = { workspace = true }
 description = "Nesium web runtime (WASM)"
-repository.workspace = true
+repository = { workspace = true }
 
 [lints]
 workspace = true

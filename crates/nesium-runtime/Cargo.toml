@@ -21,6 +21,9 @@ lz4_flex.workspace = true
 parking_lot.workspace = true
 postcard.workspace = true
 
+[target.'cfg(target_os = "android")'.dependencies]
+libc.workspace = true
+
 [dev-dependencies]
 tokio = { workspace = true, features = [
     "rt-multi-thread",

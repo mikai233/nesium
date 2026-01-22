@@ -31,6 +31,14 @@ object NesiumNative {
     external fun nativeSetVideoBackend(mode: Int)
 
     /**
+     * Enables/disables best-effort thread priority boost on Android.
+     *
+     * This affects the Rust runtime thread and (when running) the Rust renderer thread.
+     */
+    @JvmStatic
+    external fun nativeSetHighPriority(enabled: Boolean)
+
+    /**
      * Starts the Rust-side EGL/GL renderer that presents into the given [Surface].
      *
      * Only used when `nativeSetVideoBackend(1)` was selected.

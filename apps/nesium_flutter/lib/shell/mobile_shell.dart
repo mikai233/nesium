@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../domain/nes_controller.dart';
 import '../domain/nes_state.dart';
@@ -36,6 +37,9 @@ class _MobileShellState extends ConsumerState<MobileShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (isNativeMobile) {
+      unawaited(WakelockPlus.enable());
+    }
   }
 
   @override
@@ -66,6 +70,7 @@ class _MobileShellState extends ConsumerState<MobileShell>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     if (isNativeMobile) {
+      unawaited(WakelockPlus.disable());
       unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     }
     super.dispose();

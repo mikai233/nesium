@@ -13,3 +13,5 @@ bool get preferVirtualControlsByDefault => false;
 
 /// Web browsers do not support raw TCP sockets.
 bool get supportsTcp => false;
+
+bool get useAndroidNativeGameView => false;

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/logging/app_logger.dart';
+import 'package:nesium_flutter/platform/platform_capabilities.dart';
 
 import 'nes_state.dart';
 import 'nes_texture_service.dart';
@@ -18,12 +19,20 @@ class NesController extends Notifier<NesState> {
 
   Future<void> initTexture() async {
     state = state.copyWith(clearError: true);
+    if (useAndroidNativeGameView) {
+      // Native SurfaceView path (Android): no Flutter external texture is created.
+      return;
+    }
     try {
       final textureId = await _textureService.createTexture();
       state = state.copyWith(textureId: textureId);
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
+  }
+
+  void updateTextureId(int? id) {
+    state = state.copyWith(textureId: id);
   }
 
   Future<void> refreshRomHash() async {

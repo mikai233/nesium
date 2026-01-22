@@ -1,24 +1,23 @@
 package io.github.mikai233.nesium
 
-import android.os.Handler
-import android.os.HandlerThread
-import android.view.Surface
-import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.view.TextureRegistry
 import android.opengl.EGL14
 import android.opengl.GLES20
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.FloatBuffer
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.os.MessageQueue
 import android.os.ParcelFileDescriptor
+import android.os.Process
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
 import android.util.Log
+import android.view.Surface
 import java.io.FileDescriptor
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
 import java.util.concurrent.CountDownLatch
 
 
@@ -26,22 +25,33 @@ import java.util.concurrent.CountDownLatch
  * A dedicated GL thread that uploads the latest NES frame into a GL texture.
  *
  * This implementation uses an EGL window surface created from a Java `Surface` that wraps the
- * Flutter-provided `SurfaceTexture`. Each swap produces a new buffer that Flutter can consume.
+ * Flutter-provided `SurfaceTexture` (external texture) or a native `SurfaceView`.
  */
 class NesRenderer(
-    private val flutterEngine: FlutterEngine,
-    private val textureEntry: TextureRegistry.SurfaceTextureEntry,
-    private val profilingEnabled: Boolean = false,
+    private val surface: Surface,
+    private val releaseSurface: Boolean,
+    private val onDispose: (() -> Unit)? = null,
+    private val highPriorityEnabled: Boolean = false,
 ) {
     private companion object {
         private const val TAG = "NesRenderer"
+    }
+
+    private inline fun bestEffort(action: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            Log.d(TAG, "Best-effort operation failed: $action", t)
+        }
     }
 
     private val thread = HandlerThread("NesGLThread")
     private val handler: Handler
 
     private var eglDisplay = EGL14.EGL_NO_DISPLAY
+
     private var eglContext = EGL14.EGL_NO_CONTEXT
+
     private var eglSurface = EGL14.EGL_NO_SURFACE
 
     private var windowSurface: Surface? = null
@@ -84,73 +94,6 @@ class NesRenderer(
     // Prevent recursive re-initialization when EGL context is lost.
     private var recreatingEgl = false
 
-    // --- Profiling (optional) ---
-    private var profFrames = 0
-    private var profLastLogNs = 0L
-    private var profSumUploadNs = 0L
-    private var profMaxUploadNs = 0L
-    private var profSumSwapNs = 0L
-    private var profMaxSwapNs = 0L
-    private var profSumTotalNs = 0L
-    private var profMaxTotalNs = 0L
-
-    private fun recordFrameTiming(
-        tStartNs: Long,
-        tUploadStartNs: Long,
-        tUploadEndNs: Long,
-        tSwapStartNs: Long,
-        tSwapEndNs: Long,
-    ) {
-        val pacingThresholdSwapNs = 25_000_000L // ~25ms, likely missed vsync on 60Hz
-
-        val uploadNs = tUploadEndNs - tUploadStartNs
-        val swapNs = tSwapEndNs - tSwapStartNs
-        val totalNs = tSwapEndNs - tStartNs
-
-        profFrames += 1
-        profSumUploadNs += uploadNs
-        profSumSwapNs += swapNs
-        profSumTotalNs += totalNs
-        if (uploadNs > profMaxUploadNs) profMaxUploadNs = uploadNs
-        if (swapNs > profMaxSwapNs) profMaxSwapNs = swapNs
-        if (totalNs > profMaxTotalNs) profMaxTotalNs = totalNs
-
-        val now = tSwapEndNs
-        val shouldLog = (profLastLogNs == 0L) ||
-                (now - profLastLogNs >= 1_000_000_000L) ||
-                (swapNs >= pacingThresholdSwapNs)
-
-        if (!shouldLog) return
-
-        val avgUploadMs = profSumUploadNs.toDouble() / profFrames / 1_000_000.0
-        val avgSwapMs = profSumSwapNs.toDouble() / profFrames / 1_000_000.0
-        val avgTotalMs = profSumTotalNs.toDouble() / profFrames / 1_000_000.0
-        val maxUploadMs = profMaxUploadNs.toDouble() / 1_000_000.0
-        val maxSwapMs = profMaxSwapNs.toDouble() / 1_000_000.0
-        val maxTotalMs = profMaxTotalNs.toDouble() / 1_000_000.0
-
-        val msg =
-            "frame pacing: avg upload=${"%.2f".format(avgUploadMs)}ms (max ${"%.2f".format(maxUploadMs)}ms), " +
-                "avg swap=${"%.2f".format(avgSwapMs)}ms (max ${"%.2f".format(maxSwapMs)}ms), " +
-                "avg total=${"%.2f".format(avgTotalMs)}ms (max ${"%.2f".format(maxTotalMs)}ms), " +
-                "frames=$profFrames"
-
-        if (profMaxSwapNs >= pacingThresholdSwapNs) {
-            Log.w(TAG, msg)
-        } else {
-            Log.d(TAG, msg)
-        }
-
-        profLastLogNs = now
-        profFrames = 0
-        profSumUploadNs = 0L
-        profMaxUploadNs = 0L
-        profSumSwapNs = 0L
-        profMaxSwapNs = 0L
-        profSumTotalNs = 0L
-        profMaxTotalNs = 0L
-    }
-
     private val vertexShaderCode = """
         attribute vec4 a_position;
         attribute vec2 a_tex_coord;
@@ -190,7 +133,16 @@ class NesRenderer(
     init {
         thread.start()
         handler = Handler(thread.looper)
-        handler.post { initGLAndLoop() }
+        handler.post {
+            if (highPriorityEnabled) {
+                try {
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Failed to raise GL thread priority", t)
+                }
+            }
+            initGLAndLoop()
+        }
     }
 
     private fun initGLAndLoop() {
@@ -231,8 +183,8 @@ class NesRenderer(
             throw RuntimeException("eglCreateContext failed")
         }
 
-        // Window surface backed by the Flutter SurfaceTexture.
-        windowSurface = Surface(textureEntry.surfaceTexture())
+        // Window surface backed by the provided Surface.
+        windowSurface = surface
         val surfaceAttribs = intArrayOf(EGL14.EGL_NONE)
         eglSurface =
             EGL14.eglCreateWindowSurface(eglDisplay, config, windowSurface, surfaceAttribs, 0)
@@ -410,6 +362,7 @@ class NesRenderer(
             } catch (e: ErrnoException) {
                 // EAGAIN means we've drained all currently available bytes.
                 if (e.errno == OsConstants.EAGAIN) return
+                Log.w(TAG, "Frame signal pipe read failed (errno=${e.errno})", e)
                 return
             }
         }
@@ -431,23 +384,19 @@ class NesRenderer(
     private fun teardownFrameSignalPipe() {
         val fd = frameSignalFd
         if (fd != null) {
-            try {
+            bestEffort("removeOnFileDescriptorEventListener") {
                 Looper.myQueue().removeOnFileDescriptorEventListener(fd)
-            } catch (_: Throwable) {
-                // Best-effort cleanup.
             }
         }
 
         // Stop native writes before closing the pipe.
         NesiumNative.nativeSetFrameSignalFd(-1)
 
-        try {
+        bestEffort("frameSignalRead.close") {
             frameSignalRead?.close()
-        } catch (_: Throwable) {
         }
-        try {
+        bestEffort("frameSignalWrite.close") {
             frameSignalWrite?.close()
-        } catch (_: Throwable) {
         }
 
         frameSignalRead = null
@@ -498,17 +447,19 @@ class NesRenderer(
     }
 
     private fun destroyEglOnly() {
-        try {
-            if (textureId != 0) {
-                GLES20.glDeleteTextures(1, intArrayOf(textureId), 0)
-                textureId = 0
+        if (textureId != 0) {
+            val id = textureId
+            textureId = 0
+            bestEffort("glDeleteTextures($id)") {
+                GLES20.glDeleteTextures(1, intArrayOf(id), 0)
             }
-            if (program != 0) {
-                GLES20.glDeleteProgram(program)
-                program = 0
+        }
+        if (program != 0) {
+            val id = program
+            program = 0
+            bestEffort("glDeleteProgram($id)") {
+                GLES20.glDeleteProgram(id)
             }
-        } catch (_: Throwable) {
-            // Best-effort cleanup; ignore GL errors during teardown.
         }
 
         if (eglDisplay != EGL14.EGL_NO_DISPLAY && eglSurface != EGL14.EGL_NO_SURFACE) {
@@ -526,7 +477,11 @@ class NesRenderer(
         }
         eglDisplay = EGL14.EGL_NO_DISPLAY
 
-        windowSurface?.release()
+        if (releaseSurface) {
+            bestEffort("surface.release") {
+                surface.release()
+            }
+        }
         windowSurface = null
 
         // Reset cached state.
@@ -558,14 +513,12 @@ class NesRenderer(
         hasNewFrameSignal = false
         lastSeq = seq
 
-        val tStartNs = if (profilingEnabled) System.nanoTime() else 0L
         val idx = NesiumNative.nativeBeginFrontCopy()
         try {
             val buffer = planeBuffers[idx]
                 ?: throw IllegalStateException("Plane buffer is not initialized")
             buffer.position(0)
 
-            val tUploadStartNs = if (profilingEnabled) System.nanoTime() else 0L
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
             GLES20.glTexSubImage2D(
                 GLES20.GL_TEXTURE_2D,
@@ -578,7 +531,6 @@ class NesRenderer(
                 GLES20.GL_UNSIGNED_BYTE,
                 buffer
             )
-            val tUploadEndNs = if (profilingEnabled) System.nanoTime() else 0L
 
             updateViewportIfNeeded()
 
@@ -595,12 +547,10 @@ class NesRenderer(
 
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
 
-            val tSwapStartNs = if (profilingEnabled) System.nanoTime() else 0L
             if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
                 handleSwapFailure()
                 return
             }
-            val tSwapEndNs = if (profilingEnabled) System.nanoTime() else 0L
 
             // For SurfaceTexture-backed Flutter textures, swapping the EGL window surface enqueues
             // a new buffer to the underlying SurfaceTexture. The Flutter embedding registers an
@@ -609,16 +559,6 @@ class NesRenderer(
             // If another frame arrived while we were uploading/swapping, render again.
             if (hasNewFrameSignal) {
                 scheduleRender()
-            }
-
-            if (profilingEnabled) {
-                recordFrameTiming(
-                    tStartNs = tStartNs,
-                    tUploadStartNs = tUploadStartNs,
-                    tUploadEndNs = tUploadEndNs,
-                    tSwapStartNs = tSwapStartNs,
-                    tSwapEndNs = tSwapEndNs,
-                )
             }
         } finally {
             NesiumNative.nativeEndFrontCopy()
@@ -636,7 +576,11 @@ class NesRenderer(
                 // Must run on the GL thread looper.
                 teardownFrameSignalPipe()
 
-                textureEntry.release()
+                try {
+                    onDispose?.invoke()
+                } catch (t: Throwable) {
+                    Log.w(TAG, "onDispose callback failed", t)
+                }
                 thread.quitSafely()
                 latch?.countDown()
             }

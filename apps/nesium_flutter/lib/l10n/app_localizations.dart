@@ -1685,8 +1685,20 @@ abstract class AppLocalizations {
   /// No description provided for @videoBackendLabel.
   ///
   /// In en, this message translates to:
-  /// **'Android renderer backend'**
+  /// **'Renderer backend'**
   String get videoBackendLabel;
+
+  /// No description provided for @videoBackendAndroidLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Android renderer backend'**
+  String get videoBackendAndroidLabel;
+
+  /// No description provided for @videoBackendWindowsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows renderer backend'**
+  String get videoBackendWindowsLabel;
 
   /// No description provided for @videoBackendHardware.
   ///
@@ -1705,6 +1717,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Takes effect after app restart.'**
   String get videoBackendRestartHint;
+
+  /// No description provided for @highPerformanceModeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'High Performance Mode'**
+  String get highPerformanceModeLabel;
+
+  /// No description provided for @highPerformanceModeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Elevate process priority and optimize scheduler for smoother gameplay.'**
+  String get highPerformanceModeDescription;
 
   /// No description provided for @videoLowLatencyTitle.
   ///
