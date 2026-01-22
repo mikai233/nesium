@@ -78,6 +78,10 @@ tasks.register<Exec>("buildRustAndroidSo") {
     workingDir = rustWorkspaceDir
     outputs.dir(jniLibsOutDir)
 
+    // Always run this task; let Cargo handle incremental compilation.
+    // Gradle's caching doesn't understand Rust's complex dependency graph (crates, proc-macros, etc.).
+    outputs.upToDateWhen { false }
+
     doFirst {
         val requestedAbis = mutableListOf<String>()
         if (targetPlatform != null) {
