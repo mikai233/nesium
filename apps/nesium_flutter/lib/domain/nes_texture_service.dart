@@ -24,6 +24,9 @@ class NesTextureService {
   Future<void> setVideoBackend(int mode) =>
       _channel.invokeMethod<void>('setVideoBackend', {'mode': mode});
 
+  Future<void> setAndroidHighPriority(bool enabled) => _channel
+      .invokeMethod<void>('setAndroidHighPriority', {'enabled': enabled});
+
   /// Switches the Windows video backend.
   ///
   /// - `true`: D3D11 GPU texture sharing (zero-copy)

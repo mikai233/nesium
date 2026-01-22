@@ -16,3 +16,6 @@ bool get supportsVirtualControls => isNativeMobile;
 bool get preferVirtualControlsByDefault => isNativeMobile;
 
 bool get supportsTcp => true;
+
+bool get useAndroidNativeGameView =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;

@@ -32,7 +32,7 @@ use super::{
         RuntimeEventSender, SAVE_STATE_REPLY_TIMEOUT, TileViewerBackground, TileViewerLayout,
         TileViewerSource, VideoConfig,
     },
-    util::button_bit,
+    util::{button_bit, try_raise_current_thread_priority},
 };
 
 struct RuntimeInner {
@@ -118,6 +118,7 @@ impl Runtime {
 
         let ctrl_tx_clone = ctrl_tx.clone();
         let join = thread::spawn(move || {
+            try_raise_current_thread_priority();
             let mut runner = Runner::new(
                 audio_mode,
                 ctrl_rx,

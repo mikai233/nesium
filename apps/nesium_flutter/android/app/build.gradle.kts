@@ -99,11 +99,13 @@ tasks.register<Exec>("buildRustAndroidSo") {
         }
 
         // Default to all for local dev robustness
-        val finalAbis = if (requestedAbis.isNotEmpty()) requestedAbis else listOf(
-            "armeabi-v7a",
-            "arm64-v8a",
-            "x86_64"
-        )
+        val finalAbis = requestedAbis.ifEmpty {
+            listOf(
+                "armeabi-v7a",
+                "arm64-v8a",
+                "x86_64"
+            )
+        }
         val abiArgs = finalAbis.flatMap { listOf("-t", it) }
 
         logger.lifecycle("Rust build ($abiSlug) targeting ABIs: $finalAbis -> ${jniLibsOutDir.absolutePath}")

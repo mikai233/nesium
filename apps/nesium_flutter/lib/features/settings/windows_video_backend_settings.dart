@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/nes_texture_service.dart';
 import '../../persistence/keys.dart';
@@ -31,10 +32,14 @@ class WindowsVideoBackendSettingsController
         ? WindowsVideoBackend.d3d11Gpu
         : WindowsVideoBackend.softwareCpu;
 
-    // Apply the preference to the native plugin on startup.
-    Future.microtask(
-      () => _applyBackend(backend == WindowsVideoBackend.d3d11Gpu),
-    );
+    final isWindows =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    if (isWindows) {
+      // Apply the preference to the native plugin on startup.
+      Future.microtask(
+        () => _applyBackend(backend == WindowsVideoBackend.d3d11Gpu),
+      );
+    }
 
     return WindowsVideoBackendSettings(backend: backend);
   }
@@ -49,6 +54,10 @@ class WindowsVideoBackendSettingsController
     );
 
     state = state.copyWith(backend: backend);
+
+    final isWindows =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    if (!isWindows) return;
     await _applyBackend(backend == WindowsVideoBackend.d3d11Gpu);
   }
 

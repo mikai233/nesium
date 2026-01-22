@@ -1,45 +1,39 @@
 package io.github.mikai233.nesium
 
-import android.content.pm.ApplicationInfo
 import android.os.Bundle
-import android.view.Surface
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import io.flutter.view.TextureRegistry
 import androidx.core.content.edit
 
 
 class MainActivity : FlutterActivity() {
     private val channel = "nesium"
-    private var renderer: NesRenderer? = null
-    private var rustRendererSurface: Surface? = null
-    private var rustTextureEntry: TextureRegistry.SurfaceTextureEntry? = null
-    private var videoBackend: Int = 1 // default to hardware (Scheme B)
+    private var videoBackend: NesiumVideoBackend = NesiumVideoBackend.Hardware
+    private var highPriority: Boolean = false
     private var auxPlugin: NesiumAuxTexturePlugin? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
-        videoBackend = prefs.getInt("video_backend", 1)
-        NesiumNative.nativeSetVideoBackend(videoBackend)
+        videoBackend = NesiumVideoBackend.fromMode(prefs.getInt("video_backend", 1))
+        highPriority = prefs.getBoolean("high_priority", false)
+        NesiumAndroidVideoBackend.set(videoBackend.mode)
+        NesiumAndroidHighPriority.set(highPriority)
+        NesiumNative.nativeSetVideoBackend(videoBackend.mode)
+        NesiumNative.nativeSetHighPriority(highPriority)
         // Pass a stable application context to Rust.
         NesiumNative.init_android_context(applicationContext)
     }
 
-    private fun disposeTextureInternal() {
-        renderer?.dispose(waitForShutdown = true)
-        renderer = null
-        NesiumNative.nativeStopRustRenderer()
-        rustRendererSurface?.release()
-        rustRendererSurface = null
-        rustTextureEntry?.release()
-        rustTextureEntry = null
-    }
-
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            "nesium_game_view",
+            NesiumGameViewFactory(),
+        )
 
         // Register auxiliary texture plugin
         val auxPlugin = NesiumAuxTexturePlugin(flutterEngine)
@@ -49,38 +43,6 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "createNesTexture" -> {
-                        // Replace any existing texture.
-                        disposeTextureInternal()
-
-                        // SurfaceTexture-based external texture.
-                        val entry = flutterEngine.renderer.createSurfaceTexture()
-                        entry.surfaceTexture().setDefaultBufferSize(256, 240)
-                        val profilingEnabled =
-                            (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-
-                        if (videoBackend == 1) {
-                            // Scheme B: Rust renders directly into the SurfaceTexture via EGL.
-                            rustTextureEntry = entry
-                            rustRendererSurface = Surface(entry.surfaceTexture())
-                            NesiumNative.nativeStartRustRenderer(rustRendererSurface!!)
-                        } else {
-                            // Scheme A: Kotlin uploads the planes into a GL texture.
-                            renderer = NesRenderer(
-                                flutterEngine = flutterEngine,
-                                textureEntry = entry,
-                                profilingEnabled = profilingEnabled,
-                            )
-                        }
-
-                        result.success(entry.id())
-                    }
-
-                    "disposeNesTexture" -> {
-                        disposeTextureInternal()
-                        result.success(null)
-                    }
-
                     "setVideoBackend" -> {
                         val mode = call.argument<Int>("mode")
                         if (mode == null || (mode != 0 && mode != 1)) {
@@ -93,13 +55,29 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "setAndroidHighPriority" -> {
+                        val enabled = call.argument<Boolean>("enabled")
+                        if (enabled == null) {
+                            result.error("bad_args", "enabled must be a bool", null)
+                            return@setMethodCallHandler
+                        }
+                        val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
+                        prefs.edit { putBoolean("high_priority", enabled) }
+                        highPriority = enabled
+                        NesiumAndroidHighPriority.set(enabled)
+                        NesiumNative.nativeSetHighPriority(enabled)
+                        result.success(null)
+                    }
+
                     else -> result.notImplemented()
                 }
             }
     }
 
     override fun onDestroy() {
-        disposeTextureInternal()
+        // Best-effort: if a renderer thread is still running when the Activity is being torn down,
+        // stop it to avoid leaks/crashes.
+        NesiumNative.nativeStopRustRenderer()
         auxPlugin?.dispose()
         auxPlugin = null
         super.onDestroy()

@@ -3031,6 +3031,7 @@ dependencies = [
  "anyhow",
  "cpal",
  "crossbeam-channel",
+ "libc",
  "lz4_flex",
  "nesium-core",
  "nesium-netplay",

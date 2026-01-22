@@ -13,7 +13,7 @@ use std::{
 use jni::{
     JNIEnv,
     objects::{GlobalRef, JByteBuffer, JClass, JObject},
-    sys::{jint, jlong, jobject},
+    sys::{jboolean, jint, jlong, jobject},
 };
 
 use crate::{FRAME_HEIGHT, FRAME_WIDTH, ensure_runtime, runtime_handle};
@@ -33,6 +33,34 @@ static VIDEO_BACKEND: AtomicI32 = AtomicI32::new(AndroidVideoBackend::AhbSwapcha
 
 pub fn use_ahb_video_backend() -> bool {
     VIDEO_BACKEND.load(Ordering::Acquire) == AndroidVideoBackend::AhbSwapchain as i32
+}
+
+static RUST_RENDERER_TID: AtomicI32 = AtomicI32::new(-1);
+
+fn try_raise_current_thread_priority() {
+    // Best-effort: Android apps may not be allowed to reduce nice (negative values).
+    // If the call fails, we simply keep the default scheduler behavior.
+    unsafe {
+        let tid = libc::gettid() as i32;
+        RUST_RENDERER_TID.store(tid, Ordering::Release);
+        if !nesium_runtime::runtime::is_high_priority_enabled() {
+            return;
+        }
+        let tid = tid as libc::id_t;
+        let _ = libc::setpriority(libc::PRIO_PROCESS, tid, -2);
+    }
+}
+
+fn apply_rust_renderer_priority(enabled: bool) {
+    let tid = RUST_RENDERER_TID.load(Ordering::Acquire);
+    if tid <= 0 {
+        return;
+    }
+    unsafe {
+        let tid = tid as libc::id_t;
+        let nice = if enabled { -2 } else { 0 };
+        let _ = libc::setpriority(libc::PRIO_PROCESS, tid, nice);
+    }
 }
 
 // === AHardwareBuffer swapchain (Scheme B) ==================================
@@ -375,6 +403,20 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetVide
     mode: jint,
 ) {
     VIDEO_BACKEND.store(mode as i32, Ordering::Release);
+}
+
+/// Enables/disables best-effort thread priority boost on Android.
+///
+/// This affects the runtime thread and the Rust renderer thread (if running).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetHighPriority(
+    _env: JNIEnv,
+    _class: JClass,
+    enabled: jboolean,
+) {
+    let enabled = enabled != 0;
+    nesium_runtime::runtime::set_high_priority_enabled(enabled);
+    apply_rust_renderer_priority(enabled);
 }
 
 /// Stores the write-end FD for the frame signal pipe and makes it non-blocking.
@@ -749,6 +791,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
     let stop_for_thread = stop.clone();
     let swapchain_ref = std::panic::AssertUnwindSafe(swapchain_ref);
     let join = std::thread::spawn(move || {
+        try_raise_current_thread_priority();
         let window = window_ptr as *mut ANativeWindow;
         let res = std::panic::catch_unwind(|| unsafe {
             run_rust_renderer(window, *swapchain_ref, stop_for_thread);

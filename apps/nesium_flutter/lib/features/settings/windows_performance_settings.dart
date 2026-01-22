@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/domain/nes_texture_service.dart';
 import 'package:nesium_flutter/persistence/app_storage.dart';
@@ -24,8 +25,10 @@ class WindowsPerformanceSettingsController
         storage.get(StorageKeys.settingsWindowsHighPerformance) as bool? ??
         true;
 
+    final isWindows =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     // Initial apply
-    if (highPerformance) {
+    if (isWindows && highPerformance) {
       _applyHighPerformance(highPerformance);
     }
 
@@ -43,6 +46,9 @@ class WindowsPerformanceSettingsController
   }
 
   Future<void> _applyHighPerformance(bool enabled) async {
+    final isWindows =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    if (!isWindows) return;
     await ref.read(nesTextureServiceProvider).setWindowsHighPriority(enabled);
   }
 }

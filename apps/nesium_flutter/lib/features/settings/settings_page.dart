@@ -17,6 +17,7 @@ import '../controls/turbo_settings.dart';
 import '../controls/virtual_controls_editor.dart';
 import '../controls/virtual_controls_settings.dart';
 import 'android_video_backend_settings.dart';
+import 'android_performance_settings.dart';
 import 'emulation_settings.dart';
 import 'gamepad_settings.dart';
 import 'gamepad_assignment_controller.dart';
@@ -937,17 +938,28 @@ class _VideoTab extends ConsumerWidget {
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
-    final windowsBackend = ref.watch(windowsVideoBackendSettingsProvider);
-    final windowsBackendController = ref.read(
-      windowsVideoBackendSettingsProvider.notifier,
-    );
+    final windowsBackend = isWindows
+        ? ref.watch(windowsVideoBackendSettingsProvider)
+        : const WindowsVideoBackendSettings(
+            backend: WindowsVideoBackend.d3d11Gpu,
+          );
+    final windowsBackendController = isWindows
+        ? ref.read(windowsVideoBackendSettingsProvider.notifier)
+        : null;
 
-    final windowsPerformance = ref.watch(
-      windowsPerformanceSettingsControllerProvider,
-    );
-    final windowsPerformanceController = ref.read(
-      windowsPerformanceSettingsControllerProvider.notifier,
-    );
+    final windowsPerformance = isWindows
+        ? ref.watch(windowsPerformanceSettingsControllerProvider)
+        : WindowsPerformanceSettings(highPerformance: false);
+    final windowsPerformanceController = isWindows
+        ? ref.read(windowsPerformanceSettingsControllerProvider.notifier)
+        : null;
+
+    final androidPerformance = isAndroid
+        ? ref.watch(androidPerformanceSettingsControllerProvider)
+        : AndroidPerformanceSettings(highPerformance: false);
+    final androidPerformanceController = isAndroid
+        ? ref.read(androidPerformanceSettingsControllerProvider.notifier)
+        : null;
 
     Widget dropdown<T>({
       required String labelText,
@@ -1035,6 +1047,7 @@ class _VideoTab extends ConsumerWidget {
     }
 
     Future<void> setWindowsBackend(WindowsVideoBackend value) async {
+      if (windowsBackendController == null) return;
       try {
         await windowsBackendController.setBackend(value);
       } catch (e, st) {
@@ -1211,6 +1224,18 @@ class _VideoTab extends ConsumerWidget {
                     ],
                     onSelected: setAndroidBackend,
                   ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.rocket_launch),
+                    title: Text(l10n.highPerformanceModeLabel),
+                    subtitle: Text(l10n.highPerformanceModeDescription),
+                    value: androidPerformance.highPerformance,
+                    onChanged: androidPerformanceController == null
+                        ? null
+                        : (value) => androidPerformanceController
+                              .setHighPerformance(value),
+                  ),
                 ],
                 if (isWindows) ...[
                   const SizedBox(height: 12),
@@ -1236,8 +1261,10 @@ class _VideoTab extends ConsumerWidget {
                     title: Text(l10n.highPerformanceModeLabel),
                     subtitle: Text(l10n.highPerformanceModeDescription),
                     value: windowsPerformance.highPerformance,
-                    onChanged: (value) =>
-                        windowsPerformanceController.setHighPerformance(value),
+                    onChanged: windowsPerformanceController == null
+                        ? null
+                        : (value) => windowsPerformanceController
+                              .setHighPerformance(value),
                   ),
                 ],
               ],

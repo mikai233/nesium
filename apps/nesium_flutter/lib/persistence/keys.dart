@@ -11,6 +11,8 @@ final class StorageKeys {
       'settings.windows.video_backend.v1';
   static const String settingsWindowsHighPerformance =
       'settings.windows.high_performance.v1';
+  static const String settingsAndroidHighPerformance =
+      'settings.android.high_performance.v1';
   static const String settingsInput = 'settings.input.v1';
   static const String settingsTurbo = 'settings.turbo.v1';
   static const String settingsVirtualControls = 'settings.virtual_controls.v1';
