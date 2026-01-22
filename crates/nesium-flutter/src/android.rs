@@ -549,6 +549,8 @@ const EGL_WINDOW_BIT: EGLint = 0x0004;
 const EGL_OPENGL_ES2_BIT: EGLint = 0x0004;
 const EGL_CONTEXT_CLIENT_VERSION: EGLint = 0x3098;
 const EGL_OPENGL_ES_API: EGLint = 0x30A0;
+const EGL_WIDTH: EGLint = 0x3057;
+const EGL_HEIGHT: EGLint = 0x3056;
 
 const EGL_NATIVE_BUFFER_ANDROID: EGLint = 0x3140;
 const EGL_IMAGE_PRESERVED_KHR: EGLint = 0x30D2;
@@ -589,6 +591,12 @@ unsafe extern "C" {
         draw: EGLSurface,
         read: EGLSurface,
         ctx: EGLContext,
+    ) -> EGLBoolean;
+    fn eglQuerySurface(
+        dpy: EGLDisplay,
+        surface: EGLSurface,
+        attribute: EGLint,
+        value: *mut EGLint,
     ) -> EGLBoolean;
     fn eglSwapInterval(dpy: EGLDisplay, interval: EGLint) -> EGLBoolean;
     fn eglSwapBuffers(dpy: EGLDisplay, surface: EGLSurface) -> EGLBoolean;
@@ -1095,10 +1103,6 @@ unsafe fn run_rust_renderer(
     for i in 0..2 {
         unsafe {
             glBindTexture(GL_TEXTURE_2D, textures[i]);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         }
 
         let client_buf = unsafe { get_native_client_buffer(swapchain.buffer(i)) };
@@ -1118,6 +1122,16 @@ unsafe fn run_rust_renderer(
         }
         images[i] = image;
         unsafe { gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void) };
+
+        // Set texture parameters AFTER binding the EGLImage. Some Android GPU drivers
+        // reset texture parameters to defaults (GL_LINEAR) when glEGLImageTargetTexture2DOES
+        // is called, causing blurry rendering if set beforehand.
+        unsafe {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
     }
 
     let _images_cleanup = EglImagesCleanup {
@@ -1204,8 +1218,19 @@ unsafe fn run_rust_renderer(
 
         let _busy = GpuBusyGuard::new(swapchain, idx);
 
+        // Query the actual EGL surface size. When using a SurfaceView without
+        // setFixedSize(), the surface matches the view's pixel dimensions. This allows
+        // our GL renderer to scale the NES frame to fill the screen using NEAREST sampling,
+        // avoiding the system compositor's bilinear scaling.
+        let mut surf_w: EGLint = FRAME_WIDTH as EGLint;
+        let mut surf_h: EGLint = FRAME_HEIGHT as EGLint;
         unsafe {
-            glViewport(0, 0, FRAME_WIDTH as c_int, FRAME_HEIGHT as c_int);
+            let _ = eglQuerySurface(dpy, surf, EGL_WIDTH, &mut surf_w as *mut _);
+            let _ = eglQuerySurface(dpy, surf, EGL_HEIGHT, &mut surf_h as *mut _);
+
+            let w = (surf_w as c_int).max(1);
+            let h = (surf_h as c_int).max(1);
+            glViewport(0, 0, w, h);
             glClearColor(0.0, 0.0, 0.0, 1.0);
             glClear(GL_COLOR_BUFFER_BIT);
         }

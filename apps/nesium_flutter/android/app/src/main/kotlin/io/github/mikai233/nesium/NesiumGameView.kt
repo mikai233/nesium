@@ -17,9 +17,11 @@ class NesiumGameView(context: Context) : PlatformView, SurfaceHolder.Callback {
     private var uploadRenderer: NesRenderer? = null
 
     init {
-        // Keep the underlying native buffer at the NES output resolution.
-        // The SurfaceView will scale this buffer to the view size.
-        surfaceView.holder.setFixedSize(256, 240)
+        // Note: do NOT force the underlying buffer to 256x240.
+        // If we do, Android will scale the small Surface buffer to the view size in the system
+        // compositor (typically bilinear), which looks blurry/dirty for pixel art.
+        // We want the Surface buffer to match the view size so scaling happens in our renderer
+        // (nearest-neighbor).
         surfaceView.holder.addCallback(this)
         surfaceView.keepScreenOn = true
     }

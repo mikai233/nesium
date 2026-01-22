@@ -1,5 +1,8 @@
 use nesium_core::controller::Button;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(target_os = "android")]
+use std::sync::atomic::AtomicI32;
 
 static HIGH_PRIORITY_ENABLED: AtomicBool = AtomicBool::new(false);
 
