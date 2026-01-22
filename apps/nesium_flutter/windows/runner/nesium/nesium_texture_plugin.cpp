@@ -5,28 +5,31 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <utility>
 #include <thread>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 
-#include "flutter/method_channel.h"
 #include "flutter/plugin_registrar.h"
 #include "flutter/plugin_registrar_windows.h"
 #include "flutter/standard_method_codec.h"
 #include "flutter/texture_registrar.h"
+#include <avrt.h>
+#include <flutter/method_channel.h>
 
+#include "nesium_gpu_texture.h"
 #include "nesium_rust_ffi.h"
 #include "nesium_texture.h"
 
-// Windows software-texture backend for Nesium (Flutter desktop).
+// Windows texture backend for Nesium (Flutter desktop).
 //
 // Design notes:
+// - Attempts to use D3D11 GPU texture sharing for zero-copy frame presentation.
+// - Falls back to CPU PixelBufferTexture if D3D11 initialization fails.
 // - The Rust library is linked as an import library and will be loaded by the
-//   OS loader when the Runner starts (provided `nesium_flutter.dll` is alongside
-//   the executable).
-// - This plugin wires the "frame-ready" callback to a copy worker thread.
-// - Frames are copied into a double-buffered CPU RGBA backing store (see
-// `NesiumTexture`),
-//   and `MarkTextureFrameAvailable(textureId)` is used to notify Flutter that a
-//   new frame is ready.
+//   OS loader when the Runner starts.
 
 namespace {
 
@@ -46,14 +49,16 @@ public:
       HandleMethodCall(call, std::move(result));
     });
 
-    // Copy worker thread:
-    // - waits for a pending bufferIndex (latest-only)
-    // - calls Rust `copy_frame` into CPU buffer
-    // - marks Flutter texture frame available
-    worker_ = std::thread([this] { CopyWorkerMain(); });
+    // Initial priority application
+    if (prefer_high_priority_.load()) {
+      ::SetPriorityClass(::GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+    }
+
+    // Copy/present worker thread (used for both GPU and CPU paths)
+    worker_ = std::thread([this] { WorkerMain(); });
   }
 
-  ~NesiumTexturePlugin() override {
+  ~NesiumTexturePlugin() {
     nesium_set_frame_ready_callback(nullptr, nullptr);
     shutting_down_.store(true, std::memory_order_release);
     {
@@ -77,13 +82,52 @@ private:
       DisposeNesTexture(std::move(result));
       return;
     }
+    if (call.method_name() == "setWindowsVideoBackend") {
+      SetWindowsVideoBackend(call, std::move(result));
+      return;
+    }
+    if (call.method_name() == "setWindowsHighPriority") {
+      SetWindowsHighPriority(call, std::move(result));
+      return;
+    }
     result->NotImplemented();
+  }
+
+  void SetWindowsHighPriority(
+      const flutter::MethodCall<flutter::EncodableValue> &call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+    const auto *args = std::get_if<flutter::EncodableMap>(call.arguments());
+    if (!args) {
+      result->Error("Invalid arguments", "Expected map");
+      return;
+    }
+
+    auto it = args->find(flutter::EncodableValue("enabled"));
+    if (it == args->end()) {
+      result->Error("Invalid arguments", "Missing enabled");
+      return;
+    }
+
+    bool enabled = std::get<bool>(it->second);
+    prefer_high_priority_.store(enabled, std::memory_order_release);
+
+    if (enabled) {
+      ::SetPriorityClass(::GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+    } else {
+      ::SetPriorityClass(::GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
+    }
+
+    if (result) {
+      result->Success();
+    }
   }
 
   void CreateNesTexture(
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
     if (texture_id_.load(std::memory_order_acquire) >= 0) {
-      result->Success(flutter::EncodableValue(texture_id_.load()));
+      if (result) {
+        result->Success(flutter::EncodableValue(texture_id_.load()));
+      }
       return;
     }
 
@@ -91,15 +135,57 @@ private:
     const int width = 256;
     const int height = 240;
 
-    texture_ = std::make_unique<NesiumTexture>(width, height);
+    std::shared_ptr<NesiumGpuTexture> gpu_texture;
+    std::shared_ptr<NesiumTexture> cpu_texture;
+    std::shared_ptr<flutter::TextureVariant> texture_variant;
 
-    // Flutter software texture: engine calls this callback to fetch the latest
-    // CPU buffer.
-    texture_variant_ =
-        std::make_unique<flutter::TextureVariant>(flutter::PixelBufferTexture(
-            [this](size_t w, size_t h) -> const FlutterDesktopPixelBuffer * {
-              return texture_ ? texture_->CopyPixelBuffer(w, h) : nullptr;
-            }));
+    // Try D3D11 GPU texture if preferred.
+    if (prefer_gpu_) {
+      IDXGIAdapter *adapter = nullptr;
+      if (auto *view = registrar_->GetView()) {
+        adapter = view->GetGraphicsAdapter();
+      }
+      gpu_texture = NesiumGpuTexture::Create(width, height, adapter);
+    }
+
+    if (gpu_texture && gpu_texture->is_valid()) {
+      // GPU path: use GpuSurfaceTexture with DXGI shared handle.
+      // D3D11 requires BGRA format.
+      nesium_set_color_format(true);
+      auto gpu_texture_for_callback = gpu_texture;
+      texture_variant = std::make_shared<flutter::TextureVariant>(
+          flutter::GpuSurfaceTexture(
+              kFlutterDesktopGpuSurfaceTypeDxgiSharedHandle,
+              [gpu_texture_for_callback](
+                  size_t w,
+                  size_t h) -> const FlutterDesktopGpuSurfaceDescriptor * {
+                return gpu_texture_for_callback
+                           ? gpu_texture_for_callback->GetGpuSurface(w, h)
+                           : nullptr;
+              }));
+    } else {
+      // Fallback: CPU PixelBufferTexture.
+      // CPU path uses RGBA format.
+      nesium_set_color_format(false);
+      gpu_texture.reset();
+      cpu_texture = std::make_shared<NesiumTexture>(width, height);
+      auto cpu_texture_for_callback = cpu_texture;
+      texture_variant = std::make_shared<flutter::TextureVariant>(
+          flutter::PixelBufferTexture(
+              [cpu_texture_for_callback](
+                  size_t w, size_t h) -> const FlutterDesktopPixelBuffer * {
+                return cpu_texture_for_callback
+                           ? cpu_texture_for_callback->CopyPixelBuffer(w, h)
+                           : nullptr;
+              }));
+    }
+
+    {
+      std::lock_guard<std::mutex> lk(texture_state_mu_);
+      gpu_texture_ = std::move(gpu_texture);
+      cpu_texture_ = std::move(cpu_texture);
+      texture_variant_ = std::move(texture_variant);
+    }
 
     const int64_t id =
         texture_registrar_->RegisterTexture(texture_variant_.get());
@@ -107,10 +193,12 @@ private:
 
     // Wire callback and start runtime after texture registration is ready.
     nesium_set_frame_ready_callback(&NesiumTexturePlugin::OnFrameReadyThunk,
-                                    this);
+                                     this);
     nesium_runtime_start();
 
-    result->Success(flutter::EncodableValue(id));
+    if (result) {
+      result->Success(flutter::EncodableValue(id));
+    }
   }
 
   void DisposeNesTexture(
@@ -118,18 +206,67 @@ private:
     nesium_set_frame_ready_callback(nullptr, nullptr);
 
     pending_index_.store(kEmptyPending, std::memory_order_release);
-    copy_scheduled_.store(false, std::memory_order_release);
+    work_scheduled_.store(false, std::memory_order_release);
 
-    const int64_t id = texture_id_.load(std::memory_order_acquire);
-    if (id >= 0) {
-      texture_registrar_->UnregisterTexture(id);
+    const int64_t id = texture_id_.exchange(-1, std::memory_order_acq_rel);
+
+    std::shared_ptr<flutter::TextureVariant> texture_variant_to_release;
+    {
+      std::lock_guard<std::mutex> lk(texture_state_mu_);
+      texture_variant_to_release = std::move(texture_variant_);
+      gpu_texture_.reset();
+      cpu_texture_.reset();
     }
 
-    texture_variant_.reset();
-    texture_.reset();
-    texture_id_.store(-1, std::memory_order_release);
+    if (id >= 0) {
+      // Unregistration is asynchronous. Keep the registered TextureVariant
+      // alive until the engine completes unregistration to avoid use-after-free
+      // in texture callbacks.
+      texture_registrar_->UnregisterTexture(
+          id, [texture_variant_to_release]() {});
+    }
 
-    result->Success(flutter::EncodableValue());
+    if (result) {
+      result->Success(flutter::EncodableValue());
+    }
+  }
+
+  void SetWindowsVideoBackend(
+      const flutter::MethodCall<flutter::EncodableValue> &call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+    const auto *args = std::get_if<flutter::EncodableMap>(call.arguments());
+    if (!args) {
+      result->Error("Invalid arguments", "Expected map");
+      return;
+    }
+
+    auto it = args->find(flutter::EncodableValue("useGpu"));
+    if (it == args->end()) {
+      result->Error("Invalid arguments", "Missing useGpu");
+      return;
+    }
+
+    bool use_gpu = std::get<bool>(it->second);
+    if (use_gpu == prefer_gpu_) {
+      result->Success();
+      return;
+    }
+
+    prefer_gpu_ = use_gpu;
+    int64_t new_id = -1;
+
+    // If texture is already active, we must recreate it to apply the change.
+    if (texture_id_.load(std::memory_order_acquire) >= 0) {
+      DisposeNesTexture(nullptr);
+      CreateNesTexture(nullptr);
+      new_id = texture_id_.load(std::memory_order_acquire);
+    }
+
+    if (new_id >= 0) {
+      result->Success(flutter::EncodableValue(new_id));
+    } else {
+      result->Success();
+    }
   }
 
   static void OnFrameReadyThunk(uint32_t bufferIndex, uint32_t width,
@@ -139,12 +276,11 @@ private:
   }
 
   // Called from the Rust runtime thread. Must be lightweight and non-blocking.
-  // We store only the latest bufferIndex and schedule at most one copy drain.
   void OnFrameReady(uint32_t bufferIndex, uint32_t, uint32_t, uint32_t) {
     pending_index_.store(bufferIndex, std::memory_order_release);
 
     bool expected = false;
-    if (!copy_scheduled_.compare_exchange_strong(expected, true,
+    if (!work_scheduled_.compare_exchange_strong(expected, true,
                                                  std::memory_order_acq_rel)) {
       return;
     }
@@ -153,13 +289,24 @@ private:
     cv_.notify_one();
   }
 
-  void CopyWorkerMain() {
+  void WorkerMain() {
+    DWORD mm_task_index = 0;
+    HANDLE mm_handle = nullptr;
+
     while (!shutting_down_.load(std::memory_order_acquire)) {
+      const bool high_prio =
+          prefer_high_priority_.load(std::memory_order_acquire);
+      if (high_prio && !mm_handle) {
+        mm_handle = ::AvSetMmThreadCharacteristicsW(L"Games", &mm_task_index);
+      } else if (!high_prio && mm_handle) {
+        ::AvRevertMmThreadCharacteristics(mm_handle);
+        mm_handle = nullptr;
+      }
       {
         std::unique_lock<std::mutex> lk(mu_);
         cv_.wait(lk, [this] {
           return shutting_down_.load(std::memory_order_acquire) ||
-                 copy_scheduled_.load(std::memory_order_acquire);
+                 work_scheduled_.load(std::memory_order_acquire);
         });
       }
 
@@ -169,28 +316,45 @@ private:
 
       const uint32_t idx =
           pending_index_.exchange(kEmptyPending, std::memory_order_acq_rel);
-      copy_scheduled_.store(false, std::memory_order_release);
+      work_scheduled_.store(false, std::memory_order_release);
 
-      auto *tex = texture_.get();
       const int64_t tid = texture_id_.load(std::memory_order_acquire);
-      if (!tex || tid < 0 || idx == kEmptyPending) {
+      if (tid < 0 || idx == kEmptyPending) {
         continue;
       }
 
-      // Copy RGBA pixels into the back buffer, then publish it atomically.
-      auto [dst, write_index] = tex->acquireWritableBuffer();
-      nesium_copy_frame(idx, dst, static_cast<uint32_t>(tex->stride()),
-                        static_cast<uint32_t>(tex->height()));
-      tex->commitLatestReady(write_index);
+      std::shared_ptr<NesiumGpuTexture> gpu_texture;
+      std::shared_ptr<NesiumTexture> cpu_texture;
+      {
+        std::lock_guard<std::mutex> lk(texture_state_mu_);
+        gpu_texture = gpu_texture_;
+        cpu_texture = cpu_texture_;
+      }
+
+      if (gpu_texture) {
+        // GPU path: map, copy, unmap, commit
+        auto [dst, pitch] = gpu_texture->MapWriteBuffer();
+        if (dst) {
+          nesium_copy_frame(idx, dst, pitch,
+                            static_cast<uint32_t>(gpu_texture->height()));
+          gpu_texture->UnmapAndCommit();
+        }
+      } else if (cpu_texture) {
+        // CPU fallback path
+        auto [dst, write_index] = cpu_texture->acquireWritableBuffer();
+        nesium_copy_frame(idx, dst,
+                          static_cast<uint32_t>(cpu_texture->stride()),
+                          static_cast<uint32_t>(cpu_texture->height()));
+        cpu_texture->commitLatestReady(write_index);
+      }
 
       // Notify Flutter that the texture has a new frame.
       texture_registrar_->MarkTextureFrameAvailable(tid);
 
-      // If another frame arrived while copying, schedule one more drain
-      // (latest-only).
+      // If another frame arrived while processing, schedule one more drain.
       if (pending_index_.load(std::memory_order_acquire) != kEmptyPending) {
         bool expected = false;
-        if (copy_scheduled_.compare_exchange_strong(
+        if (work_scheduled_.compare_exchange_strong(
                 expected, true, std::memory_order_acq_rel)) {
           std::lock_guard<std::mutex> lk(mu_);
           cv_.notify_one();
@@ -204,15 +368,23 @@ private:
   flutter::TextureRegistrar *texture_registrar_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
 
-  std::unique_ptr<NesiumTexture> texture_;
-  std::unique_ptr<flutter::TextureVariant> texture_variant_;
+  // GPU texture (preferred)
+  std::shared_ptr<NesiumGpuTexture> gpu_texture_;
+  // CPU texture (fallback)
+  std::shared_ptr<NesiumTexture> cpu_texture_;
+
+  std::shared_ptr<flutter::TextureVariant> texture_variant_;
+  bool prefer_gpu_ = true;
 
   std::atomic<int64_t> texture_id_{-1};
 
-  // Latest-only signaling from Rust thread -> copy worker thread.
+  // Latest-only signaling from Rust thread -> worker thread.
   std::atomic<uint32_t> pending_index_{kEmptyPending};
-  std::atomic<bool> copy_scheduled_{false};
+  std::atomic<bool> work_scheduled_{false};
   std::atomic<bool> shutting_down_{false};
+  std::atomic<bool> prefer_high_priority_{true};
+
+  std::mutex texture_state_mu_;
 
   std::mutex mu_;
   std::condition_variable cv_;

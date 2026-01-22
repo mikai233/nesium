@@ -70,7 +70,7 @@ static RUNTIME: OnceLock<RuntimeHolder> = OnceLock::new();
 /// Returns the platform-specific pixel format for Flutter textures.
 ///
 /// - macOS/iOS: BGRA (CVPixelBuffer)
-/// - Android/Windows/Linux: RGBA (OpenGL/FlPixelBufferTexture)
+/// - Android/Windows/Linux: RGBA (default - can be overridden at runtime on Windows)
 #[inline]
 pub fn platform_color_format() -> ColorFormat {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -217,6 +217,24 @@ pub extern "C" fn nesium_runtime_start() {
     let _ = ensure_runtime();
 }
 
+/// Set the color format for frame rendering at runtime.
+///
+/// On Windows, D3D11 GPU textures require BGRA, while CPU fallback uses RGBA.
+/// Call this after runtime start but before creating textures.
+///
+/// `use_bgra`: if true, uses BGRA; if false, uses RGBA.
+#[cfg(target_os = "windows")]
+#[unsafe(no_mangle)]
+pub extern "C" fn nesium_set_color_format(use_bgra: bool) {
+    use nesium_core::ppu::buffer::ColorFormat;
+    let format = if use_bgra {
+        ColorFormat::Bgra8888
+    } else {
+        ColorFormat::Rgba8888
+    };
+    let _ = runtime_handle().set_color_format(format);
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn nesium_set_frame_ready_callback(
     cb: Option<FrameReadyCallback>,
@@ -260,7 +278,6 @@ pub unsafe extern "C" fn nesium_copy_frame(
         )
     };
 
-    // Fast path when destination is tightly packed.
     if dst_pitch == src_pitch {
         let bytes = src_pitch * height;
         let src_len = src_slice.len();
@@ -269,16 +286,14 @@ pub unsafe extern "C" fn nesium_copy_frame(
         let src = &src_slice[..bytes];
         let dst = &mut dst_slice[..bytes];
         dst.copy_from_slice(src);
-        frame_handle.end_front_copy();
-        return;
-    }
-
-    for y in 0..height {
-        let src_off = y * src_pitch;
-        let dst_off = y * dst_pitch;
-        let src_row = &src_slice[src_off..src_off + src_pitch];
-        let dst_row = &mut dst_slice[dst_off..dst_off + src_pitch.min(dst_pitch)];
-        dst_row.copy_from_slice(&src_row[..dst_row.len()]);
+    } else {
+        for y in 0..height {
+            let src_off = y * src_pitch;
+            let dst_off = y * dst_pitch;
+            let src_row = &src_slice[src_off..src_off + src_pitch];
+            let dst_row = &mut dst_slice[dst_off..dst_off + src_pitch.min(dst_pitch)];
+            dst_row.copy_from_slice(&src_row[..dst_row.len()]);
+        }
     }
 
     frame_handle.end_front_copy();

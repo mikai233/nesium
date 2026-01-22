@@ -867,7 +867,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Nesium is licensed under GPL-3.0-or-later. See LICENSE.md in the repository root.';
 
   @override
-  String get videoBackendLabel => 'Android renderer backend';
+  String get videoBackendLabel => 'Renderer backend';
+
+  @override
+  String get videoBackendAndroidLabel => 'Android renderer backend';
+
+  @override
+  String get videoBackendWindowsLabel => 'Windows renderer backend';
 
   @override
   String get videoBackendHardware => 'Hardware (AHardwareBuffer)';
@@ -877,6 +883,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoBackendRestartHint => 'Takes effect after app restart.';
+
+  @override
+  String get highPerformanceModeLabel => 'High Performance Mode';
+
+  @override
+  String get highPerformanceModeDescription =>
+      'Elevate process priority and optimize scheduler for smoother gameplay.';
 
   @override
   String get videoLowLatencyTitle => 'Low latency video';

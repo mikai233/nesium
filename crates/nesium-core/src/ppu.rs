@@ -337,6 +337,14 @@ impl Ppu {
         self.framebuffer.set_frame_ready_callback(cb, user_data);
     }
 
+    /// Change the color format for frame rendering at runtime.
+    ///
+    /// # Panics
+    /// Panics if the new format has a different `bytes_per_pixel` than the current format.
+    pub fn set_color_format(&mut self, format: buffer::ColorFormat) {
+        self.framebuffer.set_color_format(format);
+    }
+
     /// Current frame counter (increments when scanline wraps from 260 to -1).
     pub fn frame_count(&self) -> u32 {
         self.frame

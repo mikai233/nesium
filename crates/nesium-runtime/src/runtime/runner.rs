@@ -1,3 +1,4 @@
+use nesium_core::ppu::buffer::ColorFormat;
 use nesium_netplay::NetplayInputProvider;
 use nesium_support::rewind::RewindState;
 use nesium_support::tas::{self, FrameFlags, InputFrame};
@@ -338,6 +339,9 @@ impl Runner {
             ControlMessage::SetAudioConfig(cfg, reply) => self.handle_set_audio_config(cfg, reply),
             ControlMessage::SetFrameReadyCallback(cb, user_data, reply) => {
                 self.handle_set_frame_ready_callback(cb, user_data, reply)
+            }
+            ControlMessage::SetColorFormat(format, reply) => {
+                self.handle_set_color_format(format, reply)
             }
             ControlMessage::SetIntegerFpsTarget(fps, reply) => {
                 self.handle_set_integer_fps_target(fps, reply)
@@ -1597,6 +1601,12 @@ impl Runner {
         reply: ControlReplySender,
     ) {
         self.nes.set_frame_ready_callback(cb, user_data);
+        let _ = reply.send(Ok(()));
+    }
+
+    /// Changes the color format for frame rendering at runtime.
+    fn handle_set_color_format(&mut self, format: ColorFormat, reply: ControlReplySender) {
+        self.nes.set_color_format(format);
         let _ = reply.send(Ok(()));
     }
 

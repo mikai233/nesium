@@ -407,6 +407,19 @@ impl RuntimeHandle {
         })
     }
 
+    /// Set the color format for frame rendering at runtime.
+    ///
+    /// # Panics (on the runtime thread)
+    /// Panics if the new format has a different `bytes_per_pixel` than the current format.
+    pub fn set_color_format(
+        &self,
+        format: nesium_core::ppu::buffer::ColorFormat,
+    ) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_color_format", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetColorFormat(format, reply)
+        })
+    }
+
     /// Enables an integer FPS pacing mode.
     ///
     /// - `None`: run at the NES's exact NTSC FPS (~60.0988Hz)

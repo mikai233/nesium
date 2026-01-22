@@ -150,12 +150,16 @@ private:
     // Clean up any existing texture with this ID.
     auto existing_it = textures_.find(id);
     if (existing_it != textures_.end()) {
-      texture_registrar_->UnregisterTexture(existing_it->second.flutter_id);
+      // Unregistration is asynchronous. Keep the entry alive until the engine
+      // completes unregistration to avoid use-after-free in texture callbacks.
+      auto keep_alive = existing_it->second.entry;
+      texture_registrar_->UnregisterTexture(existing_it->second.flutter_id,
+                                            [keep_alive]() {});
       textures_.erase(existing_it);
     }
 
     // Create new texture entry.
-    auto entry = std::make_unique<AuxTextureEntry>(id, width, height);
+    auto entry = std::make_shared<AuxTextureEntry>(id, width, height);
     const int64_t flutter_id =
         texture_registrar_->RegisterTexture(entry->texture_variant());
 
@@ -191,7 +195,11 @@ private:
 
     auto it = textures_.find(id);
     if (it != textures_.end()) {
-      texture_registrar_->UnregisterTexture(it->second.flutter_id);
+      // Unregistration is asynchronous. Keep the entry alive until the engine
+      // completes unregistration to avoid use-after-free in texture callbacks.
+      auto keep_alive = it->second.entry;
+      texture_registrar_->UnregisterTexture(it->second.flutter_id,
+                                            [keep_alive]() {});
       textures_.erase(it);
     }
     paused_ids_.erase(id);
@@ -255,7 +263,7 @@ private:
 
   struct TextureInfo {
     int64_t flutter_id;
-    std::unique_ptr<AuxTextureEntry> entry;
+    std::shared_ptr<AuxTextureEntry> entry;
   };
 
   std::mutex textures_mutex_;

@@ -853,7 +853,13 @@ class AppLocalizationsZh extends AppLocalizations {
       'Nesium 使用 GPL-3.0-or-later 授权。详见仓库根目录的 LICENSE.md。';
 
   @override
-  String get videoBackendLabel => 'Android 渲染后端';
+  String get videoBackendLabel => '渲染后端';
+
+  @override
+  String get videoBackendAndroidLabel => 'Android 渲染后端';
+
+  @override
+  String get videoBackendWindowsLabel => 'Windows 渲染后端';
 
   @override
   String get videoBackendHardware => '硬件（AHardwareBuffer）';
@@ -863,6 +869,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoBackendRestartHint => '重启后生效。';
+
+  @override
+  String get highPerformanceModeLabel => '高性能模式';
+
+  @override
+  String get highPerformanceModeDescription => '提高进程优先级并针对游戏优化调度，以获得更流畅的体验。';
 
   @override
   String get videoLowLatencyTitle => '低延迟视频';

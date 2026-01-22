@@ -10,7 +10,7 @@ use nesium_core::{
         tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
         tilemap_interceptor::CapturePoint as TilemapCapturePoint,
     },
-    ppu::buffer::FrameReadyCallback,
+    ppu::buffer::{ColorFormat, FrameReadyCallback},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
 };
@@ -31,6 +31,7 @@ pub(crate) enum ControlMessage {
     PowerOff(ControlReplySender),
     SetAudioConfig(AudioBusConfig, ControlReplySender),
     SetFrameReadyCallback(Option<FrameReadyCallback>, *mut c_void, ControlReplySender),
+    SetColorFormat(ColorFormat, ControlReplySender),
     SetPaletteKind(PaletteKind, ControlReplySender),
     SetPalette(Palette, ControlReplySender),
     /// None = exact NTSC FPS, Some(60) = integer FPS (PAL reserved for future).

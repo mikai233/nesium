@@ -23,6 +23,9 @@ import 'gamepad_assignment_controller.dart';
 import 'language_settings.dart';
 import 'theme_settings.dart';
 import 'video_settings.dart';
+import 'windows_video_backend_settings.dart';
+import 'windows_performance_settings.dart';
+
 import 'server_settings.dart';
 import '../../platform/nes_palette.dart' as nes_palette;
 import '../../domain/connected_gamepads_provider.dart';
@@ -931,6 +934,20 @@ class _VideoTab extends ConsumerWidget {
     );
     final isAndroid =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final isWindows =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
+    final windowsBackend = ref.watch(windowsVideoBackendSettingsProvider);
+    final windowsBackendController = ref.read(
+      windowsVideoBackendSettingsProvider.notifier,
+    );
+
+    final windowsPerformance = ref.watch(
+      windowsPerformanceSettingsControllerProvider,
+    );
+    final windowsPerformanceController = ref.read(
+      windowsPerformanceSettingsControllerProvider.notifier,
+    );
 
     Widget dropdown<T>({
       required String labelText,
@@ -1012,6 +1029,19 @@ class _VideoTab extends ConsumerWidget {
           e,
           stackTrace: st,
           message: 'setBackend failed',
+          logger: 'settings_page',
+        );
+      }
+    }
+
+    Future<void> setWindowsBackend(WindowsVideoBackend value) async {
+      try {
+        await windowsBackendController.setBackend(value);
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'setWindowsBackend failed',
           logger: 'settings_page',
         );
       }
@@ -1166,7 +1196,7 @@ class _VideoTab extends ConsumerWidget {
                 if (isAndroid) ...[
                   const SizedBox(height: 12),
                   dropdown<AndroidVideoBackend>(
-                    labelText: l10n.videoBackendLabel,
+                    labelText: l10n.videoBackendAndroidLabel,
                     helperText: l10n.videoBackendRestartHint,
                     value: androidBackend.backend,
                     entries: [
@@ -1180,6 +1210,34 @@ class _VideoTab extends ConsumerWidget {
                       ),
                     ],
                     onSelected: setAndroidBackend,
+                  ),
+                ],
+                if (isWindows) ...[
+                  const SizedBox(height: 12),
+                  dropdown<WindowsVideoBackend>(
+                    labelText: l10n.videoBackendWindowsLabel,
+                    value: windowsBackend.backend,
+                    entries: [
+                      DropdownMenuEntry(
+                        value: WindowsVideoBackend.d3d11Gpu,
+                        label: 'D3D11 GPU (Zero-Copy)',
+                      ),
+                      DropdownMenuEntry(
+                        value: WindowsVideoBackend.softwareCpu,
+                        label: 'Software CPU (Fallback)',
+                      ),
+                    ],
+                    onSelected: setWindowsBackend,
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.rocket_launch),
+                    title: Text(l10n.highPerformanceModeLabel),
+                    subtitle: Text(l10n.highPerformanceModeDescription),
+                    value: windowsPerformance.highPerformance,
+                    onChanged: (value) =>
+                        windowsPerformanceController.setHighPerformance(value),
                   ),
                 ],
               ],

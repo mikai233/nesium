@@ -685,6 +685,21 @@ impl FrameBuffer {
     pub fn color_format(&self) -> ColorFormat {
         self.color_format
     }
+
+    /// Change the color format at runtime.
+    ///
+    /// # Panics
+    /// Panics if the new format has a different `bytes_per_pixel` than the current format.
+    pub fn set_color_format(&mut self, format: ColorFormat) {
+        let current_bpp = self.color_format.bytes_per_pixel();
+        let new_bpp = format.bytes_per_pixel();
+        assert_eq!(
+            current_bpp, new_bpp,
+            "Cannot change color format: bytes_per_pixel mismatch ({} != {})",
+            current_bpp, new_bpp
+        );
+        self.color_format = format;
+    }
 }
 
 /// Helper to pack a single line of indices into a destination buffer.

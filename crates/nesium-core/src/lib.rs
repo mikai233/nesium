@@ -607,6 +607,14 @@ impl Nes {
         self.ppu.set_frame_ready_callback(cb, user_data);
     }
 
+    /// Change the color format for frame rendering at runtime.
+    ///
+    /// # Panics
+    /// Panics if the new format has a different `bytes_per_pixel` than the current format.
+    pub fn set_color_format(&mut self, format: ColorFormat) {
+        self.ppu.set_color_format(format);
+    }
+
     /// Selects one of the built-in palettes.
     pub fn set_palette(&mut self, palette: Palette) {
         self.ppu.set_palette(palette);

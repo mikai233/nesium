@@ -26,6 +26,10 @@ class NesController extends Notifier<NesState> {
     }
   }
 
+  void updateTextureId(int? id) {
+    state = state.copyWith(textureId: id);
+  }
+
   Future<void> refreshRomHash() async {
     try {
       final hashBytes = await nes_api.getRomHash();
