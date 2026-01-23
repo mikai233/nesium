@@ -447,7 +447,7 @@ jobs:
           # 2. Generate Icon (Dynamic)
           $GeneratedDir = "target\\generated"
           if (-not (Test-Path $GeneratedDir)) { New-Item -ItemType Directory -Force -Path $GeneratedDir | Out-Null }
-          $IconPath = Join-Path $GeneratedDir "app_icon.ico"
+          $IconPath = Join-Path $PWD "target\generated\app_icon.ico"
           cargo run -p nesium-icon -- --out "$IconPath"
 
           # 3. Create Inno Setup Installer
