@@ -15,3 +15,4 @@ svg = ["skia-safe/svg"]
 skia-safe = { workspace = true, features = ["gl"] }
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
+ico.workspace = true

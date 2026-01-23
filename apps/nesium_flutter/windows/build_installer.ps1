@@ -5,7 +5,8 @@ $ErrorActionPreference = 'Stop'
 # 1. Define Paths (Relative to script location)
 $WindowsDir = $PSScriptRoot
 $FlutterAppDir = Split-Path $WindowsDir -Parent
-$ProjectDir = Split-Path $FlutterAppDir -Parent
+$AppsDir = Split-Path $FlutterAppDir -Parent
+$ProjectDir = Split-Path $AppsDir -Parent
 $IssScript = Join-Path $WindowsDir "installer.iss"
 
 Write-Host "--- Nesium Installer Test Script ---" -ForegroundColor Cyan

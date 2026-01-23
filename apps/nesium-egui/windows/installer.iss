@@ -1,21 +1,21 @@
-; Inno Setup Script for Nesium
+; Inno Setup Script for Nesium (egui version)
 ; This script is designed for Inno Setup 6+ with modern UI features.
 
-#define MyAppName "Nesium"
+#define MyAppName "Nesium (egui)"
 #define MyAppPublisher "mikai233"
 #define MyAppURL "https://github.com/mikai233/nesium"
-#define MyAppExeName "Nesium.exe"
+#define MyAppExeName "nesium_egui.exe"
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  #define MyAppVersion "0.1.0"
 #endif
 
 #ifndef SourceDir
-  #define SourceDir "..\build\windows\runner\Release"
+  #define SourceDir "..\..\..\target\x86_64-pc-windows-msvc\release-dist"
 #endif
 
 [Setup]
-AppId={{8B9D6C11-2E7C-4EAB-9C75-6B0F7B4E1C5A}
+AppId={{D37E7C12-5E7C-4E12-B758-BDCB79D4FB2D}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -25,16 +25,16 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
-; Make the installer 64-bit (so it installs to Program Files instead of Program Files (x86))
+; Make the installer 64-bit
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=.
-OutputBaseFilename=nesium-setup-{#MyAppVersion}
+OutputBaseFilename=nesium-egui-setup-{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 ShowLanguageDialog=yes
+
 ; Modern UI 2.0 / Windows 11 Styling
-; Note: These directives are supported in Inno Setup 6+
 #if VER >= 0x06000000
 WizardStyle=modern windows11 includetitlebar
 #else
@@ -43,7 +43,7 @@ WizardStyle=modern
 WizardSizePercent=100,100
 
 ; Graphics
-SetupIconFile=runner\resources\app_icon.ico
+SetupIconFile={#MyAppIcon}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -53,7 +53,9 @@ Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; If there are any DLLs or other files in the same directory, include them
+Source: "{#SourceDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -62,6 +64,3 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
-
-[Code]
-// Custom Pascal code can go here for more advanced styling or logic if needed.
