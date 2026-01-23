@@ -25,11 +25,11 @@ jobs:
       matrix:
         include:
           # Windows x64 Only
-          - name: windows-x86_64-msi
+          - name: windows-x86_64-setup
             os: windows-latest
             target_arch: x64
-            asset_ext: msi
-            asset_suffix: windows-x86_64
+            asset_ext: exe
+            asset_suffix: windows-x86_64-setup
 
           # macOS Universal
           - name: macos-universal-dmg
@@ -71,7 +71,7 @@ jobs:
             echo "FLUTTER_BUILD_NAME=0.0.0" >> "$GITHUB_ENV"
             echo "FLUTTER_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
             echo "DEB_VERSION=0.0.0~dev.${GITHUB_RUN_NUMBER}+${SHORT_SHA}" >> "$GITHUB_ENV"
-            echo "MSI_VERSION=0.0.0" >> "$GITHUB_ENV"
+            echo "DEB_VERSION=0.0.0~dev.${GITHUB_RUN_NUMBER}+${SHORT_SHA}" >> "$GITHUB_ENV"
           else
             # Pre-release / Release: read Flutter version from pubspec.yaml
             python3 - <<'PY' >> "$GITHUB_ENV"
@@ -90,18 +90,10 @@ jobs:
               if not build.isdigit():
                   sys.exit(f'ERROR: pubspec build number must be digits, got: {build}')
               
-              # MSI Product Version must be numeric x.y.z
-              base = re.split(r'[-+]', name)[0]
-              parts = base.split('.')
-              while len(parts) < 3:
-                  parts.append('0')
-              msi = '.'.join(parts[:3])
-              
               print(f'ASSET_TAG={v}')
               print(f'FLUTTER_BUILD_NAME={name}')
               print(f'FLUTTER_BUILD_NUMBER={build}')
               print(f'DEB_VERSION={v}')
-              print(f'MSI_VERSION={msi}')
           except Exception as e:
               sys.exit(f'ERROR: Script failed: {e}')
           PY

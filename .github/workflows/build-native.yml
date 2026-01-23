@@ -47,21 +47,21 @@ jobs:
             asset_ext: deb
             asset_suffix: Ubuntu24.04-arm64
 
-          - name: windows-x86_64-msi
+          - name: windows-x86_64-setup
             os: windows-latest
             target: x86_64-pc-windows-msvc
             msvc_arch: amd64
-            bundle_format: msi
-            asset_ext: msi
-            asset_suffix: windows-x86_64
+            bundle_format: exe
+            asset_ext: exe
+            asset_suffix: windows-x86_64-setup
 
-          - name: windows-aarch64-msi
+          - name: windows-aarch64-setup
             os: windows-latest
             target: aarch64-pc-windows-msvc
             msvc_arch: amd64_arm64
-            bundle_format: msi
-            asset_ext: msi
-            asset_suffix: windows-arm64
+            bundle_format: exe
+            asset_ext: exe
+            asset_suffix: windows-arm64-setup
 
           - name: macos-universal-dmg
             os: macos-latest
@@ -171,10 +171,10 @@ jobs:
         with:
           tool: cargo-bundle
 
-      - name: Install WiX Toolset (Windows)
+      - name: Install Inno Setup (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install wixtoolset -y
+        run: choco install innosetup -y
 
       - name: Create dist directory
         shell: bash
@@ -423,21 +423,16 @@ jobs:
           ls -la "$DIST"
 
       # ===================================================
-      # WINDOWS MSI & PORTABLE BUNDLING
+      # WINDOWS SETUP & PORTABLE BUNDLING
       # ===================================================
       - name: Bundle installer + portable (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           rustup target add "${{ matrix.target }}"
-          cargo bundle -p nesium-egui --profile release-dist --target "${{ matrix.target }}" --format "${{ matrix.bundle_format }}"
-
-          $installer = "nesium-egui-$env:EGUI_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
-          $msi = Get-ChildItem -Path "target" -Recurse -Filter "*.msi" | Select-Object -First 1
-          if (-not $msi) {
-            Write-Error "No .msi found under target/**/bundle/**"
-            exit 1
-          }
+          
+          # 1. Build Release binary
+          cargo build -p nesium-egui --profile release-dist --target "${{ matrix.target }}"
 
           $exe = "target\\${{ matrix.target }}\\release-dist\\nesium_egui.exe"
           if (-not (Test-Path $exe)) {
@@ -447,20 +442,46 @@ jobs:
             Write-Error "Expected binary not found at target\\${{ matrix.target }}\\release-dist\\nesium_egui.exe"
             exit 1
           }
+          $srcDir = (Get-Item $exe).DirectoryName
 
-          # Consolidation
+          # 2. Generate Icon (Dynamic)
+          $GeneratedDir = "target\\generated"
+          if (-not (Test-Path $GeneratedDir)) { New-Item -ItemType Directory -Force -Path $GeneratedDir | Out-Null }
+          $IconPath = Join-Path $GeneratedDir "app_icon.ico"
+          cargo run -p nesium-icon -- --out "$IconPath"
+
+          # 3. Create Inno Setup Installer
+          $installer = "nesium-egui-$env:EGUI_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
+          $OutDir = "dist"
+          if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force -Path $OutDir | Out-Null }
+          
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DMyAppVersion="$env:EGUI_TAG" `
+            /DSourceDir="$srcDir" `
+            /DMyAppIcon="$IconPath" `
+            /O"$OutDir" `
+            /F"nesium-egui-$env:EGUI_TAG-${{ matrix.asset_suffix }}" `
+            "apps\nesium-egui\windows\installer.iss"
+
+          $finalSetupPath = Join-Path $OutDir $installer
+          if (-not (Test-Path $finalSetupPath)) {
+             Write-Error "Installer not generated at $finalSetupPath"
+             exit 1
+          }
+
+          # 4. Consolidation (for ZIP)
           $consolidatedDir = Join-Path $env:RUNNER_TEMP "nesium-egui-windows-full"
           if (Test-Path $consolidatedDir) { Remove-Item -Recurse -Force $consolidatedDir }
           New-Item -ItemType Directory -Force -Path $consolidatedDir | Out-Null
           
-          # 1. Add Portable version
+          # Add Portable version
           $portableDir = New-Item -ItemType Directory -Force -Path (Join-Path $consolidatedDir "portable")
           Copy-Item $exe $portableDir -Force
           if (Test-Path "README.md") { Copy-Item "README.md" $portableDir -Force }
           if (Test-Path "LICENSE.md") { Copy-Item "LICENSE.md" $portableDir -Force }
           
-          # 2. Add MSI
-          Copy-Item $msi.FullName (Join-Path $consolidatedDir $installer) -Force
+          # Add Setup EXE
+          Copy-Item $finalSetupPath $consolidatedDir -Force
           
           # Create Final ZIP
           $finalZip = "nesium-egui-$env:EGUI_TAG-${{ matrix.asset_suffix }}.zip"
