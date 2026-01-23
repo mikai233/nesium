@@ -21,8 +21,8 @@ pub fn get_public_ip() -> Option<String> {
     ];
 
     for service in services {
-        if let Ok(resp) = ureq::get(service).call() {
-            if let Ok(ip_str) = resp.into_string() {
+        if let Ok(mut resp) = ureq::get(service).call() {
+            if let Ok(ip_str) = resp.body_mut().read_to_string() {
                 let trimmed = ip_str.trim();
                 // Validate it's a valid IP
                 if trimmed.parse::<std::net::IpAddr>().is_ok() {
