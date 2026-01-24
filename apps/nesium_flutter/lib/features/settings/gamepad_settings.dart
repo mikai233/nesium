@@ -6,6 +6,7 @@ import '../../platform/nes_gamepad.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 import '../../logging/app_logger.dart';
+import '../../windows/settings_sync.dart';
 
 class GamepadSettingsController extends Notifier<Map<String, GamepadMapping>> {
   @override
@@ -56,6 +57,26 @@ class GamepadSettingsController extends Notifier<Map<String, GamepadMapping>> {
       message: 'Persist gamepad settings',
       logger: 'gamepad_settings',
     );
+    unawaited(
+      SettingsSync.broadcast(group: 'gamepad', payload: _toStorage(value)),
+    );
+  }
+
+  void applySynced(Object? payload) {
+    final next = _fromStorage(payload);
+    if (_mapsEqual(next, state)) return;
+    state = next;
+  }
+
+  bool _mapsEqual(
+    Map<String, GamepadMapping> a,
+    Map<String, GamepadMapping> b,
+  ) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      if (b[entry.key] != entry.value) return false;
+    }
+    return true;
   }
 }
 

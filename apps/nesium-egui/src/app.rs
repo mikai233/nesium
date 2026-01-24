@@ -25,21 +25,13 @@ use egui::{
 };
 use gilrs::GamepadId;
 use nesium_core::{
-    audio::bus::AudioBusConfig,
-    ppu::buffer::ColorFormat,
-    ppu::palette::PaletteKind,
-    ppu::{SCREEN_HEIGHT, SCREEN_WIDTH},
+    audio::bus::AudioBusConfig, ppu::buffer::ColorFormat, ppu::palette::PaletteKind,
     reset_kind::ResetKind,
 };
 use nesium_runtime::{
     AudioMode, DebugState, Event, EventTopic, NotificationEvent, Runtime, RuntimeConfig,
-    RuntimeEventSender, RuntimeHandle, VideoConfig, VideoExternalConfig,
+    RuntimeEventSender, RuntimeHandle, VideoConfig,
 };
-
-struct VideoBackingStore {
-    _plane0: Box<[u8]>,
-    _plane1: Box<[u8]>,
-}
 
 use self::{
     controller::{ControllerDevice, ControllerInput, InputPreset},
@@ -187,7 +179,6 @@ impl Viewports {
 }
 
 pub struct NesiumApp {
-    _video_backing: VideoBackingStore,
     runtime_handle: RuntimeHandle,
     _runtime: Runtime,
     notification_rx: Receiver<NotificationEvent>,
@@ -218,29 +209,16 @@ impl NesiumApp {
         cc.egui_ctx.set_visuals(Visuals::light());
         let has_cjk_font = install_cjk_font(&cc.egui_ctx);
 
-        let len = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
-        let plane0 = vec![0u8; len].into_boxed_slice();
-        let plane1 = vec![0u8; len].into_boxed_slice();
-
-        let mut video_backing = VideoBackingStore {
-            _plane0: plane0,
-            _plane1: plane1,
-        };
-
-        // SAFETY: `video_backing` keeps the two planes alive for the lifetime of the app.
-        // The planes do not overlap and are sized to the NES framebuffer.
         let (notification_tx, notification_rx) = unbounded();
         let sender = Box::new(EguiNotificationSender {
             tx: notification_tx,
         });
         let runtime = Runtime::start_with_sender(
             RuntimeConfig {
-                video: VideoConfig::External(VideoExternalConfig {
+                video: VideoConfig {
                     color_format: ColorFormat::Rgba8888,
-                    pitch_bytes: SCREEN_WIDTH * ColorFormat::Rgba8888.bytes_per_pixel(),
-                    plane0: video_backing._plane0.as_mut_ptr(),
-                    plane1: video_backing._plane1.as_mut_ptr(),
-                }),
+                    ..VideoConfig::default()
+                },
                 audio: AudioMode::Auto,
             },
             sender,
@@ -284,7 +262,6 @@ impl NesiumApp {
         }));
 
         let mut app = Self {
-            _video_backing: video_backing,
             runtime_handle,
             _runtime: runtime,
             notification_rx,
@@ -387,19 +364,35 @@ impl NesiumApp {
             .expect("egui requires a readable CPU framebuffer");
 
         let idx = handle.begin_front_copy();
+        let width = handle.width();
+        let height = handle.height();
+        let pitch_bytes = handle.pitch_bytes();
         let slice = handle.plane_slice(idx);
+        if width == 0 || height == 0 || pitch_bytes == 0 || slice.is_empty() {
+            handle.end_front_copy();
+            return;
+        }
 
         // Avoid per-frame allocations: keep a `ColorImage` buffer around and update it in-place.
-        let image = self.frame_image.get_or_insert_with(|| {
-            Arc::new(ColorImage::filled(
-                [SCREEN_WIDTH, SCREEN_HEIGHT],
+        let needs_realloc = self
+            .frame_image
+            .as_ref()
+            .map_or(true, |image| image.size != [width, height]);
+        if needs_realloc {
+            self.frame_image = Some(Arc::new(ColorImage::filled(
+                [width, height],
                 egui::Color32::BLACK,
-            ))
-        });
+            )));
+        }
+
+        let image = self
+            .frame_image
+            .as_mut()
+            .expect("frame_image must be initialized");
         {
             let image = Arc::make_mut(image);
-            debug_assert_eq!(image.size, [SCREEN_WIDTH, SCREEN_HEIGHT]);
-            debug_assert_eq!(slice.len(), SCREEN_WIDTH * SCREEN_HEIGHT * 4);
+            debug_assert_eq!(image.size, [width, height]);
+            debug_assert_eq!(handle.color_format(), ColorFormat::Rgba8888);
             // `Color32` is `[r, g, b, a]` in memory; our runtime outputs RGBA8888 with a=255.
             // Copying raw bytes avoids per-pixel conversion overhead and improves frame pacing.
             let dst_bytes = unsafe {
@@ -408,7 +401,22 @@ impl NesiumApp {
                     image.pixels.len() * 4,
                 )
             };
-            dst_bytes.copy_from_slice(slice);
+            let bytes_per_pixel = handle.bytes_per_pixel();
+            let row_bytes = width * bytes_per_pixel;
+            debug_assert_eq!(pitch_bytes % bytes_per_pixel, 0);
+            debug_assert!(pitch_bytes >= row_bytes);
+            debug_assert!(slice.len() >= pitch_bytes * height);
+
+            if pitch_bytes == row_bytes {
+                dst_bytes[..(row_bytes * height)].copy_from_slice(&slice[..(row_bytes * height)]);
+            } else {
+                for row in 0..height {
+                    let src_start = row * pitch_bytes;
+                    let dst_start = row * row_bytes;
+                    dst_bytes[dst_start..(dst_start + row_bytes)]
+                        .copy_from_slice(&slice[src_start..(src_start + row_bytes)]);
+                }
+            }
         }
 
         match &mut self.frame_texture {

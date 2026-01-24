@@ -10,6 +10,7 @@ import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 import '../../platform/nes_gamepad.dart';
+import '../../windows/settings_sync.dart';
 
 enum InputDevice { keyboard, gamepad, virtualController }
 
@@ -629,6 +630,21 @@ class InputSettingsController extends Notifier<InputSettingsState> {
       message: 'Persist input settings',
       logger: 'input_settings',
     );
+    unawaited(
+      SettingsSync.broadcast(
+        group: 'input',
+        payload: _inputSettingsStateToStorage(value),
+      ),
+    );
+  }
+
+  void applySynced(Object? payload) {
+    final next = _inputSettingsStateFromStorage(
+      payload,
+      defaults: _allDefaults(),
+    );
+    if (next == null || next == state) return;
+    state = next;
   }
 }
 

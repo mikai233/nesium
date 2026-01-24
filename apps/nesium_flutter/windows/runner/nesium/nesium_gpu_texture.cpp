@@ -92,7 +92,23 @@ bool NesiumGpuTexture::Initialize(IDXGIAdapter *adapter) {
     return false;
   }
 
-  // Create double-buffered textures
+  std::lock_guard<std::mutex> lk(mu_);
+  return CreateBuffersLocked();
+}
+
+bool NesiumGpuTexture::CreateBuffersLocked() {
+  if (!device_) {
+    return false;
+  }
+
+  // Reset previous resources.
+  for (int i = 0; i < kBufferCount; ++i) {
+    staging_textures_[i].Reset();
+    gpu_textures_[i].Reset();
+    shared_handles_[i].reset();
+  }
+
+  // Create double-buffered textures.
   for (int i = 0; i < kBufferCount; ++i) {
     // Staging texture: CPU writable
     D3D11_TEXTURE2D_DESC staging_desc = {};
@@ -105,7 +121,7 @@ bool NesiumGpuTexture::Initialize(IDXGIAdapter *adapter) {
     staging_desc.Usage = D3D11_USAGE_STAGING;
     staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-    hr =
+    HRESULT hr =
         device_->CreateTexture2D(&staging_desc, nullptr, &staging_textures_[i]);
     if (FAILED(hr)) {
       LogHResultIndexed("CreateTexture2D(staging)", i, hr);
@@ -147,6 +163,10 @@ bool NesiumGpuTexture::Initialize(IDXGIAdapter *adapter) {
     }
     shared_handles_[i].reset(shared_handle);
   }
+
+  write_index_.store(0, std::memory_order_release);
+  read_index_.store(0, std::memory_order_release);
+  is_mapped_ = false;
 
   return true;
 }
@@ -197,12 +217,34 @@ void NesiumGpuTexture::UnmapAndCommit() {
   write_index_.store(1 - idx, std::memory_order_release);
 }
 
+void NesiumGpuTexture::Resize(int width, int height) {
+  std::lock_guard<std::mutex> lk(mu_);
+  if (width == width_ && height == height_) {
+    return;
+  }
+  if (!device_) {
+    return;
+  }
+
+  // Best-effort: if the worker resized mid-frame, unmap so we can recreate.
+  if (is_mapped_ && context_) {
+    int idx = write_index_.load(std::memory_order_acquire);
+    context_->Unmap(staging_textures_[idx].Get(), 0);
+    is_mapped_ = false;
+  }
+
+  width_ = width;
+  height_ = height;
+  CreateBuffersLocked();
+}
+
 const FlutterDesktopGpuSurfaceDescriptor *
 NesiumGpuTexture::GetGpuSurface(size_t width, size_t height) {
   if (!descriptor_) {
     return nullptr;
   }
 
+  std::lock_guard<std::mutex> lk(mu_);
   int idx = read_index_.load(std::memory_order_acquire);
 
   descriptor_->handle = shared_handles_[idx].get();

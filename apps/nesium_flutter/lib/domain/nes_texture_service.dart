@@ -15,6 +15,31 @@ class NesTextureService {
   Future<int?> disposeTexture() =>
       _channel.invokeMethod<int>('disposeNesTexture');
 
+  /// Updates the platform presentation buffer size for the main NES output.
+  ///
+  /// This does **not** change the Rust runtime output size; that is controlled via FRB
+  /// (video pipeline config). On some platforms (notably Android), setting the presentation
+  /// buffer size is required to avoid system compositor scaling/blurring.
+  Future<void> setPresentBufferSize({
+    required int width,
+    required int height,
+  }) => _channel.invokeMethod<void>('setPresentBufferSize', {
+    'width': width,
+    'height': height,
+  });
+
+  /// Sets the Android native SurfaceView buffer size (PlatformView path).
+  ///
+  /// - If `width`/`height` are > 0: uses `SurfaceHolder.setFixedSize`.
+  /// - Otherwise: resets to `SurfaceHolder.setSizeFromLayout`.
+  Future<void> setAndroidSurfaceSize({
+    required int width,
+    required int height,
+  }) => _channel.invokeMethod<void>('setAndroidSurfaceSize', {
+    'width': width,
+    'height': height,
+  });
+
   /// Switches the Android video backend.
   ///
   /// - `0`: Kotlin GL uploader (software upload)

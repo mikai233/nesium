@@ -65,7 +65,7 @@ class NesRenderer(
     private var running = true
     private var lastSeq = -1L
 
-    // Cached native constants (NES frame size is fixed).
+    // Cached native frame size (can change at runtime).
     private var frameW = 0
     private var frameH = 0
 
@@ -421,6 +421,34 @@ class NesRenderer(
         }
     }
 
+    private fun ensureFrameResourcesUpToDate() {
+        val newW = NesiumNative.nativeFrameWidth()
+        val newH = NesiumNative.nativeFrameHeight()
+        if (newW <= 0 || newH <= 0) return
+        if (newW == frameW && newH == frameH) return
+
+        frameW = newW
+        frameH = newH
+
+        // Refresh DirectByteBuffers because the native backing store may have been reallocated.
+        planeBuffers[0] = NesiumNative.nativePlaneBuffer(0)
+        planeBuffers[1] = NesiumNative.nativePlaneBuffer(1)
+
+        // Reallocate GL texture storage for the new size.
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
+        GLES20.glTexImage2D(
+            GLES20.GL_TEXTURE_2D,
+            0,
+            GLES20.GL_RGBA,
+            frameW,
+            frameH,
+            0,
+            GLES20.GL_RGBA,
+            GLES20.GL_UNSIGNED_BYTE,
+            null
+        )
+    }
+
     private fun handleSwapFailure() {
         val err = EGL14.eglGetError()
         // EGL_CONTEXT_LOST requires full context recreation.
@@ -512,6 +540,8 @@ class NesRenderer(
         // We observed a new frame seq.
         hasNewFrameSignal = false
         lastSeq = seq
+
+        ensureFrameResourcesUpToDate()
 
         val idx = NesiumNative.nativeBeginFrontCopy()
         try {

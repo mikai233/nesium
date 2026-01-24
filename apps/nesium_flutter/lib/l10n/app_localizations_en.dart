@@ -812,6 +812,78 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoTitle => 'Video';
 
   @override
+  String get videoFilterLabel => 'Video Filter';
+
+  @override
+  String get videoFilterNone => 'None (1x)';
+
+  @override
+  String get videoFilterPrescale2x => 'Prescale 2x';
+
+  @override
+  String get videoFilterPrescale3x => 'Prescale 3x';
+
+  @override
+  String get videoFilterPrescale4x => 'Prescale 4x';
+
+  @override
+  String get videoFilterHq2x => 'HQ2x';
+
+  @override
+  String get videoFilterHq3x => 'HQ3x';
+
+  @override
+  String get videoFilterHq4x => 'HQ4x';
+
+  @override
+  String get videoFilterNtscComposite => 'NTSC (Composite)';
+
+  @override
+  String get videoFilterNtscSvideo => 'NTSC (S-Video)';
+
+  @override
+  String get videoFilterNtscRgb => 'NTSC (RGB)';
+
+  @override
+  String get videoFilterNtscMonochrome => 'NTSC (Monochrome)';
+
+  @override
+  String get videoNtscAdvancedTitle => 'NTSC Advanced';
+
+  @override
+  String get videoNtscMergeFieldsLabel => 'Merge fields (reduce flicker)';
+
+  @override
+  String get videoNtscHueLabel => 'Hue';
+
+  @override
+  String get videoNtscSaturationLabel => 'Saturation';
+
+  @override
+  String get videoNtscContrastLabel => 'Contrast';
+
+  @override
+  String get videoNtscBrightnessLabel => 'Brightness';
+
+  @override
+  String get videoNtscSharpnessLabel => 'Sharpness';
+
+  @override
+  String get videoNtscGammaLabel => 'Gamma';
+
+  @override
+  String get videoNtscResolutionLabel => 'Resolution';
+
+  @override
+  String get videoNtscArtifactsLabel => 'Artifacts';
+
+  @override
+  String get videoNtscFringingLabel => 'Fringing';
+
+  @override
+  String get videoNtscBleedLabel => 'Bleed';
+
+  @override
   String get videoIntegerScalingTitle => 'Integer scaling';
 
   @override

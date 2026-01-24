@@ -21,6 +21,8 @@ final class NesiumTextureManager: NesiumFrameConsumer {
         switch call.method {
         case "createNesTexture":
             createNesTexture(result: result)
+        case "setPresentBufferSize":
+            setPresentBufferSize(call: call, result: result)
         case "disposeNesTexture":
             disposeNesTexture(result: result)
         default:
@@ -29,6 +31,15 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     }
 
     private func createNesTexture(result: @escaping FlutterResult) {
+        var existingId: Int64 = -1
+        frameCopyQueue.sync {
+            existingId = self.textureId
+        }
+        if existingId >= 0 {
+            result(existingId)
+            return
+        }
+
         nesiumRegisterFrameCallback(for: self)
 
         let width = 256
@@ -60,18 +71,38 @@ final class NesiumTextureManager: NesiumFrameConsumer {
         result(nil)
     }
 
+    private func setPresentBufferSize(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any] else {
+            result(FlutterError(code: "BAD_ARGS", message: "Missing arguments", details: nil))
+            return
+        }
+        guard let width = args["width"] as? Int, let height = args["height"] as? Int else {
+            result(FlutterError(code: "BAD_ARGS", message: "Missing width/height", details: nil))
+            return
+        }
+        if width <= 0 || height <= 0 {
+            result(FlutterError(code: "BAD_ARGS", message: "width/height must be > 0", details: nil))
+            return
+        }
+        frameCopyQueue.sync {
+            self.texture?.resize(width: width, height: height)
+        }
+        result(nil)
+    }
+
     func nesiumOnFrameReady(bufferIndex: UInt32, width: Int, height: Int, pitch: Int) {
         // Execute frame copy synchronously to minimize latency.
         // The copy operation is lightweight (~60KB memcpy) and can run on the Rust callback thread.
         frameCopyQueue.sync { [weak self] in
-            self?.copyLatestFrame()
+            self?.copyLatestFrame(width: width, height: height)
         }
     }
 
 
 
-    private func copyLatestFrame() {
+    private func copyLatestFrame(width: Int, height: Int) {
         guard let texture = self.texture else { return }
+        texture.resize(width: width, height: height)
         let tid = self.textureId
         guard tid >= 0 else { return }
 

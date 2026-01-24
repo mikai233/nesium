@@ -75,7 +75,22 @@ private:
       const flutter::MethodCall<flutter::EncodableValue> &call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
     if (call.method_name() == "createNesTexture") {
-      CreateNesTexture(std::move(result));
+      int width = texture_width_;
+      int height = texture_height_;
+      if (const auto *args =
+              std::get_if<flutter::EncodableMap>(call.arguments())) {
+        auto it_w = args->find(flutter::EncodableValue("width"));
+        auto it_h = args->find(flutter::EncodableValue("height"));
+        if (it_w != args->end() && it_h != args->end()) {
+          width = std::get<int>(it_w->second);
+          height = std::get<int>(it_h->second);
+        }
+      }
+      CreateNesTexture(std::move(result), width, height);
+      return;
+    }
+    if (call.method_name() == "setPresentBufferSize") {
+      SetPresentBufferSize(call, std::move(result));
       return;
     }
     if (call.method_name() == "disposeNesTexture") {
@@ -123,7 +138,8 @@ private:
   }
 
   void CreateNesTexture(
-      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result,
+      int width, int height) {
     if (texture_id_.load(std::memory_order_acquire) >= 0) {
       if (result) {
         result->Success(flutter::EncodableValue(texture_id_.load()));
@@ -131,9 +147,15 @@ private:
       return;
     }
 
-    // NES native framebuffer size.
-    const int width = 256;
-    const int height = 240;
+    if (width <= 0 || height <= 0) {
+      if (result) {
+        result->Error("Invalid arguments", "width/height must be > 0");
+      }
+      return;
+    }
+
+    texture_width_ = width;
+    texture_height_ = height;
 
     std::shared_ptr<NesiumGpuTexture> gpu_texture;
     std::shared_ptr<NesiumTexture> cpu_texture;
@@ -231,6 +253,46 @@ private:
     }
   }
 
+  void SetPresentBufferSize(
+      const flutter::MethodCall<flutter::EncodableValue> &call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+    const auto *args = std::get_if<flutter::EncodableMap>(call.arguments());
+    if (!args) {
+      result->Error("Invalid arguments", "Expected map");
+      return;
+    }
+
+    auto it_w = args->find(flutter::EncodableValue("width"));
+    auto it_h = args->find(flutter::EncodableValue("height"));
+    if (it_w == args->end() || it_h == args->end()) {
+      result->Error("Invalid arguments", "Missing width/height");
+      return;
+    }
+
+    int width = std::get<int>(it_w->second);
+    int height = std::get<int>(it_h->second);
+    if (width <= 0 || height <= 0) {
+      result->Error("Invalid arguments", "width/height must be > 0");
+      return;
+    }
+
+    texture_width_ = width;
+    texture_height_ = height;
+
+    // Best-effort: pre-resize the presentation buffer. The Rust output size is
+    // controlled via FRB video pipeline config.
+    {
+      std::lock_guard<std::mutex> lk(texture_state_mu_);
+      if (gpu_texture_) {
+        gpu_texture_->Resize(width, height);
+      }
+      if (cpu_texture_) {
+        cpu_texture_->Resize(width, height);
+      }
+    }
+    result->Success();
+  }
+
   void SetWindowsVideoBackend(
       const flutter::MethodCall<flutter::EncodableValue> &call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
@@ -258,7 +320,7 @@ private:
     // If texture is already active, we must recreate it to apply the change.
     if (texture_id_.load(std::memory_order_acquire) >= 0) {
       DisposeNesTexture(nullptr);
-      CreateNesTexture(nullptr);
+      CreateNesTexture(nullptr, texture_width_, texture_height_);
       new_id = texture_id_.load(std::memory_order_acquire);
     }
 
@@ -276,7 +338,10 @@ private:
   }
 
   // Called from the Rust runtime thread. Must be lightweight and non-blocking.
-  void OnFrameReady(uint32_t bufferIndex, uint32_t, uint32_t, uint32_t) {
+  void OnFrameReady(uint32_t bufferIndex, uint32_t width, uint32_t height,
+                    uint32_t) {
+    pending_width_.store(width, std::memory_order_release);
+    pending_height_.store(height, std::memory_order_release);
     pending_index_.store(bufferIndex, std::memory_order_release);
 
     bool expected = false;
@@ -331,6 +396,32 @@ private:
         cpu_texture = cpu_texture_;
       }
 
+      const uint32_t frame_w =
+          pending_width_.load(std::memory_order_acquire);
+      const uint32_t frame_h =
+          pending_height_.load(std::memory_order_acquire);
+      if (frame_w == 0 || frame_h == 0) {
+        continue;
+      }
+
+      if (gpu_texture) {
+        if (gpu_texture->width() != static_cast<int>(frame_w) ||
+            gpu_texture->height() != static_cast<int>(frame_h)) {
+          gpu_texture->Resize(static_cast<int>(frame_w),
+                              static_cast<int>(frame_h));
+          texture_width_ = static_cast<int>(frame_w);
+          texture_height_ = static_cast<int>(frame_h);
+        }
+      } else if (cpu_texture) {
+        if (cpu_texture->width() != static_cast<int>(frame_w) ||
+            cpu_texture->height() != static_cast<int>(frame_h)) {
+          cpu_texture->Resize(static_cast<int>(frame_w),
+                              static_cast<int>(frame_h));
+          texture_width_ = static_cast<int>(frame_w);
+          texture_height_ = static_cast<int>(frame_h);
+        }
+      }
+
       if (gpu_texture) {
         // GPU path: map, copy, unmap, commit
         auto [dst, pitch] = gpu_texture->MapWriteBuffer();
@@ -378,8 +469,13 @@ private:
 
   std::atomic<int64_t> texture_id_{-1};
 
+  int texture_width_ = 256;
+  int texture_height_ = 240;
+
   // Latest-only signaling from Rust thread -> worker thread.
   std::atomic<uint32_t> pending_index_{kEmptyPending};
+  std::atomic<uint32_t> pending_width_{0};
+  std::atomic<uint32_t> pending_height_{0};
   std::atomic<bool> work_scheduled_{false};
   std::atomic<bool> shutting_down_{false};
   std::atomic<bool> prefer_high_priority_{true};

@@ -1,78 +1,121 @@
+// ignore_for_file: invalid_annotation_target
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../platform/nes_palette.dart' as nes_palette;
+import '../../platform/nes_palette.dart' show PaletteKind;
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../platform/nes_video.dart' as nes_video;
+import '../../platform/nes_video.dart' show NtscOptions, VideoFilter;
+import '../../windows/settings_sync.dart';
+
+part 'video_settings.freezed.dart';
+part 'video_settings.g.dart';
 
 enum PaletteMode { builtin, custom }
 
 enum NesAspectRatio { square, ntsc, stretch }
 
-@immutable
-class VideoSettings {
-  static const Object _unset = Object();
+class NtscOptionsConverter
+    implements JsonConverter<NtscOptions, Map<String, dynamic>> {
+  const NtscOptionsConverter();
 
-  const VideoSettings({
-    required this.paletteMode,
-    required this.builtinPreset,
-    required this.integerScaling,
-    required this.aspectRatio,
-    required this.screenVerticalOffset,
-    this.customPaletteName,
-  });
+  static const NtscOptions _fallback = NtscOptions(
+    hue: 0,
+    saturation: 0,
+    contrast: 0,
+    brightness: 0,
+    sharpness: 0,
+    gamma: 0,
+    resolution: 0,
+    artifacts: 0,
+    fringing: 0,
+    bleed: 0,
+    mergeFields: true,
+  );
 
-  final PaletteMode paletteMode;
-  final nes_palette.PaletteKind builtinPreset;
-  final bool integerScaling;
-  final NesAspectRatio aspectRatio;
-  final double screenVerticalOffset;
-  final String? customPaletteName;
+  @override
+  NtscOptions fromJson(Map<String, dynamic> json) {
+    double readDouble(String key, double fallback) {
+      final value = json[key];
+      return value is num ? value.toDouble() : fallback;
+    }
 
-  VideoSettings copyWith({
-    PaletteMode? paletteMode,
-    nes_palette.PaletteKind? builtinPreset,
-    bool? integerScaling,
-    NesAspectRatio? aspectRatio,
-    double? screenVerticalOffset,
-    Object? customPaletteName = _unset,
-  }) {
-    return VideoSettings(
-      paletteMode: paletteMode ?? this.paletteMode,
-      builtinPreset: builtinPreset ?? this.builtinPreset,
-      integerScaling: integerScaling ?? this.integerScaling,
-      aspectRatio: aspectRatio ?? this.aspectRatio,
-      screenVerticalOffset: screenVerticalOffset ?? this.screenVerticalOffset,
-      customPaletteName: identical(customPaletteName, _unset)
-          ? this.customPaletteName
-          : customPaletteName as String?,
+    final mergeFieldsValue = json['mergeFields'];
+    final mergeFields = mergeFieldsValue is bool
+        ? mergeFieldsValue
+        : _fallback.mergeFields;
+
+    return NtscOptions(
+      hue: readDouble('hue', _fallback.hue),
+      saturation: readDouble('saturation', _fallback.saturation),
+      contrast: readDouble('contrast', _fallback.contrast),
+      brightness: readDouble('brightness', _fallback.brightness),
+      sharpness: readDouble('sharpness', _fallback.sharpness),
+      gamma: readDouble('gamma', _fallback.gamma),
+      resolution: readDouble('resolution', _fallback.resolution),
+      artifacts: readDouble('artifacts', _fallback.artifacts),
+      fringing: readDouble('fringing', _fallback.fringing),
+      bleed: readDouble('bleed', _fallback.bleed),
+      mergeFields: mergeFields,
     );
   }
 
-  static VideoSettings defaults() {
-    return VideoSettings(
-      paletteMode: PaletteMode.builtin,
-      builtinPreset: nes_palette.PaletteKind.nesdevNtsc,
-      integerScaling: false,
-      aspectRatio: NesAspectRatio.square,
-      screenVerticalOffset: 0,
-      customPaletteName: null,
-    );
-  }
+  @override
+  Map<String, dynamic> toJson(NtscOptions object) => <String, dynamic>{
+    'hue': object.hue,
+    'saturation': object.saturation,
+    'contrast': object.contrast,
+    'brightness': object.brightness,
+    'sharpness': object.sharpness,
+    'gamma': object.gamma,
+    'resolution': object.resolution,
+    'artifacts': object.artifacts,
+    'fringing': object.fringing,
+    'bleed': object.bleed,
+    'mergeFields': object.mergeFields,
+  };
+}
+
+@freezed
+sealed class VideoSettings with _$VideoSettings {
+  const VideoSettings._();
+
+  const factory VideoSettings({
+    @JsonKey(unknownEnumValue: PaletteMode.builtin)
+    @Default(PaletteMode.builtin)
+    PaletteMode paletteMode,
+    @JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc)
+    @Default(PaletteKind.nesdevNtsc)
+    PaletteKind builtinPreset,
+    @JsonKey(unknownEnumValue: VideoFilter.none)
+    @Default(VideoFilter.none)
+    VideoFilter videoFilter,
+    @Default(false) bool integerScaling,
+    @JsonKey(unknownEnumValue: NesAspectRatio.square)
+    @Default(NesAspectRatio.square)
+    NesAspectRatio aspectRatio,
+    @Default(0) double screenVerticalOffset,
+    @NtscOptionsConverter()
+    @Default(NtscOptionsConverter._fallback)
+    NtscOptions ntscOptions,
+    String? customPaletteName,
+  }) = _VideoSettings;
+
+  factory VideoSettings.fromJson(Map<String, dynamic> json) =>
+      _$VideoSettingsFromJson(json);
 }
 
 class VideoSettingsController extends Notifier<VideoSettings> {
   @override
   VideoSettings build() {
-    final defaults = VideoSettings.defaults();
-    final loaded = _videoSettingsFromStorage(
-      ref.read(appStorageProvider).get(StorageKeys.settingsVideo),
-      defaults: defaults,
-    );
-    final settings = loaded ?? defaults;
+    final settings = _loadSettingsFromStorage();
 
     final customBytes = ref
         .read(appStorageProvider)
@@ -90,6 +133,48 @@ class VideoSettingsController extends Notifier<VideoSettings> {
       );
     });
     return next;
+  }
+
+  Future<void> reloadFromStorage({bool applyPalette = true}) async {
+    final settings = _loadSettingsFromStorage();
+
+    final customBytes = ref
+        .read(appStorageProvider)
+        .get(StorageKeys.settingsVideoCustomPaletteBytes);
+    final next =
+        (settings.paletteMode == PaletteMode.custom &&
+            customBytes is! Uint8List)
+        ? settings.copyWith(paletteMode: PaletteMode.builtin)
+        : settings;
+    if (next != state) {
+      state = next;
+    }
+
+    if (applyPalette) {
+      await applyToRuntime();
+    }
+  }
+
+  void applySynced(VideoSettings next) {
+    if (next == state) return;
+    state = next;
+  }
+
+  VideoSettings _loadSettingsFromStorage() {
+    final stored = ref.read(appStorageProvider).get(StorageKeys.settingsVideo);
+    if (stored is Map) {
+      try {
+        return VideoSettings.fromJson(Map<String, dynamic>.from(stored));
+      } catch (e, st) {
+        logWarning(
+          e,
+          stackTrace: st,
+          message: 'Failed to load video settings',
+          logger: 'video_settings',
+        );
+      }
+    }
+    return const VideoSettings();
   }
 
   Future<void> applyToRuntime() async {
@@ -152,19 +237,33 @@ class VideoSettingsController extends Notifier<VideoSettings> {
   Future<void> setIntegerScaling(bool value) async {
     if (value == state.integerScaling) return;
     state = state.copyWith(integerScaling: value);
-    await _persist(state);
+    await _persist(state, broadcastFields: const ['integerScaling']);
+  }
+
+  Future<void> setVideoFilter(nes_video.VideoFilter filter) async {
+    if (filter == state.videoFilter) return;
+    state = state.copyWith(videoFilter: filter);
+    await _persist(state, broadcastFields: const ['videoFilter']);
   }
 
   Future<void> setAspectRatio(NesAspectRatio value) async {
     if (value == state.aspectRatio) return;
     state = state.copyWith(aspectRatio: value);
-    await _persist(state);
+    await _persist(state, broadcastFields: const ['aspectRatio']);
   }
 
   Future<void> setScreenVerticalOffset(double value) async {
     final clamped = value.clamp(-240.0, 240.0).toDouble();
     if (clamped == state.screenVerticalOffset) return;
     state = state.copyWith(screenVerticalOffset: clamped);
+    await _persist(state, broadcastFields: const ['screenVerticalOffset']);
+  }
+
+  Future<void> setNtscOptions(nes_video.NtscOptions value) async {
+    if (value == state.ntscOptions) return;
+    state = state.copyWith(ntscOptions: value);
+    // NTSC tuning parameters are applied to the shared Rust pipeline directly
+    // (see settings UI debounce). Other windows don't depend on these values.
     await _persist(state);
   }
 
@@ -184,11 +283,23 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     }
   }
 
-  Future<void> _persist(VideoSettings value) async {
+  Future<void> _persist(
+    VideoSettings value, {
+    List<String> broadcastFields = const <String>[],
+  }) async {
     try {
       await ref
           .read(appStorageProvider)
-          .put(StorageKeys.settingsVideo, _videoSettingsToStorage(value));
+          .put(StorageKeys.settingsVideo, value.toJson());
+      if (broadcastFields.isNotEmpty) {
+        unawaited(
+          SettingsSync.broadcast(
+            group: 'video',
+            fields: broadcastFields,
+            payload: value.toJson(),
+          ),
+        );
+      }
     } catch (e, st) {
       logError(
         e,
@@ -204,86 +315,3 @@ final videoSettingsProvider =
     NotifierProvider<VideoSettingsController, VideoSettings>(
       VideoSettingsController.new,
     );
-
-Map<String, Object?> _videoSettingsToStorage(VideoSettings value) =>
-    <String, Object?>{
-      'paletteMode': value.paletteMode.name,
-      'builtinPreset': value.builtinPreset.name,
-      'integerScaling': value.integerScaling,
-      'aspectRatio': value.aspectRatio.name,
-      'screenVerticalOffset': value.screenVerticalOffset,
-      'customPaletteName': value.customPaletteName,
-    };
-
-VideoSettings? _videoSettingsFromStorage(
-  Object? value, {
-  required VideoSettings defaults,
-}) {
-  if (value is! Map) return null;
-  final map = value.cast<String, Object?>();
-
-  PaletteMode paletteMode = defaults.paletteMode;
-  if (map['paletteMode'] is String) {
-    try {
-      paletteMode = PaletteMode.values.byName(map['paletteMode'] as String);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'Failed to lookup PaletteMode by name',
-        logger: 'video_settings',
-      );
-    }
-  }
-
-  nes_palette.PaletteKind builtinPreset = defaults.builtinPreset;
-  if (map['builtinPreset'] is String) {
-    try {
-      builtinPreset = nes_palette.PaletteKind.values.byName(
-        map['builtinPreset'] as String,
-      );
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'Failed to lookup PaletteKind by name',
-        logger: 'video_settings',
-      );
-    }
-  }
-
-  final customPaletteName = map['customPaletteName'] is String
-      ? map['customPaletteName'] as String
-      : null;
-
-  final integerScaling = map['integerScaling'] is bool
-      ? map['integerScaling'] as bool
-      : defaults.integerScaling;
-
-  NesAspectRatio aspectRatio = defaults.aspectRatio;
-  if (map['aspectRatio'] is String) {
-    try {
-      aspectRatio = NesAspectRatio.values.byName(map['aspectRatio'] as String);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'Failed to lookup NesAspectRatio by name',
-        logger: 'video_settings',
-      );
-    }
-  }
-
-  final screenVerticalOffset = map['screenVerticalOffset'] is num
-      ? (map['screenVerticalOffset'] as num).toDouble()
-      : defaults.screenVerticalOffset;
-
-  return defaults.copyWith(
-    paletteMode: paletteMode,
-    builtinPreset: builtinPreset,
-    integerScaling: integerScaling,
-    aspectRatio: aspectRatio,
-    screenVerticalOffset: screenVerticalOffset,
-    customPaletteName: customPaletteName,
-  );
-}

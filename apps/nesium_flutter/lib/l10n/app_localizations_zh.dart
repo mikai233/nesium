@@ -800,6 +800,78 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoTitle => '画面';
 
   @override
+  String get videoFilterLabel => '画面滤镜';
+
+  @override
+  String get videoFilterNone => '无 (1 倍)';
+
+  @override
+  String get videoFilterPrescale2x => '预缩放 2 倍';
+
+  @override
+  String get videoFilterPrescale3x => '预缩放 3 倍';
+
+  @override
+  String get videoFilterPrescale4x => '预缩放 4 倍';
+
+  @override
+  String get videoFilterHq2x => 'HQ2x';
+
+  @override
+  String get videoFilterHq3x => 'HQ3x';
+
+  @override
+  String get videoFilterHq4x => 'HQ4x';
+
+  @override
+  String get videoFilterNtscComposite => 'NTSC（复合视频）';
+
+  @override
+  String get videoFilterNtscSvideo => 'NTSC（S-Video）';
+
+  @override
+  String get videoFilterNtscRgb => 'NTSC（RGB）';
+
+  @override
+  String get videoFilterNtscMonochrome => 'NTSC（黑白）';
+
+  @override
+  String get videoNtscAdvancedTitle => 'NTSC 高级';
+
+  @override
+  String get videoNtscMergeFieldsLabel => '合并场（减少闪烁）';
+
+  @override
+  String get videoNtscHueLabel => '色相';
+
+  @override
+  String get videoNtscSaturationLabel => '饱和度';
+
+  @override
+  String get videoNtscContrastLabel => '对比度';
+
+  @override
+  String get videoNtscBrightnessLabel => '亮度';
+
+  @override
+  String get videoNtscSharpnessLabel => '锐度';
+
+  @override
+  String get videoNtscGammaLabel => 'Gamma';
+
+  @override
+  String get videoNtscResolutionLabel => '解析度';
+
+  @override
+  String get videoNtscArtifactsLabel => '伪影';
+
+  @override
+  String get videoNtscFringingLabel => '彩边';
+
+  @override
+  String get videoNtscBleedLabel => '出血';
+
+  @override
   String get videoIntegerScalingTitle => '整数缩放';
 
   @override

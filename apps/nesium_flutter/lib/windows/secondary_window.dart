@@ -24,11 +24,13 @@ class SecondaryWindow extends StatefulWidget {
     required this.kind,
     required this.child,
     required this.title,
+    this.wrapInScaffold = true,
   });
 
   final WindowKind kind;
   final Widget child;
   final String title;
+  final bool wrapInScaffold;
 
   @override
   State<SecondaryWindow> createState() => _SecondaryWindowState();
@@ -125,6 +127,7 @@ class _SecondaryWindowState extends State<SecondaryWindow> with WindowListener {
       case WindowKind.paletteViewer:
         await bestEffort(bridge.unsubscribePaletteState);
         break;
+      case WindowKind.settings:
       case WindowKind.tools:
       case WindowKind.main:
         break;
@@ -168,7 +171,10 @@ class _SecondaryWindowState extends State<SecondaryWindow> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: widget.child);
+    if (widget.wrapInScaffold) {
+      return Scaffold(body: widget.child);
+    }
+    return widget.child;
   }
 }
 

@@ -5,6 +5,7 @@
 #include <d3d11.h>
 #include <dxgi.h>
 #include <memory>
+#include <mutex>
 #include <utility>
 #include <windows.h>
 #include <wrl/client.h>
@@ -35,6 +36,9 @@ public:
 
   /// Unmap the write buffer and make it available for Flutter to read.
   void UnmapAndCommit();
+
+  /// Recreate underlying textures with a new size.
+  void Resize(int width, int height);
 
   /// Get the Flutter GPU surface descriptor for the current front buffer.
   /// This is called by Flutter's texture callback.
@@ -82,6 +86,7 @@ private:
 
   NesiumGpuTexture(int width, int height);
   bool Initialize(IDXGIAdapter *adapter);
+  bool CreateBuffersLocked();
 
   int width_;
   int height_;
@@ -103,4 +108,5 @@ private:
 
   // Use unique_ptr to avoid incomplete type issue with forward declaration
   std::unique_ptr<FlutterDesktopGpuSurfaceDescriptor> descriptor_;
+  std::mutex mu_;
 };

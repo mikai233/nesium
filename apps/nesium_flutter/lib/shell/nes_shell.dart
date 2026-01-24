@@ -29,12 +29,14 @@ import '../features/save_state/save_state_repository.dart';
 import '../features/settings/emulation_settings.dart';
 import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
+import '../features/settings/video_settings.dart';
 import '../features/about/about_page.dart';
 import '../features/netplay/netplay_screen.dart';
 import '../features/netplay/netplay_state.dart';
 import '../l10n/app_localizations.dart';
 import '../logging/app_logger.dart';
 import '../platform/desktop_window_manager.dart';
+import '../platform/nes_video.dart' as nes_video;
 import '../platform/platform_capabilities.dart';
 import '../startup/launch_args.dart';
 import 'desktop_shell.dart';
@@ -88,6 +90,21 @@ class _NesShellState extends ConsumerState<NesShell>
       _startReplayEvents();
       _startNetplayEvents();
       await ref.read(nesControllerProvider.notifier).initTexture();
+      final videoSettings = ref.read(videoSettingsProvider);
+      final videoFilter = videoSettings.videoFilter;
+      await nes_video
+          .setNtscOptions(options: videoSettings.ntscOptions)
+          .catchError((Object e, StackTrace st) {
+            logError(
+              e,
+              stackTrace: st,
+              message: 'setNtscOptions (init)',
+              logger: 'nes_shell',
+            );
+          });
+      await ref
+          .read(nesControllerProvider.notifier)
+          .setVideoFilter(videoFilter);
       final turbo = ref.read(turboSettingsProvider);
       await nes_input
           .setTurboTiming(onFrames: turbo.onFrames, offFrames: turbo.offFrames)
@@ -909,6 +926,14 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   Future<void> _openSettings() async {
+    if (_desktopWindowManager.isSupported) {
+      final languageCode = ref.read(appLanguageProvider).languageCode;
+      await _desktopWindowManager.openSettingsWindow(
+        languageCode: languageCode,
+      );
+      return;
+    }
+
     if (!mounted) return;
     await Navigator.of(
       context,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
+import 'package:nesium_flutter/platform/nes_video.dart' as nes_video;
 
 import 'nes_state.dart';
 import 'nes_texture_service.dart';
@@ -26,6 +27,34 @@ class NesController extends Notifier<NesState> {
     try {
       final textureId = await _textureService.createTexture();
       state = state.copyWith(textureId: textureId);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  /// Applies the selected single video filter.
+  ///
+  /// Some filters are scaling filters and will resize the runtime's output framebuffer.
+  /// In that case, we also best-effort resize the platform presentation buffer to match.
+  Future<void> setVideoFilter(nes_video.VideoFilter filter) async {
+    state = state.copyWith(clearError: true);
+    try {
+      final prevW = state.videoOutputWidth;
+      final prevH = state.videoOutputHeight;
+      final info = await nes_video.setVideoFilter(filter: filter);
+      final w = info.outputWidth;
+      final h = info.outputHeight;
+
+      final needsResize = w != prevW || h != prevH;
+      if (needsResize) {
+        if (useAndroidNativeGameView) {
+          await _textureService.setAndroidSurfaceSize(width: w, height: h);
+        } else {
+          await _textureService.setPresentBufferSize(width: w, height: h);
+        }
+      }
+
+      state = state.copyWith(videoOutputWidth: w, videoOutputHeight: h);
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }

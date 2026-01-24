@@ -68,6 +68,15 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
     unawaited(_broadcastLanguage(language));
   }
 
+  void applyIncomingLanguageFromWindow(String? languageCode) {
+    final next = AppLanguageX.fromLanguageCode(languageCode);
+    if (next == state) return;
+    _suppressBroadcast = true;
+    state = next;
+    _suppressBroadcast = false;
+    _persist(next);
+  }
+
   bool get _supportsWindowMessaging => isNativeDesktop;
 
   Future<void> _init() async {
@@ -82,7 +91,7 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
         try {
           final decoded = jsonDecode(args);
           if (decoded is Map && decoded['lang'] is String) {
-            _applyIncomingLanguage(decoded['lang'] as String);
+            applyIncomingLanguageFromWindow(decoded['lang'] as String);
           }
         } catch (e, st) {
           logWarning(
@@ -93,19 +102,6 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
           );
         }
       }
-
-      await controller.setWindowMethodHandler((call) async {
-        if (call.method != 'setLanguage') return null;
-        final arg = call.arguments;
-        if (arg == null) {
-          _applyIncomingLanguage(null);
-          return null;
-        }
-        if (arg is String) {
-          _applyIncomingLanguage(arg);
-        }
-        return null;
-      });
     } catch (e, st) {
       logError(
         e,
@@ -114,15 +110,6 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
         logger: 'language_settings',
       );
     }
-  }
-
-  void _applyIncomingLanguage(String? languageCode) {
-    final next = AppLanguageX.fromLanguageCode(languageCode);
-    if (next == state) return;
-    _suppressBroadcast = true;
-    state = next;
-    _suppressBroadcast = false;
-    _persist(next);
   }
 
   void _persist(AppLanguage language) {

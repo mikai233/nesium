@@ -14,6 +14,7 @@
 static constexpr const char *kChannelName = "nesium";
 static constexpr const char *kMethodCreate = "createNesTexture";
 static constexpr const char *kMethodDispose = "disposeNesTexture";
+static constexpr const char *kMethodSetPresentBufferSize = "setPresentBufferSize";
 
 // Texture upload pipeline (Linux):
 // 1) Rust runtime emits a frame-ready callback from its render thread.
@@ -154,19 +155,17 @@ static void copy_worker_main(NesiumChannels *self) {
     auto *tex = NESIUM_TEXTURE(self->texture);
 
     // Flutter's pixel buffer texture expects tightly-packed RGBA.
-    const uint32_t dst_stride = f.width * 4u;
-    if (f.pitch_bytes != dst_stride) {
-      // Rust guarantees RGBA; skip mismatched frames defensively.
-      continue;
-    }
+    const uint32_t out_w = f.width;
+    const uint32_t out_h = f.height;
+    const uint32_t dst_stride = out_w * 4u;
 
     uint8_t *dst = nullptr;
-    if (!nesium_texture_begin_write(tex, f.width, f.height, dst_stride, &dst)) {
+    if (!nesium_texture_begin_write(tex, out_w, out_h, dst_stride, &dst)) {
       continue;
     }
 
     // Copy the current Rust frame into the writable back buffer.
-    nesium_copy_frame(f.buffer_index, dst, dst_stride, f.height);
+    nesium_copy_frame(f.buffer_index, dst, dst_stride, out_h);
 
     // Publish and request a redraw.
     nesium_texture_end_write(tex);
@@ -261,6 +260,38 @@ static void handle_create_texture(NesiumChannels *self, FlMethodCall *call) {
   fl_method_call_respond(call, make_ok_with_int64(self->texture_id), nullptr);
 }
 
+static void handle_set_present_buffer_size(NesiumChannels *self,
+                                          FlMethodCall *call) {
+  (void)self;
+  FlValue *args = fl_method_call_get_args(call);
+  if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+    fl_method_call_respond(call, make_error("BAD_ARGS", "Missing arguments"),
+                           nullptr);
+    return;
+  }
+
+  FlValue *width_value = fl_value_lookup_string(args, "width");
+  FlValue *height_value = fl_value_lookup_string(args, "height");
+  if (width_value == nullptr || height_value == nullptr) {
+    fl_method_call_respond(
+        call, make_error("BAD_ARGS", "Missing width/height"), nullptr);
+    return;
+  }
+
+  const uint32_t width = static_cast<uint32_t>(fl_value_get_int(width_value));
+  const uint32_t height = static_cast<uint32_t>(fl_value_get_int(height_value));
+  if (width == 0 || height == 0) {
+    fl_method_call_respond(call,
+                           make_error("BAD_ARGS", "width/height must be > 0"),
+                           nullptr);
+    return;
+  }
+
+  g_autoptr(FlValue) result = fl_value_new_null();
+  fl_method_call_respond(
+      call, FL_METHOD_RESPONSE(fl_method_success_response_new(result)), nullptr);
+}
+
 static void handle_dispose_texture(NesiumChannels *self, FlMethodCall *call) {
   // Unhook the Rust callback.
   nesium_set_frame_ready_callback(nullptr, nullptr);
@@ -288,6 +319,11 @@ static void method_call_cb(FlMethodChannel * /*channel*/, FlMethodCall *call,
 
   if (g_strcmp0(name, kMethodCreate) == 0) {
     handle_create_texture(self, call);
+    return;
+  }
+
+  if (g_strcmp0(name, kMethodSetPresentBufferSize) == 0) {
+    handle_set_present_buffer_size(self, call);
     return;
   }
 

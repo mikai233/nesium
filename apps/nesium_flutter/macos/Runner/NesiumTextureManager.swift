@@ -69,6 +69,8 @@ final class NesiumTextureManager: NesiumFrameConsumer {
         switch call.method {
         case "createNesTexture":
             createNesTexture(result: result)
+        case "setPresentBufferSize":
+            setPresentBufferSize(call: call, result: result)
         case "disposeNesTexture":
             disposeNesTexture(result: result)
         default:
@@ -79,6 +81,12 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     // MARK: - Texture & render-loop setup
 
     private func createNesTexture(result: @escaping FlutterResult) {
+        let existing = textureId.load(ordering: .acquiring)
+        if existing >= 0 {
+            result(existing)
+            return
+        }
+
         nesiumRegisterFrameCallback(for: self)
 
         // NES resolution; keep this in sync with the Rust core.
@@ -125,6 +133,25 @@ final class NesiumTextureManager: NesiumFrameConsumer {
         result(nil)
     }
 
+    private func setPresentBufferSize(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any] else {
+            result(FlutterError(code: "BAD_ARGS", message: "Missing arguments", details: nil))
+            return
+        }
+        guard let width = args["width"] as? Int, let height = args["height"] as? Int else {
+            result(FlutterError(code: "BAD_ARGS", message: "Missing width/height", details: nil))
+            return
+        }
+        if width <= 0 || height <= 0 {
+            result(FlutterError(code: "BAD_ARGS", message: "width/height must be > 0", details: nil))
+            return
+        }
+        frameCopyQueue.sync {
+            self.texture?.resize(width: width, height: height)
+        }
+        result(nil)
+    }
+
     // MARK: - NesiumFrameConsumer
 
     /// Called by the Rust runtime (via NesiumRustBridge) whenever a new frame is
@@ -136,12 +163,13 @@ final class NesiumTextureManager: NesiumFrameConsumer {
         // Execute frame copy synchronously to minimize latency.
         // The copy operation is lightweight (~60KB memcpy) and can run on the Rust callback thread.
         frameCopyQueue.sync { [weak self] in
-            self?.copyFrame(bufferIndex: bufferIndex)
+            self?.copyFrame(bufferIndex: bufferIndex, width: width, height: height)
         }
     }
 
-    private func copyFrame(bufferIndex: UInt32) {
+    private func copyFrame(bufferIndex: UInt32, width: Int, height: Int) {
         guard let texture = self.texture else { return }
+        texture.resize(width: width, height: height)
 
         guard let (pixelBuffer, writeIndex) = texture.acquireWritablePixelBuffer() else {
             return

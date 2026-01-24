@@ -1289,10 +1289,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeBeginFr
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
-    let Some(h) = ensure_runtime().frame_handle.as_ref() else {
-        return -1;
-    };
-    h.begin_front_copy() as jint
+    ensure_runtime().frame_handle.begin_front_copy() as jint
 }
 
 /// Returns a direct `java.nio.ByteBuffer` backed by the requested plane.
@@ -1313,9 +1310,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativePlaneBu
         return std::ptr::null_mut();
     }
 
-    let Some(h) = ensure_runtime().frame_handle.as_ref() else {
-        return std::ptr::null_mut();
-    };
+    let h = &ensure_runtime().frame_handle;
     let slice = h.plane_slice(idx as usize);
 
     // DirectByteBuffer enables zero-copy access on the Kotlin side.
@@ -1340,12 +1335,10 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeEndFron
     _env: JNIEnv,
     _class: JClass,
 ) {
-    if let Some(h) = ensure_runtime().frame_handle.as_ref() {
-        h.end_front_copy();
-    }
+    ensure_runtime().frame_handle.end_front_copy();
 }
 
-/// Returns the fixed NES framebuffer width in pixels.
+/// Returns the current output framebuffer width in pixels.
 ///
 /// Kotlin: `NesiumNative.nativeFrameWidth(): Int`
 #[unsafe(no_mangle)]
@@ -1353,10 +1346,10 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameWi
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
-    FRAME_WIDTH as jint
+    ensure_runtime().frame_handle.width() as jint
 }
 
-/// Returns the fixed NES framebuffer height in pixels.
+/// Returns the current output framebuffer height in pixels.
 ///
 /// Kotlin: `NesiumNative.nativeFrameHeight(): Int`
 #[unsafe(no_mangle)]
@@ -1364,7 +1357,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameHe
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
-    FRAME_HEIGHT as jint
+    ensure_runtime().frame_handle.height() as jint
 }
 
 // --- Auxiliary Texture System ---

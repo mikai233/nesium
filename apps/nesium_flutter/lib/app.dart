@@ -8,6 +8,7 @@ import 'features/settings/theme_settings.dart';
 import 'features/settings/gamepad_assignment_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'windows/window_routing.dart';
+import 'windows/window_message_router.dart';
 
 class NesiumApp extends ConsumerWidget {
   const NesiumApp({super.key, required this.windowKind});
@@ -20,12 +21,15 @@ class NesiumApp extends ConsumerWidget {
     final themeSettings = ref.watch(themeSettingsProvider);
     ref.watch(romHashSyncProvider);
     ref.watch(gamepadAssignmentProvider);
+    ref.watch(windowMessageRouterProvider);
     return MaterialApp(
       onGenerateTitle: (context) {
         final l10n = AppLocalizations.of(context);
         if (l10n == null) return 'Nesium';
 
         switch (windowKind) {
+          case WindowKind.settings:
+            return l10n.settingsTitle;
           case WindowKind.debugger:
             return l10n.menuDebugger;
           case WindowKind.tools:

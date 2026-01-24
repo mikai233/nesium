@@ -16,11 +16,12 @@ import Atomics
 /// are copied into. Flutter will call `copyPixelBuffer()` whenever it needs to
 /// composite the current frame into the UI.
 final class NesiumTexture: NSObject, FlutterTexture {
-    let width: Int
-    let height: Int
+    private(set) var width: Int
+    private(set) var height: Int
 
     /// Double buffering: we hold 2 buffers.
     private var pixelBuffers: [CVPixelBuffer] = []
+    private let lock = NSLock()
 
     /// Atomic index indicating which buffer contains the latest fully written frame.
     /// 0 or 1.
@@ -76,6 +77,8 @@ final class NesiumTexture: NSObject, FlutterTexture {
     /// yields it to the closure for writing, and then atomically updates `latestReadyIndex`
     /// to point to this new buffer.
     func acquireWritablePixelBuffer() -> (CVPixelBuffer, Int)? {
+        lock.lock()
+        defer { lock.unlock() }
         guard pixelBuffers.count == 2 else { return nil }
 
         let current = Int(latestReadyIndex.load(ordering: .acquiring))
@@ -87,10 +90,31 @@ final class NesiumTexture: NSObject, FlutterTexture {
         latestReadyIndex.store(Int32(index), ordering: .releasing)
     }
 
+    func resize(width: Int, height: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard width > 0, height > 0 else { return }
+        if width == self.width, height == self.height { return }
+
+        guard let pb0 = NesiumTexture.makePixelBuffer(width: width, height: height),
+              let pb1 = NesiumTexture.makePixelBuffer(width: width, height: height) else {
+            NSLog("NesiumTexture: failed to resize CVPixelBuffer(s) to %dx%d", width, height)
+            return
+        }
+
+        self.width = width
+        self.height = height
+        self.pixelBuffers = [pb0, pb1]
+        latestReadyIndex.store(0, ordering: .releasing)
+    }
+
     // MARK: - FlutterTexture
 
     /// Called by Flutter to obtain the current frame for this texture.
     func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
+        lock.lock()
+        defer { lock.unlock() }
         guard pixelBuffers.count == 2 else {
             return nil
         }

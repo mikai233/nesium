@@ -11,6 +11,7 @@ import 'package:nesium_flutter/platform/window_manager_shim.dart';
 import 'package:nesium_flutter/startup/launch_args.dart';
 import 'package:nesium_flutter/startup/macos_splash.dart';
 import 'package:nesium_flutter/windows/window_routing.dart';
+import 'package:nesium_flutter/windows/current_window_kind.dart';
 
 import 'app.dart';
 
@@ -57,7 +58,10 @@ Future<void> main(List<String> args) async {
 
       runApp(
         ProviderScope(
-          overrides: [launchArgsProvider.overrideWithValue(launchArgs)],
+          overrides: [
+            launchArgsProvider.overrideWithValue(launchArgs),
+            currentWindowKindProvider.overrideWithValue(kind),
+          ],
           child: NesiumApp(windowKind: kind),
         ),
       );

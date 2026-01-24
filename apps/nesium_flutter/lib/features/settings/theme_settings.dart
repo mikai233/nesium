@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../windows/settings_sync.dart';
 
 /// Theme mode options
 enum AppThemeMode {
@@ -72,6 +73,11 @@ class ThemeSettingsController extends Notifier<ThemeSettings> {
     await _persist();
   }
 
+  void applySynced(ThemeSettings next) {
+    if (next == state) return;
+    state = next;
+  }
+
   Future<void> _persist() async {
     unawaitedLogged(
       Future<void>.sync(
@@ -80,6 +86,15 @@ class ThemeSettingsController extends Notifier<ThemeSettings> {
             .put(StorageKeys.settingsTheme, state.toJson()),
       ),
       message: 'Persist theme settings',
+      logger: 'theme_settings',
+    );
+    unawaitedLogged(
+      SettingsSync.broadcast(
+        group: 'theme',
+        fields: const ['mode'],
+        payload: state.toJson(),
+      ),
+      message: 'Broadcast theme settings',
       logger: 'theme_settings',
     );
   }

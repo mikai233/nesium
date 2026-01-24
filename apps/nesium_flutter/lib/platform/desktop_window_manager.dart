@@ -10,11 +10,11 @@ import 'platform_capabilities.dart';
 class DesktopWindowManager {
   const DesktopWindowManager();
 
-  // Multi-window support is disabled on Linux due to persistent EGL crashes
-  // with desktop_multi_window plugin. Linux will use in-app page navigation until
-  // Flutter's official multi-window support is available.
-  // See: https://github.com/flutter/flutter/issues/...
-  bool get isSupported => isNativeDesktop && !Platform.isLinux;
+  // We currently only enable multi-window on Windows and macOS.
+  // Linux falls back to in-app navigation (EGL stability issues with
+  // desktop_multi_window plugin).
+  bool get isSupported =>
+      isNativeDesktop && (Platform.isWindows || Platform.isMacOS);
 
   String? _routeFromArgs(String args) {
     if (args.isEmpty) return null;
@@ -64,6 +64,15 @@ class DesktopWindowManager {
     if (!isSupported) return;
     final window = await _openOrCreate(
       WindowKind.debugger,
+      languageCode: languageCode,
+    );
+    await window.invokeMethod<void>('setLanguage', languageCode);
+  }
+
+  Future<void> openSettingsWindow({String? languageCode}) async {
+    if (!isSupported) return;
+    final window = await _openOrCreate(
+      WindowKind.settings,
       languageCode: languageCode,
     );
     await window.invokeMethod<void>('setLanguage', languageCode);

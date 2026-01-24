@@ -19,7 +19,7 @@ nesium-runtime.workspace = true
 nesium-netplay.workspace = true
 nesium-netd.workspace = true
 nesium-netproto.workspace = true
-nesium-support.workspace = true
+nesium-support = { workspace = true, features = ["hqx", "ntsc"] }
 tokio = { workspace = true, features = ["full"] }
 dashmap = { workspace = true, features = ["inline"] }
 crossbeam-channel.workspace = true
@@ -35,7 +35,7 @@ easy-upnp = "0.3.0"
 
 # Enable gamepad feature on desktop platforms (not Android, not iOS, not WASM)
 [target.'cfg(all(not(target_os = "android"), not(target_os = "ios"), not(target_arch = "wasm32")))'.dependencies]
-nesium-support = { workspace = true, features = ["gamepad"] }
+nesium-support = { workspace = true, features = ["gamepad", "hqx", "ntsc"] }
 gilrs.workspace = true
 
 [target.'cfg(any(target_os = "android", target_os = "windows", target_os = "linux"))'.dependencies]

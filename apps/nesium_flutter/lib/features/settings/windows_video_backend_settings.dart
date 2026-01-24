@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/nes_texture_service.dart';
 import '../../persistence/keys.dart';
 import '../../persistence/app_storage.dart';
 import '../../domain/nes_controller.dart';
+import '../../windows/current_window_kind.dart';
+import '../../windows/settings_sync.dart';
+import '../../windows/window_types.dart';
 
 enum WindowsVideoBackend { d3d11Gpu, softwareCpu }
 
@@ -21,6 +26,9 @@ class WindowsVideoBackendSettings {
 
 class WindowsVideoBackendSettingsController
     extends Notifier<WindowsVideoBackendSettings> {
+  bool get _isMainWindow =>
+      ref.read(currentWindowKindProvider) == WindowKind.main;
+
   @override
   WindowsVideoBackendSettings build() {
     final storage = ref.read(appStorageProvider);
@@ -36,9 +44,11 @@ class WindowsVideoBackendSettingsController
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     if (isWindows) {
       // Apply the preference to the native plugin on startup.
-      Future.microtask(
-        () => _applyBackend(backend == WindowsVideoBackend.d3d11Gpu),
-      );
+      if (_isMainWindow) {
+        Future.microtask(
+          () => _applyBackend(backend == WindowsVideoBackend.d3d11Gpu),
+        );
+      }
     }
 
     return WindowsVideoBackendSettings(backend: backend);
@@ -52,12 +62,19 @@ class WindowsVideoBackendSettingsController
       StorageKeys.settingsWindowsVideoBackend,
       backend == WindowsVideoBackend.d3d11Gpu,
     );
+    unawaited(
+      SettingsSync.broadcast(
+        group: 'windowsVideoBackend',
+        fields: const ['backend'],
+      ),
+    );
 
     state = state.copyWith(backend: backend);
 
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     if (!isWindows) return;
+    if (!_isMainWindow) return;
     await _applyBackend(backend == WindowsVideoBackend.d3d11Gpu);
   }
 

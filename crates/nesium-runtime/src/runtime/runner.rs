@@ -30,7 +30,7 @@ use nesium_core::{
     Nes,
     audio::bus::AudioBusConfig,
     controller::Button,
-    ppu::buffer::{FrameBuffer, FrameReadyCallback, SCREEN_SIZE},
+    ppu::buffer::{FrameBuffer, FrameReadyCallback, SCREEN_SIZE, VideoPostProcessor},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
 };
@@ -342,6 +342,20 @@ impl Runner {
             ControlMessage::SetColorFormat(format, reply) => {
                 self.handle_set_color_format(format, reply)
             }
+            ControlMessage::SetVideoOutputConfig {
+                width,
+                height,
+                reply,
+            } => self.handle_set_video_output_config(width, height, reply),
+            ControlMessage::SetVideoPostProcessor(processor, reply) => {
+                self.handle_set_video_post_processor(processor, reply)
+            }
+            ControlMessage::SetVideoPipeline {
+                width,
+                height,
+                processor,
+                reply,
+            } => self.handle_set_video_pipeline(width, height, processor, reply),
             ControlMessage::SetIntegerFpsTarget(fps, reply) => {
                 self.handle_set_integer_fps_target(fps, reply)
             }
@@ -1328,6 +1342,51 @@ impl Runner {
     /// Changes the color format for frame rendering at runtime.
     fn handle_set_color_format(&mut self, format: ColorFormat, reply: ControlReplySender) {
         self.nes.set_color_format(format);
+        let _ = reply.send(Ok(()));
+    }
+
+    fn handle_set_video_output_config(
+        &mut self,
+        width: u32,
+        height: u32,
+        reply: ControlReplySender,
+    ) {
+        if width == 0 || height == 0 {
+            let _ = reply.send(Err(RuntimeError::InvalidVideoOutputSize { width, height }));
+            return;
+        }
+
+        self.nes
+            .ppu
+            .framebuffer_mut()
+            .set_output_config(width as usize, height as usize);
+
+        let _ = reply.send(Ok(()));
+    }
+
+    fn handle_set_video_post_processor(
+        &mut self,
+        processor: Box<dyn VideoPostProcessor>,
+        reply: ControlReplySender,
+    ) {
+        self.nes.ppu.framebuffer_mut().set_post_processor(processor);
+        let _ = reply.send(Ok(()));
+    }
+
+    fn handle_set_video_pipeline(
+        &mut self,
+        width: u32,
+        height: u32,
+        processor: Box<dyn VideoPostProcessor>,
+        reply: ControlReplySender,
+    ) {
+        if width == 0 || height == 0 {
+            let _ = reply.send(Err(RuntimeError::InvalidVideoOutputSize { width, height }));
+            return;
+        }
+        let fb = self.nes.ppu.framebuffer_mut();
+        fb.set_output_config(width as usize, height as usize);
+        fb.set_post_processor(processor);
         let _ = reply.send(Ok(()));
     }
 

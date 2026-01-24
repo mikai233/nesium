@@ -15,9 +15,14 @@ thiserror.workspace = true
 tracing.workspace = true
 hex.workspace = true
 
+[build-dependencies]
+cc.workspace = true
+
 [target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "android"), not(target_os = "ios")))'.dependencies]
 gilrs = { workspace = true, optional = true }
 
 [features]
 default = []
 gamepad = ["gilrs"]
+hqx = []
+ntsc = []

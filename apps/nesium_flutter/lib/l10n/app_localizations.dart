@@ -1556,6 +1556,150 @@ abstract class AppLocalizations {
   /// **'Video'**
   String get videoTitle;
 
+  /// No description provided for @videoFilterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Video Filter'**
+  String get videoFilterLabel;
+
+  /// No description provided for @videoFilterNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None (1x)'**
+  String get videoFilterNone;
+
+  /// No description provided for @videoFilterPrescale2x.
+  ///
+  /// In en, this message translates to:
+  /// **'Prescale 2x'**
+  String get videoFilterPrescale2x;
+
+  /// No description provided for @videoFilterPrescale3x.
+  ///
+  /// In en, this message translates to:
+  /// **'Prescale 3x'**
+  String get videoFilterPrescale3x;
+
+  /// No description provided for @videoFilterPrescale4x.
+  ///
+  /// In en, this message translates to:
+  /// **'Prescale 4x'**
+  String get videoFilterPrescale4x;
+
+  /// No description provided for @videoFilterHq2x.
+  ///
+  /// In en, this message translates to:
+  /// **'HQ2x'**
+  String get videoFilterHq2x;
+
+  /// No description provided for @videoFilterHq3x.
+  ///
+  /// In en, this message translates to:
+  /// **'HQ3x'**
+  String get videoFilterHq3x;
+
+  /// No description provided for @videoFilterHq4x.
+  ///
+  /// In en, this message translates to:
+  /// **'HQ4x'**
+  String get videoFilterHq4x;
+
+  /// No description provided for @videoFilterNtscComposite.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Composite)'**
+  String get videoFilterNtscComposite;
+
+  /// No description provided for @videoFilterNtscSvideo.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (S-Video)'**
+  String get videoFilterNtscSvideo;
+
+  /// No description provided for @videoFilterNtscRgb.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (RGB)'**
+  String get videoFilterNtscRgb;
+
+  /// No description provided for @videoFilterNtscMonochrome.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Monochrome)'**
+  String get videoFilterNtscMonochrome;
+
+  /// No description provided for @videoNtscAdvancedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC Advanced'**
+  String get videoNtscAdvancedTitle;
+
+  /// No description provided for @videoNtscMergeFieldsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Merge fields (reduce flicker)'**
+  String get videoNtscMergeFieldsLabel;
+
+  /// No description provided for @videoNtscHueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hue'**
+  String get videoNtscHueLabel;
+
+  /// No description provided for @videoNtscSaturationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturation'**
+  String get videoNtscSaturationLabel;
+
+  /// No description provided for @videoNtscContrastLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Contrast'**
+  String get videoNtscContrastLabel;
+
+  /// No description provided for @videoNtscBrightnessLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get videoNtscBrightnessLabel;
+
+  /// No description provided for @videoNtscSharpnessLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharpness'**
+  String get videoNtscSharpnessLabel;
+
+  /// No description provided for @videoNtscGammaLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Gamma'**
+  String get videoNtscGammaLabel;
+
+  /// No description provided for @videoNtscResolutionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolution'**
+  String get videoNtscResolutionLabel;
+
+  /// No description provided for @videoNtscArtifactsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Artifacts'**
+  String get videoNtscArtifactsLabel;
+
+  /// No description provided for @videoNtscFringingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Fringing'**
+  String get videoNtscFringingLabel;
+
+  /// No description provided for @videoNtscBleedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Bleed'**
+  String get videoNtscBleedLabel;
+
   /// No description provided for @videoIntegerScalingTitle.
   ///
   /// In en, this message translates to:
