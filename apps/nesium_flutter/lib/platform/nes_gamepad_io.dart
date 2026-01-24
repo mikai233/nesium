@@ -6,9 +6,13 @@ import 'dart:async';
 import 'dart:io';
 
 import '../bridge/api/gamepad.dart' as frb_gamepad;
+import '../logging/app_logger.dart';
 
 export 'nes_gamepad_types.dart';
 import 'nes_gamepad_types.dart';
+
+bool _loggedGetGamepadMappingError = false;
+bool _loggedGetGamepadPressedButtonsError = false;
 
 /// Whether gamepad support is available on this platform.
 bool get isGamepadSupported =>
@@ -89,7 +93,16 @@ Future<GamepadMapping?> getGamepadMapping(int port) async {
   try {
     final result = await frb_gamepad.getGamepadMapping(port: port);
     return _gamepadMappingFromFfi(result);
-  } catch (_) {
+  } catch (e, st) {
+    if (!_loggedGetGamepadMappingError) {
+      _loggedGetGamepadMappingError = true;
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'getGamepadMapping failed; returning null',
+        logger: 'nes_gamepad_io',
+      );
+    }
     return null;
   }
 }
@@ -102,7 +115,16 @@ Future<List<GamepadButton>> getGamepadPressedButtons(int id) async {
       id: BigInt.from(id),
     );
     return result.map((b) => _gamepadButtonFromFfi(b)).toList();
-  } catch (_) {
+  } catch (e, st) {
+    if (!_loggedGetGamepadPressedButtonsError) {
+      _loggedGetGamepadPressedButtonsError = true;
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'getGamepadPressedButtons failed; returning empty list',
+        logger: 'nes_gamepad_io',
+      );
+    }
     return [];
   }
 }

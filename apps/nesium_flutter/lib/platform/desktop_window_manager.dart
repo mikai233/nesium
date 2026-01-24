@@ -69,15 +69,6 @@ class DesktopWindowManager {
     await window.invokeMethod<void>('setLanguage', languageCode);
   }
 
-  Future<void> openSettingsWindow({String? languageCode}) async {
-    if (!isSupported) return;
-    final window = await _openOrCreate(
-      WindowKind.settings,
-      languageCode: languageCode,
-    );
-    await window.invokeMethod<void>('setLanguage', languageCode);
-  }
-
   Future<void> openToolsWindow({String? languageCode}) async {
     if (!isSupported) return;
     final window = await _openOrCreate(

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 
+import '../logging/app_logger.dart';
 import '../platform/platform_capabilities.dart';
 
 class SettingsSync {
@@ -18,7 +19,13 @@ class SettingsSync {
     try {
       final controller = await WindowController.fromCurrentEngine();
       currentId = controller.windowId;
-    } catch (_) {
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'SettingsSync.broadcast: failed to get current window id',
+        logger: 'settings_sync',
+      );
       return;
     }
 
@@ -32,8 +39,13 @@ class SettingsSync {
         }
         unawaited(window.invokeMethod<void>(methodSettingsChanged, args));
       }
-    } catch (_) {
-      // Best-effort.
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'SettingsSync.broadcast: failed to send to other windows',
+        logger: 'settings_sync',
+      );
     }
   }
 }

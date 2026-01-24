@@ -7,7 +7,6 @@ import '../l10n/app_localizations.dart';
 import '../logging/app_logger.dart';
 import '../platform/platform_capabilities.dart';
 import '../shell/nes_shell.dart';
-import '../features/settings/settings_page.dart';
 import 'secondary_window.dart';
 import 'window_types.dart';
 
@@ -16,11 +15,6 @@ String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
     case WindowKind.main:
       return jsonEncode({
         'route': 'main',
-        if (languageCode != null) 'lang': languageCode,
-      });
-    case WindowKind.settings:
-      return jsonEncode({
-        'route': 'settings',
         if (languageCode != null) 'lang': languageCode,
       });
     case WindowKind.debugger:
@@ -65,8 +59,6 @@ WindowKind _parseWindowKindFromArguments(String? arguments) {
     final data = jsonDecode(arguments);
     if (data is Map && data['route'] is String) {
       switch (data['route'] as String) {
-        case 'settings':
-          return WindowKind.settings;
         case 'debugger':
           return WindowKind.debugger;
         case 'tools':
@@ -162,13 +154,6 @@ class _WindowRouterState extends State<WindowRouter> {
     switch (kind) {
       case WindowKind.main:
         return const NesShell();
-      case WindowKind.settings:
-        return SecondaryWindow(
-          kind: WindowKind.settings,
-          title: l10n.settingsTitle,
-          wrapInScaffold: false,
-          child: const SettingsPage(),
-        );
       case WindowKind.debugger:
         return SecondaryWindow(
           kind: WindowKind.debugger,

@@ -1,6 +1,5 @@
 enum WindowKind {
   main,
-  settings,
   debugger,
   tools,
   tilemap,

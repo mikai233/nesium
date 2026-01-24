@@ -6,12 +6,23 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
 import '../../bridge/api/netplay.dart';
 import '../../bridge/api/server.dart';
 import '../netplay/netplay_models.dart';
 
 part 'server_settings.freezed.dart';
 part 'server_settings.g.dart';
+
+final StorageKey<ServerSettings> _serverSettingsKey = StorageKey(
+  StorageKeys.settingsServer,
+  jsonModelStringCodec<ServerSettings>(
+    fromJson: ServerSettings.fromJson,
+    toJson: (value) => value.toJson(),
+    storageKey: StorageKeys.settingsServer,
+  ),
+);
 
 @freezed
 sealed class ServerSettings with _$ServerSettings {
@@ -46,10 +57,9 @@ class ServerSettingsController extends Notifier<ServerSettings> {
   Future<void> _load() async {
     try {
       final storage = ref.read(appStorageProvider);
-      final stored = storage.get(StorageKeys.settingsServer);
-
-      if (stored is Map) {
-        state = ServerSettings.fromJson(Map<String, dynamic>.from(stored));
+      final stored = storage.read(_serverSettingsKey);
+      if (stored != null) {
+        state = stored;
       }
     } catch (e, st) {
       logWarning(
@@ -120,9 +130,7 @@ class ServerSettingsController extends Notifier<ServerSettings> {
 
   Future<void> _persist() async {
     try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsServer, state.toJson());
+      await ref.read(appStorageProvider).write(_serverSettingsKey, state);
     } catch (e, st) {
       logError(
         e,
@@ -161,7 +169,14 @@ class ServerSettingsController extends Notifier<ServerSettings> {
       if (!wasRunning) {
         try {
           await netserverStop();
-        } catch (_) {}
+        } catch (stopError, st) {
+          logWarning(
+            stopError,
+            stackTrace: st,
+            message: 'Failed to stop netserver after failed P2P host start',
+            logger: 'server_settings',
+          );
+        }
       }
       rethrow;
     }

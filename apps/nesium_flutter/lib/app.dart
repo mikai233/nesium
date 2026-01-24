@@ -28,8 +28,6 @@ class NesiumApp extends ConsumerWidget {
         if (l10n == null) return 'Nesium';
 
         switch (windowKind) {
-          case WindowKind.settings:
-            return l10n.settingsTitle;
           case WindowKind.debugger:
             return l10n.menuDebugger;
           case WindowKind.tools:

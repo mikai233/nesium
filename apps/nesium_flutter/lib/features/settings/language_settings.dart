@@ -1,14 +1,13 @@
-import 'dart:async';
-import 'dart:convert';
-
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../platform/platform_capabilities.dart';
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../platform/platform_capabilities.dart';
+import '../../windows/settings_sync.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 enum AppLanguage { system, english, chineseSimplified }
 
@@ -33,20 +32,12 @@ extension AppLanguageX on AppLanguage {
 }
 
 class LanguageSettingsController extends Notifier<AppLanguage> {
-  bool _initialized = false;
-  bool _suppressBroadcast = false;
-  WindowController? _windowController;
-
   @override
   AppLanguage build() {
-    if (!_initialized) {
-      _initialized = true;
-      scheduleMicrotask(_init);
-    }
     final stored = ref
         .read(appStorageProvider)
-        .get(StorageKeys.settingsLanguage);
-    if (stored is String) {
+        .get<String>(StorageKeys.settingsLanguage);
+    if (stored != null) {
       try {
         return AppLanguage.values.byName(stored);
       } catch (e, st) {
@@ -61,52 +52,40 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
     return AppLanguage.system;
   }
 
-  void setLanguage(AppLanguage language) {
+  Future<void> setLanguage(AppLanguage language) async {
     if (language == state) return;
     state = language;
     _persist(language);
-    unawaited(_broadcastLanguage(language));
-  }
 
-  void applyIncomingLanguageFromWindow(String? languageCode) {
-    final next = AppLanguageX.fromLanguageCode(languageCode);
-    if (next == state) return;
-    _suppressBroadcast = true;
-    state = next;
-    _suppressBroadcast = false;
-    _persist(next);
-  }
-
-  bool get _supportsWindowMessaging => isNativeDesktop;
-
-  Future<void> _init() async {
-    if (!_supportsWindowMessaging) return;
-
-    try {
-      final controller = await WindowController.fromCurrentEngine();
-      _windowController = controller;
-
-      final args = controller.arguments;
-      if (args.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(args);
-          if (decoded is Map && decoded['lang'] is String) {
-            applyIncomingLanguageFromWindow(decoded['lang'] as String);
-          }
-        } catch (e, st) {
-          logWarning(
-            e,
-            stackTrace: st,
-            message: 'Failed to decode window arguments',
-            logger: 'language_settings',
-          );
-        }
+    if (isNativeDesktop) {
+      unawaited(
+        SettingsSync.broadcast(group: 'language', payload: language.name),
+      );
+      final windows = await WindowController.getAll();
+      for (final window in windows) {
+        unawaited(
+          window.invokeMethod<void>('setLanguage', language.languageCode),
+        );
       }
+    }
+  }
+
+  void applyIncomingLanguageFromWindow(String? code) {
+    final language = AppLanguageX.fromLanguageCode(code);
+    if (language == state) return;
+    state = language;
+  }
+
+  void applySynced(String name) {
+    try {
+      final language = AppLanguage.values.byName(name);
+      if (language == state) return;
+      state = language;
     } catch (e, st) {
-      logError(
+      logWarning(
         e,
         stackTrace: st,
-        message: 'Failed to initialize language messaging',
+        message: 'Failed to apply synced language: $name',
         logger: 'language_settings',
       );
     }
@@ -122,29 +101,6 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
       message: 'Persist language',
       logger: 'language_settings',
     );
-  }
-
-  Future<void> _broadcastLanguage(AppLanguage language) async {
-    if (_suppressBroadcast) return;
-    if (!_supportsWindowMessaging) return;
-
-    try {
-      final currentId = _windowController?.windowId;
-      final windows = await WindowController.getAll();
-      for (final window in windows) {
-        if (currentId != null && window.windowId == currentId) continue;
-        unawaited(
-          window.invokeMethod<void>('setLanguage', language.languageCode),
-        );
-      }
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'Failed to broadcast language change',
-        logger: 'language_settings',
-      );
-    }
   }
 }
 

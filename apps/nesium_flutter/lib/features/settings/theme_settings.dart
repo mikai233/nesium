@@ -1,10 +1,22 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
 import '../../windows/settings_sync.dart';
+
+final StorageKey<ThemeSettings> _themeSettingsKey = StorageKey(
+  StorageKeys.settingsTheme,
+  jsonModelStringCodec<ThemeSettings>(
+    fromJson: ThemeSettings.fromJson,
+    toJson: (value) => value.toJson(),
+    storageKey: StorageKeys.settingsTheme,
+  ),
+);
 
 /// Theme mode options
 enum AppThemeMode {
@@ -51,18 +63,18 @@ class ThemeSettings {
 class ThemeSettingsController extends Notifier<ThemeSettings> {
   @override
   ThemeSettings build() {
-    final stored = ref.read(appStorageProvider).get(StorageKeys.settingsTheme);
-    if (stored is Map) {
-      try {
-        return ThemeSettings.fromJson(Map<String, dynamic>.from(stored));
-      } catch (e, st) {
-        logWarning(
-          e,
-          stackTrace: st,
-          message: 'Failed to load theme settings',
-          logger: 'theme_settings',
-        );
+    try {
+      final stored = ref.read(appStorageProvider).read(_themeSettingsKey);
+      if (stored != null) {
+        return stored;
       }
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to load theme settings',
+        logger: 'theme_settings',
+      );
     }
     return const ThemeSettings();
   }
@@ -71,30 +83,20 @@ class ThemeSettingsController extends Notifier<ThemeSettings> {
     if (mode == state.mode) return;
     state = state.copyWith(mode: mode);
     await _persist();
+    unawaited(SettingsSync.broadcast(group: 'theme', payload: state.toJson()));
   }
 
   void applySynced(ThemeSettings next) {
-    if (next == state) return;
+    if (next.mode == state.mode) return;
     state = next;
   }
 
   Future<void> _persist() async {
     unawaitedLogged(
       Future<void>.sync(
-        () => ref
-            .read(appStorageProvider)
-            .put(StorageKeys.settingsTheme, state.toJson()),
+        () => ref.read(appStorageProvider).write(_themeSettingsKey, state),
       ),
       message: 'Persist theme settings',
-      logger: 'theme_settings',
-    );
-    unawaitedLogged(
-      SettingsSync.broadcast(
-        group: 'theme',
-        fields: const ['mode'],
-        payload: state.toJson(),
-      ),
-      message: 'Broadcast theme settings',
       logger: 'theme_settings',
     );
   }

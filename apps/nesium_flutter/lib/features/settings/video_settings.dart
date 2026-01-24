@@ -11,12 +11,23 @@ import '../../platform/nes_palette.dart' show PaletteKind;
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
 import '../../platform/nes_video.dart' as nes_video;
 import '../../platform/nes_video.dart' show NtscOptions, VideoFilter;
-import '../../windows/settings_sync.dart';
+import '../../domain/nes_controller.dart';
 
 part 'video_settings.freezed.dart';
 part 'video_settings.g.dart';
+
+final StorageKey<VideoSettings> _videoSettingsKey = StorageKey(
+  StorageKeys.settingsVideo,
+  jsonModelStringCodec<VideoSettings>(
+    fromJson: VideoSettings.fromJson,
+    toJson: (value) => value.toJson(),
+    storageKey: StorageKeys.settingsVideo,
+  ),
+);
 
 enum PaletteMode { builtin, custom }
 
@@ -125,6 +136,7 @@ class VideoSettingsController extends Notifier<VideoSettings> {
             customBytes is! Uint8List)
         ? settings.copyWith(paletteMode: PaletteMode.builtin)
         : settings;
+
     scheduleMicrotask(() {
       unawaitedLogged(
         applyToRuntime(),
@@ -155,29 +167,42 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     }
   }
 
-  void applySynced(VideoSettings next) {
-    if (next == state) return;
-    state = next;
-  }
-
   VideoSettings _loadSettingsFromStorage() {
-    final stored = ref.read(appStorageProvider).get(StorageKeys.settingsVideo);
-    if (stored is Map) {
-      try {
-        return VideoSettings.fromJson(Map<String, dynamic>.from(stored));
-      } catch (e, st) {
-        logWarning(
-          e,
-          stackTrace: st,
-          message: 'Failed to load video settings',
-          logger: 'video_settings',
-        );
+    try {
+      final stored = ref.read(appStorageProvider).read(_videoSettingsKey);
+      if (stored != null) {
+        return stored;
       }
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to load video settings',
+        logger: 'video_settings',
+      );
     }
     return const VideoSettings();
   }
 
-  Future<void> applyToRuntime() async {
+  Future<void> applyToRuntime({bool skipPalette = false}) async {
+    final isNtsc =
+        state.videoFilter == nes_video.VideoFilter.ntscComposite ||
+        state.videoFilter == nes_video.VideoFilter.ntscSVideo ||
+        state.videoFilter == nes_video.VideoFilter.ntscRgb ||
+        state.videoFilter == nes_video.VideoFilter.ntscMonochrome;
+
+    // In the main engine, we must notify the controller to update textures
+    // This also applies the filter to the Rust side.
+    await ref
+        .read(nesControllerProvider.notifier)
+        .setVideoFilter(state.videoFilter);
+
+    if (isNtsc) {
+      await nes_video.setNtscOptions(options: state.ntscOptions);
+    }
+
+    if (skipPalette) return;
+
     final storage = ref.read(appStorageProvider);
     if (state.paletteMode == PaletteMode.custom) {
       final customBytes = storage.get(
@@ -237,26 +262,27 @@ class VideoSettingsController extends Notifier<VideoSettings> {
   Future<void> setIntegerScaling(bool value) async {
     if (value == state.integerScaling) return;
     state = state.copyWith(integerScaling: value);
-    await _persist(state, broadcastFields: const ['integerScaling']);
+    await _persist(state);
   }
 
   Future<void> setVideoFilter(nes_video.VideoFilter filter) async {
     if (filter == state.videoFilter) return;
     state = state.copyWith(videoFilter: filter);
-    await _persist(state, broadcastFields: const ['videoFilter']);
+    await _persist(state);
+    await applyToRuntime(skipPalette: true);
   }
 
   Future<void> setAspectRatio(NesAspectRatio value) async {
     if (value == state.aspectRatio) return;
     state = state.copyWith(aspectRatio: value);
-    await _persist(state, broadcastFields: const ['aspectRatio']);
+    await _persist(state);
   }
 
   Future<void> setScreenVerticalOffset(double value) async {
     final clamped = value.clamp(-240.0, 240.0).toDouble();
     if (clamped == state.screenVerticalOffset) return;
     state = state.copyWith(screenVerticalOffset: clamped);
-    await _persist(state, broadcastFields: const ['screenVerticalOffset']);
+    await _persist(state);
   }
 
   Future<void> setNtscOptions(nes_video.NtscOptions value) async {
@@ -265,6 +291,7 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     // NTSC tuning parameters are applied to the shared Rust pipeline directly
     // (see settings UI debounce). Other windows don't depend on these values.
     await _persist(state);
+    await nes_video.setNtscOptions(options: value);
   }
 
   void useCustomIfAvailable() {
@@ -283,28 +310,9 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     }
   }
 
-  Future<void> _persist(
-    VideoSettings value, {
-    List<String> broadcastFields = const <String>[],
-  }) async {
+  Future<void> _persist(VideoSettings value) async {
     try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsVideo, value.toJson());
-      if (broadcastFields.isNotEmpty) {
-        final payload = value.toJson();
-        // Remove NTSC options from broadcast as they are not needed by other windows
-        // (they are applied directly to the shared Rust pipeline)
-        payload.remove('ntscOptions');
-
-        unawaited(
-          SettingsSync.broadcast(
-            group: 'video',
-            fields: broadcastFields,
-            payload: payload,
-          ),
-        );
-      }
+      await ref.read(appStorageProvider).write(_videoSettingsKey, value);
     } catch (e, st) {
       logError(
         e,

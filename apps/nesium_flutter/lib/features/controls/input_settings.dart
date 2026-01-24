@@ -10,12 +10,22 @@ import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
 import '../../platform/nes_gamepad.dart';
 import '../../persistence/json_converters.dart';
-import '../../windows/settings_sync.dart';
 
 part 'input_settings.freezed.dart';
 part 'input_settings.g.dart';
+
+final StorageKey<InputSettingsState> _inputSettingsKey = StorageKey(
+  StorageKeys.settingsInput,
+  jsonModelStringCodec<InputSettingsState>(
+    fromJson: InputSettingsState.fromJson,
+    toJson: (value) => value.toJson(),
+    storageKey: StorageKeys.settingsInput,
+  ),
+);
 
 enum InputDevice { keyboard, gamepad, virtualController }
 
@@ -341,18 +351,18 @@ bool _supportsVirtualController() {
 class InputSettingsController extends Notifier<InputSettingsState> {
   @override
   InputSettingsState build() {
-    final stored = ref.read(appStorageProvider).get(StorageKeys.settingsInput);
-    if (stored is Map) {
-      try {
-        return InputSettingsState.fromJson(Map<String, dynamic>.from(stored));
-      } catch (e, st) {
-        logWarning(
-          e,
-          stackTrace: st,
-          message: 'Failed to load input settings',
-          logger: 'input_settings',
-        );
+    try {
+      final stored = ref.read(appStorageProvider).read(_inputSettingsKey);
+      if (stored != null) {
+        return stored;
       }
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to load input settings',
+        logger: 'input_settings',
+      );
     }
     return _allDefaults();
   }
@@ -529,27 +539,11 @@ class InputSettingsController extends Notifier<InputSettingsState> {
   void _persist(InputSettingsState value) {
     unawaitedLogged(
       Future<void>.sync(
-        () => ref
-            .read(appStorageProvider)
-            .put(StorageKeys.settingsInput, value.toJson()),
+        () => ref.read(appStorageProvider).write(_inputSettingsKey, value),
       ),
       message: 'Persist input settings',
       logger: 'input_settings',
     );
-    unawaited(SettingsSync.broadcast(group: 'input', payload: value.toJson()));
-  }
-
-  void applySynced(Object? payload) {
-    if (payload is! Map) return;
-    try {
-      final next = InputSettingsState.fromJson(
-        Map<String, dynamic>.from(payload),
-      );
-      if (next == state) return;
-      state = next;
-    } catch (e, st) {
-      logWarning(e, stackTrace: st, message: 'Failed to apply synced input');
-    }
   }
 }
 

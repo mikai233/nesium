@@ -9,10 +9,16 @@ import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
-import '../../windows/settings_sync.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
 
 part 'emulation_settings.freezed.dart';
 part 'emulation_settings.g.dart';
+
+final StorageKey<JsonMap> _emulationSettingsKey = StorageKey(
+  StorageKeys.settingsEmulation,
+  jsonMapStringCodec(storageKey: StorageKeys.settingsEmulation),
+);
 
 @freezed
 sealed class EmulationSettings with _$EmulationSettings {
@@ -52,12 +58,9 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
   EmulationSettings? _loadSettingsFromStorage({
     required EmulationSettings defaults,
   }) {
-    final stored = ref
-        .read(appStorageProvider)
-        .get(StorageKeys.settingsEmulation);
-    if (stored is! Map) return null;
+    final map = ref.read(appStorageProvider).read(_emulationSettingsKey);
+    if (map == null) return null;
     try {
-      final map = Map<String, dynamic>.from(stored);
       var settings = EmulationSettings.fromJson(map);
       if (!map.containsKey('pauseInBackground')) {
         settings = settings.copyWith(
@@ -195,26 +198,11 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
       Future<void>.sync(
         () => ref
             .read(appStorageProvider)
-            .put(StorageKeys.settingsEmulation, value.toJson()),
+            .write(_emulationSettingsKey, value.toJson()),
       ),
       message: 'Persist emulation settings',
       logger: 'emulation_settings',
     );
-    final payload = value.toJson();
-    // Only broadcast fields that have visible/functional impact on the main window
-    const visibleFields = {
-      'showEmulationStatusOverlay',
-      'fastForwardSpeedPercent',
-    };
-    payload.removeWhere((key, _) => !visibleFields.contains(key));
-
-    unawaited(SettingsSync.broadcast(group: 'emulation', payload: payload));
-  }
-
-  void applySynced(EmulationSettings next) {
-    if (next == state) return;
-    state = next;
-    applyToRuntime();
   }
 }
 
