@@ -17,6 +17,7 @@ import '../controls/turbo_settings.dart';
 import '../controls/virtual_controls_editor.dart';
 import '../controls/virtual_controls_settings.dart';
 import 'android_video_backend_settings.dart';
+import 'android_shader_settings.dart';
 import 'android_performance_settings.dart';
 import 'emulation_settings.dart';
 import 'gamepad_settings.dart';
@@ -26,6 +27,7 @@ import 'theme_settings.dart';
 import 'video_settings.dart';
 import 'windows_video_backend_settings.dart';
 import 'windows_performance_settings.dart';
+import '../shaders/shader_browser_page.dart';
 
 import 'server_settings.dart';
 import '../../platform/nes_palette.dart' as nes_palette;
@@ -980,14 +982,20 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
     final l10n = AppLocalizations.of(context)!;
     final videoSettings = ref.watch(videoSettingsProvider);
     final videoController = ref.read(videoSettingsProvider.notifier);
-    final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
-    final androidBackendController = ref.read(
-      androidVideoBackendSettingsProvider.notifier,
-    );
     final isAndroid =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
+    final androidBackendController = ref.read(
+      androidVideoBackendSettingsProvider.notifier,
+    );
+    final androidShaderSettings = isAndroid
+        ? ref.watch(androidShaderSettingsProvider)
+        : null;
+    final androidShaderController = isAndroid
+        ? ref.read(androidShaderSettingsProvider.notifier)
+        : null;
 
     final windowsBackend = isWindows
         ? ref.watch(windowsVideoBackendSettingsProvider)
@@ -1165,6 +1173,17 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
           logger: 'settings_page',
         );
       }
+    }
+
+    Future<void> pickAndSetShaderPreset() async {
+      if (!isAndroid) return;
+      if (androidShaderController == null) return;
+      if (androidBackend.backend != AndroidVideoBackend.hardware) return;
+
+      if (!context.mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const ShaderBrowserPage()),
+      );
     }
 
     return ListView(
@@ -2093,6 +2112,77 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
             ),
           ),
         ),
+        if (isAndroid && androidShaderSettings != null) ...[
+          const SizedBox(height: 12),
+          AnimatedSettingsCard(
+            index: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.auto_fix_high),
+                    title: const Text('Librashader (RetroArch preset)'),
+                    subtitle: Text(
+                      androidBackend.backend == AndroidVideoBackend.hardware
+                          ? 'Requires GLES3 + Hardware backend (AHB swapchain).'
+                          : 'Switch Android backend to Hardware to enable.',
+                    ),
+                    value: androidShaderSettings.enabled,
+                    onChanged:
+                        androidBackend.backend == AndroidVideoBackend.hardware
+                        ? (value) async {
+                            try {
+                              await androidShaderController?.setEnabled(value);
+                            } catch (e, st) {
+                              logWarning(
+                                e,
+                                stackTrace: st,
+                                message: 'setEnabled failed',
+                                logger: 'settings_page',
+                              );
+                            }
+                          }
+                        : null,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.description_outlined),
+                    title: const Text('Preset (.slangp)'),
+                    subtitle: Text(
+                      androidShaderSettings.presetPath ?? 'Not set',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.folder_open),
+                    onTap:
+                        androidBackend.backend == AndroidVideoBackend.hardware
+                        ? pickAndSetShaderPreset
+                        : null,
+                    onLongPress: androidShaderSettings.presetPath == null
+                        ? null
+                        : () async {
+                            try {
+                              await androidShaderController?.setPresetPath(
+                                null,
+                              );
+                            } catch (e, st) {
+                              logWarning(
+                                e,
+                                stackTrace: st,
+                                message: 'clear preset failed',
+                                logger: 'settings_page',
+                              );
+                            }
+                          },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

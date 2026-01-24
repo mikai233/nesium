@@ -2,6 +2,7 @@ use parking_lot::{Condvar, Mutex};
 use std::{
     collections::VecDeque,
     ffi::{CStr, c_char, c_int, c_uint, c_void},
+    num::NonZeroU32,
     os::unix::io::RawFd,
     sync::{
         Arc, OnceLock,
@@ -10,11 +11,19 @@ use std::{
     time::Duration,
 };
 
+use glow::HasContext;
 use jni::{
     JNIEnv,
-    objects::{GlobalRef, JByteBuffer, JClass, JObject},
+    objects::{GlobalRef, JByteBuffer, JClass, JObject, JString},
     sys::{jboolean, jint, jlong, jobject},
 };
+use librashader::presets::ShaderFeatures as LibrashaderShaderFeatures;
+use librashader::runtime::Viewport as LibrashaderViewport;
+use librashader::runtime::gl::{
+    FilterChain as LibrashaderFilterChain, FilterChainOptions as LibrashaderFilterChainOptions,
+    FrameOptions as LibrashaderFrameOptions, GLImage as LibrashaderGlImage,
+};
+use librashader::runtime::{Size as LibrashaderSize};
 
 use crate::{FRAME_HEIGHT, FRAME_WIDTH, ensure_runtime, runtime_handle};
 
@@ -37,6 +46,50 @@ pub fn use_ahb_video_backend() -> bool {
 
 static RUST_RENDERER_TID: AtomicI32 = AtomicI32::new(-1);
 static RUST_RENDERER_RUNNING: AtomicBool = AtomicBool::new(false);
+
+#[derive(Debug, Clone)]
+struct AndroidShaderConfig {
+    enabled: bool,
+    preset_path: Option<String>,
+    generation: u64,
+}
+
+static ANDROID_SHADER_CONFIG: OnceLock<Mutex<AndroidShaderConfig>> = OnceLock::new();
+
+fn android_shader_config() -> &'static Mutex<AndroidShaderConfig> {
+    ANDROID_SHADER_CONFIG.get_or_init(|| {
+        Mutex::new(AndroidShaderConfig {
+            enabled: false,
+            preset_path: None,
+            generation: 1,
+        })
+    })
+}
+
+fn android_shader_snapshot() -> AndroidShaderConfig {
+    android_shader_config().lock().clone()
+}
+
+pub(crate) fn android_set_shader_enabled(enabled: bool) {
+    let mut cfg = android_shader_config().lock();
+    if cfg.enabled == enabled {
+        return;
+    }
+    cfg.enabled = enabled;
+    cfg.generation = cfg.generation.wrapping_add(1);
+    // Wake renderer so it reloads promptly.
+    rust_renderer_wake();
+}
+
+pub(crate) fn android_set_shader_preset_path(path: Option<String>) {
+    let mut cfg = android_shader_config().lock();
+    if cfg.preset_path == path {
+        return;
+    }
+    cfg.preset_path = path;
+    cfg.generation = cfg.generation.wrapping_add(1);
+    rust_renderer_wake();
+}
 
 fn try_raise_current_thread_priority() {
     // Best-effort: Android apps may not be allowed to reduce nice (negative values).
@@ -579,6 +632,37 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetHigh
     apply_rust_renderer_priority(enabled);
 }
 
+/// Enables/disables the librashader filter chain in the Rust renderer (AHB backend).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetShaderEnabled(
+    _env: JNIEnv,
+    _class: JClass,
+    enabled: jboolean,
+) {
+    android_set_shader_enabled(enabled != 0);
+}
+
+/// Updates the shader preset path for the Rust renderer (AHB backend).
+///
+/// The path must be readable by native code (typically under app-private storage).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetShaderPreset(
+    mut env: JNIEnv,
+    _class: JClass,
+    path: JString,
+) {
+    let Ok(jstr) = env.get_string(&path) else {
+        return;
+    };
+    let s = jstr.to_string_lossy().to_string();
+    let trimmed = s.trim().to_string();
+    if trimmed.is_empty() {
+        android_set_shader_preset_path(None);
+    } else {
+        android_set_shader_preset_path(Some(trimmed));
+    }
+}
+
 /// Stores the write-end FD for the frame signal pipe and makes it non-blocking.
 fn set_frame_signal_fd(fd: RawFd) {
     if fd < 0 {
@@ -708,6 +792,8 @@ const EGL_RENDERABLE_TYPE: EGLint = 0x3040;
 const EGL_SURFACE_TYPE: EGLint = 0x3033;
 const EGL_WINDOW_BIT: EGLint = 0x0004;
 const EGL_OPENGL_ES2_BIT: EGLint = 0x0004;
+// EGL_KHR_create_context
+const EGL_OPENGL_ES3_BIT_KHR: EGLint = 0x00000040;
 const EGL_CONTEXT_CLIENT_VERSION: EGLint = 0x3098;
 const EGL_OPENGL_ES_API: EGLint = 0x30A0;
 const EGL_WIDTH: EGLint = 0x3057;
@@ -1129,9 +1215,9 @@ unsafe fn run_rust_renderer(
         eprintln!("eglBindAPI failed: 0x{:x}", unsafe { eglGetError() });
     }
 
-    let attribs = [
+    let attribs_es3 = [
         EGL_RENDERABLE_TYPE,
-        EGL_OPENGL_ES2_BIT,
+        EGL_OPENGL_ES3_BIT_KHR,
         EGL_SURFACE_TYPE,
         EGL_WINDOW_BIT,
         EGL_RED_SIZE,
@@ -1146,23 +1232,74 @@ unsafe fn run_rust_renderer(
     ];
     let mut config: EGLConfig = std::ptr::null_mut();
     let mut num: EGLint = 0;
-    if unsafe {
+
+    let choose_ok = unsafe {
         eglChooseConfig(
             dpy,
-            attribs.as_ptr(),
+            attribs_es3.as_ptr(),
             &mut config as *mut _,
             1,
             &mut num as *mut _,
         )
-    } == EGL_FALSE
-        || num <= 0
-    {
-        eprintln!("eglChooseConfig failed: 0x{:x}", unsafe { eglGetError() });
-        return;
+    } != EGL_FALSE
+        && num > 0;
+
+    if !choose_ok {
+        // Fallback: ES2 config (keeps the old non-shader renderer working).
+        let attribs_es2 = [
+            EGL_RENDERABLE_TYPE,
+            EGL_OPENGL_ES2_BIT,
+            EGL_SURFACE_TYPE,
+            EGL_WINDOW_BIT,
+            EGL_RED_SIZE,
+            8,
+            EGL_GREEN_SIZE,
+            8,
+            EGL_BLUE_SIZE,
+            8,
+            EGL_ALPHA_SIZE,
+            8,
+            EGL_NONE,
+        ];
+        if unsafe {
+            eglChooseConfig(
+                dpy,
+                attribs_es2.as_ptr(),
+                &mut config as *mut _,
+                1,
+                &mut num as *mut _,
+            )
+        } == EGL_FALSE
+            || num <= 0
+        {
+            eprintln!("eglChooseConfig failed: 0x{:x}", unsafe { eglGetError() });
+            return;
+        }
     }
 
-    let ctx_attribs = [EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE];
-    let ctx = unsafe { eglCreateContext(dpy, config, EGL_NO_CONTEXT, ctx_attribs.as_ptr()) };
+    // Prefer GLES3 for librashader; fall back to GLES2 if needed.
+    let mut ctx_version: EGLint = 3;
+    let ctx = unsafe {
+        eglCreateContext(
+            dpy,
+            config,
+            EGL_NO_CONTEXT,
+            [EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE].as_ptr(),
+        )
+    };
+    let ctx = if ctx == EGL_NO_CONTEXT {
+        ctx_version = 2;
+        unsafe {
+            eglCreateContext(
+                dpy,
+                config,
+                EGL_NO_CONTEXT,
+                [EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE].as_ptr(),
+            )
+        }
+    } else {
+        ctx
+    };
     if ctx == EGL_NO_CONTEXT {
         eprintln!("eglCreateContext failed: 0x{:x}", unsafe { eglGetError() });
         return;
@@ -1182,6 +1319,18 @@ unsafe fn run_rust_renderer(
         eprintln!("eglMakeCurrent failed: 0x{:x}", unsafe { eglGetError() });
         return;
     }
+
+    // Create a glow context for librashader and for our blit path.
+    let glow_ctx = Arc::new(unsafe {
+        glow::Context::from_loader_function(|name| {
+            // `eglGetProcAddress` expects a NUL-terminated string.
+            let name = match std::ffi::CString::new(name) {
+                Ok(v) => v,
+                Err(_) => return std::ptr::null(),
+            };
+            unsafe { eglGetProcAddress(name.as_ptr()) as *const c_void }
+        })
+    });
 
     let get_native_client_buffer: PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC =
         match unsafe { egl_proc(b"eglGetNativeClientBufferANDROID\0") } {
@@ -1306,60 +1455,192 @@ unsafe fn run_rust_renderer(
 
     recreate_textures_and_images(&mut textures, &mut images);
 
-    let vs_src = CStr::from_bytes_with_nul(
-        b"attribute vec4 a_position;\nattribute vec2 a_tex_coord;\nvarying vec2 v_tex_coord;\nvoid main() {\n  gl_Position = a_position;\n  v_tex_coord = a_tex_coord;\n}\n\0",
-    )
-    .expect("vertex shader source must be NUL-terminated");
-    let fs_src = CStr::from_bytes_with_nul(
-        b"precision mediump float;\nuniform sampler2D u_texture;\nvarying vec2 v_tex_coord;\nvoid main() {\n  gl_FragColor = texture2D(u_texture, v_tex_coord);\n}\n\0",
-    )
-    .expect("fragment shader source must be NUL-terminated");
-    let Some(vs) = compile_shader(GL_VERTEX_SHADER, vs_src) else {
-        return;
-    };
-    let Some(fs) = compile_shader(GL_FRAGMENT_SHADER, fs_src) else {
-        return;
-    };
-    let Some(program) = link_program(vs, fs) else {
-        return;
-    };
-    unsafe { glUseProgram(program) };
+    // Create a simple blit shader program to draw a texture to the EGL surface.
+    let is_gles = glow_ctx.version().is_embedded;
+    let is_gles3 = is_gles && glow_ctx.version().major >= 3 && ctx_version >= 3;
 
-    let a_position =
-        unsafe { glGetAttribLocation(program, b"a_position\0".as_ptr() as *const c_char) };
-    let a_tex = unsafe { glGetAttribLocation(program, b"a_tex_coord\0".as_ptr() as *const c_char) };
-    let u_tex = unsafe { glGetUniformLocation(program, b"u_texture\0".as_ptr() as *const c_char) };
-    unsafe { glUniform1i(u_tex, 0) };
+    let (vs_src, fs_src) = if is_gles3 {
+        (
+            r#"#version 300 es
+precision highp float;
+layout(location = 0) in vec2 a_position;
+layout(location = 1) in vec2 a_tex_coord;
+out vec2 v_tex_coord;
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+  v_tex_coord = a_tex_coord;
+}
+"#,
+            r#"#version 300 es
+precision mediump float;
+uniform sampler2D u_texture;
+in vec2 v_tex_coord;
+out vec4 o_color;
+void main() {
+  o_color = texture(u_texture, v_tex_coord);
+}
+"#,
+        )
+    } else {
+        (
+            r#"attribute vec2 a_position;
+attribute vec2 a_tex_coord;
+varying vec2 v_tex_coord;
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+  v_tex_coord = a_tex_coord;
+}
+"#,
+            r#"precision mediump float;
+uniform sampler2D u_texture;
+varying vec2 v_tex_coord;
+void main() {
+  gl_FragColor = texture2D(u_texture, v_tex_coord);
+}
+"#,
+        )
+    };
 
-    let vertex_data: [f32; 16] = [
+    let blit_program = unsafe {
+        let vs = match glow_ctx.create_shader(glow::VERTEX_SHADER) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("blit create vertex shader failed: {e}");
+                return;
+            }
+        };
+        glow_ctx.shader_source(vs, vs_src);
+        glow_ctx.compile_shader(vs);
+        if !glow_ctx.get_shader_compile_status(vs) {
+            eprintln!("blit vertex shader compile failed");
+            glow_ctx.delete_shader(vs);
+            return;
+        }
+
+        let fs = match glow_ctx.create_shader(glow::FRAGMENT_SHADER) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("blit create fragment shader failed: {e}");
+                glow_ctx.delete_shader(vs);
+                return;
+            }
+        };
+        glow_ctx.shader_source(fs, fs_src);
+        glow_ctx.compile_shader(fs);
+        if !glow_ctx.get_shader_compile_status(fs) {
+            eprintln!("blit fragment shader compile failed");
+            glow_ctx.delete_shader(vs);
+            glow_ctx.delete_shader(fs);
+            return;
+        }
+
+        let program = match glow_ctx.create_program() {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("blit create program failed: {e}");
+                glow_ctx.delete_shader(vs);
+                glow_ctx.delete_shader(fs);
+                return;
+            }
+        };
+
+        glow_ctx.attach_shader(program, vs);
+        glow_ctx.attach_shader(program, fs);
+
+        if !is_gles3 {
+            glow_ctx.bind_attrib_location(program, 0, "a_position");
+            glow_ctx.bind_attrib_location(program, 1, "a_tex_coord");
+        }
+
+        glow_ctx.link_program(program);
+        glow_ctx.delete_shader(vs);
+        glow_ctx.delete_shader(fs);
+
+        if !glow_ctx.get_program_link_status(program) {
+            eprintln!("blit program link failed");
+            glow_ctx.delete_program(program);
+            return;
+        }
+
+        glow_ctx.use_program(Some(program));
+        if let Some(loc) = glow_ctx.get_uniform_location(program, "u_texture") {
+            glow_ctx.uniform_1_i32(Some(&loc), 0);
+        }
+        glow_ctx.use_program(None);
+        program
+    };
+
+    // Fullscreen quad VBO/VAO.
+    let quad: [f32; 16] = [
         // X,   Y,   U,   V
         -1.0, -1.0, 0.0, 1.0, // bottom-left
-        1.0, -1.0, 1.0, 1.0, // bottom-right
-        -1.0, 1.0, 0.0, 0.0, // top-left
-        1.0, 1.0, 1.0, 0.0, // top-right
+        1.0, -1.0, 1.0, 1.0,  // bottom-right
+        -1.0, 1.0, 0.0, 0.0,  // top-left
+        1.0, 1.0, 1.0, 0.0,   // top-right
     ];
-    let stride = (4 * std::mem::size_of::<f32>()) as c_int;
-    let base_ptr = vertex_data.as_ptr() as *const c_void;
-    unsafe {
-        glEnableVertexAttribArray(a_position as u32);
-        glVertexAttribPointer(
-            a_position as u32,
-            2,
-            0x1406, /* GL_FLOAT */
-            0,
-            stride,
-            base_ptr,
+
+    let quad_vbo = unsafe {
+        let vbo = match glow_ctx.create_buffer() {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("blit create buffer failed: {e}");
+                glow_ctx.delete_program(blit_program);
+                return;
+            }
+        };
+        let bytes = std::slice::from_raw_parts(
+            quad.as_ptr() as *const u8,
+            std::mem::size_of_val(&quad),
         );
-        glEnableVertexAttribArray(a_tex as u32);
-        glVertexAttribPointer(
-            a_tex as u32,
-            2,
-            0x1406, /* GL_FLOAT */
-            0,
-            stride,
-            (vertex_data.as_ptr().add(2)) as *const c_void,
-        );
-    }
+        glow_ctx.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+        glow_ctx.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes, glow::STATIC_DRAW);
+        glow_ctx.bind_buffer(glow::ARRAY_BUFFER, None);
+        vbo
+    };
+
+    let quad_vao = if is_gles3 {
+        unsafe {
+            let vao = match glow_ctx.create_vertex_array() {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("blit create vertex array failed: {e}");
+                    glow_ctx.delete_buffer(quad_vbo);
+                    glow_ctx.delete_program(blit_program);
+                    return;
+                }
+            };
+            glow_ctx.bind_vertex_array(Some(vao));
+            glow_ctx.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+            let stride = (4 * std::mem::size_of::<f32>()) as i32;
+            glow_ctx.enable_vertex_attrib_array(0);
+            glow_ctx.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+            glow_ctx.enable_vertex_attrib_array(1);
+            glow_ctx.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, stride, 2 * 4);
+            glow_ctx.bind_vertex_array(None);
+            glow_ctx.bind_buffer(glow::ARRAY_BUFFER, None);
+            Some(vao)
+        }
+    } else {
+        None
+    };
+
+    // Librashader state (optional; only enabled when we successfully created a GLES3 context).
+    let mut shader_seen_generation: u64 = 0;
+    let mut shader_chain: Option<LibrashaderFilterChain> = None;
+    let shader_features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
+        | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
+    let shader_chain_options = LibrashaderFilterChainOptions {
+        // Auto-detect; our patched runtime-gl maps GLES to GLSL ES.
+        glsl_version: 0,
+        use_dsa: false,
+        force_no_mipmaps: false,
+        disable_cache: true,
+    };
+
+    // Offscreen output texture for shader rendering (we then blit it to the EGL surface).
+    let mut shader_output_tex: Option<glow::Texture> = None;
+    let mut shader_output_size: LibrashaderSize<u32> = LibrashaderSize { width: 0, height: 0 };
+    let mut frame_count: usize = 0;
 
     // Render loop: wait for frame-ready signals from `android_frame_ready_cb`.
     let signal = rust_renderer_signal();
@@ -1409,18 +1690,151 @@ unsafe fn run_rust_renderer(
         unsafe {
             let _ = eglQuerySurface(dpy, surf, EGL_WIDTH, &mut surf_w as *mut _);
             let _ = eglQuerySurface(dpy, surf, EGL_HEIGHT, &mut surf_h as *mut _);
-
-            let w = (surf_w as c_int).max(1);
-            let h = (surf_h as c_int).max(1);
-            glViewport(0, 0, w, h);
-            glClearColor(0.0, 0.0, 0.0, 1.0);
-            glClear(GL_COLOR_BUFFER_BIT);
         }
 
+        let surf_w = (surf_w as i32).max(1) as u32;
+        let surf_h = (surf_h as i32).max(1) as u32;
+
+        // Reload shader chain if config changed.
+        if is_gles3 {
+            let cfg = android_shader_snapshot();
+            if cfg.generation != shader_seen_generation {
+                shader_seen_generation = cfg.generation;
+                shader_chain = None;
+                if cfg.enabled {
+                    if let Some(path) = cfg.preset_path {
+                        let res = unsafe {
+                            LibrashaderFilterChain::load_from_path(
+                                path,
+                                shader_features,
+                                Arc::clone(&glow_ctx),
+                                Some(&shader_chain_options),
+                            )
+                        };
+                        match res {
+                            Ok(chain) => shader_chain = Some(chain),
+                            Err(e) => eprintln!("Failed to load shader preset: {e:?}"),
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ensure shader output texture is allocated for the current surface size.
+        if is_gles3 && shader_chain.is_some() {
+            if shader_output_size.width != surf_w || shader_output_size.height != surf_h {
+                shader_output_size = LibrashaderSize {
+                    width: surf_w,
+                    height: surf_h,
+                };
+                unsafe {
+                    if let Some(tex) = shader_output_tex.take() {
+                        glow_ctx.delete_texture(tex);
+                    }
+                    let tex = match glow_ctx.create_texture() {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("create shader output texture failed: {e}");
+                            shader_chain = None;
+                            continue;
+                        }
+                    };
+                    glow_ctx.bind_texture(glow::TEXTURE_2D, Some(tex));
+                    glow_ctx.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
+                    glow_ctx.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
+                    glow_ctx.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+                    glow_ctx.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+                    glow_ctx.tex_image_2d(
+                        glow::TEXTURE_2D,
+                        0,
+                        glow::RGBA8 as i32,
+                        surf_w as i32,
+                        surf_h as i32,
+                        0,
+                        glow::RGBA,
+                        glow::UNSIGNED_BYTE,
+                        glow::PixelUnpackData::Slice(None),
+                    );
+                    glow_ctx.bind_texture(glow::TEXTURE_2D, None);
+                    shader_output_tex = Some(tex);
+                }
+            }
+        }
+
+        // Optional shader pass: render into offscreen texture first.
+        let mut present_tex_id = textures[idx];
+        if is_gles3 {
+            if let (Some(chain), Some(out_tex)) = (shader_chain.as_mut(), shader_output_tex) {
+                let in_tex = NonZeroU32::new(textures[idx]).map(glow::NativeTexture);
+                let input = LibrashaderGlImage {
+                    handle: in_tex,
+                    format: glow::RGBA8,
+                    size: LibrashaderSize {
+                        width: swapchain.width(),
+                        height: swapchain.height(),
+                    },
+                };
+
+                let output = LibrashaderGlImage {
+                    handle: Some(out_tex),
+                    format: glow::RGBA8,
+                    size: shader_output_size,
+                };
+
+                let viewport = LibrashaderViewport::new_render_target_sized_origin(&output, None)
+                    .unwrap();
+
+                let frame_options = LibrashaderFrameOptions {
+                    frames_per_second: 60.0,
+                    frametime_delta: 17,
+                    ..Default::default()
+                };
+
+                if let Err(e) = unsafe { chain.frame(&input, &viewport, frame_count, Some(&frame_options)) } {
+                    eprintln!("Shader frame failed: {e:?}");
+                } else {
+                    present_tex_id = out_tex.0.get();
+                }
+            }
+        }
+
+        frame_count = frame_count.wrapping_add(1);
+
+        // Present: blit to EGL surface.
         unsafe {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, textures[idx]);
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+            glow_ctx.viewport(0, 0, surf_w as i32, surf_h as i32);
+            glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
+            glow_ctx.clear(glow::COLOR_BUFFER_BIT);
+
+            glow_ctx.disable(glow::CULL_FACE);
+            glow_ctx.disable(glow::BLEND);
+            glow_ctx.disable(glow::DEPTH_TEST);
+
+            glow_ctx.use_program(Some(blit_program));
+            glow_ctx.active_texture(glow::TEXTURE0);
+            let tex = NonZeroU32::new(present_tex_id).map(glow::NativeTexture);
+            glow_ctx.bind_texture(glow::TEXTURE_2D, tex);
+
+            if let Some(vao) = quad_vao {
+                glow_ctx.bind_vertex_array(Some(vao));
+            } else {
+                glow_ctx.bind_buffer(glow::ARRAY_BUFFER, Some(quad_vbo));
+                let stride = (4 * std::mem::size_of::<f32>()) as i32;
+                glow_ctx.enable_vertex_attrib_array(0);
+                glow_ctx.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
+                glow_ctx.enable_vertex_attrib_array(1);
+                glow_ctx.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false, stride, 2 * 4);
+            }
+
+            glow_ctx.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+
+            if quad_vao.is_some() {
+                glow_ctx.bind_vertex_array(None);
+            } else {
+                glow_ctx.bind_buffer(glow::ARRAY_BUFFER, None);
+            }
+            glow_ctx.bind_texture(glow::TEXTURE_2D, None);
+            glow_ctx.use_program(None);
         }
 
         if unsafe { eglSwapBuffers(dpy, surf) } == EGL_FALSE {
@@ -1441,8 +1855,16 @@ unsafe fn run_rust_renderer(
         unsafe { release_buffers(retired) };
     }
     unsafe {
-        glDeleteProgram(program);
-        glFlush();
+        // Best-effort cleanup (renderer thread exiting).
+        if let Some(tex) = shader_output_tex.take() {
+            glow_ctx.delete_texture(tex);
+        }
+        if let Some(vao) = quad_vao {
+            glow_ctx.delete_vertex_array(vao);
+        }
+        glow_ctx.delete_buffer(quad_vbo);
+        glow_ctx.delete_program(blit_program);
+        glow_ctx.flush();
     }
 }
 

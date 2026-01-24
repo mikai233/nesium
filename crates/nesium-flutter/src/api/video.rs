@@ -468,3 +468,41 @@ pub fn set_ntsc_bisqwit_options(options: NtscBisqwitOptions) -> Result<(), Strin
 
     Ok(())
 }
+
+#[frb]
+pub fn set_shader_enabled(enabled: bool) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        crate::android::android_set_shader_enabled(enabled);
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = enabled;
+        Err("Librashader is only supported on Android for now.".to_string())
+    }
+}
+
+#[frb]
+pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        let path = path.and_then(|p| {
+            let trimmed = p.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        });
+        crate::android::android_set_shader_preset_path(path);
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = path;
+        Err("Librashader is only supported on Android for now.".to_string())
+    }
+}

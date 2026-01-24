@@ -98,3 +98,13 @@ Future<void> setNtscBisqwitOptions({
   // NTSC (Bisqwit) is not supported on web yet.
   return Future.value();
 }
+
+Future<void> setShaderEnabled({required bool enabled}) {
+  // Librashader is not supported on web.
+  return Future.value();
+}
+
+Future<void> setShaderPresetPath({String? path}) {
+  // Librashader is not supported on web.
+  return Future.value();
+}

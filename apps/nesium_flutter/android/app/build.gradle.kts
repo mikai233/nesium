@@ -59,6 +59,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    aaptOptions {
+        ignoreAssetsPattern = "!*.git:!.git"
+    }
 }
 
 flutter {

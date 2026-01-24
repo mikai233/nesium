@@ -1,3 +1,6 @@
 [submodule "crates/nesium-core/vendor/nes-test-roms"]
 	path = crates/nesium-core/vendor/nes-test-roms
 	url = https://github.com/mikai233/nes-test-roms.git
+[submodule "apps/nesium_flutter/assets/shaders"]
+	path = apps/nesium_flutter/assets/shaders
+	url = https://github.com/libretro/slang-shaders.git

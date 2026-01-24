@@ -40,6 +40,10 @@ void logWarning(
   Logger(logger).warning(message ?? error.toString(), error, stackTrace);
 }
 
+void logInfo(String message, {String logger = 'nesium_flutter'}) {
+  Logger(logger).info(message);
+}
+
 void unawaitedLogged(
   Future<void> future, {
   String? message,

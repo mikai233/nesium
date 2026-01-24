@@ -39,6 +39,21 @@ object NesiumNative {
     external fun nativeSetHighPriority(enabled: Boolean)
 
     /**
+     * Enables/disables the Rust-side librashader filter chain (AHB backend).
+     */
+    @JvmStatic
+    external fun nativeSetShaderEnabled(enabled: Boolean)
+
+    /**
+     * Sets the shader preset path for the Rust-side librashader filter chain (AHB backend).
+     *
+     * The path must be readable by native code (typically under app-private storage).
+     * Pass an empty string to clear.
+     */
+    @JvmStatic
+    external fun nativeSetShaderPreset(path: String)
+
+    /**
      * Starts the Rust-side EGL/GL renderer that presents into the given [Surface].
      *
      * Only used when `nativeSetVideoBackend(1)` was selected.

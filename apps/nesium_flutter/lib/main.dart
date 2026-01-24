@@ -13,6 +13,7 @@ import 'package:nesium_flutter/startup/macos_splash.dart';
 import 'package:nesium_flutter/windows/window_routing.dart';
 import 'package:nesium_flutter/windows/current_window_kind.dart';
 
+import 'features/shaders/shader_asset_service.dart';
 import 'app.dart';
 
 Future<void> main(List<String> args) async {
@@ -54,6 +55,7 @@ Future<void> main(List<String> args) async {
 
       await initAppStorage();
       await initRustRuntime();
+      await ShaderAssetService().syncShaders();
       final kind = await resolveWindowKind();
 
       runApp(

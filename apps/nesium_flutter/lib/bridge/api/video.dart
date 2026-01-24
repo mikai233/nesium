@@ -24,6 +24,12 @@ Future<void> setScanlineOptions({required ScanlineOptions options}) =>
 Future<void> setNtscBisqwitOptions({required NtscBisqwitOptions options}) =>
     RustLib.instance.api.crateApiVideoSetNtscBisqwitOptions(options: options);
 
+Future<void> setShaderEnabled({required bool enabled}) =>
+    RustLib.instance.api.crateApiVideoSetShaderEnabled(enabled: enabled);
+
+Future<void> setShaderPresetPath({String? path}) =>
+    RustLib.instance.api.crateApiVideoSetShaderPresetPath(path: path);
+
 class LcdGridOptions {
   /// Strength in `0.0..=1.0` (0 = off, 1 = strongest / default).
   final double strength;

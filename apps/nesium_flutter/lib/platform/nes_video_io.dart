@@ -25,3 +25,9 @@ Future<void> setScanlineOptions({required frb_video.ScanlineOptions options}) =>
 Future<void> setNtscBisqwitOptions({
   required frb_video.NtscBisqwitOptions options,
 }) => frb_video.setNtscBisqwitOptions(options: options);
+
+Future<void> setShaderEnabled({required bool enabled}) =>
+    frb_video.setShaderEnabled(enabled: enabled);
+
+Future<void> setShaderPresetPath({String? path}) =>
+    frb_video.setShaderPresetPath(path: path);
