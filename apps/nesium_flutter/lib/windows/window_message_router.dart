@@ -11,15 +11,11 @@ import '../platform/platform_capabilities.dart';
 import '../features/controls/input_settings.dart';
 import '../features/settings/language_settings.dart';
 import '../features/settings/emulation_settings.dart';
-import '../features/settings/gamepad_assignment_controller.dart';
-import '../features/settings/gamepad_settings.dart';
-import '../features/settings/server_settings.dart';
 import '../features/settings/theme_settings.dart';
 import '../features/settings/video_settings.dart';
-import '../features/settings/windows_performance_settings.dart';
-import '../features/settings/windows_video_backend_settings.dart';
 import 'current_window_kind.dart';
 import 'settings_sync.dart';
+
 import 'window_types.dart';
 
 final windowMessageRouterProvider = Provider<void>((ref) {
@@ -152,34 +148,34 @@ final windowMessageRouterProvider = Provider<void>((ref) {
               );
               break;
             case 'theme':
-              ref.invalidate(themeSettingsProvider);
+              final next = payload is Map
+                  ? ThemeSettings.fromJson(Map<String, dynamic>.from(payload))
+                  : null;
+              if (next != null) {
+                ref.read(themeSettingsProvider.notifier).applySynced(next);
+              } else {
+                ref.invalidate(themeSettingsProvider);
+              }
               break;
             case 'input':
-              ref.invalidate(inputSettingsProvider);
+              ref.read(inputSettingsProvider.notifier).applySynced(payload);
               if (kind == WindowKind.main) {
                 ref.read(nesInputMasksProvider.notifier).clearAll();
               }
               break;
             case 'emulation':
-              ref.invalidate(emulationSettingsProvider);
+              final next = payload is Map
+                  ? EmulationSettings.fromJson(
+                      Map<String, dynamic>.from(payload),
+                    )
+                  : null;
+              if (next != null) {
+                ref.read(emulationSettingsProvider.notifier).applySynced(next);
+              } else {
+                ref.invalidate(emulationSettingsProvider);
+              }
               break;
-            case 'server':
-              ref.invalidate(serverSettingsProvider);
-              break;
-            case 'gamepadAssignments':
-              ref.invalidate(gamepadAssignmentProvider);
-              break;
-            case 'gamepad':
-              ref.invalidate(gamepadSettingsProvider);
-              break;
-            case 'windowsPerformance':
-              ref.invalidate(windowsPerformanceSettingsControllerProvider);
-              ref.read(windowsPerformanceSettingsControllerProvider);
-              break;
-            case 'windowsVideoBackend':
-              ref.invalidate(windowsVideoBackendSettingsProvider);
-              ref.read(windowsVideoBackendSettingsProvider);
-              break;
+
             default:
               break;
           }

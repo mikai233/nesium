@@ -292,11 +292,16 @@ class VideoSettingsController extends Notifier<VideoSettings> {
           .read(appStorageProvider)
           .put(StorageKeys.settingsVideo, value.toJson());
       if (broadcastFields.isNotEmpty) {
+        final payload = value.toJson();
+        // Remove NTSC options from broadcast as they are not needed by other windows
+        // (they are applied directly to the shared Rust pipeline)
+        payload.remove('ntscOptions');
+
         unawaited(
           SettingsSync.broadcast(
             group: 'video',
             fields: broadcastFields,
-            payload: value.toJson(),
+            payload: payload,
           ),
         );
       }

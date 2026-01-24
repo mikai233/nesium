@@ -8,7 +8,6 @@ import '../../persistence/keys.dart';
 import '../../bridge/api/netplay.dart';
 import '../../bridge/api/server.dart';
 import '../netplay/netplay_models.dart';
-import '../../windows/settings_sync.dart';
 
 /// Server configuration settings.
 class ServerSettings {
@@ -149,13 +148,6 @@ class ServerSettingsController extends Notifier<ServerSettings> {
     state = state.copyWith(port: port);
     try {
       await ref.read(appStorageProvider).put(StorageKeys.serverPort, port);
-      unawaited(
-        SettingsSync.broadcast(
-          group: 'server',
-          fields: const ['port'],
-          payload: <String, Object?>{'port': port},
-        ),
-      );
     } catch (e, st) {
       logWarning(
         e,
@@ -173,13 +165,6 @@ class ServerSettingsController extends Notifier<ServerSettings> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsNetplayPlayerName, name);
-      unawaited(
-        SettingsSync.broadcast(
-          group: 'server',
-          fields: const ['playerName'],
-          payload: <String, Object?>{'playerName': name},
-        ),
-      );
     } catch (e, st) {
       logWarning(e, stackTrace: st, message: 'Failed to persist player name');
     }
@@ -192,13 +177,6 @@ class ServerSettingsController extends Notifier<ServerSettings> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsNetplayP2PServerAddr, addr);
-      unawaited(
-        SettingsSync.broadcast(
-          group: 'server',
-          fields: const ['p2pServerAddr'],
-          payload: <String, Object?>{'p2pServerAddr': addr},
-        ),
-      );
     } catch (e, st) {
       logWarning(
         e,
@@ -227,13 +205,6 @@ class ServerSettingsController extends Notifier<ServerSettings> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsNetplayP2PEnabled, enabled);
-      unawaited(
-        SettingsSync.broadcast(
-          group: 'server',
-          fields: const ['p2pEnabled'],
-          payload: <String, Object?>{'p2pEnabled': enabled},
-        ),
-      );
     } catch (e, st) {
       logWarning(e, stackTrace: st, message: 'Failed to persist p2p enabled');
     }
@@ -246,13 +217,6 @@ class ServerSettingsController extends Notifier<ServerSettings> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsNetplayTransport, option.index);
-      unawaited(
-        SettingsSync.broadcast(
-          group: 'server',
-          fields: const ['transport'],
-          payload: <String, Object?>{'transport': option.index},
-        ),
-      );
     } catch (e, st) {
       logWarning(e, stackTrace: st, message: 'Failed to persist transport');
     }
@@ -265,13 +229,6 @@ class ServerSettingsController extends Notifier<ServerSettings> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsNetplaySni, sni);
-      unawaited(
-        SettingsSync.broadcast(
-          group: 'server',
-          fields: const ['sni'],
-          payload: <String, Object?>{'sni': sni},
-        ),
-      );
     } catch (e, st) {
       logWarning(e, stackTrace: st, message: 'Failed to persist sni');
     }
@@ -284,13 +241,6 @@ class ServerSettingsController extends Notifier<ServerSettings> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsNetplayFingerprint, fingerprint);
-      unawaited(
-        SettingsSync.broadcast(
-          group: 'server',
-          fields: const ['fingerprint'],
-          payload: <String, Object?>{'fingerprint': fingerprint},
-        ),
-      );
     } catch (e, st) {
       logWarning(e, stackTrace: st, message: 'Failed to persist fingerprint');
     }
@@ -303,46 +253,9 @@ class ServerSettingsController extends Notifier<ServerSettings> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsNetplayDirectAddr, addr);
-      unawaited(
-        SettingsSync.broadcast(
-          group: 'server',
-          fields: const ['directAddr'],
-          payload: <String, Object?>{'directAddr': addr},
-        ),
-      );
     } catch (e, st) {
       logWarning(e, stackTrace: st, message: 'Failed to persist direct addr');
     }
-  }
-
-  void applySyncedPatch(Object? payload) {
-    if (payload is! Map) return;
-    final patch = payload.cast<String, Object?>();
-
-    state = state.copyWith(
-      port: patch['port'] is int ? patch['port'] as int : null,
-      playerName: patch['playerName'] is String
-          ? patch['playerName'] as String
-          : null,
-      p2pServerAddr: patch['p2pServerAddr'] is String
-          ? patch['p2pServerAddr'] as String
-          : null,
-      p2pEnabled: patch['p2pEnabled'] is bool
-          ? patch['p2pEnabled'] as bool
-          : null,
-      transport:
-          patch['transport'] is int &&
-              (patch['transport'] as int) < NetplayTransportOption.values.length
-          ? NetplayTransportOption.values[patch['transport'] as int]
-          : null,
-      sni: patch['sni'] is String ? patch['sni'] as String : null,
-      fingerprint: patch['fingerprint'] is String
-          ? patch['fingerprint'] as String
-          : null,
-      directAddr: patch['directAddr'] is String
-          ? patch['directAddr'] as String
-          : null,
-    );
   }
 
   Future<void> stopServer() async {

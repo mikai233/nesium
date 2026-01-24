@@ -200,9 +200,15 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
       message: 'Persist emulation settings',
       logger: 'emulation_settings',
     );
-    unawaited(
-      SettingsSync.broadcast(group: 'emulation', payload: value.toJson()),
-    );
+    final payload = value.toJson();
+    // Only broadcast fields that have visible/functional impact on the main window
+    const visibleFields = {
+      'showEmulationStatusOverlay',
+      'fastForwardSpeedPercent',
+    };
+    payload.removeWhere((key, _) => !visibleFields.contains(key));
+
+    unawaited(SettingsSync.broadcast(group: 'emulation', payload: payload));
   }
 
   void applySynced(EmulationSettings next) {

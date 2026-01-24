@@ -7,7 +7,6 @@ import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 import '../../logging/app_logger.dart';
 import '../../domain/connected_gamepads_provider.dart';
-import '../../windows/settings_sync.dart';
 
 class GamepadAssignmentController extends Notifier<Map<String, int>> {
   @override
@@ -72,28 +71,6 @@ class GamepadAssignmentController extends Notifier<Map<String, int>> {
       message: 'Persist gamepad assignments',
       logger: 'gamepad_assignment',
     );
-    unawaited(
-      SettingsSync.broadcast(group: 'gamepadAssignments', payload: state),
-    );
-  }
-
-  void applySynced(Object? payload) {
-    if (payload is! Map) return;
-    try {
-      final next = payload.map(
-        (key, value) => MapEntry(key as String, value as int),
-      );
-      if (_mapsEqual(next, state)) return;
-      state = Map<String, int>.from(next);
-    } catch (_) {}
-  }
-
-  bool _mapsEqual(Map<String, int> a, Map<String, int> b) {
-    if (a.length != b.length) return false;
-    for (final entry in a.entries) {
-      if (b[entry.key] != entry.value) return false;
-    }
-    return true;
   }
 
   Map<String, int> _fromStorage(Object? value) {
