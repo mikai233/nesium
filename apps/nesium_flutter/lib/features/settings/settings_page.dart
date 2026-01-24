@@ -2987,27 +2987,21 @@ class _GamepadMappingInfoCardState
         nes_gamepad.GamepadMapping.standard();
 
     final newMapping = switch (action) {
-      NesButtonAction.a => currentMapping.copyWith(clearA: true),
-      NesButtonAction.b => currentMapping.copyWith(clearB: true),
-      NesButtonAction.select => currentMapping.copyWith(clearSelect: true),
-      NesButtonAction.start => currentMapping.copyWith(clearStart: true),
-      NesButtonAction.up => currentMapping.copyWith(clearUp: true),
-      NesButtonAction.down => currentMapping.copyWith(clearDown: true),
-      NesButtonAction.left => currentMapping.copyWith(clearLeft: true),
-      NesButtonAction.right => currentMapping.copyWith(clearRight: true),
-      NesButtonAction.turboA => currentMapping.copyWith(clearTurboA: true),
-      NesButtonAction.turboB => currentMapping.copyWith(clearTurboB: true),
-      NesButtonAction.rewind => currentMapping.copyWith(clearRewind: true),
-      NesButtonAction.fastForward => currentMapping.copyWith(
-        clearFastForward: true,
-      ),
-      NesButtonAction.saveState => currentMapping.copyWith(
-        clearSaveState: true,
-      ),
-      NesButtonAction.loadState => currentMapping.copyWith(
-        clearLoadState: true,
-      ),
-      NesButtonAction.pause => currentMapping.copyWith(clearPause: true),
+      NesButtonAction.a => currentMapping.copyWith(a: null),
+      NesButtonAction.b => currentMapping.copyWith(b: null),
+      NesButtonAction.select => currentMapping.copyWith(select: null),
+      NesButtonAction.start => currentMapping.copyWith(start: null),
+      NesButtonAction.up => currentMapping.copyWith(up: null),
+      NesButtonAction.down => currentMapping.copyWith(down: null),
+      NesButtonAction.left => currentMapping.copyWith(left: null),
+      NesButtonAction.right => currentMapping.copyWith(right: null),
+      NesButtonAction.turboA => currentMapping.copyWith(turboA: null),
+      NesButtonAction.turboB => currentMapping.copyWith(turboB: null),
+      NesButtonAction.rewind => currentMapping.copyWith(rewind: null),
+      NesButtonAction.fastForward => currentMapping.copyWith(fastForward: null),
+      NesButtonAction.saveState => currentMapping.copyWith(saveState: null),
+      NesButtonAction.loadState => currentMapping.copyWith(loadState: null),
+      NesButtonAction.pause => currentMapping.copyWith(pause: null),
     };
 
     if (gp != null) {
@@ -3491,10 +3485,11 @@ class _KeyboardMappingInfoCardState
     final inputState = ref.watch(inputSettingsProvider);
     final settings =
         inputState.ports[widget.port] ??
-        const InputSettings.empty(
+        const InputSettings(
           device: InputDevice.keyboard,
           keyboardPreset: KeyboardPreset.none,
         );
+
     final inputController = ref.read(inputSettingsProvider.notifier);
     final currentRemap = ref.watch(remappingStateProvider);
     ref.listen(remappingStateProvider, (prev, next) {
