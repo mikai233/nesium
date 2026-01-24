@@ -100,7 +100,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   GamepadMappingFfi dco_decode_box_autoadd_gamepad_mapping_ffi(dynamic raw);
 
   @protected
+  LcdGridOptions dco_decode_box_autoadd_lcd_grid_options(dynamic raw);
+
+  @protected
+  NtscBisqwitOptions dco_decode_box_autoadd_ntsc_bisqwit_options(dynamic raw);
+
+  @protected
   NtscOptions dco_decode_box_autoadd_ntsc_options(dynamic raw);
+
+  @protected
+  ScanlineOptions dco_decode_box_autoadd_scanline_options(dynamic raw);
 
   @protected
   int dco_decode_box_autoadd_u_8(dynamic raw);
@@ -139,6 +148,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int dco_decode_i_32(dynamic raw);
+
+  @protected
+  LcdGridOptions dco_decode_lcd_grid_options(dynamic raw);
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
@@ -180,6 +192,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NetplayTransport dco_decode_netplay_transport(dynamic raw);
 
   @protected
+  NtscBisqwitOptions dco_decode_ntsc_bisqwit_options(dynamic raw);
+
+  @protected
   NtscOptions dco_decode_ntsc_options(dynamic raw);
 
   @protected
@@ -217,6 +232,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RuntimeNotificationKind dco_decode_runtime_notification_kind(dynamic raw);
+
+  @protected
+  ScanlineOptions dco_decode_scanline_options(dynamic raw);
 
   @protected
   ServerStatus dco_decode_server_status(dynamic raw);
@@ -337,7 +355,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  LcdGridOptions sse_decode_box_autoadd_lcd_grid_options(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NtscBisqwitOptions sse_decode_box_autoadd_ntsc_bisqwit_options(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NtscOptions sse_decode_box_autoadd_ntsc_options(SseDeserializer deserializer);
+
+  @protected
+  ScanlineOptions sse_decode_box_autoadd_scanline_options(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_box_autoadd_u_8(SseDeserializer deserializer);
@@ -384,6 +417,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  LcdGridOptions sse_decode_lcd_grid_options(SseDeserializer deserializer);
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
@@ -433,6 +469,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NetplayTransport sse_decode_netplay_transport(SseDeserializer deserializer);
 
   @protected
+  NtscBisqwitOptions sse_decode_ntsc_bisqwit_options(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NtscOptions sse_decode_ntsc_options(SseDeserializer deserializer);
 
   @protected
@@ -480,6 +521,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RuntimeNotificationKind sse_decode_runtime_notification_kind(
     SseDeserializer deserializer,
   );
+
+  @protected
+  ScanlineOptions sse_decode_scanline_options(SseDeserializer deserializer);
 
   @protected
   ServerStatus sse_decode_server_status(SseDeserializer deserializer);
@@ -614,8 +658,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_lcd_grid_options(
+    LcdGridOptions self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ntsc_bisqwit_options(
+    NtscBisqwitOptions self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ntsc_options(
     NtscOptions self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_scanline_options(
+    ScanlineOptions self,
     SseSerializer serializer,
   );
 
@@ -675,6 +737,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_lcd_grid_options(
+    LcdGridOptions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
@@ -740,6 +808,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ntsc_bisqwit_options(
+    NtscBisqwitOptions self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ntsc_options(NtscOptions self, SseSerializer serializer);
 
   @protected
@@ -799,6 +873,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_runtime_notification_kind(
     RuntimeNotificationKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_scanline_options(
+    ScanlineOptions self,
     SseSerializer serializer,
   );
 

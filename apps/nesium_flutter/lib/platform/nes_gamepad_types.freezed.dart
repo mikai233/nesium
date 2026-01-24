@@ -130,10 +130,7 @@ return $default(_that);case _:
 final _that = this;
 switch (_that) {
 case _GamepadMapping():
-return $default(_that);case _:
-  throw StateError('Unexpected subclass');
-
-}
+return $default(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -192,10 +189,7 @@ return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_th
 @optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( GamepadButton? a,  GamepadButton? b,  GamepadButton? select,  GamepadButton? start,  GamepadButton? up,  GamepadButton? down,  GamepadButton? left,  GamepadButton? right,  GamepadButton? turboA,  GamepadButton? turboB,  GamepadButton? rewind,  GamepadButton? fastForward,  GamepadButton? saveState,  GamepadButton? loadState,  GamepadButton? pause)  $default,) {final _that = this;
 switch (_that) {
 case _GamepadMapping():
-return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_that.left,_that.right,_that.turboA,_that.turboB,_that.rewind,_that.fastForward,_that.saveState,_that.loadState,_that.pause);case _:
-  throw StateError('Unexpected subclass');
-
-}
+return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_that.left,_that.right,_that.turboA,_that.turboB,_that.rewind,_that.fastForward,_that.saveState,_that.loadState,_that.pause);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///

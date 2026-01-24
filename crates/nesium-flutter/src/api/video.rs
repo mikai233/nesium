@@ -1,9 +1,13 @@
 use flutter_rust_bridge::frb;
 use nesium_core::ppu::buffer::{NearestPostProcessor, VideoPostProcessor};
 use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
-use nesium_support::video::filters::HqxPostProcessor;
 use nesium_support::video::filters::NesNtscPostProcessor;
 use nesium_support::video::filters::NesNtscTuning;
+use nesium_support::video::filters::{
+    HqxPostProcessor, LcdGridPostProcessor, NtscBisqwitOptions as SupportNtscBisqwitOptions,
+    NtscBisqwitPostProcessor, SaiPostProcessor, SaiVariant, ScanlinePostProcessor,
+    XbrzPostProcessor,
+};
 use nesium_support::video::hqx::HqxScale;
 use nesium_support::video::ntsc::NesNtscPreset;
 use nesium_support::video::ntsc::nes_ntsc_out_width;
@@ -24,10 +28,23 @@ pub enum VideoFilter {
     Hq2x,
     Hq3x,
     Hq4x,
+    Sai2x,
+    Super2xSai,
+    SuperEagle,
     NtscComposite,
     NtscSVideo,
     NtscRgb,
     NtscMonochrome,
+    LcdGrid,
+    Scanlines,
+    Xbrz2x,
+    Xbrz3x,
+    Xbrz4x,
+    Xbrz5x,
+    Xbrz6x,
+    NtscBisqwit2x,
+    NtscBisqwit4x,
+    NtscBisqwit8x,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,12 +86,79 @@ impl Default for NtscOptions {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LcdGridOptions {
+    /// Strength in `0.0..=1.0` (0 = off, 1 = strongest / default).
+    pub strength: f64,
+}
+
+impl Default for LcdGridOptions {
+    fn default() -> Self {
+        Self { strength: 1.0 }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScanlineOptions {
+    /// Scanline intensity in `0.0..=1.0` (0 = off, 1 = strongest).
+    pub intensity: f64,
+}
+
+impl Default for ScanlineOptions {
+    fn default() -> Self {
+        // Matches the previous hard-coded value: brightness multiplier ≈ 0.70.
+        Self { intensity: 0.30 }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NtscBisqwitOptions {
+    pub brightness: f64,
+    pub contrast: f64,
+    pub hue: f64,
+    pub saturation: f64,
+    pub y_filter_length: f64,
+    pub i_filter_length: f64,
+    pub q_filter_length: f64,
+}
+
+impl Default for NtscBisqwitOptions {
+    fn default() -> Self {
+        Self {
+            brightness: 0.0,
+            contrast: 0.0,
+            hue: 0.0,
+            saturation: 0.0,
+            y_filter_length: 0.0,
+            i_filter_length: 0.5,
+            q_filter_length: 0.5,
+        }
+    }
+}
+
 static NTSC_OPTIONS: OnceLock<Mutex<NtscOptions>> = OnceLock::new();
+static LCD_GRID_OPTIONS: OnceLock<Mutex<LcdGridOptions>> = OnceLock::new();
+static SCANLINE_OPTIONS: OnceLock<Mutex<ScanlineOptions>> = OnceLock::new();
+static NTSC_BISQWIT_OPTIONS: OnceLock<Mutex<NtscBisqwitOptions>> = OnceLock::new();
 static CURRENT_FILTER: OnceLock<Mutex<VideoFilter>> = OnceLock::new();
 
 fn ntsc_options() -> NtscOptions {
     *NTSC_OPTIONS
         .get_or_init(|| Mutex::new(NtscOptions::default()))
+        .lock()
+        .unwrap()
+}
+
+fn lcd_grid_options() -> LcdGridOptions {
+    *LCD_GRID_OPTIONS
+        .get_or_init(|| Mutex::new(LcdGridOptions::default()))
+        .lock()
+        .unwrap()
+}
+
+fn scanline_options() -> ScanlineOptions {
+    *SCANLINE_OPTIONS
+        .get_or_init(|| Mutex::new(ScanlineOptions::default()))
         .lock()
         .unwrap()
 }
@@ -93,6 +177,13 @@ fn current_filter() -> VideoFilter {
         .unwrap()
 }
 
+fn ntsc_bisqwit_options() -> NtscBisqwitOptions {
+    *NTSC_BISQWIT_OPTIONS
+        .get_or_init(|| Mutex::new(NtscBisqwitOptions::default()))
+        .lock()
+        .unwrap()
+}
+
 impl VideoFilter {
     fn scale_factor(self) -> u32 {
         match self {
@@ -103,10 +194,20 @@ impl VideoFilter {
             VideoFilter::Hq2x => 2,
             VideoFilter::Hq3x => 3,
             VideoFilter::Hq4x => 4,
+            VideoFilter::Sai2x | VideoFilter::Super2xSai | VideoFilter::SuperEagle => 2,
             VideoFilter::NtscComposite
             | VideoFilter::NtscSVideo
             | VideoFilter::NtscRgb
             | VideoFilter::NtscMonochrome => 0,
+            VideoFilter::LcdGrid | VideoFilter::Scanlines => 2,
+            VideoFilter::Xbrz2x => 2,
+            VideoFilter::Xbrz3x => 3,
+            VideoFilter::Xbrz4x => 4,
+            VideoFilter::Xbrz5x => 5,
+            VideoFilter::Xbrz6x => 6,
+            VideoFilter::NtscBisqwit2x => 2,
+            VideoFilter::NtscBisqwit4x => 4,
+            VideoFilter::NtscBisqwit8x => 8,
         }
     }
 
@@ -148,6 +249,13 @@ fn is_ntsc_filter(filter: VideoFilter) -> bool {
     )
 }
 
+fn is_ntsc_bisqwit_filter(filter: VideoFilter) -> bool {
+    matches!(
+        filter,
+        VideoFilter::NtscBisqwit2x | VideoFilter::NtscBisqwit4x | VideoFilter::NtscBisqwit8x
+    )
+}
+
 fn apply_video_filter(filter: VideoFilter) -> Result<VideoOutputInfo, String> {
     let (output_width, output_height) = filter.output_size()?;
 
@@ -158,6 +266,36 @@ fn apply_video_filter(filter: VideoFilter) -> Result<VideoOutputInfo, String> {
         VideoFilter::Hq2x => Box::new(HqxPostProcessor::new(HqxScale::X2)),
         VideoFilter::Hq3x => Box::new(HqxPostProcessor::new(HqxScale::X3)),
         VideoFilter::Hq4x => Box::new(HqxPostProcessor::new(HqxScale::X4)),
+        VideoFilter::Sai2x => Box::new(SaiPostProcessor::new(SaiVariant::Sai2x)),
+        VideoFilter::Super2xSai => Box::new(SaiPostProcessor::new(SaiVariant::Super2xSai)),
+        VideoFilter::SuperEagle => Box::new(SaiPostProcessor::new(SaiVariant::SuperEagle)),
+        VideoFilter::LcdGrid => {
+            let o = lcd_grid_options();
+            Box::new(LcdGridPostProcessor::new(o.strength))
+        }
+        VideoFilter::Scanlines => {
+            let o = scanline_options();
+            Box::new(ScanlinePostProcessor::new(2, o.intensity))
+        }
+        VideoFilter::Xbrz2x => Box::new(XbrzPostProcessor::new(2)),
+        VideoFilter::Xbrz3x => Box::new(XbrzPostProcessor::new(3)),
+        VideoFilter::Xbrz4x => Box::new(XbrzPostProcessor::new(4)),
+        VideoFilter::Xbrz5x => Box::new(XbrzPostProcessor::new(5)),
+        VideoFilter::Xbrz6x => Box::new(XbrzPostProcessor::new(6)),
+        VideoFilter::NtscBisqwit2x | VideoFilter::NtscBisqwit4x | VideoFilter::NtscBisqwit8x => {
+            let o = ntsc_bisqwit_options();
+            let support_o = SupportNtscBisqwitOptions {
+                brightness: o.brightness,
+                contrast: o.contrast,
+                hue: o.hue,
+                saturation: o.saturation,
+                y_filter_length: o.y_filter_length,
+                i_filter_length: o.i_filter_length,
+                q_filter_length: o.q_filter_length,
+            };
+            let scale = filter.scale_factor() as u8;
+            Box::new(NtscBisqwitPostProcessor::new(scale, support_o))
+        }
         VideoFilter::NtscComposite => {
             let o = ntsc_options();
             Box::new(NesNtscPostProcessor::new_with_tuning(
@@ -262,6 +400,69 @@ pub fn set_ntsc_options(options: NtscOptions) -> Result<(), String> {
 
     let filter = current_filter();
     if is_ntsc_filter(filter) {
+        let _ = apply_video_filter(filter)?;
+    }
+
+    Ok(())
+}
+
+#[frb]
+pub fn set_lcd_grid_options(options: LcdGridOptions) -> Result<(), String> {
+    let options = LcdGridOptions {
+        strength: options.strength.clamp(0.0, 1.0),
+    };
+
+    *LCD_GRID_OPTIONS
+        .get_or_init(|| Mutex::new(LcdGridOptions::default()))
+        .lock()
+        .unwrap() = options;
+
+    let filter = current_filter();
+    if filter == VideoFilter::LcdGrid {
+        let _ = apply_video_filter(filter)?;
+    }
+
+    Ok(())
+}
+
+#[frb]
+pub fn set_scanline_options(options: ScanlineOptions) -> Result<(), String> {
+    let options = ScanlineOptions {
+        intensity: options.intensity.clamp(0.0, 1.0),
+    };
+
+    *SCANLINE_OPTIONS
+        .get_or_init(|| Mutex::new(ScanlineOptions::default()))
+        .lock()
+        .unwrap() = options;
+
+    let filter = current_filter();
+    if filter == VideoFilter::Scanlines {
+        let _ = apply_video_filter(filter)?;
+    }
+
+    Ok(())
+}
+
+#[frb]
+pub fn set_ntsc_bisqwit_options(options: NtscBisqwitOptions) -> Result<(), String> {
+    let options = NtscBisqwitOptions {
+        brightness: options.brightness.clamp(-1.0, 1.0),
+        contrast: options.contrast.clamp(-1.0, 1.0),
+        hue: options.hue.clamp(-1.0, 1.0),
+        saturation: options.saturation.clamp(-1.0, 1.0),
+        y_filter_length: options.y_filter_length.clamp(-0.46, 4.0),
+        i_filter_length: options.i_filter_length.clamp(0.0, 4.0),
+        q_filter_length: options.q_filter_length.clamp(0.0, 4.0),
+    };
+
+    *NTSC_BISQWIT_OPTIONS
+        .get_or_init(|| Mutex::new(NtscBisqwitOptions::default()))
+        .lock()
+        .unwrap() = options;
+
+    let filter = current_filter();
+    if is_ntsc_bisqwit_filter(filter) {
         let _ = apply_video_filter(filter)?;
     }
 

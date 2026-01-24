@@ -1,5 +1,11 @@
 export '../bridge/api/video.dart'
-    show NtscOptions, VideoFilter, VideoOutputInfo;
+    show
+        LcdGridOptions,
+        NtscOptions,
+        NtscBisqwitOptions,
+        ScanlineOptions,
+        VideoFilter,
+        VideoOutputInfo;
 
 import '../bridge/api/video.dart' as frb_video;
 
@@ -9,3 +15,13 @@ Future<frb_video.VideoOutputInfo> setVideoFilter({
 
 Future<void> setNtscOptions({required frb_video.NtscOptions options}) =>
     frb_video.setNtscOptions(options: options);
+
+Future<void> setLcdGridOptions({required frb_video.LcdGridOptions options}) =>
+    frb_video.setLcdGridOptions(options: options);
+
+Future<void> setScanlineOptions({required frb_video.ScanlineOptions options}) =>
+    frb_video.setScanlineOptions(options: options);
+
+Future<void> setNtscBisqwitOptions({
+  required frb_video.NtscBisqwitOptions options,
+}) => frb_video.setNtscBisqwitOptions(options: options);

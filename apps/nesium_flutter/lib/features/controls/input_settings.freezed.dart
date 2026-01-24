@@ -137,10 +137,7 @@ return $default(_that);case _:
 final _that = this;
 switch (_that) {
 case _InputSettings():
-return $default(_that);case _:
-  throw StateError('Unexpected subclass');
-
-}
+return $default(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -199,10 +196,7 @@ return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDow
 @optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( InputDevice device,  KeyboardPreset keyboardPreset,  LogicalKeyboardKey? customUp,  LogicalKeyboardKey? customDown,  LogicalKeyboardKey? customLeft,  LogicalKeyboardKey? customRight,  LogicalKeyboardKey? customA,  LogicalKeyboardKey? customB,  LogicalKeyboardKey? customSelect,  LogicalKeyboardKey? customStart,  LogicalKeyboardKey? customTurboA,  LogicalKeyboardKey? customTurboB,  LogicalKeyboardKey? customRewind,  LogicalKeyboardKey? customFastForward,  LogicalKeyboardKey? customSaveState,  LogicalKeyboardKey? customLoadState,  LogicalKeyboardKey? customPause)  $default,) {final _that = this;
 switch (_that) {
 case _InputSettings():
-return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDown,_that.customLeft,_that.customRight,_that.customA,_that.customB,_that.customSelect,_that.customStart,_that.customTurboA,_that.customTurboB,_that.customRewind,_that.customFastForward,_that.customSaveState,_that.customLoadState,_that.customPause);case _:
-  throw StateError('Unexpected subclass');
-
-}
+return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDown,_that.customLeft,_that.customRight,_that.customA,_that.customB,_that.customSelect,_that.customStart,_that.customTurboA,_that.customTurboB,_that.customRewind,_that.customFastForward,_that.customSaveState,_that.customLoadState,_that.customPause);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -445,10 +439,7 @@ return $default(_that);case _:
 final _that = this;
 switch (_that) {
 case _InputSettingsState():
-return $default(_that);case _:
-  throw StateError('Unexpected subclass');
-
-}
+return $default(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -507,10 +498,7 @@ return $default(_that.ports,_that.selectedPort);case _:
 @optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( Map<int, InputSettings> ports,  int selectedPort)  $default,) {final _that = this;
 switch (_that) {
 case _InputSettingsState():
-return $default(_that.ports,_that.selectedPort);case _:
-  throw StateError('Unexpected subclass');
-
-}
+return $default(_that.ports,_that.selectedPort);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///

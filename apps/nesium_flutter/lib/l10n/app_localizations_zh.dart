@@ -824,6 +824,42 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoFilterHq4x => 'HQ4x';
 
   @override
+  String get videoFilter2xSai => '2xSaI';
+
+  @override
+  String get videoFilterSuper2xSai => 'Super 2xSaI';
+
+  @override
+  String get videoFilterSuperEagle => 'Super Eagle';
+
+  @override
+  String get videoFilterLcdGrid => 'LCD 网格（2 倍）';
+
+  @override
+  String get videoFilterScanlines => '扫描线（2 倍）';
+
+  @override
+  String get videoFilterXbrz2x => 'xBRZ 2 倍';
+
+  @override
+  String get videoFilterXbrz3x => 'xBRZ 3 倍';
+
+  @override
+  String get videoFilterXbrz4x => 'xBRZ 4 倍';
+
+  @override
+  String get videoFilterXbrz5x => 'xBRZ 5 倍';
+
+  @override
+  String get videoFilterXbrz6x => 'xBRZ 6 倍';
+
+  @override
+  String get videoLcdGridStrengthLabel => 'LCD 网格强度';
+
+  @override
+  String get videoScanlinesIntensityLabel => '扫描线强度';
+
+  @override
   String get videoFilterNtscComposite => 'NTSC（复合视频）';
 
   @override
@@ -834,6 +870,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoFilterNtscMonochrome => 'NTSC（黑白）';
+
+  @override
+  String get videoFilterNtscBisqwit2x => 'NTSC（Bisqwit）2 倍';
+
+  @override
+  String get videoFilterNtscBisqwit4x => 'NTSC（Bisqwit）4 倍';
+
+  @override
+  String get videoFilterNtscBisqwit8x => 'NTSC（Bisqwit）8 倍';
 
   @override
   String get videoNtscAdvancedTitle => 'NTSC 高级';
@@ -870,6 +915,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoNtscBleedLabel => '出血';
+
+  @override
+  String get videoNtscBisqwitSettingsTitle => 'NTSC 设置（Bisqwit）';
+
+  @override
+  String get videoNtscBisqwitYFilterLengthLabel => 'Y 滤波器（水平模糊）';
+
+  @override
+  String get videoNtscBisqwitIFilterLengthLabel => 'I 滤波器';
+
+  @override
+  String get videoNtscBisqwitQFilterLengthLabel => 'Q 滤波器';
 
   @override
   String get videoIntegerScalingTitle => '整数缩放';

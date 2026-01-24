@@ -6,14 +6,89 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `apply_video_filter`, `current_filter`, `is_ntsc_filter`, `ntsc_options`, `output_size`, `scale_factor`, `set_current_filter`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `apply_video_filter`, `current_filter`, `is_ntsc_bisqwit_filter`, `is_ntsc_filter`, `lcd_grid_options`, `ntsc_bisqwit_options`, `ntsc_options`, `output_size`, `scale_factor`, `scanline_options`, `set_current_filter`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<VideoOutputInfo> setVideoFilter({required VideoFilter filter}) =>
     RustLib.instance.api.crateApiVideoSetVideoFilter(filter: filter);
 
 Future<void> setNtscOptions({required NtscOptions options}) =>
     RustLib.instance.api.crateApiVideoSetNtscOptions(options: options);
+
+Future<void> setLcdGridOptions({required LcdGridOptions options}) =>
+    RustLib.instance.api.crateApiVideoSetLcdGridOptions(options: options);
+
+Future<void> setScanlineOptions({required ScanlineOptions options}) =>
+    RustLib.instance.api.crateApiVideoSetScanlineOptions(options: options);
+
+Future<void> setNtscBisqwitOptions({required NtscBisqwitOptions options}) =>
+    RustLib.instance.api.crateApiVideoSetNtscBisqwitOptions(options: options);
+
+class LcdGridOptions {
+  /// Strength in `0.0..=1.0` (0 = off, 1 = strongest / default).
+  final double strength;
+
+  const LcdGridOptions({required this.strength});
+
+  static Future<LcdGridOptions> default_() =>
+      RustLib.instance.api.crateApiVideoLcdGridOptionsDefault();
+
+  @override
+  int get hashCode => strength.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LcdGridOptions &&
+          runtimeType == other.runtimeType &&
+          strength == other.strength;
+}
+
+class NtscBisqwitOptions {
+  final double brightness;
+  final double contrast;
+  final double hue;
+  final double saturation;
+  final double yFilterLength;
+  final double iFilterLength;
+  final double qFilterLength;
+
+  const NtscBisqwitOptions({
+    required this.brightness,
+    required this.contrast,
+    required this.hue,
+    required this.saturation,
+    required this.yFilterLength,
+    required this.iFilterLength,
+    required this.qFilterLength,
+  });
+
+  static Future<NtscBisqwitOptions> default_() =>
+      RustLib.instance.api.crateApiVideoNtscBisqwitOptionsDefault();
+
+  @override
+  int get hashCode =>
+      brightness.hashCode ^
+      contrast.hashCode ^
+      hue.hashCode ^
+      saturation.hashCode ^
+      yFilterLength.hashCode ^
+      iFilterLength.hashCode ^
+      qFilterLength.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NtscBisqwitOptions &&
+          runtimeType == other.runtimeType &&
+          brightness == other.brightness &&
+          contrast == other.contrast &&
+          hue == other.hue &&
+          saturation == other.saturation &&
+          yFilterLength == other.yFilterLength &&
+          iFilterLength == other.iFilterLength &&
+          qFilterLength == other.qFilterLength;
+}
 
 class NtscOptions {
   final double hue;
@@ -77,6 +152,26 @@ class NtscOptions {
           mergeFields == other.mergeFields;
 }
 
+class ScanlineOptions {
+  /// Scanline intensity in `0.0..=1.0` (0 = off, 1 = strongest).
+  final double intensity;
+
+  const ScanlineOptions({required this.intensity});
+
+  static Future<ScanlineOptions> default_() =>
+      RustLib.instance.api.crateApiVideoScanlineOptionsDefault();
+
+  @override
+  int get hashCode => intensity.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ScanlineOptions &&
+          runtimeType == other.runtimeType &&
+          intensity == other.intensity;
+}
+
 /// Single-select video filter configuration, modeled after Mesen's `VideoFilterType`.
 ///
 /// Notes:
@@ -91,10 +186,23 @@ enum VideoFilter {
   hq2X,
   hq3X,
   hq4X,
+  sai2X,
+  super2XSai,
+  superEagle,
   ntscComposite,
   ntscSVideo,
   ntscRgb,
   ntscMonochrome,
+  lcdGrid,
+  scanlines,
+  xbrz2X,
+  xbrz3X,
+  xbrz4X,
+  xbrz5X,
+  xbrz6X,
+  ntscBisqwit2X,
+  ntscBisqwit4X,
+  ntscBisqwit8X,
 }
 
 class VideoOutputInfo {

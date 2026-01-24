@@ -33,6 +33,14 @@ android {
     // Standard JNI libs mapping using a dynamic, isolated "source" directory.
     sourceSets["main"].jniLibs.setSrcDirs(listOf(jniLibsOutDir))
 
+    // Our Rust cdylib links against libc++_shared when we compile vendor C++ code (HQX/SaI/xBRZ/etc).
+    // Ensure APK packaging doesn't fail if other dependencies also ship the same runtime.
+    packaging {
+        jniLibs {
+            pickFirsts.add("**/libc++_shared.so")
+        }
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "io.github.mikai233.nesium"
@@ -143,6 +151,41 @@ tasks.register<Exec>("buildRustAndroidSo") {
                 "-p", rustPackageName,
             )
         )
+    }
+
+    doLast {
+        val ndkDir = android.ndkDirectory
+            ?: throw GradleException("Android NDK directory not found (android.ndkDirectory is null)")
+
+        val os = org.gradle.internal.os.OperatingSystem.current()
+        val hostTag = when {
+            os.isWindows -> "windows-x86_64"
+            os.isMacOsX -> "darwin-x86_64"
+            os.isLinux -> "linux-x86_64"
+            else -> throw GradleException("Unsupported host OS for NDK: $os")
+        }
+
+        val sysrootUsrLib = ndkDir.resolve("toolchains/llvm/prebuilt/$hostTag/sysroot/usr/lib")
+        val abiToTriple = mapOf(
+            "armeabi-v7a" to "arm-linux-androideabi",
+            "arm64-v8a" to "aarch64-linux-android",
+            "x86_64" to "x86_64-linux-android",
+        )
+
+        // Copy libc++_shared.so into the same ABI folders where cargo-ndk emitted libnesium_flutter.so.
+        // This fixes runtime crashes like:
+        //   java.lang.UnsatisfiedLinkError: dlopen failed: library "libc++_shared.so" not found
+        jniLibsOutDir.listFiles()
+            ?.filter { it.isDirectory }
+            ?.forEach { abiDir ->
+                val abi = abiDir.name
+                val triple = abiToTriple[abi] ?: return@forEach
+                val src = sysrootUsrLib.resolve("$triple/libc++_shared.so")
+                if (!src.exists()) {
+                    throw GradleException("NDK libc++_shared.so not found at: ${src.absolutePath}")
+                }
+                src.copyTo(abiDir.resolve("libc++_shared.so"), overwrite = true)
+            }
     }
 }
 

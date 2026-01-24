@@ -574,6 +574,28 @@ onmessage = async (ev) => {
                     break;
                 }
 
+                case "setVideoFilter": {
+                    const filter = msg.filter ?? 0;
+                    if (typeof nes.set_video_filter !== "function") {
+                        throw new Error("Missing wasm export: set_video_filter. Rebuild `web/nes/pkg`.");
+                    }
+
+                    const info = nes.set_video_filter(filter | 0);
+                    const outW = info?.output_width ?? 256;
+                    const outH = info?.output_height ?? 240;
+
+                    width = outW | 0;
+                    height = outH | 0;
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    imageData = ctx2d.createImageData(width, height);
+                    ctx2d.imageSmoothingEnabled = false;
+
+                    postMessage({ type: "videoOutput", width, height });
+                    break;
+                }
+
                 default:
                     postMessage({ type: "error", message: `Unknown cmd: ${msg.cmd}` });
             }

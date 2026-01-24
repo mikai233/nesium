@@ -3053,6 +3053,7 @@ dependencies = [
  "hex",
  "lz4_flex",
  "nesium-core",
+ "proptest",
  "thiserror 2.0.18",
  "tracing",
 ]

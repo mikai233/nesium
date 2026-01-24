@@ -14,7 +14,8 @@ import '../../persistence/keys.dart';
 import '../../persistence/storage_codec.dart';
 import '../../persistence/storage_key.dart';
 import '../../platform/nes_video.dart' as nes_video;
-import '../../platform/nes_video.dart' show NtscOptions, VideoFilter;
+import '../../platform/nes_video.dart'
+    show NtscBisqwitOptions, NtscOptions, VideoFilter;
 import '../../domain/nes_controller.dart';
 
 part 'video_settings.freezed.dart';
@@ -94,6 +95,50 @@ class NtscOptionsConverter
   };
 }
 
+class NtscBisqwitOptionsConverter
+    implements JsonConverter<NtscBisqwitOptions, Map<String, dynamic>> {
+  const NtscBisqwitOptionsConverter();
+
+  static const NtscBisqwitOptions _fallback = NtscBisqwitOptions(
+    brightness: 0,
+    contrast: 0,
+    hue: 0,
+    saturation: 0,
+    yFilterLength: 0,
+    iFilterLength: 0.5,
+    qFilterLength: 0.5,
+  );
+
+  @override
+  NtscBisqwitOptions fromJson(Map<String, dynamic> json) {
+    double readDouble(String key, double fallback) {
+      final value = json[key];
+      return value is num ? value.toDouble() : fallback;
+    }
+
+    return NtscBisqwitOptions(
+      brightness: readDouble('brightness', _fallback.brightness),
+      contrast: readDouble('contrast', _fallback.contrast),
+      hue: readDouble('hue', _fallback.hue),
+      saturation: readDouble('saturation', _fallback.saturation),
+      yFilterLength: readDouble('yFilterLength', _fallback.yFilterLength),
+      iFilterLength: readDouble('iFilterLength', _fallback.iFilterLength),
+      qFilterLength: readDouble('qFilterLength', _fallback.qFilterLength),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson(NtscBisqwitOptions object) => <String, dynamic>{
+    'brightness': object.brightness,
+    'contrast': object.contrast,
+    'hue': object.hue,
+    'saturation': object.saturation,
+    'yFilterLength': object.yFilterLength,
+    'iFilterLength': object.iFilterLength,
+    'qFilterLength': object.qFilterLength,
+  };
+}
+
 @freezed
 sealed class VideoSettings with _$VideoSettings {
   const VideoSettings._();
@@ -116,6 +161,15 @@ sealed class VideoSettings with _$VideoSettings {
     @NtscOptionsConverter()
     @Default(NtscOptionsConverter._fallback)
     NtscOptions ntscOptions,
+    @NtscBisqwitOptionsConverter()
+    @Default(NtscBisqwitOptionsConverter._fallback)
+    NtscBisqwitOptions ntscBisqwitOptions,
+
+    /// LCD grid strength in `0.0..=1.0`.
+    @Default(1.0) double lcdGridStrength,
+
+    /// Scanline intensity in `0.0..=1.0`.
+    @Default(0.30) double scanlineIntensity,
     String? customPaletteName,
   }) = _VideoSettings;
 
@@ -199,6 +253,26 @@ class VideoSettingsController extends Notifier<VideoSettings> {
 
     if (isNtsc) {
       await nes_video.setNtscOptions(options: state.ntscOptions);
+    }
+
+    final isNtscBisqwit =
+        state.videoFilter == nes_video.VideoFilter.ntscBisqwit2X ||
+        state.videoFilter == nes_video.VideoFilter.ntscBisqwit4X ||
+        state.videoFilter == nes_video.VideoFilter.ntscBisqwit8X;
+    if (isNtscBisqwit) {
+      await nes_video.setNtscBisqwitOptions(options: state.ntscBisqwitOptions);
+    }
+
+    if (state.videoFilter == nes_video.VideoFilter.lcdGrid) {
+      await nes_video.setLcdGridOptions(
+        options: nes_video.LcdGridOptions(strength: state.lcdGridStrength),
+      );
+    }
+
+    if (state.videoFilter == nes_video.VideoFilter.scanlines) {
+      await nes_video.setScanlineOptions(
+        options: nes_video.ScanlineOptions(intensity: state.scanlineIntensity),
+      );
     }
 
     if (skipPalette) return;
@@ -292,6 +366,33 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     // (see settings UI debounce). Other windows don't depend on these values.
     await _persist(state);
     await nes_video.setNtscOptions(options: value);
+  }
+
+  Future<void> setNtscBisqwitOptions(nes_video.NtscBisqwitOptions value) async {
+    if (value == state.ntscBisqwitOptions) return;
+    state = state.copyWith(ntscBisqwitOptions: value);
+    await _persist(state);
+    await nes_video.setNtscBisqwitOptions(options: value);
+  }
+
+  Future<void> setLcdGridStrength(double value) async {
+    final clamped = value.clamp(0.0, 1.0).toDouble();
+    if (clamped == state.lcdGridStrength) return;
+    state = state.copyWith(lcdGridStrength: clamped);
+    await _persist(state);
+    await nes_video.setLcdGridOptions(
+      options: nes_video.LcdGridOptions(strength: clamped),
+    );
+  }
+
+  Future<void> setScanlineIntensity(double value) async {
+    final clamped = value.clamp(0.0, 1.0).toDouble();
+    if (clamped == state.scanlineIntensity) return;
+    state = state.copyWith(scanlineIntensity: clamped);
+    await _persist(state);
+    await nes_video.setScanlineOptions(
+      options: nes_video.ScanlineOptions(intensity: clamped),
+    );
   }
 
   void useCustomIfAvailable() {

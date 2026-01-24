@@ -1604,6 +1604,78 @@ abstract class AppLocalizations {
   /// **'HQ4x'**
   String get videoFilterHq4x;
 
+  /// No description provided for @videoFilter2xSai.
+  ///
+  /// In en, this message translates to:
+  /// **'2xSaI'**
+  String get videoFilter2xSai;
+
+  /// No description provided for @videoFilterSuper2xSai.
+  ///
+  /// In en, this message translates to:
+  /// **'Super 2xSaI'**
+  String get videoFilterSuper2xSai;
+
+  /// No description provided for @videoFilterSuperEagle.
+  ///
+  /// In en, this message translates to:
+  /// **'Super Eagle'**
+  String get videoFilterSuperEagle;
+
+  /// No description provided for @videoFilterLcdGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'LCD Grid (2x)'**
+  String get videoFilterLcdGrid;
+
+  /// No description provided for @videoFilterScanlines.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanlines (2x)'**
+  String get videoFilterScanlines;
+
+  /// No description provided for @videoFilterXbrz2x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 2x'**
+  String get videoFilterXbrz2x;
+
+  /// No description provided for @videoFilterXbrz3x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 3x'**
+  String get videoFilterXbrz3x;
+
+  /// No description provided for @videoFilterXbrz4x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 4x'**
+  String get videoFilterXbrz4x;
+
+  /// No description provided for @videoFilterXbrz5x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 5x'**
+  String get videoFilterXbrz5x;
+
+  /// No description provided for @videoFilterXbrz6x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 6x'**
+  String get videoFilterXbrz6x;
+
+  /// No description provided for @videoLcdGridStrengthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'LCD Grid Strength'**
+  String get videoLcdGridStrengthLabel;
+
+  /// No description provided for @videoScanlinesIntensityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanline Intensity'**
+  String get videoScanlinesIntensityLabel;
+
   /// No description provided for @videoFilterNtscComposite.
   ///
   /// In en, this message translates to:
@@ -1627,6 +1699,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'NTSC (Monochrome)'**
   String get videoFilterNtscMonochrome;
+
+  /// No description provided for @videoFilterNtscBisqwit2x.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Bisqwit) 2x'**
+  String get videoFilterNtscBisqwit2x;
+
+  /// No description provided for @videoFilterNtscBisqwit4x.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Bisqwit) 4x'**
+  String get videoFilterNtscBisqwit4x;
+
+  /// No description provided for @videoFilterNtscBisqwit8x.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Bisqwit) 8x'**
+  String get videoFilterNtscBisqwit8x;
 
   /// No description provided for @videoNtscAdvancedTitle.
   ///
@@ -1699,6 +1789,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bleed'**
   String get videoNtscBleedLabel;
+
+  /// No description provided for @videoNtscBisqwitSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC settings (Bisqwit)'**
+  String get videoNtscBisqwitSettingsTitle;
+
+  /// No description provided for @videoNtscBisqwitYFilterLengthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Y Filter (Horizontal Blur)'**
+  String get videoNtscBisqwitYFilterLengthLabel;
+
+  /// No description provided for @videoNtscBisqwitIFilterLengthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'I Filter'**
+  String get videoNtscBisqwitIFilterLengthLabel;
+
+  /// No description provided for @videoNtscBisqwitQFilterLengthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Q Filter'**
+  String get videoNtscBisqwitQFilterLengthLabel;
 
   /// No description provided for @videoIntegerScalingTitle.
   ///

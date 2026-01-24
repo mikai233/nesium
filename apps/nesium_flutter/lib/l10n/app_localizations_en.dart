@@ -836,6 +836,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoFilterHq4x => 'HQ4x';
 
   @override
+  String get videoFilter2xSai => '2xSaI';
+
+  @override
+  String get videoFilterSuper2xSai => 'Super 2xSaI';
+
+  @override
+  String get videoFilterSuperEagle => 'Super Eagle';
+
+  @override
+  String get videoFilterLcdGrid => 'LCD Grid (2x)';
+
+  @override
+  String get videoFilterScanlines => 'Scanlines (2x)';
+
+  @override
+  String get videoFilterXbrz2x => 'xBRZ 2x';
+
+  @override
+  String get videoFilterXbrz3x => 'xBRZ 3x';
+
+  @override
+  String get videoFilterXbrz4x => 'xBRZ 4x';
+
+  @override
+  String get videoFilterXbrz5x => 'xBRZ 5x';
+
+  @override
+  String get videoFilterXbrz6x => 'xBRZ 6x';
+
+  @override
+  String get videoLcdGridStrengthLabel => 'LCD Grid Strength';
+
+  @override
+  String get videoScanlinesIntensityLabel => 'Scanline Intensity';
+
+  @override
   String get videoFilterNtscComposite => 'NTSC (Composite)';
 
   @override
@@ -846,6 +882,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoFilterNtscMonochrome => 'NTSC (Monochrome)';
+
+  @override
+  String get videoFilterNtscBisqwit2x => 'NTSC (Bisqwit) 2x';
+
+  @override
+  String get videoFilterNtscBisqwit4x => 'NTSC (Bisqwit) 4x';
+
+  @override
+  String get videoFilterNtscBisqwit8x => 'NTSC (Bisqwit) 8x';
 
   @override
   String get videoNtscAdvancedTitle => 'NTSC Advanced';
@@ -882,6 +927,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoNtscBleedLabel => 'Bleed';
+
+  @override
+  String get videoNtscBisqwitSettingsTitle => 'NTSC settings (Bisqwit)';
+
+  @override
+  String get videoNtscBisqwitYFilterLengthLabel => 'Y Filter (Horizontal Blur)';
+
+  @override
+  String get videoNtscBisqwitIFilterLengthLabel => 'I Filter';
+
+  @override
+  String get videoNtscBisqwitQFilterLengthLabel => 'Q Filter';
 
   @override
   String get videoIntegerScalingTitle => 'Integer scaling';

@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/logging/app_logger.dart';
@@ -47,7 +46,9 @@ class NesController extends Notifier<NesState> {
 
       final needsResize = w != prevW || h != prevH;
       if (needsResize) {
-        if (useAndroidNativeGameView) {
+        if (kIsWeb) {
+          // Web renders via OffscreenCanvas in a Worker; there is no platform presentation buffer.
+        } else if (useAndroidNativeGameView) {
           // Keep the SurfaceView buffer size driven by layout so scaling happens in our
           // renderer with nearest-neighbor sampling (avoids system compositor bilinear scaling).
           await _textureService.resetAndroidSurfaceSizeFromLayout();
