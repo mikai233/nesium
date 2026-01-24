@@ -1203,7 +1203,8 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
                     videoSettings.videoFilter ==
                         nes_video.VideoFilter.ntscMonochrome)
                   AnimatedExpansionTile(
-                    title: Text(l10n.videoNtscAdvancedTitle),
+                    labelText: l10n.videoNtscAdvancedTitle,
+                    title: Text(l10n.keyboardPresetCustom),
                     initiallyExpanded: false,
                     children: [
                       Padding(
