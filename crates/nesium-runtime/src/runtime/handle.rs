@@ -30,7 +30,7 @@ use super::{
     types::{
         CONTROL_REPLY_TIMEOUT, EventTopic, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError,
         RuntimeEventSender, SAVE_STATE_REPLY_TIMEOUT, TileViewerBackground, TileViewerLayout,
-        TileViewerSource,
+        TileViewerSource, VideoBackendConfig,
     },
     util::{button_bit, try_raise_current_thread_priority},
 };
@@ -55,18 +55,12 @@ impl Runtime {
     pub fn start(config: RuntimeConfig) -> Result<Self, RuntimeError> {
         Self::start_internal(config, None)
     }
-}
 
-impl Runtime {
-    pub fn start_with_sender(
+    pub fn start_with_event_sender(
         config: RuntimeConfig,
         sender: Box<dyn RuntimeEventSender>,
     ) -> Result<Self, RuntimeError> {
         Self::start_internal(config, Some(sender))
-    }
-
-    pub fn start_pending(config: RuntimeConfig) -> Result<Self, RuntimeError> {
-        Self::start_internal(config, None)
     }
 
     fn start_internal(
@@ -83,7 +77,14 @@ impl Runtime {
             });
         }
 
-        let mut framebuffer = FrameBuffer::new(video.color_format);
+        let mut framebuffer = match video.backend {
+            VideoBackendConfig::Owned => FrameBuffer::new(video.color_format),
+            VideoBackendConfig::Swapchain {
+                lock,
+                unlock,
+                user_data,
+            } => FrameBuffer::new_swapchain(video.color_format, lock, unlock, user_data),
+        };
         framebuffer.set_output_config(video.output_width as usize, video.output_height as usize);
         let frame_handle = framebuffer.external_frame_handle().cloned();
 

@@ -48,7 +48,9 @@ class NesController extends Notifier<NesState> {
       final needsResize = w != prevW || h != prevH;
       if (needsResize) {
         if (useAndroidNativeGameView) {
-          await _textureService.setAndroidSurfaceSize(width: w, height: h);
+          // Keep the SurfaceView buffer size driven by layout so scaling happens in our
+          // renderer with nearest-neighbor sampling (avoids system compositor bilinear scaling).
+          await _textureService.resetAndroidSurfaceSizeFromLayout();
         } else {
           await _textureService.setPresentBufferSize(width: w, height: h);
         }

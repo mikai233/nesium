@@ -5,7 +5,7 @@ use std::{
     os::unix::io::RawFd,
     sync::{
         Arc, OnceLock,
-        atomic::{AtomicBool, AtomicI32, Ordering},
+        atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering},
     },
     time::Duration,
 };
@@ -36,6 +36,7 @@ pub fn use_ahb_video_backend() -> bool {
 }
 
 static RUST_RENDERER_TID: AtomicI32 = AtomicI32::new(-1);
+static RUST_RENDERER_RUNNING: AtomicBool = AtomicBool::new(false);
 
 fn try_raise_current_thread_priority() {
     // Best-effort: Android apps may not be allowed to reduce nice (negative values).
@@ -114,17 +115,22 @@ unsafe extern "C" {
 }
 
 pub struct AhbSwapchain {
-    buffers: [*mut AHardwareBuffer; 2],
-    pitch_bytes: usize,
-    sync_mu: Mutex<AhbSyncState>,
-    gpu_busy_cv: Condvar,
-    fallback_planes: [Box<[u8]>; 2],
+    sync_mu: Mutex<AhbState>,
+    sync_cv: Condvar,
+    generation: AtomicU32,
 }
 
-#[derive(Clone, Copy)]
-struct AhbSyncState {
+struct AhbState {
+    buffers: [*mut AHardwareBuffer; 2],
+    width: u32,
+    height: u32,
+    pitch_bytes: usize,
+    fallback_planes: [Box<[u8]>; 2],
     gpu_busy: [bool; 2],
     cpu_locked: [bool; 2],
+    cpu_locked_ahb: [bool; 2],
+    resizing: bool,
+    retired_buffers: Vec<[*mut AHardwareBuffer; 2]>,
 }
 
 // SAFETY: The swapchain buffers are stable native handles; access is coordinated via internal
@@ -134,83 +140,163 @@ unsafe impl Sync for AhbSwapchain {}
 
 impl AhbSwapchain {
     pub fn new(width: u32, height: u32) -> Self {
-        let mut buffers: [*mut AHardwareBuffer; 2] = [std::ptr::null_mut(), std::ptr::null_mut()];
-        let desc = AHardwareBuffer_Desc {
-            width,
-            height,
-            layers: 1,
-            format: AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
-            usage: AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN | AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
-            stride: 0,
-            rfu0: 0,
-            rfu1: 0,
-        };
-
-        for slot in &mut buffers {
-            let mut out: *mut AHardwareBuffer = std::ptr::null_mut();
-            let res = unsafe { AHardwareBuffer_allocate(&desc as *const _, &mut out as *mut _) };
-            if res != 0 || out.is_null() {
-                panic!("AHardwareBuffer_allocate failed: {res}");
-            }
-            *slot = out;
-        }
-
-        let mut described = AHardwareBuffer_Desc {
-            width: 0,
-            height: 0,
-            layers: 0,
-            format: 0,
-            usage: 0,
-            stride: 0,
-            rfu0: 0,
-            rfu1: 0,
-        };
-        unsafe { AHardwareBuffer_describe(buffers[0] as *const _, &mut described as *mut _) };
-        let stride_pixels = described.stride.max(width);
-        let pitch_bytes = stride_pixels as usize * 4;
-        let fallback_len = pitch_bytes * height as usize;
-        let fallback_planes = [
-            vec![0u8; fallback_len].into_boxed_slice(),
-            vec![0u8; fallback_len].into_boxed_slice(),
-        ];
+        let (buffers, pitch_bytes, fallback_planes) =
+            allocate_buffers(width, height).expect("failed to allocate AHB swapchain buffers");
 
         Self {
-            buffers,
-            pitch_bytes,
-            sync_mu: Mutex::new(AhbSyncState {
+            sync_mu: Mutex::new(AhbState {
+                buffers,
+                width,
+                height,
+                pitch_bytes,
+                fallback_planes,
                 gpu_busy: [false; 2],
                 cpu_locked: [false; 2],
+                cpu_locked_ahb: [false; 2],
+                resizing: false,
+                retired_buffers: Vec::new(),
             }),
-            gpu_busy_cv: Condvar::new(),
-            fallback_planes,
+            sync_cv: Condvar::new(),
+            generation: AtomicU32::new(0),
         }
     }
 
     pub fn pitch_bytes(&self) -> usize {
-        self.pitch_bytes
+        let mut state = self.sync_mu.lock();
+        while state.resizing {
+            self.sync_cv.wait(&mut state);
+        }
+        state.pitch_bytes
     }
 
     pub fn buffer(&self, idx: usize) -> *mut AHardwareBuffer {
-        self.buffers[idx]
+        let mut state = self.sync_mu.lock();
+        while state.resizing {
+            self.sync_cv.wait(&mut state);
+        }
+        state.buffers[idx]
+    }
+
+    pub fn width(&self) -> u32 {
+        let mut state = self.sync_mu.lock();
+        while state.resizing {
+            self.sync_cv.wait(&mut state);
+        }
+        state.width
+    }
+
+    pub fn height(&self) -> u32 {
+        let mut state = self.sync_mu.lock();
+        while state.resizing {
+            self.sync_cv.wait(&mut state);
+        }
+        state.height
+    }
+
+    pub fn generation(&self) -> u32 {
+        self.generation.load(Ordering::Acquire)
+    }
+
+    pub fn resize(&self, width: u32, height: u32) -> Result<(), String> {
+        if width == 0 || height == 0 {
+            return Err("invalid output size".to_string());
+        }
+
+        let (old_buffers, should_retire) = {
+            let mut state = self.sync_mu.lock();
+            if state.width == width && state.height == height {
+                return Ok(());
+            }
+
+            state.resizing = true;
+            self.sync_cv.notify_all();
+
+            while state.cpu_locked.iter().any(|&b| b) || state.gpu_busy.iter().any(|&b| b) {
+                self.sync_cv.wait(&mut state);
+            }
+
+            (state.buffers, RUST_RENDERER_RUNNING.load(Ordering::Acquire))
+        };
+
+        let (new_buffers, pitch_bytes, fallback_planes) = match allocate_buffers(width, height) {
+            Ok(v) => v,
+            Err(e) => {
+                let mut state = self.sync_mu.lock();
+                state.resizing = false;
+                self.sync_cv.notify_all();
+                return Err(e);
+            }
+        };
+
+        let to_release = {
+            let mut state = self.sync_mu.lock();
+            if should_retire {
+                state.retired_buffers.push(old_buffers);
+            }
+            state.buffers = new_buffers;
+            state.width = width;
+            state.height = height;
+            state.pitch_bytes = pitch_bytes;
+            state.fallback_planes = fallback_planes;
+            state.resizing = false;
+            self.generation.fetch_add(1, Ordering::AcqRel);
+            self.sync_cv.notify_all();
+            if should_retire {
+                None
+            } else {
+                Some(old_buffers)
+            }
+        };
+
+        if let Some(buffers) = to_release {
+            unsafe { release_buffers(buffers) };
+        }
+
+        rust_renderer_wake();
+        Ok(())
+    }
+
+    pub fn take_retired_buffers(&self) -> Vec<[*mut AHardwareBuffer; 2]> {
+        let mut state = self.sync_mu.lock();
+        std::mem::take(&mut state.retired_buffers)
     }
 
     fn wait_gpu_idle(&self, idx: usize) {
-        let mut guard = self.sync_mu.lock();
-        while guard.gpu_busy[idx] {
-            self.gpu_busy_cv.wait(&mut guard);
+        let mut state = self.sync_mu.lock();
+        while state.resizing || state.gpu_busy[idx] {
+            self.sync_cv.wait(&mut state);
         }
     }
 
     fn set_gpu_busy(&self, idx: usize, busy: bool) {
-        let mut guard = self.sync_mu.lock();
-        guard.gpu_busy[idx] = busy;
-        if !busy {
-            self.gpu_busy_cv.notify_all();
+        let mut state = self.sync_mu.lock();
+        if busy {
+            while state.resizing {
+                self.sync_cv.wait(&mut state);
+            }
+            state.gpu_busy[idx] = true;
+            return;
         }
+
+        // Clearing busy must never block on `resizing`, otherwise we can deadlock:
+        // resize waits for `gpu_busy=false`, while the renderer waits to clear it.
+        state.gpu_busy[idx] = false;
+        self.sync_cv.notify_all();
     }
 
     fn lock_plane(&self, idx: usize) -> *mut u8 {
-        self.wait_gpu_idle(idx);
+        let (buffer, fallback_ptr) = {
+            let mut state = self.sync_mu.lock();
+            while state.resizing || state.gpu_busy[idx] {
+                self.sync_cv.wait(&mut state);
+            }
+            state.cpu_locked[idx] = true;
+            state.cpu_locked_ahb[idx] = true;
+            (
+                state.buffers[idx],
+                state.fallback_planes[idx].as_ptr() as *mut u8,
+            )
+        };
 
         let mut out: *mut c_void;
         let mut last_err: c_int = 0;
@@ -218,7 +304,7 @@ impl AhbSwapchain {
             out = std::ptr::null_mut();
             let res = unsafe {
                 AHardwareBuffer_lock(
-                    self.buffers[idx],
+                    buffer,
                     AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
                     -1,
                     std::ptr::null(),
@@ -226,8 +312,6 @@ impl AhbSwapchain {
                 )
             };
             if res == 0 && !out.is_null() {
-                let mut guard = self.sync_mu.lock();
-                guard.cpu_locked[idx] = true;
                 return out as *mut u8;
             }
             last_err = res;
@@ -240,35 +324,98 @@ impl AhbSwapchain {
         eprintln!(
             "AHardwareBuffer_lock failed for idx={idx} (err={last_err}); falling back to dummy buffer"
         );
-        let mut guard = self.sync_mu.lock();
-        guard.cpu_locked[idx] = false;
-        self.fallback_planes[idx].as_ptr() as *mut u8
+        let mut state = self.sync_mu.lock();
+        state.cpu_locked_ahb[idx] = false;
+        fallback_ptr
     }
 
     fn unlock_plane(&self, idx: usize) {
-        let should_unlock = {
-            let mut guard = self.sync_mu.lock();
-            let was_locked = guard.cpu_locked[idx];
-            guard.cpu_locked[idx] = false;
-            was_locked
+        let (buffer, should_unlock) = {
+            let state = self.sync_mu.lock();
+            if !state.cpu_locked[idx] {
+                return;
+            }
+            (state.buffers[idx], state.cpu_locked_ahb[idx])
         };
-        if !should_unlock {
-            return;
+
+        if should_unlock {
+            let res = unsafe { AHardwareBuffer_unlock(buffer, std::ptr::null_mut()) };
+            if res != 0 {
+                eprintln!("AHardwareBuffer_unlock failed: {res}");
+            }
         }
 
-        let res = unsafe { AHardwareBuffer_unlock(self.buffers[idx], std::ptr::null_mut()) };
-        if res != 0 {
-            eprintln!("AHardwareBuffer_unlock failed: {res}");
-        }
+        let mut state = self.sync_mu.lock();
+        state.cpu_locked[idx] = false;
+        state.cpu_locked_ahb[idx] = false;
+        self.sync_cv.notify_all();
     }
 }
 
 impl Drop for AhbSwapchain {
     fn drop(&mut self) {
-        for b in self.buffers {
-            if !b.is_null() {
-                unsafe { AHardwareBuffer_release(b) };
+        let state = self.sync_mu.get_mut();
+        unsafe {
+            release_buffers(state.buffers);
+            for retired in state.retired_buffers.drain(..) {
+                release_buffers(retired);
             }
+        }
+    }
+}
+
+fn allocate_buffers(
+    width: u32,
+    height: u32,
+) -> Result<([*mut AHardwareBuffer; 2], usize, [Box<[u8]>; 2]), String> {
+    let mut buffers: [*mut AHardwareBuffer; 2] = [std::ptr::null_mut(), std::ptr::null_mut()];
+    let desc = AHardwareBuffer_Desc {
+        width,
+        height,
+        layers: 1,
+        format: AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
+        usage: AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN | AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
+        stride: 0,
+        rfu0: 0,
+        rfu1: 0,
+    };
+
+    for slot in &mut buffers {
+        let mut out: *mut AHardwareBuffer = std::ptr::null_mut();
+        let res = unsafe { AHardwareBuffer_allocate(&desc as *const _, &mut out as *mut _) };
+        if res != 0 || out.is_null() {
+            unsafe { release_buffers(buffers) };
+            return Err(format!("AHardwareBuffer_allocate failed: {res}"));
+        }
+        *slot = out;
+    }
+
+    let mut described = AHardwareBuffer_Desc {
+        width: 0,
+        height: 0,
+        layers: 0,
+        format: 0,
+        usage: 0,
+        stride: 0,
+        rfu0: 0,
+        rfu1: 0,
+    };
+    unsafe { AHardwareBuffer_describe(buffers[0] as *const _, &mut described as *mut _) };
+    let stride_pixels = described.stride.max(width);
+    let pitch_bytes = stride_pixels as usize * 4;
+    let fallback_len = pitch_bytes * height as usize;
+    let fallback_planes = [
+        vec![0u8; fallback_len].into_boxed_slice(),
+        vec![0u8; fallback_len].into_boxed_slice(),
+    ];
+
+    Ok((buffers, pitch_bytes, fallback_planes))
+}
+
+unsafe fn release_buffers(buffers: [*mut AHardwareBuffer; 2]) {
+    for b in buffers {
+        if !b.is_null() {
+            unsafe { AHardwareBuffer_release(b) };
         }
     }
 }
@@ -318,6 +465,19 @@ static NDK_CONTEXT_INIT: OnceLock<()> = OnceLock::new();
 ///
 /// Note: the FD is owned by Kotlin (via `ParcelFileDescriptor`) and may be closed during shutdown.
 static FRAME_SIGNAL_FD: AtomicI32 = AtomicI32::new(-1);
+static CURRENT_OUTPUT_WIDTH: AtomicU32 = AtomicU32::new(0);
+static CURRENT_OUTPUT_HEIGHT: AtomicU32 = AtomicU32::new(0);
+
+fn set_current_output_size(width: u32, height: u32) {
+    CURRENT_OUTPUT_WIDTH.store(width, Ordering::Release);
+    CURRENT_OUTPUT_HEIGHT.store(height, Ordering::Release);
+}
+
+fn current_output_size() -> Option<(u32, u32)> {
+    let w = CURRENT_OUTPUT_WIDTH.load(Ordering::Acquire);
+    let h = CURRENT_OUTPUT_HEIGHT.load(Ordering::Acquire);
+    if w > 0 && h > 0 { Some((w, h)) } else { None }
+}
 
 struct RustRendererSignalState {
     queue: VecDeque<u32>,
@@ -490,12 +650,13 @@ pub(crate) fn signal_frame_ready() {
 
 pub extern "C" fn android_frame_ready_cb(
     buffer_index: c_uint,
-    _width: c_uint,
-    _height: c_uint,
+    width: c_uint,
+    height: c_uint,
     _pitch: c_uint,
     _user_data: *mut c_void,
 ) {
     // Must not panic here.
+    set_current_output_size(width as u32, height as u32);
     signal_frame_ready();
     notify_rust_renderer(buffer_index);
 }
@@ -751,6 +912,20 @@ fn get_ahb_swapchain() -> Option<&'static AhbSwapchain> {
     }
 }
 
+pub fn resize_ahb_swapchain(width: u32, height: u32) -> Result<(), String> {
+    set_current_output_size(width, height);
+
+    if !use_ahb_video_backend() {
+        return Ok(());
+    }
+
+    let Some(swapchain) = get_ahb_swapchain() else {
+        return Ok(());
+    };
+
+    swapchain.resize(width, height)
+}
+
 struct GpuBusyGuard {
     swapchain: &'static AhbSwapchain,
     idx: usize,
@@ -800,6 +975,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
     let swapchain_ref = std::panic::AssertUnwindSafe(swapchain_ref);
     let join = std::thread::spawn(move || {
         try_raise_current_thread_priority();
+        RUST_RENDERER_RUNNING.store(true, Ordering::Release);
         let window = window_ptr as *mut ANativeWindow;
         let res = std::panic::catch_unwind(|| unsafe {
             run_rust_renderer(window, *swapchain_ref, stop_for_thread);
@@ -807,6 +983,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
         if let Err(_) = res {
             eprintln!("Rust renderer thread panicked");
         }
+        RUST_RENDERER_RUNNING.store(false, Ordering::Release);
         set_rust_renderer_active(false);
         unsafe { ANativeWindow_release(window) };
     });
@@ -924,24 +1101,6 @@ impl Drop for EglCleanup {
                 let _ = eglDestroyContext(self.dpy, self.ctx);
             }
             let _ = eglTerminate(self.dpy);
-        }
-    }
-}
-
-struct EglImagesCleanup {
-    dpy: EGLDisplay,
-    destroy_image: PFNEGLDESTROYIMAGEKHRPROC,
-    images: [EGLImageKHR; 2],
-}
-
-impl Drop for EglImagesCleanup {
-    fn drop(&mut self) {
-        unsafe {
-            for img in self.images {
-                if img != EGL_NO_IMAGE_KHR {
-                    let _ = (self.destroy_image)(self.dpy, img);
-                }
-            }
         }
     }
 }
@@ -1095,50 +1254,57 @@ unsafe fn run_rust_renderer(
     unsafe { glDisable(GL_DITHER) };
     let _ = unsafe { eglSwapInterval(dpy, 1) };
 
-    // Create textures backed by the two AHardwareBuffers.
     let mut textures = [0u32; 2];
-    unsafe { glGenTextures(2, textures.as_mut_ptr()) };
-
     let mut images = [EGL_NO_IMAGE_KHR; 2];
-    for i in 0..2 {
-        unsafe {
-            glBindTexture(GL_TEXTURE_2D, textures[i]);
-        }
+    let mut seen_generation = swapchain.generation();
 
-        let client_buf = unsafe { get_native_client_buffer(swapchain.buffer(i)) };
-        let img_attribs = [EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE];
-        let image = unsafe {
-            egl_create_image(
-                dpy,
-                EGL_NO_CONTEXT,
-                EGL_NATIVE_BUFFER_ANDROID,
-                client_buf,
-                img_attribs.as_ptr(),
-            )
-        };
-        if image == EGL_NO_IMAGE_KHR {
-            eprintln!("eglCreateImageKHR failed: 0x{:x}", unsafe { eglGetError() });
-            continue;
+    let mut destroy_images = |images: &mut [EGLImageKHR; 2]| unsafe {
+        for img in images.iter_mut() {
+            if *img != EGL_NO_IMAGE_KHR {
+                let _ = egl_destroy_image(dpy, *img);
+                *img = EGL_NO_IMAGE_KHR;
+            }
         }
-        images[i] = image;
-        unsafe { gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void) };
-
-        // Set texture parameters AFTER binding the EGLImage. Some Android GPU drivers
-        // reset texture parameters to defaults (GL_LINEAR) when glEGLImageTargetTexture2DOES
-        // is called, causing blurry rendering if set beforehand.
-        unsafe {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        }
-    }
-
-    let _images_cleanup = EglImagesCleanup {
-        dpy,
-        destroy_image: egl_destroy_image,
-        images,
     };
+
+    let mut recreate_textures_and_images =
+        |textures: &mut [u32; 2], images: &mut [EGLImageKHR; 2]| {
+            unsafe { glGenTextures(2, textures.as_mut_ptr()) };
+
+            for i in 0..2 {
+                unsafe { glBindTexture(GL_TEXTURE_2D, textures[i]) };
+
+                let client_buf = unsafe { get_native_client_buffer(swapchain.buffer(i)) };
+                let img_attribs = [EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE];
+                let image = unsafe {
+                    egl_create_image(
+                        dpy,
+                        EGL_NO_CONTEXT,
+                        EGL_NATIVE_BUFFER_ANDROID,
+                        client_buf,
+                        img_attribs.as_ptr(),
+                    )
+                };
+                if image == EGL_NO_IMAGE_KHR {
+                    eprintln!("eglCreateImageKHR failed: 0x{:x}", unsafe { eglGetError() });
+                    continue;
+                }
+                images[i] = image;
+                unsafe { gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void) };
+
+                // Set texture parameters AFTER binding the EGLImage. Some Android GPU drivers
+                // reset texture parameters to defaults (GL_LINEAR) when glEGLImageTargetTexture2DOES
+                // is called, causing blurry rendering if set beforehand.
+                unsafe {
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                }
+            }
+        };
+
+    recreate_textures_and_images(&mut textures, &mut images);
 
     let vs_src = CStr::from_bytes_with_nul(
         b"attribute vec4 a_position;\nattribute vec2 a_tex_coord;\nvarying vec2 v_tex_coord;\nvoid main() {\n  gl_Position = a_position;\n  v_tex_coord = a_tex_coord;\n}\n\0",
@@ -1199,10 +1365,28 @@ unsafe fn run_rust_renderer(
     let signal = rust_renderer_signal();
 
     while !stop.load(Ordering::Acquire) {
+        let generation = swapchain.generation();
+        if generation != seen_generation {
+            wait_for_gpu(dpy);
+            unsafe { glBindTexture(GL_TEXTURE_2D, 0) };
+            unsafe { glDeleteTextures(2, textures.as_ptr()) };
+            wait_for_gpu(dpy);
+            destroy_images(&mut images);
+            wait_for_gpu(dpy);
+            textures = [0u32; 2];
+            images = [EGL_NO_IMAGE_KHR; 2];
+            for retired in swapchain.take_retired_buffers() {
+                unsafe { release_buffers(retired) };
+            }
+            recreate_textures_and_images(&mut textures, &mut images);
+            seen_generation = generation;
+        }
+
         let msg = {
             let mut state = signal.mu.lock();
             while state.queue.is_empty() && !stop.load(Ordering::Acquire) {
                 signal.cv.wait_for(&mut state, Duration::from_millis(500));
+                break;
             }
             if stop.load(Ordering::Acquire) {
                 None
@@ -1211,9 +1395,7 @@ unsafe fn run_rust_renderer(
             }
         };
 
-        let Some(buffer_index) = msg else {
-            break;
-        };
+        let Some(buffer_index) = msg else { continue };
         let idx = buffer_index as usize;
 
         let _busy = GpuBusyGuard::new(swapchain, idx);
@@ -1249,8 +1431,16 @@ unsafe fn run_rust_renderer(
         wait_for_gpu(dpy);
     }
 
+    wait_for_gpu(dpy);
+    unsafe { glBindTexture(GL_TEXTURE_2D, 0) };
+    unsafe { glDeleteTextures(2, textures.as_ptr()) };
+    wait_for_gpu(dpy);
+    destroy_images(&mut images);
+    wait_for_gpu(dpy);
+    for retired in swapchain.take_retired_buffers() {
+        unsafe { release_buffers(retired) };
+    }
     unsafe {
-        glDeleteTextures(2, textures.as_ptr());
         glDeleteProgram(program);
         glFlush();
     }
@@ -1289,7 +1479,10 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeBeginFr
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
-    ensure_runtime().frame_handle.begin_front_copy() as jint
+    let Some(h) = ensure_runtime().frame_handle.as_deref() else {
+        return 0;
+    };
+    h.begin_front_copy() as jint
 }
 
 /// Returns a direct `java.nio.ByteBuffer` backed by the requested plane.
@@ -1310,7 +1503,9 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativePlaneBu
         return std::ptr::null_mut();
     }
 
-    let h = &ensure_runtime().frame_handle;
+    let Some(h) = ensure_runtime().frame_handle.as_deref() else {
+        return std::ptr::null_mut();
+    };
     let slice = h.plane_slice(idx as usize);
 
     // DirectByteBuffer enables zero-copy access on the Kotlin side.
@@ -1335,7 +1530,10 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeEndFron
     _env: JNIEnv,
     _class: JClass,
 ) {
-    ensure_runtime().frame_handle.end_front_copy();
+    let Some(h) = ensure_runtime().frame_handle.as_deref() else {
+        return;
+    };
+    h.end_front_copy();
 }
 
 /// Returns the current output framebuffer width in pixels.
@@ -1346,7 +1544,16 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameWi
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
-    ensure_runtime().frame_handle.width() as jint
+    if let Some(h) = ensure_runtime().frame_handle.as_deref() {
+        return h.width() as jint;
+    }
+    if let Some((w, _)) = current_output_size() {
+        return w as jint;
+    }
+    if let Some(swapchain) = get_ahb_swapchain() {
+        return swapchain.width() as jint;
+    }
+    FRAME_WIDTH as jint
 }
 
 /// Returns the current output framebuffer height in pixels.
@@ -1357,7 +1564,16 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameHe
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
-    ensure_runtime().frame_handle.height() as jint
+    if let Some(h) = ensure_runtime().frame_handle.as_deref() {
+        return h.height() as jint;
+    }
+    if let Some((_, h)) = current_output_size() {
+        return h as jint;
+    }
+    if let Some(swapchain) = get_ahb_swapchain() {
+        return swapchain.height() as jint;
+    }
+    FRAME_HEIGHT as jint
 }
 
 // --- Auxiliary Texture System ---

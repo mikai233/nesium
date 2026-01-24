@@ -1,7 +1,10 @@
 use std::{any::Any, path::PathBuf, time::Duration};
 
 use nesium_core::cartridge::header::Mirroring;
-use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, buffer::ColorFormat};
+use nesium_core::ppu::{
+    SCREEN_HEIGHT, SCREEN_WIDTH,
+    buffer::{ColorFormat, SwapchainLockCallback, SwapchainUnlockCallback},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioMode {
@@ -14,6 +17,23 @@ pub struct VideoConfig {
     pub color_format: ColorFormat,
     pub output_width: u32,
     pub output_height: u32,
+    pub backend: VideoBackendConfig,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum VideoBackendConfig {
+    Owned,
+    Swapchain {
+        lock: SwapchainLockCallback,
+        unlock: SwapchainUnlockCallback,
+        user_data: *mut std::ffi::c_void,
+    },
+}
+
+impl Default for VideoBackendConfig {
+    fn default() -> Self {
+        Self::Owned
+    }
 }
 
 impl Default for VideoConfig {
@@ -22,6 +42,7 @@ impl Default for VideoConfig {
             color_format: ColorFormat::Rgba8888,
             output_width: SCREEN_WIDTH as u32,
             output_height: SCREEN_HEIGHT as u32,
+            backend: VideoBackendConfig::Owned,
         }
     }
 }

@@ -9,6 +9,14 @@ class NesTextureService {
   static const MethodChannel _channel = MethodChannel('nesium');
   static const MethodChannel _auxChannel = MethodChannel('nesium_aux');
 
+  Future<void> _invokeSetAndroidSurfaceSize({
+    required int width,
+    required int height,
+  }) => _channel.invokeMethod<void>('setAndroidSurfaceSize', {
+    'width': width,
+    'height': height,
+  });
+
   Future<int?> createTexture() =>
       _channel.invokeMethod<int>('createNesTexture');
 
@@ -32,13 +40,18 @@ class NesTextureService {
   ///
   /// - If `width`/`height` are > 0: uses `SurfaceHolder.setFixedSize`.
   /// - Otherwise: resets to `SurfaceHolder.setSizeFromLayout`.
-  Future<void> setAndroidSurfaceSize({
+  /// Forces the Android native SurfaceView buffer size (PlatformView path).
+  Future<void> setAndroidSurfaceFixedSize({
     required int width,
     required int height,
-  }) => _channel.invokeMethod<void>('setAndroidSurfaceSize', {
-    'width': width,
-    'height': height,
-  });
+  }) {
+    assert(width > 0 && height > 0);
+    return _invokeSetAndroidSurfaceSize(width: width, height: height);
+  }
+
+  /// Resets the Android native SurfaceView buffer size to be driven by layout.
+  Future<void> resetAndroidSurfaceSizeFromLayout() =>
+      _invokeSetAndroidSurfaceSize(width: 0, height: 0);
 
   /// Switches the Android video backend.
   ///

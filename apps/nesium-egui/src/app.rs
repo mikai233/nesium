@@ -213,7 +213,7 @@ impl NesiumApp {
         let sender = Box::new(EguiNotificationSender {
             tx: notification_tx,
         });
-        let runtime = Runtime::start_with_sender(
+        let runtime = Runtime::start_with_event_sender(
             RuntimeConfig {
                 video: VideoConfig {
                     color_format: ColorFormat::Rgba8888,

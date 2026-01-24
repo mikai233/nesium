@@ -151,6 +151,9 @@ fn is_ntsc_filter(filter: VideoFilter) -> bool {
 fn apply_video_filter(filter: VideoFilter) -> Result<VideoOutputInfo, String> {
     let (output_width, output_height) = filter.output_size()?;
 
+    #[cfg(target_os = "android")]
+    crate::android::resize_ahb_swapchain(output_width, output_height)?;
+
     let processor: Box<dyn VideoPostProcessor> = match filter {
         VideoFilter::Hq2x => Box::new(HqxPostProcessor::new(HqxScale::X2)),
         VideoFilter::Hq3x => Box::new(HqxPostProcessor::new(HqxScale::X3)),

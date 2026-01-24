@@ -34,15 +34,25 @@ use nesium_core::{
         buffer::{ColorFormat, ExternalFrameHandle, FrameReadyCallback},
     },
 };
-use nesium_runtime::{AudioMode, Runtime, RuntimeConfig, RuntimeHandle, VideoConfig};
+use nesium_runtime::{
+    AudioMode, Runtime, RuntimeConfig, RuntimeHandle, VideoBackendConfig, VideoConfig,
+};
 
 pub const FRAME_WIDTH: usize = SCREEN_WIDTH;
 pub const FRAME_HEIGHT: usize = SCREEN_HEIGHT;
 
+#[cfg(target_os = "android")]
+pub enum VideoBacking {
+    Upload,
+    Ahb(Arc<android::AhbSwapchain>),
+}
+
 struct RuntimeHolder {
     handle: RuntimeHandle,
-    frame_handle: Arc<ExternalFrameHandle>,
+    frame_handle: Option<Arc<ExternalFrameHandle>>,
     _runtime: Runtime,
+    #[cfg(target_os = "android")]
+    _video: VideoBacking,
 }
 
 static RUNTIME: OnceLock<RuntimeHolder> = OnceLock::new();
@@ -70,9 +80,39 @@ fn ensure_runtime() -> &'static RuntimeHolder {
             color_format,
             output_width: FRAME_WIDTH as u32,
             output_height: FRAME_HEIGHT as u32,
+            backend: VideoBackendConfig::Owned,
         };
 
-        let runtime = Runtime::start_pending(RuntimeConfig {
+        #[cfg(target_os = "android")]
+        let (runtime, video_backing) = if android::use_ahb_video_backend() {
+            let mut video_cfg = video_cfg;
+            let swapchain = Arc::new(android::AhbSwapchain::new(
+                video_cfg.output_width,
+                video_cfg.output_height,
+            ));
+            let user_data = Arc::as_ptr(&swapchain) as *mut c_void;
+            video_cfg.backend = VideoBackendConfig::Swapchain {
+                lock: android::ahb_lock_plane,
+                unlock: android::ahb_unlock_plane,
+                user_data,
+            };
+            let runtime = Runtime::start(RuntimeConfig {
+                video: video_cfg,
+                audio: AudioMode::Auto,
+            })
+            .expect("failed to start nesium runtime");
+            (runtime, VideoBacking::Ahb(swapchain))
+        } else {
+            let runtime = Runtime::start(RuntimeConfig {
+                video: video_cfg,
+                audio: AudioMode::Auto,
+            })
+            .expect("failed to start nesium runtime");
+            (runtime, VideoBacking::Upload)
+        };
+
+        #[cfg(not(target_os = "android"))]
+        let runtime = Runtime::start(RuntimeConfig {
             video: video_cfg,
             audio: AudioMode::Auto,
         })
@@ -91,25 +131,20 @@ fn ensure_runtime() -> &'static RuntimeHolder {
                 )
                 .expect("failed to set android frame ready callback");
         }
-        let frame_handle = handle
-            .frame_handle()
-            .cloned()
-            .expect("frame handle not available for this video backend");
+        let frame_handle = handle.frame_handle().cloned();
 
         RuntimeHolder {
             handle,
             frame_handle,
             _runtime: runtime,
+            #[cfg(target_os = "android")]
+            _video: video_backing,
         }
     })
 }
 
 pub(crate) fn runtime_handle() -> &'static RuntimeHandle {
     &ensure_runtime().handle
-}
-
-fn frame_handle_ref() -> &'static ExternalFrameHandle {
-    &ensure_runtime().frame_handle
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,7 +225,9 @@ pub unsafe extern "C" fn nesium_copy_frame(
         return;
     }
 
-    let frame_handle = frame_handle_ref();
+    let Some(frame_handle) = ensure_runtime().frame_handle.as_deref() else {
+        return;
+    };
     let idx = frame_handle.begin_front_copy();
     let src_slice = frame_handle.plane_slice(idx);
 
