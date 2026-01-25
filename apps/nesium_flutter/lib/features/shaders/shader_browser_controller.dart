@@ -1,19 +1,5 @@
-import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 import 'shader_asset_service.dart';
-
-class ShaderNode {
-  final String name;
-  final String path;
-  final bool isDirectory;
-
-  ShaderNode({
-    required this.name,
-    required this.path,
-    required this.isDirectory,
-  });
-}
 
 class ShaderBrowserController extends Notifier<AsyncValue<List<ShaderNode>>> {
   final List<String> _pathStack = [];
@@ -32,47 +18,24 @@ class ShaderBrowserController extends Notifier<AsyncValue<List<ShaderNode>>> {
     state = const AsyncValue.loading();
     try {
       final assetService = ref.read(shaderAssetServiceProvider);
-      final root = await assetService.getShadersRoot();
-      if (root == null) {
-        state = AsyncValue.error('Shaders root not found', StackTrace.current);
-        return;
-      }
+      final nodes = await assetService.listShaders(relativePath);
+      state = AsyncValue.data(nodes);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
 
-      final absolutePath = relativePath == null
-          ? root
-          : p.join(root, relativePath);
-      final dir = Directory(absolutePath);
+  Future<void> search(String query) async {
+    if (query.trim().isEmpty) {
+      // Logic for clearing search: reload current path
+      _loadDirectory(currentPath);
+      return;
+    }
 
-      if (!dir.existsSync()) {
-        state = AsyncValue.error(
-          'Directory does not exist: $absolutePath',
-          StackTrace.current,
-        );
-        return;
-      }
-
-      final entities = dir.listSync().where((e) {
-        final name = p.basename(e.path);
-        if (name.startsWith('.')) return false;
-        if (e is File) return name.endsWith('.slangp');
-        return e is Directory;
-      }).toList();
-
-      // Sort: Directories first, then files alphabetically
-      entities.sort((a, b) {
-        if (a is Directory && b is File) return -1;
-        if (a is File && b is Directory) return 1;
-        return p.basename(a.path).compareTo(p.basename(b.path));
-      });
-
-      final nodes = entities.map((e) {
-        return ShaderNode(
-          name: p.basename(e.path),
-          path: p.relative(e.path, from: root),
-          isDirectory: e is Directory,
-        );
-      }).toList();
-
+    state = const AsyncValue.loading();
+    try {
+      final assetService = ref.read(shaderAssetServiceProvider);
+      final nodes = await assetService.searchShaders(query);
       state = AsyncValue.data(nodes);
     } catch (e, st) {
       state = AsyncValue.error(e, st);

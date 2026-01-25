@@ -13,26 +13,24 @@ ZIP_FILE="$ASSETS_DIR/shaders.zip"
 echo "Zipping shaders from $SHADERS_DIR to $ZIP_FILE..."
 
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
-    # Windows
-    powershell.exe -NoProfile -Command "
-        \$shaderDir = Resolve-Path '$SHADERS_DIR';
-        \$zipFile = '$ZIP_FILE';
-        if (Test-Path \$zipFile) { Remove-Item \$zipFile }
-        Add-Type -AssemblyName 'System.IO.Compression.FileSystem';
-        \$zip = [System.IO.Compression.ZipFile]::Open(\$zipFile, [System.IO.Compression.ZipArchiveMode]::Create);
-        Get-ChildItem -Path \$shaderDir -Recurse | Where-Object { \$_.FullName -notmatch '\\\\.git(\$|\\\\)' } | ForEach-Object {
-            if (-not \$_.PSIsContainer) {
-                \$relativePath = \$_.FullName.Substring(\$shaderDir.Path.Length + 1).Replace('\\', '/');
-                [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(\$zip, \$_.FullName, \$relativePath, [System.IO.Compression.CompressionLevel]::Optimal);
-            }
-        };
-        \$zip.Dispose();
-    "
+    # Windows: Use the dedicated PowerShell script for consistency and performance
+    # Passing the full path to ensure it finds the script relative to this script's directory
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$SCRIPT_DIR/zip_shaders.ps1")"
 else
     # macOS / Linux
     if command -v zip >/dev/null 2>&1; then
         rm -f "$ZIP_FILE"
-        cd "$SHADERS_DIR" && zip -r "$ZIP_FILE" . -x "*.git*"
+        EXCLUDES=(
+            "*.git*"
+            "*/bezel/*"
+            "*/handheld/*"
+            "*/stereoscopic-3d/*"
+            "*/deinterlacing/*"
+            "*/motion-interpolation/*"
+            "*/test/*"
+            "*/test-patterns/*"
+        )
+        cd "$SHADERS_DIR" && zip -r "$ZIP_FILE" . -x "${EXCLUDES[@]}"
     else
         echo "Error: 'zip' command not found."
         exit 1

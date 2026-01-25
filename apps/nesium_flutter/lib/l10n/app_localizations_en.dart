@@ -963,6 +963,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoAspectRatioStretch => 'Stretch';
 
   @override
+  String get videoShaderLibrashaderTitle => 'Librashader (RetroArch preset)';
+
+  @override
+  String get videoShaderLibrashaderSubtitle =>
+      'Requires GLES3 + Hardware backend (AHB swapchain).';
+
+  @override
+  String get videoShaderLibrashaderSubtitleDisabled =>
+      'Switch Android backend to Hardware to enable.';
+
+  @override
+  String get videoShaderPresetLabel => 'Preset (.slangp)';
+
+  @override
+  String get videoShaderPresetNotSet => 'Not set';
+
+  @override
+  String get shaderBrowserTitle => 'Shaders';
+
+  @override
+  String get shaderBrowserNoShaders => 'No shaders found';
+
+  @override
+  String shaderBrowserError(String error) {
+    return 'Error: $error';
+  }
+
+  @override
   String get aboutTitle => 'About Nesium';
 
   @override

@@ -2123,11 +2123,11 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     secondary: const Icon(Icons.auto_fix_high),
-                    title: const Text('Librashader (RetroArch preset)'),
+                    title: Text(l10n.videoShaderLibrashaderTitle),
                     subtitle: Text(
                       androidBackend.backend == AndroidVideoBackend.hardware
-                          ? 'Requires GLES3 + Hardware backend (AHB swapchain).'
-                          : 'Switch Android backend to Hardware to enable.',
+                          ? l10n.videoShaderLibrashaderSubtitle
+                          : l10n.videoShaderLibrashaderSubtitleDisabled,
                     ),
                     value: androidShaderSettings.enabled,
                     onChanged:
@@ -2150,9 +2150,10 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.description_outlined),
-                    title: const Text('Preset (.slangp)'),
+                    title: Text(l10n.videoShaderPresetLabel),
                     subtitle: Text(
-                      androidShaderSettings.presetPath ?? 'Not set',
+                      androidShaderSettings.presetPath ??
+                          l10n.videoShaderPresetNotSet,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),

@@ -505,6 +505,21 @@
   "videoAspectRatioSquare": "1:1 (Square pixels)",
   "videoAspectRatioNtsc": "4:3 (NTSC)",
   "videoAspectRatioStretch": "Stretch",
+  "videoShaderLibrashaderTitle": "Librashader (RetroArch preset)",
+  "videoShaderLibrashaderSubtitle": "Requires GLES3 + Hardware backend (AHB swapchain).",
+  "videoShaderLibrashaderSubtitleDisabled": "Switch Android backend to Hardware to enable.",
+  "videoShaderPresetLabel": "Preset (.slangp)",
+  "videoShaderPresetNotSet": "Not set",
+  "shaderBrowserTitle": "Shaders",
+  "shaderBrowserNoShaders": "No shaders found",
+  "shaderBrowserError": "Error: {error}",
+  "@shaderBrowserError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "aboutTitle": "About Nesium",
   "aboutLead": "Nesium: Rust NES/FC emulator frontend built on nesium-core.",
   "aboutIntro": "This Flutter frontend reuses the Rust core for emulation. The web build runs in the browser via Flutter Web + Web Worker + WASM.",

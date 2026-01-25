@@ -15,7 +15,6 @@ members = [
   "crates/nesium-netproto",
   "crates/nesium-support",
 ]
-exclude = ["crates/vendor"]
 
 [profile.test]
 opt-level = 2
@@ -122,5 +121,9 @@ rcgen = { version = "0.14.6", default-features = false, features = [
 parking_lot = "0.12.5"
 
 [patch.crates-io]
-# Patched locally to support GLSL ES targets on Android (GLES3).
-librashader-runtime-gl = { path = "crates/vendor/librashader-runtime-gl-0.10.0" }
+librashader = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
+librashader-common = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
+librashader-runtime-gl = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
+librashader-presets = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
+librashader-preprocess = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
+librashader-reflect = { git = "https://github.com/mikai233/librashader", branch = "nesium" }

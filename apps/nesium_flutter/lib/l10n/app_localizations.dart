@@ -1856,6 +1856,54 @@ abstract class AppLocalizations {
   /// **'Stretch'**
   String get videoAspectRatioStretch;
 
+  /// No description provided for @videoShaderLibrashaderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Librashader (RetroArch preset)'**
+  String get videoShaderLibrashaderTitle;
+
+  /// No description provided for @videoShaderLibrashaderSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires GLES3 + Hardware backend (AHB swapchain).'**
+  String get videoShaderLibrashaderSubtitle;
+
+  /// No description provided for @videoShaderLibrashaderSubtitleDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch Android backend to Hardware to enable.'**
+  String get videoShaderLibrashaderSubtitleDisabled;
+
+  /// No description provided for @videoShaderPresetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Preset (.slangp)'**
+  String get videoShaderPresetLabel;
+
+  /// No description provided for @videoShaderPresetNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get videoShaderPresetNotSet;
+
+  /// No description provided for @shaderBrowserTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shaders'**
+  String get shaderBrowserTitle;
+
+  /// No description provided for @shaderBrowserNoShaders.
+  ///
+  /// In en, this message translates to:
+  /// **'No shaders found'**
+  String get shaderBrowserNoShaders;
+
+  /// No description provided for @shaderBrowserError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error: {error}'**
+  String shaderBrowserError(String error);
+
   /// No description provided for @aboutTitle.
   ///
   /// In en, this message translates to:

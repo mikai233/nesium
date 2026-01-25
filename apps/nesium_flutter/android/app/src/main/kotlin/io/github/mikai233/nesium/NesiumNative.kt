@@ -14,7 +14,11 @@ object NesiumNative {
     init {
         // Ensure the Rust shared library is loaded before calling any native methods.
         System.loadLibrary("nesium_flutter")
+        nativeInitLogger()
     }
+
+    @JvmStatic
+    external fun nativeInitLogger()
 
     @JvmStatic
     external fun init_android_context(context: Context)
