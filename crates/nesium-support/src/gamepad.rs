@@ -261,17 +261,17 @@ impl GamepadManager {
 
             // Check axes for triggers manually if not detected as buttons
             let axis_threshold = 0.3;
-            if let Some(axis) = gamepad.axis_data(gilrs::Axis::LeftZ) {
-                if axis.value() > axis_threshold && !buttons.contains(&gilrs::Button::LeftTrigger2)
-                {
-                    buttons.push(gilrs::Button::LeftTrigger2);
-                }
+            if let Some(axis) = gamepad.axis_data(gilrs::Axis::LeftZ)
+                && axis.value() > axis_threshold
+                && !buttons.contains(&gilrs::Button::LeftTrigger2)
+            {
+                buttons.push(gilrs::Button::LeftTrigger2);
             }
-            if let Some(axis) = gamepad.axis_data(gilrs::Axis::RightZ) {
-                if axis.value() > axis_threshold && !buttons.contains(&gilrs::Button::RightTrigger2)
-                {
-                    buttons.push(gilrs::Button::RightTrigger2);
-                }
+            if let Some(axis) = gamepad.axis_data(gilrs::Axis::RightZ)
+                && axis.value() > axis_threshold
+                && !buttons.contains(&gilrs::Button::RightTrigger2)
+            {
+                buttons.push(gilrs::Button::RightTrigger2);
             }
 
             buttons
@@ -482,30 +482,30 @@ impl GamepadManager {
             btn != gilrs::Button::Unknown && gamepad.is_pressed(btn)
         };
 
-        if let Some(btn) = self.action_mapping.rewind {
-            if is_pressed_safe(btn) {
-                actions.rewind = true;
-            }
+        if let Some(btn) = self.action_mapping.rewind
+            && is_pressed_safe(btn)
+        {
+            actions.rewind = true;
         }
-        if let Some(btn) = self.action_mapping.fast_forward {
-            if is_pressed_safe(btn) {
-                actions.fast_forward = true;
-            }
+        if let Some(btn) = self.action_mapping.fast_forward
+            && is_pressed_safe(btn)
+        {
+            actions.fast_forward = true;
         }
-        if let Some(btn) = self.action_mapping.save_state {
-            if is_pressed_safe(btn) {
-                actions.save_state = true;
-            }
+        if let Some(btn) = self.action_mapping.save_state
+            && is_pressed_safe(btn)
+        {
+            actions.save_state = true;
         }
-        if let Some(btn) = self.action_mapping.load_state {
-            if is_pressed_safe(btn) {
-                actions.load_state = true;
-            }
+        if let Some(btn) = self.action_mapping.load_state
+            && is_pressed_safe(btn)
+        {
+            actions.load_state = true;
         }
-        if let Some(btn) = self.action_mapping.pause {
-            if is_pressed_safe(btn) {
-                actions.pause = true;
-            }
+        if let Some(btn) = self.action_mapping.pause
+            && is_pressed_safe(btn)
+        {
+            actions.pause = true;
         }
     }
 

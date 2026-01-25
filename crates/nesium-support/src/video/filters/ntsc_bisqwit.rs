@@ -44,7 +44,7 @@ impl NtscBisqwitPostProcessor {
             options,
             ppu: Vec::new(),
             output_argb: Vec::new(),
-            fallback: NearestPostProcessor::default(),
+            fallback: NearestPostProcessor,
         }
     }
 }

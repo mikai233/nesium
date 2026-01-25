@@ -17,7 +17,7 @@ impl Default for LcdGridPostProcessor {
             strength: 1.0,
             input_argb: Vec::new(),
             output_argb: Vec::new(),
-            fallback: NearestPostProcessor::default(),
+            fallback: NearestPostProcessor,
         }
     }
 }

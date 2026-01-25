@@ -27,7 +27,7 @@ impl SaiPostProcessor {
             variant,
             input_xrgb: Vec::new(),
             output_xrgb: Vec::new(),
-            fallback: NearestPostProcessor::default(),
+            fallback: NearestPostProcessor,
         }
     }
 }

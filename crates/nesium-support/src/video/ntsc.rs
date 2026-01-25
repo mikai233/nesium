@@ -100,7 +100,7 @@ impl NesNtsc {
         }
     }
 
-    pub fn blit(
+    pub unsafe fn blit(
         &self,
         nes_in: *const u16,
         in_row_width: usize,

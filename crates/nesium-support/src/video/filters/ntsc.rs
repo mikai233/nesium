@@ -70,7 +70,7 @@ impl NesNtscPostProcessor {
             last_palette_bytes: [0xFF; BASE_PALETTE_LEN],
             input: Vec::new(),
             tmp_rgb: Vec::new(),
-            fallback: NearestPostProcessor::default(),
+            fallback: NearestPostProcessor,
         };
         processor.reinit_ntsc();
         processor
@@ -225,15 +225,17 @@ impl VideoPostProcessor for NesNtscPostProcessor {
         };
         self.tmp_rgb.resize(tmp_len, 0);
 
-        self.ntsc.blit(
-            self.input.as_ptr(),
-            src_width,
-            self.burst_phase,
-            src_width,
-            src_height,
-            self.tmp_rgb.as_mut_ptr() as *mut c_void,
-            row_bytes,
-        );
+        unsafe {
+            self.ntsc.blit(
+                self.input.as_ptr(),
+                src_width,
+                self.burst_phase,
+                src_width,
+                src_height,
+                self.tmp_rgb.as_mut_ptr() as *mut c_void,
+                row_bytes,
+            );
+        }
         self.burst_phase = (self.burst_phase + 1) % 3;
 
         match dst_format {

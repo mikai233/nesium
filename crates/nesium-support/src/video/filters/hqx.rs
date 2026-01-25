@@ -21,7 +21,7 @@ impl HqxPostProcessor {
         Self {
             scale,
             scratch: HqxScratch::default(),
-            fallback: NearestPostProcessor::default(),
+            fallback: NearestPostProcessor,
         }
     }
 }

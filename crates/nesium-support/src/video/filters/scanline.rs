@@ -18,7 +18,7 @@ impl ScanlinePostProcessor {
             scale,
             intensity: intensity.clamp(0.0, 1.0),
             output_argb: Vec::new(),
-            fallback: NearestPostProcessor::default(),
+            fallback: NearestPostProcessor,
         }
     }
 }

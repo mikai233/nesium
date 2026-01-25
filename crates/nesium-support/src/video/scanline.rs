@@ -13,7 +13,7 @@ pub fn scanline_apply_argb8888(
     brightness: u8,
     scale: u8,
 ) {
-    if width == 0 || height == 0 || brightness >= 255 {
+    if width == 0 || height == 0 || brightness == 255 {
         return;
     }
     debug_assert!(buffer.len() >= width * height);

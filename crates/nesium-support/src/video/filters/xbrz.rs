@@ -14,7 +14,7 @@ impl XbrzPostProcessor {
         Self {
             scale,
             input_argb: Vec::new(),
-            fallback: NearestPostProcessor::default(),
+            fallback: NearestPostProcessor,
         }
     }
 }
