@@ -119,6 +119,7 @@ rcgen = { version = "0.14.6", default-features = false, features = [
   "ring",
 ] }
 parking_lot = "0.12.5"
+xbrz-rs = "0.1.0"
 
 [patch.crates-io]
 librashader = { git = "https://github.com/mikai233/librashader", branch = "nesium" }

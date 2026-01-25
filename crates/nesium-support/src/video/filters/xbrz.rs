@@ -1,5 +1,6 @@
 use nesium_core::ppu::buffer::{ColorFormat, NearestPostProcessor, VideoPostProcessor};
 use nesium_core::ppu::palette::Color;
+use xbrz::scale_rgba;
 
 #[derive(Debug, Clone)]
 pub struct XbrzPostProcessor {
@@ -99,28 +100,6 @@ impl VideoPostProcessor for XbrzPostProcessor {
             self.input_argb[i] =
                 0xFF00_0000 | ((c.b as u32) << 16) | ((c.g as u32) << 8) | (c.r as u32);
         }
-
-        // xbrz-rs uses RGBA bytes
-        #[cfg(target_arch = "wasm32")]
-        {
-            if self.input_argb.len() > 0 && (src_indices.len() > 0 && src_indices[0] != 0) {
-                // Sample log once to avoid spam (checking if not black/zero index to be interesting)
-                // But hard to do "once" without state.
-                // Just logging for a single interesting frame or similar is tricky.
-                // We'll trust the user to only check logs briefly.
-                web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&format!(
-                    "xbrz input: dim={}x{} scale={} input_len={} [0]={:08X} [1]={:08X}",
-                    src_width,
-                    src_height,
-                    scale,
-                    self.input_argb.len(),
-                    self.input_argb[0],
-                    self.input_argb.get(1).unwrap_or(&0)
-                )));
-            }
-        }
-
-        use xbrz_lib::scale_rgba;
 
         // Cast u32 slice to u8 slice
         // SAFETY: u32 to u8 cast is safe for read.

@@ -14,6 +14,7 @@ bitflags.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 hex.workspace = true
+xbrz-rs.workspace = true
 
 [build-dependencies]
 cc.workspace = true
@@ -33,9 +34,4 @@ ntsc = []
 sai-cpp = []
 lcd-grid-cpp = []
 scanline-cpp = []
-xbrz = []
 ntsc-bisqwit = []
-
-[dependencies.xbrz_lib]
-package = "xbrz-rs"
-version = "0.1"

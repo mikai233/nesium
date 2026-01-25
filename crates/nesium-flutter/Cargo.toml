@@ -23,7 +23,6 @@ nesium-support = { workspace = true, features = [
     "hqx",
     "ntsc",
     "ntsc-bisqwit",
-    "xbrz",
 ] }
 tokio = { workspace = true, features = ["full"] }
 dashmap = { workspace = true, features = ["inline"] }
@@ -45,7 +44,6 @@ nesium-support = { workspace = true, features = [
     "hqx",
     "ntsc",
     "ntsc-bisqwit",
-    "xbrz",
 ] }
 gilrs.workspace = true
 
