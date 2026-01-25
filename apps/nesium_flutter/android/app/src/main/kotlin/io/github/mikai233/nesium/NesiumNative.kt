@@ -14,7 +14,11 @@ object NesiumNative {
     init {
         // Ensure the Rust shared library is loaded before calling any native methods.
         System.loadLibrary("nesium_flutter")
+        nativeInitLogger()
     }
+
+    @JvmStatic
+    external fun nativeInitLogger()
 
     @JvmStatic
     external fun init_android_context(context: Context)
@@ -37,6 +41,21 @@ object NesiumNative {
      */
     @JvmStatic
     external fun nativeSetHighPriority(enabled: Boolean)
+
+    /**
+     * Enables/disables the Rust-side librashader filter chain (AHB backend).
+     */
+    @JvmStatic
+    external fun nativeSetShaderEnabled(enabled: Boolean)
+
+    /**
+     * Sets the shader preset path for the Rust-side librashader filter chain (AHB backend).
+     *
+     * The path must be readable by native code (typically under app-private storage).
+     * Pass an empty string to clear.
+     */
+    @JvmStatic
+    external fun nativeSetShaderPreset(path: String)
 
     /**
      * Starts the Rust-side EGL/GL renderer that presents into the given [Surface].

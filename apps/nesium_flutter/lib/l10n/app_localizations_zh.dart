@@ -950,6 +950,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoAspectRatioStretch => '拉伸';
 
   @override
+  String get videoShaderLibrashaderTitle => 'Librashader (RetroArch 预设)';
+
+  @override
+  String get videoShaderLibrashaderSubtitle => '需要 GLES3 + 硬件后端 (AHB 交换链)。';
+
+  @override
+  String get videoShaderLibrashaderSubtitleDisabled => '切换 Android 后端到“硬件”以启用。';
+
+  @override
+  String get videoShaderPresetLabel => '预设 (.slangp)';
+
+  @override
+  String get videoShaderPresetNotSet => '未设置';
+
+  @override
+  String get shaderBrowserTitle => '着色器';
+
+  @override
+  String get shaderBrowserNoShaders => '未找到着色器';
+
+  @override
+  String shaderBrowserError(String error) {
+    return '错误: $error';
+  }
+
+  @override
   String get aboutTitle => '关于 Nesium';
 
   @override

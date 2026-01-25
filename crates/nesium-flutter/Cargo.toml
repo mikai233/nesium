@@ -60,3 +60,12 @@ mimalloc = ["dep:mimalloc"]
 jni.workspace = true
 ndk-context.workspace = true
 libc.workspace = true
+librashader = { version = "0.10.0", default-features = false, features = [
+    "runtime-gl",
+    "presets",
+    "preprocess",
+    "stable",
+] }
+glow = "0.16.0"
+android_logger = "0.13"
+log = "0.4"

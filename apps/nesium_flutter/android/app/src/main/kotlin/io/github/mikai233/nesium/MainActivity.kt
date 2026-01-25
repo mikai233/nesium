@@ -14,6 +14,8 @@ class MainActivity : FlutterActivity() {
     private val channel = "nesium"
     private var videoBackend: NesiumVideoBackend = NesiumVideoBackend.Hardware
     private var highPriority: Boolean = false
+    private var shaderEnabled: Boolean = false
+    private var shaderPresetPath: String = ""
     private var auxPlugin: NesiumAuxTexturePlugin? = null
 
     // Main NES Flutter texture (optional on Android; SurfaceView is the default path).
@@ -26,10 +28,14 @@ class MainActivity : FlutterActivity() {
         val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
         videoBackend = NesiumVideoBackend.fromMode(prefs.getInt("video_backend", 1))
         highPriority = prefs.getBoolean("high_priority", false)
+        shaderEnabled = prefs.getBoolean("shader_enabled", false)
+        shaderPresetPath = prefs.getString("shader_preset_path", "") ?: ""
         NesiumAndroidVideoBackend.set(videoBackend.mode)
         NesiumAndroidHighPriority.set(highPriority)
         NesiumNative.nativeSetVideoBackend(videoBackend.mode)
         NesiumNative.nativeSetHighPriority(highPriority)
+        NesiumNative.nativeSetShaderEnabled(shaderEnabled)
+        NesiumNative.nativeSetShaderPreset(shaderPresetPath)
         // Pass a stable application context to Rust.
         NesiumNative.init_android_context(applicationContext)
     }
@@ -99,6 +105,32 @@ class MainActivity : FlutterActivity() {
                         highPriority = enabled
                         NesiumAndroidHighPriority.set(enabled)
                         NesiumNative.nativeSetHighPriority(enabled)
+                        result.success(null)
+                    }
+
+                    "setShaderEnabled" -> {
+                        val enabled = call.argument<Boolean>("enabled")
+                        if (enabled == null) {
+                            result.error("bad_args", "enabled must be a bool", null)
+                            return@setMethodCallHandler
+                        }
+                        val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
+                        prefs.edit { putBoolean("shader_enabled", enabled) }
+                        shaderEnabled = enabled
+                        NesiumNative.nativeSetShaderEnabled(enabled)
+                        result.success(null)
+                    }
+
+                    "setShaderPreset" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null) {
+                            result.error("bad_args", "path must be a string", null)
+                            return@setMethodCallHandler
+                        }
+                        val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
+                        prefs.edit { putString("shader_preset_path", path) }
+                        shaderPresetPath = path
+                        NesiumNative.nativeSetShaderPreset(path)
                         result.success(null)
                     }
 

@@ -65,6 +65,18 @@ class NesTextureService {
   Future<void> setAndroidHighPriority(bool enabled) => _channel
       .invokeMethod<void>('setAndroidHighPriority', {'enabled': enabled});
 
+  /// Enables/disables the Rust-side librashader chain (Android hardware backend).
+  ///
+  /// This only affects the Android "Hardware" backend (AHardwareBuffer + Rust renderer).
+  Future<void> setShaderEnabled(bool enabled) =>
+      _channel.invokeMethod<void>('setShaderEnabled', {'enabled': enabled});
+
+  /// Sets the shader preset path for librashader (Android hardware backend).
+  ///
+  /// Pass an empty string to clear.
+  Future<void> setShaderPreset(String path) =>
+      _channel.invokeMethod<void>('setShaderPreset', {'path': path});
+
   /// Switches the Windows video backend.
   ///
   /// - `true`: D3D11 GPU texture sharing (zero-copy)

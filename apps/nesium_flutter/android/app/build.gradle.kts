@@ -59,6 +59,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    aaptOptions {
+        ignoreAssetsPattern = "!*.git:!.git"
+    }
 }
 
 flutter {
@@ -187,6 +191,25 @@ tasks.register<Exec>("buildRustAndroidSo") {
                 src.copyTo(abiDir.resolve("libc++_shared.so"), overwrite = true)
             }
     }
+}
+
+tasks.register<Exec>("zipShaders") {
+    group = "build"
+    description = "Zip shaders into an asset for the app"
+
+    val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
+    workingDir = file("../..") // apps/nesium_flutter
+
+    if (isWindows) {
+        commandLine("pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tool/zip_shaders.ps1")
+    } else {
+        commandLine("sh", "tool/zip_shaders.sh")
+    }
+}
+
+// Ensure shaders are zipped before assets are processed or the build starts
+tasks.named("preBuild") {
+    dependsOn("zipShaders")
 }
 
 // Ensure Rust is built before Android builds the APK/AAB.
