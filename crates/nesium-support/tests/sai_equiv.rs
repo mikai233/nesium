@@ -1,4 +1,4 @@
-#![cfg(all(feature = "sai", feature = "sai-cpp"))]
+#![cfg(feature = "sai-cpp")]
 
 use nesium_support::video::sai::{
     scale_2xsai_xrgb8888, scale_2xsai_xrgb8888_cpp, scale_super_2xsai_xrgb8888,

@@ -1,4 +1,7 @@
-use std::sync::OnceLock;
+pub mod hq2x;
+pub mod hq3x;
+pub mod hq4x;
+pub mod hqx_common;
 
 use thiserror::Error;
 
@@ -20,14 +23,6 @@ pub enum HqxScale {
     X2 = 2,
     X3 = 3,
     X4 = 4,
-}
-
-static HQX_INIT: OnceLock<()> = OnceLock::new();
-
-fn ensure_init() {
-    HQX_INIT.get_or_init(|| unsafe {
-        hqxInit();
-    });
 }
 
 /// Upscales an ARGB8888 framebuffer using HQX (hq2x/hq3x/hq4x).
@@ -64,25 +59,13 @@ pub fn hqx_scale_argb8888(
         });
     }
 
-    ensure_init();
+    hqx_common::ensure_init();
 
-    let w = width as i32;
-    let h = height as i32;
-
-    unsafe {
-        match scale {
-            HqxScale::X2 => hq2x_32(src.as_ptr(), dst.as_mut_ptr(), w, h),
-            HqxScale::X3 => hq3x_32(src.as_ptr(), dst.as_mut_ptr(), w, h),
-            HqxScale::X4 => hq4x_32(src.as_ptr(), dst.as_mut_ptr(), w, h),
-        }
+    match scale {
+        HqxScale::X2 => hq2x::hq2x_32_rb(src, width, dst, width * 2, width, height),
+        HqxScale::X3 => hq3x::hq3x_32_rb(src, width, dst, width * 3, width, height),
+        HqxScale::X4 => hq4x::hq4x_32_rb(src, width, dst, width * 4, width, height),
     }
 
     Ok(())
-}
-
-unsafe extern "C" {
-    fn hqxInit();
-    fn hq2x_32(src: *const u32, dest: *mut u32, width: i32, height: i32);
-    fn hq3x_32(src: *const u32, dest: *mut u32, width: i32, height: i32);
-    fn hq4x_32(src: *const u32, dest: *mut u32, width: i32, height: i32);
 }

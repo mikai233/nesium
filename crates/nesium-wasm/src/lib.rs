@@ -18,7 +18,9 @@ use nesium_core::{
     state::{SnapshotMeta, nes::NesSnapshot},
 };
 use nesium_support::rewind::RewindState;
-use nesium_support::video::filters::{SaiPostProcessor, SaiVariant};
+use nesium_support::video::filters::{
+    LcdGridPostProcessor, SaiPostProcessor, SaiVariant, ScanlinePostProcessor, XbrzPostProcessor,
+};
 use sha1::{Digest, Sha1};
 
 /// NES output resolution (visible area).
@@ -129,6 +131,13 @@ enum WasmVideoFilter {
     Sai2x,
     Super2xSai,
     SuperEagle,
+    LcdGrid,
+    Scanlines,
+    Xbrz2x,
+    Xbrz3x,
+    Xbrz4x,
+    Xbrz5x,
+    Xbrz6x,
 }
 
 impl WasmVideoFilter {
@@ -140,9 +149,18 @@ impl WasmVideoFilter {
             1 => Some(Self::Prescale2x),
             2 => Some(Self::Prescale3x),
             3 => Some(Self::Prescale4x),
+            // 4..6: HQX filters (not supported in WASM yet)
             7 => Some(Self::Sai2x),
             8 => Some(Self::Super2xSai),
             9 => Some(Self::SuperEagle),
+            // 10..13: NTSC filters (not supported in WASM/Rust-only yet)
+            14 => Some(Self::LcdGrid),
+            15 => Some(Self::Scanlines),
+            16 => Some(Self::Xbrz2x),
+            17 => Some(Self::Xbrz3x),
+            18 => Some(Self::Xbrz4x),
+            19 => Some(Self::Xbrz5x),
+            20 => Some(Self::Xbrz6x),
             _ => None,
         }
     }
@@ -150,10 +168,16 @@ impl WasmVideoFilter {
     fn output_size(self) -> (usize, usize) {
         match self {
             Self::None => (WIDTH, HEIGHT),
-            Self::Prescale2x => (WIDTH * 2, HEIGHT * 2),
-            Self::Prescale3x => (WIDTH * 3, HEIGHT * 3),
-            Self::Prescale4x => (WIDTH * 4, HEIGHT * 4),
-            Self::Sai2x | Self::Super2xSai | Self::SuperEagle => (WIDTH * 2, HEIGHT * 2),
+            Self::Prescale2x
+            | Self::Sai2x
+            | Self::Super2xSai
+            | Self::SuperEagle
+            | Self::LcdGrid
+            | Self::Xbrz2x => (WIDTH * 2, HEIGHT * 2),
+            Self::Prescale3x | Self::Scanlines | Self::Xbrz3x => (WIDTH * 3, HEIGHT * 3),
+            Self::Prescale4x | Self::Xbrz4x => (WIDTH * 4, HEIGHT * 4),
+            Self::Xbrz5x => (WIDTH * 5, HEIGHT * 5),
+            Self::Xbrz6x => (WIDTH * 6, HEIGHT * 6),
         }
     }
 
@@ -165,6 +189,13 @@ impl WasmVideoFilter {
             Self::Sai2x => Box::new(SaiPostProcessor::new(SaiVariant::Sai2x)),
             Self::Super2xSai => Box::new(SaiPostProcessor::new(SaiVariant::Super2xSai)),
             Self::SuperEagle => Box::new(SaiPostProcessor::new(SaiVariant::SuperEagle)),
+            Self::LcdGrid => Box::new(LcdGridPostProcessor::new(1.0)),
+            Self::Scanlines => Box::new(ScanlinePostProcessor::new(3, 0.25)), // 3x scale, 25% intensity
+            Self::Xbrz2x => Box::new(XbrzPostProcessor::new(2)),
+            Self::Xbrz3x => Box::new(XbrzPostProcessor::new(3)),
+            Self::Xbrz4x => Box::new(XbrzPostProcessor::new(4)),
+            Self::Xbrz5x => Box::new(XbrzPostProcessor::new(5)),
+            Self::Xbrz6x => Box::new(XbrzPostProcessor::new(6)),
         }
     }
 }

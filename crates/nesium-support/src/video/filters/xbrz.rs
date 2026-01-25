@@ -1,13 +1,10 @@
 use nesium_core::ppu::buffer::{ColorFormat, NearestPostProcessor, VideoPostProcessor};
 use nesium_core::ppu::palette::Color;
 
-use crate::video::xbrz::xbrz_scale_argb8888;
-
 #[derive(Debug, Clone)]
 pub struct XbrzPostProcessor {
     scale: u8,
     input_argb: Vec<u32>,
-    output_argb: Vec<u32>,
     fallback: NearestPostProcessor,
 }
 
@@ -16,7 +13,6 @@ impl XbrzPostProcessor {
         Self {
             scale,
             input_argb: Vec::new(),
-            output_argb: Vec::new(),
             fallback: NearestPostProcessor::default(),
         }
     }
@@ -92,75 +88,110 @@ impl VideoPostProcessor for XbrzPostProcessor {
         if src_indices.len() != expected_in {
             return;
         }
-        let expected_out = match dst_width.checked_mul(dst_height) {
-            Some(v) => v,
-            None => return,
-        };
 
         self.input_argb.resize(expected_in, 0);
-        self.output_argb.resize(expected_out, 0);
 
         for (i, &idx) in src_indices.iter().enumerate() {
             let c = palette[(idx & 0x3F) as usize];
+            // xbrz-rs takes RGBA bytes (R, G, B, A).
+            // We pack into u32.
+            // On Little Endian: 0xAABBGGRR -> [RR, GG, BB, AA]
             self.input_argb[i] =
-                0xFF00_0000 | ((c.r as u32) << 16) | ((c.g as u32) << 8) | (c.b as u32);
+                0xFF00_0000 | ((c.b as u32) << 16) | ((c.g as u32) << 8) | (c.r as u32);
         }
 
-        xbrz_scale_argb8888(
-            scale,
-            self.input_argb.as_slice(),
-            src_width,
-            src_height,
-            self.output_argb.as_mut_slice(),
-        );
+        // xbrz-rs uses RGBA bytes
+        #[cfg(target_arch = "wasm32")]
+        {
+            if self.input_argb.len() > 0 && (src_indices.len() > 0 && src_indices[0] != 0) {
+                // Sample log once to avoid spam (checking if not black/zero index to be interesting)
+                // But hard to do "once" without state.
+                // Just logging for a single interesting frame or similar is tricky.
+                // We'll trust the user to only check logs briefly.
+                web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&format!(
+                    "xbrz input: dim={}x{} scale={} input_len={} [0]={:08X} [1]={:08X}",
+                    src_width,
+                    src_height,
+                    scale,
+                    self.input_argb.len(),
+                    self.input_argb[0],
+                    self.input_argb.get(1).unwrap_or(&0)
+                )));
+            }
+        }
+
+        use xbrz_lib::scale_rgba;
+
+        // Cast u32 slice to u8 slice
+        // SAFETY: u32 to u8 cast is safe for read.
+        let src_bytes = unsafe {
+            std::slice::from_raw_parts(
+                self.input_argb.as_ptr() as *const u8,
+                self.input_argb.len() * 4,
+            )
+        };
+
+        let output_rgba = scale_rgba(src_bytes, src_width, src_height, scale);
+
+        // Check output size
+        if output_rgba.len() != dst_width * dst_height * 4 {
+            // Should not happen if xbrz works as expected
+            return;
+        }
 
         match dst_format {
             ColorFormat::Rgba8888 => {
                 for y in 0..dst_height {
-                    let row_src = &self.output_argb[y * dst_width..(y + 1) * dst_width];
-                    let row_dst = &mut dst[y * dst_pitch..y * dst_pitch + row_bytes];
-                    for (x, &argb) in row_src.iter().enumerate() {
-                        let r = ((argb >> 16) & 0xFF) as u8;
-                        let g = ((argb >> 8) & 0xFF) as u8;
-                        let b = (argb & 0xFF) as u8;
-                        let off = x * 4;
-                        row_dst[off] = r;
-                        row_dst[off + 1] = g;
-                        row_dst[off + 2] = b;
-                        row_dst[off + 3] = 0xFF;
-                    }
+                    let src_start = y * dst_width * 4;
+                    let src_end = src_start + dst_width * 4;
+                    let row_src = &output_rgba[src_start..src_end];
+
+                    let dst_start = y * dst_pitch;
+                    let dst_end = dst_start + row_bytes;
+                    let row_dst = &mut dst[dst_start..dst_end];
+
+                    row_dst.copy_from_slice(row_src);
                 }
             }
             ColorFormat::Bgra8888 => {
                 for y in 0..dst_height {
-                    let row_src = &self.output_argb[y * dst_width..(y + 1) * dst_width];
-                    let row_dst = &mut dst[y * dst_pitch..y * dst_pitch + row_bytes];
-                    for (x, &argb) in row_src.iter().enumerate() {
-                        let r = ((argb >> 16) & 0xFF) as u8;
-                        let g = ((argb >> 8) & 0xFF) as u8;
-                        let b = (argb & 0xFF) as u8;
+                    let src_start = y * dst_width * 4;
+                    let src_end = src_start + dst_width * 4;
+                    let row_src = &output_rgba[src_start..src_end];
+
+                    let dst_start = y * dst_pitch;
+                    let dst_end = dst_start + row_bytes;
+                    let row_dst = &mut dst[dst_start..dst_end];
+
+                    for x in 0..dst_width {
                         let off = x * 4;
-                        row_dst[off] = b;
-                        row_dst[off + 1] = g;
-                        row_dst[off + 2] = r;
-                        row_dst[off + 3] = 0xFF;
+                        // src: R G B A
+                        // dst: B G R A
+                        row_dst[off] = row_src[off + 2]; // B <- B
+                        row_dst[off + 1] = row_src[off + 1]; // G <- G
+                        row_dst[off + 2] = row_src[off]; // R <- R
+                        row_dst[off + 3] = row_src[off + 3]; // A <- A
                     }
                 }
             }
             ColorFormat::Argb8888 => {
                 for y in 0..dst_height {
-                    let row_src = &self.output_argb[y * dst_width..(y + 1) * dst_width];
-                    let row_dst = &mut dst[y * dst_pitch..y * dst_pitch + row_bytes];
-                    for (x, &argb) in row_src.iter().enumerate() {
-                        let a = 0xFFu8;
-                        let r = ((argb >> 16) & 0xFF) as u8;
-                        let g = ((argb >> 8) & 0xFF) as u8;
-                        let b = (argb & 0xFF) as u8;
+                    let src_start = y * dst_width * 4;
+                    let src_end = src_start + dst_width * 4;
+                    let row_src = &output_rgba[src_start..src_end];
+
+                    let dst_start = y * dst_pitch;
+                    let dst_end = dst_start + row_bytes;
+                    let row_dst = &mut dst[dst_start..dst_end];
+
+                    for x in 0..dst_width {
                         let off = x * 4;
-                        row_dst[off] = a;
-                        row_dst[off + 1] = r;
-                        row_dst[off + 2] = g;
-                        row_dst[off + 3] = b;
+                        // src: R G B A
+                        // dst: A R G B
+                        row_dst[off] = row_src[off + 3]; // A <- A
+                        row_dst[off + 1] = row_src[off]; // R <- R
+                        row_dst[off + 2] = row_src[off + 1]; // G <- G
+                        row_dst[off + 3] = row_src[off + 2]; // B <- B
                     }
                 }
             }

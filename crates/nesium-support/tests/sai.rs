@@ -1,5 +1,3 @@
-#![cfg(feature = "sai")]
-
 use nesium_core::ppu::buffer::{ColorFormat, VideoPostProcessor};
 use nesium_core::ppu::palette::Color;
 use nesium_support::video::filters::{SaiPostProcessor, SaiVariant};

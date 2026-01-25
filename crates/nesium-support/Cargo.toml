@@ -28,10 +28,14 @@ gilrs = { workspace = true, optional = true }
 default = []
 gamepad = ["gilrs"]
 hqx = []
+hqx-cpp = []
 ntsc = []
-sai = []
-sai-cpp = ["sai"]
-lcd-grid = []
-scanline = []
+sai-cpp = []
+lcd-grid-cpp = []
+scanline-cpp = []
 xbrz = []
 ntsc-bisqwit = []
+
+[dependencies.xbrz_lib]
+package = "xbrz-rs"
+version = "0.1"
