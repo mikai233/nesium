@@ -25,6 +25,7 @@ if (Test-Path $zipFile) {
     Remove-Item $zipFile -Force
 }
 
+Add-Type -AssemblyName "System.IO.Compression"
 Add-Type -AssemblyName "System.IO.Compression.FileSystem"
 $compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
 $zip = [System.IO.Compression.ZipFile]::Open($zipFile, [System.IO.Compression.ZipArchiveMode]::Create)

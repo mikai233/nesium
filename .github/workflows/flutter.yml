@@ -45,6 +45,13 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Generate shaders.zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x tool/zip_shaders.sh
+          ./tool/zip_shaders.sh
+
       - name: Pub get
         run: flutter pub get
 

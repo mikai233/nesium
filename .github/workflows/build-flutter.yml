@@ -224,6 +224,21 @@ jobs:
           fi
           "${SDKMANAGER}" --list_installed | grep -E "ndk;" || true
 
+      - name: Generate shaders.zip (Windows)
+        if: runner.os == 'Windows'
+        working-directory: apps/nesium_flutter
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File tool/zip_shaders.ps1
+
+      - name: Generate shaders.zip (macOS/Linux)
+        if: runner.os != 'Windows'
+        working-directory: apps/nesium_flutter
+        shell: bash
+        run: |
+          chmod +x tool/zip_shaders.sh
+          ./tool/zip_shaders.sh
+
       - name: Flutter pub get
         working-directory: apps/nesium_flutter
         shell: bash

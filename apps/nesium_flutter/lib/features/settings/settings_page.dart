@@ -1223,20 +1223,6 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
                       value: nes_video.VideoFilter.prescale4X,
                       label: l10n.videoFilterPrescale4x,
                     ),
-                    if (!kIsWeb) ...[
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.hq2X,
-                        label: l10n.videoFilterHq2x,
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.hq3X,
-                        label: l10n.videoFilterHq3x,
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.hq4X,
-                        label: l10n.videoFilterHq4x,
-                      ),
-                    ],
                     DropdownMenuEntry(
                       value: nes_video.VideoFilter.sai2X,
                       label: l10n.videoFilter2xSai,
@@ -1257,6 +1243,20 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
                       value: nes_video.VideoFilter.scanlines,
                       label: l10n.videoFilterScanlines,
                     ),
+                    if (!kIsWeb) ...[
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.hq2X,
+                        label: l10n.videoFilterHq2x,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.hq3X,
+                        label: l10n.videoFilterHq3x,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.hq4X,
+                        label: l10n.videoFilterHq4x,
+                      ),
+                    ],
                     DropdownMenuEntry(
                       value: nes_video.VideoFilter.xbrz2X,
                       label: l10n.videoFilterXbrz2x,

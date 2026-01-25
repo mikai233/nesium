@@ -1,40 +1,36 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # apps/nesium_flutter/tool/zip_shaders.sh
 
-# Cross-platform script to zip shaders.
-# On Windows, it uses PowerShell + .NET for speed.
-# On macOS/Linux, it uses the standard zip command.
+set -euo pipefail
 
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-ASSETS_DIR="$SCRIPT_DIR/../assets"
-SHADERS_DIR="$ASSETS_DIR/shaders"
-ZIP_FILE="$ASSETS_DIR/shaders.zip"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SHADER_DIR="$(cd "${SCRIPT_DIR}/../assets/shaders" && pwd)"
+ZIP_FILE="$(cd "${SCRIPT_DIR}/../assets" && pwd)/shaders.zip"
 
-echo "Zipping shaders from $SHADERS_DIR to $ZIP_FILE..."
+EXCLUDE_LIST=("bezel" "handheld" "stereoscopic-3d" "deinterlacing" "motion-interpolation" "test" "test-patterns")
 
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
-    # Windows: Use the dedicated PowerShell script for consistency and performance
-    # Passing the full path to ensure it finds the script relative to this script's directory
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$SCRIPT_DIR/zip_shaders.ps1")"
-else
-    # macOS / Linux
-    if command -v zip >/dev/null 2>&1; then
-        rm -f "$ZIP_FILE"
-        EXCLUDES=(
-            "*.git*"
-            "*/bezel/*"
-            "*/handheld/*"
-            "*/stereoscopic-3d/*"
-            "*/deinterlacing/*"
-            "*/motion-interpolation/*"
-            "*/test/*"
-            "*/test-patterns/*"
-        )
-        cd "$SHADERS_DIR" && zip -r "$ZIP_FILE" . -x "${EXCLUDES[@]}"
-    else
-        echo "Error: 'zip' command not found."
-        exit 1
-    fi
-fi
+echo "Zipping shaders from ${SHADER_DIR} to ${ZIP_FILE}..."
 
-echo "Done!"
+# Build exclusion pattern for find
+EXCLUDE_ARGS=()
+for item in "${EXCLUDE_LIST[@]}"; do
+    EXCLUDE_ARGS+=("-o" "-path" "*/${item}/*" "-o" "-name" "${item}")
+done
+
+# Temporary list file
+LIST_FILE=$(mktemp)
+
+pushd "${SHADER_DIR}" > /dev/null
+# Find all files, excluding .git and categories
+find . -type f \
+    ! -path "*/.git/*" \
+    ! \( "${EXCLUDE_ARGS[@]:1}" \) \
+    > "${LIST_FILE}"
+
+# Create zip
+zip -@ "${ZIP_FILE}" < "${LIST_FILE}"
+popd > /dev/null
+
+rm "${LIST_FILE}"
+
+echo "Done! File size: $(du -h "${ZIP_FILE}" | cut -f1)"
