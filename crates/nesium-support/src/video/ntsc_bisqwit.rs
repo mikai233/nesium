@@ -1,4 +1,3 @@
-#[cfg(all(feature = "ntsc-bisqwit", not(target_arch = "wasm32")))]
 unsafe extern "C" {
     fn nesium_ntsc_bisqwit_apply_argb8888(
         ppu: *const u16,
@@ -17,7 +16,6 @@ unsafe extern "C" {
     );
 }
 
-#[cfg(all(feature = "ntsc-bisqwit", not(target_arch = "wasm32")))]
 pub fn ntsc_bisqwit_apply_argb8888(
     ppu: &[u16],
     ppu_width: usize,

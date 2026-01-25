@@ -1,4 +1,4 @@
-#![cfg(all(feature = "hqx", feature = "hqx-cpp"))]
+#![cfg(feature = "hqx-cpp")]
 
 use nesium_support::video::hqx::{HqxScale, hqx_scale_argb8888};
 use proptest::prelude::*;

@@ -1205,6 +1205,7 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
                 dropdown<nes_video.VideoFilter>(
                   labelText: l10n.videoFilterLabel,
                   value: videoSettings.videoFilter,
+                  onSelected: setVideoFilter,
                   entries: [
                     DropdownMenuEntry(
                       value: nes_video.VideoFilter.none,
@@ -1222,18 +1223,20 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
                       value: nes_video.VideoFilter.prescale4X,
                       label: l10n.videoFilterPrescale4x,
                     ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.hq2X,
-                      label: l10n.videoFilterHq2x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.hq3X,
-                      label: l10n.videoFilterHq3x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.hq4X,
-                      label: l10n.videoFilterHq4x,
-                    ),
+                    if (!kIsWeb) ...[
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.hq2X,
+                        label: l10n.videoFilterHq2x,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.hq3X,
+                        label: l10n.videoFilterHq3x,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.hq4X,
+                        label: l10n.videoFilterHq4x,
+                      ),
+                    ],
                     DropdownMenuEntry(
                       value: nes_video.VideoFilter.sai2X,
                       label: l10n.videoFilter2xSai,
@@ -1274,36 +1277,37 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
                       value: nes_video.VideoFilter.xbrz6X,
                       label: l10n.videoFilterXbrz6x,
                     ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.ntscComposite,
-                      label: l10n.videoFilterNtscComposite,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.ntscSVideo,
-                      label: l10n.videoFilterNtscSvideo,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.ntscRgb,
-                      label: l10n.videoFilterNtscRgb,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.ntscMonochrome,
-                      label: l10n.videoFilterNtscMonochrome,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.ntscBisqwit2X,
-                      label: l10n.videoFilterNtscBisqwit2x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.ntscBisqwit4X,
-                      label: l10n.videoFilterNtscBisqwit4x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.ntscBisqwit8X,
-                      label: l10n.videoFilterNtscBisqwit8x,
-                    ),
+                    if (!kIsWeb) ...[
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.ntscComposite,
+                        label: l10n.videoFilterNtscComposite,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.ntscSVideo,
+                        label: l10n.videoFilterNtscSvideo,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.ntscRgb,
+                        label: l10n.videoFilterNtscRgb,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.ntscMonochrome,
+                        label: l10n.videoFilterNtscMonochrome,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.ntscBisqwit2X,
+                        label: l10n.videoFilterNtscBisqwit2x,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.ntscBisqwit4X,
+                        label: l10n.videoFilterNtscBisqwit4x,
+                      ),
+                      DropdownMenuEntry(
+                        value: nes_video.VideoFilter.ntscBisqwit8X,
+                        label: l10n.videoFilterNtscBisqwit8x,
+                      ),
+                    ],
                   ],
-                  onSelected: setVideoFilter,
                 ),
                 const SizedBox(height: 12),
                 if (videoSettings.videoFilter == nes_video.VideoFilter.lcdGrid)

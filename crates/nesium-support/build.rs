@@ -8,23 +8,21 @@ fn main() {
         return;
     }
 
-    let has_hqx = env::var_os("CARGO_FEATURE_HQX").is_some();
     let has_hqx_cpp = env::var_os("CARGO_FEATURE_HQX_CPP").is_some();
-    let has_ntsc = env::var_os("CARGO_FEATURE_NTSC").is_some();
+    let has_ntsc_cpp = env::var_os("CARGO_FEATURE_NTSC_CPP").is_some();
     let has_sai_cpp = env::var_os("CARGO_FEATURE_SAI_CPP").is_some();
     let has_xbrz = env::var_os("CARGO_FEATURE_XBRZ").is_some();
-    let has_ntsc_bisqwit = env::var_os("CARGO_FEATURE_NTSC_BISQWIT").is_some();
+    let has_ntsc_bisqwit_cpp = env::var_os("CARGO_FEATURE_NTSC_BISQWIT_CPP").is_some();
     let has_lcd_grid_cpp = env::var_os("CARGO_FEATURE_LCD_GRID_CPP").is_some();
     let has_scanline_cpp = env::var_os("CARGO_FEATURE_SCANLINE_CPP").is_some();
 
-    if !has_hqx
-        && !has_hqx_cpp
-        && !has_ntsc
+    if !has_hqx_cpp
+        && !has_ntsc_cpp
         && !has_sai_cpp
         && !has_lcd_grid_cpp
         && !has_scanline_cpp
         && !has_xbrz
-        && !has_ntsc_bisqwit
+        && !has_ntsc_bisqwit_cpp
     {
         return;
     }
@@ -57,11 +55,7 @@ fn main() {
         build.compile("nesium_support_hqx_cpp");
     }
 
-    if has_hqx {
-        // HQX is now implemented in native Rust. No C++ compilation needed.
-    }
-
-    if has_ntsc {
+    if has_ntsc_cpp {
         let vendor_dir = crate_dir.join("vendor").join("ntsc");
         for rel in [
             "nes_ntsc.h",
@@ -154,7 +148,7 @@ fn main() {
         // xbrz is now implemented in native Rust. No C++ compilation needed.
     }
 
-    if has_ntsc_bisqwit {
+    if has_ntsc_bisqwit_cpp {
         let vendor_dir = crate_dir.join("vendor").join("ntsc_bisqwit");
         println!(
             "cargo:rerun-if-changed={}",

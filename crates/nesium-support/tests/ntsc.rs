@@ -1,4 +1,4 @@
-#![cfg(feature = "ntsc")]
+#![cfg(feature = "ntsc-cpp")]
 
 use nesium_core::ppu::buffer::{ColorFormat, VideoPostProcessor};
 use nesium_core::ppu::palette::Color;

@@ -45,14 +45,39 @@ Future<frb_video.VideoOutputInfo> setVideoFilter({
           outputHeight: baseH * 2,
         );
       case frb_video.VideoFilter.lcdGrid:
+        return const frb_video.VideoOutputInfo(
+          outputWidth: baseW * 2,
+          outputHeight: baseH * 2,
+        );
       case frb_video.VideoFilter.scanlines:
+        return const frb_video.VideoOutputInfo(
+          outputWidth: baseW * 3,
+          outputHeight: baseH * 3,
+        );
       case frb_video.VideoFilter.xbrz2X:
+        return const frb_video.VideoOutputInfo(
+          outputWidth: baseW * 2,
+          outputHeight: baseH * 2,
+        );
       case frb_video.VideoFilter.xbrz3X:
+        return const frb_video.VideoOutputInfo(
+          outputWidth: baseW * 3,
+          outputHeight: baseH * 3,
+        );
       case frb_video.VideoFilter.xbrz4X:
+        return const frb_video.VideoOutputInfo(
+          outputWidth: baseW * 4,
+          outputHeight: baseH * 4,
+        );
       case frb_video.VideoFilter.xbrz5X:
+        return const frb_video.VideoOutputInfo(
+          outputWidth: baseW * 5,
+          outputHeight: baseH * 5,
+        );
       case frb_video.VideoFilter.xbrz6X:
-        throw UnsupportedError(
-          'This video filter is not supported on web yet (WASM supports PrescaleNx + SaI only).',
+        return const frb_video.VideoOutputInfo(
+          outputWidth: baseW * 6,
+          outputHeight: baseH * 6,
         );
       case frb_video.VideoFilter.hq2X:
       case frb_video.VideoFilter.hq3X:
@@ -65,7 +90,7 @@ Future<frb_video.VideoOutputInfo> setVideoFilter({
       case frb_video.VideoFilter.ntscBisqwit4X:
       case frb_video.VideoFilter.ntscBisqwit8X:
         throw UnsupportedError(
-          'This video filter is not supported on web yet (WASM supports PrescaleNx + SaI only).',
+          'This video filter is not supported on web yet (requires C++ compilation).',
         );
     }
   }
@@ -83,12 +108,14 @@ Future<void> setNtscOptions({required frb_video.NtscOptions options}) {
 }
 
 Future<void> setLcdGridOptions({required frb_video.LcdGridOptions options}) {
-  // LCD Grid is not supported on web yet.
+  if (!isWebNesReady) return Future.value();
+  webPostCmd('setLcdGridOptions', {'strength': options.strength});
   return Future.value();
 }
 
 Future<void> setScanlineOptions({required frb_video.ScanlineOptions options}) {
-  // Scanlines are not supported on web yet.
+  if (!isWebNesReady) return Future.value();
+  webPostCmd('setScanlineOptions', {'intensity': options.intensity});
   return Future.value();
 }
 

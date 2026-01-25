@@ -100,6 +100,11 @@ pub struct WasmNes {
     /// TAS movie playback.
     movie: Option<nesium_support::tas::Movie>,
     movie_frame: usize,
+
+    /// Filter state for web.
+    current_filter: WasmVideoFilter,
+    lcd_grid_strength: f64,
+    scanline_intensity: f64,
 }
 
 #[wasm_bindgen]
@@ -181,7 +186,11 @@ impl WasmVideoFilter {
         }
     }
 
-    fn post_processor(self) -> Box<dyn VideoPostProcessor> {
+    fn post_processor(
+        self,
+        lcd_grid_strength: f64,
+        scanline_intensity: f64,
+    ) -> Box<dyn VideoPostProcessor> {
         match self {
             Self::None | Self::Prescale2x | Self::Prescale3x | Self::Prescale4x => {
                 Box::new(NearestPostProcessor::default())
@@ -189,8 +198,8 @@ impl WasmVideoFilter {
             Self::Sai2x => Box::new(SaiPostProcessor::new(SaiVariant::Sai2x)),
             Self::Super2xSai => Box::new(SaiPostProcessor::new(SaiVariant::Super2xSai)),
             Self::SuperEagle => Box::new(SaiPostProcessor::new(SaiVariant::SuperEagle)),
-            Self::LcdGrid => Box::new(LcdGridPostProcessor::new(1.0)),
-            Self::Scanlines => Box::new(ScanlinePostProcessor::new(3, 0.25)), // 3x scale, 25% intensity
+            Self::LcdGrid => Box::new(LcdGridPostProcessor::new(lcd_grid_strength)),
+            Self::Scanlines => Box::new(ScanlinePostProcessor::new(3, scanline_intensity)), // 3x scale
             Self::Xbrz2x => Box::new(XbrzPostProcessor::new(2)),
             Self::Xbrz3x => Box::new(XbrzPostProcessor::new(3)),
             Self::Xbrz4x => Box::new(XbrzPostProcessor::new(4)),
@@ -240,6 +249,9 @@ impl WasmNes {
             rewind_speed_percent: 100,
             movie: None,
             movie_frame: 0,
+            current_filter: WasmVideoFilter::None,
+            lcd_grid_strength: 1.0,
+            scanline_intensity: 0.3,
         }
     }
 
@@ -270,23 +282,25 @@ impl WasmNes {
         self.output_height as u32
     }
 
-    /// Sets the video filter (Web/WASM currently supports PrescaleNx + SaI only).
+    /// Sets the video filter.
     ///
     /// `filter_index` matches the Flutter `VideoFilter` enum index.
     pub fn set_video_filter(&mut self, filter_index: u32) -> Result<VideoOutputInfo, JsValue> {
-        let filter = WasmVideoFilter::try_from_index(filter_index).ok_or_else(|| {
-            JsValue::from_str("Unsupported video filter on web (WASM supports PrescaleNx + SaI)")
-        })?;
+        let filter = WasmVideoFilter::try_from_index(filter_index)
+            .ok_or_else(|| JsValue::from_str("Unsupported video filter on web"))?;
         let (output_width, output_height) = filter.output_size();
 
         let palette = *self.nes.ppu.palette().as_colors();
         let fb = self.nes.ppu.framebuffer_mut();
         fb.set_output_config(output_width, output_height);
-        fb.set_post_processor(filter.post_processor());
+        fb.set_post_processor(
+            filter.post_processor(self.lcd_grid_strength, self.scanline_intensity),
+        );
         fb.rebuild_packed(&palette);
 
         self.output_width = output_width;
         self.output_height = output_height;
+        self.current_filter = filter;
 
         self.copy_rgba_from_core()?;
 
@@ -294,6 +308,32 @@ impl WasmNes {
             output_width: output_width as u32,
             output_height: output_height as u32,
         })
+    }
+
+    pub fn set_lcd_grid_options(&mut self, strength: f64) {
+        self.lcd_grid_strength = strength;
+        if self.current_filter == WasmVideoFilter::LcdGrid {
+            let palette = *self.nes.ppu.palette().as_colors();
+            let fb = self.nes.ppu.framebuffer_mut();
+            fb.set_post_processor(
+                self.current_filter
+                    .post_processor(self.lcd_grid_strength, self.scanline_intensity),
+            );
+            fb.rebuild_packed(&palette);
+        }
+    }
+
+    pub fn set_scanline_options(&mut self, intensity: f64) {
+        self.scanline_intensity = intensity;
+        if self.current_filter == WasmVideoFilter::Scanlines {
+            let palette = *self.nes.ppu.palette().as_colors();
+            let fb = self.nes.ppu.framebuffer_mut();
+            fb.set_post_processor(
+                self.current_filter
+                    .post_processor(self.lcd_grid_strength, self.scanline_intensity),
+            );
+            fb.rebuild_packed(&palette);
+        }
     }
 
     /// Load an iNES ROM image from bytes.

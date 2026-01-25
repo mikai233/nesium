@@ -596,6 +596,22 @@ onmessage = async (ev) => {
                     break;
                 }
 
+                case "setLcdGridOptions": {
+                    const strength = Number(msg.strength ?? 1.0);
+                    if (typeof nes.set_lcd_grid_options === "function") {
+                        nes.set_lcd_grid_options(strength);
+                    }
+                    break;
+                }
+
+                case "setScanlineOptions": {
+                    const intensity = Number(msg.intensity ?? 0.3);
+                    if (typeof nes.set_scanline_options === "function") {
+                        nes.set_scanline_options(intensity);
+                    }
+                    break;
+                }
+
                 default:
                     postMessage({ type: "error", message: `Unknown cmd: ${msg.cmd}` });
             }
