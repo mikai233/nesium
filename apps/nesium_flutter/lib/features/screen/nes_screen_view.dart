@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/nes_controller.dart';
 import '../../platform/platform_capabilities.dart';
+import '../../platform/nes_video.dart' show VideoFilter;
 import '../settings/video_settings.dart';
+import '../settings/windows_shader_settings.dart';
 import 'emulation_status_overlay.dart';
 
 class NesScreenView extends ConsumerStatefulWidget {
@@ -62,6 +64,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
 
   Timer? _cursorTimer;
   bool _cursorHidden = false;
+  Size? _lastReportedSize;
 
   void _showCursorAndArmTimer() {
     if (_cursorHidden) {
@@ -90,6 +93,46 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
     }
   }
 
+  void _updateBufferSizeIfNeeded(
+    Size viewport,
+    bool shouldUseHighRes,
+    BuildContext context,
+  ) {
+    if (shouldUseHighRes) {
+      final dpr = MediaQuery.of(context).devicePixelRatio;
+      final physicalWidth = (viewport.width * dpr).round();
+      final physicalHeight = (viewport.height * dpr).round();
+
+      if (_lastReportedSize?.width != physicalWidth.toDouble() ||
+          _lastReportedSize?.height != physicalHeight.toDouble()) {
+        _lastReportedSize = Size(
+          physicalWidth.toDouble(),
+          physicalHeight.toDouble(),
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref
+                .read(nesControllerProvider.notifier)
+                .updateWindowOutputSize(physicalWidth, physicalHeight);
+          }
+        });
+      }
+    } else {
+      // Revert to native resolution when no filters/shaders are active.
+      if (_lastReportedSize?.width != 256.0 ||
+          _lastReportedSize?.height != 240.0) {
+        _lastReportedSize = const Size(256, 240);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref
+                .read(nesControllerProvider.notifier)
+                .updateWindowOutputSize(256, 240);
+          }
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
     _cursorTimer?.cancel();
@@ -102,6 +145,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
       nesControllerProvider.select((s) => s.romHash != null),
     );
     final settings = ref.watch(videoSettingsProvider);
+    final windowsShaderSettings = ref.watch(windowsShaderSettingsProvider);
     final integerScaling = settings.integerScaling;
     final aspectRatio = settings.aspectRatio;
 
@@ -163,6 +207,12 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           );
           if (viewport == null) return const SizedBox.shrink();
 
+          final shouldUseHighRes =
+              settings.videoFilter != VideoFilter.none ||
+              windowsShaderSettings.enabled;
+
+          _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
+
           final child = SizedBox(
             width: viewport.width,
             height: viewport.height,
@@ -171,7 +221,9 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
               children: [
                 Texture(
                   textureId: widget.textureId!,
-                  filterQuality: FilterQuality.none, // nearest-neighbor scaling
+                  filterQuality: shouldUseHighRes
+                      ? FilterQuality.low
+                      : FilterQuality.none,
                 ),
                 if (hasRom) const EmulationStatusOverlay(),
               ],

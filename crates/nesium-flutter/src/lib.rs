@@ -14,6 +14,8 @@ pub mod aux_texture;
 pub mod event_worker;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 mod senders;
+#[cfg(target_os = "windows")]
+pub mod windows;
 
 #[cfg(all(
     feature = "mimalloc",

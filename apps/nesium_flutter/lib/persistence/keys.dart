@@ -9,6 +9,10 @@ final class StorageKeys {
       'settings.android.video_backend.v1';
   static const String settingsWindowsVideoBackend =
       'settings.windows.video_backend.v1';
+  static const String settingsWindowsShaderEnabled =
+      'settings.windows.shader_enabled.v1';
+  static const String settingsWindowsShaderPresetPath =
+      'settings.windows.shader_preset_path.v1';
   static const String settingsWindowsHighPerformance =
       'settings.windows.high_performance.v1';
   static const String settingsAndroidHighPerformance =

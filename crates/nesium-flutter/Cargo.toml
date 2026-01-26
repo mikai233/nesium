@@ -57,7 +57,7 @@ mimalloc = ["dep:mimalloc"]
 jni.workspace = true
 ndk-context.workspace = true
 libc.workspace = true
-librashader = { version = "0.10.0", default-features = false, features = [
+librashader = { workspace = true, features = [
     "runtime-gl",
     "presets",
     "preprocess",
@@ -66,3 +66,16 @@ librashader = { version = "0.10.0", default-features = false, features = [
 glow = "0.16.0"
 android_logger = "0.13"
 log = "0.4"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+librashader = { workspace = true, features = [
+    "runtime-d3d11",
+    "presets",
+    "preprocess",
+    "stable",
+] }
+log = "0.4"
+windows = { version = "0.62.2", features = [
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi_Common",
+] }

@@ -103,6 +103,19 @@ class NesController extends Notifier<NesState> {
       state = state.copyWith(clearRomBytes: true);
     }
   }
+
+  /// Updates the presentation buffer size to match the physical window size.
+  ///
+  /// This is critical for shaders on Windows to render at native resolution (HiDPI).
+  Future<void> updateWindowOutputSize(int width, int height) async {
+    // Only applied on Windows for now where we use the GPU texture path with decoupled resolution.
+    if (useAndroidNativeGameView) return;
+    try {
+      await _textureService.setPresentBufferSize(width: width, height: height);
+    } catch (e) {
+      logError(e, message: 'updateWindowOutputSize failed');
+    }
+  }
 }
 
 final nesControllerProvider = NotifierProvider<NesController, NesState>(

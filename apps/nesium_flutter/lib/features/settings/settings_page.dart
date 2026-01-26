@@ -26,6 +26,7 @@ import 'language_settings.dart';
 import 'theme_settings.dart';
 import 'video_settings.dart';
 import 'windows_video_backend_settings.dart';
+import 'windows_shader_settings.dart';
 import 'windows_performance_settings.dart';
 import '../shaders/shader_browser_page.dart';
 
@@ -997,6 +998,13 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
         ? ref.read(androidShaderSettingsProvider.notifier)
         : null;
 
+    final windowsShaderSettings = isWindows
+        ? ref.watch(windowsShaderSettingsProvider)
+        : null;
+    final windowsShaderController = isWindows
+        ? ref.read(windowsShaderSettingsProvider.notifier)
+        : null;
+
     final windowsBackend = isWindows
         ? ref.watch(windowsVideoBackendSettingsProvider)
         : const WindowsVideoBackendSettings(
@@ -1176,9 +1184,15 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
     }
 
     Future<void> pickAndSetShaderPreset() async {
-      if (!isAndroid) return;
-      if (androidShaderController == null) return;
-      if (androidBackend.backend != AndroidVideoBackend.hardware) return;
+      if (!isAndroid && !isWindows) return;
+      if (isAndroid) {
+        if (androidShaderController == null) return;
+        if (androidBackend.backend != AndroidVideoBackend.hardware) return;
+      }
+      if (isWindows) {
+        if (windowsShaderController == null) return;
+        if (windowsBackend.backend != WindowsVideoBackend.d3d11Gpu) return;
+      }
 
       if (!context.mounted) return;
       Navigator.of(context).push(
@@ -2116,6 +2130,78 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
             ),
           ),
         ),
+        if (isWindows && windowsShaderSettings != null) ...[
+          const SizedBox(height: 12),
+          AnimatedSettingsCard(
+            index: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.auto_fix_high),
+                    title: Text(l10n.videoShaderLibrashaderTitle),
+                    subtitle: Text(
+                      windowsBackend.backend == WindowsVideoBackend.d3d11Gpu
+                          ? l10n.videoShaderLibrashaderSubtitle
+                          : l10n.videoShaderLibrashaderSubtitleDisabled,
+                    ),
+                    value: windowsShaderSettings.enabled,
+                    onChanged:
+                        windowsBackend.backend == WindowsVideoBackend.d3d11Gpu
+                        ? (value) async {
+                            try {
+                              await windowsShaderController?.setEnabled(value);
+                            } catch (e, st) {
+                              logWarning(
+                                e,
+                                stackTrace: st,
+                                message: 'setEnabled failed',
+                                logger: 'settings_page',
+                              );
+                            }
+                          }
+                        : null,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.description_outlined),
+                    title: Text(l10n.videoShaderPresetLabel),
+                    subtitle: Text(
+                      windowsShaderSettings.presetPath ??
+                          l10n.videoShaderPresetNotSet,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.folder_open),
+                    onTap:
+                        windowsBackend.backend == WindowsVideoBackend.d3d11Gpu
+                        ? pickAndSetShaderPreset
+                        : null,
+                    onLongPress: windowsShaderSettings.presetPath == null
+                        ? null
+                        : () async {
+                            try {
+                              await windowsShaderController?.setPresetPath(
+                                null,
+                              );
+                            } catch (e, st) {
+                              logWarning(
+                                e,
+                                stackTrace: st,
+                                message: 'clear preset failed',
+                                logger: 'settings_page',
+                              );
+                            }
+                          },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         if (isAndroid && androidShaderSettings != null) ...[
           const SizedBox(height: 12),
           AnimatedSettingsCard(

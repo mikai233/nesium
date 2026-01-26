@@ -24,8 +24,9 @@ class NesiumGpuTexture {
 public:
   /// Create a new GPU texture with the given dimensions.
   /// Returns nullptr if D3D11 initialization fails.
-  static std::shared_ptr<NesiumGpuTexture> Create(int width, int height,
-                                                  IDXGIAdapter *adapter = nullptr);
+  static std::shared_ptr<NesiumGpuTexture>
+  Create(int src_width, int src_height, int dst_width, int dst_height,
+         IDXGIAdapter *adapter = nullptr);
 
   ~NesiumGpuTexture();
 
@@ -37,16 +38,19 @@ public:
   /// Unmap the write buffer and make it available for Flutter to read.
   void UnmapAndCommit();
 
-  /// Recreate underlying textures with a new size.
-  void Resize(int width, int height);
+  /// Resize source (input) dimensions.
+  void ResizeSource(int width, int height);
+
+  /// Resize output (destination) dimensions.
+  void ResizeOutput(int width, int height);
 
   /// Get the Flutter GPU surface descriptor for the current front buffer.
   /// This is called by Flutter's texture callback.
   const FlutterDesktopGpuSurfaceDescriptor *GetGpuSurface(size_t width,
                                                           size_t height);
 
-  int width() const { return width_; }
-  int height() const { return height_; }
+  int width() const { return src_width_; }
+  int height() const { return src_height_; }
   bool is_valid() const { return device_ != nullptr; }
 
 private:
@@ -84,22 +88,28 @@ private:
     HANDLE handle_ = nullptr;
   };
 
-  NesiumGpuTexture(int width, int height);
+  NesiumGpuTexture(int src_width, int src_height, int dst_width,
+                   int dst_height);
   bool Initialize(IDXGIAdapter *adapter);
   bool CreateBuffersLocked();
 
-  int width_;
-  int height_;
+  int src_width_;
+  int src_height_;
+  int dst_width_;
+  int dst_height_;
 
   ComPtr<ID3D11Device> device_;
   ComPtr<ID3D11DeviceContext> context_;
 
   // Double-buffered textures: one for writing, one for Flutter to read.
   // staging_textures_: CPU-writable staging resources.
-  // gpu_textures_: GPU-readable shared resources (opened by Flutter via handle).
+  // gpu_textures_: GPU-readable shared resources (opened by Flutter via
+  // handle).
   static constexpr int kBufferCount = 2;
   ComPtr<ID3D11Texture2D> staging_textures_[kBufferCount];
   ComPtr<ID3D11Texture2D> gpu_textures_[kBufferCount];
+  ComPtr<ID3D11Texture2D>
+      shader_texture_; // Intermediate texture for shader input
   ScopedHandle shared_handles_[kBufferCount];
 
   std::atomic<int> write_index_{0};

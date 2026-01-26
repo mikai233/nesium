@@ -477,10 +477,16 @@ pub fn set_shader_enabled(enabled: bool) -> Result<(), String> {
         Ok(())
     }
 
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "windows")]
+    {
+        crate::windows::windows_set_shader_enabled(enabled);
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "windows")))]
     {
         let _ = enabled;
-        Err("Librashader is only supported on Android for now.".to_string())
+        Err("Librashader is only supported on Android and Windows for now.".to_string())
     }
 }
 
@@ -500,9 +506,23 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
         Ok(())
     }
 
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "windows")]
+    {
+        let path = path.and_then(|p| {
+            let trimmed = p.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        });
+        crate::windows::windows_set_shader_preset_path(path);
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "windows")))]
     {
         let _ = path;
-        Err("Librashader is only supported on Android for now.".to_string())
+        Err("Librashader is only supported on Android and Windows for now.".to_string())
     }
 }

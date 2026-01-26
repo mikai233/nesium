@@ -21,12 +21,12 @@ using NesiumFrameReadyCallback = void(NESIUM_CALLCONV *)(
 
 extern "C" {
 NESIUM_RUST_IMPORT void nesium_runtime_start();
-  NESIUM_RUST_IMPORT void
-  nesium_set_frame_ready_callback(NesiumFrameReadyCallback cb, void *user);
-  NESIUM_RUST_IMPORT void nesium_copy_frame(uint32_t bufferIndex, uint8_t *dst,
-                                            uint32_t dstPitch,
-                                            uint32_t dstHeight);
-  NESIUM_RUST_IMPORT void nesium_set_color_format(bool use_bgra);
+NESIUM_RUST_IMPORT void
+nesium_set_frame_ready_callback(NesiumFrameReadyCallback cb, void *user);
+NESIUM_RUST_IMPORT void nesium_copy_frame(uint32_t bufferIndex, uint8_t *dst,
+                                          uint32_t dstPitch,
+                                          uint32_t dstHeight);
+NESIUM_RUST_IMPORT void nesium_set_color_format(bool use_bgra);
 
 NESIUM_RUST_IMPORT void nesium_aux_create(uint32_t id, uint32_t width,
                                           uint32_t height);
@@ -34,4 +34,12 @@ NESIUM_RUST_IMPORT std::size_t nesium_aux_copy(uint32_t id, uint8_t *dst,
                                                uint32_t dst_pitch,
                                                uint32_t dst_height);
 NESIUM_RUST_IMPORT void nesium_aux_destroy(uint32_t id);
+
+// Shader APIs
+NESIUM_RUST_IMPORT void nesium_set_d3d11_device(void *device, void *context);
+NESIUM_RUST_IMPORT bool nesium_apply_shader(void *input_tex, void *output_tex,
+                                            uint32_t src_width,
+                                            uint32_t src_height,
+                                            uint32_t dst_width,
+                                            uint32_t dst_height);
 }

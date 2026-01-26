@@ -120,11 +120,4 @@ rcgen = { version = "0.14.6", default-features = false, features = [
 ] }
 parking_lot = "0.12.5"
 xbrz-rs = "0.1.0"
-
-[patch.crates-io]
-librashader = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
-librashader-common = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
-librashader-runtime-gl = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
-librashader-presets = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
-librashader-preprocess = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
-librashader-reflect = { git = "https://github.com/mikai233/librashader", branch = "nesium" }
+librashader = { version = "0.10.1", default-features = false }

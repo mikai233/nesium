@@ -7,6 +7,7 @@ import 'features/settings/language_settings.dart';
 import 'features/settings/theme_settings.dart';
 import 'features/settings/gamepad_assignment_controller.dart';
 import 'features/settings/android_shader_settings.dart';
+import 'features/settings/windows_shader_settings.dart';
 import 'l10n/app_localizations.dart';
 import 'windows/window_routing.dart';
 import 'windows/window_message_router.dart';
@@ -24,6 +25,7 @@ class NesiumApp extends ConsumerWidget {
     ref.watch(gamepadAssignmentProvider);
     ref.watch(windowMessageRouterProvider);
     ref.watch(androidShaderSettingsProvider);
+    ref.watch(windowsShaderSettingsProvider);
     return MaterialApp(
       onGenerateTitle: (context) {
         final l10n = AppLocalizations.of(context);

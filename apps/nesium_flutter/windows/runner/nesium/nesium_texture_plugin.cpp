@@ -5,8 +5,9 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
-#include <utility>
 #include <thread>
+#include <utility>
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -167,20 +168,26 @@ private:
       if (auto *view = registrar_->GetView()) {
         adapter = view->GetGraphicsAdapter();
       }
-      gpu_texture = NesiumGpuTexture::Create(width, height, adapter);
+      // Use current known source size (or default) and requested destination
+      // size.
+      gpu_texture = NesiumGpuTexture::Create(src_width_, src_height_, width,
+                                             height, adapter);
     }
 
     if (gpu_texture && gpu_texture->is_valid()) {
       // GPU path: use GpuSurfaceTexture with DXGI shared handle.
-      // D3D11 requires BGRA format.
-      nesium_set_color_format(true);
+      //
+      // Rationale: We signal 'false' (RGBA) to the Rust core because
+      // librashader currently requires RGBA intermediate textures on Windows.
+      // The conversion to BGRA (required by Flutter/D2D) is performed by the
+      // shader backend.
+      nesium_set_color_format(false);
       auto gpu_texture_for_callback = gpu_texture;
-      texture_variant = std::make_shared<flutter::TextureVariant>(
-          flutter::GpuSurfaceTexture(
+      texture_variant =
+          std::make_shared<flutter::TextureVariant>(flutter::GpuSurfaceTexture(
               kFlutterDesktopGpuSurfaceTypeDxgiSharedHandle,
-              [gpu_texture_for_callback](
-                  size_t w,
-                  size_t h) -> const FlutterDesktopGpuSurfaceDescriptor * {
+              [gpu_texture_for_callback](size_t w, size_t h)
+                  -> const FlutterDesktopGpuSurfaceDescriptor * {
                 return gpu_texture_for_callback
                            ? gpu_texture_for_callback->GetGpuSurface(w, h)
                            : nullptr;
@@ -190,10 +197,13 @@ private:
       // CPU path uses RGBA format.
       nesium_set_color_format(false);
       gpu_texture.reset();
-      cpu_texture = std::make_shared<NesiumTexture>(width, height);
+      // CPU texture works on source size, scaling happens in Flutter.
+      // Or maybe it should also be decoupled? CPU texture usually just copies,
+      // so it's source size.
+      cpu_texture = std::make_shared<NesiumTexture>(src_width_, src_height_);
       auto cpu_texture_for_callback = cpu_texture;
-      texture_variant = std::make_shared<flutter::TextureVariant>(
-          flutter::PixelBufferTexture(
+      texture_variant =
+          std::make_shared<flutter::TextureVariant>(flutter::PixelBufferTexture(
               [cpu_texture_for_callback](
                   size_t w, size_t h) -> const FlutterDesktopPixelBuffer * {
                 return cpu_texture_for_callback
@@ -215,7 +225,7 @@ private:
 
     // Wire callback and start runtime after texture registration is ready.
     nesium_set_frame_ready_callback(&NesiumTexturePlugin::OnFrameReadyThunk,
-                                     this);
+                                    this);
     nesium_runtime_start();
 
     if (result) {
@@ -244,8 +254,8 @@ private:
       // Unregistration is asynchronous. Keep the registered TextureVariant
       // alive until the engine completes unregistration to avoid use-after-free
       // in texture callbacks.
-      texture_registrar_->UnregisterTexture(
-          id, [texture_variant_to_release]() {});
+      texture_registrar_->UnregisterTexture(id,
+                                            [texture_variant_to_release]() {});
     }
 
     if (result) {
@@ -279,16 +289,14 @@ private:
     texture_width_ = width;
     texture_height_ = height;
 
-    // Best-effort: pre-resize the presentation buffer. The Rust output size is
-    // controlled via FRB video pipeline config.
+    // Best-effort: pre-resize the presentation buffer.
     {
       std::lock_guard<std::mutex> lk(texture_state_mu_);
       if (gpu_texture_) {
-        gpu_texture_->Resize(width, height);
+        gpu_texture_->ResizeOutput(width, height);
       }
-      if (cpu_texture_) {
-        cpu_texture_->Resize(width, height);
-      }
+      // CPU texture: we don't resize output here because it's driven by source
+      // content size usually. Flutter scales it.
     }
     result->Success();
   }
@@ -396,29 +404,31 @@ private:
         cpu_texture = cpu_texture_;
       }
 
-      const uint32_t frame_w =
-          pending_width_.load(std::memory_order_acquire);
-      const uint32_t frame_h =
-          pending_height_.load(std::memory_order_acquire);
+      const uint32_t frame_w = pending_width_.load(std::memory_order_acquire);
+      const uint32_t frame_h = pending_height_.load(std::memory_order_acquire);
       if (frame_w == 0 || frame_h == 0) {
         continue;
       }
 
       if (gpu_texture) {
-        if (gpu_texture->width() != static_cast<int>(frame_w) ||
-            gpu_texture->height() != static_cast<int>(frame_h)) {
-          gpu_texture->Resize(static_cast<int>(frame_w),
-                              static_cast<int>(frame_h));
-          texture_width_ = static_cast<int>(frame_w);
-          texture_height_ = static_cast<int>(frame_h);
+        // Resize Source if frame size changed
+        if (src_width_ != static_cast<int>(frame_w) ||
+            src_height_ != static_cast<int>(frame_h)) {
+          gpu_texture->ResizeSource(static_cast<int>(frame_w),
+                                    static_cast<int>(frame_h));
+          src_width_ = static_cast<int>(frame_w);
+          src_height_ = static_cast<int>(frame_h);
         }
+        // Note: Output dimension updates (dst_width/height) are handled via
+        // SetPresentBufferSize, which triggers ResizeOutput on the GPU texture.
+
       } else if (cpu_texture) {
         if (cpu_texture->width() != static_cast<int>(frame_w) ||
             cpu_texture->height() != static_cast<int>(frame_h)) {
           cpu_texture->Resize(static_cast<int>(frame_w),
                               static_cast<int>(frame_h));
-          texture_width_ = static_cast<int>(frame_w);
-          texture_height_ = static_cast<int>(frame_h);
+          src_width_ = static_cast<int>(frame_w);
+          src_height_ = static_cast<int>(frame_h);
         }
       }
 
@@ -427,7 +437,8 @@ private:
         auto [dst, pitch] = gpu_texture->MapWriteBuffer();
         if (dst) {
           nesium_copy_frame(idx, dst, pitch,
-                            static_cast<uint32_t>(gpu_texture->height()));
+                            static_cast<uint32_t>(
+                                gpu_texture->height())); // This is src height
           gpu_texture->UnmapAndCommit();
         }
       } else if (cpu_texture) {
@@ -471,6 +482,8 @@ private:
 
   int texture_width_ = 256;
   int texture_height_ = 240;
+  int src_width_ = 256;
+  int src_height_ = 240;
 
   // Latest-only signaling from Rust thread -> worker thread.
   std::atomic<uint32_t> pending_index_{kEmptyPending};

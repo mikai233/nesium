@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
 import 'shader_browser_controller.dart';
 import '../settings/android_shader_settings.dart';
+import '../settings/windows_shader_settings.dart';
+import 'package:flutter/foundation.dart';
 
 class ShaderBrowserPage extends ConsumerStatefulWidget {
   const ShaderBrowserPage({super.key});
@@ -107,9 +109,17 @@ class _ShaderBrowserPageState extends ConsumerState<ShaderBrowserPage> {
                     if (_isSearching) _stopSearch();
                     controller.enterDirectory(node.path);
                   } else {
-                    ref
-                        .read(androidShaderSettingsProvider.notifier)
-                        .setPresetPath(node.path);
+                    if (!kIsWeb &&
+                        defaultTargetPlatform == TargetPlatform.windows) {
+                      ref
+                          .read(windowsShaderSettingsProvider.notifier)
+                          .setPresetPath(node.path);
+                    } else if (!kIsWeb &&
+                        defaultTargetPlatform == TargetPlatform.android) {
+                      ref
+                          .read(androidShaderSettingsProvider.notifier)
+                          .setPresetPath(node.path);
+                    }
                     Navigator.of(context).pop();
                   }
                 },
