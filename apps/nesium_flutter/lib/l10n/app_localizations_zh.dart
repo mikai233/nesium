@@ -956,7 +956,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoAspectRatioStretch => '拉伸';
 
   @override
-  String get videoShaderLibrashaderTitle => 'Librashader (RetroArch 预设)';
+  String get videoShaderLibrashaderTitle => 'RetroArch 着色器';
 
   @override
   String get videoShaderLibrashaderSubtitle => '需要 GLES3 + 硬件后端 (AHB 交换链)。';

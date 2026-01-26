@@ -1871,7 +1871,7 @@ abstract class AppLocalizations {
   /// No description provided for @videoShaderLibrashaderTitle.
   ///
   /// In en, this message translates to:
-  /// **'Librashader (RetroArch preset)'**
+  /// **'RetroArch Shaders'**
   String get videoShaderLibrashaderTitle;
 
   /// No description provided for @videoShaderLibrashaderSubtitle.

@@ -390,7 +390,7 @@
   "videoAspectRatioSquare": "1:1（方形像素）",
   "videoAspectRatioNtsc": "4:3（NTSC）",
   "videoAspectRatioStretch": "拉伸",
-  "videoShaderLibrashaderTitle": "Librashader (RetroArch 预设)",
+  "videoShaderLibrashaderTitle": "RetroArch 着色器",
   "videoShaderLibrashaderSubtitle": "需要 GLES3 + 硬件后端 (AHB 交换链)。",
   "videoShaderLibrashaderSubtitleWindows": "需要 D3D11 GPU 后端。",
   "videoShaderLibrashaderSubtitleDisabled": "切换 Android 后端到“硬件”以启用。",

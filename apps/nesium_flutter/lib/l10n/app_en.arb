@@ -507,7 +507,7 @@
   "videoAspectRatioSquare": "1:1 (Square pixels)",
   "videoAspectRatioNtsc": "4:3 (NTSC)",
   "videoAspectRatioStretch": "Stretch",
-  "videoShaderLibrashaderTitle": "Librashader (RetroArch preset)",
+  "videoShaderLibrashaderTitle": "RetroArch Shaders",
   "videoShaderLibrashaderSubtitle": "Requires GLES3 + Hardware backend (AHB swapchain).",
   "videoShaderLibrashaderSubtitleWindows": "Requires D3D11 GPU backend.",
   "videoShaderLibrashaderSubtitleDisabled": "Switch Android backend to Hardware to enable.",

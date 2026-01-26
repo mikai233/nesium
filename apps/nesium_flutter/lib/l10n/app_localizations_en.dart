@@ -969,7 +969,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoAspectRatioStretch => 'Stretch';
 
   @override
-  String get videoShaderLibrashaderTitle => 'Librashader (RetroArch preset)';
+  String get videoShaderLibrashaderTitle => 'RetroArch Shaders';
 
   @override
   String get videoShaderLibrashaderSubtitle =>
