@@ -46,11 +46,7 @@ jobs:
           cache: true
 
       - name: Generate shaders.zip
-        shell: bash
-        run: |
-          set -euo pipefail
-          chmod +x tool/zip_shaders.sh
-          ./tool/zip_shaders.sh
+        run: dart tool/package_shaders.dart
 
       - name: Pub get
         run: flutter pub get

@@ -197,13 +197,13 @@ tasks.register<Exec>("zipShaders") {
     group = "build"
     description = "Zip shaders into an asset for the app"
 
-    val isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows
     workingDir = file("../..") // apps/nesium_flutter
-
-    if (isWindows) {
-        commandLine("pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tool/zip_shaders.ps1")
-    } else {
-        commandLine("sh", "tool/zip_shaders.sh")
+    doFirst {
+        val script = "tool/package_shaders.dart"
+        logger.lifecycle("Running shader packager: dart $script")
+        exec {
+            commandLine("dart", script)
+        }
     }
 }
 
