@@ -1211,800 +1211,1001 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
         const SizedBox(height: 8),
         AnimatedSettingsCard(
           index: 0,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                dropdown<nes_video.VideoFilter>(
-                  labelText: l10n.videoFilterLabel,
-                  value: videoSettings.videoFilter,
-                  onSelected: setVideoFilter,
-                  entries: [
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.none,
-                      label: l10n.videoFilterNone,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                child: Text(
+                  l10n.videoFilterCategoryCpu,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    dropdown<nes_video.VideoFilter>(
+                      labelText: l10n.videoFilterLabel,
+                      value: videoSettings.videoFilter,
+                      onSelected: setVideoFilter,
+                      entries: [
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.none,
+                          label: l10n.videoFilterNone,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.prescale2X,
+                          label: l10n.videoFilterPrescale2x,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.prescale3X,
+                          label: l10n.videoFilterPrescale3x,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.prescale4X,
+                          label: l10n.videoFilterPrescale4x,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.sai2X,
+                          label: l10n.videoFilter2xSai,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.super2XSai,
+                          label: l10n.videoFilterSuper2xSai,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.superEagle,
+                          label: l10n.videoFilterSuperEagle,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.lcdGrid,
+                          label: l10n.videoFilterLcdGrid,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.scanlines,
+                          label: l10n.videoFilterScanlines,
+                        ),
+                        if (!kIsWeb) ...[
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.hq2X,
+                            label: l10n.videoFilterHq2x,
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.hq3X,
+                            label: l10n.videoFilterHq3x,
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.hq4X,
+                            label: l10n.videoFilterHq4x,
+                          ),
+                        ],
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.xbrz2X,
+                          label: l10n.videoFilterXbrz2x,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.xbrz3X,
+                          label: l10n.videoFilterXbrz3x,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.xbrz4X,
+                          label: l10n.videoFilterXbrz4x,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.xbrz5X,
+                          label: l10n.videoFilterXbrz5x,
+                        ),
+                        DropdownMenuEntry(
+                          value: nes_video.VideoFilter.xbrz6X,
+                          label: l10n.videoFilterXbrz6x,
+                        ),
+                        if (!kIsWeb) ...[
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.ntscComposite,
+                            label: l10n.videoFilterNtscComposite,
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.ntscSVideo,
+                            label: l10n.videoFilterNtscSvideo,
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.ntscRgb,
+                            label: l10n.videoFilterNtscRgb,
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.ntscMonochrome,
+                            label: l10n.videoFilterNtscMonochrome,
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.ntscBisqwit2X,
+                            label: l10n.videoFilterNtscBisqwit2x,
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.ntscBisqwit4X,
+                            label: l10n.videoFilterNtscBisqwit4x,
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_video.VideoFilter.ntscBisqwit8X,
+                            label: l10n.videoFilterNtscBisqwit8x,
+                          ),
+                        ],
+                      ],
                     ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.prescale2X,
-                      label: l10n.videoFilterPrescale2x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.prescale3X,
-                      label: l10n.videoFilterPrescale3x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.prescale4X,
-                      label: l10n.videoFilterPrescale4x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.sai2X,
-                      label: l10n.videoFilter2xSai,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.super2XSai,
-                      label: l10n.videoFilterSuper2xSai,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.superEagle,
-                      label: l10n.videoFilterSuperEagle,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.lcdGrid,
-                      label: l10n.videoFilterLcdGrid,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.scanlines,
-                      label: l10n.videoFilterScanlines,
-                    ),
-                    if (!kIsWeb) ...[
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.hq2X,
-                        label: l10n.videoFilterHq2x,
+                    const SizedBox(height: 12),
+                    if (videoSettings.videoFilter ==
+                        nes_video.VideoFilter.lcdGrid)
+                      AnimatedSliderTile(
+                        label: l10n.videoLcdGridStrengthLabel,
+                        value: videoSettings.lcdGridStrength,
+                        min: 0,
+                        max: 1,
+                        divisions: 100,
+                        valueLabel:
+                            '${(videoSettings.lcdGridStrength * 100).round()}%',
+                        onChanged: (value) {
+                          unawaited(videoController.setLcdGridStrength(value));
+                        },
                       ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.hq3X,
-                        label: l10n.videoFilterHq3x,
+                    if (videoSettings.videoFilter ==
+                        nes_video.VideoFilter.lcdGrid)
+                      const SizedBox(height: 12),
+                    if (videoSettings.videoFilter ==
+                        nes_video.VideoFilter.scanlines)
+                      AnimatedSliderTile(
+                        label: l10n.videoScanlinesIntensityLabel,
+                        value: videoSettings.scanlineIntensity,
+                        min: 0,
+                        max: 1,
+                        divisions: 100,
+                        valueLabel:
+                            '${(videoSettings.scanlineIntensity * 100).round()}%',
+                        onChanged: (value) {
+                          unawaited(
+                            videoController.setScanlineIntensity(value),
+                          );
+                        },
                       ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.hq4X,
-                        label: l10n.videoFilterHq4x,
+                    if (videoSettings.videoFilter ==
+                        nes_video.VideoFilter.scanlines)
+                      const SizedBox(height: 12),
+                    if (videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscBisqwit2X ||
+                        videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscBisqwit4X ||
+                        videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscBisqwit8X)
+                      AnimatedExpansionTile(
+                        labelText: l10n.videoNtscBisqwitSettingsTitle,
+                        title: Text(l10n.keyboardPresetCustom),
+                        initiallyExpanded: false,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscHueLabel,
+                              value: videoSettings.ntscBisqwitOptions.hue,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscBisqwitOptions.hue
+                                  .toStringAsFixed(2),
+                              onChanged: (value) {
+                                final o = videoSettings.ntscBisqwitOptions;
+                                final next = nes_video.NtscBisqwitOptions(
+                                  brightness: o.brightness,
+                                  contrast: o.contrast,
+                                  hue: value,
+                                  saturation: o.saturation,
+                                  yFilterLength: o.yFilterLength,
+                                  iFilterLength: o.iFilterLength,
+                                  qFilterLength: o.qFilterLength,
+                                );
+                                unawaited(
+                                  videoController.setNtscBisqwitOptions(next),
+                                );
+                                _scheduleApplyNtscBisqwitOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscSaturationLabel,
+                              value:
+                                  videoSettings.ntscBisqwitOptions.saturation,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings
+                                  .ntscBisqwitOptions
+                                  .saturation
+                                  .toStringAsFixed(2),
+                              onChanged: (value) {
+                                final o = videoSettings.ntscBisqwitOptions;
+                                final next = nes_video.NtscBisqwitOptions(
+                                  brightness: o.brightness,
+                                  contrast: o.contrast,
+                                  hue: o.hue,
+                                  saturation: value,
+                                  yFilterLength: o.yFilterLength,
+                                  iFilterLength: o.iFilterLength,
+                                  qFilterLength: o.qFilterLength,
+                                );
+                                unawaited(
+                                  videoController.setNtscBisqwitOptions(next),
+                                );
+                                _scheduleApplyNtscBisqwitOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscContrastLabel,
+                              value: videoSettings.ntscBisqwitOptions.contrast,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings
+                                  .ntscBisqwitOptions
+                                  .contrast
+                                  .toStringAsFixed(2),
+                              onChanged: (value) {
+                                final o = videoSettings.ntscBisqwitOptions;
+                                final next = nes_video.NtscBisqwitOptions(
+                                  brightness: o.brightness,
+                                  contrast: value,
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  yFilterLength: o.yFilterLength,
+                                  iFilterLength: o.iFilterLength,
+                                  qFilterLength: o.qFilterLength,
+                                );
+                                unawaited(
+                                  videoController.setNtscBisqwitOptions(next),
+                                );
+                                _scheduleApplyNtscBisqwitOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscBrightnessLabel,
+                              value:
+                                  videoSettings.ntscBisqwitOptions.brightness,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings
+                                  .ntscBisqwitOptions
+                                  .brightness
+                                  .toStringAsFixed(2),
+                              onChanged: (value) {
+                                final o = videoSettings.ntscBisqwitOptions;
+                                final next = nes_video.NtscBisqwitOptions(
+                                  brightness: value,
+                                  contrast: o.contrast,
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  yFilterLength: o.yFilterLength,
+                                  iFilterLength: o.iFilterLength,
+                                  qFilterLength: o.qFilterLength,
+                                );
+                                unawaited(
+                                  videoController.setNtscBisqwitOptions(next),
+                                );
+                                _scheduleApplyNtscBisqwitOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscBisqwitYFilterLengthLabel,
+                              value: videoSettings
+                                  .ntscBisqwitOptions
+                                  .yFilterLength,
+                              min: -0.46,
+                              max: 4,
+                              divisions: 446,
+                              valueLabel:
+                                  (videoSettings
+                                              .ntscBisqwitOptions
+                                              .yFilterLength *
+                                          100)
+                                      .round()
+                                      .toString(),
+                              onChanged: (value) {
+                                final o = videoSettings.ntscBisqwitOptions;
+                                final next = nes_video.NtscBisqwitOptions(
+                                  brightness: o.brightness,
+                                  contrast: o.contrast,
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  yFilterLength: value,
+                                  iFilterLength: o.iFilterLength,
+                                  qFilterLength: o.qFilterLength,
+                                );
+                                unawaited(
+                                  videoController.setNtscBisqwitOptions(next),
+                                );
+                                _scheduleApplyNtscBisqwitOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscBisqwitIFilterLengthLabel,
+                              value: videoSettings
+                                  .ntscBisqwitOptions
+                                  .iFilterLength,
+                              min: 0,
+                              max: 4,
+                              divisions: 400,
+                              valueLabel:
+                                  (videoSettings
+                                              .ntscBisqwitOptions
+                                              .iFilterLength *
+                                          100)
+                                      .round()
+                                      .toString(),
+                              onChanged: (value) {
+                                final o = videoSettings.ntscBisqwitOptions;
+                                final next = nes_video.NtscBisqwitOptions(
+                                  brightness: o.brightness,
+                                  contrast: o.contrast,
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  yFilterLength: o.yFilterLength,
+                                  iFilterLength: value,
+                                  qFilterLength: o.qFilterLength,
+                                );
+                                unawaited(
+                                  videoController.setNtscBisqwitOptions(next),
+                                );
+                                _scheduleApplyNtscBisqwitOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscBisqwitQFilterLengthLabel,
+                              value: videoSettings
+                                  .ntscBisqwitOptions
+                                  .qFilterLength,
+                              min: 0,
+                              max: 4,
+                              divisions: 400,
+                              valueLabel:
+                                  (videoSettings
+                                              .ntscBisqwitOptions
+                                              .qFilterLength *
+                                          100)
+                                      .round()
+                                      .toString(),
+                              onChanged: (value) {
+                                final o = videoSettings.ntscBisqwitOptions;
+                                final next = nes_video.NtscBisqwitOptions(
+                                  brightness: o.brightness,
+                                  contrast: o.contrast,
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  yFilterLength: o.yFilterLength,
+                                  iFilterLength: o.iFilterLength,
+                                  qFilterLength: value,
+                                );
+                                unawaited(
+                                  videoController.setNtscBisqwitOptions(next),
+                                );
+                                _scheduleApplyNtscBisqwitOptions(next);
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.xbrz2X,
-                      label: l10n.videoFilterXbrz2x,
+                    if (videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscBisqwit2X ||
+                        videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscBisqwit4X ||
+                        videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscBisqwit8X)
+                      const SizedBox(height: 12),
+                    if (videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscComposite ||
+                        videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscSVideo ||
+                        videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscRgb ||
+                        videoSettings.videoFilter ==
+                            nes_video.VideoFilter.ntscMonochrome)
+                      AnimatedExpansionTile(
+                        labelText: l10n.videoNtscAdvancedTitle,
+                        title: Text(l10n.keyboardPresetCustom),
+                        initiallyExpanded: false,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(l10n.videoNtscMergeFieldsLabel),
+                              value: videoSettings.ntscOptions.mergeFields,
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  contrast: o.contrast,
+                                  brightness: o.brightness,
+                                  sharpness: o.sharpness,
+                                  gamma: o.gamma,
+                                  resolution: o.resolution,
+                                  artifacts: o.artifacts,
+                                  fringing: o.fringing,
+                                  bleed: o.bleed,
+                                  mergeFields: value,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscHueLabel,
+                              value: videoSettings.ntscOptions.hue,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.hue
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: value,
+                                  saturation: o.saturation,
+                                  contrast: o.contrast,
+                                  brightness: o.brightness,
+                                  sharpness: o.sharpness,
+                                  gamma: o.gamma,
+                                  resolution: o.resolution,
+                                  artifacts: o.artifacts,
+                                  fringing: o.fringing,
+                                  bleed: o.bleed,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscSaturationLabel,
+                              value: videoSettings.ntscOptions.saturation,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.saturation
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: value,
+                                  contrast: o.contrast,
+                                  brightness: o.brightness,
+                                  sharpness: o.sharpness,
+                                  gamma: o.gamma,
+                                  resolution: o.resolution,
+                                  artifacts: o.artifacts,
+                                  fringing: o.fringing,
+                                  bleed: o.bleed,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscContrastLabel,
+                              value: videoSettings.ntscOptions.contrast,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.contrast
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  contrast: value,
+                                  brightness: o.brightness,
+                                  sharpness: o.sharpness,
+                                  gamma: o.gamma,
+                                  resolution: o.resolution,
+                                  artifacts: o.artifacts,
+                                  fringing: o.fringing,
+                                  bleed: o.bleed,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscBrightnessLabel,
+                              value: videoSettings.ntscOptions.brightness,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.brightness
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  contrast: o.contrast,
+                                  brightness: value,
+                                  sharpness: o.sharpness,
+                                  gamma: o.gamma,
+                                  resolution: o.resolution,
+                                  artifacts: o.artifacts,
+                                  fringing: o.fringing,
+                                  bleed: o.bleed,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscSharpnessLabel,
+                              value: videoSettings.ntscOptions.sharpness,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.sharpness
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  contrast: o.contrast,
+                                  brightness: o.brightness,
+                                  sharpness: value,
+                                  gamma: o.gamma,
+                                  resolution: o.resolution,
+                                  artifacts: o.artifacts,
+                                  fringing: o.fringing,
+                                  bleed: o.bleed,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscGammaLabel,
+                              value: videoSettings.ntscOptions.gamma,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.gamma
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  contrast: o.contrast,
+                                  brightness: o.brightness,
+                                  sharpness: o.sharpness,
+                                  gamma: value,
+                                  resolution: o.resolution,
+                                  artifacts: o.artifacts,
+                                  fringing: o.fringing,
+                                  bleed: o.bleed,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscResolutionLabel,
+                              value: videoSettings.ntscOptions.resolution,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.resolution
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  contrast: o.contrast,
+                                  brightness: o.brightness,
+                                  sharpness: o.sharpness,
+                                  gamma: o.gamma,
+                                  resolution: value,
+                                  artifacts: o.artifacts,
+                                  fringing: o.fringing,
+                                  bleed: o.bleed,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscArtifactsLabel,
+                              value: videoSettings.ntscOptions.artifacts,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.artifacts
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  contrast: o.contrast,
+                                  brightness: o.brightness,
+                                  sharpness: o.sharpness,
+                                  gamma: o.gamma,
+                                  resolution: o.resolution,
+                                  artifacts: value,
+                                  fringing: o.fringing,
+                                  bleed: o.bleed,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscFringingLabel,
+                              value: videoSettings.ntscOptions.fringing,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.fringing
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  contrast: o.contrast,
+                                  brightness: o.brightness,
+                                  sharpness: o.sharpness,
+                                  gamma: o.gamma,
+                                  resolution: o.resolution,
+                                  artifacts: o.artifacts,
+                                  fringing: value,
+                                  bleed: o.bleed,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: AnimatedSliderTile(
+                              label: l10n.videoNtscBleedLabel,
+                              value: videoSettings.ntscOptions.bleed,
+                              min: -1,
+                              max: 1,
+                              divisions: 200,
+                              valueLabel: videoSettings.ntscOptions.bleed
+                                  .toStringAsFixed(2),
+                              onChanged: (value) async {
+                                final o = videoSettings.ntscOptions;
+                                final next = nes_video.NtscOptions(
+                                  hue: o.hue,
+                                  saturation: o.saturation,
+                                  contrast: o.contrast,
+                                  brightness: o.brightness,
+                                  sharpness: o.sharpness,
+                                  gamma: o.gamma,
+                                  resolution: o.resolution,
+                                  artifacts: o.artifacts,
+                                  fringing: o.fringing,
+                                  bleed: value,
+                                  mergeFields: o.mergeFields,
+                                );
+                                unawaited(videoController.setNtscOptions(next));
+                                _scheduleApplyNtscOptions(next);
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    const SizedBox(height: 12),
+                    dropdown<PaletteMode>(
+                      labelText: l10n.paletteModeLabel,
+                      value: videoSettings.paletteMode,
+                      entries: [
+                        DropdownMenuEntry(
+                          value: PaletteMode.builtin,
+                          label: l10n.paletteModeBuiltin,
+                        ),
+                        DropdownMenuEntry(
+                          value: PaletteMode.custom,
+                          label: videoSettings.customPaletteName == null
+                              ? l10n.paletteModeCustom
+                              : l10n.paletteModeCustomActive(
+                                  videoSettings.customPaletteName!,
+                                ),
+                        ),
+                      ],
+                      onSelected: onPaletteModeSelected,
                     ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.xbrz3X,
-                      label: l10n.videoFilterXbrz3x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.xbrz4X,
-                      label: l10n.videoFilterXbrz4x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.xbrz5X,
-                      label: l10n.videoFilterXbrz5x,
-                    ),
-                    DropdownMenuEntry(
-                      value: nes_video.VideoFilter.xbrz6X,
-                      label: l10n.videoFilterXbrz6x,
-                    ),
-                    if (!kIsWeb) ...[
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.ntscComposite,
-                        label: l10n.videoFilterNtscComposite,
+                    const SizedBox(height: 12),
+                    if (videoSettings.paletteMode == PaletteMode.builtin)
+                      dropdown<nes_palette.PaletteKind>(
+                        labelText: l10n.builtinPaletteLabel,
+                        value: videoSettings.builtinPreset,
+                        entries: const [
+                          DropdownMenuEntry(
+                            value: nes_palette.PaletteKind.nesdevNtsc,
+                            label: 'Nesdev (NTSC)',
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_palette.PaletteKind.fbxCompositeDirect,
+                            label: 'FirebrandX (Composite Direct)',
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_palette.PaletteKind.sonyCxa2025AsUs,
+                            label: 'Sony CXA2025AS (US)',
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_palette.PaletteKind.pal2C07,
+                            label: 'RP2C07 (PAL)',
+                          ),
+                          DropdownMenuEntry(
+                            value: nes_palette.PaletteKind.rawLinear,
+                            label: 'Raw linear',
+                          ),
+                        ],
+                        onSelected: setBuiltinPalette,
+                      )
+                    else
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(l10n.customPaletteLoadTitle),
+                        subtitle: Text(
+                          videoSettings.customPaletteName == null
+                              ? l10n.customPaletteLoadSubtitle
+                              : l10n.paletteModeCustomActive(
+                                  videoSettings.customPaletteName!,
+                                ),
+                        ),
+                        trailing: IconButton.filledTonal(
+                          tooltip: l10n.actionLoadPalette,
+                          icon: const Icon(Icons.folder_open),
+                          onPressed: () => widget.pickAndApplyCustomPalette(
+                            context,
+                            videoController,
+                          ),
+                        ),
+                        onTap: () => widget.pickAndApplyCustomPalette(
+                          context,
+                          videoController,
+                        ),
                       ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.ntscSVideo,
-                        label: l10n.videoFilterNtscSvideo,
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.ntscRgb,
-                        label: l10n.videoFilterNtscRgb,
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.ntscMonochrome,
-                        label: l10n.videoFilterNtscMonochrome,
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.ntscBisqwit2X,
-                        label: l10n.videoFilterNtscBisqwit2x,
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.ntscBisqwit4X,
-                        label: l10n.videoFilterNtscBisqwit4x,
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_video.VideoFilter.ntscBisqwit8X,
-                        label: l10n.videoFilterNtscBisqwit8x,
-                      ),
-                    ],
                   ],
                 ),
-                const SizedBox(height: 12),
-                if (videoSettings.videoFilter == nes_video.VideoFilter.lcdGrid)
-                  AnimatedSliderTile(
-                    label: l10n.videoLcdGridStrengthLabel,
-                    value: videoSettings.lcdGridStrength,
-                    min: 0,
-                    max: 1,
-                    divisions: 100,
-                    valueLabel:
-                        '${(videoSettings.lcdGridStrength * 100).round()}%',
-                    onChanged: (value) {
-                      unawaited(videoController.setLcdGridStrength(value));
-                    },
+              ),
+              if ((isWindows && windowsShaderSettings != null) ||
+                  (isAndroid && androidShaderSettings != null)) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Divider(height: 24),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    l10n.videoFilterCategoryGpu,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
-                if (videoSettings.videoFilter == nes_video.VideoFilter.lcdGrid)
-                  const SizedBox(height: 12),
-                if (videoSettings.videoFilter ==
-                    nes_video.VideoFilter.scanlines)
-                  AnimatedSliderTile(
-                    label: l10n.videoScanlinesIntensityLabel,
-                    value: videoSettings.scanlineIntensity,
-                    min: 0,
-                    max: 1,
-                    divisions: 100,
-                    valueLabel:
-                        '${(videoSettings.scanlineIntensity * 100).round()}%',
-                    onChanged: (value) {
-                      unawaited(videoController.setScanlineIntensity(value));
-                    },
-                  ),
-                if (videoSettings.videoFilter ==
-                    nes_video.VideoFilter.scanlines)
-                  const SizedBox(height: 12),
-                if (videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscBisqwit2X ||
-                    videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscBisqwit4X ||
-                    videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscBisqwit8X)
-                  AnimatedExpansionTile(
-                    labelText: l10n.videoNtscBisqwitSettingsTitle,
-                    title: Text(l10n.keyboardPresetCustom),
-                    initiallyExpanded: false,
+                ),
+                if (isWindows && windowsShaderSettings != null)
+                  Column(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscHueLabel,
-                          value: videoSettings.ntscBisqwitOptions.hue,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscBisqwitOptions.hue
-                              .toStringAsFixed(2),
-                          onChanged: (value) {
-                            final o = videoSettings.ntscBisqwitOptions;
-                            final next = nes_video.NtscBisqwitOptions(
-                              brightness: o.brightness,
-                              contrast: o.contrast,
-                              hue: value,
-                              saturation: o.saturation,
-                              yFilterLength: o.yFilterLength,
-                              iFilterLength: o.iFilterLength,
-                              qFilterLength: o.qFilterLength,
-                            );
-                            unawaited(
-                              videoController.setNtscBisqwitOptions(next),
-                            );
-                            _scheduleApplyNtscBisqwitOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscSaturationLabel,
-                          value: videoSettings.ntscBisqwitOptions.saturation,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings
-                              .ntscBisqwitOptions
-                              .saturation
-                              .toStringAsFixed(2),
-                          onChanged: (value) {
-                            final o = videoSettings.ntscBisqwitOptions;
-                            final next = nes_video.NtscBisqwitOptions(
-                              brightness: o.brightness,
-                              contrast: o.contrast,
-                              hue: o.hue,
-                              saturation: value,
-                              yFilterLength: o.yFilterLength,
-                              iFilterLength: o.iFilterLength,
-                              qFilterLength: o.qFilterLength,
-                            );
-                            unawaited(
-                              videoController.setNtscBisqwitOptions(next),
-                            );
-                            _scheduleApplyNtscBisqwitOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscContrastLabel,
-                          value: videoSettings.ntscBisqwitOptions.contrast,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscBisqwitOptions.contrast
-                              .toStringAsFixed(2),
-                          onChanged: (value) {
-                            final o = videoSettings.ntscBisqwitOptions;
-                            final next = nes_video.NtscBisqwitOptions(
-                              brightness: o.brightness,
-                              contrast: value,
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              yFilterLength: o.yFilterLength,
-                              iFilterLength: o.iFilterLength,
-                              qFilterLength: o.qFilterLength,
-                            );
-                            unawaited(
-                              videoController.setNtscBisqwitOptions(next),
-                            );
-                            _scheduleApplyNtscBisqwitOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscBrightnessLabel,
-                          value: videoSettings.ntscBisqwitOptions.brightness,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings
-                              .ntscBisqwitOptions
-                              .brightness
-                              .toStringAsFixed(2),
-                          onChanged: (value) {
-                            final o = videoSettings.ntscBisqwitOptions;
-                            final next = nes_video.NtscBisqwitOptions(
-                              brightness: value,
-                              contrast: o.contrast,
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              yFilterLength: o.yFilterLength,
-                              iFilterLength: o.iFilterLength,
-                              qFilterLength: o.qFilterLength,
-                            );
-                            unawaited(
-                              videoController.setNtscBisqwitOptions(next),
-                            );
-                            _scheduleApplyNtscBisqwitOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscBisqwitYFilterLengthLabel,
-                          value: videoSettings.ntscBisqwitOptions.yFilterLength,
-                          min: -0.46,
-                          max: 4,
-                          divisions: 446,
-                          valueLabel:
-                              (videoSettings.ntscBisqwitOptions.yFilterLength *
-                                      100)
-                                  .round()
-                                  .toString(),
-                          onChanged: (value) {
-                            final o = videoSettings.ntscBisqwitOptions;
-                            final next = nes_video.NtscBisqwitOptions(
-                              brightness: o.brightness,
-                              contrast: o.contrast,
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              yFilterLength: value,
-                              iFilterLength: o.iFilterLength,
-                              qFilterLength: o.qFilterLength,
-                            );
-                            unawaited(
-                              videoController.setNtscBisqwitOptions(next),
-                            );
-                            _scheduleApplyNtscBisqwitOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscBisqwitIFilterLengthLabel,
-                          value: videoSettings.ntscBisqwitOptions.iFilterLength,
-                          min: 0,
-                          max: 4,
-                          divisions: 400,
-                          valueLabel:
-                              (videoSettings.ntscBisqwitOptions.iFilterLength *
-                                      100)
-                                  .round()
-                                  .toString(),
-                          onChanged: (value) {
-                            final o = videoSettings.ntscBisqwitOptions;
-                            final next = nes_video.NtscBisqwitOptions(
-                              brightness: o.brightness,
-                              contrast: o.contrast,
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              yFilterLength: o.yFilterLength,
-                              iFilterLength: value,
-                              qFilterLength: o.qFilterLength,
-                            );
-                            unawaited(
-                              videoController.setNtscBisqwitOptions(next),
-                            );
-                            _scheduleApplyNtscBisqwitOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscBisqwitQFilterLengthLabel,
-                          value: videoSettings.ntscBisqwitOptions.qFilterLength,
-                          min: 0,
-                          max: 4,
-                          divisions: 400,
-                          valueLabel:
-                              (videoSettings.ntscBisqwitOptions.qFilterLength *
-                                      100)
-                                  .round()
-                                  .toString(),
-                          onChanged: (value) {
-                            final o = videoSettings.ntscBisqwitOptions;
-                            final next = nes_video.NtscBisqwitOptions(
-                              brightness: o.brightness,
-                              contrast: o.contrast,
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              yFilterLength: o.yFilterLength,
-                              iFilterLength: o.iFilterLength,
-                              qFilterLength: value,
-                            );
-                            unawaited(
-                              videoController.setNtscBisqwitOptions(next),
-                            );
-                            _scheduleApplyNtscBisqwitOptions(next);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                if (videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscBisqwit2X ||
-                    videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscBisqwit4X ||
-                    videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscBisqwit8X)
-                  const SizedBox(height: 12),
-                if (videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscComposite ||
-                    videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscSVideo ||
-                    videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscRgb ||
-                    videoSettings.videoFilter ==
-                        nes_video.VideoFilter.ntscMonochrome)
-                  AnimatedExpansionTile(
-                    labelText: l10n.videoNtscAdvancedTitle,
-                    title: Text(l10n.keyboardPresetCustom),
-                    initiallyExpanded: false,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
+                      SwitchListTile(
+                        contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 8,
                         ),
-                        child: SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(l10n.videoNtscMergeFieldsLabel),
-                          value: videoSettings.ntscOptions.mergeFields,
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              contrast: o.contrast,
-                              brightness: o.brightness,
-                              sharpness: o.sharpness,
-                              gamma: o.gamma,
-                              resolution: o.resolution,
-                              artifacts: o.artifacts,
-                              fringing: o.fringing,
-                              bleed: o.bleed,
-                              mergeFields: value,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
+                        secondary: const Icon(Icons.auto_fix_high),
+                        title: Text(l10n.videoShaderLibrashaderTitle),
+                        subtitle: Text(
+                          windowsBackend.backend == WindowsVideoBackend.d3d11Gpu
+                              ? l10n.videoShaderLibrashaderSubtitleWindows
+                              : l10n.videoShaderLibrashaderSubtitleDisabledWindows,
                         ),
+                        value: windowsShaderSettings.enabled,
+                        onChanged:
+                            windowsBackend.backend ==
+                                WindowsVideoBackend.d3d11Gpu
+                            ? (value) async {
+                                try {
+                                  await windowsShaderController?.setEnabled(
+                                    value,
+                                  );
+                                } catch (e, st) {
+                                  logWarning(
+                                    e,
+                                    stackTrace: st,
+                                    message: 'setEnabled failed',
+                                    logger: 'settings_page',
+                                  );
+                                }
+                              }
+                            : null,
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscHueLabel,
-                          value: videoSettings.ntscOptions.hue,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.hue
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: value,
-                              saturation: o.saturation,
-                              contrast: o.contrast,
-                              brightness: o.brightness,
-                              sharpness: o.sharpness,
-                              gamma: o.gamma,
-                              resolution: o.resolution,
-                              artifacts: o.artifacts,
-                              fringing: o.fringing,
-                              bleed: o.bleed,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
+                      const SizedBox(height: 1),
+                      ListTile(
+                        enabled:
+                            windowsBackend.backend ==
+                            WindowsVideoBackend.d3d11Gpu,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscSaturationLabel,
-                          value: videoSettings.ntscOptions.saturation,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.saturation
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: value,
-                              contrast: o.contrast,
-                              brightness: o.brightness,
-                              sharpness: o.sharpness,
-                              gamma: o.gamma,
-                              resolution: o.resolution,
-                              artifacts: o.artifacts,
-                              fringing: o.fringing,
-                              bleed: o.bleed,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
+                        leading: const Icon(Icons.description_outlined),
+                        title: Text(l10n.videoShaderPresetLabel),
+                        subtitle: Text(
+                          windowsShaderSettings.presetPath ??
+                              l10n.videoShaderPresetNotSet,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
+                        trailing: const Icon(Icons.folder_open),
+                        onTap:
+                            windowsBackend.backend ==
+                                WindowsVideoBackend.d3d11Gpu
+                            ? pickAndSetShaderPreset
+                            : null,
+                        onLongPress: windowsShaderSettings.presetPath == null
+                            ? null
+                            : () async {
+                                try {
+                                  await windowsShaderController?.setPresetPath(
+                                    null,
+                                  );
+                                } catch (e, st) {
+                                  logWarning(
+                                    e,
+                                    stackTrace: st,
+                                    message: 'clear preset failed',
+                                    logger: 'settings_page',
+                                  );
+                                }
+                              },
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscContrastLabel,
-                          value: videoSettings.ntscOptions.contrast,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.contrast
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              contrast: value,
-                              brightness: o.brightness,
-                              sharpness: o.sharpness,
-                              gamma: o.gamma,
-                              resolution: o.resolution,
-                              artifacts: o.artifacts,
-                              fringing: o.fringing,
-                              bleed: o.bleed,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscBrightnessLabel,
-                          value: videoSettings.ntscOptions.brightness,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.brightness
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              contrast: o.contrast,
-                              brightness: value,
-                              sharpness: o.sharpness,
-                              gamma: o.gamma,
-                              resolution: o.resolution,
-                              artifacts: o.artifacts,
-                              fringing: o.fringing,
-                              bleed: o.bleed,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscSharpnessLabel,
-                          value: videoSettings.ntscOptions.sharpness,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.sharpness
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              contrast: o.contrast,
-                              brightness: o.brightness,
-                              sharpness: value,
-                              gamma: o.gamma,
-                              resolution: o.resolution,
-                              artifacts: o.artifacts,
-                              fringing: o.fringing,
-                              bleed: o.bleed,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscGammaLabel,
-                          value: videoSettings.ntscOptions.gamma,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.gamma
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              contrast: o.contrast,
-                              brightness: o.brightness,
-                              sharpness: o.sharpness,
-                              gamma: value,
-                              resolution: o.resolution,
-                              artifacts: o.artifacts,
-                              fringing: o.fringing,
-                              bleed: o.bleed,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscResolutionLabel,
-                          value: videoSettings.ntscOptions.resolution,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.resolution
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              contrast: o.contrast,
-                              brightness: o.brightness,
-                              sharpness: o.sharpness,
-                              gamma: o.gamma,
-                              resolution: value,
-                              artifacts: o.artifacts,
-                              fringing: o.fringing,
-                              bleed: o.bleed,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscArtifactsLabel,
-                          value: videoSettings.ntscOptions.artifacts,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.artifacts
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              contrast: o.contrast,
-                              brightness: o.brightness,
-                              sharpness: o.sharpness,
-                              gamma: o.gamma,
-                              resolution: o.resolution,
-                              artifacts: value,
-                              fringing: o.fringing,
-                              bleed: o.bleed,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscFringingLabel,
-                          value: videoSettings.ntscOptions.fringing,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.fringing
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              contrast: o.contrast,
-                              brightness: o.brightness,
-                              sharpness: o.sharpness,
-                              gamma: o.gamma,
-                              resolution: o.resolution,
-                              artifacts: o.artifacts,
-                              fringing: value,
-                              bleed: o.bleed,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: AnimatedSliderTile(
-                          label: l10n.videoNtscBleedLabel,
-                          value: videoSettings.ntscOptions.bleed,
-                          min: -1,
-                          max: 1,
-                          divisions: 200,
-                          valueLabel: videoSettings.ntscOptions.bleed
-                              .toStringAsFixed(2),
-                          onChanged: (value) async {
-                            final o = videoSettings.ntscOptions;
-                            final next = nes_video.NtscOptions(
-                              hue: o.hue,
-                              saturation: o.saturation,
-                              contrast: o.contrast,
-                              brightness: o.brightness,
-                              sharpness: o.sharpness,
-                              gamma: o.gamma,
-                              resolution: o.resolution,
-                              artifacts: o.artifacts,
-                              fringing: o.fringing,
-                              bleed: value,
-                              mergeFields: o.mergeFields,
-                            );
-                            unawaited(videoController.setNtscOptions(next));
-                            _scheduleApplyNtscOptions(next);
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 8),
                     ],
                   ),
-                const SizedBox(height: 12),
-                dropdown<PaletteMode>(
-                  labelText: l10n.paletteModeLabel,
-                  value: videoSettings.paletteMode,
-                  entries: [
-                    DropdownMenuEntry(
-                      value: PaletteMode.builtin,
-                      label: l10n.paletteModeBuiltin,
-                    ),
-                    DropdownMenuEntry(
-                      value: PaletteMode.custom,
-                      label: videoSettings.customPaletteName == null
-                          ? l10n.paletteModeCustom
-                          : l10n.paletteModeCustomActive(
-                              videoSettings.customPaletteName!,
-                            ),
-                    ),
-                  ],
-                  onSelected: onPaletteModeSelected,
-                ),
-                const SizedBox(height: 12),
-                if (videoSettings.paletteMode == PaletteMode.builtin)
-                  dropdown<nes_palette.PaletteKind>(
-                    labelText: l10n.builtinPaletteLabel,
-                    value: videoSettings.builtinPreset,
-                    entries: const [
-                      DropdownMenuEntry(
-                        value: nes_palette.PaletteKind.nesdevNtsc,
-                        label: 'Nesdev (NTSC)',
+                if (isAndroid && androidShaderSettings != null)
+                  Column(
+                    children: [
+                      SwitchListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                        secondary: const Icon(Icons.auto_fix_high),
+                        title: Text(l10n.videoShaderLibrashaderTitle),
+                        subtitle: Text(
+                          androidBackend.backend == AndroidVideoBackend.hardware
+                              ? l10n.videoShaderLibrashaderSubtitle
+                              : l10n.videoShaderLibrashaderSubtitleDisabled,
+                        ),
+                        value: androidShaderSettings.enabled,
+                        onChanged:
+                            androidBackend.backend ==
+                                AndroidVideoBackend.hardware
+                            ? (value) async {
+                                try {
+                                  await androidShaderController?.setEnabled(
+                                    value,
+                                  );
+                                } catch (e, st) {
+                                  logWarning(
+                                    e,
+                                    stackTrace: st,
+                                    message: 'setEnabled failed',
+                                    logger: 'settings_page',
+                                  );
+                                }
+                              }
+                            : null,
                       ),
-                      DropdownMenuEntry(
-                        value: nes_palette.PaletteKind.fbxCompositeDirect,
-                        label: 'FirebrandX (Composite Direct)',
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_palette.PaletteKind.sonyCxa2025AsUs,
-                        label: 'Sony CXA2025AS (US)',
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_palette.PaletteKind.pal2C07,
-                        label: 'RP2C07 (PAL)',
-                      ),
-                      DropdownMenuEntry(
-                        value: nes_palette.PaletteKind.rawLinear,
-                        label: 'Raw linear',
+                      const SizedBox(height: 1),
+                      ListTile(
+                        enabled:
+                            androidBackend.backend ==
+                            AndroidVideoBackend.hardware,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                        leading: const Icon(Icons.description_outlined),
+                        title: Text(l10n.videoShaderPresetLabel),
+                        subtitle: Text(
+                          androidShaderSettings.presetPath ??
+                              l10n.videoShaderPresetNotSet,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: const Icon(Icons.folder_open),
+                        onTap:
+                            androidBackend.backend ==
+                                AndroidVideoBackend.hardware
+                            ? pickAndSetShaderPreset
+                            : null,
+                        onLongPress: androidShaderSettings.presetPath == null
+                            ? null
+                            : () async {
+                                try {
+                                  await androidShaderController?.setPresetPath(
+                                    null,
+                                  );
+                                } catch (e, st) {
+                                  logWarning(
+                                    e,
+                                    stackTrace: st,
+                                    message: 'clear preset failed',
+                                    logger: 'settings_page',
+                                  );
+                                }
+                              },
                       ),
                     ],
-                    onSelected: setBuiltinPalette,
-                  )
-                else
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.customPaletteLoadTitle),
-                    subtitle: Text(
-                      videoSettings.customPaletteName == null
-                          ? l10n.customPaletteLoadSubtitle
-                          : l10n.paletteModeCustomActive(
-                              videoSettings.customPaletteName!,
-                            ),
-                    ),
-                    trailing: IconButton.filledTonal(
-                      tooltip: l10n.actionLoadPalette,
-                      icon: const Icon(Icons.folder_open),
-                      onPressed: () => widget.pickAndApplyCustomPalette(
-                        context,
-                        videoController,
-                      ),
-                    ),
-                    onTap: () => widget.pickAndApplyCustomPalette(
-                      context,
-                      videoController,
-                    ),
                   ),
+                const SizedBox(height: 8),
               ],
-            ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
@@ -2104,11 +2305,11 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
                     entries: [
                       DropdownMenuEntry(
                         value: WindowsVideoBackend.d3d11Gpu,
-                        label: 'D3D11 GPU (Zero-Copy)',
+                        label: l10n.videoBackendD3D11,
                       ),
                       DropdownMenuEntry(
                         value: WindowsVideoBackend.softwareCpu,
-                        label: 'Software CPU (Fallback)',
+                        label: l10n.videoBackendSoftware,
                       ),
                     ],
                     onSelected: setWindowsBackend,
@@ -2130,150 +2331,6 @@ class _VideoTabState extends ConsumerState<_VideoTab> {
             ),
           ),
         ),
-        if (isWindows && windowsShaderSettings != null) ...[
-          const SizedBox(height: 12),
-          AnimatedSettingsCard(
-            index: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    secondary: const Icon(Icons.auto_fix_high),
-                    title: Text(l10n.videoShaderLibrashaderTitle),
-                    subtitle: Text(
-                      windowsBackend.backend == WindowsVideoBackend.d3d11Gpu
-                          ? l10n.videoShaderLibrashaderSubtitle
-                          : l10n.videoShaderLibrashaderSubtitleDisabled,
-                    ),
-                    value: windowsShaderSettings.enabled,
-                    onChanged:
-                        windowsBackend.backend == WindowsVideoBackend.d3d11Gpu
-                        ? (value) async {
-                            try {
-                              await windowsShaderController?.setEnabled(value);
-                            } catch (e, st) {
-                              logWarning(
-                                e,
-                                stackTrace: st,
-                                message: 'setEnabled failed',
-                                logger: 'settings_page',
-                              );
-                            }
-                          }
-                        : null,
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.description_outlined),
-                    title: Text(l10n.videoShaderPresetLabel),
-                    subtitle: Text(
-                      windowsShaderSettings.presetPath ??
-                          l10n.videoShaderPresetNotSet,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: const Icon(Icons.folder_open),
-                    onTap:
-                        windowsBackend.backend == WindowsVideoBackend.d3d11Gpu
-                        ? pickAndSetShaderPreset
-                        : null,
-                    onLongPress: windowsShaderSettings.presetPath == null
-                        ? null
-                        : () async {
-                            try {
-                              await windowsShaderController?.setPresetPath(
-                                null,
-                              );
-                            } catch (e, st) {
-                              logWarning(
-                                e,
-                                stackTrace: st,
-                                message: 'clear preset failed',
-                                logger: 'settings_page',
-                              );
-                            }
-                          },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-        if (isAndroid && androidShaderSettings != null) ...[
-          const SizedBox(height: 12),
-          AnimatedSettingsCard(
-            index: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    secondary: const Icon(Icons.auto_fix_high),
-                    title: Text(l10n.videoShaderLibrashaderTitle),
-                    subtitle: Text(
-                      androidBackend.backend == AndroidVideoBackend.hardware
-                          ? l10n.videoShaderLibrashaderSubtitle
-                          : l10n.videoShaderLibrashaderSubtitleDisabled,
-                    ),
-                    value: androidShaderSettings.enabled,
-                    onChanged:
-                        androidBackend.backend == AndroidVideoBackend.hardware
-                        ? (value) async {
-                            try {
-                              await androidShaderController?.setEnabled(value);
-                            } catch (e, st) {
-                              logWarning(
-                                e,
-                                stackTrace: st,
-                                message: 'setEnabled failed',
-                                logger: 'settings_page',
-                              );
-                            }
-                          }
-                        : null,
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.description_outlined),
-                    title: Text(l10n.videoShaderPresetLabel),
-                    subtitle: Text(
-                      androidShaderSettings.presetPath ??
-                          l10n.videoShaderPresetNotSet,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: const Icon(Icons.folder_open),
-                    onTap:
-                        androidBackend.backend == AndroidVideoBackend.hardware
-                        ? pickAndSetShaderPreset
-                        : null,
-                    onLongPress: androidShaderSettings.presetPath == null
-                        ? null
-                        : () async {
-                            try {
-                              await androidShaderController?.setPresetPath(
-                                null,
-                              );
-                            } catch (e, st) {
-                              logWarning(
-                                e,
-                                stackTrace: st,
-                                message: 'clear preset failed',
-                                logger: 'settings_page',
-                              );
-                            }
-                          },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }

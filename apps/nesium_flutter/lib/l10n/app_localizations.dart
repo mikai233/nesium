@@ -1562,6 +1562,18 @@ abstract class AppLocalizations {
   /// **'Video Filter'**
   String get videoFilterLabel;
 
+  /// No description provided for @videoFilterCategoryCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU Filters'**
+  String get videoFilterCategoryCpu;
+
+  /// No description provided for @videoFilterCategoryGpu.
+  ///
+  /// In en, this message translates to:
+  /// **'GPU Filters (Shaders)'**
+  String get videoFilterCategoryGpu;
+
   /// No description provided for @videoFilterNone.
   ///
   /// In en, this message translates to:
@@ -1868,11 +1880,23 @@ abstract class AppLocalizations {
   /// **'Requires GLES3 + Hardware backend (AHB swapchain).'**
   String get videoShaderLibrashaderSubtitle;
 
+  /// No description provided for @videoShaderLibrashaderSubtitleWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires D3D11 GPU backend.'**
+  String get videoShaderLibrashaderSubtitleWindows;
+
   /// No description provided for @videoShaderLibrashaderSubtitleDisabled.
   ///
   /// In en, this message translates to:
   /// **'Switch Android backend to Hardware to enable.'**
   String get videoShaderLibrashaderSubtitleDisabled;
+
+  /// No description provided for @videoShaderLibrashaderSubtitleDisabledWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch Windows backend to D3D11 GPU to enable.'**
+  String get videoShaderLibrashaderSubtitleDisabledWindows;
 
   /// No description provided for @videoShaderPresetLabel.
   ///
@@ -1999,6 +2023,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Takes effect after app restart.'**
   String get videoBackendRestartHint;
+
+  /// No description provided for @videoBackendCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current Backend: {backend}'**
+  String videoBackendCurrent(String backend);
 
   /// No description provided for @highPerformanceModeLabel.
   ///
@@ -2977,6 +3007,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Long press to clear'**
   String get longPressToClear;
+
+  /// No description provided for @videoBackendD3D11.
+  ///
+  /// In en, this message translates to:
+  /// **'D3D11 GPU (Zero-Copy)'**
+  String get videoBackendD3D11;
+
+  /// No description provided for @videoBackendSoftware.
+  ///
+  /// In en, this message translates to:
+  /// **'Software CPU (Fallback)'**
+  String get videoBackendSoftware;
 
   /// No description provided for @netplayBackToSetup.
   ///

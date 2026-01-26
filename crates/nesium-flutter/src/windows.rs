@@ -1,5 +1,7 @@
 use parking_lot::Mutex;
 use std::ffi::c_void;
+use std::mem::{ManuallyDrop, transmute_copy};
+use std::sync::atomic::AtomicUsize;
 use std::sync::{OnceLock, atomic::Ordering};
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::Graphics::Direct3D::D3D11_SRV_DIMENSION_TEXTURE2D;
@@ -49,12 +51,7 @@ fn get_passthrough_preset() -> std::path::PathBuf {
     let slangp = temp.join("nesium_passthrough.slangp");
     let slang = temp.join("passthrough.slang");
 
-    // Rationale: This passthrough shader is required by the pipeline to handle
-    // HiDPI scaling and to ensure consistent rendering when no user shader is active.
-    //
-    // Note: We now use a pure BGRA pipeline (Core -> Staging -> Librashader -> Output),
-    // thanks to upstream librashader support. An identity pass is still useful
-    // for handling the scaling aspect via the robust shader chain.
+    // Use a passthrough shader to copy/scale the texture when no user shader is active.
     let _ = std::fs::write(
         &slang,
         r#"#version 450
@@ -111,48 +108,16 @@ pub(crate) fn windows_set_shader_preset_path(path: Option<String>) {
     cfg.generation = cfg.generation.wrapping_add(1);
 }
 
-/// Raw device/context pointers passed from C++.
-/// Must be updatable (device/context can change after resize/recreate).
-#[derive(Copy, Clone)]
-struct D3D11DeviceContext {
-    device: *mut c_void,
-    context: *mut c_void,
-}
-
-unsafe impl Send for D3D11DeviceContext {}
-unsafe impl Sync for D3D11DeviceContext {}
-
-/// Shared D3D11 context. Using Mutex instead of OnceLock to allow
-/// context updates during device recreation or resize events.
-static D3D11_CONTEXT: Mutex<Option<D3D11DeviceContext>> = Mutex::new(None);
-
-#[unsafe(no_mangle)]
-pub extern "C" fn nesium_set_d3d11_device(device: *mut c_void, context: *mut c_void) {
-    if device.is_null() || context.is_null() {
-        log::error!(
-            "nesium_set_d3d11_device called with null ptr(s): device={:p}, context={:p}",
-            device,
-            context
-        );
-        *D3D11_CONTEXT.lock() = None;
-        return;
-    }
-
-    *D3D11_CONTEXT.lock() = Some(D3D11DeviceContext { device, context });
-    log::info!(
-        "D3D11 device/context updated: device={:p}, context={:p}",
-        device,
-        context
-    );
-}
-
 struct ShaderState {
     chain: Option<LibrashaderFilterChain>,
     generation: u64,
+    // Store device address to detect if the underlying D3D11 device has changed
+    // (e.g. backend switch or recreation).
+    device_addr: usize,
 }
 
 static SHADER_STATE: Mutex<Option<ShaderState>> = Mutex::new(None);
-static FRAME_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static FRAME_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 fn hresult_from_windows_error(e: &windows::core::Error) -> HRESULT {
     e.code().into()
@@ -196,6 +161,8 @@ unsafe fn validate_resource_device(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nesium_apply_shader(
+    device: *mut c_void,
+    context: *mut c_void,
     input_tex: *mut c_void,
     output_tex: *mut c_void,
     src_width: u32,
@@ -230,21 +197,34 @@ pub unsafe extern "C" fn nesium_apply_shader(
             return false;
         }
 
-        let Some(d3d11) = *D3D11_CONTEXT.lock() else {
-            log::error!("D3D11 context not set");
+        if device.is_null() || context.is_null() {
+            log::error!(
+                "nesium_apply_shader: null device/context ptr(s): device={:p}, context={:p}",
+                device,
+                context
+            );
             return false;
-        };
+        }
 
         let mut state_lock = SHADER_STATE.lock();
 
-        // Reload if generation changed or shader not loaded
+        // Reload if generation changed OR device changed OR shader not loaded
         let needs_reload = match &*state_lock {
-            Some(state) => state.generation != cfg.generation,
+            Some(state) => {
+                state.generation != cfg.generation || state.device_addr != device as usize
+            }
             None => true,
         };
 
         if needs_reload {
-            log::info!("Reloading shader chain (path={})", effective_path);
+            log::info!(
+                "Reloading shader chain (path={}, device changed={})",
+                effective_path,
+                match &*state_lock {
+                    Some(state) => state.device_addr != device as usize,
+                    None => true,
+                }
+            );
             let features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
                 | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
 
@@ -255,8 +235,9 @@ pub unsafe extern "C" fn nesium_apply_shader(
             };
 
             unsafe {
+                let device_ptr = device;
                 let device: std::mem::ManuallyDrop<ID3D11Device> =
-                    std::mem::ManuallyDrop::new(std::mem::transmute_copy(&d3d11.device));
+                    std::mem::ManuallyDrop::new(std::mem::transmute_copy(&device));
 
                 match LibrashaderFilterChain::load_from_path(
                     &effective_path,
@@ -269,6 +250,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         *state_lock = Some(ShaderState {
                             chain: Some(chain),
                             generation: cfg.generation,
+                            device_addr: device_ptr as usize,
                         });
                     }
                     Err(e) => {
@@ -281,6 +263,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         *state_lock = Some(ShaderState {
                             chain: None,
                             generation: cfg.generation,
+                            device_addr: device_ptr as usize,
                         });
                     }
                 }
@@ -296,26 +279,21 @@ pub unsafe extern "C" fn nesium_apply_shader(
 
         unsafe {
             // Again, wrap in ManuallyDrop to avoid Release() on drop.
-            let device: std::mem::ManuallyDrop<ID3D11Device> =
-                std::mem::ManuallyDrop::new(std::mem::transmute_copy(&d3d11.device));
-            let context: std::mem::ManuallyDrop<ID3D11DeviceContext> =
-                std::mem::ManuallyDrop::new(std::mem::transmute_copy(&d3d11.context));
+            let device_ref: ManuallyDrop<ID3D11Device> = ManuallyDrop::new(transmute_copy(&device));
+            let context_ref: ManuallyDrop<ID3D11DeviceContext> =
+                ManuallyDrop::new(transmute_copy(&context));
 
-            let input_tex_resource: std::mem::ManuallyDrop<ID3D11Resource> =
-                std::mem::ManuallyDrop::new(std::mem::transmute_copy(&input_tex));
-            let output_tex_resource: std::mem::ManuallyDrop<ID3D11Resource> =
-                std::mem::ManuallyDrop::new(std::mem::transmute_copy(&output_tex));
-
-            // log_tex2d_desc("input", &*input_tex_resource);
-            // log_tex2d_desc("output", &*output_tex_resource);
+            let input_tex_resource: ManuallyDrop<ID3D11Resource> =
+                ManuallyDrop::new(transmute_copy(&input_tex));
+            let output_tex_resource: ManuallyDrop<ID3D11Resource> =
+                ManuallyDrop::new(transmute_copy(&output_tex));
 
             // --- New: resource/device consistency checks (high-signal for 0x80070057) ---
-            if let Err(hr) = validate_resource_device("input", &*input_tex_resource, d3d11.device) {
+            if let Err(hr) = validate_resource_device("input", &*input_tex_resource, device) {
                 log_hresult_context("Input resource/device validation failed", hr);
                 return false;
             }
-            if let Err(hr) = validate_resource_device("output", &*output_tex_resource, d3d11.device)
-            {
+            if let Err(hr) = validate_resource_device("output", &*output_tex_resource, device) {
                 log_hresult_context("Output resource/device validation failed", hr);
                 return false;
             }
@@ -334,7 +312,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                 MostDetailedMip: 0,
             };
 
-            if let Err(e) = device.CreateShaderResourceView(
+            if let Err(e) = device_ref.CreateShaderResourceView(
                 &*input_tex_resource,
                 Some(&srv_desc),
                 Some(&mut srv),
@@ -348,9 +326,11 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         "Retry CreateShaderResourceView with inferred desc (None) due to E_INVALIDARG"
                     );
                     srv = None;
-                    if let Err(e2) =
-                        device.CreateShaderResourceView(&*input_tex_resource, None, Some(&mut srv))
-                    {
+                    if let Err(e2) = device_ref.CreateShaderResourceView(
+                        &*input_tex_resource,
+                        None,
+                        Some(&mut srv),
+                    ) {
                         log::error!("Failed to create SRV (inferred desc): {:?}", e2);
                         return false;
                     }
@@ -372,7 +352,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
             rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
             rtv_desc.Anonymous.Texture2D = D3D11_TEX2D_RTV { MipSlice: 0 };
 
-            if let Err(e) = device.CreateRenderTargetView(
+            if let Err(e) = device_ref.CreateRenderTargetView(
                 &*output_tex_resource,
                 Some(&rtv_desc),
                 Some(&mut rtv),
@@ -386,9 +366,11 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         "Retry CreateRenderTargetView with inferred desc (None) due to E_INVALIDARG"
                     );
                     rtv = None;
-                    if let Err(e2) =
-                        device.CreateRenderTargetView(&*output_tex_resource, None, Some(&mut rtv))
-                    {
+                    if let Err(e2) = device_ref.CreateRenderTargetView(
+                        &*output_tex_resource,
+                        None,
+                        Some(&mut rtv),
+                    ) {
                         log::error!("Failed to create RTV (inferred desc): {:?}", e2);
                         return false;
                     }
@@ -422,7 +404,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
             };
 
             match chain.frame(
-                Some(&*context),
+                Some(&*context_ref),
                 &srv,
                 &viewport,
                 frame_count,
@@ -437,8 +419,8 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         src_height,
                         dst_width,
                         dst_height,
-                        d3d11.device,
-                        d3d11.context,
+                        device,
+                        context,
                         input_tex,
                         output_tex
                     );

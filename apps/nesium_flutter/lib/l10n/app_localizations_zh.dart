@@ -803,6 +803,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoFilterLabel => '画面滤镜';
 
   @override
+  String get videoFilterCategoryCpu => 'CPU 滤镜';
+
+  @override
+  String get videoFilterCategoryGpu => 'GPU 滤镜 (Shaders)';
+
+  @override
   String get videoFilterNone => '无 (1 倍)';
 
   @override
@@ -956,7 +962,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoShaderLibrashaderSubtitle => '需要 GLES3 + 硬件后端 (AHB 交换链)。';
 
   @override
+  String get videoShaderLibrashaderSubtitleWindows => '需要 D3D11 GPU 后端。';
+
+  @override
   String get videoShaderLibrashaderSubtitleDisabled => '切换 Android 后端到“硬件”以启用。';
+
+  @override
+  String get videoShaderLibrashaderSubtitleDisabledWindows =>
+      '切换 Windows 后端到“D3D11 GPU”以启用。';
 
   @override
   String get videoShaderPresetLabel => '预设 (.slangp)';
@@ -1024,6 +1037,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoBackendRestartHint => '重启后生效。';
+
+  @override
+  String videoBackendCurrent(String backend) {
+    return '当前后端：$backend';
+  }
 
   @override
   String get highPerformanceModeLabel => '高性能模式';
@@ -1542,6 +1560,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get longPressToClear => '长按清除';
+
+  @override
+  String get videoBackendD3D11 => 'D3D11 GPU (零拷贝)';
+
+  @override
+  String get videoBackendSoftware => '软件 CPU (回退)';
 
   @override
   String get netplayBackToSetup => '返回设置';

@@ -339,6 +339,8 @@
   "actionLoadPalette": "加载调色板",
   "videoTitle": "画面",
   "videoFilterLabel": "画面滤镜",
+  "videoFilterCategoryCpu": "CPU 滤镜",
+  "videoFilterCategoryGpu": "GPU 滤镜 (Shaders)",
   "videoFilterNone": "无 (1 倍)",
   "videoFilterPrescale2x": "预缩放 2 倍",
   "videoFilterPrescale3x": "预缩放 3 倍",
@@ -390,7 +392,9 @@
   "videoAspectRatioStretch": "拉伸",
   "videoShaderLibrashaderTitle": "Librashader (RetroArch 预设)",
   "videoShaderLibrashaderSubtitle": "需要 GLES3 + 硬件后端 (AHB 交换链)。",
+  "videoShaderLibrashaderSubtitleWindows": "需要 D3D11 GPU 后端。",
   "videoShaderLibrashaderSubtitleDisabled": "切换 Android 后端到“硬件”以启用。",
+  "videoShaderLibrashaderSubtitleDisabledWindows": "切换 Windows 后端到“D3D11 GPU”以启用。",
   "videoShaderPresetLabel": "预设 (.slangp)",
   "videoShaderPresetNotSet": "未设置",
   "shaderBrowserTitle": "着色器",
@@ -412,6 +416,14 @@
   "videoBackendHardware": "硬件（AHardwareBuffer）",
   "videoBackendUpload": "兼容（CPU 上传）",
   "videoBackendRestartHint": "重启后生效。",
+  "videoBackendCurrent": "当前后端：{backend}",
+  "@videoBackendCurrent": {
+    "placeholders": {
+      "backend": {
+        "type": "String"
+      }
+    }
+  },
   "highPerformanceModeLabel": "高性能模式",
   "highPerformanceModeDescription": "提高进程优先级并针对游戏优化调度，以获得更流畅的体验。",
   "videoLowLatencyTitle": "低延迟视频",
@@ -652,6 +664,8 @@
   "netplayStartP2PSession": "开启 P2P 会话",
   "netplayJoinP2PSession": "加入 P2P 会话",
   "netplayInvalidP2PServerAddr": "P2P 服务器地址无效",
-  "netplayProceed": "继续"
+  "netplayProceed": "继续",
+  "videoBackendD3D11": "D3D11 GPU (零拷贝)",
+  "videoBackendSoftware": "软件 CPU (回退)"
 }
 

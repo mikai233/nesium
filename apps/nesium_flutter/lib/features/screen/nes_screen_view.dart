@@ -9,6 +9,7 @@ import '../../platform/platform_capabilities.dart';
 import '../../platform/nes_video.dart' show VideoFilter;
 import '../settings/video_settings.dart';
 import '../settings/windows_shader_settings.dart';
+import '../settings/windows_video_backend_settings.dart';
 import 'emulation_status_overlay.dart';
 
 class NesScreenView extends ConsumerStatefulWidget {
@@ -146,6 +147,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
     );
     final settings = ref.watch(videoSettingsProvider);
     final windowsShaderSettings = ref.watch(windowsShaderSettingsProvider);
+    final windowsBackend = ref.watch(windowsVideoBackendSettingsProvider);
     final integerScaling = settings.integerScaling;
     final aspectRatio = settings.aspectRatio;
 
@@ -209,7 +211,8 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
 
           final shouldUseHighRes =
               settings.videoFilter != VideoFilter.none ||
-              windowsShaderSettings.enabled;
+              (windowsShaderSettings.enabled &&
+                  windowsBackend.backend == WindowsVideoBackend.d3d11Gpu);
 
           _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
 

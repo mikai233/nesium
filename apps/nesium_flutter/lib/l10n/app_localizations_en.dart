@@ -815,6 +815,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoFilterLabel => 'Video Filter';
 
   @override
+  String get videoFilterCategoryCpu => 'CPU Filters';
+
+  @override
+  String get videoFilterCategoryGpu => 'GPU Filters (Shaders)';
+
+  @override
   String get videoFilterNone => 'None (1x)';
 
   @override
@@ -970,8 +976,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Requires GLES3 + Hardware backend (AHB swapchain).';
 
   @override
+  String get videoShaderLibrashaderSubtitleWindows =>
+      'Requires D3D11 GPU backend.';
+
+  @override
   String get videoShaderLibrashaderSubtitleDisabled =>
       'Switch Android backend to Hardware to enable.';
+
+  @override
+  String get videoShaderLibrashaderSubtitleDisabledWindows =>
+      'Switch Windows backend to D3D11 GPU to enable.';
 
   @override
   String get videoShaderPresetLabel => 'Preset (.slangp)';
@@ -1040,6 +1054,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoBackendRestartHint => 'Takes effect after app restart.';
+
+  @override
+  String videoBackendCurrent(String backend) {
+    return 'Current Backend: $backend';
+  }
 
   @override
   String get highPerformanceModeLabel => 'High Performance Mode';
@@ -1561,6 +1580,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get longPressToClear => 'Long press to clear';
+
+  @override
+  String get videoBackendD3D11 => 'D3D11 GPU (Zero-Copy)';
+
+  @override
+  String get videoBackendSoftware => 'Software CPU (Fallback)';
 
   @override
   String get netplayBackToSetup => 'Back to Setup';

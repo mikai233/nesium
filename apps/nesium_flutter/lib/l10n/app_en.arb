@@ -456,6 +456,8 @@
   "actionLoadPalette": "Load palette",
   "videoTitle": "Video",
   "videoFilterLabel": "Video Filter",
+  "videoFilterCategoryCpu": "CPU Filters",
+  "videoFilterCategoryGpu": "GPU Filters (Shaders)",
   "videoFilterNone": "None (1x)",
   "videoFilterPrescale2x": "Prescale 2x",
   "videoFilterPrescale3x": "Prescale 3x",
@@ -507,7 +509,9 @@
   "videoAspectRatioStretch": "Stretch",
   "videoShaderLibrashaderTitle": "Librashader (RetroArch preset)",
   "videoShaderLibrashaderSubtitle": "Requires GLES3 + Hardware backend (AHB swapchain).",
+  "videoShaderLibrashaderSubtitleWindows": "Requires D3D11 GPU backend.",
   "videoShaderLibrashaderSubtitleDisabled": "Switch Android backend to Hardware to enable.",
+  "videoShaderLibrashaderSubtitleDisabledWindows": "Switch Windows backend to D3D11 GPU to enable.",
   "videoShaderPresetLabel": "Preset (.slangp)",
   "videoShaderPresetNotSet": "Not set",
   "shaderBrowserTitle": "Shaders",
@@ -536,6 +540,14 @@
   "videoBackendHardware": "Hardware (AHardwareBuffer)",
   "videoBackendUpload": "Compatibility (CPU upload)",
   "videoBackendRestartHint": "Takes effect after app restart.",
+  "videoBackendCurrent": "Current Backend: {backend}",
+  "@videoBackendCurrent": {
+    "placeholders": {
+      "backend": {
+        "type": "String"
+      }
+    }
+  },
   "highPerformanceModeLabel": "High Performance Mode",
   "highPerformanceModeDescription": "Elevate process priority and optimize scheduler for smoother gameplay.",
   "videoLowLatencyTitle": "Low latency video",
@@ -786,6 +798,8 @@
   "spriteViewerVisibleStatusVisible": "Visible",
   "spriteViewerVisibleStatusOffscreen": "Offscreen",
   "longPressToClear": "Long press to clear",
+  "videoBackendD3D11": "D3D11 GPU (Zero-Copy)",
+  "videoBackendSoftware": "Software CPU (Fallback)",
   "netplayBackToSetup": "Back to Setup",
   "netplayP2PMode": "P2P Mode",
   "netplaySignalingServer": "Signaling Server",

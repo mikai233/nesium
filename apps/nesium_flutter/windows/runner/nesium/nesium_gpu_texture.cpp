@@ -265,9 +265,6 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
     return false;
   }
 
-  // Pass device and context to Rust for librashader
-  nesium_set_d3d11_device(device_.Get(), context_.Get());
-
   write_index_.store(0, std::memory_order_release);
   read_index_.store(0, std::memory_order_release);
   is_mapped_ = false;
@@ -340,7 +337,8 @@ void NesiumGpuTexture::UnmapAndCommit() {
   if (shader_input_rgba_ && gpu_textures_[idx] && src_width_ > 0 &&
       src_height_ > 0 && dst_width_ > 0 && dst_height_ > 0) {
     applied =
-        nesium_apply_shader(shader_input_rgba_.Get(), gpu_textures_[idx].Get(),
+        nesium_apply_shader(device_.Get(), context_.Get(),
+                            shader_input_rgba_.Get(), gpu_textures_[idx].Get(),
                             src_width_, src_height_, dst_width_, dst_height_);
   }
 
