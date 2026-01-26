@@ -2846,8 +2846,7 @@ dependencies = [
 [[package]]
 name = "librashader"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8ba2f86c5fade6158ba832d7b7a42e01b323c9651a5f53703955acb8012594d"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "halfbrown",
  "librashader-cache",
@@ -2870,8 +2869,7 @@ dependencies = [
 [[package]]
 name = "librashader-cache"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c3ef2d6661c3f7cf4a15aa7d48d9693539f1ca3704b059aad89fba780490e96"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "bincode",
  "blake3",
@@ -2888,8 +2886,7 @@ dependencies = [
 [[package]]
 name = "librashader-common"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e198e06fd532b961e4247dafbbb0aa392a1ddb64e678d188bcafb630e5e16eef"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "ash",
  "bitflags 2.10.0",
@@ -2908,8 +2905,7 @@ dependencies = [
 [[package]]
 name = "librashader-pack"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58fda09fc5b95955fb52c5e6a13831a4e13ac7819d292ef6556be9e9faec13c5"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "image",
  "librashader-preprocess",
@@ -2921,8 +2917,7 @@ dependencies = [
 [[package]]
 name = "librashader-preprocess"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6bad79c3ea62c1f380cf08dada7e911519100dac17cafd724e18cc6091e5d04"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "encoding_rs",
  "librashader-common",
@@ -2934,8 +2929,7 @@ dependencies = [
 [[package]]
 name = "librashader-presets"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2182ff80761bc07b463309ecc2b4d4542c83f0d2e48ec96e9f8e90977fa6cd4c"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "librashader-common",
  "nom 8.0.0",
@@ -2951,8 +2945,7 @@ dependencies = [
 [[package]]
 name = "librashader-reflect"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96a36e8b24f4a13ae931911cb59e65323e2902b81a1653dcdc86a20ac1980809"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "bitflags 2.10.0",
  "bytemuck",
@@ -2974,8 +2967,7 @@ dependencies = [
 [[package]]
 name = "librashader-runtime"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f401eb05f89595d1605d41f80b98933d9705337f9f5291a0628956dc0e72e09"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "arc-swap",
  "array-concat",
@@ -2992,8 +2984,7 @@ dependencies = [
 [[package]]
 name = "librashader-runtime-d3d11"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e10b5461c13babf3dabe0aba027cd99834526f72dc7a9bdb186667592d71f226"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "array-concat",
  "bytemuck",
@@ -3012,8 +3003,7 @@ dependencies = [
 [[package]]
 name = "librashader-runtime-d3d12"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c2ef3e4f5998d1638188f96d37edaa403db97ebfbee12d873a8c47c7d8856fb"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "array-concat",
  "array-init",
@@ -3038,8 +3028,7 @@ dependencies = [
 [[package]]
 name = "librashader-runtime-d3d9"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "946a47c4a32796ee33a9bb02d238f47305a45881054ad0c0585cb4e6704aa595"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "array-concat",
  "bytemuck",
@@ -3061,8 +3050,7 @@ dependencies = [
 [[package]]
 name = "librashader-runtime-gl"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b38b64f3481b5e823b43755504e1e8ad34a9dd08b9ed41aa4a9973935aafef36"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "array-init",
  "bytemuck",
@@ -3082,8 +3070,7 @@ dependencies = [
 [[package]]
 name = "librashader-runtime-mtl"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "139e0715a2e779aeee7f35778259df7cdf4514110ccf0db7bc60132d59b868bb"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "array-concat",
  "bytemuck",
@@ -3103,8 +3090,7 @@ dependencies = [
 [[package]]
 name = "librashader-runtime-vk"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d39f435de8593230be2be34a9c969c0d01d805b04cc568944441fa2ab20f1557"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "array-concat",
  "ash",
@@ -3125,8 +3111,7 @@ dependencies = [
 [[package]]
 name = "librashader-runtime-wgpu"
 version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e323d473dc81a648dc59b49565f123325efd8ca2699fe462767ea51d31bfaa6"
+source = "git+https://github.com/mikai233/librashader.git?branch=master#3e4418f63f562d0fde8938f7c3158d2154ad3432"
 dependencies = [
  "array-concat",
  "bytemuck",

@@ -49,14 +49,12 @@ fn get_passthrough_preset() -> std::path::PathBuf {
     let slangp = temp.join("nesium_passthrough.slangp");
     let slang = temp.join("passthrough.slang");
 
-    // Rationale: This passthrough shader is required by the hybrid rendering pipeline
-    // (RGBA intermediate -> BGRA shared). It ensures that librashader always performs
-    // the necessary color format conversion and HiDPI scaling even when no user
-    // shader is active.
+    // Rationale: This passthrough shader is required by the pipeline to handle
+    // HiDPI scaling and to ensure consistent rendering when no user shader is active.
     //
-    // Future Optimization: If upstream librashader adds native support for BGRA
-    // textures on Windows, this intermediate pass could be replaced by a direct
-    // BitBlt or ResourceCopy.
+    // Note: We now use a pure BGRA pipeline (Core -> Staging -> Librashader -> Output),
+    // thanks to upstream librashader support. An identity pass is still useful
+    // for handling the scaling aspect via the robust shader chain.
     let _ = std::fs::write(
         &slang,
         r#"#version 450
@@ -326,11 +324,9 @@ pub unsafe extern "C" fn nesium_apply_shader(
             let mut srv: Option<ID3D11ShaderResourceView> = None;
 
             let mut srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC::default();
-            // Rationale: librashader (v0.10.1) currently encounters 0x80070057
-            // (E_INVALIDARG) when creating internal resources for BGRA8 textures on Windows.
-            // We use RGBA8 as an intermediate format to maintain compatibility.
-            // TODO: Investigate and contribute native BGRA support to upstream librashader.
-            srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            // Upstream librashader now supports BGRA on Windows (fixed 0x80070057).
+            // We use a pure BGRA pipeline for best performance/simplicity.
+            srv_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
             srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
             srv_desc.Anonymous.Texture2D = D3D11_TEX2D_SRV {
                 MipLevels: 1,

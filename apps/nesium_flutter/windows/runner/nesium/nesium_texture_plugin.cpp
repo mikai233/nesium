@@ -177,11 +177,9 @@ private:
     if (gpu_texture && gpu_texture->is_valid()) {
       // GPU path: use GpuSurfaceTexture with DXGI shared handle.
       //
-      // Rationale: We signal 'false' (RGBA) to the Rust core because
-      // librashader currently requires RGBA intermediate textures on Windows.
-      // The conversion to BGRA (required by Flutter/D2D) is performed by the
-      // shader backend.
-      nesium_set_color_format(false);
+      // Optimization: We now use a pure BGRA pipeline.
+      // Core (BGRA) -> Staging (BGRA) -> Shader Input (BGRA) -> Shared (BGRA).
+      nesium_set_color_format(true);
       auto gpu_texture_for_callback = gpu_texture;
       texture_variant =
           std::make_shared<flutter::TextureVariant>(flutter::GpuSurfaceTexture(

@@ -123,7 +123,8 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
     staging_desc.Height = src_height_;
     staging_desc.MipLevels = 1;
     staging_desc.ArraySize = 1;
-    staging_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    // Pure BGRA pipeline: Staging is now BGRA (matches Core output)
+    staging_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     staging_desc.SampleDesc.Count = 1;
     staging_desc.Usage = D3D11_USAGE_STAGING;
     staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -178,7 +179,8 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
   shader_desc.Height = src_height_;
   shader_desc.MipLevels = 1;
   shader_desc.ArraySize = 1;
-  shader_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  // Pure BGRA pipeline: Intermediate shader texture is now BGRA
+  shader_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
   shader_desc.SampleDesc.Count = 1;
   shader_desc.Usage = D3D11_USAGE_DEFAULT;
   shader_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
