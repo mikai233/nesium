@@ -3,12 +3,14 @@
 
 #include <cstdio>
 #include <cstring>
+#include <d3dcompiler.h>
 
 // Include Flutter header for FlutterDesktopGpuSurfaceDescriptor definition
 #include "flutter/texture_registrar.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "d3dcompiler.lib")
 
 namespace {
 
@@ -25,6 +27,23 @@ void LogHResultIndexed(const char *step, int index, HRESULT hr) {
             index, static_cast<unsigned long>(hr));
   ::OutputDebugStringA(buffer);
 }
+
+const char *kSwizzleShaderSource = R"(
+Texture2D<float4> bgra_input : register(t0);
+RWTexture2D<float4> rgba_output : register(u0);
+
+[numthreads(16, 16, 1)]
+void main(uint3 coord : SV_DispatchThreadID) {
+    uint width, height;
+    rgba_output.GetDimensions(width, height);
+    if (coord.x >= width || coord.y >= height) return;
+
+    float4 color = bgra_input[coord.xy];
+    // D3D11 handles format conversion (BGRA -> float4) automatically.
+    // We just write it to the RGBA output, letting the hardware map logical channels.
+    rgba_output[coord.xy] = color;
+}
+)";
 
 } // namespace
 
@@ -106,7 +125,12 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
   }
 
   // Reset previous resources.
-  shader_texture_.Reset();
+  shader_input_bgra_.Reset();
+  shader_input_rgba_.Reset();
+  swizzle_srv_.Reset();
+  swizzle_uav_.Reset();
+  swizzle_shader_.Reset();
+
   for (int i = 0; i < kBufferCount; ++i) {
     staging_textures_[i].Reset();
     gpu_textures_[i].Reset();
@@ -174,20 +198,70 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
   }
 
   // Create intermediate shader texture (Source Size)
-  D3D11_TEXTURE2D_DESC shader_desc = {};
-  shader_desc.Width = src_width_;
-  shader_desc.Height = src_height_;
-  shader_desc.MipLevels = 1;
-  shader_desc.ArraySize = 1;
-  // Pure BGRA pipeline: Intermediate shader texture is now BGRA
-  shader_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-  shader_desc.SampleDesc.Count = 1;
-  shader_desc.Usage = D3D11_USAGE_DEFAULT;
-  shader_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+  // 1. BGRA Texture (Target of CPU upload)
+  D3D11_TEXTURE2D_DESC bgra_desc = {};
+  bgra_desc.Width = src_width_;
+  bgra_desc.Height = src_height_;
+  bgra_desc.MipLevels = 1;
+  bgra_desc.ArraySize = 1;
+  bgra_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+  bgra_desc.SampleDesc.Count = 1;
+  bgra_desc.Usage = D3D11_USAGE_DEFAULT;
+  bgra_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
-  hr = device_->CreateTexture2D(&shader_desc, nullptr, &shader_texture_);
+  hr = device_->CreateTexture2D(&bgra_desc, nullptr, &shader_input_bgra_);
   if (FAILED(hr)) {
-    LogHResult("CreateTexture2D(shader input)", hr);
+    LogHResult("CreateTexture2D(shader_input_bgra)", hr);
+    return false;
+  }
+
+  // 2. RGBA Texture (Target of GPU swizzle, source for librashader)
+  D3D11_TEXTURE2D_DESC rgba_desc = bgra_desc;
+  rgba_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  rgba_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE |
+                        D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_RENDER_TARGET;
+
+  hr = device_->CreateTexture2D(&rgba_desc, nullptr, &shader_input_rgba_);
+  if (FAILED(hr)) {
+    LogHResult("CreateTexture2D(shader_input_rgba)", hr);
+    return false;
+  }
+
+  // 3. Create SRV for BGRA input
+  hr = device_->CreateShaderResourceView(shader_input_bgra_.Get(), nullptr,
+                                         &swizzle_srv_);
+  if (FAILED(hr)) {
+    LogHResult("CreateShaderResourceView(swizzle_srv)", hr);
+    return false;
+  }
+
+  // 4. Create UAV for RGBA output
+  hr = device_->CreateUnorderedAccessView(shader_input_rgba_.Get(), nullptr,
+                                          &swizzle_uav_);
+  if (FAILED(hr)) {
+    LogHResult("CreateUnorderedAccessView(swizzle_uav)", hr);
+    return false;
+  }
+
+  // 5. Compile and create Compute Shader
+  ComPtr<ID3DBlob> cs_blob;
+  ComPtr<ID3DBlob> error_msg;
+  hr = D3DCompile(kSwizzleShaderSource, strlen(kSwizzleShaderSource), nullptr,
+                  nullptr, nullptr, "main", "cs_5_0", 0, 0, &cs_blob,
+                  &error_msg);
+  if (FAILED(hr)) {
+    if (error_msg) {
+      OutputDebugStringA((char *)error_msg->GetBufferPointer());
+    }
+    LogHResult("D3DCompile(SwizzleCS)", hr);
+    return false;
+  }
+
+  hr = device_->CreateComputeShader(cs_blob->GetBufferPointer(),
+                                    cs_blob->GetBufferSize(), nullptr,
+                                    &swizzle_shader_);
+  if (FAILED(hr)) {
+    LogHResult("CreateComputeShader(SwizzleCS)", hr);
     return false;
   }
 
@@ -236,18 +310,37 @@ void NesiumGpuTexture::UnmapAndCommit() {
   context_->Unmap(staging_textures_[idx].Get(), 0);
   is_mapped_ = false;
 
-  // Copy staging -> Shader input texture
-  if (shader_texture_) {
-    context_->CopyResource(shader_texture_.Get(), staging_textures_[idx].Get());
+  // Copy staging -> Intermediate BGRA texture
+  if (shader_input_bgra_) {
+    context_->CopyResource(shader_input_bgra_.Get(),
+                           staging_textures_[idx].Get());
   }
 
-  // Try apply shader: intermediate(shader_texture) -> shared
-  // output(gpu_textures)
+  // GPU Swizzle: BGRA -> RGBA
+  if (swizzle_shader_) {
+    context_->CSSetShader(swizzle_shader_.Get(), nullptr, 0);
+    ID3D11ShaderResourceView *srvs[] = {swizzle_srv_.Get()};
+    context_->CSSetShaderResources(0, 1, srvs);
+    ID3D11UnorderedAccessView *uavs[] = {swizzle_uav_.Get()};
+    context_->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+
+    // Dispatch: 16x16 threads per group
+    context_->Dispatch((src_width_ + 15) / 16, (src_height_ + 15) / 16, 1);
+
+    // Cleanup CS state
+    context_->CSSetShader(nullptr, nullptr, 0);
+    ID3D11ShaderResourceView *null_srvs[] = {nullptr};
+    context_->CSSetShaderResources(0, 1, null_srvs);
+    ID3D11UnorderedAccessView *null_uavs[] = {nullptr};
+    context_->CSSetUnorderedAccessViews(0, 1, null_uavs, nullptr);
+  }
+
+  // Try apply shader: RGBA -> BGRA shared output (gpu_textures)
   bool applied = false;
-  if (shader_texture_ && gpu_textures_[idx] && src_width_ > 0 &&
+  if (shader_input_rgba_ && gpu_textures_[idx] && src_width_ > 0 &&
       src_height_ > 0 && dst_width_ > 0 && dst_height_ > 0) {
     applied =
-        nesium_apply_shader(shader_texture_.Get(), gpu_textures_[idx].Get(),
+        nesium_apply_shader(shader_input_rgba_.Get(), gpu_textures_[idx].Get(),
                             src_width_, src_height_, dst_width_, dst_height_);
   }
 
@@ -256,8 +349,9 @@ void NesiumGpuTexture::UnmapAndCommit() {
     // shader-based blit fails. Note that this only works correctly if source
     // and destination dimensions match.
     if (src_width_ == dst_width_ && src_height_ == dst_height_) {
-      if (shader_texture_) {
-        context_->CopyResource(gpu_textures_[idx].Get(), shader_texture_.Get());
+      if (shader_input_bgra_) {
+        context_->CopyResource(gpu_textures_[idx].Get(),
+                               shader_input_bgra_.Get());
       } else {
         context_->CopyResource(gpu_textures_[idx].Get(),
                                staging_textures_[idx].Get());

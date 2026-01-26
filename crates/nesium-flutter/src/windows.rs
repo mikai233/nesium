@@ -324,9 +324,10 @@ pub unsafe extern "C" fn nesium_apply_shader(
             let mut srv: Option<ID3D11ShaderResourceView> = None;
 
             let mut srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC::default();
-            // Upstream librashader now supports BGRA on Windows (fixed 0x80070057).
-            // We use a pure BGRA pipeline for best performance/simplicity.
-            srv_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            // Official librashader 0.10.1 D3D11 runtime only supports RGBA input.
+            // We use a GPU swizzle (Compute Shader) in C++ to bridge the BGRA output
+            // of the core to the RGBA required here.
+            srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
             srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
             srv_desc.Anonymous.Texture2D = D3D11_TEX2D_SRV {
                 MipLevels: 1,

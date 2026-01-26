@@ -108,8 +108,18 @@ private:
   static constexpr int kBufferCount = 2;
   ComPtr<ID3D11Texture2D> staging_textures_[kBufferCount];
   ComPtr<ID3D11Texture2D> gpu_textures_[kBufferCount];
+
+  // Shader input resources:
+  // Nesium core outputs BGRA, but librashader requires RGBA.
+  // We use a Compute Shader to swizzle BGRA -> RGBA on the GPU.
   ComPtr<ID3D11Texture2D>
-      shader_texture_; // Intermediate texture for shader input
+      shader_input_bgra_; // Target for CPU upload (B8G8R8A8)
+  ComPtr<ID3D11Texture2D>
+      shader_input_rgba_; // Input for librashader (R8G8B8A8)
+  ComPtr<ID3D11ShaderResourceView> swizzle_srv_;
+  ComPtr<ID3D11UnorderedAccessView> swizzle_uav_;
+  ComPtr<ID3D11ComputeShader> swizzle_shader_;
+
   ScopedHandle shared_handles_[kBufferCount];
 
   std::atomic<int> write_index_{0};
