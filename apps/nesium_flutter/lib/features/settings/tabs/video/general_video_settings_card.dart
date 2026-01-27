@@ -9,6 +9,7 @@ import '../../../../widgets/animated_settings_widgets.dart';
 import '../../android_performance_settings.dart';
 import '../../android_video_backend_settings.dart';
 import '../../apple_performance_settings.dart';
+import '../../linux_performance_settings.dart';
 import '../../windows_performance_settings.dart';
 import '../../windows_video_backend_settings.dart';
 import '../../video_settings.dart';
@@ -25,6 +26,7 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    final isLinux = !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
     final isApple =
         !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.macOS ||
@@ -61,6 +63,13 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
         : ApplePerformanceSettings(highPerformance: false);
     final applePerformanceController = isApple
         ? ref.read(applePerformanceSettingsControllerProvider.notifier)
+        : null;
+
+    final linuxPerformance = isLinux
+        ? ref.watch(linuxPerformanceSettingsControllerProvider)
+        : LinuxPerformanceSettings(highPerformance: false);
+    final linuxPerformanceController = isLinux
+        ? ref.read(linuxPerformanceSettingsControllerProvider.notifier)
         : null;
 
     Future<void> setAspectRatio(NesAspectRatio value) async {
@@ -244,6 +253,20 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
                     ? null
                     : (value) =>
                           applePerformanceController.setHighPerformance(value),
+              ),
+            ],
+            if (isLinux) ...[
+              const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.rocket_launch),
+                title: Text(l10n.highPerformanceModeLabel),
+                subtitle: Text(l10n.highPerformanceModeDescription),
+                value: linuxPerformance.highPerformance,
+                onChanged: linuxPerformanceController == null
+                    ? null
+                    : (value) =>
+                          linuxPerformanceController.setHighPerformance(value),
               ),
             ],
           ],

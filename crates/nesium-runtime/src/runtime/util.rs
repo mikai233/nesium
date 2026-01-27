@@ -139,6 +139,28 @@ pub(crate) fn apply_priority_to_current_thread(enabled: bool) {
             }
         }
     }
+
+    #[cfg(target_os = "linux")]
+    {
+        let tid = unsafe { libc::gettid() as i32 };
+        unsafe {
+            // 1. Try to set nice value. Non-root can only increase nice value.
+            // We use -10 for high priority (might fail if not root) and 0 for normal.
+            let nice = if enabled { -10 } else { 0 };
+            let res = libc::setpriority(libc::PRIO_PROCESS, tid as u32, nice);
+            if res == 0 {
+                tracing::info!("Linux thread priority (nice) set to: {}", nice);
+            }
+
+            // 2. Set timer slack to 1ns for high performance, or default (50us)
+            // This does not require root and significantly improves wakeup latency.
+            let slack = if enabled { 1 } else { 50_000 };
+            let res = libc::prctl(libc::PR_SET_TIMERSLACK, slack, 0, 0, 0);
+            if res == 0 {
+                tracing::info!("Linux thread timer slack set to: {}ns", slack);
+            }
+        }
+    }
 }
 
 pub(crate) fn try_raise_current_thread_priority() {
