@@ -595,7 +595,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_init_1android
         unsafe {
             ndk_context::initialize_android_context(vm_ptr, context_ptr);
         }
-        tracing::info!("[Rust] Android Context initialized via ndk-context");
+        tracing::info!("Android Context initialized via ndk-context");
     });
 
     // Ensure the runtime is started (video backend must be selected beforehand).
@@ -1396,7 +1396,7 @@ unsafe fn run_rust_renderer(
     let ext_ptr = unsafe { glGetString(GL_EXTENSIONS) };
     if !ext_ptr.is_null() {
         let ext = unsafe { CStr::from_ptr(ext_ptr as *const c_char) }.to_string_lossy();
-        tracing::info!("[RustRenderer] GL_EXTENSIONS: {}", ext);
+        tracing::info!("GL_EXTENSIONS: {}", ext);
     }
 
     unsafe { glDisable(GL_DITHER) };

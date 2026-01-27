@@ -21,7 +21,7 @@ unsafe extern "C" {
 }
 
 pub fn set_high_priority_enabled(enabled: bool) {
-    tracing::info!("[nesium-runtime] High priority enabled set to: {}", enabled);
+    tracing::info!("High priority enabled set to: {}", enabled);
     HIGH_PRIORITY_ENABLED.store(enabled, Ordering::Release);
 
     #[cfg(target_os = "android")]
@@ -72,7 +72,7 @@ pub(crate) fn apply_priority_to_current_thread(enabled: bool) {
             let res = pthread_set_qos_class_self_np(qos, 0);
             if res == 0 {
                 tracing::info!(
-                    "[nesium-runtime] macOS Thread QoS {}: {}",
+                    "macOS Thread QoS {}: {}",
                     if enabled { "raised" } else { "restored" },
                     if enabled {
                         "UserInteractive"
@@ -81,7 +81,7 @@ pub(crate) fn apply_priority_to_current_thread(enabled: bool) {
                     }
                 );
             } else {
-                tracing::error!("[nesium-runtime] Failed to set macOS Thread QoS: {}", res);
+                tracing::error!("Failed to set macOS Thread QoS: {}", res);
             }
         }
     }
@@ -102,7 +102,7 @@ pub(crate) fn apply_priority_to_current_thread(enabled: bool) {
             };
             if SetPriorityClass(process, p_priority) != 0 {
                 tracing::info!(
-                    "[nesium-runtime] Windows process priority class set to: {}",
+                    "Windows process priority class set to: {}",
                     if enabled { "HIGH" } else { "NORMAL" }
                 );
             }
@@ -116,7 +116,7 @@ pub(crate) fn apply_priority_to_current_thread(enabled: bool) {
             };
             if SetThreadPriority(thread, t_priority) != 0 {
                 tracing::info!(
-                    "[nesium-runtime] Windows thread priority set to: {}",
+                    "Windows thread priority set to: {}",
                     if enabled { "HIGHEST" } else { "NORMAL" }
                 );
             }
@@ -144,15 +144,9 @@ fn try_set_thread_nice(tid: i32, nice: i32) {
         let tid = tid as libc::id_t;
         let res = libc::setpriority(libc::PRIO_PROCESS, tid, nice);
         if res == 0 {
-            tracing::info!(
-                "[nesium-runtime] Android thread priority (nice) set to: {}",
-                nice
-            );
+            tracing::info!("Android thread priority (nice) set to: {}", nice);
         } else {
-            tracing::error!(
-                "[nesium-runtime] Failed to set Android thread priority: {}",
-                res
-            );
+            tracing::error!("Failed to set Android thread priority: {}", res);
         }
     }
 }
