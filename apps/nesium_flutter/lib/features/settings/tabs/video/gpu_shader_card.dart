@@ -28,8 +28,9 @@ class GpuShaderCard extends ConsumerWidget {
             defaultTargetPlatform == TargetPlatform.iOS);
     final isLinux = !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
-    if (!isAndroid && !isWindows && !isApple && !isLinux)
+    if (!isAndroid && !isWindows && !isApple && !isLinux) {
       return const SizedBox.shrink();
+    }
 
     final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
     final androidShaderSettings = isAndroid
