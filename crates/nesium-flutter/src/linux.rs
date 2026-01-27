@@ -63,9 +63,27 @@ static GLOW_CONTEXT: OnceLock<Arc<glow::Context>> = OnceLock::new();
 fn glow_context() -> Arc<glow::Context> {
     GLOW_CONTEXT
         .get_or_init(|| {
+            let lib_names = ["libGL.so.1", "libGLESv2.so.2", "libEGL.so.1"];
+            let mut handles = Vec::new();
+            for name in lib_names {
+                let c_name = std::ffi::CString::new(name).unwrap();
+                let handle =
+                    unsafe { libc::dlopen(c_name.as_ptr(), libc::RTLD_LAZY | libc::RTLD_LOCAL) };
+                if !handle.is_null() {
+                    tracing::info!("Loaded GL symbol library: {}", name);
+                    handles.push(handle);
+                }
+            }
+
             Arc::new(unsafe {
                 glow::Context::from_loader_function(|s| {
                     let c_name = std::ffi::CString::new(s).unwrap();
+                    for &h in &handles {
+                        let ptr = libc::dlsym(h, c_name.as_ptr());
+                        if !ptr.is_null() {
+                            return ptr as *const _;
+                        }
+                    }
                     libc::dlsym(libc::RTLD_DEFAULT, c_name.as_ptr()) as *const _
                 })
             })
@@ -222,8 +240,17 @@ pub unsafe extern "C" fn nesium_linux_apply_shader(
             ..Default::default()
         };
 
+        // Aggressive state save
         let prev_fbo = unsafe { glow_ctx.get_parameter_i32(glow::FRAMEBUFFER_BINDING) as u32 };
+        let prev_program = unsafe { glow_ctx.get_parameter_i32(glow::CURRENT_PROGRAM) as u32 };
+        let prev_tex = unsafe { glow_ctx.get_parameter_i32(glow::TEXTURE_BINDING_2D) as u32 };
+        let prev_active_tex = unsafe { glow_ctx.get_parameter_i32(glow::ACTIVE_TEXTURE) as u32 };
+        let mut prev_viewport = [0i32; 4];
+        unsafe { glow_ctx.get_parameter_i32_slice(glow::VIEWPORT, &mut prev_viewport) };
         let prev_scissor_enabled = unsafe { glow_ctx.is_enabled(glow::SCISSOR_TEST) };
+        let mut prev_scissor_box = [0i32; 4];
+        unsafe { glow_ctx.get_parameter_i32_slice(glow::SCISSOR_BOX, &mut prev_scissor_box) };
+        let prev_unpack_alignment = unsafe { glow_ctx.get_parameter_i32(glow::UNPACK_ALIGNMENT) };
 
         let res = unsafe {
             chain.frame(
@@ -234,16 +261,36 @@ pub unsafe extern "C" fn nesium_linux_apply_shader(
             )
         };
 
+        // Aggressive state restore
         unsafe {
             glow_ctx.bind_framebuffer(
                 glow::FRAMEBUFFER,
                 NonZeroU32::new(prev_fbo).map(glow::NativeFramebuffer),
+            );
+            glow_ctx.use_program(NonZeroU32::new(prev_program).map(glow::NativeProgram));
+            glow_ctx.active_texture(prev_active_tex);
+            glow_ctx.bind_texture(
+                glow::TEXTURE_2D,
+                NonZeroU32::new(prev_tex).map(glow::NativeTexture),
+            );
+            glow_ctx.viewport(
+                prev_viewport[0],
+                prev_viewport[1],
+                prev_viewport[2],
+                prev_viewport[3],
             );
             if prev_scissor_enabled {
                 glow_ctx.enable(glow::SCISSOR_TEST);
             } else {
                 glow_ctx.disable(glow::SCISSOR_TEST);
             }
+            glow_ctx.scissor(
+                prev_scissor_box[0],
+                prev_scissor_box[1],
+                prev_scissor_box[2],
+                prev_scissor_box[3],
+            );
+            glow_ctx.pixel_store_i32(glow::UNPACK_ALIGNMENT, prev_unpack_alignment);
         }
 
         match res {
