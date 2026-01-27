@@ -23,6 +23,10 @@ final class StorageKeys {
       'settings.apple.high_performance.v1';
   static const String settingsLinuxHighPerformance =
       'settings.linux.high_performance.v1';
+  static const String settingsLinuxShaderEnabled =
+      'settings.linux.shader_enabled.v1';
+  static const String settingsLinuxShaderPresetPath =
+      'settings.linux.shader_preset_path.v1';
   static const String settingsAppleShaderEnabled =
       'settings.apple.shader_enabled.v1';
   static const String settingsAppleShaderPresetPath =
