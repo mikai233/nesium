@@ -93,7 +93,6 @@ target_link_libraries(${BINARY_NAME} PRIVATE rust_lib)
 # Standard Flutter dependencies
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
-target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::EPOXY)
 
 # Link X11 for XInitThreads support (required for multi-engine desktop apps)
 pkg_check_modules(X11 REQUIRED x11)
