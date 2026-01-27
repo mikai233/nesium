@@ -548,6 +548,8 @@
       }
     }
   },
+  "windowsNativeOverlayTitle": "Windows Native Overlay (Experimental)",
+  "windowsNativeOverlaySubtitle": "Bypasses Flutter compositor for perfect smoothness. Disables shaders and overlays UI behind the game.",
   "highPerformanceModeLabel": "High Performance Mode",
   "highPerformanceModeDescription": "Elevate process priority and optimize scheduler for smoother gameplay.",
   "videoLowLatencyTitle": "Low latency video",

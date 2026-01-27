@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:archive/archive_io.dart';
+import 'package:path/path.dart' as path;
 
 // Configuration
 const List<String> kWhitelistCategories = [
@@ -69,8 +71,14 @@ void main(List<String> args) async {
     // Dest: Temporary build directory to assemble the clean pack
     destPath = joinPath(appRoot, joinPath('build', 'shaders_pkg'));
 
-    // Zip: Output to assets/shaders.zip
-    zipPath = joinPath(appRoot, joinPath('assets', 'shaders.zip'));
+    // Zip: Output to assets/bundled/shaders.zip
+    final bundledDir = Directory(
+      joinPath(appRoot, joinPath('assets', 'bundled')),
+    );
+    if (!bundledDir.existsSync()) {
+      bundledDir.createSync(recursive: true);
+    }
+    zipPath = joinPath(bundledDir.path, 'shaders.zip');
 
     logInfo('ℹ️ No arguments provided. Using defaults:');
     logInfo('   Source: $sourcePath');
@@ -140,24 +148,27 @@ void main(List<String> args) async {
   // 2. Zip the result if requested
   if (zipOutput != null) {
     logInfo('🤐 Creating ZIP archive: $zipOutput');
-    // Use system tar for basic zipping (available on Windows 10+ and Unix)
-    // We use -C to change to the destination directory and pack '.'
-    // so that the ZIP root contains the shaders directly (matching original PS1 script).
-    final result = await Process.run('tar', [
-      '-a',
-      '-c',
-      '-f',
-      zipOutput,
-      '-C',
-      _destRoot,
-      '.',
-    ]);
 
-    if (result.exitCode == 0) {
+    try {
+      final encoder = ZipFileEncoder();
+      encoder.create(zipOutput);
+
+      // Add all files from _destRoot to the zip, but with relative paths
+      // This mimics "tar -C _destRoot -cf ... ."
+      final destDir = Directory(_destRoot);
+      if (destDir.existsSync()) {
+        await for (final entity in destDir.list(recursive: true)) {
+          if (entity is File) {
+            final relPath = path.relative(entity.path, from: _destRoot);
+            encoder.addFile(entity, relPath);
+          }
+        }
+      }
+
+      encoder.close();
       logInfo('✨ ZIP created successfully.');
-    } else {
-      logError('⚠️ ZIP creation failed (exit code ${result.exitCode}).');
-      logError('STDERR: ${result.stderr}');
+    } catch (e) {
+      logError('⚠️ ZIP creation failed: $e');
     }
   }
 }

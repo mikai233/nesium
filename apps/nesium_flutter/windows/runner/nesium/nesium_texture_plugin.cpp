@@ -1,15 +1,21 @@
 #include "nesium_texture_plugin.h"
 
 #include <atomic>
-#include <condition_variable>
+#include <chrono>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <thread>
+#include <numeric>
 #include <utility>
+#include <variant>
+#include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
 #endif
 #include <windows.h>
 
@@ -17,12 +23,16 @@
 #include "flutter/plugin_registrar_windows.h"
 #include "flutter/standard_method_codec.h"
 #include "flutter/texture_registrar.h"
-#include <avrt.h>
+#include <flutter/encodable_value.h>
 #include <flutter/method_channel.h>
 
 #include "nesium_gpu_texture.h"
+#include "nesium_native_window.h"
 #include "nesium_rust_ffi.h"
 #include "nesium_texture.h"
+
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "dxgi.lib")
 
 // Windows texture backend for Nesium (Flutter desktop).
 //
@@ -34,10 +44,19 @@
 
 namespace {
 
-constexpr uint32_t kEmptyPending = 0xFFFFFFFFu;
+class NesiumTexturePlugin;
 
 class NesiumTexturePlugin : public flutter::Plugin {
 public:
+  static double GetDouble(const flutter::EncodableValue &value) {
+    if (std::holds_alternative<double>(value))
+      return std::get<double>(value);
+    if (std::holds_alternative<int32_t>(value))
+      return static_cast<double>(std::get<int32_t>(value));
+    if (std::holds_alternative<int64_t>(value))
+      return static_cast<double>(std::get<int64_t>(value));
+    return 0.0;
+  }
   explicit NesiumTexturePlugin(flutter::PluginRegistrarWindows *registrar)
       : registrar_(registrar),
         texture_registrar_(registrar->texture_registrar()) {
@@ -50,32 +69,23 @@ public:
       HandleMethodCall(call, std::move(result));
     });
 
-    // Initial priority application
-    if (prefer_high_priority_.load()) {
-      ::SetPriorityClass(::GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+    if (auto *view = registrar_->GetView()) {
+      parent_hwnd_ = view->GetNativeWindow();
+      OutputDebugStringA("[Nesium] Plugin initialized with View HWND\n");
     }
-
-    // Copy/present worker thread (used for both GPU and CPU paths)
-    worker_ = std::thread([this] { WorkerMain(); });
   }
 
-  ~NesiumTexturePlugin() {
+  virtual ~NesiumTexturePlugin() {
     nesium_set_frame_ready_callback(nullptr, nullptr);
     shutting_down_.store(true, std::memory_order_release);
-    {
-      std::lock_guard<std::mutex> lk(mu_);
-      cv_.notify_all();
-    }
-    if (worker_.joinable()) {
-      worker_.join();
-    }
   }
 
 private:
   void HandleMethodCall(
       const flutter::MethodCall<flutter::EncodableValue> &call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-    if (call.method_name() == "createNesTexture") {
+    const std::string &method = call.method_name();
+    if (method == "createNesTexture") {
       int width = texture_width_;
       int height = texture_height_;
       if (const auto *args =
@@ -88,54 +98,77 @@ private:
         }
       }
       CreateNesTexture(std::move(result), width, height);
-      return;
-    }
-    if (call.method_name() == "setPresentBufferSize") {
+    } else if (method == "setPresentBufferSize") {
       SetPresentBufferSize(call, std::move(result));
-      return;
-    }
-    if (call.method_name() == "disposeNesTexture") {
+    } else if (method == "disposeNesTexture") {
       DisposeNesTexture(std::move(result));
-      return;
-    }
-    if (call.method_name() == "setWindowsVideoBackend") {
+    } else if (method == "setWindowsVideoBackend") {
       SetWindowsVideoBackend(call, std::move(result));
-      return;
+    } else if (method == "setNativeOverlay") {
+      SetNativeOverlay(call, std::move(result));
+    } else {
+      result->NotImplemented();
     }
-    if (call.method_name() == "setWindowsHighPriority") {
-      SetWindowsHighPriority(call, std::move(result));
-      return;
-    }
-    result->NotImplemented();
   }
 
-  void SetWindowsHighPriority(
+  void SetNativeOverlay(
       const flutter::MethodCall<flutter::EncodableValue> &call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+    OutputDebugStringA("[Nesium] SetNativeOverlay called\n");
     const auto *args = std::get_if<flutter::EncodableMap>(call.arguments());
     if (!args) {
       result->Error("Invalid arguments", "Expected map");
       return;
     }
 
-    auto it = args->find(flutter::EncodableValue("enabled"));
-    if (it == args->end()) {
-      result->Error("Invalid arguments", "Missing enabled");
-      return;
-    }
-
-    bool enabled = std::get<bool>(it->second);
-    prefer_high_priority_.store(enabled, std::memory_order_release);
+    auto it_enabled = args->find(flutter::EncodableValue("enabled"));
+    bool enabled =
+        it_enabled != args->end() && std::get<bool>(it_enabled->second);
 
     if (enabled) {
-      ::SetPriorityClass(::GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+      OutputDebugStringA("[Nesium] Native Overlay Enabled\n");
+      if (!native_window_) {
+        OutputDebugStringA("[Nesium] Creating Native Window...\n");
+        std::shared_ptr<NesiumGpuTexture> gpu_texture;
+        {
+          std::lock_guard<std::mutex> lk(texture_state_mu_);
+          gpu_texture = gpu_texture_;
+        }
+        if (gpu_texture && parent_hwnd_) {
+          native_window_ = NesiumNativeWindow::Create(
+              parent_hwnd_,
+              reinterpret_cast<ID3D11Device *>(gpu_texture->GetDevice()));
+        } else {
+          if (!gpu_texture)
+            OutputDebugStringA("[Nesium] SKIP: gpu_texture is null\n");
+          if (!parent_hwnd_)
+            OutputDebugStringA("[Nesium] SKIP: parent_hwnd_ is null\n");
+        }
+      }
+
+      if (native_window_) {
+        auto it_x = args->find(flutter::EncodableValue("x"));
+        auto it_y = args->find(flutter::EncodableValue("y"));
+        auto it_w = args->find(flutter::EncodableValue("width"));
+        auto it_h = args->find(flutter::EncodableValue("height"));
+
+        if (it_x != args->end() && it_y != args->end() && it_w != args->end() &&
+            it_h != args->end()) {
+          overlay_x_ = static_cast<int>(GetDouble(it_x->second));
+          overlay_y_ = static_cast<int>(GetDouble(it_y->second));
+          overlay_w_ = static_cast<int>(GetDouble(it_w->second));
+          overlay_h_ = static_cast<int>(GetDouble(it_h->second));
+          UpdateOverlayPos();
+        }
+        native_window_->SetVisible(true);
+      }
     } else {
-      ::SetPriorityClass(::GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
+      if (native_window_) {
+        native_window_->SetVisible(false);
+      }
     }
 
-    if (result) {
-      result->Success();
-    }
+    result->Success();
   }
 
   void CreateNesTexture(
@@ -163,15 +196,36 @@ private:
     std::shared_ptr<flutter::TextureVariant> texture_variant;
 
     // Try D3D11 GPU texture if preferred.
+    {
+      char buf[256];
+      sprintf_s(
+          buf,
+          "[Nesium] CreateNesTexture: prefer_gpu=%d, src=%dx%d, dst=%dx%d\n",
+          prefer_gpu_, src_width_, src_height_, width, height);
+      OutputDebugStringA(buf);
+    }
+
     if (prefer_gpu_) {
       IDXGIAdapter *adapter = nullptr;
       if (auto *view = registrar_->GetView()) {
         adapter = view->GetGraphicsAdapter();
+        char buf[128];
+        sprintf_s(buf, "[Nesium] Graphics Adapter: %p\n", adapter);
+        OutputDebugStringA(buf);
+      } else {
+        OutputDebugStringA("[Nesium] SKIP: view is null\n");
       }
       // Use current known source size (or default) and requested destination
       // size.
       gpu_texture = NesiumGpuTexture::Create(src_width_, src_height_, width,
                                              height, adapter);
+      if (!gpu_texture) {
+        OutputDebugStringA(
+            "[Nesium] NesiumGpuTexture::Create failed (returned null)\n");
+      } else if (!gpu_texture->is_valid()) {
+        OutputDebugStringA(
+            "[Nesium] NesiumGpuTexture is invalid after Create\n");
+      }
     }
 
     if (gpu_texture && gpu_texture->is_valid()) {
@@ -191,6 +245,7 @@ private:
                            : nullptr;
               }));
     } else {
+      OutputDebugStringA("[Nesium] Falling back to CPU texture path\n");
       // Fallback: CPU PixelBufferTexture.
       // CPU path uses RGBA format.
       nesium_set_color_format(false);
@@ -235,9 +290,6 @@ private:
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
     nesium_set_frame_ready_callback(nullptr, nullptr);
 
-    pending_index_.store(kEmptyPending, std::memory_order_release);
-    work_scheduled_.store(false, std::memory_order_release);
-
     const int64_t id = texture_id_.exchange(-1, std::memory_order_acq_rel);
 
     std::shared_ptr<flutter::TextureVariant> texture_variant_to_release;
@@ -277,8 +329,8 @@ private:
       return;
     }
 
-    int width = std::get<int>(it_w->second);
-    int height = std::get<int>(it_h->second);
+    int width = static_cast<int>(GetDouble(it_w->second));
+    int height = static_cast<int>(GetDouble(it_h->second));
     if (width <= 0 || height <= 0) {
       result->Error("Invalid arguments", "width/height must be > 0");
       return;
@@ -346,121 +398,72 @@ private:
   // Called from the Rust runtime thread. Must be lightweight and non-blocking.
   void OnFrameReady(uint32_t bufferIndex, uint32_t width, uint32_t height,
                     uint32_t) {
-    pending_width_.store(width, std::memory_order_release);
-    pending_height_.store(height, std::memory_order_release);
-    pending_index_.store(bufferIndex, std::memory_order_release);
-
-    bool expected = false;
-    if (!work_scheduled_.compare_exchange_strong(expected, true,
-                                                 std::memory_order_acq_rel)) {
+    if (shutting_down_.load(std::memory_order_acquire)) {
       return;
     }
 
-    std::lock_guard<std::mutex> lk(mu_);
-    cv_.notify_one();
+    const int64_t tid = texture_id_.load(std::memory_order_acquire);
+    if (tid < 0) {
+      return;
+    }
+
+    std::shared_ptr<NesiumGpuTexture> gpu_texture;
+    std::shared_ptr<NesiumTexture> cpu_texture;
+    {
+      std::lock_guard<std::mutex> lk(texture_state_mu_);
+      gpu_texture = gpu_texture_;
+      cpu_texture = cpu_texture_;
+    }
+
+    if (gpu_texture) {
+      // Resize Source if frame size changed
+      if (src_width_ != static_cast<int>(width) ||
+          src_height_ != static_cast<int>(height)) {
+        gpu_texture->ResizeSource(static_cast<int>(width),
+                                  static_cast<int>(height));
+        src_width_ = static_cast<int>(width);
+        src_height_ = static_cast<int>(height);
+      }
+
+      // GPU path: map, copy, unmap, commit
+      auto [dst, pitch] = gpu_texture->MapWriteBuffer();
+      if (dst) {
+        nesium_copy_frame(bufferIndex, dst, pitch,
+                          static_cast<uint32_t>(gpu_texture->height()));
+        int idx_to_present = gpu_texture->UnmapAndCommit();
+
+        if (native_window_ && idx_to_present >= 0) {
+          native_window_->PresentTexture(
+              gpu_texture->GetTexture(idx_to_present),
+              gpu_texture->was_shader_applied());
+        }
+      }
+    } else if (cpu_texture) {
+      if (cpu_texture->width() != static_cast<int>(width) ||
+          cpu_texture->height() != static_cast<int>(height)) {
+        cpu_texture->Resize(static_cast<int>(width), static_cast<int>(height));
+        src_width_ = static_cast<int>(width);
+        src_height_ = static_cast<int>(height);
+      }
+
+      // CPU fallback path
+      auto [dst, write_index] = cpu_texture->acquireWritableBuffer();
+      nesium_copy_frame(bufferIndex, dst,
+                        static_cast<uint32_t>(cpu_texture->stride()),
+                        static_cast<uint32_t>(cpu_texture->height()));
+      cpu_texture->commitLatestReady(write_index);
+    }
+
+    // Notify Flutter that the texture has a new frame.
+    texture_registrar_->MarkTextureFrameAvailable(tid);
   }
 
-  void WorkerMain() {
-    DWORD mm_task_index = 0;
-    HANDLE mm_handle = nullptr;
+public:
+  void UpdateOverlayPos() {
+    if (!native_window_ || !parent_hwnd_)
+      return;
 
-    while (!shutting_down_.load(std::memory_order_acquire)) {
-      const bool high_prio =
-          prefer_high_priority_.load(std::memory_order_acquire);
-      if (high_prio && !mm_handle) {
-        mm_handle = ::AvSetMmThreadCharacteristicsW(L"Games", &mm_task_index);
-      } else if (!high_prio && mm_handle) {
-        ::AvRevertMmThreadCharacteristics(mm_handle);
-        mm_handle = nullptr;
-      }
-      {
-        std::unique_lock<std::mutex> lk(mu_);
-        cv_.wait(lk, [this] {
-          return shutting_down_.load(std::memory_order_acquire) ||
-                 work_scheduled_.load(std::memory_order_acquire);
-        });
-      }
-
-      if (shutting_down_.load(std::memory_order_acquire)) {
-        break;
-      }
-
-      const uint32_t idx =
-          pending_index_.exchange(kEmptyPending, std::memory_order_acq_rel);
-      work_scheduled_.store(false, std::memory_order_release);
-
-      const int64_t tid = texture_id_.load(std::memory_order_acquire);
-      if (tid < 0 || idx == kEmptyPending) {
-        continue;
-      }
-
-      std::shared_ptr<NesiumGpuTexture> gpu_texture;
-      std::shared_ptr<NesiumTexture> cpu_texture;
-      {
-        std::lock_guard<std::mutex> lk(texture_state_mu_);
-        gpu_texture = gpu_texture_;
-        cpu_texture = cpu_texture_;
-      }
-
-      const uint32_t frame_w = pending_width_.load(std::memory_order_acquire);
-      const uint32_t frame_h = pending_height_.load(std::memory_order_acquire);
-      if (frame_w == 0 || frame_h == 0) {
-        continue;
-      }
-
-      if (gpu_texture) {
-        // Resize Source if frame size changed
-        if (src_width_ != static_cast<int>(frame_w) ||
-            src_height_ != static_cast<int>(frame_h)) {
-          gpu_texture->ResizeSource(static_cast<int>(frame_w),
-                                    static_cast<int>(frame_h));
-          src_width_ = static_cast<int>(frame_w);
-          src_height_ = static_cast<int>(frame_h);
-        }
-        // Note: Output dimension updates (dst_width/height) are handled via
-        // SetPresentBufferSize, which triggers ResizeOutput on the GPU texture.
-
-      } else if (cpu_texture) {
-        if (cpu_texture->width() != static_cast<int>(frame_w) ||
-            cpu_texture->height() != static_cast<int>(frame_h)) {
-          cpu_texture->Resize(static_cast<int>(frame_w),
-                              static_cast<int>(frame_h));
-          src_width_ = static_cast<int>(frame_w);
-          src_height_ = static_cast<int>(frame_h);
-        }
-      }
-
-      if (gpu_texture) {
-        // GPU path: map, copy, unmap, commit
-        auto [dst, pitch] = gpu_texture->MapWriteBuffer();
-        if (dst) {
-          nesium_copy_frame(idx, dst, pitch,
-                            static_cast<uint32_t>(
-                                gpu_texture->height())); // This is src height
-          gpu_texture->UnmapAndCommit();
-        }
-      } else if (cpu_texture) {
-        // CPU fallback path
-        auto [dst, write_index] = cpu_texture->acquireWritableBuffer();
-        nesium_copy_frame(idx, dst,
-                          static_cast<uint32_t>(cpu_texture->stride()),
-                          static_cast<uint32_t>(cpu_texture->height()));
-        cpu_texture->commitLatestReady(write_index);
-      }
-
-      // Notify Flutter that the texture has a new frame.
-      texture_registrar_->MarkTextureFrameAvailable(tid);
-
-      // If another frame arrived while processing, schedule one more drain.
-      if (pending_index_.load(std::memory_order_acquire) != kEmptyPending) {
-        bool expected = false;
-        if (work_scheduled_.compare_exchange_strong(
-                expected, true, std::memory_order_acq_rel)) {
-          std::lock_guard<std::mutex> lk(mu_);
-          cv_.notify_one();
-        }
-      }
-    }
+    native_window_->Resize(overlay_x_, overlay_y_, overlay_w_, overlay_h_);
   }
 
 private:
@@ -483,19 +486,18 @@ private:
   int src_width_ = 256;
   int src_height_ = 240;
 
-  // Latest-only signaling from Rust thread -> worker thread.
-  std::atomic<uint32_t> pending_index_{kEmptyPending};
-  std::atomic<uint32_t> pending_width_{0};
-  std::atomic<uint32_t> pending_height_{0};
-  std::atomic<bool> work_scheduled_{false};
-  std::atomic<bool> shutting_down_{false};
-  std::atomic<bool> prefer_high_priority_{true};
-
   std::mutex texture_state_mu_;
 
-  std::mutex mu_;
-  std::condition_variable cv_;
-  std::thread worker_;
+  std::atomic<bool> shutting_down_{false};
+
+  HWND parent_hwnd_ = nullptr;
+  std::unique_ptr<NesiumNativeWindow> native_window_;
+
+  // Overlay state for synchronization
+  int overlay_x_ = 0;
+  int overlay_y_ = 0;
+  int overlay_w_ = 0;
+  int overlay_h_ = 0;
 };
 
 } // namespace

@@ -70,11 +70,9 @@ class NesiumGameView(context: Context) : PlatformView, SurfaceHolder.Callback {
         when (backend) {
             NesiumVideoBackend.Upload -> {
                 // Scheme A: Kotlin uploads planes into a GL texture and presents to the SurfaceView.
-                val highPriorityEnabled = NesiumAndroidHighPriority.get(surfaceView.context)
                 uploadRenderer = NesRenderer(
                     surface = holder.surface,
                     releaseSurface = false,
-                    highPriorityEnabled = highPriorityEnabled,
                 )
             }
 

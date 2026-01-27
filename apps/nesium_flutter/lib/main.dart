@@ -55,7 +55,7 @@ Future<void> main(List<String> args) async {
 
       await initAppStorage();
       await initRustRuntime();
-      await ShaderAssetService().syncShaders();
+      unawaited(ShaderAssetService().syncShaders());
       final kind = await resolveWindowKind();
 
       runApp(

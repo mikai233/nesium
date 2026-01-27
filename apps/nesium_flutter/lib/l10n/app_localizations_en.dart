@@ -1061,6 +1061,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get windowsNativeOverlayTitle =>
+      'Windows Native Overlay (Experimental)';
+
+  @override
+  String get windowsNativeOverlaySubtitle =>
+      'Bypasses Flutter compositor for perfect smoothness. Disables shaders and overlays UI behind the game.';
+
+  @override
   String get highPerformanceModeLabel => 'High Performance Mode';
 
   @override

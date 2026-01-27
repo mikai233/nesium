@@ -207,6 +207,18 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
                     : (value) => windowsPerformanceController
                           .setHighPerformance(value),
               ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.layers),
+                title: Text(l10n.windowsNativeOverlayTitle),
+                subtitle: Text(l10n.windowsNativeOverlaySubtitle),
+                value: windowsBackend.useNativeOverlay,
+                onChanged: windowsBackendController == null
+                    ? null
+                    : (value) =>
+                          windowsBackendController.setNativeOverlay(value),
+              ),
             ],
           ],
         ),

@@ -13,7 +13,6 @@ import io.flutter.view.TextureRegistry
 class MainActivity : FlutterActivity() {
     private val channel = "nesium"
     private var videoBackend: NesiumVideoBackend = NesiumVideoBackend.Hardware
-    private var highPriority: Boolean = false
     private var shaderEnabled: Boolean = false
     private var shaderPresetPath: String = ""
     private var auxPlugin: NesiumAuxTexturePlugin? = null
@@ -27,13 +26,10 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
         videoBackend = NesiumVideoBackend.fromMode(prefs.getInt("video_backend", 1))
-        highPriority = prefs.getBoolean("high_priority", false)
         shaderEnabled = prefs.getBoolean("shader_enabled", false)
         shaderPresetPath = prefs.getString("shader_preset_path", "") ?: ""
         NesiumAndroidVideoBackend.set(videoBackend.mode)
-        NesiumAndroidHighPriority.set(highPriority)
         NesiumNative.nativeSetVideoBackend(videoBackend.mode)
-        NesiumNative.nativeSetHighPriority(highPriority)
         NesiumNative.nativeSetShaderEnabled(shaderEnabled)
         NesiumNative.nativeSetShaderPreset(shaderPresetPath)
         // Pass a stable application context to Rust.
@@ -91,20 +87,6 @@ class MainActivity : FlutterActivity() {
                         // Persist preference; it will take effect on next cold start.
                         val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
                         prefs.edit { putInt("video_backend", mode) }
-                        result.success(null)
-                    }
-
-                    "setAndroidHighPriority" -> {
-                        val enabled = call.argument<Boolean>("enabled")
-                        if (enabled == null) {
-                            result.error("bad_args", "enabled must be a bool", null)
-                            return@setMethodCallHandler
-                        }
-                        val prefs = getSharedPreferences("nesium", MODE_PRIVATE)
-                        prefs.edit { putBoolean("high_priority", enabled) }
-                        highPriority = enabled
-                        NesiumAndroidHighPriority.set(enabled)
-                        NesiumNative.nativeSetHighPriority(enabled)
                         result.success(null)
                     }
 
@@ -185,7 +167,6 @@ class MainActivity : FlutterActivity() {
                 nesTextureUploadRenderer = NesRenderer(
                     surface = surface,
                     releaseSurface = false,
-                    highPriorityEnabled = highPriority,
                 )
             }
 

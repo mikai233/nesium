@@ -115,6 +115,12 @@ bool NesiumGpuTexture::Initialize(IDXGIAdapter *adapter) {
     return false;
   }
 
+  // Ensure device is thread-safe for our multi-threaded access
+  ComPtr<ID3D10Multithread> mt;
+  if (SUCCEEDED(device_.As(&mt))) {
+    mt->SetMultithreadProtected(TRUE);
+  }
+
   std::lock_guard<std::mutex> lk(mu_);
   return CreateBuffersLocked();
 }
@@ -134,6 +140,7 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
   for (int i = 0; i < kBufferCount; ++i) {
     staging_textures_[i].Reset();
     gpu_textures_[i].Reset();
+    gpu_queries_[i].Reset();
     shared_handles_[i].reset();
   }
 
@@ -195,6 +202,15 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
       return false;
     }
     shared_handles_[i].reset(shared_handle);
+
+    // Create GPU synchronization query (Event)
+    D3D11_QUERY_DESC query_desc = {};
+    query_desc.Query = D3D11_QUERY_EVENT;
+    hr = device_->CreateQuery(&query_desc, &gpu_queries_[i]);
+    if (FAILED(hr)) {
+      LogHResultIndexed("CreateQuery(Event)", i, hr);
+      return false;
+    }
   }
 
   // Create intermediate shader texture (Source Size)
@@ -267,7 +283,7 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
 
   write_index_.store(0, std::memory_order_release);
   read_index_.store(0, std::memory_order_release);
-  is_mapped_ = false;
+  is_mapped_.store(false, std::memory_order_release);
 
   return true;
 }
@@ -295,77 +311,100 @@ std::pair<uint8_t *, uint32_t> NesiumGpuTexture::MapWriteBuffer() {
           static_cast<uint32_t>(mapped.RowPitch)};
 }
 
-void NesiumGpuTexture::UnmapAndCommit() {
-  std::lock_guard<std::mutex> lk(mu_);
-  if (!is_mapped_ || !context_) {
-    return;
+int NesiumGpuTexture::UnmapAndCommit() {
+  ComPtr<ID3D11DeviceContext> local_context;
+  ComPtr<ID3D11Texture2D> local_staging;
+  ComPtr<ID3D11Texture2D> local_gpu_tex;
+  ComPtr<ID3D11Query> local_query;
+  int idx = -1;
+
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    if (!is_mapped_.load(std::memory_order_acquire) || !context_) {
+      return -1;
+    }
+    idx = write_index_.load(std::memory_order_acquire);
+    local_context = context_;
+    local_staging = staging_textures_[idx];
+    local_gpu_tex = gpu_textures_[idx];
+    local_query = gpu_queries_[idx];
   }
 
-  int idx = write_index_.load(std::memory_order_acquire);
+  // Unmap staging texture (doesn't require global lock)
+  local_context->Unmap(local_staging.Get(), 0);
+  is_mapped_.store(false, std::memory_order_release);
 
-  // Unmap staging texture
-  context_->Unmap(staging_textures_[idx].Get(), 0);
-  is_mapped_ = false;
+  // Copy/Shader processing
+  {
+    std::lock_guard<std::mutex> lk(
+        mu_); // Temporarily take lock for shader textures/dims
+    if (shader_input_bgra_) {
+      local_context->CopyResource(shader_input_bgra_.Get(),
+                                  local_staging.Get());
+    }
 
-  // Copy staging -> Intermediate BGRA texture
-  if (shader_input_bgra_) {
-    context_->CopyResource(shader_input_bgra_.Get(),
-                           staging_textures_[idx].Get());
-  }
+    if (swizzle_shader_) {
+      local_context->CSSetShader(swizzle_shader_.Get(), nullptr, 0);
+      ID3D11ShaderResourceView *srvs[] = {swizzle_srv_.Get()};
+      local_context->CSSetShaderResources(0, 1, srvs);
+      ID3D11UnorderedAccessView *uavs[] = {swizzle_uav_.Get()};
+      local_context->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+      local_context->Dispatch((src_width_ + 15) / 16, (src_height_ + 15) / 16,
+                              1);
+      local_context->CSSetShader(nullptr, nullptr, 0);
+      ID3D11ShaderResourceView *null_srvs[] = {nullptr};
+      local_context->CSSetShaderResources(0, 1, null_srvs);
+      ID3D11UnorderedAccessView *null_uavs[] = {nullptr};
+      local_context->CSSetUnorderedAccessViews(0, 1, null_uavs, nullptr);
+    }
 
-  // GPU Swizzle: BGRA -> RGBA
-  if (swizzle_shader_) {
-    context_->CSSetShader(swizzle_shader_.Get(), nullptr, 0);
-    ID3D11ShaderResourceView *srvs[] = {swizzle_srv_.Get()};
-    context_->CSSetShaderResources(0, 1, srvs);
-    ID3D11UnorderedAccessView *uavs[] = {swizzle_uav_.Get()};
-    context_->CSSetUnorderedAccessViews(0, 1, uavs, nullptr);
+    bool applied = false;
+    if (shader_input_rgba_ && local_gpu_tex && src_width_ > 0 &&
+        src_height_ > 0 && dst_width_ > 0 && dst_height_ > 0) {
+      applied =
+          nesium_apply_shader(device_.Get(), local_context.Get(),
+                              shader_input_rgba_.Get(), local_gpu_tex.Get(),
+                              src_width_, src_height_, dst_width_, dst_height_);
+    }
 
-    // Dispatch: 16x16 threads per group
-    context_->Dispatch((src_width_ + 15) / 16, (src_height_ + 15) / 16, 1);
-
-    // Cleanup CS state
-    context_->CSSetShader(nullptr, nullptr, 0);
-    ID3D11ShaderResourceView *null_srvs[] = {nullptr};
-    context_->CSSetShaderResources(0, 1, null_srvs);
-    ID3D11UnorderedAccessView *null_uavs[] = {nullptr};
-    context_->CSSetUnorderedAccessViews(0, 1, null_uavs, nullptr);
-  }
-
-  // Try apply shader: RGBA -> BGRA shared output (gpu_textures)
-  bool applied = false;
-  if (shader_input_rgba_ && gpu_textures_[idx] && src_width_ > 0 &&
-      src_height_ > 0 && dst_width_ > 0 && dst_height_ > 0) {
-    applied =
-        nesium_apply_shader(device_.Get(), context_.Get(),
-                            shader_input_rgba_.Get(), gpu_textures_[idx].Get(),
-                            src_width_, src_height_, dst_width_, dst_height_);
-  }
-
-  if (!applied && gpu_textures_[idx]) {
-    // Safety Fallback: Directly copy the source to the shared texture if the
-    // shader-based blit fails. Note that this only works correctly if source
-    // and destination dimensions match.
-    if (src_width_ == dst_width_ && src_height_ == dst_height_) {
-      if (shader_input_bgra_) {
-        context_->CopyResource(gpu_textures_[idx].Get(),
-                               shader_input_bgra_.Get());
-      } else {
-        context_->CopyResource(gpu_textures_[idx].Get(),
-                               staging_textures_[idx].Get());
+    if (!applied && local_gpu_tex) {
+      if (src_width_ == dst_width_ && src_height_ == dst_height_) {
+        if (shader_input_bgra_) {
+          local_context->CopyResource(local_gpu_tex.Get(),
+                                      shader_input_bgra_.Get());
+        } else {
+          local_context->CopyResource(local_gpu_tex.Get(), local_staging.Get());
+        }
       }
-    } else {
-      // Dimensions mismatch and shader blit failed. Scaling/conversion cannot
-      // be performed via BitBlt. Frame will remain blank.
+    }
+    was_shader_applied_.store(applied, std::memory_order_release);
+  }
+
+  // --- No Lock Held during GPU Sync ---
+  if (local_query) {
+    local_context->End(local_query.Get());
+  }
+  local_context->Flush();
+
+  if (local_query) {
+    BOOL data = FALSE;
+    while (local_context->GetData(local_query.Get(), &data, sizeof(data), 0) ==
+           S_FALSE) {
+      YieldProcessor();
     }
   }
 
-  // Flush to ensure copy/shader-render is complete before Flutter reads
-  context_->Flush();
+  // Swap indices
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    // New read index is the one we just finished writing
+    read_index_.store(idx, std::memory_order_release);
 
-  // Swap buffers: the written buffer becomes readable
-  read_index_.store(idx, std::memory_order_release);
-  write_index_.store(1 - idx, std::memory_order_release);
+    // Double buffering: next write is the other one
+    int next_write = 1 - idx;
+    write_index_.store(next_write, std::memory_order_release);
+  }
+  return idx;
 }
 
 void NesiumGpuTexture::ResizeSource(int width, int height) {

@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../bridge/api/emulation.dart' as emulation;
 
 final nesTextureServiceProvider = Provider((ref) => NesTextureService());
 
@@ -62,8 +63,8 @@ class NesTextureService {
   Future<void> setVideoBackend(int mode) =>
       _channel.invokeMethod<void>('setVideoBackend', {'mode': mode});
 
-  Future<void> setAndroidHighPriority(bool enabled) => _channel
-      .invokeMethod<void>('setAndroidHighPriority', {'enabled': enabled});
+  Future<void> setAndroidHighPriority(bool enabled) =>
+      emulation.setHighPriorityEnabled(enabled: enabled);
 
   /// Enables/disables the Rust-side librashader chain (Android hardware backend).
   ///
@@ -85,7 +86,23 @@ class NesTextureService {
       _channel.invokeMethod<int>('setWindowsVideoBackend', {'useGpu': useGpu});
 
   Future<void> setWindowsHighPriority(bool enabled) async {
-    await _channel.invokeMethod('setWindowsHighPriority', {'enabled': enabled});
+    await emulation.setHighPriorityEnabled(enabled: enabled);
+  }
+
+  Future<void> setNativeOverlay({
+    required bool enabled,
+    double x = 0,
+    double y = 0,
+    double width = 0,
+    double height = 0,
+  }) async {
+    await _channel.invokeMethod('setNativeOverlay', {
+      'enabled': enabled,
+      'x': x,
+      'y': y,
+      'width': width,
+      'height': height,
+    });
   }
 
   // ---------------------------------------------------------------------------

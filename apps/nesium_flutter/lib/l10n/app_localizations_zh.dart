@@ -1044,6 +1044,13 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get windowsNativeOverlayTitle => 'Windows 原生覆盖 (实验性)';
+
+  @override
+  String get windowsNativeOverlaySubtitle =>
+      '绕过 Flutter 合成器以获得完美流畅度。禁用着色器并将 UI 叠加在游戏后面。';
+
+  @override
   String get highPerformanceModeLabel => '高性能模式';
 
   @override

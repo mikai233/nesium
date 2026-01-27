@@ -22,3 +22,10 @@ parking_lot.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
 libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Media",
+    "Win32_System_Threading",
+    "Win32_Foundation",
+] }

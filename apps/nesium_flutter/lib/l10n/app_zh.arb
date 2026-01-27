@@ -424,6 +424,8 @@
       }
     }
   },
+  "windowsNativeOverlayTitle": "Windows 原生覆盖 (实验性)",
+  "windowsNativeOverlaySubtitle": "绕过 Flutter 合成器以获得完美流畅度。禁用着色器并将 UI 叠加在游戏后面。",
   "highPerformanceModeLabel": "高性能模式",
   "highPerformanceModeDescription": "提高进程优先级并针对游戏优化调度，以获得更流畅的体验。",
   "videoLowLatencyTitle": "低延迟视频",

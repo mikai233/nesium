@@ -85,7 +85,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/shaders.zip
+    - assets/bundled/
 
   fonts:
     - family: NotoSansSC

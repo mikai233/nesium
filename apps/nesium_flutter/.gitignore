@@ -45,4 +45,4 @@ app.*.map.json
 /android/app/release
 
 # Generated assets
-/assets/shaders.zip
+/assets/bundled/shaders.zip

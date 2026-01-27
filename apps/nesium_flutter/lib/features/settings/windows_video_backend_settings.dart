@@ -14,13 +14,23 @@ enum WindowsVideoBackend { d3d11Gpu, softwareCpu }
 
 class WindowsVideoBackendSettings {
   final WindowsVideoBackend backend;
+  final bool useNativeOverlay;
 
-  const WindowsVideoBackendSettings({required this.backend});
+  const WindowsVideoBackendSettings({
+    required this.backend,
+    this.useNativeOverlay = false,
+  });
 
   bool get useGpu => backend == WindowsVideoBackend.d3d11Gpu;
 
-  WindowsVideoBackendSettings copyWith({WindowsVideoBackend? backend}) {
-    return WindowsVideoBackendSettings(backend: backend ?? this.backend);
+  WindowsVideoBackendSettings copyWith({
+    WindowsVideoBackend? backend,
+    bool? useNativeOverlay,
+  }) {
+    return WindowsVideoBackendSettings(
+      backend: backend ?? this.backend,
+      useNativeOverlay: useNativeOverlay ?? this.useNativeOverlay,
+    );
   }
 }
 
@@ -34,6 +44,8 @@ class WindowsVideoBackendSettingsController
     final storage = ref.read(appStorageProvider);
     final useGpuValue =
         storage.get(StorageKeys.settingsWindowsVideoBackend) as bool?;
+    final useNativeOverlayValue =
+        storage.get(StorageKeys.settingsWindowsNativeOverlay) as bool?;
 
     // Default to GPU (D3D11) if not set.
     final backend = (useGpuValue ?? true)
@@ -51,7 +63,10 @@ class WindowsVideoBackendSettingsController
       }
     }
 
-    return WindowsVideoBackendSettings(backend: backend);
+    return WindowsVideoBackendSettings(
+      backend: backend,
+      useNativeOverlay: useNativeOverlayValue ?? false,
+    );
   }
 
   Future<void> setBackend(WindowsVideoBackend backend) async {
@@ -76,6 +91,21 @@ class WindowsVideoBackendSettingsController
     if (!isWindows) return;
     if (!_isMainWindow) return;
     await _applyBackend(backend == WindowsVideoBackend.d3d11Gpu);
+  }
+
+  Future<void> setNativeOverlay(bool value) async {
+    if (state.useNativeOverlay == value) return;
+
+    final storage = ref.read(appStorageProvider);
+    await storage.put(StorageKeys.settingsWindowsNativeOverlay, value);
+    unawaited(
+      SettingsSync.broadcast(
+        group: 'windowsVideoBackend',
+        fields: const ['useNativeOverlay'],
+      ),
+    );
+
+    state = state.copyWith(useNativeOverlay: value);
   }
 
   Future<void> _applyBackend(bool useGpu) async {

@@ -2030,6 +2030,18 @@ abstract class AppLocalizations {
   /// **'Current Backend: {backend}'**
   String videoBackendCurrent(String backend);
 
+  /// No description provided for @windowsNativeOverlayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows Native Overlay (Experimental)'**
+  String get windowsNativeOverlayTitle;
+
+  /// No description provided for @windowsNativeOverlaySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bypasses Flutter compositor for perfect smoothness. Disables shaders and overlays UI behind the game.'**
+  String get windowsNativeOverlaySubtitle;
+
   /// No description provided for @highPerformanceModeLabel.
   ///
   /// In en, this message translates to:

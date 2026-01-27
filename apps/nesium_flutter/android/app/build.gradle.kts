@@ -193,25 +193,6 @@ tasks.register<Exec>("buildRustAndroidSo") {
     }
 }
 
-tasks.register<Exec>("zipShaders") {
-    group = "build"
-    description = "Zip shaders into an asset for the app"
-
-    workingDir = file("../..") // apps/nesium_flutter
-    doFirst {
-        val script = "tool/package_shaders.dart"
-        logger.lifecycle("Running shader packager: dart $script")
-        exec {
-            commandLine("dart", script)
-        }
-    }
-}
-
-// Ensure shaders are zipped before assets are processed or the build starts
-tasks.named("preBuild") {
-    dependsOn("zipShaders")
-}
-
 // Ensure Rust is built before Android builds the APK/AAB.
 tasks.named("preBuild") {
     dependsOn("buildRustAndroidSo")

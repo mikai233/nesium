@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,6 +12,7 @@ import '../../platform/nes_video.dart' show VideoFilter;
 import '../settings/video_settings.dart';
 import '../settings/windows_shader_settings.dart';
 import '../settings/windows_video_backend_settings.dart';
+import '../../domain/nes_texture_service.dart';
 import 'emulation_status_overlay.dart';
 
 class NesScreenView extends ConsumerStatefulWidget {
@@ -66,6 +69,8 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
   Timer? _cursorTimer;
   bool _cursorHidden = false;
   Size? _lastReportedSize;
+  final _gameKey = GlobalKey();
+  Rect? _lastOverlayRect;
 
   void _showCursorAndArmTimer() {
     if (_cursorHidden) {
@@ -216,18 +221,86 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
 
           _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
 
+          final isWindows =
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
+          // Only enable overlay if this is the current active route
+          final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? true;
+          final useNativeOverlay =
+              isWindows && windowsBackend.useNativeOverlay && isCurrentRoute;
+
+          if (useNativeOverlay) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+
+              // We use the GlobalKey of the actual game SizedBox to get its exact position
+              // This is much more reliable as it avoids double-counting any
+              // parent alignment or Transform.translate offsets.
+              final gameBox =
+                  _gameKey.currentContext?.findRenderObject() as RenderBox?;
+              if (gameBox == null || !gameBox.hasSize) return;
+
+              final globalOffset = gameBox.localToGlobal(Offset.zero);
+              final dpr = MediaQuery.of(context).devicePixelRatio;
+
+              final rect = Rect.fromLTWH(
+                globalOffset.dx * dpr,
+                globalOffset.dy * dpr,
+                viewport.width * dpr,
+                viewport.height * dpr,
+              );
+
+              // Only update if significantly changed
+              if (_lastOverlayRect == null ||
+                  (rect.left - _lastOverlayRect!.left).abs() > 0.1 ||
+                  (rect.top - _lastOverlayRect!.top).abs() > 0.1 ||
+                  (rect.width - _lastOverlayRect!.width).abs() > 0.1 ||
+                  (rect.height - _lastOverlayRect!.height).abs() > 0.1) {
+                _lastOverlayRect = rect;
+                ref
+                    .read(nesTextureServiceProvider)
+                    .setNativeOverlay(
+                      enabled: true,
+                      x: rect.left,
+                      y: rect.top,
+                      width: rect.width,
+                      height: rect.height,
+                    );
+              }
+            });
+          } else if (isWindows) {
+            // Ensure overlay is disabled if setting is off
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              if (_lastOverlayRect != null) {
+                _lastOverlayRect = null;
+                ref
+                    .read(nesTextureServiceProvider)
+                    .setNativeOverlay(enabled: false);
+              }
+            });
+          }
+
           final child = SizedBox(
+            key: _gameKey,
             width: viewport.width,
             height: viewport.height,
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Texture(
-                  textureId: widget.textureId!,
-                  filterQuality: shouldUseHighRes
-                      ? FilterQuality.low
-                      : FilterQuality.none,
-                ),
+                if (useNativeOverlay)
+                  // Use BlendMode.clear to punch a hole through to the DWM transparency
+                  CustomPaint(
+                    painter: const _HolePunchPainter(),
+                    child: const SizedBox.expand(),
+                  )
+                else
+                  Texture(
+                    textureId: widget.textureId!,
+                    filterQuality: shouldUseHighRes
+                        ? FilterQuality.low
+                        : FilterQuality.none,
+                  ),
                 if (hasRom) const EmulationStatusOverlay(),
               ],
             ),
@@ -255,4 +328,18 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
       ),
     );
   }
+}
+
+class _HolePunchPainter extends CustomPainter {
+  const _HolePunchPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Clears the pixels to (0,0,0,0) - Transparent Black
+    // This allows DwmExtendFrameIntoClientArea to show the window behind.
+    canvas.drawRect(Offset.zero & size, Paint()..blendMode = BlendMode.clear);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

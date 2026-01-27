@@ -31,7 +31,6 @@ class NesRenderer(
     private val surface: Surface,
     private val releaseSurface: Boolean,
     private val onDispose: (() -> Unit)? = null,
-    private val highPriorityEnabled: Boolean = false,
 ) {
     private companion object {
         private const val TAG = "NesRenderer"
@@ -134,12 +133,8 @@ class NesRenderer(
         thread.start()
         handler = Handler(thread.looper)
         handler.post {
-            if (highPriorityEnabled) {
-                try {
-                    Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
-                } catch (t: Throwable) {
-                    Log.w(TAG, "Failed to raise GL thread priority", t)
-                }
+            bestEffort("registerRendererTid") {
+                NesiumNative.nativeRegisterRendererTid(Process.myTid())
             }
             initGLAndLoop()
         }

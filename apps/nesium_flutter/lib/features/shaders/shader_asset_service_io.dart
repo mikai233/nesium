@@ -7,7 +7,7 @@ import '../../logging/app_logger.dart';
 import 'shader_node.dart';
 
 class ShaderAssetService {
-  static const String _zipPath = 'assets/shaders.zip';
+  static const String _zipPath = 'assets/bundled/shaders.zip';
   static const String _shadersFolder = 'shaders';
   static const String _markerFile = '.extracted';
 
@@ -38,24 +38,33 @@ class ShaderAssetService {
       }
       target.createSync(recursive: true);
 
-      final data = await rootBundle.load(_zipPath);
-      final bytes = data.buffer.asUint8List();
-      final archive = ZipDecoder().decodeBytes(bytes);
+      try {
+        final data = await rootBundle.load(_zipPath);
+        final bytes = data.buffer.asUint8List();
+        final archive = ZipDecoder().decodeBytes(bytes);
 
-      for (final file in archive) {
-        final filename = file.name;
-        if (file.isFile) {
-          final data = file.content as List<int>;
-          File(p.join(target.path, filename))
-            ..createSync(recursive: true)
-            ..writeAsBytesSync(data);
-        } else {
-          Directory(p.join(target.path, filename)).createSync(recursive: true);
+        for (final file in archive) {
+          final filename = file.name;
+          if (file.isFile) {
+            final data = file.content as List<int>;
+            File(p.join(target.path, filename))
+              ..createSync(recursive: true)
+              ..writeAsBytesSync(data);
+          } else {
+            Directory(
+              p.join(target.path, filename),
+            ).createSync(recursive: true);
+          }
         }
-      }
 
-      marker.createSync();
-      logInfo('Shader extraction complete.', logger: 'shader_asset_service');
+        marker.createSync();
+        logInfo('Shader extraction complete.', logger: 'shader_asset_service');
+      } catch (e) {
+        logWarning(
+          'Failed to load shaders from $_zipPath. Shaders will not be available.',
+          logger: 'shader_asset_service',
+        );
+      }
     } catch (e, st) {
       logError(
         e,

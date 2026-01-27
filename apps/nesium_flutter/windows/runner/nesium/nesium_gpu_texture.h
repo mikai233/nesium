@@ -36,7 +36,8 @@ public:
   std::pair<uint8_t *, uint32_t> MapWriteBuffer();
 
   /// Unmap the write buffer and make it available for Flutter to read.
-  void UnmapAndCommit();
+  /// Returns the index of the buffer that was just committed (read_index).
+  int UnmapAndCommit();
 
   /// Resize source (input) dimensions.
   void ResizeSource(int width, int height);
@@ -52,6 +53,20 @@ public:
   int width() const { return src_width_; }
   int height() const { return src_height_; }
   bool is_valid() const { return device_ != nullptr; }
+  ID3D11Device *GetDevice() const { return device_.Get(); }
+
+  ID3D11Texture2D *GetTexture(int index) const {
+    if (index < 0 || index >= kBufferCount)
+      return nullptr;
+    return gpu_textures_[index].Get();
+  }
+
+  bool was_shader_applied() const {
+    return was_shader_applied_.load(std::memory_order_acquire);
+  }
+  ID3D11Texture2D *GetShaderInputBGRA() const {
+    return shader_input_bgra_.Get();
+  }
 
 private:
   class ScopedHandle {
@@ -109,6 +124,9 @@ private:
   ComPtr<ID3D11Texture2D> staging_textures_[kBufferCount];
   ComPtr<ID3D11Texture2D> gpu_textures_[kBufferCount];
 
+  // Synchronization for cross-device shared texture access
+  ComPtr<ID3D11Query> gpu_queries_[kBufferCount];
+
   // Shader input resources:
   // Nesium core outputs BGRA, but librashader requires RGBA.
   // We use a Compute Shader to swizzle BGRA -> RGBA on the GPU.
@@ -124,7 +142,8 @@ private:
 
   std::atomic<int> write_index_{0};
   std::atomic<int> read_index_{0};
-  bool is_mapped_ = false;
+  std::atomic<bool> is_mapped_{false};
+  std::atomic<bool> was_shader_applied_{false};
 
   // Use unique_ptr to avoid incomplete type issue with forward declaration
   std::unique_ptr<FlutterDesktopGpuSurfaceDescriptor> descriptor_;

@@ -19,6 +19,22 @@ pub fn set_high_priority_enabled(enabled: bool) {
             try_set_thread_nice(tid, if enabled { -2 } else { 0 });
         }
     }
+
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Threading::{
+            GetCurrentProcess, HIGH_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS, SetPriorityClass,
+        };
+        unsafe {
+            let process = GetCurrentProcess();
+            let priority = if enabled {
+                HIGH_PRIORITY_CLASS
+            } else {
+                NORMAL_PRIORITY_CLASS
+            };
+            let _ = SetPriorityClass(process, priority);
+        }
+    }
 }
 
 pub fn is_high_priority_enabled() -> bool {
@@ -51,7 +67,23 @@ pub(crate) fn try_raise_current_thread_priority() {
     try_set_thread_nice(tid, -2);
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(windows)]
+pub(crate) fn try_raise_current_thread_priority() {
+    if !is_high_priority_enabled() {
+        return;
+    }
+
+    unsafe {
+        windows_sys::Win32::Media::timeBeginPeriod(1);
+        let thread = windows_sys::Win32::System::Threading::GetCurrentThread();
+        let _ = windows_sys::Win32::System::Threading::SetThreadPriority(
+            thread,
+            windows_sys::Win32::System::Threading::THREAD_PRIORITY_HIGHEST,
+        );
+    }
+}
+
+#[cfg(not(any(target_os = "android", windows)))]
 pub(crate) fn try_raise_current_thread_priority() {}
 
 #[cfg(target_os = "android")]

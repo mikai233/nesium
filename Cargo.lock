@@ -3636,6 +3636,7 @@ dependencies = [
  "ringbuf",
  "sha1",
  "thiserror 2.0.18",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

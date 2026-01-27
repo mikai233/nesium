@@ -111,7 +111,7 @@ fn try_raise_current_thread_priority() {
     }
 }
 
-fn apply_rust_renderer_priority(enabled: bool) {
+pub(crate) fn apply_rust_renderer_priority(enabled: bool) {
     let tid = RUST_RENDERER_TID.load(Ordering::Acquire);
     if tid <= 0 {
         return;
@@ -624,18 +624,16 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetVide
     VIDEO_BACKEND.store(mode as i32, Ordering::Release);
 }
 
-/// Enables/disables best-effort thread priority boost on Android.
-///
-/// This affects the runtime thread and the Rust renderer thread (if running).
+/// Registers the calling thread as a renderer thread to receive dynamic priority updates.
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetHighPriority(
+pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeRegisterRendererTid(
     _env: JNIEnv,
     _class: JClass,
-    enabled: jboolean,
+    tid: jint,
 ) {
-    let enabled = enabled != 0;
-    nesium_runtime::runtime::set_high_priority_enabled(enabled);
-    apply_rust_renderer_priority(enabled);
+    RUST_RENDERER_TID.store(tid, Ordering::Release);
+    // Apply current priority immediately to the newly registered thread.
+    apply_rust_renderer_priority(nesium_runtime::runtime::is_high_priority_enabled());
 }
 
 /// Enables/disables the librashader filter chain in the Rust renderer (AHB backend).
