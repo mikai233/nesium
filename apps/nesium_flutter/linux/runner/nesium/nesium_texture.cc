@@ -10,16 +10,6 @@ nesium_linux_apply_shader(uint32_t input_tex, uint32_t output_tex,
                           uint32_t dst_width, uint32_t dst_height,
                           uint64_t frame_count);
 
-static void log_gl_info() {
-  static bool logged = false;
-  if (!logged) {
-    g_info("GL Vendor: %s", glGetString(GL_VENDOR));
-    g_info("GL Renderer: %s", glGetString(GL_RENDERER));
-    g_info("GL Version: %s", glGetString(GL_VERSION));
-    logged = true;
-  }
-}
-
 struct _NesiumTexture {
   FlTextureGL parent_instance;
 
@@ -56,8 +46,6 @@ static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
   auto *self = NESIUM_TEXTURE(texture);
 
   g_mutex_lock(&self->mutex);
-
-  log_gl_info();
 
   if (self->width == 0 || self->height == 0) {
     g_mutex_unlock(&self->mutex);
