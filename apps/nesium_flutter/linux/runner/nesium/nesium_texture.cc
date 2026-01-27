@@ -10,6 +10,10 @@ nesium_linux_apply_shader(uint32_t input_tex, uint32_t output_tex,
                           uint32_t dst_width, uint32_t dst_height,
                           uint64_t frame_count);
 
+namespace {
+constexpr uint8_t kFallbackPixelRGBA[4] = {0, 0, 0, 0};
+} // namespace
+
 struct _NesiumTexture {
   FlTextureGL parent_instance;
 
