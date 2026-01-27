@@ -76,11 +76,11 @@ class GpuShaderCard extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: 12),
           child: Divider(height: 24),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
           child: Text(
             l10n.videoFilterCategoryGpu,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -94,7 +94,7 @@ class GpuShaderCard extends ConsumerWidget {
           Column(
             children: [
               SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 secondary: const Icon(Icons.auto_fix_high),
                 title: Text(l10n.videoShaderLibrashaderTitle),
                 subtitle: Text(
@@ -122,7 +122,7 @@ class GpuShaderCard extends ConsumerWidget {
               const SizedBox(height: 1),
               ListTile(
                 enabled: windowsBackend.backend == WindowsVideoBackend.d3d11Gpu,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 leading: const Icon(Icons.description_outlined),
                 title: Text(l10n.videoShaderPresetLabel),
                 subtitle: Text(
@@ -156,7 +156,7 @@ class GpuShaderCard extends ConsumerWidget {
           Column(
             children: [
               SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 secondary: const Icon(Icons.auto_fix_high),
                 title: Text(l10n.videoShaderLibrashaderTitle),
                 subtitle: Text(
@@ -184,7 +184,7 @@ class GpuShaderCard extends ConsumerWidget {
               const SizedBox(height: 1),
               ListTile(
                 enabled: androidBackend.backend == AndroidVideoBackend.hardware,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 leading: const Icon(Icons.description_outlined),
                 title: Text(l10n.videoShaderPresetLabel),
                 subtitle: Text(
@@ -218,7 +218,7 @@ class GpuShaderCard extends ConsumerWidget {
           Column(
             children: [
               SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 secondary: const Icon(Icons.auto_fix_high),
                 title: Text(l10n.videoShaderLibrashaderTitle),
                 subtitle: Text(l10n.videoShaderLibrashaderSubtitleApple),
@@ -238,7 +238,7 @@ class GpuShaderCard extends ConsumerWidget {
               ),
               const SizedBox(height: 1),
               ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                 leading: const Icon(Icons.description_outlined),
                 title: Text(l10n.videoShaderPresetLabel),
                 subtitle: Text(
