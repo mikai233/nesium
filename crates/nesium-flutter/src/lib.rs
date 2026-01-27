@@ -13,6 +13,8 @@ pub mod api;
 pub mod aux_texture;
 pub mod event_worker;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
+#[cfg(target_os = "macos")]
+mod macos;
 mod senders;
 #[cfg(target_os = "windows")]
 pub mod windows;

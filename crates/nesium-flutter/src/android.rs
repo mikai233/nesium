@@ -630,37 +630,6 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeRegiste
     apply_rust_renderer_priority(nesium_runtime::runtime::is_high_priority_enabled());
 }
 
-/// Enables/disables the librashader filter chain in the Rust renderer (AHB backend).
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetShaderEnabled(
-    _env: JNIEnv,
-    _class: JClass,
-    enabled: jboolean,
-) {
-    android_set_shader_enabled(enabled != 0);
-}
-
-/// Updates the shader preset path for the Rust renderer (AHB backend).
-///
-/// The path must be readable by native code (typically under app-private storage).
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetShaderPreset(
-    mut env: JNIEnv,
-    _class: JClass,
-    path: JString,
-) {
-    let Ok(jstr) = env.get_string(&path) else {
-        return;
-    };
-    let s = jstr.to_string_lossy().to_string();
-    let trimmed = s.trim().to_string();
-    if trimmed.is_empty() {
-        android_set_shader_preset_path(None);
-    } else {
-        android_set_shader_preset_path(Some(trimmed));
-    }
-}
-
 /// Stores the write-end FD for the frame signal pipe and makes it non-blocking.
 fn set_frame_signal_fd(fd: RawFd) {
     if fd < 0 {

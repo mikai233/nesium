@@ -78,3 +78,14 @@ windows = { version = "0.62.2", features = [
     "Win32_Graphics_Direct3D11",
     "Win32_Graphics_Dxgi_Common",
 ] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+librashader = { workspace = true, features = [
+    "runtime-metal",
+    "presets",
+    "preprocess",
+    "stable",
+] }
+# metal-rs for FFI types
+metal = "0.33.0"
+objc = "0.2.7"

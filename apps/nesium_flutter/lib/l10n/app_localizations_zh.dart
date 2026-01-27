@@ -965,6 +965,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoShaderLibrashaderSubtitleWindows => '需要 D3D11 GPU 后端。';
 
   @override
+  String get videoShaderLibrashaderSubtitleMacos => '需要 Metal 后端。';
+
+  @override
   String get videoShaderLibrashaderSubtitleDisabled => '切换 Android 后端到“硬件”以启用。';
 
   @override

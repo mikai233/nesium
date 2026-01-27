@@ -6,6 +6,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../logging/app_logger.dart';
 import '../../android_shader_settings.dart';
 import '../../android_video_backend_settings.dart';
+import '../../macos_shader_settings.dart';
 import '../../windows_shader_settings.dart';
 import '../../windows_video_backend_settings.dart';
 import '../../../shaders/shader_browser_page.dart';
@@ -20,8 +21,9 @@ class GpuShaderCard extends ConsumerWidget {
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    final isMacos = !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
-    if (!isAndroid && !isWindows) return const SizedBox.shrink();
+    if (!isAndroid && !isWindows && !isMacos) return const SizedBox.shrink();
 
     final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
     final androidShaderSettings = isAndroid
@@ -41,6 +43,13 @@ class GpuShaderCard extends ConsumerWidget {
         ? ref.read(windowsShaderSettingsProvider.notifier)
         : null;
 
+    final macosShaderSettings = isMacos
+        ? ref.watch(macosShaderSettingsProvider)
+        : null;
+    final macosShaderController = isMacos
+        ? ref.read(macosShaderSettingsProvider.notifier)
+        : null;
+
     Future<void> pickAndSetShaderPreset() async {
       if (isAndroid) {
         if (androidShaderController == null) return;
@@ -49,6 +58,9 @@ class GpuShaderCard extends ConsumerWidget {
       if (isWindows) {
         if (windowsShaderController == null) return;
         if (windowsBackend?.backend != WindowsVideoBackend.d3d11Gpu) return;
+      }
+      if (isMacos) {
+        if (macosShaderController == null) return;
       }
 
       if (!context.mounted) return;
@@ -187,6 +199,58 @@ class GpuShaderCard extends ConsumerWidget {
                     : () async {
                         try {
                           await androidShaderController?.setPresetPath(null);
+                        } catch (e, st) {
+                          logWarning(
+                            e,
+                            stackTrace: st,
+                            message: 'clear preset failed',
+                            logger: 'gpu_shader_card',
+                          );
+                        }
+                      },
+              ),
+            ],
+          ),
+        if (isMacos && macosShaderSettings != null)
+          Column(
+            children: [
+              SwitchListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                secondary: const Icon(Icons.auto_fix_high),
+                title: Text(l10n.videoShaderLibrashaderTitle),
+                subtitle: Text(l10n.videoShaderLibrashaderSubtitleMacos),
+                value: macosShaderSettings.enabled,
+                onChanged: (value) async {
+                  try {
+                    await macosShaderController?.setEnabled(value);
+                  } catch (e, st) {
+                    logWarning(
+                      e,
+                      stackTrace: st,
+                      message: 'setEnabled failed',
+                      logger: 'gpu_shader_card',
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 1),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                leading: const Icon(Icons.description_outlined),
+                title: Text(l10n.videoShaderPresetLabel),
+                subtitle: Text(
+                  macosShaderSettings.presetPath ??
+                      l10n.videoShaderPresetNotSet,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: const Icon(Icons.folder_open),
+                onTap: pickAndSetShaderPreset,
+                onLongPress: macosShaderSettings.presetPath == null
+                    ? null
+                    : () async {
+                        try {
+                          await macosShaderController?.setPresetPath(null);
                         } catch (e, st) {
                           logWarning(
                             e,

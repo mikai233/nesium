@@ -11,6 +11,7 @@ import '../../platform/platform_capabilities.dart';
 import '../../platform/nes_video.dart' show VideoFilter;
 import '../settings/video_settings.dart';
 import '../settings/windows_shader_settings.dart';
+import '../settings/macos_shader_settings.dart';
 import '../settings/windows_video_backend_settings.dart';
 import '../../domain/nes_texture_service.dart';
 import 'emulation_status_overlay.dart';
@@ -214,10 +215,15 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           );
           if (viewport == null) return const SizedBox.shrink();
 
+          final macosShaderSettings = ref.watch(macosShaderSettingsProvider);
+          final isMacos =
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+
           final shouldUseHighRes =
               settings.videoFilter != VideoFilter.none ||
               (windowsShaderSettings.enabled &&
-                  windowsBackend.backend == WindowsVideoBackend.d3d11Gpu);
+                  windowsBackend.backend == WindowsVideoBackend.d3d11Gpu) ||
+              (isMacos && macosShaderSettings.enabled);
 
           _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
 

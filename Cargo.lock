@@ -2864,6 +2864,8 @@ dependencies = [
  "librashader-runtime-mtl",
  "librashader-runtime-vk",
  "librashader-runtime-wgpu",
+ "objc2 0.6.3",
+ "objc2-metal 0.3.2",
  "windows 0.62.2",
 ]
 
@@ -3325,6 +3327,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "metal"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7047791b5bc903b8cd963014b355f71dc9864a9a0b727057676c1dcae5cbc15"
+dependencies = [
+ "bitflags 2.10.0",
+ "block",
+ "core-graphics-types 0.2.0",
+ "foreign-types",
+ "log",
+ "objc",
+ "paste",
+]
+
+[[package]]
 name = "mimalloc"
 version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3522,6 +3539,7 @@ dependencies = [
  "libc",
  "librashader",
  "log",
+ "metal 0.33.0",
  "mimalloc",
  "ndk-context",
  "nesium-core",
@@ -3530,6 +3548,7 @@ dependencies = [
  "nesium-netproto",
  "nesium-runtime",
  "nesium-support",
+ "objc",
  "parking_lot",
  "postcard",
  "serde",
@@ -6715,7 +6734,7 @@ dependencies = [
  "libc",
  "libloading",
  "log",
- "metal",
+ "metal 0.32.0",
  "naga 27.0.3",
  "ndk-sys",
  "objc",

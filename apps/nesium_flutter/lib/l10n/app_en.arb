@@ -510,6 +510,7 @@
   "videoShaderLibrashaderTitle": "RetroArch Shaders",
   "videoShaderLibrashaderSubtitle": "Requires GLES3 + Hardware backend (AHB swapchain).",
   "videoShaderLibrashaderSubtitleWindows": "Requires D3D11 GPU backend.",
+  "videoShaderLibrashaderSubtitleMacos": "Requires Metal backend.",
   "videoShaderLibrashaderSubtitleDisabled": "Switch Android backend to Hardware to enable.",
   "videoShaderLibrashaderSubtitleDisabledWindows": "Switch Windows backend to D3D11 GPU to enable.",
   "videoShaderPresetLabel": "Preset (.slangp)",

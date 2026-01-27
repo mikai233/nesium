@@ -393,6 +393,7 @@
   "videoShaderLibrashaderTitle": "RetroArch 着色器",
   "videoShaderLibrashaderSubtitle": "需要 GLES3 + 硬件后端 (AHB 交换链)。",
   "videoShaderLibrashaderSubtitleWindows": "需要 D3D11 GPU 后端。",
+  "videoShaderLibrashaderSubtitleMacos": "需要 Metal 后端。",
   "videoShaderLibrashaderSubtitleDisabled": "切换 Android 后端到“硬件”以启用。",
   "videoShaderLibrashaderSubtitleDisabledWindows": "切换 Windows 后端到“D3D11 GPU”以启用。",
   "videoShaderPresetLabel": "预设 (.slangp)",
@@ -670,4 +671,3 @@
   "videoBackendD3D11": "D3D11 GPU (零拷贝)",
   "videoBackendSoftware": "软件 CPU (回退)"
 }
-

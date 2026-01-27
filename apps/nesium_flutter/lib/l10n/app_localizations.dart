@@ -1886,6 +1886,12 @@ abstract class AppLocalizations {
   /// **'Requires D3D11 GPU backend.'**
   String get videoShaderLibrashaderSubtitleWindows;
 
+  /// No description provided for @videoShaderLibrashaderSubtitleMacos.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires Metal backend.'**
+  String get videoShaderLibrashaderSubtitleMacos;
+
   /// No description provided for @videoShaderLibrashaderSubtitleDisabled.
   ///
   /// In en, this message translates to:
