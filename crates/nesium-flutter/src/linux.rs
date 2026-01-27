@@ -210,11 +210,7 @@ pub unsafe extern "C" fn nesium_linux_apply_shader(
             },
         };
 
-        let Some(viewport) =
-            LibrashaderViewport::new_render_target_sized_origin(&output, None).ok()
-        else {
-            return false;
-        };
+        let viewport = LibrashaderViewport::new_render_target_sized_origin(&output, None).ok()?;
 
         let frame_options = LibrashaderFrameOptions {
             frames_per_second: 60.0,
