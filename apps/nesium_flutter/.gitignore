@@ -46,3 +46,4 @@ app.*.map.json
 
 # Generated assets
 /assets/bundled/shaders.zip
+/assets/bundled/shaders.zip.md5

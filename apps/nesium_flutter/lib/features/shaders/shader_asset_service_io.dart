@@ -8,8 +8,9 @@ import 'shader_node.dart';
 
 class ShaderAssetService {
   static const String _zipPath = 'assets/bundled/shaders.zip';
+  static const String _hashPath = 'assets/bundled/shaders.zip.md5';
   static const String _shadersFolder = 'shaders';
-  static const String _markerFile = '.extracted';
+  static const String _markerFile = '.md5';
 
   Future<Directory> get _targetDir async {
     final docDir = await getApplicationSupportDirectory();
@@ -20,12 +21,25 @@ class ShaderAssetService {
     final target = await _targetDir;
     final marker = File(p.join(target.path, _markerFile));
 
-    if (marker.existsSync()) {
-      logInfo(
-        'Shaders already extracted at ${target.path}',
+    String? bundledHash;
+    try {
+      bundledHash = (await rootBundle.loadString(_hashPath)).trim();
+    } catch (_) {
+      logWarning(
+        'Could not load bundled shader hash from $_hashPath',
         logger: 'shader_asset_service',
       );
-      return;
+    }
+
+    if (marker.existsSync() && bundledHash != null) {
+      final storedHash = await marker.readAsString();
+      if (storedHash.trim() == bundledHash) {
+        logInfo(
+          'Shaders up to date ($bundledHash)',
+          logger: 'shader_asset_service',
+        );
+        return;
+      }
     }
 
     try {
@@ -57,7 +71,14 @@ class ShaderAssetService {
           }
         }
 
-        marker.createSync();
+        if (bundledHash != null) {
+          marker.writeAsStringSync(bundledHash);
+        } else {
+          // If no bundled hash is available, create an empty marker file.
+          // This serves as a flag that the initial extraction has successfully completed,
+          // preventing redundant extraction attempts on subsequent app launches.
+          marker.createSync();
+        }
         logInfo('Shader extraction complete.', logger: 'shader_asset_service');
       } catch (e) {
         logWarning(

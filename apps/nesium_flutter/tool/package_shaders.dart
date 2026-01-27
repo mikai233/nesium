@@ -167,9 +167,51 @@ void main(List<String> args) async {
 
       encoder.close();
       logInfo('✨ ZIP created successfully.');
+
+      await _generateMd5(zipOutput);
     } catch (e) {
       logError('⚠️ ZIP creation failed: $e');
     }
+  }
+}
+
+Future<void> _generateMd5(String filePath) async {
+  String? hash;
+  try {
+    if (Platform.isMacOS) {
+      final result = await Process.run('md5', ['-q', filePath]);
+      if (result.exitCode == 0) hash = result.stdout.toString().trim();
+    } else if (Platform.isLinux) {
+      final result = await Process.run('md5sum', [filePath]);
+      if (result.exitCode == 0) {
+        hash = result.stdout.toString().split(' ').first.trim();
+      }
+    } else if (Platform.isWindows) {
+      final result = await Process.run('certutil', [
+        '-hashfile',
+        filePath,
+        'MD5',
+      ]);
+      if (result.exitCode == 0) {
+        final lines = result.stdout.toString().split('\n');
+        // certutil output usually has the hash on the second line
+        if (lines.length > 1) {
+          hash = lines[1].trim().replaceAll(' ', '');
+        }
+      }
+    }
+
+    if (hash != null) {
+      final md5File = File('$filePath.md5');
+      await md5File.writeAsString(hash);
+      logInfo('📝 MD5 hash generated: $hash');
+    } else {
+      logWarning(
+        '⚠️ Could not generate MD5 hash for platform ${Platform.operatingSystem}',
+      );
+    }
+  } catch (e) {
+    logError('⚠️ Error generating MD5: $e');
   }
 }
 
