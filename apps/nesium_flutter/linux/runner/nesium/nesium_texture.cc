@@ -34,15 +34,16 @@ struct _NesiumTexture {
   uint32_t last_upload_height = 0;
   uint64_t frame_count = 0;
 
+  // Kept until finalize to avoid use-after-free by the engine.
   GSList *retired_buffers = nullptr;
 };
 
 G_DEFINE_TYPE(NesiumTexture, nesium_texture, fl_texture_gl_get_type())
 
-static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
-                                           uint32_t *target, uint32_t *name,
-                                           uint32_t *width, uint32_t *height,
-                                           GError **error) {
+static gboolean
+nesium_texture_gl_populate_texture(FlTextureGL *texture, uint32_t *target,
+                                   uint32_t *name, uint32_t *width,
+                                   uint32_t *height, GError **error) {
   auto *self = NESIUM_TEXTURE(texture);
 
   g_mutex_lock(&self->mutex);
@@ -71,7 +72,7 @@ static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   }
 
-  // 2. Upload CPU buffer to GPU if new frame available.
+  // 2. Upload CPU buffer to GPU if changed.
   if (self->has_frame) {
     glBindTexture(GL_TEXTURE_2D, self->source_tex);
     if (self->width != self->last_upload_width ||
@@ -89,6 +90,7 @@ static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
   }
 
   // 3. Apply shader.
+  // Output size currently matches input size.
   uint32_t out_w = self->width;
   uint32_t out_h = self->height;
 
@@ -134,6 +136,9 @@ static void nesium_texture_finalize(GObject *object) {
     self->retired_buffers = nullptr;
   }
 
+  // Note: texture deletion depends on a current GL context, which may not exist
+  // here. We leave them for process exit or context destruction.
+
   self->buffer_capacity = 0;
   self->front_index = 0;
   self->has_frame = FALSE;
@@ -142,6 +147,7 @@ static void nesium_texture_finalize(GObject *object) {
   self->write_active = FALSE;
 
   g_mutex_unlock(&self->mutex);
+
   g_mutex_clear(&self->mutex);
 
   G_OBJECT_CLASS(nesium_texture_parent_class)->finalize(object);
@@ -153,7 +159,7 @@ static void nesium_texture_class_init(NesiumTextureClass *klass) {
   gobject_class->finalize = nesium_texture_finalize;
 
   auto *gl_texture_class = FL_TEXTURE_GL_CLASS(klass);
-  gl_texture_class->populate = nesium_texture_gl_populate;
+  gl_texture_class->populate = nesium_texture_gl_populate_texture;
 }
 
 static void nesium_texture_init(NesiumTexture *texture) {
