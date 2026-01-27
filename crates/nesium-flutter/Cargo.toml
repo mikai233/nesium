@@ -79,16 +79,6 @@ windows = { version = "0.62.2", features = [
     "Win32_Graphics_Dxgi_Common",
 ] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-librashader = { workspace = true, features = [
-    "runtime-gl",
-    "presets",
-    "preprocess",
-    "stable",
-] }
-glow = "0.16.0"
-libc.workspace = true
-
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 librashader = { workspace = true, features = [
     "runtime-metal",

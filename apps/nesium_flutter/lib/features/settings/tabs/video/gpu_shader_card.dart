@@ -7,7 +7,6 @@ import '../../../../logging/app_logger.dart';
 import '../../android_shader_settings.dart';
 import '../../android_video_backend_settings.dart';
 import '../../apple_shader_settings.dart';
-import '../../linux_shader_settings.dart';
 import '../../windows_shader_settings.dart';
 import '../../windows_video_backend_settings.dart';
 import '../../../shaders/shader_browser_page.dart';
@@ -26,10 +25,8 @@ class GpuShaderCard extends ConsumerWidget {
         !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.iOS);
-    final isLinux = !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
-    if (!isAndroid && !isWindows && !isApple && !isLinux)
-      return const SizedBox.shrink();
+    if (!isAndroid && !isWindows && !isApple) return const SizedBox.shrink();
 
     final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
     final androidShaderSettings = isAndroid
@@ -56,17 +53,10 @@ class GpuShaderCard extends ConsumerWidget {
         ? ref.read(appleShaderSettingsProvider.notifier)
         : null;
 
-    final linuxShaderSettings = isLinux
-        ? ref.watch(linuxShaderSettingsProvider)
-        : null;
-    final linuxShaderController = isLinux
-        ? ref.read(linuxShaderSettingsProvider.notifier)
-        : null;
-
     Future<void> pickAndSetShaderPreset() async {
       if (isAndroid) {
         if (androidShaderController == null) return;
-        if (androidBackend.backend == AndroidVideoBackend.upload) return;
+        if (androidBackend.backend != AndroidVideoBackend.hardware) return;
       }
       if (isWindows) {
         if (windowsShaderController == null) return;
@@ -74,9 +64,6 @@ class GpuShaderCard extends ConsumerWidget {
       }
       if (isApple) {
         if (appleShaderController == null) return;
-      }
-      if (isLinux) {
-        if (linuxShaderController == null) return;
       }
 
       if (!context.mounted) return;
@@ -267,58 +254,6 @@ class GpuShaderCard extends ConsumerWidget {
                     : () async {
                         try {
                           await appleShaderController?.setPresetPath(null);
-                        } catch (e, st) {
-                          logWarning(
-                            e,
-                            stackTrace: st,
-                            message: 'clear preset failed',
-                            logger: 'gpu_shader_card',
-                          );
-                        }
-                      },
-              ),
-            ],
-          ),
-        if (isLinux && linuxShaderSettings != null)
-          Column(
-            children: [
-              SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                secondary: const Icon(Icons.auto_fix_high),
-                title: Text(l10n.videoShaderLibrashaderTitle),
-                subtitle: Text(l10n.videoShaderLibrashaderSubtitle),
-                value: linuxShaderSettings.enabled,
-                onChanged: (value) async {
-                  try {
-                    await linuxShaderController?.setEnabled(value);
-                  } catch (e, st) {
-                    logWarning(
-                      e,
-                      stackTrace: st,
-                      message: 'setEnabled failed',
-                      logger: 'gpu_shader_card',
-                    );
-                  }
-                },
-              ),
-              const SizedBox(height: 1),
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                leading: const Icon(Icons.description_outlined),
-                title: Text(l10n.videoShaderPresetLabel),
-                subtitle: Text(
-                  linuxShaderSettings.presetPath ??
-                      l10n.videoShaderPresetNotSet,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: const Icon(Icons.folder_open),
-                onTap: pickAndSetShaderPreset,
-                onLongPress: linuxShaderSettings.presetPath == null
-                    ? null
-                    : () async {
-                        try {
-                          await linuxShaderController?.setPresetPath(null);
                         } catch (e, st) {
                           logWarning(
                             e,

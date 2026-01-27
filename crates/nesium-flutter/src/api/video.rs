@@ -489,25 +489,15 @@ pub fn set_shader_enabled(enabled: bool) -> Result<(), String> {
         Ok(())
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        crate::linux::linux_set_shader_enabled(enabled);
-        Ok(())
-    }
-
     #[cfg(not(any(
         target_os = "android",
         target_os = "windows",
         target_os = "macos",
-        target_os = "ios",
-        target_os = "linux"
+        target_os = "ios"
     )))]
     {
         let _ = enabled;
-        Err(
-            "Librashader is only supported on Android, Windows, macOS, iOS and Linux for now."
-                .to_string(),
-        )
+        Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
     }
 }
 
@@ -555,32 +545,14 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
         Ok(())
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        let path = path.and_then(|p| {
-            let trimmed = p.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        });
-        crate::linux::linux_set_shader_preset_path(path);
-        Ok(())
-    }
-
     #[cfg(not(any(
         target_os = "android",
         target_os = "windows",
         target_os = "macos",
-        target_os = "ios",
-        target_os = "linux"
+        target_os = "ios"
     )))]
     {
         let _ = path;
-        Err(
-            "Librashader is only supported on Android, Windows, macOS, iOS and Linux for now."
-                .to_string(),
-        )
+        Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
     }
 }
