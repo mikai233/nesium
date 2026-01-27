@@ -657,4 +657,12 @@ impl RuntimeHandle {
             ControlMessage::DisableNetplay(reply)
         })
     }
+
+    pub fn set_high_priority_enabled(&self, enabled: bool) -> Result<(), RuntimeError> {
+        self.send_with_reply(
+            "set_high_priority_enabled",
+            CONTROL_REPLY_TIMEOUT,
+            |reply| ControlMessage::SetHighPriorityEnabled(enabled, reply),
+        )
+    }
 }

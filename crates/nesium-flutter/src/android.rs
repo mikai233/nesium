@@ -11,12 +11,6 @@ use std::{
     time::Duration,
 };
 
-use android_logger::Config;
-use log::LevelFilter;
-use std::sync::Once;
-
-static LOGGER_INIT: Once = Once::new();
-
 use glow::HasContext;
 use jni::{
     JNIEnv,
@@ -380,7 +374,7 @@ impl AhbSwapchain {
             std::thread::sleep(Duration::from_millis(backoff_ms));
         }
 
-        log::error!(
+        tracing::error!(
             "AHardwareBuffer_lock failed for idx={idx} (err={last_err}); falling back to dummy buffer"
         );
         let mut state = self.sync_mu.lock();
@@ -400,7 +394,7 @@ impl AhbSwapchain {
         if should_unlock {
             let res = unsafe { AHardwareBuffer_unlock(buffer, std::ptr::null_mut()) };
             if res != 0 {
-                log::error!("AHardwareBuffer_unlock failed: {res}");
+                tracing::error!("AHardwareBuffer_unlock failed: {res}");
             }
         }
 
@@ -601,7 +595,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_init_1android
         unsafe {
             ndk_context::initialize_android_context(vm_ptr, context_ptr);
         }
-        log::info!("[Rust] Android Context initialized via ndk-context");
+        tracing::info!("[Rust] Android Context initialized via ndk-context");
     });
 
     // Ensure the runtime is started (video backend must be selected beforehand).
@@ -1035,20 +1029,6 @@ impl Drop for GpuBusyGuard {
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeInitLogger(
-    _env: JNIEnv,
-    _class: JClass,
-) {
-    LOGGER_INIT.call_once(|| {
-        android_logger::init_once(
-            Config::default()
-                .with_max_level(LevelFilter::Info)
-                .with_tag("NesiumNative"),
-        );
-    });
-}
-
-#[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRustRenderer(
     env: JNIEnv,
     _class: JClass,
@@ -1056,14 +1036,14 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
 ) {
     // Ensure the runtime is started (video backend must be selected beforehand).
     let Some(swapchain) = get_ahb_swapchain() else {
-        log::error!("nativeStartRustRenderer: AHB swapchain backend not active");
+        tracing::error!("nativeStartRustRenderer: AHB swapchain backend not active");
         return;
     };
 
     let env_ptr = env.get_native_interface();
     let window = unsafe { ANativeWindow_fromSurface(env_ptr, surface.as_raw()) };
     if window.is_null() {
-        log::error!("ANativeWindow_fromSurface failed");
+        tracing::error!("ANativeWindow_fromSurface failed");
         return;
     }
 
@@ -1086,7 +1066,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
             run_rust_renderer(window, *swapchain_ref, stop_for_thread);
         });
         if let Err(_) = res {
-            log::error!("Rust renderer thread panicked");
+            tracing::error!("Rust renderer thread panicked");
         }
         RUST_RENDERER_RUNNING.store(false, Ordering::Release);
         set_rust_renderer_active(false);
@@ -1139,7 +1119,7 @@ fn compile_shader(kind: u32, src: &CStr) -> Option<u32> {
             &mut written as *mut _,
             buf.as_mut_ptr() as *mut c_char,
         );
-        log::error!("shader compile failed: {}", String::from_utf8_lossy(&buf));
+        tracing::error!("shader compile failed: {}", String::from_utf8_lossy(&buf));
         None
     }
 }
@@ -1169,7 +1149,7 @@ fn link_program(vs: u32, fs: u32) -> Option<u32> {
             &mut written as *mut _,
             buf.as_mut_ptr() as *mut c_char,
         );
-        log::error!("program link failed: {}", String::from_utf8_lossy(&buf));
+        tracing::error!("program link failed: {}", String::from_utf8_lossy(&buf));
         None
     }
 }
@@ -1219,19 +1199,19 @@ unsafe fn run_rust_renderer(
 
     let dpy = unsafe { eglGetDisplay(EGL_DEFAULT_DISPLAY) };
     if dpy == EGL_NO_DISPLAY {
-        log::error!("eglGetDisplay failed");
+        tracing::error!("eglGetDisplay failed");
         return;
     }
     egl.dpy = dpy;
     let mut major: EGLint = 0;
     let mut minor: EGLint = 0;
     if unsafe { eglInitialize(dpy, &mut major as *mut _, &mut minor as *mut _) } == EGL_FALSE {
-        log::error!("eglInitialize failed: 0x{:x}", unsafe { eglGetError() });
+        tracing::error!("eglInitialize failed: 0x{:x}", unsafe { eglGetError() });
         return;
     }
     egl.initialized = true;
     if unsafe { eglBindAPI(EGL_OPENGL_ES_API) } == EGL_FALSE {
-        log::error!("eglBindAPI failed: 0x{:x}", unsafe { eglGetError() });
+        tracing::error!("eglBindAPI failed: 0x{:x}", unsafe { eglGetError() });
     }
 
     let attribs_es3 = [
@@ -1291,7 +1271,7 @@ unsafe fn run_rust_renderer(
         } == EGL_FALSE
             || num <= 0
         {
-            log::error!("eglChooseConfig failed: 0x{:x}", unsafe { eglGetError() });
+            tracing::error!("eglChooseConfig failed: 0x{:x}", unsafe { eglGetError() });
             return;
         }
     }
@@ -1320,14 +1300,14 @@ unsafe fn run_rust_renderer(
         ctx
     };
     if ctx == EGL_NO_CONTEXT {
-        log::error!("eglCreateContext failed: 0x{:x}", unsafe { eglGetError() });
+        tracing::error!("eglCreateContext failed: 0x{:x}", unsafe { eglGetError() });
         return;
     }
     egl.ctx = ctx;
 
     let surf = unsafe { eglCreateWindowSurface(dpy, config, window, [EGL_NONE].as_ptr()) };
     if surf == EGL_NO_SURFACE {
-        log::error!("eglCreateWindowSurface failed: 0x{:x}", unsafe {
+        tracing::error!("eglCreateWindowSurface failed: 0x{:x}", unsafe {
             eglGetError()
         });
         return;
@@ -1335,7 +1315,7 @@ unsafe fn run_rust_renderer(
     egl.surf = surf;
 
     if unsafe { eglMakeCurrent(dpy, surf, surf, ctx) } == EGL_FALSE {
-        log::error!("eglMakeCurrent failed: 0x{:x}", unsafe { eglGetError() });
+        tracing::error!("eglMakeCurrent failed: 0x{:x}", unsafe { eglGetError() });
         return;
     }
 
@@ -1355,7 +1335,7 @@ unsafe fn run_rust_renderer(
         match unsafe { egl_proc(b"eglGetNativeClientBufferANDROID\0") } {
             Some(p) => p,
             None => {
-                log::error!("missing eglGetNativeClientBufferANDROID");
+                tracing::error!("missing eglGetNativeClientBufferANDROID");
                 return;
             }
         };
@@ -1363,7 +1343,7 @@ unsafe fn run_rust_renderer(
         match unsafe { egl_proc(b"eglCreateImageKHR\0") } {
             Some(p) => p,
             None => {
-                log::error!("missing eglCreateImageKHR");
+                tracing::error!("missing eglCreateImageKHR");
                 return;
             }
         };
@@ -1371,7 +1351,7 @@ unsafe fn run_rust_renderer(
         match unsafe { egl_proc(b"eglDestroyImageKHR\0") } {
             Some(p) => p,
             None => {
-                log::error!("missing eglDestroyImageKHR");
+                tracing::error!("missing eglDestroyImageKHR");
                 return;
             }
         };
@@ -1379,7 +1359,7 @@ unsafe fn run_rust_renderer(
         match unsafe { egl_proc(b"glEGLImageTargetTexture2DOES\0") } {
             Some(p) => p,
             None => {
-                log::error!("missing glEGLImageTargetTexture2DOES");
+                tracing::error!("missing glEGLImageTargetTexture2DOES");
                 return;
             }
         };
@@ -1416,7 +1396,7 @@ unsafe fn run_rust_renderer(
     let ext_ptr = unsafe { glGetString(GL_EXTENSIONS) };
     if !ext_ptr.is_null() {
         let ext = unsafe { CStr::from_ptr(ext_ptr as *const c_char) }.to_string_lossy();
-        log::info!("[RustRenderer] GL_EXTENSIONS: {}", ext);
+        tracing::info!("[RustRenderer] GL_EXTENSIONS: {}", ext);
     }
 
     unsafe { glDisable(GL_DITHER) };
@@ -1454,7 +1434,7 @@ unsafe fn run_rust_renderer(
                     )
                 };
                 if image == EGL_NO_IMAGE_KHR {
-                    log::error!("eglCreateImageKHR failed: 0x{:x}", unsafe { eglGetError() });
+                    tracing::error!("eglCreateImageKHR failed: 0x{:x}", unsafe { eglGetError() });
                     continue;
                 }
                 images[i] = image;
@@ -1477,7 +1457,7 @@ unsafe fn run_rust_renderer(
     // Create a simple blit shader program to draw a texture to the EGL surface.
     let is_gles = glow_ctx.version().is_embedded;
     let is_gles3 = is_gles && glow_ctx.version().major >= 3 && ctx_version >= 3;
-    log::info!(
+    tracing::info!(
         "GL Version: {:?}, is_gles: {}, ctx_version: {}, is_gles3: {}",
         glow_ctx.version(),
         is_gles,
@@ -1531,14 +1511,14 @@ void main() {
         let vs = match glow_ctx.create_shader(glow::VERTEX_SHADER) {
             Ok(v) => v,
             Err(e) => {
-                log::error!("blit create vertex shader failed: {e}");
+                tracing::error!("blit create vertex shader failed: {e}");
                 return;
             }
         };
         glow_ctx.shader_source(vs, vs_src);
         glow_ctx.compile_shader(vs);
         if !glow_ctx.get_shader_compile_status(vs) {
-            log::error!("blit vertex shader compile failed");
+            tracing::error!("blit vertex shader compile failed");
             glow_ctx.delete_shader(vs);
             return;
         }
@@ -1546,7 +1526,7 @@ void main() {
         let fs = match glow_ctx.create_shader(glow::FRAGMENT_SHADER) {
             Ok(v) => v,
             Err(e) => {
-                log::error!("blit create fragment shader failed: {e}");
+                tracing::error!("blit create fragment shader failed: {e}");
                 glow_ctx.delete_shader(vs);
                 return;
             }
@@ -1554,7 +1534,7 @@ void main() {
         glow_ctx.shader_source(fs, fs_src);
         glow_ctx.compile_shader(fs);
         if !glow_ctx.get_shader_compile_status(fs) {
-            log::error!("blit fragment shader compile failed");
+            tracing::error!("blit fragment shader compile failed");
             glow_ctx.delete_shader(vs);
             glow_ctx.delete_shader(fs);
             return;
@@ -1563,7 +1543,7 @@ void main() {
         let program = match glow_ctx.create_program() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("blit create program failed: {e}");
+                tracing::error!("blit create program failed: {e}");
                 glow_ctx.delete_shader(vs);
                 glow_ctx.delete_shader(fs);
                 return;
@@ -1583,7 +1563,7 @@ void main() {
         glow_ctx.delete_shader(fs);
 
         if !glow_ctx.get_program_link_status(program) {
-            log::error!("blit program link failed");
+            tracing::error!("blit program link failed");
             glow_ctx.delete_program(program);
             return;
         }
@@ -1609,7 +1589,7 @@ void main() {
         let vbo = match glow_ctx.create_buffer() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("blit create buffer failed: {e}");
+                tracing::error!("blit create buffer failed: {e}");
                 glow_ctx.delete_program(blit_program);
                 return;
             }
@@ -1627,7 +1607,7 @@ void main() {
             let vao = match glow_ctx.create_vertex_array() {
                 Ok(v) => v,
                 Err(e) => {
-                    log::error!("blit create vertex array failed: {e}");
+                    tracing::error!("blit create vertex array failed: {e}");
                     glow_ctx.delete_buffer(quad_vbo);
                     glow_ctx.delete_program(blit_program);
                     return;
@@ -1740,10 +1720,10 @@ void main() {
                         };
                         match res {
                             Ok(chain) => {
-                                log::info!("Shader chain loaded successfully");
+                                tracing::info!("Shader chain loaded successfully");
                                 shader_chain = Some(chain);
                             }
-                            Err(e) => log::error!("Failed to load shader preset: {e:?}"),
+                            Err(e) => tracing::error!("Failed to load shader preset: {e:?}"),
                         }
                     }
                 }
@@ -1764,7 +1744,7 @@ void main() {
                     let tex = match glow_ctx.create_texture() {
                         Ok(v) => v,
                         Err(e) => {
-                            log::error!("create shader output texture failed: {e}");
+                            tracing::error!("create shader output texture failed: {e}");
                             shader_chain = None;
                             continue;
                         }
@@ -1839,7 +1819,7 @@ void main() {
                 if let Err(e) =
                     unsafe { chain.frame(&input, &viewport, frame_count, Some(&frame_options)) }
                 {
-                    log::error!("Shader frame failed: {e:?}");
+                    tracing::error!("Shader frame failed: {e:?}");
                 } else {
                     present_tex_id = out_tex.0.get();
                 }
@@ -1886,7 +1866,7 @@ void main() {
         }
 
         if unsafe { eglSwapBuffers(dpy, surf) } == EGL_FALSE {
-            log::error!("eglSwapBuffers failed: 0x{:x}", unsafe { eglGetError() });
+            tracing::error!("eglSwapBuffers failed: 0x{:x}", unsafe { eglGetError() });
             wait_for_gpu(dpy);
             break;
         }
@@ -1986,7 +1966,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativePlaneBu
     match res {
         Ok(buf) => buf.into_raw(),
         Err(e) => {
-            log::error!("Failed to create direct ByteBuffer: {e}");
+            tracing::error!("Failed to create direct ByteBuffer: {e}");
             std::ptr::null_mut()
         }
     }

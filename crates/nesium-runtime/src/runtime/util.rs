@@ -1,5 +1,6 @@
 use nesium_core::controller::Button;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tracing;
 
 #[cfg(target_os = "android")]
 use std::sync::atomic::AtomicI32;
@@ -9,7 +10,18 @@ static HIGH_PRIORITY_ENABLED: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "android")]
 static RUNTIME_THREAD_TID: AtomicI32 = AtomicI32::new(-1);
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+const QOS_CLASS_DEFAULT: u32 = 0x15;
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+unsafe extern "C" {
+    fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
+}
+
 pub fn set_high_priority_enabled(enabled: bool) {
+    tracing::info!("[nesium-runtime] High priority enabled set to: {}", enabled);
     HIGH_PRIORITY_ENABLED.store(enabled, Ordering::Release);
 
     #[cfg(target_os = "android")]
@@ -20,21 +32,8 @@ pub fn set_high_priority_enabled(enabled: bool) {
         }
     }
 
-    #[cfg(windows)]
-    {
-        use windows_sys::Win32::System::Threading::{
-            GetCurrentProcess, HIGH_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS, SetPriorityClass,
-        };
-        unsafe {
-            let process = GetCurrentProcess();
-            let priority = if enabled {
-                HIGH_PRIORITY_CLASS
-            } else {
-                NORMAL_PRIORITY_CLASS
-            };
-            let _ = SetPriorityClass(process, priority);
-        }
-    }
+    #[cfg(not(target_os = "android"))]
+    apply_priority_to_current_thread(enabled);
 }
 
 pub fn is_high_priority_enabled() -> bool {
@@ -54,36 +53,88 @@ pub(crate) fn button_bit(button: Button) -> u8 {
     }
 }
 
-#[cfg(target_os = "android")]
-pub(crate) fn try_raise_current_thread_priority() {
-    // Store the tid even if the boost is disabled so we can apply it later.
-    let tid = unsafe { libc::gettid() as i32 };
-    RUNTIME_THREAD_TID.store(tid, Ordering::Release);
-
-    if !is_high_priority_enabled() {
-        return;
+pub(crate) fn apply_priority_to_current_thread(enabled: bool) {
+    #[cfg(target_os = "android")]
+    {
+        let tid = unsafe { libc::gettid() as i32 };
+        RUNTIME_THREAD_TID.store(tid, Ordering::Release);
+        try_set_thread_nice(tid, if enabled { -2 } else { 0 });
     }
 
-    try_set_thread_nice(tid, -2);
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        unsafe {
+            let qos = if enabled {
+                QOS_CLASS_USER_INTERACTIVE
+            } else {
+                QOS_CLASS_DEFAULT
+            };
+            let res = pthread_set_qos_class_self_np(qos, 0);
+            if res == 0 {
+                tracing::info!(
+                    "[nesium-runtime] macOS Thread QoS {}: {}",
+                    if enabled { "raised" } else { "restored" },
+                    if enabled {
+                        "UserInteractive"
+                    } else {
+                        "Default"
+                    }
+                );
+            } else {
+                tracing::error!("[nesium-runtime] Failed to set macOS Thread QoS: {}", res);
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Threading::{
+            GetCurrentProcess, GetCurrentThread, HIGH_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS,
+            SetPriorityClass, SetThreadPriority, THREAD_PRIORITY_HIGHEST, THREAD_PRIORITY_NORMAL,
+        };
+        unsafe {
+            // Process priority class
+            let process = GetCurrentProcess();
+            let p_priority = if enabled {
+                HIGH_PRIORITY_CLASS
+            } else {
+                NORMAL_PRIORITY_CLASS
+            };
+            if SetPriorityClass(process, p_priority) != 0 {
+                tracing::info!(
+                    "[nesium-runtime] Windows process priority class set to: {}",
+                    if enabled { "HIGH" } else { "NORMAL" }
+                );
+            }
+
+            // Thread priority
+            let thread = GetCurrentThread();
+            let t_priority = if enabled {
+                THREAD_PRIORITY_HIGHEST
+            } else {
+                THREAD_PRIORITY_NORMAL
+            };
+            if SetThreadPriority(thread, t_priority) != 0 {
+                tracing::info!(
+                    "[nesium-runtime] Windows thread priority set to: {}",
+                    if enabled { "HIGHEST" } else { "NORMAL" }
+                );
+            }
+
+            if enabled {
+                windows_sys::Win32::Media::timeBeginPeriod(1);
+            } else {
+                windows_sys::Win32::Media::timeEndPeriod(1);
+            }
+        }
+    }
 }
 
-#[cfg(windows)]
 pub(crate) fn try_raise_current_thread_priority() {
-    if !is_high_priority_enabled() {
-        return;
-    }
-
-    unsafe {
-        windows_sys::Win32::Media::timeBeginPeriod(1);
-        let thread = windows_sys::Win32::System::Threading::GetCurrentThread();
-        let _ = windows_sys::Win32::System::Threading::SetThreadPriority(
-            thread,
-            windows_sys::Win32::System::Threading::THREAD_PRIORITY_HIGHEST,
-        );
-    }
+    apply_priority_to_current_thread(is_high_priority_enabled());
 }
 
-#[cfg(not(any(target_os = "android", windows)))]
+#[cfg(not(any(target_os = "android", windows, target_os = "macos", target_os = "ios")))]
 pub(crate) fn try_raise_current_thread_priority() {}
 
 #[cfg(target_os = "android")]
@@ -91,6 +142,17 @@ fn try_set_thread_nice(tid: i32, nice: i32) {
     let nice = nice.clamp(-20, 19) as libc::c_int;
     unsafe {
         let tid = tid as libc::id_t;
-        let _ = libc::setpriority(libc::PRIO_PROCESS, tid, nice);
+        let res = libc::setpriority(libc::PRIO_PROCESS, tid, nice);
+        if res == 0 {
+            tracing::info!(
+                "[nesium-runtime] Android thread priority (nice) set to: {}",
+                nice
+            );
+        } else {
+            tracing::error!(
+                "[nesium-runtime] Failed to set Android thread priority: {}",
+                res
+            );
+        }
     }
 }

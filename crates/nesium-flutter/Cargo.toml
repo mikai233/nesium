@@ -23,7 +23,7 @@ nesium-support.workspace = true
 tokio = { workspace = true, features = ["full"] }
 dashmap = { workspace = true, features = ["inline"] }
 crossbeam-channel.workspace = true
-tracing.workspace = true
+tracing = { workspace = true, features = ["log"] }
 tracing-subscriber.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
@@ -74,7 +74,6 @@ librashader = { workspace = true, features = [
     "preprocess",
     "stable",
 ] }
-log = "0.4"
 windows = { version = "0.62.2", features = [
     "Win32_Graphics_Direct3D11",
     "Win32_Graphics_Dxgi_Common",

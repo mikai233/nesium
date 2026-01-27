@@ -511,6 +511,10 @@ impl Runner {
                 self.netplay_input = None;
                 let _ = reply.send(Ok(()));
             }
+            ControlMessage::SetHighPriorityEnabled(enabled, reply) => {
+                super::util::set_high_priority_enabled(enabled);
+                let _ = reply.send(Ok(()));
+            }
         }
 
         false

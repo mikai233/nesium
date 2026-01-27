@@ -8,6 +8,7 @@ import '../../../../widgets/animated_dropdown_menu.dart';
 import '../../../../widgets/animated_settings_widgets.dart';
 import '../../android_performance_settings.dart';
 import '../../android_video_backend_settings.dart';
+import '../../macos_performance_settings.dart';
 import '../../windows_performance_settings.dart';
 import '../../windows_video_backend_settings.dart';
 import '../../video_settings.dart';
@@ -24,6 +25,7 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    final isMacos = !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
     final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
     final androidBackendController = ref.read(
@@ -49,6 +51,12 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
         : WindowsPerformanceSettings(highPerformance: false);
     final windowsPerformanceController = isWindows
         ? ref.read(windowsPerformanceSettingsControllerProvider.notifier)
+        : null;
+    final macosPerformance = isMacos
+        ? ref.watch(macosPerformanceSettingsControllerProvider)
+        : MacosPerformanceSettings(highPerformance: false);
+    final macosPerformanceController = isMacos
+        ? ref.read(macosPerformanceSettingsControllerProvider.notifier)
         : null;
 
     Future<void> setAspectRatio(NesAspectRatio value) async {
@@ -218,6 +226,20 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
                     ? null
                     : (value) =>
                           windowsBackendController.setNativeOverlay(value),
+              ),
+            ],
+            if (isMacos) ...[
+              const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.rocket_launch),
+                title: Text(l10n.highPerformanceModeLabel),
+                subtitle: Text(l10n.highPerformanceModeDescription),
+                value: macosPerformance.highPerformance,
+                onChanged: macosPerformanceController == null
+                    ? null
+                    : (value) =>
+                          macosPerformanceController.setHighPerformance(value),
               ),
             ],
           ],

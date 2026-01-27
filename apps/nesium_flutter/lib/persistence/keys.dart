@@ -19,6 +19,8 @@ final class StorageKeys {
       'settings.windows.high_performance.v1';
   static const String settingsAndroidHighPerformance =
       'settings.android.high_performance.v1';
+  static const String settingsMacosHighPerformance =
+      'settings.macos.high_performance.v1';
   static const String settingsAndroidShaderEnabled =
       'settings.android.shader_enabled.v1';
   static const String settingsAndroidShaderPresetPath =

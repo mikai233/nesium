@@ -95,6 +95,8 @@ pub(crate) enum ControlMessage {
     },
     /// Disable netplay and return to local input.
     DisableNetplay(ControlReplySender),
+    /// Set high priority (QoS) for the runtime thread.
+    SetHighPriorityEnabled(bool, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

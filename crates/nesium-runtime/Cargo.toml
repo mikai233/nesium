@@ -19,8 +19,9 @@ crossbeam-channel.workspace = true
 thiserror.workspace = true
 lz4_flex.workspace = true
 parking_lot.workspace = true
+tracing.workspace = true
 
-[target.'cfg(target_os = "android")'.dependencies]
+[target.'cfg(any(target_os = "android", target_os = "macos", target_os = "ios"))'.dependencies]
 libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]

@@ -125,9 +125,9 @@ fn hresult_from_windows_error(e: &windows::core::Error) -> HRESULT {
 
 fn log_hresult_context(prefix: &str, hr: HRESULT) {
     if hr == E_INVALIDARG {
-        log::error!("{}: HRESULT=0x{:08X} (E_INVALIDARG)", prefix, hr.0 as u32);
+        tracing::error!("{}: HRESULT=0x{:08X} (E_INVALIDARG)", prefix, hr.0 as u32);
     } else {
-        log::error!("{}: HRESULT=0x{:08X}", prefix, hr.0 as u32);
+        tracing::error!("{}: HRESULT=0x{:08X}", prefix, hr.0 as u32);
     }
 }
 
@@ -141,13 +141,13 @@ unsafe fn validate_resource_device(
     let owning = unsafe { res.GetDevice() };
 
     let Ok(owning_dev) = owning else {
-        log::error!("{} resource has no owning device", label);
+        tracing::error!("{} resource has no owning device", label);
         return Err(E_INVALIDARG);
     };
 
     let owning_ptr = owning_dev.as_raw() as *mut c_void;
     if owning_ptr != expected_device_ptr {
-        log::error!(
+        tracing::error!(
             "{} resource device mismatch: owning={:p}, expected={:p}",
             label,
             owning_ptr,
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
         };
 
         if input_tex.is_null() || output_tex.is_null() {
-            log::error!(
+            tracing::error!(
                 "nesium_apply_shader: null texture ptr(s): input={:p}, output={:p}",
                 input_tex,
                 output_tex
@@ -187,7 +187,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
             return false;
         }
         if src_width == 0 || src_height == 0 || dst_width == 0 || dst_height == 0 {
-            log::error!(
+            tracing::error!(
                 "nesium_apply_shader: invalid sizes (src={}x{}, dst={}x{})",
                 src_width,
                 src_height,
@@ -198,7 +198,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
         }
 
         if device.is_null() || context.is_null() {
-            log::error!(
+            tracing::error!(
                 "nesium_apply_shader: null device/context ptr(s): device={:p}, context={:p}",
                 device,
                 context
@@ -217,7 +217,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
         };
 
         if needs_reload {
-            log::info!(
+            tracing::info!(
                 "Reloading shader chain (path={}, device changed={})",
                 effective_path,
                 match &*state_lock {
@@ -246,7 +246,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                     Some(&options),
                 ) {
                     Ok(chain) => {
-                        log::info!("Windows shader chain loaded from {}", effective_path);
+                        tracing::info!("Windows shader chain loaded from {}", effective_path);
                         *state_lock = Some(ShaderState {
                             chain: Some(chain),
                             generation: cfg.generation,
@@ -254,7 +254,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         });
                     }
                     Err(e) => {
-                        log::error!(
+                        tracing::error!(
                             "Failed to load Windows shader preset ({}): {:?}",
                             effective_path,
                             e
@@ -318,11 +318,11 @@ pub unsafe extern "C" fn nesium_apply_shader(
                 Some(&mut srv),
             ) {
                 let hr = hresult_from_windows_error(&e);
-                log::error!("Failed to create SRV (explicit desc): {:?}", e);
+                tracing::error!("Failed to create SRV (explicit desc): {:?}", e);
 
                 // Fallback: let D3D infer format/desc (often fixes typeless/sRGB cases).
                 if hr == E_INVALIDARG {
-                    log::warn!(
+                    tracing::warn!(
                         "Retry CreateShaderResourceView with inferred desc (None) due to E_INVALIDARG"
                     );
                     srv = None;
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         None,
                         Some(&mut srv),
                     ) {
-                        log::error!("Failed to create SRV (inferred desc): {:?}", e2);
+                        tracing::error!("Failed to create SRV (inferred desc): {:?}", e2);
                         return false;
                     }
                 } else {
@@ -340,7 +340,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
             }
 
             let Some(srv) = srv else {
-                log::error!("SRV created but is None");
+                tracing::error!("SRV created but is None");
                 return false;
             };
 
@@ -358,11 +358,11 @@ pub unsafe extern "C" fn nesium_apply_shader(
                 Some(&mut rtv),
             ) {
                 let hr = hresult_from_windows_error(&e);
-                log::error!("Failed to create RTV (explicit desc): {:?}", e);
+                tracing::error!("Failed to create RTV (explicit desc): {:?}", e);
 
                 // Fallback: inferred desc
                 if hr == E_INVALIDARG {
-                    log::warn!(
+                    tracing::warn!(
                         "Retry CreateRenderTargetView with inferred desc (None) due to E_INVALIDARG"
                     );
                     rtv = None;
@@ -371,7 +371,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         None,
                         Some(&mut rtv),
                     ) {
-                        log::error!("Failed to create RTV (inferred desc): {:?}", e2);
+                        tracing::error!("Failed to create RTV (inferred desc): {:?}", e2);
                         return false;
                     }
                 } else {
@@ -380,7 +380,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
             }
 
             let Some(rtv) = rtv else {
-                log::error!("RTV created but is None");
+                tracing::error!("RTV created but is None");
                 return false;
             };
 
@@ -412,7 +412,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
             ) {
                 Ok(_) => true,
                 Err(e) => {
-                    log::error!(
+                    tracing::error!(
                         "Windows shader frame failed: {:?} (src={}x{}, dst={}x{}) device={:p} context={:p} input={:p} output={:p}",
                         e,
                         src_width,
@@ -433,7 +433,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
     match result {
         Ok(val) => val,
         Err(e) => {
-            log::error!("Panic in nesium_apply_shader: {:?}", e);
+            tracing::error!("Panic in nesium_apply_shader: {:?}", e);
             false
         }
     }

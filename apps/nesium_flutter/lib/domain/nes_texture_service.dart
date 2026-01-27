@@ -89,6 +89,10 @@ class NesTextureService {
     await emulation.setHighPriorityEnabled(enabled: enabled);
   }
 
+  Future<void> setMacosHighPriority(bool enabled) async {
+    await emulation.setHighPriorityEnabled(enabled: enabled);
+  }
+
   Future<void> setNativeOverlay({
     required bool enabled,
     double x = 0,
