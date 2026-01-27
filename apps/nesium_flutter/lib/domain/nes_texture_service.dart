@@ -89,7 +89,7 @@ class NesTextureService {
     await emulation.setHighPriorityEnabled(enabled: enabled);
   }
 
-  Future<void> setMacosHighPriority(bool enabled) async {
+  Future<void> setAppleHighPriority(bool enabled) async {
     await emulation.setHighPriorityEnabled(enabled: enabled);
   }
 

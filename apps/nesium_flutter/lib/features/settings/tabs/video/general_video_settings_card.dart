@@ -8,7 +8,7 @@ import '../../../../widgets/animated_dropdown_menu.dart';
 import '../../../../widgets/animated_settings_widgets.dart';
 import '../../android_performance_settings.dart';
 import '../../android_video_backend_settings.dart';
-import '../../macos_performance_settings.dart';
+import '../../apple_performance_settings.dart';
 import '../../windows_performance_settings.dart';
 import '../../windows_video_backend_settings.dart';
 import '../../video_settings.dart';
@@ -25,7 +25,10 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
-    final isMacos = !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+    final isApple =
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.iOS);
 
     final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
     final androidBackendController = ref.read(
@@ -52,11 +55,12 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
     final windowsPerformanceController = isWindows
         ? ref.read(windowsPerformanceSettingsControllerProvider.notifier)
         : null;
-    final macosPerformance = isMacos
-        ? ref.watch(macosPerformanceSettingsControllerProvider)
-        : MacosPerformanceSettings(highPerformance: false);
-    final macosPerformanceController = isMacos
-        ? ref.read(macosPerformanceSettingsControllerProvider.notifier)
+
+    final applePerformance = isApple
+        ? ref.watch(applePerformanceSettingsControllerProvider)
+        : ApplePerformanceSettings(highPerformance: false);
+    final applePerformanceController = isApple
+        ? ref.read(applePerformanceSettingsControllerProvider.notifier)
         : null;
 
     Future<void> setAspectRatio(NesAspectRatio value) async {
@@ -228,18 +232,18 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
                           windowsBackendController.setNativeOverlay(value),
               ),
             ],
-            if (isMacos) ...[
+            if (isApple) ...[
               const SizedBox(height: 16),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 secondary: const Icon(Icons.rocket_launch),
                 title: Text(l10n.highPerformanceModeLabel),
                 subtitle: Text(l10n.highPerformanceModeDescription),
-                value: macosPerformance.highPerformance,
-                onChanged: macosPerformanceController == null
+                value: applePerformance.highPerformance,
+                onChanged: applePerformanceController == null
                     ? null
                     : (value) =>
-                          macosPerformanceController.setHighPerformance(value),
+                          applePerformanceController.setHighPerformance(value),
               ),
             ],
           ],

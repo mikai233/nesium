@@ -71,8 +71,14 @@ pub(crate) fn apply_priority_to_current_thread(enabled: bool) {
             };
             let res = pthread_set_qos_class_self_np(qos, 0);
             if res == 0 {
+                let platform_name = if cfg!(target_os = "ios") {
+                    "iOS"
+                } else {
+                    "macOS"
+                };
                 tracing::info!(
-                    "macOS Thread QoS {}: {}",
+                    "{} Thread QoS {}: {}",
+                    platform_name,
                     if enabled { "raised" } else { "restored" },
                     if enabled {
                         "UserInteractive"
@@ -81,7 +87,12 @@ pub(crate) fn apply_priority_to_current_thread(enabled: bool) {
                     }
                 );
             } else {
-                tracing::error!("Failed to set macOS Thread QoS: {}", res);
+                let platform_name = if cfg!(target_os = "ios") {
+                    "iOS"
+                } else {
+                    "macOS"
+                };
+                tracing::error!("Failed to set {} Thread QoS: {}", platform_name, res);
             }
         }
     }

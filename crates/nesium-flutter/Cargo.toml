@@ -89,3 +89,6 @@ librashader = { workspace = true, features = [
 # metal-rs for FFI types
 metal = "0.33.0"
 objc = "0.2.7"
+
+[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
+tracing-oslog = "0.3.0"

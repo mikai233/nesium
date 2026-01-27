@@ -128,10 +128,8 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
 ) -> bool {
     let result = std::panic::catch_unwind(|| {
         let cfg = macos_shader_snapshot();
-        let effective_path = if cfg.enabled
-            && let Some(preset_path) = cfg.preset_path.as_ref()
-        {
-            preset_path.clone()
+        let effective_path = if cfg.enabled && cfg.preset_path.is_some() {
+            cfg.preset_path.clone().unwrap()
         } else {
             get_passthrough_preset().to_string_lossy().to_string()
         };
