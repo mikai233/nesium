@@ -58,6 +58,20 @@ struct ShaderState {
 }
 
 static SHADER_STATE: Mutex<Option<ShaderState>> = Mutex::new(None);
+static GLOW_CONTEXT: OnceLock<Arc<glow::Context>> = OnceLock::new();
+
+fn glow_context() -> Arc<glow::Context> {
+    GLOW_CONTEXT
+        .get_or_init(|| {
+            Arc::new(unsafe {
+                glow::Context::from_loader_function(|s| {
+                    let c_name = std::ffi::CString::new(s).unwrap();
+                    libc::dlsym(libc::RTLD_DEFAULT, c_name.as_ptr()) as *const _
+                })
+            })
+        })
+        .clone()
+}
 
 fn get_passthrough_preset() -> std::path::PathBuf {
     let temp = std::env::temp_dir();
@@ -128,13 +142,7 @@ pub unsafe extern "C" fn nesium_linux_apply_shader(
         let mut state_lock = SHADER_STATE.lock();
 
         // Initialize glow context on demand.
-        // On Linux, we use dlsym to find GL symbols, which works if epoxy is linked.
-        let glow_ctx = Arc::new(unsafe {
-            glow::Context::from_loader_function(|s| {
-                let c_name = std::ffi::CString::new(s).unwrap();
-                libc::dlsym(libc::RTLD_DEFAULT, c_name.as_ptr()) as *const _
-            })
-        });
+        let glow_ctx = glow_context();
 
         if state_lock
             .as_ref()
@@ -202,7 +210,7 @@ pub unsafe extern "C" fn nesium_linux_apply_shader(
             },
         };
 
-        let viewport = LibrashaderViewport::new_render_target_sized_origin(&output, None).unwrap();
+        let viewport = LibrashaderViewport::new_render_target_sized_origin(&output, None).ok()?;
 
         let frame_options = LibrashaderFrameOptions {
             frames_per_second: 60.0,
@@ -210,14 +218,31 @@ pub unsafe extern "C" fn nesium_linux_apply_shader(
             ..Default::default()
         };
 
-        match unsafe {
+        let prev_fbo = unsafe { glow_ctx.get_parameter_i32(glow::FRAMEBUFFER_BINDING) as u32 };
+        let prev_scissor_enabled = unsafe { glow_ctx.is_enabled(glow::SCISSOR_TEST) };
+
+        let res = unsafe {
             chain.frame(
                 &input,
                 &viewport,
                 frame_count as usize,
                 Some(&frame_options),
             )
-        } {
+        };
+
+        unsafe {
+            glow_ctx.bind_framebuffer(
+                glow::FRAMEBUFFER,
+                NonZeroU32::new(prev_fbo).map(glow::NativeFramebuffer),
+            );
+            if prev_scissor_enabled {
+                glow_ctx.enable(glow::SCISSOR_TEST);
+            } else {
+                glow_ctx.disable(glow::SCISSOR_TEST);
+            }
+        }
+
+        match res {
             Ok(_) => true,
             Err(e) => {
                 tracing::error!("Linux shader frame failed: {:?}", e);
