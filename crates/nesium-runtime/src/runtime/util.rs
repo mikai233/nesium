@@ -145,9 +145,6 @@ pub(crate) fn try_raise_current_thread_priority() {
     apply_priority_to_current_thread(is_high_priority_enabled());
 }
 
-#[cfg(not(any(target_os = "android", windows, target_os = "macos", target_os = "ios")))]
-pub(crate) fn try_raise_current_thread_priority() {}
-
 #[cfg(target_os = "android")]
 fn try_set_thread_nice(tid: i32, nice: i32) {
     let nice = nice.clamp(-20, 19) as libc::c_int;
