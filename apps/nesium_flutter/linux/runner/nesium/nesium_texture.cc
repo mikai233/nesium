@@ -163,7 +163,7 @@ static void nesium_texture_class_init(NesiumTextureClass *klass) {
   gobject_class->finalize = nesium_texture_finalize;
 
   auto *gl_texture_class = FL_TEXTURE_GL_CLASS(klass);
-  gl_texture_class->populate = nesium_texture_gl_populate_texture;
+  gl_texture_class->populate_texture = nesium_texture_gl_populate_texture;
 }
 
 static void nesium_texture_init(NesiumTexture *texture) {
