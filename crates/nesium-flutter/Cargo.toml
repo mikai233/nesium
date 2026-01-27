@@ -79,7 +79,7 @@ windows = { version = "0.62.2", features = [
     "Win32_Graphics_Dxgi_Common",
 ] }
 
-[target.'cfg(target_os = "macos")'.dependencies]
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 librashader = { workspace = true, features = [
     "runtime-metal",
     "presets",
@@ -89,6 +89,4 @@ librashader = { workspace = true, features = [
 # metal-rs for FFI types
 metal = "0.33.0"
 objc = "0.2.7"
-
-[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 tracing-oslog = "0.3.0"

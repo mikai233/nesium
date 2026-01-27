@@ -12,17 +12,17 @@ use librashader::runtime::mtl::{
 };
 
 #[derive(Debug, Clone)]
-struct MacOSShaderConfig {
+struct AppleShaderConfig {
     enabled: bool,
     preset_path: Option<String>,
     generation: u64,
 }
 
-static MACOS_SHADER_CONFIG: OnceLock<Mutex<MacOSShaderConfig>> = OnceLock::new();
+static APPLE_SHADER_CONFIG: OnceLock<Mutex<AppleShaderConfig>> = OnceLock::new();
 
-fn macos_shader_config() -> &'static Mutex<MacOSShaderConfig> {
-    MACOS_SHADER_CONFIG.get_or_init(|| {
-        Mutex::new(MacOSShaderConfig {
+fn apple_shader_config() -> &'static Mutex<AppleShaderConfig> {
+    APPLE_SHADER_CONFIG.get_or_init(|| {
+        Mutex::new(AppleShaderConfig {
             enabled: false,
             preset_path: None,
             generation: 1,
@@ -30,8 +30,8 @@ fn macos_shader_config() -> &'static Mutex<MacOSShaderConfig> {
     })
 }
 
-fn macos_shader_snapshot() -> MacOSShaderConfig {
-    macos_shader_config().lock().clone()
+fn apple_shader_snapshot() -> AppleShaderConfig {
+    apple_shader_config().lock().clone()
 }
 
 fn get_passthrough_preset() -> std::path::PathBuf {
@@ -78,8 +78,8 @@ void main() {
     slangp
 }
 
-pub(crate) fn macos_set_shader_enabled(enabled: bool) {
-    let mut cfg = macos_shader_config().lock();
+pub(crate) fn apple_set_shader_enabled(enabled: bool) {
+    let mut cfg = apple_shader_config().lock();
     if cfg.enabled == enabled {
         return;
     }
@@ -87,8 +87,8 @@ pub(crate) fn macos_set_shader_enabled(enabled: bool) {
     cfg.generation = cfg.generation.wrapping_add(1);
 }
 
-pub(crate) fn macos_set_shader_preset_path(path: Option<String>) {
-    let mut cfg = macos_shader_config().lock();
+pub(crate) fn apple_set_shader_preset_path(path: Option<String>) {
+    let mut cfg = apple_shader_config().lock();
     if cfg.preset_path == path {
         return;
     }
@@ -127,7 +127,7 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
     dst_height: u32,
 ) -> bool {
     let result = std::panic::catch_unwind(|| {
-        let cfg = macos_shader_snapshot();
+        let cfg = apple_shader_snapshot();
         let effective_path = if cfg.enabled && cfg.preset_path.is_some() {
             cfg.preset_path.clone().unwrap()
         } else {
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
 
         if needs_reload {
             tracing::info!(
-                "Reloading macOS Metal shader chain (path={})",
+                "Reloading Apple Metal shader chain (path={})",
                 effective_path
             );
             let features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
@@ -177,7 +177,7 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
                 )
             } {
                 Ok(chain) => {
-                    tracing::info!("macOS shader chain loaded from {}", effective_path);
+                    tracing::info!("Apple shader chain loaded from {}", effective_path);
                     *state_lock = Some(ShaderState {
                         chain: Some(chain),
                         generation: cfg.generation,
@@ -186,7 +186,7 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
                 }
                 Err(e) => {
                     tracing::error!(
-                        "Failed to load macOS shader preset ({}): {:?}",
+                        "Failed to load Apple shader preset ({}): {:?}",
                         effective_path,
                         e
                     );
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
         } {
             Ok(_) => true,
             Err(e) => {
-                tracing::error!("macOS shader frame failed: {:?}", e);
+                tracing::error!("Apple shader frame failed: {:?}", e);
                 false
             }
         }

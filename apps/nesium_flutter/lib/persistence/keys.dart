@@ -21,10 +21,10 @@ final class StorageKeys {
       'settings.android.high_performance.v1';
   static const String settingsAppleHighPerformance =
       'settings.apple.high_performance.v1';
-  static const String settingsMacosShaderEnabled =
-      'settings.macos.shader_enabled.v1';
-  static const String settingsMacosShaderPresetPath =
-      'settings.macos.shader_preset_path.v1';
+  static const String settingsAppleShaderEnabled =
+      'settings.apple.shader_enabled.v1';
+  static const String settingsAppleShaderPresetPath =
+      'settings.apple.shader_preset_path.v1';
   static const String settingsAndroidShaderEnabled =
       'settings.android.shader_enabled.v1';
   static const String settingsAndroidShaderPresetPath =

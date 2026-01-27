@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
 import 'shader_browser_controller.dart';
 import '../settings/android_shader_settings.dart';
-import '../settings/macos_shader_settings.dart';
+import '../settings/apple_shader_settings.dart';
 import '../settings/windows_shader_settings.dart';
 import 'package:flutter/foundation.dart';
 
@@ -121,9 +121,10 @@ class _ShaderBrowserPageState extends ConsumerState<ShaderBrowserPage> {
                           .read(androidShaderSettingsProvider.notifier)
                           .setPresetPath(node.path);
                     } else if (!kIsWeb &&
-                        defaultTargetPlatform == TargetPlatform.macOS) {
+                        (defaultTargetPlatform == TargetPlatform.macOS ||
+                            defaultTargetPlatform == TargetPlatform.iOS)) {
                       ref
-                          .read(macosShaderSettingsProvider.notifier)
+                          .read(appleShaderSettingsProvider.notifier)
                           .setPresetPath(node.path);
                     }
                     Navigator.of(context).pop();

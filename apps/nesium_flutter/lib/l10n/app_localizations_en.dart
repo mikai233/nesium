@@ -980,7 +980,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Requires D3D11 GPU backend.';
 
   @override
-  String get videoShaderLibrashaderSubtitleMacos => 'Requires Metal backend.';
+  String get videoShaderLibrashaderSubtitleApple => 'Requires Metal backend.';
 
   @override
   String get videoShaderLibrashaderSubtitleDisabled =>

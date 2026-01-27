@@ -12,21 +12,21 @@ import '../../persistence/keys.dart';
 import '../../platform/nes_video.dart' as nes_video;
 
 @immutable
-class MacosShaderSettings {
-  const MacosShaderSettings({required this.enabled, required this.presetPath});
+class AppleShaderSettings {
+  const AppleShaderSettings({required this.enabled, required this.presetPath});
 
   final bool enabled;
   final String? presetPath;
 }
 
-class MacosShaderSettingsController extends Notifier<MacosShaderSettings> {
+class AppleShaderSettingsController extends Notifier<AppleShaderSettings> {
   @override
-  MacosShaderSettings build() {
+  AppleShaderSettings build() {
     final storage = ref.read(appStorageProvider);
-    final storedEnabled = storage.get(StorageKeys.settingsMacosShaderEnabled);
-    final storedPath = storage.get(StorageKeys.settingsMacosShaderPresetPath);
+    final storedEnabled = storage.get(StorageKeys.settingsAppleShaderEnabled);
+    final storedPath = storage.get(StorageKeys.settingsAppleShaderPresetPath);
 
-    final settings = MacosShaderSettings(
+    final settings = AppleShaderSettings(
       enabled: storedEnabled is bool ? storedEnabled : false,
       presetPath: storedPath is String && storedPath.trim().isNotEmpty
           ? storedPath.trim()
@@ -37,17 +37,20 @@ class MacosShaderSettingsController extends Notifier<MacosShaderSettings> {
       unawaitedLogged(
         _applyToRuntime(settings),
         message: 'applyToRuntime (init)',
-        logger: 'macos_shader_settings',
+        logger: 'apple_shader_settings',
       );
     });
 
     return settings;
   }
 
-  bool get _isMacos => !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+  bool get _isApple =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
-  Future<void> _applyToRuntime(MacosShaderSettings settings) async {
-    if (!_isMacos) return;
+  Future<void> _applyToRuntime(AppleShaderSettings settings) async {
+    if (!_isApple) return;
 
     String? absolutePath;
     if (settings.presetPath != null) {
@@ -63,14 +66,14 @@ class MacosShaderSettingsController extends Notifier<MacosShaderSettings> {
         logWarning(
           e,
           message: 'Failed to resolve shader root',
-          logger: 'macos_shader_settings',
+          logger: 'apple_shader_settings',
         );
       }
     }
 
     logInfo(
       'Applying shader: enabled=${settings.enabled}, path=$absolutePath (rel=${settings.presetPath})',
-      logger: 'macos_shader_settings',
+      logger: 'apple_shader_settings',
     );
 
     await nes_video.setShaderPresetPath(path: absolutePath);
@@ -79,7 +82,7 @@ class MacosShaderSettingsController extends Notifier<MacosShaderSettings> {
 
   Future<void> setEnabled(bool enabled) async {
     if (enabled == state.enabled) return;
-    final next = MacosShaderSettings(
+    final next = AppleShaderSettings(
       enabled: enabled,
       presetPath: state.presetPath,
     );
@@ -88,13 +91,13 @@ class MacosShaderSettingsController extends Notifier<MacosShaderSettings> {
     try {
       await ref
           .read(appStorageProvider)
-          .put(StorageKeys.settingsMacosShaderEnabled, enabled);
+          .put(StorageKeys.settingsAppleShaderEnabled, enabled);
     } catch (e, st) {
       logError(
         e,
         stackTrace: st,
-        message: 'Failed to persist macos shader enabled',
-        logger: 'macos_shader_settings',
+        message: 'Failed to persist apple shader enabled',
+        logger: 'apple_shader_settings',
       );
     }
 
@@ -105,7 +108,7 @@ class MacosShaderSettingsController extends Notifier<MacosShaderSettings> {
         e,
         stackTrace: st,
         message: 'setShaderEnabled failed',
-        logger: 'macos_shader_settings',
+        logger: 'apple_shader_settings',
       );
     }
   }
@@ -116,7 +119,7 @@ class MacosShaderSettingsController extends Notifier<MacosShaderSettings> {
         : path.trim();
     if (normalized == state.presetPath) return;
 
-    final next = MacosShaderSettings(
+    final next = AppleShaderSettings(
       enabled: state.enabled,
       presetPath: normalized,
     );
@@ -126,18 +129,18 @@ class MacosShaderSettingsController extends Notifier<MacosShaderSettings> {
       if (normalized == null) {
         await ref
             .read(appStorageProvider)
-            .delete(StorageKeys.settingsMacosShaderPresetPath);
+            .delete(StorageKeys.settingsAppleShaderPresetPath);
       } else {
         await ref
             .read(appStorageProvider)
-            .put(StorageKeys.settingsMacosShaderPresetPath, normalized);
+            .put(StorageKeys.settingsAppleShaderPresetPath, normalized);
       }
     } catch (e, st) {
       logError(
         e,
         stackTrace: st,
-        message: 'Failed to persist macos shader preset path',
-        logger: 'macos_shader_settings',
+        message: 'Failed to persist apple shader preset path',
+        logger: 'apple_shader_settings',
       );
     }
 
@@ -148,13 +151,13 @@ class MacosShaderSettingsController extends Notifier<MacosShaderSettings> {
         e,
         stackTrace: st,
         message: 'setShaderPresetPath failed',
-        logger: 'macos_shader_settings',
+        logger: 'apple_shader_settings',
       );
     }
   }
 }
 
-final macosShaderSettingsProvider =
-    NotifierProvider<MacosShaderSettingsController, MacosShaderSettings>(
-      MacosShaderSettingsController.new,
+final appleShaderSettingsProvider =
+    NotifierProvider<AppleShaderSettingsController, AppleShaderSettings>(
+      AppleShaderSettingsController.new,
     );
