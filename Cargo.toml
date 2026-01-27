@@ -30,9 +30,6 @@ debug = false
 [profile.release.package.rand_chacha]
 opt-level = 2
 
-[profile.release.package.rspirv]
-opt-level = 2
-
 [profile.release-dist]
 inherits = "release"
 codegen-units = 1
