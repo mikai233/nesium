@@ -81,19 +81,11 @@ static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
 
   // 2. Upload CPU buffer to GPU if new frame available.
   if (self->has_frame) {
-    bool size_changed = (self->width != self->last_upload_width ||
-                         self->height != self->last_upload_height);
-
     glBindTexture(GL_TEXTURE_2D, self->source_tex);
-    if (size_changed) {
+    if (self->width != self->last_upload_width ||
+        self->height != self->last_upload_height) {
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, self->width, self->height, 0,
                    GL_RGBA, GL_UNSIGNED_BYTE, self->buffers[self->front_index]);
-
-      // Also ensure target_tex matches size
-      glBindTexture(GL_TEXTURE_2D, self->target_tex);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, self->width, self->height, 0,
-                   GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-
       self->last_upload_width = self->width;
       self->last_upload_height = self->height;
     } else {
@@ -102,13 +94,17 @@ static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
                       self->buffers[self->front_index]);
     }
     self->has_frame = FALSE;
+
+    // Also ensure target_tex matches size
+    glBindTexture(GL_TEXTURE_2D, self->target_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, self->width, self->height, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
   }
 
   // 3. Apply shader.
   uint32_t out_w = self->width;
   uint32_t out_h = self->height;
 
-  glActiveTexture(GL_TEXTURE0);
   if (nesium_linux_apply_shader(self->source_tex, self->target_tex, self->width,
                                 self->height, out_w, out_h,
                                 self->frame_count)) {
@@ -123,10 +119,6 @@ static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
     *width = self->width;
     *height = self->height;
   }
-
-  // Cleanup state for Flutter.
-  glBindTexture(GL_TEXTURE_2D, 0);
-  glFlush();
 
   g_mutex_unlock(&self->mutex);
   return TRUE;
