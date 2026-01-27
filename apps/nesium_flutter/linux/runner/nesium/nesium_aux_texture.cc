@@ -218,35 +218,39 @@ void nesium_aux_texture_update_from_rust(NesiumAuxTexture *texture) {
 
   auto *self = NESIUM_AUX_TEXTURE(texture);
 
-  g_mutex_lock(&self->mutex);
-
-  const int front = self->front_index;
-  const int back = 1 - front;
-
-  uint8_t *dst = self->buffers[back];
+  // 1) Calculate requirements.
   const uint32_t w = self->width;
   const uint32_t h = self->height;
-  const size_t cap = self->buffer_capacity;
-
-  g_mutex_unlock(&self->mutex);
-
-  if (dst == nullptr || w == 0 || h == 0)
+  if (w == 0 || h == 0)
     return;
 
   const uint32_t pitch = w * 4u;
   const size_t needed = static_cast<size_t>(pitch) * static_cast<size_t>(h);
-
   if (needed == 0)
     return;
 
-  if (!ensure_capacity(self, needed))
+  // 2) Lock and ensure capacity before getting the buffer pointer.
+  g_mutex_lock(&self->mutex);
+
+  if (!ensure_capacity(self, needed)) {
+    g_mutex_unlock(&self->mutex);
+    return;
+  }
+
+  const int front = self->front_index;
+  const int back = 1 - front;
+  uint8_t *dst = self->buffers[back];
+
+  g_mutex_unlock(&self->mutex);
+
+  if (dst == nullptr)
     return;
 
-  // Copy from Rust buffer
+  // 3) Copy from Rust buffer (outside lock to avoid blocking).
   const size_t copied = nesium_aux_copy(self->id, dst, pitch, h);
 
   if (copied > 0) {
-    // Publish the back buffer as the new front buffer
+    // 4) Publish the back buffer as the new front buffer.
     g_mutex_lock(&self->mutex);
     self->front_index = back;
     self->has_frame = TRUE;
