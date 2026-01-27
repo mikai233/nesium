@@ -60,11 +60,6 @@ static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // Allocate initial storage
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, self->width, self->height, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    self->last_upload_width = self->width;
-    self->last_upload_height = self->height;
   }
 
   if (self->target_tex == 0) {
@@ -74,9 +69,6 @@ static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // Allocate storage for target texture
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, self->width, self->height, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
   }
 
   // 2. Upload CPU buffer to GPU if new frame available.
@@ -94,11 +86,6 @@ static gboolean nesium_texture_gl_populate(FlTextureGL *texture,
                       self->buffers[self->front_index]);
     }
     self->has_frame = FALSE;
-
-    // Also ensure target_tex matches size
-    glBindTexture(GL_TEXTURE_2D, self->target_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, self->width, self->height, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
   }
 
   // 3. Apply shader.
@@ -153,15 +140,6 @@ static void nesium_texture_finalize(GObject *object) {
   self->width = 0;
   self->height = 0;
   self->write_active = FALSE;
-
-  if (self->source_tex != 0) {
-    glDeleteTextures(1, &self->source_tex);
-    self->source_tex = 0;
-  }
-  if (self->target_tex != 0) {
-    glDeleteTextures(1, &self->target_tex);
-    self->target_tex = 0;
-  }
 
   g_mutex_unlock(&self->mutex);
   g_mutex_clear(&self->mutex);
