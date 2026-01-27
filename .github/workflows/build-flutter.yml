@@ -224,10 +224,6 @@ jobs:
           fi
           "${SDKMANAGER}" --list_installed | grep -E "ndk;" || true
 
-      - name: Generate shaders.zip
-        working-directory: apps/nesium_flutter
-        run: dart tool/package_shaders.dart
-
       - name: Flutter pub get
         working-directory: apps/nesium_flutter
         shell: bash
@@ -235,6 +231,10 @@ jobs:
           set -euo pipefail
           flutter --version
           flutter pub get
+
+      - name: Generate shaders.zip
+        working-directory: apps/nesium_flutter
+        run: dart tool/package_shaders.dart
 
       - name: Install fonttools (Python)
         shell: bash
