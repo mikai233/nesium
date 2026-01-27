@@ -162,6 +162,21 @@ pub unsafe extern "C" fn nesium_linux_apply_shader(
         // Initialize glow context on demand.
         let glow_ctx = glow_context();
 
+        {
+            static LOGGED: parking_lot::Once = parking_lot::Once::new();
+            LOGGED.call_once(|| unsafe {
+                let vendor = glow_ctx.get_parameter_string(glow::VENDOR);
+                let renderer = glow_ctx.get_parameter_string(glow::RENDERER);
+                let version = glow_ctx.get_parameter_string(glow::VERSION);
+                tracing::info!(
+                    "Rust GL Info - Vendor: {}, Renderer: {}, Version: {}",
+                    vendor,
+                    renderer,
+                    version
+                );
+            });
+        }
+
         if state_lock
             .as_ref()
             .map_or(true, |s| s.generation != cfg.generation)
