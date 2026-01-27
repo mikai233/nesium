@@ -39,6 +39,9 @@ struct _NesiumAuxTexture {
   gboolean has_frame = FALSE;
   uint32_t width = 0;
   uint32_t height = 0;
+
+  // Retired buffers kept until finalize to avoid use-after-free by the engine.
+  GSList *retired_buffers = nullptr;
 };
 
 G_DEFINE_TYPE(NesiumAuxTexture, nesium_aux_texture,
@@ -109,6 +112,11 @@ static void nesium_aux_texture_finalize(GObject *object) {
   self->width = 0;
   self->height = 0;
 
+  if (self->retired_buffers != nullptr) {
+    g_slist_free_full(self->retired_buffers, g_free);
+    self->retired_buffers = nullptr;
+  }
+
   g_mutex_unlock(&self->mutex);
 
   g_mutex_clear(&self->mutex);
@@ -131,19 +139,20 @@ static void nesium_aux_texture_init(NesiumAuxTexture *texture) {
 
   self->front_index = 0;
   self->has_frame = FALSE;
+  self->retired_buffers = nullptr;
 }
 
-static bool ensure_capacity_once(NesiumAuxTexture *self, size_t needed_bytes) {
+static bool ensure_capacity(NesiumAuxTexture *self, size_t needed_bytes) {
   if (needed_bytes == 0)
     return false;
 
-  // Allocate exactly once. If the texture size changes later, reject the
-  // update.
-  if (self->buffer_capacity != 0) {
-    return needed_bytes <= self->buffer_capacity &&
-           self->buffers[0] != nullptr && self->buffers[1] != nullptr;
+  // If we already have enough space, do nothing.
+  if (self->buffer_capacity >= needed_bytes && self->buffers[0] != nullptr &&
+      self->buffers[1] != nullptr) {
+    return true;
   }
 
+  // Growth needed. Allocate new buffers.
   uint8_t *b0 = static_cast<uint8_t *>(g_malloc(needed_bytes));
   uint8_t *b1 = static_cast<uint8_t *>(g_malloc(needed_bytes));
   if (b0 == nullptr || b1 == nullptr) {
@@ -152,6 +161,21 @@ static bool ensure_capacity_once(NesiumAuxTexture *self, size_t needed_bytes) {
     if (b1 != nullptr)
       g_free(b1);
     return false;
+  }
+
+  // If we had old buffers, push them to the retired list.
+  if (self->retired_buffers != nullptr) {
+    g_slist_free_full(self->retired_buffers, g_free);
+    self->retired_buffers = nullptr;
+  }
+
+  if (self->buffers[0] != nullptr) {
+    self->retired_buffers =
+        g_slist_prepend(self->retired_buffers, self->buffers[0]);
+  }
+  if (self->buffers[1] != nullptr) {
+    self->retired_buffers =
+        g_slist_prepend(self->retired_buffers, self->buffers[1]);
   }
 
   self->buffers[0] = b0;
@@ -173,7 +197,7 @@ NesiumAuxTexture *nesium_aux_texture_new(uint32_t id, uint32_t width,
       static_cast<size_t>(width) * static_cast<size_t>(height) * 4u;
 
   g_mutex_lock(&texture->mutex);
-  ensure_capacity_once(texture, needed);
+  ensure_capacity(texture, needed);
   g_mutex_unlock(&texture->mutex);
 
   // Create Rust-side backing store
@@ -212,7 +236,10 @@ void nesium_aux_texture_update_from_rust(NesiumAuxTexture *texture) {
   const uint32_t pitch = w * 4u;
   const size_t needed = static_cast<size_t>(pitch) * static_cast<size_t>(h);
 
-  if (needed == 0 || needed > cap)
+  if (needed == 0)
+    return;
+
+  if (!ensure_capacity(self, needed))
     return;
 
   // Copy from Rust buffer
