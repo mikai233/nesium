@@ -70,16 +70,16 @@ pub struct ButtonMapping {
 impl Default for ButtonMapping {
     fn default() -> Self {
         Self {
-            a: Some(Button::South), // Xbox A / PS Cross
-            b: Some(Button::East),  // Xbox B / PS Circle
+            a: Some(Button::South), // A / Cross
+            b: Some(Button::West),  // Y / Square
             select: Some(Button::Select),
             start: Some(Button::Start),
             up: Some(Button::DPadUp),
             down: Some(Button::DPadDown),
             left: Some(Button::DPadLeft),
             right: Some(Button::DPadRight),
-            turbo_a: Some(Button::North), // Y / △ (Xbox Y / PS Triangle)
-            turbo_b: Some(Button::West),  // X / □ (Xbox X / PS Square)
+            turbo_a: Some(Button::East),  // B / Circle
+            turbo_b: Some(Button::North), // X / Triangle
         }
     }
 }
@@ -115,8 +115,8 @@ pub struct ActionMapping {
 impl Default for ActionMapping {
     fn default() -> Self {
         Self {
-            rewind: Some(Button::RightTrigger2),      // RT / R2
-            fast_forward: Some(Button::LeftTrigger2), // LT / L2
+            rewind: Some(Button::LeftTrigger),        // L1 / LB
+            fast_forward: Some(Button::RightTrigger), // R1 / RB
             save_state: None,
             load_state: None,
             pause: None,
