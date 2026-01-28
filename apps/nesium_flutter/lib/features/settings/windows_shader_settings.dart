@@ -66,7 +66,7 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
     if (newState.enabled != state.enabled ||
         newState.presetPath != state.presetPath) {
       state = newState;
-      _debounceApply(newState);
+      _debounceApply(newState, persist: false);
     }
   }
 
@@ -84,15 +84,40 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
         previous.presetPath != next.presetPath;
   }
 
-  void _debounceApply(WindowsShaderSettings settings) {
+  void _debounceApply(WindowsShaderSettings settings, {required bool persist}) {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 200), () {
+      if (persist) {
+        _persist(settings);
+      }
       unawaitedLogged(
         _applyToRuntime(settings),
         message: 'applyToRuntime (debounced)',
         logger: 'windows_shader_settings',
       );
     });
+  }
+
+  void _persist(WindowsShaderSettings settings) {
+    final storage = ref.read(appStorageProvider);
+    try {
+      storage.put(StorageKeys.settingsWindowsShaderEnabled, settings.enabled);
+      if (settings.presetPath == null) {
+        storage.delete(StorageKeys.settingsWindowsShaderPresetPath);
+      } else {
+        storage.put(
+          StorageKeys.settingsWindowsShaderPresetPath,
+          settings.presetPath,
+        );
+      }
+    } catch (e, st) {
+      logError(
+        e,
+        stackTrace: st,
+        message: 'Failed to persist windows shader settings',
+        logger: 'windows_shader_settings',
+      );
+    }
   }
 
   Future<void> _applyToRuntime(WindowsShaderSettings settings) async {
@@ -133,21 +158,7 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
       presetPath: state.presetPath,
     );
     state = next;
-
-    try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsWindowsShaderEnabled, enabled);
-    } catch (e, st) {
-      logError(
-        e,
-        stackTrace: st,
-        message: 'Failed to persist windows shader enabled',
-        logger: 'windows_shader_settings',
-      );
-    }
-
-    _debounceApply(next);
+    _debounceApply(next, persist: true);
   }
 
   Future<void> setPresetPath(String? path) async {
@@ -161,27 +172,7 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
       presetPath: normalized,
     );
     state = next;
-
-    try {
-      if (normalized == null) {
-        await ref
-            .read(appStorageProvider)
-            .delete(StorageKeys.settingsWindowsShaderPresetPath);
-      } else {
-        await ref
-            .read(appStorageProvider)
-            .put(StorageKeys.settingsWindowsShaderPresetPath, normalized);
-      }
-    } catch (e, st) {
-      logError(
-        e,
-        stackTrace: st,
-        message: 'Failed to persist windows shader preset path',
-        logger: 'windows_shader_settings',
-      );
-    }
-
-    _debounceApply(next);
+    _debounceApply(next, persist: true);
   }
 }
 

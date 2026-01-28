@@ -178,6 +178,8 @@ sealed class VideoSettings with _$VideoSettings {
 }
 
 class VideoSettingsController extends Notifier<VideoSettings> {
+  Timer? _debounceTimer;
+
   @override
   VideoSettings build() {
     final settings = _loadSettingsFromStorage();
@@ -212,7 +214,10 @@ class VideoSettingsController extends Notifier<VideoSettings> {
       }
     });
 
-    ref.onDispose(() => subscription.cancel());
+    ref.onDispose(() {
+      subscription.cancel();
+      _debounceTimer?.cancel();
+    });
 
     scheduleMicrotask(() {
       unawaitedLogged(
@@ -237,11 +242,29 @@ class VideoSettingsController extends Notifier<VideoSettings> {
         : settings;
     if (next != state) {
       state = next;
+      if (applyPalette) {
+        _debounceApply(next);
+      }
     }
+  }
 
-    if (applyPalette) {
+  void _debounceApply(VideoSettings settings, {bool skipPalette = false}) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 150), () {
+      unawaitedLogged(
+        applyToRuntime(skipPalette: skipPalette),
+        message: 'applyToRuntime (debounced)',
+        logger: 'video_settings',
+      );
+    });
+  }
+
+  void _debouncePersist(VideoSettings settings) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 150), () async {
+      await _persist(settings);
       await applyToRuntime();
-    }
+    });
   }
 
   VideoSettings _loadSettingsFromStorage() {
@@ -402,20 +425,14 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     final clamped = value.clamp(0.0, 1.0).toDouble();
     if (clamped == state.lcdGridStrength) return;
     state = state.copyWith(lcdGridStrength: clamped);
-    await _persist(state);
-    await nes_video.setLcdGridOptions(
-      options: nes_video.LcdGridOptions(strength: clamped),
-    );
+    _debouncePersist(state);
   }
 
   Future<void> setScanlineIntensity(double value) async {
     final clamped = value.clamp(0.0, 1.0).toDouble();
     if (clamped == state.scanlineIntensity) return;
     state = state.copyWith(scanlineIntensity: clamped);
-    await _persist(state);
-    await nes_video.setScanlineOptions(
-      options: nes_video.ScanlineOptions(intensity: clamped),
-    );
+    _debouncePersist(state);
   }
 
   void useCustomIfAvailable() {

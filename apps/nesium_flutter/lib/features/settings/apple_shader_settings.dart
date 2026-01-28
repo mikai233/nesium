@@ -64,7 +64,7 @@ class AppleShaderSettingsController extends Notifier<AppleShaderSettings> {
     if (newState.enabled != state.enabled ||
         newState.presetPath != state.presetPath) {
       state = newState;
-      _debounceApply(newState);
+      _debounceApply(newState, persist: false);
     }
   }
 
@@ -84,15 +84,40 @@ class AppleShaderSettingsController extends Notifier<AppleShaderSettings> {
         previous.presetPath != next.presetPath;
   }
 
-  void _debounceApply(AppleShaderSettings settings) {
+  void _debounceApply(AppleShaderSettings settings, {required bool persist}) {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 200), () {
+      if (persist) {
+        _persist(settings);
+      }
       unawaitedLogged(
         _applyToRuntime(settings),
         message: 'applyToRuntime (debounced)',
         logger: 'apple_shader_settings',
       );
     });
+  }
+
+  void _persist(AppleShaderSettings settings) {
+    final storage = ref.read(appStorageProvider);
+    try {
+      storage.put(StorageKeys.settingsAppleShaderEnabled, settings.enabled);
+      if (settings.presetPath == null) {
+        storage.delete(StorageKeys.settingsAppleShaderPresetPath);
+      } else {
+        storage.put(
+          StorageKeys.settingsAppleShaderPresetPath,
+          settings.presetPath,
+        );
+      }
+    } catch (e, st) {
+      logError(
+        e,
+        stackTrace: st,
+        message: 'Failed to persist apple shader settings',
+        logger: 'apple_shader_settings',
+      );
+    }
   }
 
   Future<void> _applyToRuntime(AppleShaderSettings settings) async {
@@ -133,21 +158,7 @@ class AppleShaderSettingsController extends Notifier<AppleShaderSettings> {
       presetPath: state.presetPath,
     );
     state = next;
-
-    try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsAppleShaderEnabled, enabled);
-    } catch (e, st) {
-      logError(
-        e,
-        stackTrace: st,
-        message: 'Failed to persist apple shader enabled',
-        logger: 'apple_shader_settings',
-      );
-    }
-
-    _debounceApply(next);
+    _debounceApply(next, persist: true);
   }
 
   Future<void> setPresetPath(String? path) async {
@@ -161,27 +172,7 @@ class AppleShaderSettingsController extends Notifier<AppleShaderSettings> {
       presetPath: normalized,
     );
     state = next;
-
-    try {
-      if (normalized == null) {
-        await ref
-            .read(appStorageProvider)
-            .delete(StorageKeys.settingsAppleShaderPresetPath);
-      } else {
-        await ref
-            .read(appStorageProvider)
-            .put(StorageKeys.settingsAppleShaderPresetPath, normalized);
-      }
-    } catch (e, st) {
-      logError(
-        e,
-        stackTrace: st,
-        message: 'Failed to persist apple shader preset path',
-        logger: 'apple_shader_settings',
-      );
-    }
-
-    _debounceApply(next);
+    _debounceApply(next, persist: true);
   }
 }
 

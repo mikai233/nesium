@@ -45,6 +45,8 @@ sealed class EmulationSettings with _$EmulationSettings {
 }
 
 class EmulationSettingsController extends Notifier<EmulationSettings> {
+  Timer? _debounceTimer;
+
   @override
   EmulationSettings build() {
     // Listen for storage changes
@@ -60,7 +62,10 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
       }
     });
 
-    ref.onDispose(() => subscription.cancel());
+    ref.onDispose(() {
+      subscription.cancel();
+      _debounceTimer?.cancel();
+    });
 
     final defaults = EmulationSettings.defaults();
     final settings = _loadSettingsFromStorage(defaults: defaults) ?? defaults;
@@ -75,8 +80,22 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     final settings = _loadSettingsFromStorage(defaults: defaults);
     if (settings != null && settings != state) {
       state = settings;
-      applyToRuntime();
+      _debounceApply(settings);
     }
+  }
+
+  void _debounceApply(EmulationSettings settings) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 250), () {
+      applyToRuntime();
+    });
+  }
+
+  void _debounceApplyToRuntime() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 250), () {
+      applyToRuntime();
+    });
   }
 
   EmulationSettings? _loadSettingsFromStorage({
@@ -162,7 +181,7 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
   void setRewindEnabled(bool enabled) {
     if (enabled == state.rewindEnabled) return;
     state = state.copyWith(rewindEnabled: enabled);
-    _applyRewindConfig();
+    _debounceApplyToRuntime();
     _persist(state);
   }
 
@@ -170,7 +189,7 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     final validated = seconds.clamp(60, 3600);
     if (validated == state.rewindSeconds) return;
     state = state.copyWith(rewindSeconds: validated);
-    _applyRewindConfig();
+    _debounceApplyToRuntime();
     _persist(state);
   }
 
@@ -178,7 +197,7 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
     final clamped = percent.clamp(100, 1000);
     if (clamped == state.rewindSpeedPercent) return;
     state = state.copyWith(rewindSpeedPercent: clamped);
-    _applyRewindSpeed();
+    _debounceApplyToRuntime();
     _persist(state);
   }
 

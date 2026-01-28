@@ -66,7 +66,7 @@ class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
     if (newState.enabled != state.enabled ||
         newState.presetPath != state.presetPath) {
       state = newState;
-      _debounceApply(newState);
+      _debounceApply(newState, persist: false);
     }
   }
 
@@ -84,15 +84,40 @@ class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
         previous.presetPath != next.presetPath;
   }
 
-  void _debounceApply(AndroidShaderSettings settings) {
+  void _debounceApply(AndroidShaderSettings settings, {required bool persist}) {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 200), () {
+      if (persist) {
+        _persist(settings);
+      }
       unawaitedLogged(
         _applyToRuntime(settings),
         message: 'applyToRuntime (debounced)',
         logger: 'android_shader_settings',
       );
     });
+  }
+
+  void _persist(AndroidShaderSettings settings) {
+    final storage = ref.read(appStorageProvider);
+    try {
+      storage.put(StorageKeys.settingsAndroidShaderEnabled, settings.enabled);
+      if (settings.presetPath == null) {
+        storage.delete(StorageKeys.settingsAndroidShaderPresetPath);
+      } else {
+        storage.put(
+          StorageKeys.settingsAndroidShaderPresetPath,
+          settings.presetPath,
+        );
+      }
+    } catch (e, st) {
+      logError(
+        e,
+        stackTrace: st,
+        message: 'Failed to persist android shader settings',
+        logger: 'android_shader_settings',
+      );
+    }
   }
 
   Future<void> _applyToRuntime(AndroidShaderSettings settings) async {
@@ -133,21 +158,7 @@ class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
       presetPath: state.presetPath,
     );
     state = next;
-
-    try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsAndroidShaderEnabled, enabled);
-    } catch (e, st) {
-      logError(
-        e,
-        stackTrace: st,
-        message: 'Failed to persist android shader enabled',
-        logger: 'android_shader_settings',
-      );
-    }
-
-    _debounceApply(next);
+    _debounceApply(next, persist: true);
   }
 
   Future<void> setPresetPath(String? path) async {
@@ -161,27 +172,7 @@ class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
       presetPath: normalized,
     );
     state = next;
-
-    try {
-      if (normalized == null) {
-        await ref
-            .read(appStorageProvider)
-            .delete(StorageKeys.settingsAndroidShaderPresetPath);
-      } else {
-        await ref
-            .read(appStorageProvider)
-            .put(StorageKeys.settingsAndroidShaderPresetPath, normalized);
-      }
-    } catch (e, st) {
-      logError(
-        e,
-        stackTrace: st,
-        message: 'Failed to persist android shader preset path',
-        logger: 'android_shader_settings',
-      );
-    }
-
-    _debounceApply(next);
+    _debounceApply(next, persist: true);
   }
 }
 
