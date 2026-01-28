@@ -252,10 +252,10 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
               final dpr = MediaQuery.of(context).devicePixelRatio;
 
               final rect = Rect.fromLTWH(
-                globalOffset.dx * dpr,
-                globalOffset.dy * dpr,
-                viewport.width * dpr,
-                viewport.height * dpr,
+                (globalOffset.dx * dpr).roundToDouble(),
+                (globalOffset.dy * dpr).roundToDouble(),
+                (viewport.width * dpr).roundToDouble(),
+                (viewport.height * dpr).roundToDouble(),
               );
 
               // Only update if significantly changed
