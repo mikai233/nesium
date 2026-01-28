@@ -396,6 +396,17 @@ private:
     prefer_gpu_ = use_gpu;
     int64_t new_id = -1;
 
+    // Destroy native_window_ before switching backends.
+    // The native window holds references to the old D3D11 device, which will be
+    // released when we dispose the texture. Using the old device's resources
+    // with a new device causes crashes.
+    if (native_window_) {
+      native_window_->SetVisible(false);
+      native_window_.reset();
+      OutputDebugStringA(
+          "[Nesium] Native window destroyed due to backend switch\n");
+    }
+
     // If texture is already active, we must recreate it to apply the change.
     if (texture_id_.load(std::memory_order_acquire) >= 0) {
       DisposeNesTexture(nullptr);

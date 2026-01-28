@@ -112,7 +112,17 @@ class WindowsVideoBackendSettingsController
       backend == WindowsVideoBackend.d3d11Gpu,
     );
 
-    state = state.copyWith(backend: backend);
+    // Native Overlay requires D3D11, so disable it when switching to CPU.
+    final shouldDisableOverlay =
+        backend == WindowsVideoBackend.softwareCpu && state.useNativeOverlay;
+    if (shouldDisableOverlay) {
+      await storage.put(StorageKeys.settingsWindowsNativeOverlay, false);
+    }
+
+    state = state.copyWith(
+      backend: backend,
+      useNativeOverlay: shouldDisableOverlay ? false : state.useNativeOverlay,
+    );
 
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;

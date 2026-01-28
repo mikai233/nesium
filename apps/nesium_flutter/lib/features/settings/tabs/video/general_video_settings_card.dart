@@ -247,7 +247,12 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
                 title: Text(l10n.windowsNativeOverlayTitle),
                 subtitle: Text(l10n.windowsNativeOverlaySubtitle),
                 value: windowsBackend.useNativeOverlay,
-                onChanged: windowsBackendController == null
+                // Native Overlay requires D3D11 GPU backend.
+                // Disable the switch when using CPU backend.
+                onChanged:
+                    windowsBackendController == null ||
+                        windowsBackend.backend ==
+                            WindowsVideoBackend.softwareCpu
                     ? null
                     : (value) =>
                           windowsBackendController.setNativeOverlay(value),
