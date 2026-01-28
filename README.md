@@ -13,6 +13,8 @@
   <img src="https://img.shields.io/badge/WebAssembly-654FF0.svg?style=flat&logo=webassembly&logoColor=white" alt="Wasm" />
 </p>
 
+[**中文说明**](./README_zh.md)
+
 </div>
 
 A cycle-accurate NES emulator written in Rust, designed to faithfully replicate the behavior of the Nintendo Entertainment System hardware. This project strives to provide precise emulation of the CPU, PPU, APU, and other critical components, ensuring that every game runs as it would on the original hardware.
