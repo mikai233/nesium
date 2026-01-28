@@ -1,19 +1,19 @@
-#[cfg(feature = "hqx-cpp")]
+#[cfg(all(feature = "hqx-cpp", not(target_arch = "wasm32")))]
 pub mod hqx;
 
-#[cfg(feature = "hqx-cpp")]
+#[cfg(all(feature = "hqx-cpp", not(target_arch = "wasm32")))]
 pub use hqx::HqxPostProcessor;
 
-#[cfg(feature = "ntsc-cpp")]
+#[cfg(all(feature = "ntsc-cpp", not(target_arch = "wasm32")))]
 pub mod ntsc;
 
-#[cfg(feature = "ntsc-cpp")]
+#[cfg(all(feature = "ntsc-cpp", not(target_arch = "wasm32")))]
 pub use ntsc::NesNtscPostProcessor;
 
-#[cfg(feature = "ntsc-cpp")]
+#[cfg(all(feature = "ntsc-cpp", not(target_arch = "wasm32")))]
 pub use crate::video::ntsc::NesNtscPreset;
 
-#[cfg(feature = "ntsc-cpp")]
+#[cfg(all(feature = "ntsc-cpp", not(target_arch = "wasm32")))]
 pub use ntsc::NesNtscTuning;
 
 pub mod sai;
@@ -32,8 +32,8 @@ pub mod xbrz;
 
 pub use xbrz::XbrzPostProcessor;
 
-#[cfg(feature = "ntsc-bisqwit-cpp")]
+#[cfg(all(feature = "ntsc-bisqwit-cpp", not(target_arch = "wasm32")))]
 pub mod ntsc_bisqwit;
 
-#[cfg(feature = "ntsc-bisqwit-cpp")]
+#[cfg(all(feature = "ntsc-bisqwit-cpp", not(target_arch = "wasm32")))]
 pub use ntsc_bisqwit::{NtscBisqwitOptions, NtscBisqwitPostProcessor};

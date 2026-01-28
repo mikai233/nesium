@@ -1,7 +1,7 @@
 use nesium_core::ppu::buffer::{ColorFormat, NearestPostProcessor, VideoPostProcessor};
 use nesium_core::ppu::palette::Color;
 
-#[cfg(not(feature = "sai-cpp"))]
+#[cfg(any(not(feature = "sai-cpp"), target_arch = "wasm32"))]
 use crate::video::sai::{
     scale_2xsai_xrgb8888, scale_super_2xsai_xrgb8888, scale_supereagle_xrgb8888,
 };
@@ -118,7 +118,7 @@ impl VideoPostProcessor for SaiPostProcessor {
 
         match self.variant {
             SaiVariant::Sai2x => {
-                #[cfg(feature = "sai-cpp")]
+                #[cfg(all(feature = "sai-cpp", not(target_arch = "wasm32")))]
                 {
                     crate::video::sai::scale_2xsai_xrgb8888_cpp(
                         src_width,
@@ -129,7 +129,7 @@ impl VideoPostProcessor for SaiPostProcessor {
                         dst_width,
                     );
                 }
-                #[cfg(not(feature = "sai-cpp"))]
+                #[cfg(any(not(feature = "sai-cpp"), target_arch = "wasm32"))]
                 {
                     scale_2xsai_xrgb8888(
                         src_width,
@@ -142,7 +142,7 @@ impl VideoPostProcessor for SaiPostProcessor {
                 }
             }
             SaiVariant::Super2xSai => {
-                #[cfg(feature = "sai-cpp")]
+                #[cfg(all(feature = "sai-cpp", not(target_arch = "wasm32")))]
                 {
                     crate::video::sai::scale_super_2xsai_xrgb8888_cpp(
                         src_width,
@@ -153,7 +153,7 @@ impl VideoPostProcessor for SaiPostProcessor {
                         dst_width,
                     );
                 }
-                #[cfg(not(feature = "sai-cpp"))]
+                #[cfg(any(not(feature = "sai-cpp"), target_arch = "wasm32"))]
                 {
                     scale_super_2xsai_xrgb8888(
                         src_width,
@@ -166,7 +166,7 @@ impl VideoPostProcessor for SaiPostProcessor {
                 }
             }
             SaiVariant::SuperEagle => {
-                #[cfg(feature = "sai-cpp")]
+                #[cfg(all(feature = "sai-cpp", not(target_arch = "wasm32")))]
                 {
                     crate::video::sai::scale_supereagle_xrgb8888_cpp(
                         src_width,
@@ -177,7 +177,7 @@ impl VideoPostProcessor for SaiPostProcessor {
                         dst_width,
                     );
                 }
-                #[cfg(not(feature = "sai-cpp"))]
+                #[cfg(any(not(feature = "sai-cpp"), target_arch = "wasm32"))]
                 {
                     scale_supereagle_xrgb8888(
                         src_width,

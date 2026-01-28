@@ -56,7 +56,7 @@ struct NeighborCoords {
     y_next2: usize,
 }
 
-#[cfg(feature = "sai-cpp")]
+#[cfg(all(feature = "sai-cpp", not(target_arch = "wasm32")))]
 unsafe extern "C" {
     fn nesium_sai_2xsai_xrgb8888(
         width: u32,
@@ -84,7 +84,7 @@ unsafe extern "C" {
     );
 }
 
-#[cfg(feature = "sai-cpp")]
+#[cfg(all(feature = "sai-cpp", not(target_arch = "wasm32")))]
 pub fn scale_2xsai_xrgb8888_cpp(
     width: usize,
     height: usize,
@@ -112,7 +112,7 @@ pub fn scale_2xsai_xrgb8888_cpp(
     }
 }
 
-#[cfg(feature = "sai-cpp")]
+#[cfg(all(feature = "sai-cpp", not(target_arch = "wasm32")))]
 pub fn scale_super_2xsai_xrgb8888_cpp(
     width: usize,
     height: usize,
@@ -140,7 +140,7 @@ pub fn scale_super_2xsai_xrgb8888_cpp(
     }
 }
 
-#[cfg(feature = "sai-cpp")]
+#[cfg(all(feature = "sai-cpp", not(target_arch = "wasm32")))]
 pub fn scale_supereagle_xrgb8888_cpp(
     width: usize,
     height: usize,

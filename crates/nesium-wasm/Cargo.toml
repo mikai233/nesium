@@ -18,3 +18,8 @@ nesium-support = { workspace = true }
 wasm-bindgen.workspace = true
 console_error_panic_hook.workspace = true
 sha1.workspace = true
+
+# Disable wasm-opt to prevent crashes on Windows.
+# The performance impact is minimal (file size only) since `opt-level = 3` is already set in the workspace.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
