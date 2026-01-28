@@ -16,8 +16,8 @@ use nesium_core::{
         tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
         tilemap_interceptor::CapturePoint as TilemapCapturePoint,
     },
-    ppu::buffer::FrameReadyCallback,
     ppu::buffer::{ExternalFrameHandle, FrameBuffer},
+    ppu::buffer::{FrameReadyCallback, VideoPostProcessor},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
 };
@@ -30,7 +30,7 @@ use super::{
     types::{
         CONTROL_REPLY_TIMEOUT, EventTopic, LOAD_ROM_REPLY_TIMEOUT, RuntimeConfig, RuntimeError,
         RuntimeEventSender, SAVE_STATE_REPLY_TIMEOUT, TileViewerBackground, TileViewerLayout,
-        TileViewerSource, VideoConfig,
+        TileViewerSource, VideoBackendConfig,
     },
     util::{button_bit, try_raise_current_thread_priority},
 };
@@ -55,18 +55,12 @@ impl Runtime {
     pub fn start(config: RuntimeConfig) -> Result<Self, RuntimeError> {
         Self::start_internal(config, None)
     }
-}
 
-impl Runtime {
-    pub fn start_with_sender(
+    pub fn start_with_event_sender(
         config: RuntimeConfig,
         sender: Box<dyn RuntimeEventSender>,
     ) -> Result<Self, RuntimeError> {
         Self::start_internal(config, Some(sender))
-    }
-
-    pub fn start_pending(config: RuntimeConfig) -> Result<Self, RuntimeError> {
-        Self::start_internal(config, None)
     }
 
     fn start_internal(
@@ -75,36 +69,24 @@ impl Runtime {
     ) -> Result<Self, RuntimeError> {
         let (ctrl_tx, ctrl_rx) = unbounded::<ControlMessage>();
 
-        let (framebuffer, frame_handle) = match config.video {
-            VideoConfig::External(video) => {
-                let len = video.len_bytes();
-                if len == 0 {
-                    return Err(RuntimeError::VideoBufferLenZero);
-                }
-                assert!(
-                    video.pitch_bytes >= video.expected_pitch_bytes(),
-                    "video pitch_bytes is smaller than the expected minimum pitch"
-                );
-                let (fb, handle) = unsafe {
-                    FrameBuffer::new_external(
-                        video.color_format,
-                        video.pitch_bytes,
-                        video.plane0,
-                        video.plane1,
-                    )
-                };
-                (fb, Some(handle))
-            }
-            VideoConfig::Swapchain(video) => {
-                let fb = FrameBuffer::new_swapchain(
-                    video.color_format,
-                    video.lock,
-                    video.unlock,
-                    video.user_data,
-                );
-                (fb, None)
-            }
+        let video = config.video;
+        if video.output_width == 0 || video.output_height == 0 {
+            return Err(RuntimeError::InvalidVideoOutputSize {
+                width: video.output_width,
+                height: video.output_height,
+            });
+        }
+
+        let mut framebuffer = match video.backend {
+            VideoBackendConfig::Owned => FrameBuffer::new(video.color_format),
+            VideoBackendConfig::Swapchain {
+                lock,
+                unlock,
+                user_data,
+            } => FrameBuffer::new_swapchain(video.color_format, lock, unlock, user_data),
         };
+        framebuffer.set_output_config(video.output_width as usize, video.output_height as usize);
+        let frame_handle = framebuffer.external_frame_handle().cloned();
 
         let state = Arc::new(RuntimeState::new());
         let thread_state = Arc::clone(&state);
@@ -421,6 +403,52 @@ impl RuntimeHandle {
         })
     }
 
+    pub fn set_video_output_config(&self, width: u32, height: u32) -> Result<(), RuntimeError> {
+        if width == 0 || height == 0 {
+            return Err(RuntimeError::InvalidVideoOutputSize { width, height });
+        }
+        self.send_with_reply("set_video_output_config", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetVideoOutputConfig {
+                width,
+                height,
+                reply,
+            }
+        })
+    }
+
+    /// Replaces the runtime video post-processor (scaler/filter chain).
+    ///
+    /// This is a Rust-only API intended for native frontends that want to inject
+    /// their own implementation. Flutter/Dart integrations should select among
+    /// built-in processors via `set_video_output_config` for now.
+    pub fn set_video_post_processor(
+        &self,
+        processor: Box<dyn VideoPostProcessor>,
+    ) -> Result<(), RuntimeError> {
+        self.send_with_reply("set_video_post_processor", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetVideoPostProcessor(processor, reply)
+        })
+    }
+
+    pub fn set_video_pipeline(
+        &self,
+        width: u32,
+        height: u32,
+        processor: Box<dyn VideoPostProcessor>,
+    ) -> Result<(), RuntimeError> {
+        if width == 0 || height == 0 {
+            return Err(RuntimeError::InvalidVideoOutputSize { width, height });
+        }
+        self.send_with_reply("set_video_pipeline", CONTROL_REPLY_TIMEOUT, |reply| {
+            ControlMessage::SetVideoPipeline {
+                width,
+                height,
+                processor,
+                reply,
+            }
+        })
+    }
+
     /// Enables an integer FPS pacing mode.
     ///
     /// - `None`: run at the NES's exact NTSC FPS (~60.0988Hz)
@@ -628,5 +656,13 @@ impl RuntimeHandle {
         self.send_with_reply("disable_netplay", CONTROL_REPLY_TIMEOUT, |reply| {
             ControlMessage::DisableNetplay(reply)
         })
+    }
+
+    pub fn set_high_priority_enabled(&self, enabled: bool) -> Result<(), RuntimeError> {
+        self.send_with_reply(
+            "set_high_priority_enabled",
+            CONTROL_REPLY_TIMEOUT,
+            |reply| ControlMessage::SetHighPriorityEnabled(enabled, reply),
+        )
     }
 }

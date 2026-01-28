@@ -6,13 +6,21 @@ import '../../platform/nes_gamepad.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 import '../../logging/app_logger.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
+
+final StorageKey<JsonMap> _gamepadSettingsKey = StorageKey(
+  StorageKeys.settingsGamepad,
+  jsonMapStringCodec(
+    fallback: <String, dynamic>{},
+    storageKey: StorageKeys.settingsGamepad,
+  ),
+);
 
 class GamepadSettingsController extends Notifier<Map<String, GamepadMapping>> {
   @override
   Map<String, GamepadMapping> build() {
-    return _fromStorage(
-      ref.read(appStorageProvider).get(StorageKeys.settingsGamepad),
-    );
+    return _fromStorage(ref.read(appStorageProvider).read(_gamepadSettingsKey));
   }
 
   /// Restores saved mappings for any assigned gamepads in the list.
@@ -51,7 +59,10 @@ class GamepadSettingsController extends Notifier<Map<String, GamepadMapping>> {
       Future<void>.sync(
         () => ref
             .read(appStorageProvider)
-            .put(StorageKeys.settingsGamepad, _toStorage(value)),
+            .write(
+              _gamepadSettingsKey,
+              Map<String, dynamic>.from(_toStorage(value)),
+            ),
       ),
       message: 'Persist gamepad settings',
       logger: 'gamepad_settings',
@@ -68,21 +79,25 @@ Map<String, Object?> _toStorage(Map<String, GamepadMapping> value) {
   return value.map((key, value) => MapEntry(key, value.toJson()));
 }
 
-Map<String, GamepadMapping> _fromStorage(Object? value) {
-  if (value is! Map) return {};
+Map<String, GamepadMapping> _fromStorage(JsonMap? value) {
+  if (value == null) return {};
   try {
     final entries = <MapEntry<String, GamepadMapping>>[];
     for (final entry in value.entries) {
-      if (entry.key is! String) continue;
-      final name = entry.key as String;
+      final name = entry.key;
 
       final val = entry.value;
       if (val is Map) {
         try {
           final mapping = GamepadMapping.fromJson(val.cast<String, dynamic>());
           entries.add(MapEntry(name, mapping));
-        } catch (_) {
-          // Ignore malformed entry
+        } catch (e, st) {
+          logWarning(
+            e,
+            stackTrace: st,
+            message: 'Ignoring malformed gamepad mapping entry: $name',
+            logger: 'gamepad_settings',
+          );
         }
       }
     }

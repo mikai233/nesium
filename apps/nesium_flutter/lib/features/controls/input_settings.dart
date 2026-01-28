@@ -3,13 +3,29 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../domain/nes_input_masks.dart';
 import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
 import '../../platform/nes_gamepad.dart';
+import '../../persistence/json_converters.dart';
+
+part 'input_settings.freezed.dart';
+part 'input_settings.g.dart';
+
+final StorageKey<InputSettingsState> _inputSettingsKey = StorageKey(
+  StorageKeys.settingsInput,
+  jsonModelStringCodec<InputSettingsState>(
+    fromJson: InputSettingsState.fromJson,
+    toJson: (value) => value.toJson(),
+    storageKey: StorageKeys.settingsInput,
+  ),
+);
 
 enum InputDevice { keyboard, gamepad, virtualController }
 
@@ -129,135 +145,33 @@ final actionHintProvider = Provider.family<String, KeyboardBindingAction>((
   }
 });
 
-@immutable
-class InputSettings {
-  static const Object _unset = Object();
+@freezed
+sealed class InputSettings with _$InputSettings {
+  const InputSettings._();
 
-  const InputSettings({
-    required this.device,
-    required this.keyboardPreset,
-    required this.customUp,
-    required this.customDown,
-    required this.customLeft,
-    required this.customRight,
-    required this.customA,
-    required this.customB,
-    required this.customSelect,
-    required this.customStart,
-    required this.customTurboA,
-    required this.customTurboB,
-    this.customRewind,
-    this.customFastForward,
-    this.customSaveState,
-    this.customLoadState,
-    this.customPause,
-  });
+  @LogicalKeyboardKeyNullableConverter()
+  const factory InputSettings({
+    required InputDevice device,
+    required KeyboardPreset keyboardPreset,
+    LogicalKeyboardKey? customUp,
+    LogicalKeyboardKey? customDown,
+    LogicalKeyboardKey? customLeft,
+    LogicalKeyboardKey? customRight,
+    LogicalKeyboardKey? customA,
+    LogicalKeyboardKey? customB,
+    LogicalKeyboardKey? customSelect,
+    LogicalKeyboardKey? customStart,
+    LogicalKeyboardKey? customTurboA,
+    LogicalKeyboardKey? customTurboB,
+    LogicalKeyboardKey? customRewind,
+    LogicalKeyboardKey? customFastForward,
+    LogicalKeyboardKey? customSaveState,
+    LogicalKeyboardKey? customLoadState,
+    LogicalKeyboardKey? customPause,
+  }) = _InputSettings;
 
-  const InputSettings.empty({
-    required this.device,
-    required this.keyboardPreset,
-  }) : customUp = null,
-       customDown = null,
-       customLeft = null,
-       customRight = null,
-       customA = null,
-       customB = null,
-       customSelect = null,
-       customStart = null,
-       customTurboA = null,
-       customTurboB = null,
-       customRewind = null,
-       customFastForward = null,
-       customSaveState = null,
-       customLoadState = null,
-       customPause = null;
-
-  final InputDevice device;
-  final KeyboardPreset keyboardPreset;
-
-  final LogicalKeyboardKey? customUp;
-  final LogicalKeyboardKey? customDown;
-  final LogicalKeyboardKey? customLeft;
-  final LogicalKeyboardKey? customRight;
-  final LogicalKeyboardKey? customA;
-  final LogicalKeyboardKey? customB;
-  final LogicalKeyboardKey? customSelect;
-  final LogicalKeyboardKey? customStart;
-  final LogicalKeyboardKey? customTurboA;
-  final LogicalKeyboardKey? customTurboB;
-  final LogicalKeyboardKey? customRewind;
-  final LogicalKeyboardKey? customFastForward;
-  final LogicalKeyboardKey? customSaveState;
-  final LogicalKeyboardKey? customLoadState;
-  final LogicalKeyboardKey? customPause;
-
-  InputSettings copyWith({
-    InputDevice? device,
-    KeyboardPreset? keyboardPreset,
-    Object? customUp = _unset,
-    Object? customDown = _unset,
-    Object? customLeft = _unset,
-    Object? customRight = _unset,
-    Object? customA = _unset,
-    Object? customB = _unset,
-    Object? customSelect = _unset,
-    Object? customStart = _unset,
-    Object? customTurboA = _unset,
-    Object? customTurboB = _unset,
-    Object? customRewind = _unset,
-    Object? customFastForward = _unset,
-    Object? customSaveState = _unset,
-    Object? customLoadState = _unset,
-    Object? customPause = _unset,
-  }) => InputSettings(
-    device: device ?? this.device,
-    keyboardPreset: keyboardPreset ?? this.keyboardPreset,
-    customUp: identical(customUp, _unset)
-        ? this.customUp
-        : customUp as LogicalKeyboardKey?,
-    customDown: identical(customDown, _unset)
-        ? this.customDown
-        : customDown as LogicalKeyboardKey?,
-    customLeft: identical(customLeft, _unset)
-        ? this.customLeft
-        : customLeft as LogicalKeyboardKey?,
-    customRight: identical(customRight, _unset)
-        ? this.customRight
-        : customRight as LogicalKeyboardKey?,
-    customA: identical(customA, _unset)
-        ? this.customA
-        : customA as LogicalKeyboardKey?,
-    customB: identical(customB, _unset)
-        ? this.customB
-        : customB as LogicalKeyboardKey?,
-    customSelect: identical(customSelect, _unset)
-        ? this.customSelect
-        : customSelect as LogicalKeyboardKey?,
-    customStart: identical(customStart, _unset)
-        ? this.customStart
-        : customStart as LogicalKeyboardKey?,
-    customTurboA: identical(customTurboA, _unset)
-        ? this.customTurboA
-        : customTurboA as LogicalKeyboardKey?,
-    customTurboB: identical(customTurboB, _unset)
-        ? this.customTurboB
-        : customTurboB as LogicalKeyboardKey?,
-    customRewind: identical(customRewind, _unset)
-        ? this.customRewind
-        : customRewind as LogicalKeyboardKey?,
-    customFastForward: identical(customFastForward, _unset)
-        ? this.customFastForward
-        : customFastForward as LogicalKeyboardKey?,
-    customSaveState: identical(customSaveState, _unset)
-        ? this.customSaveState
-        : customSaveState as LogicalKeyboardKey?,
-    customLoadState: identical(customLoadState, _unset)
-        ? this.customLoadState
-        : customLoadState as LogicalKeyboardKey?,
-    customPause: identical(customPause, _unset)
-        ? this.customPause
-        : customPause as LogicalKeyboardKey?,
-  );
+  factory InputSettings.fromJson(Map<String, dynamic> json) =>
+      _$InputSettingsFromJson(json);
 
   Map<LogicalKeyboardKey, KeyboardBindingAction> resolveKeyboardBindings() {
     final bindings = <LogicalKeyboardKey, KeyboardBindingAction>{};
@@ -371,22 +285,19 @@ class InputSettings {
   }
 }
 
-@immutable
-class InputSettingsState {
-  const InputSettingsState({required this.ports, required this.selectedPort});
+@freezed
+sealed class InputSettingsState with _$InputSettingsState {
+  const InputSettingsState._();
 
-  final Map<int, InputSettings> ports;
-  final int selectedPort;
+  const factory InputSettingsState({
+    required Map<int, InputSettings> ports,
+    required int selectedPort,
+  }) = _InputSettingsState;
+
+  factory InputSettingsState.fromJson(Map<String, dynamic> json) =>
+      _$InputSettingsStateFromJson(json);
 
   InputSettings get selectedSettings => ports[selectedPort]!;
-
-  InputSettingsState copyWith({
-    Map<int, InputSettings>? ports,
-    int? selectedPort,
-  }) => InputSettingsState(
-    ports: ports ?? this.ports,
-    selectedPort: selectedPort ?? this.selectedPort,
-  );
 
   InputBindingLocation? findConflict(
     LogicalKeyboardKey key, {
@@ -440,11 +351,20 @@ bool _supportsVirtualController() {
 class InputSettingsController extends Notifier<InputSettingsState> {
   @override
   InputSettingsState build() {
-    final loaded = _inputSettingsStateFromStorage(
-      ref.read(appStorageProvider).get(StorageKeys.settingsInput),
-      defaults: _allDefaults(),
-    );
-    return loaded ?? _allDefaults();
+    try {
+      final stored = ref.read(appStorageProvider).read(_inputSettingsKey);
+      if (stored != null) {
+        return stored;
+      }
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to load input settings',
+        logger: 'input_settings',
+      );
+    }
+    return _allDefaults();
   }
 
   InputSettingsState _allDefaults() {
@@ -609,7 +529,7 @@ class InputSettingsController extends Notifier<InputSettingsState> {
         customPause: LogicalKeyboardKey.escape,
       );
     } else {
-      return const InputSettings.empty(
+      return InputSettings(
         device: InputDevice.keyboard,
         keyboardPreset: KeyboardPreset.none,
       );
@@ -619,12 +539,7 @@ class InputSettingsController extends Notifier<InputSettingsState> {
   void _persist(InputSettingsState value) {
     unawaitedLogged(
       Future<void>.sync(
-        () => ref
-            .read(appStorageProvider)
-            .put(
-              StorageKeys.settingsInput,
-              _inputSettingsStateToStorage(value),
-            ),
+        () => ref.read(appStorageProvider).write(_inputSettingsKey, value),
       ),
       message: 'Persist input settings',
       logger: 'input_settings',
@@ -636,133 +551,3 @@ final inputSettingsProvider =
     NotifierProvider<InputSettingsController, InputSettingsState>(
       InputSettingsController.new,
     );
-
-Map<String, Object?> _inputSettingsStateToStorage(InputSettingsState state) {
-  final ports = <String, Map<String, Object?>>{};
-  state.ports.forEach((index, settings) {
-    ports[index.toString()] = _inputSettingsToStorage(settings);
-  });
-
-  return <String, Object?>{'ports': ports, 'selectedPort': state.selectedPort};
-}
-
-Map<String, Object?> _inputSettingsToStorage(InputSettings value) {
-  int? keyId(LogicalKeyboardKey? key) => key?.keyId;
-
-  return <String, Object?>{
-    'device': value.device.name,
-    'keyboardPreset': value.keyboardPreset.name,
-    'customUp': keyId(value.customUp),
-    'customDown': keyId(value.customDown),
-    'customLeft': keyId(value.customLeft),
-    'customRight': keyId(value.customRight),
-    'customA': keyId(value.customA),
-    'customB': keyId(value.customB),
-    'customSelect': keyId(value.customSelect),
-    'customStart': keyId(value.customStart),
-    'customTurboA': keyId(value.customTurboA),
-    'customTurboB': keyId(value.customTurboB),
-    'customRewind': keyId(value.customRewind),
-    'customFastForward': keyId(value.customFastForward),
-    'customSaveState': keyId(value.customSaveState),
-    'customLoadState': keyId(value.customLoadState),
-    'customPause': keyId(value.customPause),
-  };
-}
-
-InputSettingsState? _inputSettingsStateFromStorage(
-  Object? value, {
-  required InputSettingsState defaults,
-}) {
-  if (value is! Map) return null;
-  final map = value.cast<String, Object?>();
-
-  final rawPorts = map['ports'];
-  final ports = Map<int, InputSettings>.from(defaults.ports);
-
-  if (rawPorts is Map) {
-    rawPorts.forEach((key, val) {
-      final index = int.tryParse(key.toString());
-      if (index != null && index >= 0 && index < 4) {
-        final settings = _inputSettingsFromStorage(
-          val,
-          defaults: defaults.ports[index]!,
-        );
-        if (settings != null) {
-          ports[index] = settings;
-        }
-      }
-    });
-  } else {
-    // Migration: if 'ports' doesn't exist, maybe it's the old format
-    final legacySettings = _inputSettingsFromStorage(
-      value,
-      defaults: defaults.ports[0]!,
-    );
-    if (legacySettings != null) {
-      ports[0] = legacySettings;
-    }
-  }
-
-  return defaults.copyWith(
-    ports: ports,
-    selectedPort: map['selectedPort'] as int? ?? defaults.selectedPort,
-  );
-}
-
-InputSettings? _inputSettingsFromStorage(
-  Object? value, {
-  required InputSettings defaults,
-}) {
-  if (value is! Map) return null;
-  final map = value.cast<String, Object?>();
-
-  T byNameOr<T extends Enum>(List<T> values, Object? raw, T fallback) {
-    if (raw is String) {
-      try {
-        return values.byName(raw);
-      } catch (e, st) {
-        logWarning(
-          e,
-          stackTrace: st,
-          message: 'Failed to lookup enum $T by name: $raw',
-          logger: 'input_settings',
-        );
-      }
-    }
-    return fallback;
-  }
-
-  LogicalKeyboardKey? key(Object? raw, LogicalKeyboardKey? fallback) {
-    if (raw == null) return null;
-    if (raw is num) return LogicalKeyboardKey(raw.toInt());
-    return fallback;
-  }
-
-  return defaults.copyWith(
-    device: byNameOr(InputDevice.values, map['device'], defaults.device),
-    keyboardPreset: byNameOr(
-      KeyboardPreset.values,
-      map['keyboardPreset'],
-      defaults.keyboardPreset,
-    ),
-    customUp: key(map['customUp'], defaults.customUp),
-    customDown: key(map['customDown'], defaults.customDown),
-    customLeft: key(map['customLeft'], defaults.customLeft),
-    customRight: key(map['customRight'], defaults.customRight),
-    customA: key(map['customA'], defaults.customA),
-    customB: key(map['customB'], defaults.customB),
-    customSelect: key(map['customSelect'], defaults.customSelect),
-    customStart: key(map['customStart'], defaults.customStart),
-    customTurboA: key(map['customTurboA'], defaults.customTurboA),
-    customTurboB: key(map['customTurboB'], defaults.customTurboB),
-    customRewind: key(map['customRewind'], defaults.customRewind),
-    customFastForward: key(
-      map['customFastForward'],
-      defaults.customFastForward,
-    ),
-    customSaveState: key(map['customSaveState'], defaults.customSaveState),
-    customLoadState: key(map['customLoadState'], defaults.customLoadState),
-    customPause: key(map['customPause'], defaults.customPause),
-  );
-}

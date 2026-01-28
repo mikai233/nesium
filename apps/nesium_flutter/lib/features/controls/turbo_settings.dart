@@ -6,6 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../platform/nes_input.dart' as nes_input;
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
+import '../../logging/app_logger.dart';
+
+final StorageKey<JsonMap> _turboSettingsKey = StorageKey(
+  StorageKeys.settingsTurbo,
+  jsonMapStringCodec(storageKey: StorageKeys.settingsTurbo),
+);
 
 @immutable
 class TurboSettings {
@@ -38,7 +46,7 @@ class TurboSettingsController extends Notifier<TurboSettings> {
   TurboSettings build() {
     final defaults = TurboSettings.defaults;
     final loaded = _turboFromStorage(
-      ref.read(appStorageProvider).get(StorageKeys.settingsTurbo),
+      ref.read(appStorageProvider).read(_turboSettingsKey),
       defaults: defaults,
     );
     final settings = loaded ?? defaults;
@@ -62,9 +70,10 @@ class TurboSettingsController extends Notifier<TurboSettings> {
     if (next == state.onFrames) return;
     state = state.copyWith(
       onFrames: next,
-      offFrames: state.linked ? next : null,
+      offFrames: state.linked ? next : state.offFrames,
     );
-    _persistAndApply(state);
+    _persist(state);
+    applyToRuntime();
   }
 
   void setOffFrames(int value) {
@@ -72,9 +81,10 @@ class TurboSettingsController extends Notifier<TurboSettings> {
     if (next == state.offFrames) return;
     state = state.copyWith(
       offFrames: next,
-      onFrames: state.linked ? next : null,
+      onFrames: state.linked ? next : state.onFrames,
     );
-    _persistAndApply(state);
+    _persist(state);
+    applyToRuntime();
   }
 
   void setLinked(bool value) {
@@ -83,23 +93,18 @@ class TurboSettingsController extends Notifier<TurboSettings> {
     if (value) {
       state = state.copyWith(offFrames: state.onFrames);
     }
-    _persistAndApply(state);
+    _persist(state);
+    applyToRuntime();
   }
 
-  void _persistAndApply(TurboSettings value) {
-    unawaited(
-      Future.wait([
-        ref
-            .read(appStorageProvider)
-            .put(StorageKeys.settingsTurbo, _turboToStorage(value))
-            .catchError((_) {}),
-        nes_input
-            .setTurboTiming(
-              onFrames: value.onFrames,
-              offFrames: value.offFrames,
-            )
-            .catchError((_) {}),
-      ]),
+  void _persist(TurboSettings value) {
+    final payload = Map<String, dynamic>.from(_turboToStorage(value));
+    unawaitedLogged(
+      Future<void>.sync(
+        () => ref.read(appStorageProvider).write(_turboSettingsKey, payload),
+      ),
+      message: 'Persist turbo settings',
+      logger: 'turbo_settings',
     );
   }
 }
@@ -116,11 +121,10 @@ Map<String, Object?> _turboToStorage(TurboSettings value) => <String, Object?>{
 };
 
 TurboSettings? _turboFromStorage(
-  Object? value, {
+  Map<String, dynamic>? map, {
   required TurboSettings defaults,
 }) {
-  if (value is! Map) return null;
-  final map = value.cast<String, Object?>();
+  if (map == null) return null;
 
   int i(Object? v, int fallback) => v is num ? v.toInt() : fallback;
   bool b(Object? v, bool fallback) => v is bool ? v : fallback;

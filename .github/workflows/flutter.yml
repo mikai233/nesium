@@ -48,6 +48,9 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
+      - name: Generate shaders.zip
+        run: dart tool/package_shaders.dart
+
       - name: Format (check)
         run: dart format --output=none --set-exit-if-changed lib test
 

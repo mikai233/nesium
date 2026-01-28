@@ -2,97 +2,81 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../platform/nes_emulation.dart' as nes_emulation;
 import '../../logging/app_logger.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
 
-@immutable
-class EmulationSettings {
-  const EmulationSettings({
-    required this.integerFpsMode,
-    required this.pauseInBackground,
-    required this.autoSaveEnabled,
-    required this.autoSaveIntervalInMinutes,
-    required this.quickSaveSlot,
-    required this.fastForwardSpeedPercent,
-    required this.rewindEnabled,
-    required this.rewindSeconds,
-    required this.rewindSpeedPercent,
-    required this.showEmulationStatusOverlay,
-  });
+part 'emulation_settings.freezed.dart';
+part 'emulation_settings.g.dart';
 
-  final bool integerFpsMode;
-  final bool pauseInBackground;
-  final bool autoSaveEnabled;
-  final int autoSaveIntervalInMinutes;
-  final int quickSaveSlot;
-  final int fastForwardSpeedPercent;
-  final bool rewindEnabled;
-  final int rewindSeconds;
-  final int rewindSpeedPercent;
-  final bool showEmulationStatusOverlay;
+final StorageKey<JsonMap> _emulationSettingsKey = StorageKey(
+  StorageKeys.settingsEmulation,
+  jsonMapStringCodec(storageKey: StorageKeys.settingsEmulation),
+);
 
-  EmulationSettings copyWith({
-    bool? integerFpsMode,
-    bool? pauseInBackground,
-    bool? autoSaveEnabled,
-    int? autoSaveIntervalInMinutes,
-    int? quickSaveSlot,
-    int? fastForwardSpeedPercent,
-    bool? rewindEnabled,
-    int? rewindSeconds,
-    int? rewindSpeedPercent,
-    bool? showEmulationStatusOverlay,
-  }) {
-    return EmulationSettings(
-      integerFpsMode: integerFpsMode ?? this.integerFpsMode,
-      pauseInBackground: pauseInBackground ?? this.pauseInBackground,
-      autoSaveEnabled: autoSaveEnabled ?? this.autoSaveEnabled,
-      autoSaveIntervalInMinutes:
-          autoSaveIntervalInMinutes ?? this.autoSaveIntervalInMinutes,
-      quickSaveSlot: quickSaveSlot ?? this.quickSaveSlot,
-      fastForwardSpeedPercent:
-          fastForwardSpeedPercent ?? this.fastForwardSpeedPercent,
-      rewindEnabled: rewindEnabled ?? this.rewindEnabled,
-      rewindSeconds: rewindSeconds ?? this.rewindSeconds,
-      rewindSpeedPercent: rewindSpeedPercent ?? this.rewindSpeedPercent,
-      showEmulationStatusOverlay:
-          showEmulationStatusOverlay ?? this.showEmulationStatusOverlay,
-    );
-  }
+@freezed
+sealed class EmulationSettings with _$EmulationSettings {
+  const EmulationSettings._();
 
-  static EmulationSettings defaults() {
-    return EmulationSettings(
-      integerFpsMode: false,
-      pauseInBackground: isNativeMobile,
-      autoSaveEnabled: true,
-      autoSaveIntervalInMinutes: 1,
-      quickSaveSlot: 1,
-      fastForwardSpeedPercent: 300,
-      rewindEnabled: true,
-      rewindSeconds: 60,
-      rewindSpeedPercent: 100,
-      showEmulationStatusOverlay: true,
-    );
-  }
+  const factory EmulationSettings({
+    @Default(false) bool integerFpsMode,
+    @Default(false) bool pauseInBackground,
+    @Default(true) bool autoSaveEnabled,
+    @Default(1) int autoSaveIntervalInMinutes,
+    @Default(1) int quickSaveSlot,
+    @Default(300) int fastForwardSpeedPercent,
+    @Default(true) bool rewindEnabled,
+    @Default(60) int rewindSeconds,
+    @Default(100) int rewindSpeedPercent,
+    @Default(true) bool showEmulationStatusOverlay,
+  }) = _EmulationSettings;
+
+  factory EmulationSettings.defaults() =>
+      EmulationSettings(pauseInBackground: isNativeMobile);
+
+  factory EmulationSettings.fromJson(Map<String, dynamic> json) =>
+      _$EmulationSettingsFromJson(json);
 }
 
 class EmulationSettingsController extends Notifier<EmulationSettings> {
   @override
   EmulationSettings build() {
     final defaults = EmulationSettings.defaults();
-    final loaded = _emulationSettingsFromStorage(
-      ref.read(appStorageProvider).get(StorageKeys.settingsEmulation),
-      defaults: defaults,
-    );
-    final settings = loaded ?? defaults;
+    final settings = _loadSettingsFromStorage(defaults: defaults) ?? defaults;
     scheduleMicrotask(() {
       applyToRuntime();
     });
     return settings;
+  }
+
+  EmulationSettings? _loadSettingsFromStorage({
+    required EmulationSettings defaults,
+  }) {
+    final map = ref.read(appStorageProvider).read(_emulationSettingsKey);
+    if (map == null) return null;
+    try {
+      var settings = EmulationSettings.fromJson(map);
+      if (!map.containsKey('pauseInBackground')) {
+        settings = settings.copyWith(
+          pauseInBackground: defaults.pauseInBackground,
+        );
+      }
+      return settings;
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to load emulation settings',
+        logger: 'emulation_settings',
+      );
+      return null;
+    }
   }
 
   void applyToRuntime() {
@@ -214,10 +198,7 @@ class EmulationSettingsController extends Notifier<EmulationSettings> {
       Future<void>.sync(
         () => ref
             .read(appStorageProvider)
-            .put(
-              StorageKeys.settingsEmulation,
-              _emulationSettingsToStorage(value),
-            ),
+            .write(_emulationSettingsKey, value.toJson()),
       ),
       message: 'Persist emulation settings',
       logger: 'emulation_settings',
@@ -229,70 +210,3 @@ final emulationSettingsProvider =
     NotifierProvider<EmulationSettingsController, EmulationSettings>(
       EmulationSettingsController.new,
     );
-
-Map<String, Object?> _emulationSettingsToStorage(EmulationSettings value) =>
-    <String, Object?>{
-      'integerFpsMode': value.integerFpsMode,
-      'pauseInBackground': value.pauseInBackground,
-      'autoSaveEnabled': value.autoSaveEnabled,
-      'autoSaveIntervalInMinutes': value.autoSaveIntervalInMinutes,
-      'quickSaveSlot': value.quickSaveSlot,
-      'fastForwardSpeedPercent': value.fastForwardSpeedPercent,
-      'rewindEnabled': value.rewindEnabled,
-      'rewindSeconds': value.rewindSeconds,
-      'rewindSpeedPercent': value.rewindSpeedPercent,
-      'showEmulationStatusOverlay': value.showEmulationStatusOverlay,
-    };
-
-EmulationSettings? _emulationSettingsFromStorage(
-  Object? value, {
-  required EmulationSettings defaults,
-}) {
-  if (value is! Map) return null;
-  final map = value.cast<String, Object?>();
-  final integerFpsMode = map['integerFpsMode'] is bool
-      ? map['integerFpsMode'] as bool
-      : null;
-  final pauseInBackground = map['pauseInBackground'] is bool
-      ? map['pauseInBackground'] as bool
-      : null;
-  final autoSaveEnabled = map['autoSaveEnabled'] is bool
-      ? map['autoSaveEnabled'] as bool
-      : null;
-  final autoSaveIntervalInMinutes = map['autoSaveIntervalInMinutes'] is int
-      ? map['autoSaveIntervalInMinutes'] as int
-      : null;
-  final quickSaveSlot = map['quickSaveSlot'] is int
-      ? map['quickSaveSlot'] as int
-      : null;
-  final fastForwardSpeedPercent = map['fastForwardSpeedPercent'] is int
-      ? map['fastForwardSpeedPercent'] as int
-      : null;
-  final rewindEnabled = map['rewindEnabled'] is bool
-      ? map['rewindEnabled'] as bool
-      : null;
-  final rewindSeconds = map['rewindSeconds'] is int
-      ? map['rewindSeconds'] as int
-      : null;
-  final rewindSpeedPercent = map['rewindSpeedPercent'] is int
-      ? map['rewindSpeedPercent'] as int
-      : null;
-  final showEmulationStatusOverlay = map['showEmulationStatusOverlay'] is bool
-      ? map['showEmulationStatusOverlay'] as bool
-      : null;
-  return defaults.copyWith(
-    integerFpsMode: integerFpsMode ?? defaults.integerFpsMode,
-    pauseInBackground: pauseInBackground ?? defaults.pauseInBackground,
-    autoSaveEnabled: autoSaveEnabled ?? defaults.autoSaveEnabled,
-    autoSaveIntervalInMinutes:
-        autoSaveIntervalInMinutes ?? defaults.autoSaveIntervalInMinutes,
-    quickSaveSlot: quickSaveSlot ?? defaults.quickSaveSlot,
-    fastForwardSpeedPercent:
-        fastForwardSpeedPercent ?? defaults.fastForwardSpeedPercent,
-    rewindEnabled: rewindEnabled ?? defaults.rewindEnabled,
-    rewindSeconds: rewindSeconds ?? defaults.rewindSeconds,
-    rewindSpeedPercent: rewindSpeedPercent ?? defaults.rewindSpeedPercent,
-    showEmulationStatusOverlay:
-        showEmulationStatusOverlay ?? defaults.showEmulationStatusOverlay,
-  );
-}

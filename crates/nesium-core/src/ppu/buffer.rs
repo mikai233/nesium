@@ -7,13 +7,15 @@
 use crate::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH, palette::Color};
 use core::{ffi::c_void, fmt};
 use std::{
-    ptr::NonNull,
     slice,
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicPtr, AtomicUsize, Ordering},
     },
 };
+
+mod post_process;
+pub use post_process::{NearestPostProcessor, VideoPostProcessor};
 
 pub const SCREEN_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
@@ -45,12 +47,12 @@ impl fmt::Debug for FrameReadyHook {
 
 impl FrameReadyHook {
     #[inline]
-    fn call(&self, buffer_index: usize, pitch: usize) {
+    fn call(&self, buffer_index: usize, width: usize, height: usize, pitch: usize) {
         debug_assert!(buffer_index < 2);
         (self.cb)(
             buffer_index as u32,
-            SCREEN_WIDTH as u32,
-            SCREEN_HEIGHT as u32,
+            width as u32,
+            height as u32,
             pitch as u32,
             self.user_data,
         );
@@ -99,16 +101,23 @@ pub struct FrameBuffer {
     storage: FrameBufferStorage,
     /// Format used for packed pixel derivation.
     color_format: ColorFormat,
+    /// Output packed buffer width in pixels.
+    output_width: usize,
+    /// Output packed buffer height in pixels.
+    output_height: usize,
+    /// Packed output post-processor (scaler/filter chain).
+    post_processor: Box<dyn VideoPostProcessor>,
     frame_ready_hook: Option<FrameReadyHook>,
 }
 
 /// Backing storage for the derived packed pixel planes.
 #[derive(Debug)]
 enum FrameBufferStorage {
-    /// Internal double-buffered packed pixels.
-    Owned([Box<[u8]>; 2]),
-    /// Externally owned double buffers shared with the frontend.
-    External(Arc<ExternalFrameHandle>),
+    /// Internal double-buffered packed pixels + a shared handle for frontend copies.
+    Owned {
+        planes: [Box<[u8]>; 2],
+        handle: Arc<ExternalFrameHandle>,
+    },
     /// Swapchain-backed framebuffer where the core obtains writable planes via callbacks.
     Swapchain(SwapchainFrameBuffer),
 }
@@ -116,8 +125,28 @@ enum FrameBufferStorage {
 impl Clone for FrameBufferStorage {
     fn clone(&self) -> Self {
         match self {
-            Self::Owned(planes) => Self::Owned([planes[0].clone(), planes[1].clone()]),
-            Self::External(handle) => Self::External(Arc::clone(handle)),
+            Self::Owned { planes, handle } => {
+                let width = handle.width();
+                let height = handle.height();
+                let pitch_bytes = handle.pitch_bytes();
+                let front_index = handle.front_index();
+                let new_planes = [planes[0].clone(), planes[1].clone()];
+                let p0 = new_planes[0].as_ptr() as *mut u8;
+                let p1 = new_planes[1].as_ptr() as *mut u8;
+                let new_handle = Arc::new(ExternalFrameHandle::new(
+                    handle.color_format(),
+                    width,
+                    height,
+                    pitch_bytes,
+                    p0,
+                    p1,
+                    front_index,
+                ));
+                Self::Owned {
+                    planes: new_planes,
+                    handle: new_handle,
+                }
+            }
             Self::Swapchain(_) => {
                 panic!("cloning a swapchain-backed FrameBuffer is not supported")
             }
@@ -132,6 +161,9 @@ impl Clone for FrameBuffer {
             index_planes: [self.index_planes[0].clone(), self.index_planes[1].clone()],
             storage: self.storage.clone(),
             color_format: self.color_format,
+            output_width: self.output_width,
+            output_height: self.output_height,
+            post_processor: dyn_clone::clone_box(&*self.post_processor),
             frame_ready_hook: self.frame_ready_hook,
         }
     }
@@ -140,9 +172,11 @@ impl Clone for FrameBuffer {
 /// Shared external framebuffer planes + published front index.
 #[derive(Debug)]
 pub struct ExternalFrameHandle {
-    planes: [NonNull<u8>; 2],
-    len: usize,
-    pitch_bytes: usize,
+    planes: [AtomicPtr<u8>; 2],
+    len: AtomicUsize,
+    pitch_bytes: AtomicUsize,
+    width: AtomicUsize,
+    height: AtomicUsize,
     color_format: ColorFormat,
     front_index: AtomicUsize,
     frame_seq: AtomicUsize,
@@ -153,14 +187,25 @@ unsafe impl Send for ExternalFrameHandle {}
 unsafe impl Sync for ExternalFrameHandle {}
 
 impl ExternalFrameHandle {
+    const RESIZING: usize = 2;
     #[inline]
     pub fn len(&self) -> usize {
-        self.len
+        self.len.load(Ordering::Acquire)
     }
 
     #[inline]
     pub fn pitch_bytes(&self) -> usize {
-        self.pitch_bytes
+        self.pitch_bytes.load(Ordering::Acquire)
+    }
+
+    #[inline]
+    pub fn width(&self) -> usize {
+        self.width.load(Ordering::Acquire)
+    }
+
+    #[inline]
+    pub fn height(&self) -> usize {
+        self.height.load(Ordering::Acquire)
     }
 
     #[inline]
@@ -175,7 +220,13 @@ impl ExternalFrameHandle {
 
     #[inline]
     pub fn front_index(&self) -> usize {
-        self.front_index.load(Ordering::Acquire)
+        loop {
+            let idx = self.front_index.load(Ordering::Acquire);
+            if idx < 2 {
+                return idx;
+            }
+            std::hint::spin_loop();
+        }
     }
 
     #[inline]
@@ -187,7 +238,7 @@ impl ExternalFrameHandle {
     #[inline]
     pub fn front_slice(&self) -> &[u8] {
         let idx = self.front_index();
-        unsafe { slice::from_raw_parts(self.planes[idx].as_ptr(), self.len) }
+        self.plane_slice(idx)
     }
 
     /// Publish `index` as the new **front** plane.
@@ -201,23 +252,35 @@ impl ExternalFrameHandle {
     #[inline]
     pub fn plane_slice(&self, index: usize) -> &[u8] {
         debug_assert!(index < 2);
-        unsafe { slice::from_raw_parts(self.planes[index].as_ptr(), self.len) }
+        let len = self.len();
+        if len == 0 {
+            return &[];
+        }
+        let ptr = self.planes[index].load(Ordering::Acquire);
+        if ptr.is_null() {
+            return &[];
+        }
+        unsafe { slice::from_raw_parts(ptr, len) }
     }
 
     #[inline]
     fn plane_ptr_mut(&self, index: usize) -> *mut u8 {
         debug_assert!(index < 2);
-        self.planes[index].as_ptr()
+        self.planes[index].load(Ordering::Acquire)
     }
 
-    const NOT_READING: usize = 2;
+    const NOT_READING: usize = 3;
 
     #[inline]
     pub fn begin_front_copy(&self) -> usize {
         loop {
-            let idx = self.front_index();
+            let idx = self.front_index.load(Ordering::Acquire);
+            if idx >= 2 {
+                std::hint::spin_loop();
+                continue;
+            }
             self.reading_plane.store(idx, Ordering::Release);
-            if self.front_index() == idx {
+            if self.front_index.load(Ordering::Acquire) == idx {
                 return idx;
             }
             self.reading_plane
@@ -241,6 +304,78 @@ impl ExternalFrameHandle {
                 spins = 0;
                 std::thread::yield_now();
             }
+        }
+    }
+
+    fn begin_resize(&self) {
+        self.front_index.store(Self::RESIZING, Ordering::Release);
+    }
+
+    fn end_resize(&self, front_index: usize) {
+        debug_assert!(front_index < 2);
+        self.front_index.store(front_index, Ordering::Release);
+        self.frame_seq.fetch_add(1, Ordering::Release);
+    }
+
+    fn wait_until_not_reading_any(&self) {
+        let mut spins = 0u32;
+        while self.reading_plane.load(Ordering::Acquire) != Self::NOT_READING {
+            std::hint::spin_loop();
+            spins += 1;
+            if spins >= 128 {
+                spins = 0;
+                std::thread::yield_now();
+            }
+        }
+    }
+
+    fn update_buffers(
+        &self,
+        plane0: *mut u8,
+        plane1: *mut u8,
+        width: usize,
+        height: usize,
+        front_index: usize,
+    ) {
+        debug_assert!(front_index < 2);
+        let pitch_bytes = width * self.bytes_per_pixel();
+        let len = pitch_bytes * height;
+
+        self.begin_resize();
+        self.wait_until_not_reading_any();
+
+        self.len.store(0, Ordering::Release);
+        self.width.store(width, Ordering::Release);
+        self.height.store(height, Ordering::Release);
+        self.pitch_bytes.store(pitch_bytes, Ordering::Release);
+        self.planes[0].store(plane0, Ordering::Release);
+        self.planes[1].store(plane1, Ordering::Release);
+        self.len.store(len, Ordering::Release);
+
+        self.end_resize(front_index);
+    }
+
+    fn new(
+        color_format: ColorFormat,
+        width: usize,
+        height: usize,
+        pitch_bytes: usize,
+        plane0: *mut u8,
+        plane1: *mut u8,
+        front_index: usize,
+    ) -> Self {
+        debug_assert!(front_index < 2);
+        let len = pitch_bytes * height;
+        Self {
+            planes: [AtomicPtr::new(plane0), AtomicPtr::new(plane1)],
+            len: AtomicUsize::new(len),
+            pitch_bytes: AtomicUsize::new(pitch_bytes),
+            width: AtomicUsize::new(width),
+            height: AtomicUsize::new(height),
+            color_format,
+            front_index: AtomicUsize::new(front_index),
+            frame_seq: AtomicUsize::new(0),
+            reading_plane: AtomicUsize::new(Self::NOT_READING),
         }
     }
 }
@@ -321,55 +456,43 @@ impl SwapchainFrameBuffer {
 impl FrameBuffer {
     /// Creates a new `FrameBuffer` with internal storage.
     pub fn new(color_format: ColorFormat) -> Self {
-        let len = SCREEN_WIDTH * SCREEN_HEIGHT * color_format.bytes_per_pixel();
+        let bpp = color_format.bytes_per_pixel();
+        let output_width = SCREEN_WIDTH;
+        let output_height = SCREEN_HEIGHT;
+        let pitch_bytes = output_width * bpp;
+        let len = pitch_bytes * output_height;
+        let active_index = 0usize;
+        let front_index = 1 - active_index;
+
+        let planes = [
+            vec![0; len].into_boxed_slice(),
+            vec![0; len].into_boxed_slice(),
+        ];
+        let p0 = planes[0].as_ptr() as *mut u8;
+        let p1 = planes[1].as_ptr() as *mut u8;
+        let handle = Arc::new(ExternalFrameHandle::new(
+            color_format,
+            output_width,
+            output_height,
+            pitch_bytes,
+            p0,
+            p1,
+            front_index,
+        ));
+
         Self {
-            active_index: 0,
+            active_index,
             index_planes: [
                 vec![0u8; SCREEN_SIZE].into_boxed_slice(),
                 vec![0u8; SCREEN_SIZE].into_boxed_slice(),
             ],
-            storage: FrameBufferStorage::Owned([
-                vec![0; len].into_boxed_slice(),
-                vec![0; len].into_boxed_slice(),
-            ]),
+            storage: FrameBufferStorage::Owned { planes, handle },
             color_format,
+            output_width,
+            output_height,
+            post_processor: Box::new(NearestPostProcessor::default()),
             frame_ready_hook: None,
         }
-    }
-
-    /// Creates a new framebuffer backed by externally provided double buffers.
-    pub unsafe fn new_external(
-        color_format: ColorFormat,
-        pitch_bytes: usize,
-        plane0: *mut u8,
-        plane1: *mut u8,
-    ) -> (Self, Arc<ExternalFrameHandle>) {
-        let bpp = color_format.bytes_per_pixel();
-        assert!(pitch_bytes >= SCREEN_WIDTH * bpp);
-        let len = pitch_bytes * SCREEN_HEIGHT;
-
-        let handle = Arc::new(ExternalFrameHandle {
-            planes: [NonNull::new(plane0).unwrap(), NonNull::new(plane1).unwrap()],
-            len,
-            pitch_bytes,
-            color_format,
-            front_index: AtomicUsize::new(0),
-            frame_seq: AtomicUsize::new(0),
-            reading_plane: AtomicUsize::new(ExternalFrameHandle::NOT_READING),
-        });
-
-        let fb = Self {
-            active_index: 1,
-            index_planes: [
-                vec![0u8; SCREEN_SIZE].into_boxed_slice(),
-                vec![0u8; SCREEN_SIZE].into_boxed_slice(),
-            ],
-            storage: FrameBufferStorage::External(Arc::clone(&handle)),
-            color_format,
-            frame_ready_hook: None,
-        };
-
-        (fb, handle)
     }
 
     /// Creates a new swapchain-backed framebuffer.
@@ -389,6 +512,9 @@ impl FrameBuffer {
                 lock, unlock, user_data,
             )),
             color_format,
+            output_width: SCREEN_WIDTH,
+            output_height: SCREEN_HEIGHT,
+            post_processor: Box::new(NearestPostProcessor::default()),
             frame_ready_hook: None,
         }
     }
@@ -400,39 +526,60 @@ impl FrameBuffer {
         let finished_back = self.active_index;
         let format = self.color_format;
         let indices = &self.index_planes[finished_back];
+        let out_w = self.output_width;
+        let out_h = self.output_height;
+        let row_bytes = out_w * format.bytes_per_pixel();
 
-        let (dst_ptr, dst_pitch) = match &mut self.storage {
-            FrameBufferStorage::Owned(planes) => (
-                planes[finished_back].as_mut_ptr(),
-                SCREEN_WIDTH * format.bytes_per_pixel(),
-            ),
-            FrameBufferStorage::External(handle) => {
-                (handle.plane_ptr_mut(finished_back), handle.pitch_bytes())
-            }
-            FrameBufferStorage::Swapchain(s) => s.lock(finished_back),
+        let dst_pitch = match &mut self.storage {
+            FrameBufferStorage::Owned { .. } => row_bytes,
+            FrameBufferStorage::Swapchain(s) => s.lock(finished_back).1,
         };
 
+        if dst_pitch < row_bytes {
+            if let FrameBufferStorage::Swapchain(s) = &mut self.storage {
+                s.unlock(finished_back);
+            }
+            return;
+        }
+
         // Convert indices to packed pixels for the entire frame.
-        unsafe {
-            for y in 0..SCREEN_HEIGHT {
-                let row_indices = &indices[y * SCREEN_WIDTH..(y + 1) * SCREEN_WIDTH];
-                let row_dst = dst_ptr.add(y * dst_pitch);
-                pack_line(row_indices, row_dst, format, palette);
+        match &mut self.storage {
+            FrameBufferStorage::Owned { planes, .. } => {
+                self.post_processor.process(
+                    indices,
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    palette,
+                    &mut planes[finished_back],
+                    dst_pitch,
+                    out_w,
+                    out_h,
+                    format,
+                );
+            }
+            FrameBufferStorage::Swapchain(s) => {
+                let (ptr, pitch) = s.lock(finished_back);
+                let dst = unsafe { slice::from_raw_parts_mut(ptr, pitch * out_h) };
+                self.post_processor.process(
+                    indices,
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    palette,
+                    dst,
+                    pitch,
+                    out_w,
+                    out_h,
+                    format,
+                );
             }
         }
 
         // Handle presentation and index plane flipping.
         match &mut self.storage {
-            FrameBufferStorage::Owned(_) => {
-                if let Some(hook) = self.frame_ready_hook {
-                    hook.call(finished_back, dst_pitch);
-                }
-                self.active_index = 1 - self.active_index;
-            }
-            FrameBufferStorage::External(handle) => {
+            FrameBufferStorage::Owned { handle, .. } => {
                 handle.present(finished_back);
                 if let Some(hook) = self.frame_ready_hook {
-                    hook.call(finished_back, dst_pitch);
+                    hook.call(finished_back, out_w, out_h, dst_pitch);
                 }
                 self.active_index = 1 - self.active_index;
                 handle.wait_until_not_reading(self.active_index);
@@ -440,7 +587,7 @@ impl FrameBuffer {
             FrameBufferStorage::Swapchain(s) => {
                 s.unlock(finished_back);
                 if let Some(hook) = self.frame_ready_hook {
-                    hook.call(finished_back, dst_pitch);
+                    hook.call(finished_back, out_w, out_h, dst_pitch);
                 }
                 self.active_index = 1 - self.active_index;
             }
@@ -457,31 +604,59 @@ impl FrameBuffer {
         let front_idx = 1 - self.active_index;
         let indices = &self.index_planes[front_idx];
         let format = self.color_format;
+        let out_w = self.output_width;
+        let out_h = self.output_height;
+        let row_bytes = out_w * format.bytes_per_pixel();
 
-        let (dst_ptr, dst_pitch) = match &mut self.storage {
-            FrameBufferStorage::Owned(planes) => (
-                planes[front_idx].as_mut_ptr(),
-                SCREEN_WIDTH * format.bytes_per_pixel(),
-            ),
-            FrameBufferStorage::External(handle) => {
+        let dst_pitch = match &mut self.storage {
+            FrameBufferStorage::Owned { planes: _, handle } => {
                 // Avoid writing into a plane while the frontend is copying it.
                 handle.wait_until_not_reading(front_idx);
-                (handle.plane_ptr_mut(front_idx), handle.pitch_bytes())
+                row_bytes
             }
-            FrameBufferStorage::Swapchain(s) => s.lock(front_idx),
+            FrameBufferStorage::Swapchain(s) => s.lock(front_idx).1,
         };
 
-        unsafe {
-            for y in 0..SCREEN_HEIGHT {
-                let row_indices = &indices[y * SCREEN_WIDTH..(y + 1) * SCREEN_WIDTH];
-                let row_dst = dst_ptr.add(y * dst_pitch);
-                pack_line(row_indices, row_dst, format, palette);
+        if dst_pitch < row_bytes {
+            if let FrameBufferStorage::Swapchain(s) = &mut self.storage {
+                s.unlock(front_idx);
+            }
+            return;
+        }
+
+        match &mut self.storage {
+            FrameBufferStorage::Owned { planes, .. } => {
+                self.post_processor.process(
+                    indices,
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    palette,
+                    &mut planes[front_idx],
+                    dst_pitch,
+                    out_w,
+                    out_h,
+                    format,
+                );
+            }
+            FrameBufferStorage::Swapchain(s) => {
+                let (ptr, pitch) = s.lock(front_idx);
+                let dst = unsafe { slice::from_raw_parts_mut(ptr, pitch * out_h) };
+                self.post_processor.process(
+                    indices,
+                    SCREEN_WIDTH,
+                    SCREEN_HEIGHT,
+                    palette,
+                    dst,
+                    pitch,
+                    out_w,
+                    out_h,
+                    format,
+                );
+                s.unlock(front_idx);
             }
         }
 
-        if let FrameBufferStorage::Swapchain(s) = &mut self.storage {
-            s.unlock(front_idx);
-        }
+        // Owned storage does not need explicit unlock.
     }
 
     /// Writes a single pixel at `(x, y)` using a palette index.
@@ -493,20 +668,14 @@ impl FrameBuffer {
     /// Returns the current front packed pixel plane.
     ///
     /// For `Owned` storage, this slice is tightly packed and has length
-    /// `SCREEN_WIDTH * SCREEN_HEIGHT * bytes_per_pixel`.
-    ///
-    /// For `External` storage, the returned slice covers the full backing plane and
-    /// therefore includes any per-row padding. Its length is `pitch_bytes * SCREEN_HEIGHT`.
-    /// Use [`pitch`](Self::pitch) to interpret the stride, or use
-    /// [`copy_render_buffer`](Self::copy_render_buffer) to obtain a tightly packed copy.
+    /// `output_width * output_height * bytes_per_pixel`.
     ///
     /// For `Swapchain` storage, direct access is not supported because writable/readable
     /// pointers are only valid while the plane is locked.
     pub fn render(&self) -> &[u8] {
         let front_idx = 1 - self.active_index;
         match &self.storage {
-            FrameBufferStorage::Owned(planes) => &planes[front_idx],
-            FrameBufferStorage::External(handle) => handle.plane_slice(front_idx),
+            FrameBufferStorage::Owned { planes, .. } => &planes[front_idx],
             FrameBufferStorage::Swapchain(_) => {
                 panic!("Direct plane access not supported for Swapchain. Use copy_render_buffer.")
             }
@@ -535,40 +704,29 @@ impl FrameBuffer {
     /// Copies the current front packed pixel buffer into `dst`.
     ///
     /// This method always writes a tightly packed image, with no per-row padding.
-    /// The required length is `SCREEN_WIDTH * SCREEN_HEIGHT * bytes_per_pixel`.
+    /// The required length is `output_width * output_height * bytes_per_pixel`.
     ///
     /// For backends that expose a padded stride (pitch), this method copies each
     /// scanline while skipping the padding bytes.
     pub fn copy_render_buffer(&mut self, dst: &mut [u8]) {
         let front_idx = 1 - self.active_index;
         let bpp = self.color_format.bytes_per_pixel();
-        let row_len = SCREEN_WIDTH * bpp;
-        let expected = row_len * SCREEN_HEIGHT;
+        let row_len = self.output_width * bpp;
+        let expected = row_len * self.output_height;
         assert!(
             dst.len() == expected,
-            "dst must be SCREEN_WIDTH * SCREEN_HEIGHT * bytes_per_pixel bytes"
+            "dst must be output_width * output_height * bytes_per_pixel bytes"
         );
 
         match &mut self.storage {
-            FrameBufferStorage::Owned(planes) => {
+            FrameBufferStorage::Owned { planes, .. } => {
                 dst.copy_from_slice(&planes[front_idx]);
-            }
-            FrameBufferStorage::External(handle) => {
-                let src = handle.plane_slice(front_idx);
-                let pitch = handle.pitch_bytes();
-                debug_assert!(pitch >= row_len);
-                for y in 0..SCREEN_HEIGHT {
-                    let src_off = y * pitch;
-                    let dst_off = y * row_len;
-                    dst[dst_off..dst_off + row_len]
-                        .copy_from_slice(&src[src_off..src_off + row_len]);
-                }
             }
             FrameBufferStorage::Swapchain(s) => {
                 let (ptr, pitch) = s.lock(front_idx);
                 debug_assert!(pitch >= row_len);
-                let src = unsafe { slice::from_raw_parts(ptr, pitch * SCREEN_HEIGHT) };
-                for y in 0..SCREEN_HEIGHT {
+                let src = unsafe { slice::from_raw_parts(ptr, pitch * self.output_height) };
+                for y in 0..self.output_height {
                     let src_off = y * pitch;
                     let dst_off = y * row_len;
                     dst[dst_off..dst_off + row_len]
@@ -590,14 +748,16 @@ impl FrameBuffer {
     #[inline]
     pub fn pitch(&self) -> usize {
         match &self.storage {
-            FrameBufferStorage::External(handle) => handle.pitch_bytes(),
-            FrameBufferStorage::Owned(_) => SCREEN_WIDTH * self.color_format.bytes_per_pixel(),
+            FrameBufferStorage::Owned { .. } => {
+                self.output_width * self.color_format.bytes_per_pixel()
+            }
             FrameBufferStorage::Swapchain(s) => {
                 // If not locked, we return the baseline pitch.
-                if s.locked[self.active_index] {
-                    s.pitch_bytes[self.active_index]
+                let front_idx = 1 - self.active_index;
+                if s.locked[front_idx] {
+                    s.pitch_bytes[front_idx]
                 } else {
-                    SCREEN_WIDTH * self.color_format.bytes_per_pixel()
+                    self.output_width * self.color_format.bytes_per_pixel()
                 }
             }
         }
@@ -609,6 +769,15 @@ impl FrameBuffer {
         user_data: *mut c_void,
     ) {
         self.frame_ready_hook = cb.map(|cb| FrameReadyHook { cb, user_data });
+    }
+
+    /// Returns the external frame handle if this framebuffer exposes one.
+    #[inline]
+    pub fn external_frame_handle(&self) -> Option<&Arc<ExternalFrameHandle>> {
+        match &self.storage {
+            FrameBufferStorage::Owned { handle, .. } => Some(handle),
+            FrameBufferStorage::Swapchain(_) => None,
+        }
     }
 
     #[inline]
@@ -627,23 +796,16 @@ impl FrameBuffer {
             plane.fill(0);
         }
         match &mut self.storage {
-            FrameBufferStorage::Owned(planes) => {
-                for plane in planes {
-                    plane.fill(0);
-                }
-            }
-            FrameBufferStorage::External(handle) => {
-                for i in 0..2 {
+            FrameBufferStorage::Owned { planes, handle } => {
+                for (i, plane) in planes.iter_mut().enumerate() {
                     handle.wait_until_not_reading(i);
-                    unsafe {
-                        slice::from_raw_parts_mut(handle.plane_ptr_mut(i), handle.len()).fill(0)
-                    };
+                    plane.fill(0);
                 }
             }
             FrameBufferStorage::Swapchain(s) => {
                 for i in 0..2 {
                     let (ptr, pitch) = s.lock(i);
-                    unsafe { slice::from_raw_parts_mut(ptr, pitch * SCREEN_HEIGHT).fill(0) };
+                    unsafe { slice::from_raw_parts_mut(ptr, pitch * self.output_height).fill(0) };
                     s.unlock(i);
                 }
             }
@@ -663,10 +825,10 @@ impl FrameBuffer {
         self.active_index = 1 - self.active_index;
 
         let pitch = match &mut self.storage {
-            FrameBufferStorage::Owned(_) => SCREEN_WIDTH * self.color_format.bytes_per_pixel(),
-            FrameBufferStorage::External(handle) => {
+            FrameBufferStorage::Owned { handle, .. } => {
                 handle.present(cleared_plane);
-                handle.pitch_bytes()
+                handle.wait_until_not_reading(self.active_index);
+                self.output_width * self.color_format.bytes_per_pixel()
             }
             FrameBufferStorage::Swapchain(s) => {
                 // For swapchain, we need to lock/unlock to signal the frontend.
@@ -677,8 +839,55 @@ impl FrameBuffer {
         };
 
         if let Some(hook) = self.frame_ready_hook {
-            hook.call(cleared_plane, pitch);
+            hook.call(cleared_plane, self.output_width, self.output_height, pitch);
         }
+    }
+
+    /// Update the packed output resolution and scaling mode.
+    ///
+    /// This does not change the canonical index resolution (always 256×240).
+    /// For `Owned` storage, backing buffers are reallocated and the shared
+    /// [`ExternalFrameHandle`] is updated in-place so frontends do not need to
+    /// fetch a new handle.
+    pub fn set_output_config(&mut self, width: usize, height: usize) {
+        assert!(width > 0 && height > 0, "output size must be non-zero");
+        self.output_width = width;
+        self.output_height = height;
+
+        let bpp = self.color_format.bytes_per_pixel();
+        let pitch_bytes = width * bpp;
+        let len = pitch_bytes * height;
+        let front_index = 1 - self.active_index;
+
+        match &mut self.storage {
+            FrameBufferStorage::Owned { planes, handle } => {
+                if planes[0].len() != len || planes[1].len() != len {
+                    let mut new_planes = [
+                        vec![0u8; len].into_boxed_slice(),
+                        vec![0u8; len].into_boxed_slice(),
+                    ];
+                    let p0 = new_planes[0].as_mut_ptr();
+                    let p1 = new_planes[1].as_mut_ptr();
+                    handle.update_buffers(p0, p1, width, height, front_index);
+                    *planes = new_planes;
+                } else {
+                    let p0 = planes[0].as_mut_ptr();
+                    let p1 = planes[1].as_mut_ptr();
+                    handle.update_buffers(p0, p1, width, height, front_index);
+                }
+            }
+            FrameBufferStorage::Swapchain(_) => {
+                // Swapchain backends must honor the new `width`/`height` in their lock callback.
+            }
+        }
+    }
+
+    /// Replaces the post-processor used to derive packed output frames.
+    ///
+    /// This is intended for Rust-side integrations that want to inject a filter/upscaler
+    /// implementation at runtime.
+    pub fn set_post_processor(&mut self, processor: Box<dyn VideoPostProcessor>) {
+        self.post_processor = processor;
     }
 
     #[inline]
@@ -699,6 +908,55 @@ impl FrameBuffer {
             current_bpp, new_bpp
         );
         self.color_format = format;
+    }
+}
+
+#[inline]
+unsafe fn pack_pixel(color: Color, dst: *mut u8, format: ColorFormat) {
+    unsafe {
+        match format {
+            ColorFormat::Rgb555 => {
+                let r5 = (color.r as u16) >> 3;
+                let g5 = (color.g as u16) >> 3;
+                let b5 = (color.b as u16) >> 3;
+                let packed = (r5 << 10) | (g5 << 5) | b5;
+                let bytes = packed.to_le_bytes();
+                *dst = bytes[0];
+                *dst.add(1) = bytes[1];
+            }
+            ColorFormat::Rgb565 => {
+                let r5 = (color.r as u16) >> 3;
+                let g6 = (color.g as u16) >> 2;
+                let b5 = (color.b as u16) >> 3;
+                let packed = (r5 << 11) | (g6 << 5) | b5;
+                let bytes = packed.to_le_bytes();
+                *dst = bytes[0];
+                *dst.add(1) = bytes[1];
+            }
+            ColorFormat::Rgb888 => {
+                *dst = color.r;
+                *dst.add(1) = color.g;
+                *dst.add(2) = color.b;
+            }
+            ColorFormat::Rgba8888 => {
+                *dst = color.r;
+                *dst.add(1) = color.g;
+                *dst.add(2) = color.b;
+                *dst.add(3) = 0xFF;
+            }
+            ColorFormat::Bgra8888 => {
+                *dst = color.b;
+                *dst.add(1) = color.g;
+                *dst.add(2) = color.r;
+                *dst.add(3) = 0xFF;
+            }
+            ColorFormat::Argb8888 => {
+                *dst = 0xFF;
+                *dst.add(1) = color.r;
+                *dst.add(2) = color.g;
+                *dst.add(3) = color.b;
+            }
+        }
     }
 }
 

@@ -15,6 +15,6 @@ pub use types::{
     AudioMode, DebugState, EmulationStatus, Event, EventTopic, NotificationEvent, PaletteState,
     ReplayEvent, RuntimeConfig, RuntimeError, RuntimeEventSender, SpriteInfo, SpriteState,
     TileState, TileViewerBackground, TileViewerConfig, TileViewerLayout, TileViewerSource,
-    TilemapState, VideoConfig, VideoExternalConfig, VideoSwapchainConfig,
+    TilemapState, VideoBackendConfig, VideoConfig,
 };
 pub use util::{is_high_priority_enabled, set_high_priority_enabled};

@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/domain/nes_texture_service.dart';
 import 'package:nesium_flutter/persistence/app_storage.dart';
 import 'package:nesium_flutter/persistence/keys.dart';
+import 'package:nesium_flutter/windows/current_window_kind.dart';
+import 'package:nesium_flutter/windows/settings_sync.dart';
+import 'package:nesium_flutter/windows/window_types.dart';
 
 class WindowsPerformanceSettings {
   final bool highPerformance;
@@ -18,6 +23,9 @@ class WindowsPerformanceSettings {
 
 class WindowsPerformanceSettingsController
     extends Notifier<WindowsPerformanceSettings> {
+  bool get _isMainWindow =>
+      ref.read(currentWindowKindProvider) == WindowKind.main;
+
   @override
   WindowsPerformanceSettings build() {
     final storage = ref.read(appStorageProvider);
@@ -28,7 +36,7 @@ class WindowsPerformanceSettingsController
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     // Initial apply
-    if (isWindows && highPerformance) {
+    if (isWindows && highPerformance && _isMainWindow) {
       _applyHighPerformance(highPerformance);
     }
 
@@ -40,8 +48,15 @@ class WindowsPerformanceSettingsController
 
     final storage = ref.read(appStorageProvider);
     await storage.put(StorageKeys.settingsWindowsHighPerformance, enabled);
+    unawaited(
+      SettingsSync.broadcast(
+        group: 'windowsPerformance',
+        fields: const ['highPerformance'],
+      ),
+    );
     state = state.copyWith(highPerformance: enabled);
 
+    if (!_isMainWindow) return;
     await _applyHighPerformance(enabled);
   }
 

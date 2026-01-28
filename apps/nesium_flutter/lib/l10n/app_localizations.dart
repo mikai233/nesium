@@ -1556,6 +1556,276 @@ abstract class AppLocalizations {
   /// **'Video'**
   String get videoTitle;
 
+  /// No description provided for @videoFilterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Video Filter'**
+  String get videoFilterLabel;
+
+  /// No description provided for @videoFilterCategoryCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU Filters'**
+  String get videoFilterCategoryCpu;
+
+  /// No description provided for @videoFilterCategoryGpu.
+  ///
+  /// In en, this message translates to:
+  /// **'GPU Filters (Shaders)'**
+  String get videoFilterCategoryGpu;
+
+  /// No description provided for @videoFilterNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None (1x)'**
+  String get videoFilterNone;
+
+  /// No description provided for @videoFilterPrescale2x.
+  ///
+  /// In en, this message translates to:
+  /// **'Prescale 2x'**
+  String get videoFilterPrescale2x;
+
+  /// No description provided for @videoFilterPrescale3x.
+  ///
+  /// In en, this message translates to:
+  /// **'Prescale 3x'**
+  String get videoFilterPrescale3x;
+
+  /// No description provided for @videoFilterPrescale4x.
+  ///
+  /// In en, this message translates to:
+  /// **'Prescale 4x'**
+  String get videoFilterPrescale4x;
+
+  /// No description provided for @videoFilterHq2x.
+  ///
+  /// In en, this message translates to:
+  /// **'HQ2x'**
+  String get videoFilterHq2x;
+
+  /// No description provided for @videoFilterHq3x.
+  ///
+  /// In en, this message translates to:
+  /// **'HQ3x'**
+  String get videoFilterHq3x;
+
+  /// No description provided for @videoFilterHq4x.
+  ///
+  /// In en, this message translates to:
+  /// **'HQ4x'**
+  String get videoFilterHq4x;
+
+  /// No description provided for @videoFilter2xSai.
+  ///
+  /// In en, this message translates to:
+  /// **'2xSaI'**
+  String get videoFilter2xSai;
+
+  /// No description provided for @videoFilterSuper2xSai.
+  ///
+  /// In en, this message translates to:
+  /// **'Super 2xSaI'**
+  String get videoFilterSuper2xSai;
+
+  /// No description provided for @videoFilterSuperEagle.
+  ///
+  /// In en, this message translates to:
+  /// **'Super Eagle'**
+  String get videoFilterSuperEagle;
+
+  /// No description provided for @videoFilterLcdGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'LCD Grid (2x)'**
+  String get videoFilterLcdGrid;
+
+  /// No description provided for @videoFilterScanlines.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanlines (2x)'**
+  String get videoFilterScanlines;
+
+  /// No description provided for @videoFilterXbrz2x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 2x'**
+  String get videoFilterXbrz2x;
+
+  /// No description provided for @videoFilterXbrz3x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 3x'**
+  String get videoFilterXbrz3x;
+
+  /// No description provided for @videoFilterXbrz4x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 4x'**
+  String get videoFilterXbrz4x;
+
+  /// No description provided for @videoFilterXbrz5x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 5x'**
+  String get videoFilterXbrz5x;
+
+  /// No description provided for @videoFilterXbrz6x.
+  ///
+  /// In en, this message translates to:
+  /// **'xBRZ 6x'**
+  String get videoFilterXbrz6x;
+
+  /// No description provided for @videoLcdGridStrengthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'LCD Grid Strength'**
+  String get videoLcdGridStrengthLabel;
+
+  /// No description provided for @videoScanlinesIntensityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanline Intensity'**
+  String get videoScanlinesIntensityLabel;
+
+  /// No description provided for @videoFilterNtscComposite.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Composite)'**
+  String get videoFilterNtscComposite;
+
+  /// No description provided for @videoFilterNtscSvideo.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (S-Video)'**
+  String get videoFilterNtscSvideo;
+
+  /// No description provided for @videoFilterNtscRgb.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (RGB)'**
+  String get videoFilterNtscRgb;
+
+  /// No description provided for @videoFilterNtscMonochrome.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Monochrome)'**
+  String get videoFilterNtscMonochrome;
+
+  /// No description provided for @videoFilterNtscBisqwit2x.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Bisqwit) 2x'**
+  String get videoFilterNtscBisqwit2x;
+
+  /// No description provided for @videoFilterNtscBisqwit4x.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Bisqwit) 4x'**
+  String get videoFilterNtscBisqwit4x;
+
+  /// No description provided for @videoFilterNtscBisqwit8x.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC (Bisqwit) 8x'**
+  String get videoFilterNtscBisqwit8x;
+
+  /// No description provided for @videoNtscAdvancedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC Advanced'**
+  String get videoNtscAdvancedTitle;
+
+  /// No description provided for @videoNtscMergeFieldsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Merge fields (reduce flicker)'**
+  String get videoNtscMergeFieldsLabel;
+
+  /// No description provided for @videoNtscHueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hue'**
+  String get videoNtscHueLabel;
+
+  /// No description provided for @videoNtscSaturationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturation'**
+  String get videoNtscSaturationLabel;
+
+  /// No description provided for @videoNtscContrastLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Contrast'**
+  String get videoNtscContrastLabel;
+
+  /// No description provided for @videoNtscBrightnessLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get videoNtscBrightnessLabel;
+
+  /// No description provided for @videoNtscSharpnessLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharpness'**
+  String get videoNtscSharpnessLabel;
+
+  /// No description provided for @videoNtscGammaLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Gamma'**
+  String get videoNtscGammaLabel;
+
+  /// No description provided for @videoNtscResolutionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolution'**
+  String get videoNtscResolutionLabel;
+
+  /// No description provided for @videoNtscArtifactsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Artifacts'**
+  String get videoNtscArtifactsLabel;
+
+  /// No description provided for @videoNtscFringingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Fringing'**
+  String get videoNtscFringingLabel;
+
+  /// No description provided for @videoNtscBleedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Bleed'**
+  String get videoNtscBleedLabel;
+
+  /// No description provided for @videoNtscBisqwitSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'NTSC settings (Bisqwit)'**
+  String get videoNtscBisqwitSettingsTitle;
+
+  /// No description provided for @videoNtscBisqwitYFilterLengthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Y Filter (Horizontal Blur)'**
+  String get videoNtscBisqwitYFilterLengthLabel;
+
+  /// No description provided for @videoNtscBisqwitIFilterLengthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'I Filter'**
+  String get videoNtscBisqwitIFilterLengthLabel;
+
+  /// No description provided for @videoNtscBisqwitQFilterLengthLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Q Filter'**
+  String get videoNtscBisqwitQFilterLengthLabel;
+
   /// No description provided for @videoIntegerScalingTitle.
   ///
   /// In en, this message translates to:
@@ -1597,6 +1867,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stretch'**
   String get videoAspectRatioStretch;
+
+  /// No description provided for @videoShaderLibrashaderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'RetroArch Shaders'**
+  String get videoShaderLibrashaderTitle;
+
+  /// No description provided for @videoShaderLibrashaderSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires GLES3 + Hardware backend (AHB swapchain).'**
+  String get videoShaderLibrashaderSubtitle;
+
+  /// No description provided for @videoShaderLibrashaderSubtitleWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires D3D11 GPU backend.'**
+  String get videoShaderLibrashaderSubtitleWindows;
+
+  /// No description provided for @videoShaderLibrashaderSubtitleApple.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires Metal backend.'**
+  String get videoShaderLibrashaderSubtitleApple;
+
+  /// No description provided for @videoShaderLibrashaderSubtitleDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch Android backend to Hardware to enable.'**
+  String get videoShaderLibrashaderSubtitleDisabled;
+
+  /// No description provided for @videoShaderLibrashaderSubtitleDisabledWindows.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch Windows backend to D3D11 GPU to enable.'**
+  String get videoShaderLibrashaderSubtitleDisabledWindows;
+
+  /// No description provided for @videoShaderPresetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Preset (.slangp)'**
+  String get videoShaderPresetLabel;
+
+  /// No description provided for @videoShaderPresetNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get videoShaderPresetNotSet;
+
+  /// No description provided for @shaderBrowserTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shaders'**
+  String get shaderBrowserTitle;
+
+  /// No description provided for @shaderBrowserNoShaders.
+  ///
+  /// In en, this message translates to:
+  /// **'No shaders found'**
+  String get shaderBrowserNoShaders;
+
+  /// No description provided for @shaderBrowserError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error: {error}'**
+  String shaderBrowserError(String error);
 
   /// No description provided for @aboutTitle.
   ///
@@ -1693,6 +2029,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Takes effect after app restart.'**
   String get videoBackendRestartHint;
+
+  /// No description provided for @videoBackendCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current Backend: {backend}'**
+  String videoBackendCurrent(String backend);
+
+  /// No description provided for @windowsNativeOverlayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Windows Native Overlay (Experimental)'**
+  String get windowsNativeOverlayTitle;
+
+  /// No description provided for @windowsNativeOverlaySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bypasses Flutter compositor for perfect smoothness. Disables shaders and overlays UI behind the game.'**
+  String get windowsNativeOverlaySubtitle;
 
   /// No description provided for @highPerformanceModeLabel.
   ///
@@ -2671,6 +3025,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Long press to clear'**
   String get longPressToClear;
+
+  /// No description provided for @videoBackendD3D11.
+  ///
+  /// In en, this message translates to:
+  /// **'D3D11 GPU (Zero-Copy)'**
+  String get videoBackendD3D11;
+
+  /// No description provided for @videoBackendSoftware.
+  ///
+  /// In en, this message translates to:
+  /// **'Software CPU (Fallback)'**
+  String get videoBackendSoftware;
 
   /// No description provided for @netplayBackToSetup.
   ///

@@ -77,3 +77,14 @@ pub fn load_tas_movie(data: String) -> Result<(), String> {
         .load_movie(movie)
         .map_err(|e| e.to_string())
 }
+
+#[frb]
+pub fn set_high_priority_enabled(enabled: bool) -> Result<(), String> {
+    crate::runtime_handle()
+        .set_high_priority_enabled(enabled)
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "android")]
+    crate::android::apply_rust_renderer_priority(enabled);
+    Ok(())
+}

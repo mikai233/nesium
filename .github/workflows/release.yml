@@ -85,7 +85,7 @@ jobs:
   # ------------------------------------------------------------------
   deploy-web-pages:
     name: Deploy Web (GitHub Pages)
-    if: ${{ needs.setup.outputs.publish_release == 'true' || needs.setup.outputs.mode == 'test' }}
+    if: ${{ needs.setup.outputs.publish_release == 'true' || (needs.setup.outputs.mode == 'test' && github.ref_name == 'master') }}
     needs: setup
     runs-on: ubuntu-latest
     permissions:

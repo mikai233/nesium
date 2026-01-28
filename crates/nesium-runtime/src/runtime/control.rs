@@ -1,5 +1,5 @@
 use core::ffi::c_void;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use crossbeam_channel::{Receiver, Sender};
 use nesium_core::{
@@ -10,7 +10,7 @@ use nesium_core::{
         tile_viewer_interceptor::CapturePoint as TileViewerCapturePoint,
         tilemap_interceptor::CapturePoint as TilemapCapturePoint,
     },
-    ppu::buffer::{ColorFormat, FrameReadyCallback},
+    ppu::buffer::{ColorFormat, FrameReadyCallback, VideoPostProcessor},
     ppu::palette::{Palette, PaletteKind},
     reset_kind::ResetKind,
 };
@@ -32,6 +32,18 @@ pub(crate) enum ControlMessage {
     SetAudioConfig(AudioBusConfig, ControlReplySender),
     SetFrameReadyCallback(Option<FrameReadyCallback>, *mut c_void, ControlReplySender),
     SetColorFormat(ColorFormat, ControlReplySender),
+    SetVideoOutputConfig {
+        width: u32,
+        height: u32,
+        reply: ControlReplySender,
+    },
+    SetVideoPostProcessor(Box<dyn VideoPostProcessor>, ControlReplySender),
+    SetVideoPipeline {
+        width: u32,
+        height: u32,
+        processor: Box<dyn VideoPostProcessor>,
+        reply: ControlReplySender,
+    },
     SetPaletteKind(PaletteKind, ControlReplySender),
     SetPalette(Palette, ControlReplySender),
     /// None = exact NTSC FPS, Some(60) = integer FPS (PAL reserved for future).
@@ -78,11 +90,13 @@ pub(crate) enum ControlMessage {
     // Netplay control
     /// Enable netplay with the given input provider.
     EnableNetplay {
-        input_provider: std::sync::Arc<dyn nesium_netplay::NetplayInputProvider>,
+        input_provider: Arc<dyn nesium_netplay::NetplayInputProvider>,
         reply: ControlReplySender,
     },
     /// Disable netplay and return to local input.
     DisableNetplay(ControlReplySender),
+    /// Set high priority (QoS) for the runtime thread.
+    SetHighPriorityEnabled(bool, ControlReplySender),
 }
 
 // SAFETY: raw pointers and function pointers are forwarded to the runtime thread without

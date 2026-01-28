@@ -232,6 +232,10 @@ jobs:
           flutter --version
           flutter pub get
 
+      - name: Generate shaders.zip
+        working-directory: apps/nesium_flutter
+        run: dart tool/package_shaders.dart
+
       - name: Install fonttools (Python)
         shell: bash
         run: |

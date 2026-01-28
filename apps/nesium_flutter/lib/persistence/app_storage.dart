@@ -5,7 +5,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../logging/app_logger.dart';
 
 abstract class AppStorage {
-  Object? get(String key);
+  T? get<T>(String key);
+
   Future<void> put(String key, Object? value);
   Future<void> delete(String key);
 }
@@ -35,7 +36,11 @@ final class _HiveAppStorage implements AppStorage {
   final Box<Object?> _box;
 
   @override
-  Object? get(String key) => _box.get(key);
+  T? get<T>(String key) {
+    final value = _box.get(key);
+    if (value is T) return value;
+    return null;
+  }
 
   @override
   Future<void> put(String key, Object? value) async {
@@ -52,7 +57,11 @@ final class _MemoryAppStorage implements AppStorage {
   final Map<String, Object?> _data = <String, Object?>{};
 
   @override
-  Object? get(String key) => _data[key];
+  T? get<T>(String key) {
+    final value = _data[key];
+    if (value is T) return value;
+    return null;
+  }
 
   @override
   Future<void> put(String key, Object? value) async {

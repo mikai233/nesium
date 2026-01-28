@@ -6,8 +6,14 @@ import 'domain/rom_hash_sync_provider.dart';
 import 'features/settings/language_settings.dart';
 import 'features/settings/theme_settings.dart';
 import 'features/settings/gamepad_assignment_controller.dart';
+import 'features/settings/android_performance_settings.dart';
+import 'features/settings/apple_performance_settings.dart';
+import 'features/settings/windows_performance_settings.dart';
+import 'features/settings/android_shader_settings.dart';
+import 'features/settings/windows_shader_settings.dart';
 import 'l10n/app_localizations.dart';
 import 'windows/window_routing.dart';
+import 'windows/window_message_router.dart';
 
 class NesiumApp extends ConsumerWidget {
   const NesiumApp({super.key, required this.windowKind});
@@ -20,6 +26,12 @@ class NesiumApp extends ConsumerWidget {
     final themeSettings = ref.watch(themeSettingsProvider);
     ref.watch(romHashSyncProvider);
     ref.watch(gamepadAssignmentProvider);
+    ref.watch(windowMessageRouterProvider);
+    ref.watch(androidShaderSettingsProvider);
+    ref.watch(windowsShaderSettingsProvider);
+    ref.watch(androidPerformanceSettingsControllerProvider);
+    ref.watch(applePerformanceSettingsControllerProvider);
+    ref.watch(windowsPerformanceSettingsControllerProvider);
     return MaterialApp(
       onGenerateTitle: (context) {
         final l10n = AppLocalizations.of(context);
