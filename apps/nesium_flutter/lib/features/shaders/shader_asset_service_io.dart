@@ -48,6 +48,10 @@ class ShaderAssetService {
         logger: 'shader_asset_service',
       );
       if (target.existsSync()) {
+        logInfo(
+          'Cleaning up existing shader directory...',
+          logger: 'shader_asset_service',
+        );
         target.deleteSync(recursive: true);
       }
       target.createSync(recursive: true);
