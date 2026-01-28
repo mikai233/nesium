@@ -64,6 +64,18 @@ class DesktopWindowManager {
           _routeFromArgs(window.arguments) == targetRoute) {
         // Ensure it is visible; show() is idempotent.
         await window.show();
+        try {
+          // Instruct the remote window to bring itself to front.
+          // This is handled in window_message_router_io.dart.
+          await window.invokeMethod('focusWindow');
+        } catch (e, st) {
+          logWarning(
+            e,
+            stackTrace: st,
+            message: 'Failed to focus existing window ${window.windowId}',
+            logger: 'desktop_window_manager',
+          );
+        }
         return window;
       }
     }

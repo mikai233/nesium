@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../logging/app_logger.dart';
 import '../persistence/app_storage.dart';
@@ -79,6 +80,9 @@ final windowMessageRouterProvider = Provider<void>((ref) {
               );
               break;
           }
+          return null;
+        case 'focusWindow':
+          await windowManager.focus();
           return null;
         default:
           logWarning(
