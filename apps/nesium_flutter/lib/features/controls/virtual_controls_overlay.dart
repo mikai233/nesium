@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
-import '../../l10n/app_localizations.dart';
 import '../../domain/emulation_status.dart';
 import '../../domain/nes_input_masks.dart';
 import '../../domain/pad_button.dart';
@@ -87,7 +86,6 @@ class _VirtualControlsOverlayState
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final editor = ref.watch(virtualControlsEditorProvider);
     final isEditing = editor.enabled;
     final liveSettings = ref.watch(virtualControlsSettingsProvider);
@@ -129,6 +127,7 @@ class _VirtualControlsOverlayState
         final mainButtonBaseSize = _mainButtonHitboxSize(settings);
         final turboButtonBaseSize = _turboButtonHitboxSize(settings);
         final systemButtonBaseSize = _systemButtonHitboxSize(settings);
+        final buttonsBaseSize = _abClusterSize(settings);
 
         final dpadScale = isLandscape
             ? settings.landscapeDpadScale
@@ -143,6 +142,10 @@ class _VirtualControlsOverlayState
         final dpadSize = Size(
           dpadBaseSize.width * dpadScale,
           dpadBaseSize.height * dpadScale,
+        );
+        final buttonsSize = Size(
+          buttonsBaseSize.width * buttonsScale,
+          buttonsBaseSize.height * buttonsScale,
         );
 
         final dpadOffset = isLandscape
@@ -227,12 +230,21 @@ class _VirtualControlsOverlayState
         );
 
         var dpadPos = base.dpad + dpadOffset;
-        final buttonsGroupPos = base.buttons + buttonsOffset;
+        var buttonsGroupPos = base.buttons + buttonsOffset;
 
         dpadPos = _clampPositionForFrame(
           dpadPos,
           size: dpadSize,
           frameInsets: _scaleInsets(dpadFrameInsets, dpadScale),
+          frameGap: frameGap,
+          available: available,
+          safeInsets: safeInsets,
+        );
+
+        buttonsGroupPos = _clampPositionForFrame(
+          buttonsGroupPos,
+          size: buttonsSize,
+          frameInsets: EdgeInsets.zero,
           frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
@@ -282,18 +294,28 @@ class _VirtualControlsOverlayState
           mainButtonBaseSize.height * fastForwardTotalScale,
         );
 
-        var aPos = buttonsGroupPos + buttonsLocal.a * buttonsScale + aOffset;
-        var bPos = buttonsGroupPos + buttonsLocal.b * buttonsScale + bOffset;
+        var aPos =
+            buttonsGroupPos +
+            buttonsLocal.a * buttonsScale +
+            aOffset * buttonsScale;
+        var bPos =
+            buttonsGroupPos +
+            buttonsLocal.b * buttonsScale +
+            bOffset * buttonsScale;
         var turboAPos =
-            buttonsGroupPos + buttonsLocal.turboA * buttonsScale + turboAOffset;
+            buttonsGroupPos +
+            buttonsLocal.turboA * buttonsScale +
+            turboAOffset * buttonsScale;
         var turboBPos =
-            buttonsGroupPos + buttonsLocal.turboB * buttonsScale + turboBOffset;
+            buttonsGroupPos +
+            buttonsLocal.turboB * buttonsScale +
+            turboBOffset * buttonsScale;
 
-        var selectPos = base.select + systemOffset + selectOffset;
-        var startPos = base.start + systemOffset + startOffset;
-        var rewindPos = base.rewind + systemOffset + rewindOffset;
+        var selectPos = base.select + systemOffset + selectOffset * systemScale;
+        var startPos = base.start + systemOffset + startOffset * systemScale;
+        var rewindPos = base.rewind + systemOffset + rewindOffset * systemScale;
         var fastForwardPos =
-            base.fastForward + systemOffset + fastForwardOffset;
+            base.fastForward + systemOffset + fastForwardOffset * systemScale;
 
         aPos = _clampPositionForFrame(
           aPos,
@@ -426,31 +448,56 @@ class _VirtualControlsOverlayState
                 ),
               ),
             ),
-            if (isEditing)
-              Positioned(
-                left: safeInsets.left + 12,
-                top: safeInsets.top + 12,
-                child: FloatingActionButton.small(
-                  heroTag: 'virtual_controls_reset',
-                  tooltip: l10n.menuReset,
-                  onPressed: () => ref
+            Positioned(
+              left: buttonsGroupPos.dx,
+              top: buttonsGroupPos.dy,
+              width: buttonsSize.width,
+              height: buttonsSize.height,
+              child: _EditableCluster(
+                enabled: isEditing,
+                baseSize: buttonsBaseSize,
+                scale: buttonsScale,
+                topLeft: buttonsGroupPos,
+                available: available,
+                safeInsets: safeInsets,
+                gridSnapEnabled: editor.gridSnapEnabled,
+                gridSpacing: editor.gridSpacing,
+                onTransform: (topLeft, scale) {
+                  if (!isEditing) return;
+                  ref
                       .read(virtualControlsEditorProvider.notifier)
-                      .resetDraft(),
-                  child: const Icon(Icons.restore),
+                      .updateDraft(
+                        (draft) => _applyElementTransform(
+                          draft,
+                          element: _VirtualControlElement.buttonsGroup,
+                          isLandscape: isLandscape,
+                          available: available,
+                          topLeft: topLeft,
+                          scale: scale,
+                          safeInsets: safeInsets,
+                        ),
+                      );
+                },
+                centerHandle: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.20),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.40),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.drag_indicator,
+                    color: Colors.white,
+                    size: 16,
+                  ),
                 ),
+                child: const SizedBox.shrink(),
               ),
-            if (isEditing)
-              Positioned(
-                right: 12,
-                top: safeInsets.top + 12,
-                child: FloatingActionButton.small(
-                  heroTag: 'virtual_controls_save',
-                  tooltip: MaterialLocalizations.of(context).okButtonLabel,
-                  onPressed: () =>
-                      ref.read(virtualControlsEditorProvider.notifier).save(),
-                  child: const Icon(Icons.check),
-                ),
-              ),
+            ),
             Positioned(
               left: selectPos.dx,
               top: selectPos.dy,
@@ -823,6 +870,7 @@ enum _VirtualControlElement {
   start,
   rewind,
   fastForward,
+  buttonsGroup,
 }
 
 const double _clusterScaleMin = 0.6;
@@ -936,6 +984,11 @@ VirtualControlsSettings _applyElementTransform(
           ? draft.copyWith(landscapeFastForwardScale: next)
           : draft.copyWith(portraitFastForwardScale: next);
       break;
+    case _VirtualControlElement.buttonsGroup:
+      withScale = isLandscape
+          ? draft.copyWith(landscapeButtonsScale: nextTotalScale)
+          : draft.copyWith(portraitButtonsScale: nextTotalScale);
+      break;
   }
 
   final base = _basePositions(
@@ -966,47 +1019,87 @@ VirtualControlsSettings _applyElementTransform(
     case _VirtualControlElement.a:
       final baseline =
           base.buttons + buttonsOffset + buttonsLocal.a * buttonsScale;
+      final newOffset =
+          (topLeft - baseline) / (buttonsScale == 0 ? 1 : buttonsScale);
       return isLandscape
-          ? withScale.copyWith(landscapeAOffset: topLeft - baseline)
-          : withScale.copyWith(portraitAOffset: topLeft - baseline);
+          ? withScale.copyWith(landscapeAOffset: newOffset)
+          : withScale.copyWith(portraitAOffset: newOffset);
     case _VirtualControlElement.b:
       final baseline =
           base.buttons + buttonsOffset + buttonsLocal.b * buttonsScale;
+      final newOffset =
+          (topLeft - baseline) / (buttonsScale == 0 ? 1 : buttonsScale);
       return isLandscape
-          ? withScale.copyWith(landscapeBOffset: topLeft - baseline)
-          : withScale.copyWith(portraitBOffset: topLeft - baseline);
+          ? withScale.copyWith(landscapeBOffset: newOffset)
+          : withScale.copyWith(portraitBOffset: newOffset);
     case _VirtualControlElement.turboA:
       final baseline =
           base.buttons + buttonsOffset + buttonsLocal.turboA * buttonsScale;
+      final newOffset =
+          (topLeft - baseline) / (buttonsScale == 0 ? 1 : buttonsScale);
       return isLandscape
-          ? withScale.copyWith(landscapeTurboAOffset: topLeft - baseline)
-          : withScale.copyWith(portraitTurboAOffset: topLeft - baseline);
+          ? withScale.copyWith(landscapeTurboAOffset: newOffset)
+          : withScale.copyWith(portraitTurboAOffset: newOffset);
     case _VirtualControlElement.turboB:
       final baseline =
           base.buttons + buttonsOffset + buttonsLocal.turboB * buttonsScale;
+      final newOffset =
+          (topLeft - baseline) / (buttonsScale == 0 ? 1 : buttonsScale);
       return isLandscape
-          ? withScale.copyWith(landscapeTurboBOffset: topLeft - baseline)
-          : withScale.copyWith(portraitTurboBOffset: topLeft - baseline);
+          ? withScale.copyWith(landscapeTurboBOffset: newOffset)
+          : withScale.copyWith(portraitTurboBOffset: newOffset);
     case _VirtualControlElement.select:
       final baseline = base.select + systemOffset;
+      final groupScale =
+          (isLandscape ? draft.landscapeSystemScale : draft.portraitSystemScale)
+              .clamp(0.1, 2.0);
       return isLandscape
-          ? withScale.copyWith(landscapeSelectOffset: topLeft - baseline)
-          : withScale.copyWith(portraitSelectOffset: topLeft - baseline);
+          ? withScale.copyWith(
+              landscapeSelectOffset: (topLeft - baseline) / groupScale,
+            )
+          : withScale.copyWith(
+              portraitSelectOffset: (topLeft - baseline) / groupScale,
+            );
     case _VirtualControlElement.start:
       final baseline = base.start + systemOffset;
+      final groupScale =
+          (isLandscape ? draft.landscapeSystemScale : draft.portraitSystemScale)
+              .clamp(0.1, 2.0);
       return isLandscape
-          ? withScale.copyWith(landscapeStartOffset: topLeft - baseline)
-          : withScale.copyWith(portraitStartOffset: topLeft - baseline);
+          ? withScale.copyWith(
+              landscapeStartOffset: (topLeft - baseline) / groupScale,
+            )
+          : withScale.copyWith(
+              portraitStartOffset: (topLeft - baseline) / groupScale,
+            );
     case _VirtualControlElement.rewind:
       final baseline = base.rewind + systemOffset;
+      final groupScale =
+          (isLandscape ? draft.landscapeSystemScale : draft.portraitSystemScale)
+              .clamp(0.1, 2.0);
       return isLandscape
-          ? withScale.copyWith(landscapeRewindOffset: topLeft - baseline)
-          : withScale.copyWith(portraitRewindOffset: topLeft - baseline);
+          ? withScale.copyWith(
+              landscapeRewindOffset: (topLeft - baseline) / groupScale,
+            )
+          : withScale.copyWith(
+              portraitRewindOffset: (topLeft - baseline) / groupScale,
+            );
     case _VirtualControlElement.fastForward:
       final baseline = base.fastForward + systemOffset;
+      final groupScale =
+          (isLandscape ? draft.landscapeSystemScale : draft.portraitSystemScale)
+              .clamp(0.1, 2.0);
       return isLandscape
-          ? withScale.copyWith(landscapeFastForwardOffset: topLeft - baseline)
-          : withScale.copyWith(portraitFastForwardOffset: topLeft - baseline);
+          ? withScale.copyWith(
+              landscapeFastForwardOffset: (topLeft - baseline) / groupScale,
+            )
+          : withScale.copyWith(
+              portraitFastForwardOffset: (topLeft - baseline) / groupScale,
+            );
+    case _VirtualControlElement.buttonsGroup:
+      return isLandscape
+          ? withScale.copyWith(landscapeButtonsOffset: topLeft - base.buttons)
+          : withScale.copyWith(portraitButtonsOffset: topLeft - base.buttons);
   }
 }
 
@@ -1031,24 +1124,10 @@ _basePositions(
   final mainButtonBaseSize = _mainButtonHitboxSize(settings);
   final systemButtonBaseSize = _systemButtonHitboxSize(settings);
 
-  final dpadScale = isLandscape
-      ? settings.landscapeDpadScale
-      : settings.portraitDpadScale;
-  final buttonsScale = isLandscape
-      ? settings.landscapeButtonsScale
-      : settings.portraitButtonsScale;
   final systemScale = isLandscape
       ? settings.landscapeSystemScale
       : settings.portraitSystemScale;
 
-  final dpadSize = Size(
-    dpadBaseSize.width * dpadScale,
-    dpadBaseSize.height * dpadScale,
-  );
-  final buttonsSize = Size(
-    buttonsBaseSize.width * buttonsScale,
-    buttonsBaseSize.height * buttonsScale,
-  );
   final systemButtonSize = Size(
     systemButtonBaseSize.width * systemScale,
     systemButtonBaseSize.height * systemScale,
@@ -1075,15 +1154,15 @@ _basePositions(
   final dpadPos = Offset(
     basePadding + safeInsets.left,
     available.height -
-        dpadSize.height -
+        dpadBaseSize.height -
         basePadding -
         verticalOffset -
         safeInsets.bottom,
   );
   final buttonsPos = Offset(
-    available.width - buttonsSize.width - basePadding - safeInsets.right,
+    available.width - buttonsBaseSize.width - basePadding - safeInsets.right,
     available.height -
-        buttonsSize.height -
+        buttonsBaseSize.height -
         basePadding -
         verticalOffset -
         safeInsets.bottom,
@@ -1120,16 +1199,29 @@ _basePositions(
       rewindPos.dy,
     );
   } else {
+    final clusterBottomY =
+        available.height - basePadding - verticalOffset - safeInsets.bottom;
+    // Position system buttons at a fixed height above the cluster anchor area
+    // to prevent them from jumping when the clusters are scaled.
     final y =
-        math.min(dpadPos.dy, buttonsPos.dy) -
+        clusterBottomY -
+        180.0 - // Reference height for portrait cluster area
         systemButtonSize.height -
         basePadding;
+
+    // Use base sizes (scale 1.0) as horizontal reference to prevent
+    // system buttons from jumping horizontally when clusters are scaled.
     selectPos = Offset(
-      dpadPos.dx + (dpadSize.width - systemButtonSize.width) / 2,
+      (basePadding + safeInsets.left) +
+          (dpadBaseSize.width - systemButtonSize.width) / 2,
       y,
     );
     startPos = Offset(
-      buttonsPos.dx + (buttonsSize.width - systemButtonSize.width) / 2,
+      (available.width -
+              buttonsBaseSize.width -
+              basePadding -
+              safeInsets.right) +
+          (buttonsBaseSize.width - systemButtonSize.width) / 2,
       y,
     );
     // Align vertically centered with ✅
@@ -1194,6 +1286,7 @@ class _EditableCluster extends StatefulWidget {
     required this.gridSnapEnabled,
     required this.gridSpacing,
     required this.onTransform,
+    this.centerHandle,
     required this.child,
   });
 
@@ -1208,6 +1301,7 @@ class _EditableCluster extends StatefulWidget {
   final double gridSpacing;
   final void Function(Offset topLeft, double scale) onTransform;
   final Widget child;
+  final Widget? centerHandle;
 
   @override
   State<_EditableCluster> createState() => _EditableClusterState();
@@ -1453,6 +1547,8 @@ class _EditableClusterState extends State<_EditableCluster> {
           ),
           if (handle != null)
             Positioned.fill(child: IgnorePointer(child: handle)),
+          if (widget.centerHandle != null && widget.enabled)
+            Center(child: IgnorePointer(child: widget.centerHandle!)),
           if (resizeHandle != null) resizeHandle,
         ],
       ),

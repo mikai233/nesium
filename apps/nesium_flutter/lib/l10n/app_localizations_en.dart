@@ -461,6 +461,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get virtualControlsReset => 'Reset layout';
 
   @override
+  String get virtualControlsDiscardChangesTitle => 'Undo changes';
+
+  @override
+  String get virtualControlsDiscardChangesSubtitle =>
+      'Revert to last saved layout';
+
+  @override
   String get virtualControlsTurboFramesPerToggle => 'Turbo frames per toggle';
 
   @override

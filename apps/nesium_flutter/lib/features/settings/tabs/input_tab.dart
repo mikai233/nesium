@@ -455,16 +455,27 @@ class InputTab extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  12,
-                                  16,
-                                  4,
-                                ),
-                                child: Text(
-                                  l10n.virtualControlsTitle,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                padding: const EdgeInsets.fromLTRB(16, 4, 4, 0),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      l10n.virtualControlsTitle,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: controller.resetToDefault,
+                                      icon: const Icon(Icons.restore, size: 20),
+                                      tooltip: l10n.virtualControlsReset,
+                                    ),
+                                  ],
                                 ),
                               ),
                               Padding(
@@ -587,14 +598,6 @@ class InputTab extends ConsumerWidget {
                               ),
                               const SizedBox(height: 8),
                             ],
-                          ),
-                        ),
-                        AnimatedSettingsCard(
-                          index: 8,
-                          child: ListTile(
-                            leading: const Icon(Icons.restore),
-                            title: Text(l10n.virtualControlsReset),
-                            onTap: controller.resetToDefault,
                           ),
                         ),
                       ],

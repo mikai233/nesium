@@ -914,6 +914,18 @@ abstract class AppLocalizations {
   /// **'Reset layout'**
   String get virtualControlsReset;
 
+  /// No description provided for @virtualControlsDiscardChangesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo changes'**
+  String get virtualControlsDiscardChangesTitle;
+
+  /// No description provided for @virtualControlsDiscardChangesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert to last saved layout'**
+  String get virtualControlsDiscardChangesSubtitle;
+
   /// No description provided for @virtualControlsTurboFramesPerToggle.
   ///
   /// In en, this message translates to:

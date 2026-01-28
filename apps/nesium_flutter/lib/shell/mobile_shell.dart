@@ -295,6 +295,19 @@ class _MobileDrawer extends StatelessWidget {
                                       ],
                                     ),
                                   ),
+                                ListTile(
+                                  leading: const Icon(Icons.restore),
+                                  title: Text(
+                                    l10n.virtualControlsDiscardChangesTitle,
+                                  ),
+                                  subtitle: Text(
+                                    l10n.virtualControlsDiscardChangesSubtitle,
+                                  ),
+                                  onTap: () {
+                                    editorCtrl.resetDraft();
+                                    closeDrawer();
+                                  },
+                                ),
                               ],
                             ],
                           )
