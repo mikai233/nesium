@@ -55,6 +55,24 @@ class _VirtualControlsOverlayState
     );
   }
 
+  void _startFastForwarding() {
+    ref.read(emulationStatusProvider.notifier).setFastForwarding(true);
+    unawaitedLogged(
+      frb_emulation.setFastForwarding(fastForwarding: true),
+      message: 'setFastForwarding(true)',
+      logger: 'nes_shell',
+    );
+  }
+
+  void _stopFastForwarding() {
+    ref.read(emulationStatusProvider.notifier).setFastForwarding(false);
+    unawaitedLogged(
+      frb_emulation.setFastForwarding(fastForwarding: false),
+      message: 'setFastForwarding(false)',
+      logger: 'nes_shell',
+    );
+  }
+
   void _onButtonChanged(PadButton button, bool pressed, {required int pad}) {
     ref
         .read(nesInputMasksProvider.notifier)
@@ -158,6 +176,9 @@ class _VirtualControlsOverlayState
         final rewindOffset = isLandscape
             ? settings.landscapeRewindOffset
             : settings.portraitRewindOffset;
+        final fastForwardOffset = isLandscape
+            ? settings.landscapeFastForwardOffset
+            : settings.portraitFastForwardOffset;
 
         final aScale = isLandscape
             ? settings.landscapeAScale
@@ -180,6 +201,9 @@ class _VirtualControlsOverlayState
         final rewindScale = isLandscape
             ? settings.landscapeRewindScale
             : settings.portraitRewindScale;
+        final fastForwardScale = isLandscape
+            ? settings.landscapeFastForwardScale
+            : settings.portraitFastForwardScale;
 
         const frameGap = 2.0;
 
@@ -223,6 +247,7 @@ class _VirtualControlsOverlayState
         final selectTotalScale = systemScale * selectScale;
         final startTotalScale = systemScale * startScale;
         final rewindTotalScale = systemScale * rewindScale;
+        final fastForwardTotalScale = systemScale * fastForwardScale;
 
         final aSize = Size(
           mainButtonBaseSize.width * aTotalScale,
@@ -252,6 +277,10 @@ class _VirtualControlsOverlayState
           mainButtonBaseSize.width * rewindTotalScale,
           mainButtonBaseSize.height * rewindTotalScale,
         );
+        final fastForwardSize = Size(
+          mainButtonBaseSize.width * fastForwardTotalScale,
+          mainButtonBaseSize.height * fastForwardTotalScale,
+        );
 
         var aPos = buttonsGroupPos + buttonsLocal.a * buttonsScale + aOffset;
         var bPos = buttonsGroupPos + buttonsLocal.b * buttonsScale + bOffset;
@@ -263,6 +292,8 @@ class _VirtualControlsOverlayState
         var selectPos = base.select + systemOffset + selectOffset;
         var startPos = base.start + systemOffset + startOffset;
         var rewindPos = base.rewind + systemOffset + rewindOffset;
+        var fastForwardPos =
+            base.fastForward + systemOffset + fastForwardOffset;
 
         aPos = _clampPositionForFrame(
           aPos,
@@ -316,6 +347,14 @@ class _VirtualControlsOverlayState
           rewindPos,
           size: rewindSize,
           frameInsets: _scaleInsets(mainFrameInsets, rewindTotalScale),
+          frameGap: frameGap,
+          available: available,
+          safeInsets: safeInsets,
+        );
+        fastForwardPos = _clampPositionForFrame(
+          fastForwardPos,
+          size: fastForwardSize,
+          frameInsets: _scaleInsets(mainFrameInsets, fastForwardTotalScale),
           frameGap: frameGap,
           available: available,
           safeInsets: safeInsets,
@@ -720,6 +759,53 @@ class _VirtualControlsOverlayState
                   ),
                 ),
               ),
+            Positioned(
+              left: fastForwardPos.dx,
+              top: fastForwardPos.dy,
+              width: fastForwardSize.width,
+              height: fastForwardSize.height,
+              child: _EditableCluster(
+                enabled: isEditing,
+                baseSize: mainButtonBaseSize,
+                frameInsets: mainFrameInsets,
+                scale: fastForwardTotalScale,
+                topLeft: fastForwardPos,
+                available: available,
+                safeInsets: safeInsets,
+                gridSnapEnabled: editor.gridSnapEnabled,
+                gridSpacing: editor.gridSpacing,
+                onTransform: (topLeft, scale) {
+                  if (!isEditing) return;
+                  ref
+                      .read(virtualControlsEditorProvider.notifier)
+                      .updateDraft(
+                        (draft) => _applyElementTransform(
+                          draft,
+                          element: _VirtualControlElement.fastForward,
+                          isLandscape: isLandscape,
+                          available: available,
+                          topLeft: topLeft,
+                          scale: scale,
+                          safeInsets: safeInsets,
+                        ),
+                      );
+                },
+                child: IgnorePointer(
+                  ignoring: isEditing,
+                  child: _FastForwardButton(
+                    settings: settings,
+                    baseColor: chromeBase,
+                    onFastForwardChanged: (pressed) {
+                      if (pressed) {
+                        _startFastForwarding();
+                      } else {
+                        _stopFastForwarding();
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
           ],
         );
       },
@@ -736,6 +822,7 @@ enum _VirtualControlElement {
   select,
   start,
   rewind,
+  fastForward,
 }
 
 const double _clusterScaleMin = 0.6;
@@ -839,6 +926,16 @@ VirtualControlsSettings _applyElementTransform(
           ? draft.copyWith(landscapeRewindScale: next)
           : draft.copyWith(portraitRewindScale: next);
       break;
+    case _VirtualControlElement.fastForward:
+      final groupScale =
+          (isLandscape ? draft.landscapeSystemScale : draft.portraitSystemScale)
+              .clamp(_clusterScaleMin, _clusterScaleMax)
+              .toDouble();
+      final next = nextTotalScale / (groupScale == 0 ? 1 : groupScale);
+      withScale = isLandscape
+          ? draft.copyWith(landscapeFastForwardScale: next)
+          : draft.copyWith(portraitFastForwardScale: next);
+      break;
   }
 
   final base = _basePositions(
@@ -905,10 +1002,22 @@ VirtualControlsSettings _applyElementTransform(
       return isLandscape
           ? withScale.copyWith(landscapeRewindOffset: topLeft - baseline)
           : withScale.copyWith(portraitRewindOffset: topLeft - baseline);
+    case _VirtualControlElement.fastForward:
+      final baseline = base.fastForward + systemOffset;
+      return isLandscape
+          ? withScale.copyWith(landscapeFastForwardOffset: topLeft - baseline)
+          : withScale.copyWith(portraitFastForwardOffset: topLeft - baseline);
   }
 }
 
-({Offset dpad, Offset buttons, Offset select, Offset start, Offset rewind})
+({
+  Offset dpad,
+  Offset buttons,
+  Offset select,
+  Offset start,
+  Offset rewind,
+  Offset fastForward,
+})
 _basePositions(
   VirtualControlsSettings settings, {
   required bool isLandscape,
@@ -953,6 +1062,14 @@ _basePositions(
     mainButtonBaseSize.height * systemScale * rewindScale,
   );
 
+  final fastForwardScale = isLandscape
+      ? settings.landscapeFastForwardScale
+      : settings.portraitFastForwardScale;
+  final fastForwardSize = Size(
+    mainButtonBaseSize.width * systemScale * fastForwardScale,
+    mainButtonBaseSize.height * systemScale * fastForwardScale,
+  );
+
   final verticalOffset = isLandscape ? 32.0 : 120.0;
 
   final dpadPos = Offset(
@@ -975,6 +1092,7 @@ _basePositions(
   final Offset selectPos;
   final Offset startPos;
   final Offset rewindPos;
+  final Offset fastForwardPos;
 
   // Editor's Save button (✅) is at top: safeInsets.top + 12, right: 12.
   // It's a small FAB with a standard size of 40x40.
@@ -996,6 +1114,11 @@ _basePositions(
       fabCenter.dx - fabSize / 2.0 - basePadding * 2.0 - rewindSize.width,
       fabCenter.dy - rewindSize.height / 2.0,
     );
+    // Align horizontally to the left of Rewind
+    fastForwardPos = Offset(
+      rewindPos.dx - fastForwardSize.width - 8.0,
+      rewindPos.dy,
+    );
   } else {
     final y =
         math.min(dpadPos.dy, buttonsPos.dy) -
@@ -1014,6 +1137,11 @@ _basePositions(
       fabCenter.dx - rewindSize.width / 2.0,
       fabCenter.dy - rewindSize.height / 2.0,
     );
+    // Align to the left of Rewind
+    fastForwardPos = Offset(
+      rewindPos.dx - fastForwardSize.width - 12.0,
+      rewindPos.dy,
+    );
   }
 
   return (
@@ -1022,6 +1150,7 @@ _basePositions(
     select: selectPos,
     start: startPos,
     rewind: rewindPos,
+    fastForward: fastForwardPos,
   );
 }
 
@@ -2167,24 +2296,53 @@ class _RewindButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = settings.buttonSize;
-    final visualSize = Size.square(s * 0.85);
-
-    return _VirtualToggleButton(
-      visualSize: visualSize,
+    return _VirtualPressButton(
+      visualSize: Size.square(settings.buttonSize),
       hitboxScale: settings.hitboxScale,
       hapticsEnabled: settings.hapticsEnabled,
-      visualBuilder: (pressed) => _roundVisual(
-        base: baseColor.withValues(alpha: pressed ? 0.85 : 0.65),
-        pressed: pressed,
-        ringColor: Colors.blueAccent.withValues(alpha: 0.75),
-        child: Icon(
-          Icons.history,
-          color: Colors.white.withValues(alpha: 0.9),
-          size: visualSize.width * 0.6,
-        ),
-      ),
-      onToggle: onRewindChanged,
+      onPressedChanged: onRewindChanged,
+      visualBuilder: (pressed) {
+        return Container(
+          decoration: BoxDecoration(color: baseColor, shape: BoxShape.circle),
+          child: Icon(
+            Icons.history,
+            color: Colors.white.withValues(alpha: pressed ? 0.9 : 0.7),
+            size: settings.buttonSize * 0.6,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FastForwardButton extends StatelessWidget {
+  const _FastForwardButton({
+    required this.settings,
+    required this.baseColor,
+    required this.onFastForwardChanged,
+  });
+
+  final VirtualControlsSettings settings;
+  final Color baseColor;
+  final ValueChanged<bool> onFastForwardChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return _VirtualPressButton(
+      visualSize: Size.square(settings.buttonSize),
+      hitboxScale: settings.hitboxScale,
+      hapticsEnabled: settings.hapticsEnabled,
+      onPressedChanged: onFastForwardChanged,
+      visualBuilder: (pressed) {
+        return Container(
+          decoration: BoxDecoration(color: baseColor, shape: BoxShape.circle),
+          child: Icon(
+            Icons.fast_forward,
+            color: Colors.white.withValues(alpha: pressed ? 0.9 : 0.7),
+            size: settings.buttonSize * 0.6,
+          ),
+        );
+      },
     );
   }
 }
