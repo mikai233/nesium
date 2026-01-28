@@ -5,9 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
-import '../../platform/platform_capabilities.dart';
-import '../../windows/settings_sync.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 enum AppLanguage { system, english, chineseSimplified }
 
@@ -32,11 +29,22 @@ extension AppLanguageX on AppLanguage {
 }
 
 class LanguageSettingsController extends Notifier<AppLanguage> {
+  StreamSubscription<void>? _subscription;
+
   @override
   AppLanguage build() {
-    final stored = ref
-        .read(appStorageProvider)
-        .get<String>(StorageKeys.settingsLanguage);
+    final storage = ref.read(appStorageProvider);
+    _subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsLanguage) {
+        final value = event.value;
+        if (value is String) {
+          applySynced(value);
+        }
+      }
+    });
+    ref.onDispose(() => _subscription?.cancel());
+
+    final stored = storage.get<String>(StorageKeys.settingsLanguage);
     if (stored != null) {
       try {
         return AppLanguage.values.byName(stored);
@@ -56,24 +64,6 @@ class LanguageSettingsController extends Notifier<AppLanguage> {
     if (language == state) return;
     state = language;
     _persist(language);
-
-    if (isNativeDesktop) {
-      unawaited(
-        SettingsSync.broadcast(group: 'language', payload: language.name),
-      );
-      final windows = await WindowController.getAll();
-      for (final window in windows) {
-        unawaited(
-          window.invokeMethod<void>('setLanguage', language.languageCode),
-        );
-      }
-    }
-  }
-
-  void applyIncomingLanguageFromWindow(String? code) {
-    final language = AppLanguageX.fromLanguageCode(code);
-    if (language == state) return;
-    state = language;
   }
 
   void applySynced(String name) {

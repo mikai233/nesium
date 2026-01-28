@@ -7,6 +7,8 @@ import '../platform/platform_capabilities.dart';
 
 class SettingsSync {
   static const String methodSettingsChanged = 'settingsChanged';
+  static const String methodSyncKV = 'syncKV';
+  static const String methodRequestFullSync = 'requestFullSync';
 
   static Future<void> broadcast({
     required String group,

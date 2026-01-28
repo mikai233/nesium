@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,7 +8,6 @@ import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 import '../../persistence/storage_codec.dart';
 import '../../persistence/storage_key.dart';
-import '../../windows/settings_sync.dart';
 
 final StorageKey<ThemeSettings> _themeSettingsKey = StorageKey(
   StorageKeys.settingsTheme,
@@ -61,10 +61,24 @@ class ThemeSettings {
 
 /// Theme settings controller
 class ThemeSettingsController extends Notifier<ThemeSettings> {
+  StreamSubscription<void>? _subscription;
+
   @override
   ThemeSettings build() {
+    // Listen for storage changes
+    final storage = ref.read(appStorageProvider);
+    _subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsTheme) {
+        final value = event.value;
+        if (value is String) {
+          applySynced(ThemeSettings.fromJson(jsonDecode(value)));
+        }
+      }
+    });
+    ref.onDispose(() => _subscription?.cancel());
+
     try {
-      final stored = ref.read(appStorageProvider).read(_themeSettingsKey);
+      final stored = storage.read(_themeSettingsKey);
       if (stored != null) {
         return stored;
       }
@@ -83,7 +97,6 @@ class ThemeSettingsController extends Notifier<ThemeSettings> {
     if (mode == state.mode) return;
     state = state.copyWith(mode: mode);
     await _persist();
-    unawaited(SettingsSync.broadcast(group: 'theme', payload: state.toJson()));
   }
 
   void applySynced(ThemeSettings next) {

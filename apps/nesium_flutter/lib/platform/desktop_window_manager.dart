@@ -62,55 +62,31 @@ class DesktopWindowManager {
 
   Future<void> openDebuggerWindow({String? languageCode}) async {
     if (!isSupported) return;
-    final window = await _openOrCreate(
-      WindowKind.debugger,
-      languageCode: languageCode,
-    );
-    await window.invokeMethod<void>('setLanguage', languageCode);
+    await _openOrCreate(WindowKind.debugger, languageCode: languageCode);
   }
 
   Future<void> openToolsWindow({String? languageCode}) async {
     if (!isSupported) return;
-    final window = await _openOrCreate(
-      WindowKind.tools,
-      languageCode: languageCode,
-    );
-    await window.invokeMethod<void>('setLanguage', languageCode);
+    await _openOrCreate(WindowKind.tools, languageCode: languageCode);
   }
 
   Future<void> openTilemapWindow({String? languageCode}) async {
     if (!isSupported) return;
-    final window = await _openOrCreate(
-      WindowKind.tilemap,
-      languageCode: languageCode,
-    );
-    await window.invokeMethod<void>('setLanguage', languageCode);
+    await _openOrCreate(WindowKind.tilemap, languageCode: languageCode);
   }
 
   Future<void> openTileViewerWindow({String? languageCode}) async {
     if (!isSupported) return;
-    final window = await _openOrCreate(
-      WindowKind.tileViewer,
-      languageCode: languageCode,
-    );
-    await window.invokeMethod<void>('setLanguage', languageCode);
+    await _openOrCreate(WindowKind.tileViewer, languageCode: languageCode);
   }
 
   Future<void> openSpriteViewerWindow({String? languageCode}) async {
     if (!isSupported) return;
-    final window = await _openOrCreate(
-      WindowKind.spriteViewer,
-      languageCode: languageCode,
-    );
-    await window.invokeMethod<void>('setLanguage', languageCode);
+    await _openOrCreate(WindowKind.spriteViewer, languageCode: languageCode);
   }
 
   Future<void> openPaletteViewerWindow({String? languageCode}) async {
     if (!isSupported) return;
-    final window = await _openOrCreate(
-      WindowKind.paletteViewer,
-      languageCode: languageCode,
-    );
-    await window.invokeMethod<void>('setLanguage', languageCode);
+    await _openOrCreate(WindowKind.paletteViewer, languageCode: languageCode);
   }
 }

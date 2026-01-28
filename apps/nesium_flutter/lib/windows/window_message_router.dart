@@ -5,8 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logging/app_logger.dart';
 import '../platform/platform_capabilities.dart';
-import '../features/settings/language_settings.dart';
-import '../features/settings/theme_settings.dart';
+import '../persistence/app_storage.dart';
 import 'settings_sync.dart';
 
 final windowMessageRouterProvider = Provider<void>((ref) {
@@ -33,37 +32,69 @@ final windowMessageRouterProvider = Provider<void>((ref) {
 
     await controller.setWindowMethodHandler((call) async {
       switch (call.method) {
-        case 'setLanguage':
-          final arg = call.arguments;
-          final languageCode = arg is String ? arg : null;
-          ref
-              .read(appLanguageProvider.notifier)
-              .applyIncomingLanguageFromWindow(languageCode);
-          return null;
         case SettingsSync.methodSettingsChanged:
           final args = call.arguments;
-          if (args is! Map) return null;
+          if (args is! Map) {
+            logWarning(
+              'Invalid arguments for methodSettingsChanged (expected Map): $args',
+              logger: 'window_message_router',
+            );
+            return null;
+          }
           final group = args['group'];
-          if (group is! String) return null;
+          if (group is! String) {
+            logWarning(
+              'Invalid group for methodSettingsChanged (expected String): $group',
+              logger: 'window_message_router',
+            );
+            return null;
+          }
+
           final payload = args['payload'];
 
           switch (group) {
-            case 'language':
-              if (payload is String) {
-                ref.read(appLanguageProvider.notifier).applySynced(payload);
+            case SettingsSync.methodRequestFullSync:
+              if (payload != null) {
+                ref.read(appStorageProvider).handleRequestFullSync(payload);
+              } else {
+                logWarning(
+                  'Invalid payload for methodRequestFullSync (expected ID): $payload',
+                  logger: 'window_message_router',
+                );
               }
               break;
-            case 'theme':
-              final next = payload is Map
-                  ? ThemeSettings.fromJson(Map<String, dynamic>.from(payload))
-                  : null;
-              if (next != null) {
-                ref.read(themeSettingsProvider.notifier).applySynced(next);
+            case SettingsSync.methodSyncKV:
+              if (payload is Map) {
+                final key = payload['key'];
+                final value = payload['value'];
+                if (key is String) {
+                  ref.read(appStorageProvider).handleSyncUpdate(key, value);
+                } else {
+                  logWarning(
+                    'Invalid key for methodSyncKV (expected String): $key',
+                    logger: 'window_message_router',
+                  );
+                }
+              } else {
+                logWarning(
+                  'Invalid payload for methodSyncKV (expected Map): $payload',
+                  logger: 'window_message_router',
+                );
               }
+              break;
+            default:
+              logWarning(
+                'Unknown group for methodSettingsChanged: $group',
+                logger: 'window_message_router',
+              );
               break;
           }
           return null;
         default:
+          logWarning(
+            'Unknown method call: ${call.method}',
+            logger: 'window_message_router',
+          );
           return null;
       }
     });
