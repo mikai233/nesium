@@ -25,16 +25,17 @@ class WindowsShaderSettings {
 class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
   @override
   WindowsShaderSettings build() {
+    // Listen for storage changes
     final storage = ref.read(appStorageProvider);
-    final storedEnabled = storage.get(StorageKeys.settingsWindowsShaderEnabled);
-    final storedPath = storage.get(StorageKeys.settingsWindowsShaderPresetPath);
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsWindowsShaderEnabled ||
+          event.key == StorageKeys.settingsWindowsShaderPresetPath) {
+        _reloadFromStorage();
+      }
+    });
+    ref.onDispose(() => subscription.cancel());
 
-    final settings = WindowsShaderSettings(
-      enabled: storedEnabled is bool ? storedEnabled : false,
-      presetPath: storedPath is String && storedPath.trim().isNotEmpty
-          ? storedPath.trim()
-          : null,
-    );
+    final settings = _loadSettings();
 
     scheduleMicrotask(() {
       unawaitedLogged(
@@ -44,23 +45,55 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
       );
     });
 
-    // Listen for storage changes
-    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
-      event,
-    ) {
-      if (event.key == StorageKeys.settingsWindowsShaderEnabled ||
-          event.key == StorageKeys.settingsWindowsShaderPresetPath) {
-        state = build();
-      }
-    });
-
-    ref.onDispose(() => subscription.cancel());
-
     return settings;
   }
 
+  WindowsShaderSettings _loadSettings() {
+    final storage = ref.read(appStorageProvider);
+    final storedEnabled = storage.get(StorageKeys.settingsWindowsShaderEnabled);
+    final storedPath = storage.get(StorageKeys.settingsWindowsShaderPresetPath);
+
+    return WindowsShaderSettings(
+      enabled: storedEnabled is bool ? storedEnabled : false,
+      presetPath: storedPath is String && storedPath.trim().isNotEmpty
+          ? storedPath.trim()
+          : null,
+    );
+  }
+
+  void _reloadFromStorage() {
+    final newState = _loadSettings();
+    if (newState.enabled != state.enabled ||
+        newState.presetPath != state.presetPath) {
+      state = newState;
+      _debounceApply(newState);
+    }
+  }
+
+  Timer? _debounceTimer;
+
   bool get _isWindows =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
+  @override
+  bool updateShouldNotify(
+    WindowsShaderSettings previous,
+    WindowsShaderSettings next,
+  ) {
+    return previous.enabled != next.enabled ||
+        previous.presetPath != next.presetPath;
+  }
+
+  void _debounceApply(WindowsShaderSettings settings) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      unawaitedLogged(
+        _applyToRuntime(settings),
+        message: 'applyToRuntime (debounced)',
+        logger: 'windows_shader_settings',
+      );
+    });
+  }
 
   Future<void> _applyToRuntime(WindowsShaderSettings settings) async {
     if (!_isWindows) return;
@@ -114,16 +147,7 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
       );
     }
 
-    try {
-      await _applyToRuntime(next);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'setShaderEnabled failed',
-        logger: 'windows_shader_settings',
-      );
-    }
+    _debounceApply(next);
   }
 
   Future<void> setPresetPath(String? path) async {
@@ -157,16 +181,7 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
       );
     }
 
-    try {
-      await _applyToRuntime(next);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'setShaderPresetPath failed',
-        logger: 'windows_shader_settings',
-      );
-    }
+    _debounceApply(next);
   }
 }
 

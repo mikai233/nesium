@@ -22,17 +22,19 @@ class AppleShaderSettings {
 class AppleShaderSettingsController extends Notifier<AppleShaderSettings> {
   @override
   AppleShaderSettings build() {
+    // Listen for storage changes
     final storage = ref.read(appStorageProvider);
-    final storedEnabled = storage.get(StorageKeys.settingsAppleShaderEnabled);
-    final storedPath = storage.get(StorageKeys.settingsAppleShaderPresetPath);
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsAppleShaderEnabled ||
+          event.key == StorageKeys.settingsAppleShaderPresetPath) {
+        _reloadFromStorage();
+      }
+    });
+    ref.onDispose(() => subscription.cancel());
 
-    final settings = AppleShaderSettings(
-      enabled: storedEnabled is bool ? storedEnabled : false,
-      presetPath: storedPath is String && storedPath.trim().isNotEmpty
-          ? storedPath.trim()
-          : null,
-    );
+    final settings = _loadSettings();
 
+    // Initial apply
     scheduleMicrotask(() {
       unawaitedLogged(
         _applyToRuntime(settings),
@@ -41,25 +43,57 @@ class AppleShaderSettingsController extends Notifier<AppleShaderSettings> {
       );
     });
 
-    // Listen for storage changes
-    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
-      event,
-    ) {
-      if (event.key == StorageKeys.settingsAppleShaderEnabled ||
-          event.key == StorageKeys.settingsAppleShaderPresetPath) {
-        state = build();
-      }
-    });
-
-    ref.onDispose(() => subscription.cancel());
-
     return settings;
   }
+
+  AppleShaderSettings _loadSettings() {
+    final storage = ref.read(appStorageProvider);
+    final storedEnabled = storage.get(StorageKeys.settingsAppleShaderEnabled);
+    final storedPath = storage.get(StorageKeys.settingsAppleShaderPresetPath);
+
+    return AppleShaderSettings(
+      enabled: storedEnabled is bool ? storedEnabled : false,
+      presetPath: storedPath is String && storedPath.trim().isNotEmpty
+          ? storedPath.trim()
+          : null,
+    );
+  }
+
+  void _reloadFromStorage() {
+    final newState = _loadSettings();
+    if (newState.enabled != state.enabled ||
+        newState.presetPath != state.presetPath) {
+      state = newState;
+      _debounceApply(newState);
+    }
+  }
+
+  Timer? _debounceTimer;
 
   bool get _isApple =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
           defaultTargetPlatform == TargetPlatform.iOS);
+
+  @override
+  bool updateShouldNotify(
+    AppleShaderSettings previous,
+    AppleShaderSettings next,
+  ) {
+    return previous.enabled != next.enabled ||
+        previous.presetPath != next.presetPath;
+  }
+
+  void _debounceApply(AppleShaderSettings settings) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      unawaitedLogged(
+        _applyToRuntime(settings),
+        message: 'applyToRuntime (debounced)',
+        logger: 'apple_shader_settings',
+      );
+    });
+  }
 
   Future<void> _applyToRuntime(AppleShaderSettings settings) async {
     if (!_isApple) return;
@@ -113,16 +147,7 @@ class AppleShaderSettingsController extends Notifier<AppleShaderSettings> {
       );
     }
 
-    try {
-      await _applyToRuntime(next);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'setShaderEnabled failed',
-        logger: 'apple_shader_settings',
-      );
-    }
+    _debounceApply(next);
   }
 
   Future<void> setPresetPath(String? path) async {
@@ -156,16 +181,7 @@ class AppleShaderSettingsController extends Notifier<AppleShaderSettings> {
       );
     }
 
-    try {
-      await _applyToRuntime(next);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'setShaderPresetPath failed',
-        logger: 'apple_shader_settings',
-      );
-    }
+    _debounceApply(next);
   }
 }
 

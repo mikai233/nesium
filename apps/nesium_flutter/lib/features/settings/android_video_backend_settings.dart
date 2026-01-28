@@ -39,25 +39,41 @@ class AndroidVideoBackendSettingsController
   @override
   AndroidVideoBackendSettings build() {
     _textureService = NesTextureService();
-    final stored = ref
-        .read(appStorageProvider)
-        .get(StorageKeys.settingsAndroidVideoBackend);
-    final settings = AndroidVideoBackendSettings(
-      backend: androidVideoBackendFromMode(stored),
-    );
 
     // Listen for storage changes
-    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
-      event,
-    ) {
+    final storage = ref.read(appStorageProvider);
+    final subscription = storage.onKeyChanged.listen((event) {
       if (event.key == StorageKeys.settingsAndroidVideoBackend) {
-        state = build();
+        _reloadFromStorage();
       }
     });
 
     ref.onDispose(() => subscription.cancel());
 
-    return settings;
+    final stored = storage.get(StorageKeys.settingsAndroidVideoBackend);
+    return AndroidVideoBackendSettings(
+      backend: androidVideoBackendFromMode(stored),
+    );
+  }
+
+  void _reloadFromStorage() {
+    final storage = ref.read(appStorageProvider);
+    final stored = storage.get(StorageKeys.settingsAndroidVideoBackend);
+    final newBackend = androidVideoBackendFromMode(stored);
+
+    if (newBackend != state.backend) {
+      state = AndroidVideoBackendSettings(backend: newBackend);
+
+      final isAndroid =
+          !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+      if (isAndroid) {
+        unawaitedLogged(
+          _textureService.setVideoBackend(newBackend.mode),
+          message: 'setVideoBackend(${newBackend.mode})',
+          logger: 'android_video_backend_settings',
+        );
+      }
+    }
   }
 
   Future<void> setBackend(AndroidVideoBackend backend) async {

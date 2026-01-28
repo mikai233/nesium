@@ -22,28 +22,38 @@ class LinuxPerformanceSettingsController
     extends Notifier<LinuxPerformanceSettings> {
   @override
   LinuxPerformanceSettings build() {
-    final storage = ref.read(appStorageProvider);
-    final highPerformance =
-        storage.get(StorageKeys.settingsLinuxHighPerformance) as bool? ?? true;
-
-    final isLinux = !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
-    if (isLinux && highPerformance) {
-      _applyHighPerformance(highPerformance);
-    }
-
     // Listen for storage changes
-    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
-      event,
-    ) {
+    final storage = ref.read(appStorageProvider);
+    final subscription = storage.onKeyChanged.listen((event) {
       if (event.key == StorageKeys.settingsLinuxHighPerformance) {
-        state = build();
+        _reloadFromStorage();
       }
     });
 
     ref.onDispose(() => subscription.cancel());
 
+    final highPerformance =
+        storage.get(StorageKeys.settingsLinuxHighPerformance) as bool? ?? true;
+
+    if (_isLinux && highPerformance) {
+      _applyHighPerformance(highPerformance);
+    }
+
     return LinuxPerformanceSettings(highPerformance: highPerformance);
   }
+
+  void _reloadFromStorage() {
+    final storage = ref.read(appStorageProvider);
+    final highPerformance =
+        storage.get(StorageKeys.settingsLinuxHighPerformance) as bool? ?? true;
+
+    if (highPerformance != state.highPerformance) {
+      state = state.copyWith(highPerformance: highPerformance);
+      _applyHighPerformance(highPerformance);
+    }
+  }
+
+  bool get _isLinux => !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
   Future<void> setHighPerformance(bool enabled) async {
     if (state.highPerformance == enabled) return;

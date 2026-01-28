@@ -22,7 +22,16 @@ class ApplePerformanceSettingsController
     extends Notifier<ApplePerformanceSettings> {
   @override
   ApplePerformanceSettings build() {
+    // Listen for storage changes
     final storage = ref.read(appStorageProvider);
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsAppleHighPerformance) {
+        _reloadFromStorage();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     final highPerformance =
         storage.get(StorageKeys.settingsAppleHighPerformance) as bool? ?? true;
 
@@ -34,18 +43,18 @@ class ApplePerformanceSettingsController
       _applyHighPerformance(highPerformance);
     }
 
-    // Listen for storage changes
-    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
-      event,
-    ) {
-      if (event.key == StorageKeys.settingsAppleHighPerformance) {
-        state = build();
-      }
-    });
-
-    ref.onDispose(() => subscription.cancel());
-
     return ApplePerformanceSettings(highPerformance: highPerformance);
+  }
+
+  void _reloadFromStorage() {
+    final storage = ref.read(appStorageProvider);
+    final highPerformance =
+        storage.get(StorageKeys.settingsAppleHighPerformance) as bool? ?? true;
+
+    if (highPerformance != state.highPerformance) {
+      state = state.copyWith(highPerformance: highPerformance);
+      _applyHighPerformance(highPerformance);
+    }
   }
 
   Future<void> setHighPerformance(bool enabled) async {

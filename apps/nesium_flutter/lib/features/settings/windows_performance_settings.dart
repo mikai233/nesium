@@ -27,31 +27,44 @@ class WindowsPerformanceSettingsController
 
   @override
   WindowsPerformanceSettings build() {
-    final storage = ref.read(appStorageProvider);
-    final highPerformance =
-        storage.get(StorageKeys.settingsWindowsHighPerformance) as bool? ??
-        true;
-
-    final isWindows =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
-    // Initial apply
-    if (isWindows && highPerformance && _isMainWindow) {
-      _applyHighPerformance(highPerformance);
-    }
-
     // Listen for storage changes
-    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
-      event,
-    ) {
+    final storage = ref.read(appStorageProvider);
+    final subscription = storage.onKeyChanged.listen((event) {
       if (event.key == StorageKeys.settingsWindowsHighPerformance) {
-        state = build();
+        _reloadFromStorage();
       }
     });
 
     ref.onDispose(() => subscription.cancel());
 
+    final highPerformance =
+        storage.get(StorageKeys.settingsWindowsHighPerformance) as bool? ??
+        true;
+
+    // Initial apply
+    if (_isWindows && highPerformance && _isMainWindow) {
+      _applyHighPerformance(highPerformance);
+    }
+
     return WindowsPerformanceSettings(highPerformance: highPerformance);
   }
+
+  void _reloadFromStorage() {
+    final storage = ref.read(appStorageProvider);
+    final highPerformance =
+        storage.get(StorageKeys.settingsWindowsHighPerformance) as bool? ??
+        true;
+
+    if (highPerformance != state.highPerformance) {
+      state = state.copyWith(highPerformance: highPerformance);
+      if (_isMainWindow) {
+        _applyHighPerformance(highPerformance);
+      }
+    }
+  }
+
+  bool get _isWindows =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
   Future<void> setHighPerformance(bool enabled) async {
     if (state.highPerformance == enabled) return;

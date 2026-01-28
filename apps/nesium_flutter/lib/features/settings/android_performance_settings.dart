@@ -20,7 +20,16 @@ class AndroidPerformanceSettingsController
     extends Notifier<AndroidPerformanceSettings> {
   @override
   AndroidPerformanceSettings build() {
+    // Listen for storage changes
     final storage = ref.read(appStorageProvider);
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsAndroidHighPerformance) {
+        _reloadFromStorage();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     final highPerformance =
         storage.get(StorageKeys.settingsAndroidHighPerformance) as bool? ??
         false;
@@ -30,18 +39,19 @@ class AndroidPerformanceSettingsController
       _applyHighPerformance(highPerformance);
     }
 
-    // Listen for storage changes
-    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
-      event,
-    ) {
-      if (event.key == StorageKeys.settingsAndroidHighPerformance) {
-        state = build();
-      }
-    });
-
-    ref.onDispose(() => subscription.cancel());
-
     return AndroidPerformanceSettings(highPerformance: highPerformance);
+  }
+
+  void _reloadFromStorage() {
+    final storage = ref.read(appStorageProvider);
+    final highPerformance =
+        storage.get(StorageKeys.settingsAndroidHighPerformance) as bool? ??
+        false;
+
+    if (highPerformance != state.highPerformance) {
+      state = state.copyWith(highPerformance: highPerformance);
+      _applyHighPerformance(highPerformance);
+    }
   }
 
   Future<void> setHighPerformance(bool enabled) async {

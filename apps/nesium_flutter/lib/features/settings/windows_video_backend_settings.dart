@@ -40,7 +40,17 @@ class WindowsVideoBackendSettingsController
 
   @override
   WindowsVideoBackendSettings build() {
+    // Listen for storage changes
     final storage = ref.read(appStorageProvider);
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsWindowsVideoBackend ||
+          event.key == StorageKeys.settingsWindowsNativeOverlay) {
+        _reloadFromStorage();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     final useGpuValue =
         storage.get(StorageKeys.settingsWindowsVideoBackend) as bool?;
     final useNativeOverlayValue =
@@ -51,9 +61,7 @@ class WindowsVideoBackendSettingsController
         ? WindowsVideoBackend.d3d11Gpu
         : WindowsVideoBackend.softwareCpu;
 
-    final isWindows =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
-    if (isWindows) {
+    if (_isWindows) {
       // Apply the preference to the native plugin on startup.
       if (_isMainWindow) {
         Future.microtask(
@@ -62,23 +70,38 @@ class WindowsVideoBackendSettingsController
       }
     }
 
-    // Listen for storage changes
-    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
-      event,
-    ) {
-      if (event.key == StorageKeys.settingsWindowsVideoBackend ||
-          event.key == StorageKeys.settingsWindowsNativeOverlay) {
-        state = build();
-      }
-    });
-
-    ref.onDispose(() => subscription.cancel());
-
     return WindowsVideoBackendSettings(
       backend: backend,
       useNativeOverlay: useNativeOverlayValue ?? false,
     );
   }
+
+  void _reloadFromStorage() {
+    final storage = ref.read(appStorageProvider);
+    final useGpuValue =
+        storage.get(StorageKeys.settingsWindowsVideoBackend) as bool?;
+    final useNativeOverlayValue =
+        storage.get(StorageKeys.settingsWindowsNativeOverlay) as bool?;
+
+    final backend = (useGpuValue ?? true)
+        ? WindowsVideoBackend.d3d11Gpu
+        : WindowsVideoBackend.softwareCpu;
+    final useNativeOverlay = useNativeOverlayValue ?? false;
+
+    if (backend != state.backend ||
+        useNativeOverlay != state.useNativeOverlay) {
+      state = state.copyWith(
+        backend: backend,
+        useNativeOverlay: useNativeOverlay,
+      );
+      if (_isWindows && _isMainWindow) {
+        _applyBackend(backend == WindowsVideoBackend.d3d11Gpu);
+      }
+    }
+  }
+
+  bool get _isWindows =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
   Future<void> setBackend(WindowsVideoBackend backend) async {
     if (state.backend == backend) return;

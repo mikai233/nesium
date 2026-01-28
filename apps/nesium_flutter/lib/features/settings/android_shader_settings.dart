@@ -25,16 +25,17 @@ class AndroidShaderSettings {
 class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
   @override
   AndroidShaderSettings build() {
+    // Listen for storage changes
     final storage = ref.read(appStorageProvider);
-    final storedEnabled = storage.get(StorageKeys.settingsAndroidShaderEnabled);
-    final storedPath = storage.get(StorageKeys.settingsAndroidShaderPresetPath);
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsAndroidShaderEnabled ||
+          event.key == StorageKeys.settingsAndroidShaderPresetPath) {
+        _reloadFromStorage();
+      }
+    });
+    ref.onDispose(() => subscription.cancel());
 
-    final settings = AndroidShaderSettings(
-      enabled: storedEnabled is bool ? storedEnabled : false,
-      presetPath: storedPath is String && storedPath.trim().isNotEmpty
-          ? storedPath.trim()
-          : null,
-    );
+    final settings = _loadSettings();
 
     scheduleMicrotask(() {
       unawaitedLogged(
@@ -44,23 +45,55 @@ class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
       );
     });
 
-    // Listen for storage changes
-    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
-      event,
-    ) {
-      if (event.key == StorageKeys.settingsAndroidShaderEnabled ||
-          event.key == StorageKeys.settingsAndroidShaderPresetPath) {
-        state = build();
-      }
-    });
-
-    ref.onDispose(() => subscription.cancel());
-
     return settings;
   }
 
+  AndroidShaderSettings _loadSettings() {
+    final storage = ref.read(appStorageProvider);
+    final storedEnabled = storage.get(StorageKeys.settingsAndroidShaderEnabled);
+    final storedPath = storage.get(StorageKeys.settingsAndroidShaderPresetPath);
+
+    return AndroidShaderSettings(
+      enabled: storedEnabled is bool ? storedEnabled : false,
+      presetPath: storedPath is String && storedPath.trim().isNotEmpty
+          ? storedPath.trim()
+          : null,
+    );
+  }
+
+  void _reloadFromStorage() {
+    final newState = _loadSettings();
+    if (newState.enabled != state.enabled ||
+        newState.presetPath != state.presetPath) {
+      state = newState;
+      _debounceApply(newState);
+    }
+  }
+
+  Timer? _debounceTimer;
+
   bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  @override
+  bool updateShouldNotify(
+    AndroidShaderSettings previous,
+    AndroidShaderSettings next,
+  ) {
+    return previous.enabled != next.enabled ||
+        previous.presetPath != next.presetPath;
+  }
+
+  void _debounceApply(AndroidShaderSettings settings) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      unawaitedLogged(
+        _applyToRuntime(settings),
+        message: 'applyToRuntime (debounced)',
+        logger: 'android_shader_settings',
+      );
+    });
+  }
 
   Future<void> _applyToRuntime(AndroidShaderSettings settings) async {
     if (!_isAndroid) return;
@@ -114,16 +147,7 @@ class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
       );
     }
 
-    try {
-      await _applyToRuntime(next);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'setShaderEnabled failed',
-        logger: 'android_shader_settings',
-      );
-    }
+    _debounceApply(next);
   }
 
   Future<void> setPresetPath(String? path) async {
@@ -157,16 +181,7 @@ class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
       );
     }
 
-    try {
-      await _applyToRuntime(next);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'setShaderPresetPath failed',
-        logger: 'android_shader_settings',
-      );
-    }
+    _debounceApply(next);
   }
 }
 
