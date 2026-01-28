@@ -39,7 +39,8 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
     
     // Scaling and shaders
     private var inputTexture: MTLTexture?
-    private var stagingBuffer: [UInt8] = []
+    private var stagingBuffer: MTLBuffer?  // Shared memory buffer for zero-copy upload
+    private var stagingBufferSize: Int = 0
     private let renderQueue = DispatchQueue(label: "plugins.nesium.com/render_queue", qos: .userInteractive)
     
     // Cached viewport state
@@ -68,7 +69,7 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
         updatePhysicalSize(frame.size)
         nesiumRegisterFrameCallback(for: self)
         nesium_runtime_start()
-        NSLog("NesiumPlatformView: initialized (Push Mode)")
+        NSLog("[Nesium] PlatformView initialized (Low Latency Metal)")
     }
 
     func view() -> UIView {
@@ -77,7 +78,7 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
     
     deinit {
         nesiumUnregisterFrameCallback(for: self)
-        NSLog("NesiumPlatformView: deinit")
+        NSLog("[Nesium] PlatformView deinitialized")
     }
 
     private func updatePhysicalSize(_ size: CGSize) {
@@ -116,6 +117,21 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
         
         if renderWidth <= 0 || renderHeight <= 0 { return }
 
+        let rowBytes = width * 4
+        let neededSize = rowBytes * height
+        
+        // Ensure MTLBuffer is large enough (shared memory for zero-copy)
+        if stagingBuffer == nil || stagingBufferSize < neededSize {
+            stagingBuffer = device.makeBuffer(length: neededSize, options: .storageModeShared)
+            stagingBufferSize = neededSize
+        }
+        
+        guard let stagingBuffer = self.stagingBuffer else { return }
+        
+        // Copy raw frame data from Rust directly into shared GPU memory
+        let dst = stagingBuffer.contents().assumingMemoryBound(to: UInt8.self)
+        nesium_copy_frame(0, dst, UInt32(rowBytes), UInt32(height))
+        
         // Prepare input texture
         if inputTexture == nil || inputTexture?.width != width || inputTexture?.height != height {
             let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
@@ -125,50 +141,45 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
         
         guard let inputTexture = self.inputTexture else { return }
         
-        // Copy raw frame data from Rust
-        let rowBytes = width * 4
-        let neededSize = rowBytes * height
-        if stagingBuffer.count < neededSize {
-            stagingBuffer = [UInt8](repeating: 0, count: neededSize)
-        }
+        // Use blit encoder to copy from MTLBuffer to MTLTexture (GPU-side copy)
+        guard let commandBuffer = commandQueue.makeCommandBuffer(),
+              let blitEncoder = commandBuffer.makeBlitCommandEncoder() else { return }
         
-        stagingBuffer.withUnsafeMutableBytes { ptr in
-            nesium_copy_frame(
-                0,
-                ptr.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                UInt32(rowBytes),
-                UInt32(height)
-            )
-        }
-        
-        inputTexture.replace(region: MTLRegionMake2D(0, 0, width, height), 
-                           mipmapLevel: 0, 
-                           withBytes: stagingBuffer, 
-                           bytesPerRow: rowBytes)
+        blitEncoder.copy(
+            from: stagingBuffer,
+            sourceOffset: 0,
+            sourceBytesPerRow: rowBytes,
+            sourceBytesPerImage: neededSize,
+            sourceSize: MTLSize(width: width, height: height, depth: 1),
+            to: inputTexture,
+            destinationSlice: 0,
+            destinationLevel: 0,
+            destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0)
+        )
+        blitEncoder.endEncoding()
 
         // Apply shader and render to drawable
-        if let commandBuffer = commandQueue.makeCommandBuffer() {
-            let success = nesium_apply_shader_metal(
-                Unmanaged.passUnretained(device).toOpaque(),
-                Unmanaged.passUnretained(commandQueue).toOpaque(),
-                Unmanaged.passUnretained(commandBuffer).toOpaque(),
-                Unmanaged.passUnretained(inputTexture).toOpaque(),
-                Unmanaged.passUnretained(drawable.texture).toOpaque(),
-                UInt32(width),
-                UInt32(height),
-                UInt32(renderWidth),
-                UInt32(renderHeight)
-            )
-            
-            if success {
-                commandBuffer.present(drawable)
-            }
-            commandBuffer.commit()
-            
-            frameCount += 1
+        let success = nesium_apply_shader_metal(
+            Unmanaged.passUnretained(device).toOpaque(),
+            Unmanaged.passUnretained(commandQueue).toOpaque(),
+            Unmanaged.passUnretained(commandBuffer).toOpaque(),
+            Unmanaged.passUnretained(inputTexture).toOpaque(),
+            Unmanaged.passUnretained(drawable.texture).toOpaque(),
+            UInt32(width),
+            UInt32(height),
+            UInt32(renderWidth),
+            UInt32(renderHeight)
+        )
+        
+        if success {
+            commandBuffer.present(drawable)
+        } else {
             if frameCount % 60 == 0 {
-                NSLog("NesiumPlatformView: Pushed 60 frames")
+                NSLog("[Nesium] Metal shader application failed")
             }
         }
+        commandBuffer.commit()
+        
+        frameCount += 1
     }
 }
