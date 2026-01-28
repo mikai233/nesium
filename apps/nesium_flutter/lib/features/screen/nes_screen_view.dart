@@ -146,240 +146,217 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
     super.dispose();
   }
 
+  Widget _buildErrorContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.error_outline, color: Colors.red),
+        const SizedBox(height: 8),
+        Text(
+          'Failed to create texture',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(color: Colors.red),
+        ),
+        const SizedBox(height: 4),
+        Text(widget.error!, textAlign: TextAlign.center),
+      ],
+    );
+  }
+
+  Widget _wrapWithMouseRegion(Widget child) {
+    return MouseRegion(
+      cursor: _cursorHidden ? SystemMouseCursors.none : MouseCursor.defer,
+      onEnter: (_) => _showCursorAndArmTimer(),
+      onHover: (_) => _showCursorAndArmTimer(),
+      onExit: (_) => _showCursorAndCancelTimer(),
+      child: child,
+    );
+  }
+
+  Widget _buildAndroidContent(Size viewport, bool hasRom) {
+    return SizedBox(
+      width: viewport.width,
+      height: viewport.height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const AndroidView(viewType: 'nesium_game_view'),
+          if (hasRom) const EmulationStatusOverlay(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIosContent(Size viewport, bool hasRom, VideoSettings settings) {
+    final appleShaderSettings = ref.watch(appleShaderSettingsProvider);
+    final shouldUseHighRes =
+        settings.videoFilter != VideoFilter.none || appleShaderSettings.enabled;
+
+    _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
+
+    return SizedBox(
+      width: viewport.width,
+      height: viewport.height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const UiKitView(
+            viewType: 'plugins.nesium.com/native_view',
+            creationParams: {},
+            creationParamsCodec: StandardMessageCodec(),
+          ),
+          if (hasRom) const EmulationStatusOverlay(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextureContent(
+    Size viewport,
+    bool hasRom,
+    VideoSettings settings,
+  ) {
+    final windowsShaderSettings = ref.watch(windowsShaderSettingsProvider);
+    final windowsBackend = ref.watch(windowsVideoBackendSettingsProvider);
+    final appleShaderSettings = ref.watch(appleShaderSettingsProvider);
+    final isApple =
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.iOS);
+
+    final shouldUseHighRes =
+        settings.videoFilter != VideoFilter.none ||
+        (windowsShaderSettings.enabled &&
+            windowsBackend.backend == WindowsVideoBackend.d3d11Gpu) ||
+        (isApple && appleShaderSettings.enabled);
+
+    _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
+
+    final isWindows =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
+    // Only enable overlay if this is the current active route
+    final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? true;
+    final useNativeOverlay =
+        isWindows && windowsBackend.useNativeOverlay && isCurrentRoute;
+
+    if (useNativeOverlay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        final gameBox =
+            _gameKey.currentContext?.findRenderObject() as RenderBox?;
+        if (gameBox == null || !gameBox.hasSize) return;
+
+        final globalOffset = gameBox.localToGlobal(Offset.zero);
+        final dpr = MediaQuery.of(context).devicePixelRatio;
+
+        final left = (globalOffset.dx * dpr).floorToDouble();
+        final top = (globalOffset.dy * dpr).floorToDouble();
+        final right = ((globalOffset.dx + viewport.width) * dpr).ceilToDouble();
+        final bottom = ((globalOffset.dy + viewport.height) * dpr)
+            .ceilToDouble();
+
+        final rect = Rect.fromLTWH(left, top, right - left, bottom - top);
+
+        if (_lastOverlayRect == null ||
+            (rect.left - _lastOverlayRect!.left).abs() > 0.1 ||
+            (rect.top - _lastOverlayRect!.top).abs() > 0.1 ||
+            (rect.width - _lastOverlayRect!.width).abs() > 0.1 ||
+            (rect.height - _lastOverlayRect!.height).abs() > 0.1) {
+          _lastOverlayRect = rect;
+          ref
+              .read(nesTextureServiceProvider)
+              .setNativeOverlay(
+                enabled: true,
+                x: rect.left,
+                y: rect.top,
+                width: rect.width,
+                height: rect.height,
+              );
+        }
+      });
+    } else if (isWindows) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_lastOverlayRect != null) {
+          _lastOverlayRect = null;
+          ref.read(nesTextureServiceProvider).setNativeOverlay(enabled: false);
+        }
+      });
+    }
+
+    return SizedBox(
+      key: _gameKey,
+      width: viewport.width,
+      height: viewport.height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (useNativeOverlay)
+            const CustomPaint(
+              painter: _HolePunchPainter(),
+              child: SizedBox.expand(),
+            )
+          else
+            Texture(
+              textureId: widget.textureId!,
+              filterQuality: shouldUseHighRes
+                  ? FilterQuality.low
+                  : FilterQuality.none,
+            ),
+          if (hasRom) const EmulationStatusOverlay(),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.error != null) {
+      return Container(
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: _buildErrorContent(),
+      );
+    }
+
     final hasRom = ref.watch(
       nesControllerProvider.select((s) => s.romHash != null),
     );
     final settings = ref.watch(videoSettingsProvider);
-    final windowsShaderSettings = ref.watch(windowsShaderSettingsProvider);
-    final windowsBackend = ref.watch(windowsVideoBackendSettingsProvider);
     final integerScaling = settings.integerScaling;
     final aspectRatio = settings.aspectRatio;
-
-    Widget content;
-    if (widget.error != null) {
-      content = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.error_outline, color: Colors.red),
-          const SizedBox(height: 8),
-          Text(
-            'Failed to create texture',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(color: Colors.red),
-          ),
-          const SizedBox(height: 4),
-          Text(widget.error!, textAlign: TextAlign.center),
-        ],
-      );
-    } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      content = LayoutBuilder(
-        builder: (context, constraints) {
-          final viewport = NesScreenView.computeViewportSize(
-            constraints,
-            integerScaling: integerScaling,
-            aspectRatio: aspectRatio,
-          );
-          if (viewport == null) return const SizedBox.shrink();
-
-          final child = SizedBox(
-            width: viewport.width,
-            height: viewport.height,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                const AndroidView(viewType: 'nesium_game_view'),
-                if (hasRom) const EmulationStatusOverlay(),
-              ],
-            ),
-          );
-
-          return MouseRegion(
-            cursor: _cursorHidden ? SystemMouseCursors.none : MouseCursor.defer,
-            onEnter: (_) => _showCursorAndArmTimer(),
-            onHover: (_) => _showCursorAndArmTimer(),
-            onExit: (_) => _showCursorAndCancelTimer(),
-            child: child,
-          );
-        },
-      );
-    } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      content = LayoutBuilder(
-        builder: (context, constraints) {
-          final viewport = NesScreenView.computeViewportSize(
-            constraints,
-            integerScaling: integerScaling,
-            aspectRatio: aspectRatio,
-          );
-          if (viewport == null) return const SizedBox.shrink();
-
-          final appleShaderSettings = ref.watch(appleShaderSettingsProvider);
-          final shouldUseHighRes =
-              settings.videoFilter != VideoFilter.none ||
-              appleShaderSettings.enabled;
-
-          _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
-
-          final child = SizedBox(
-            width: viewport.width,
-            height: viewport.height,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                const UiKitView(
-                  viewType: 'plugins.nesium.com/native_view',
-                  creationParams: {},
-                  creationParamsCodec: StandardMessageCodec(),
-                ),
-                if (hasRom) const EmulationStatusOverlay(),
-              ],
-            ),
-          );
-
-          return MouseRegion(
-            cursor: _cursorHidden ? SystemMouseCursors.none : MouseCursor.defer,
-            onEnter: (_) => _showCursorAndArmTimer(),
-            onHover: (_) => _showCursorAndArmTimer(),
-            onExit: (_) => _showCursorAndCancelTimer(),
-            child: child,
-          );
-        },
-      );
-    } else if (widget.textureId != null) {
-      content = LayoutBuilder(
-        builder: (context, constraints) {
-          final viewport = NesScreenView.computeViewportSize(
-            constraints,
-            integerScaling: integerScaling,
-            aspectRatio: aspectRatio,
-          );
-          if (viewport == null) return const SizedBox.shrink();
-
-          final appleShaderSettings = ref.watch(appleShaderSettingsProvider);
-          final isApple =
-              !kIsWeb &&
-              (defaultTargetPlatform == TargetPlatform.macOS ||
-                  defaultTargetPlatform == TargetPlatform.iOS);
-
-          final shouldUseHighRes =
-              settings.videoFilter != VideoFilter.none ||
-              (windowsShaderSettings.enabled &&
-                  windowsBackend.backend == WindowsVideoBackend.d3d11Gpu) ||
-              (isApple && appleShaderSettings.enabled);
-
-          _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
-
-          final isWindows =
-              !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
-
-          // Only enable overlay if this is the current active route
-          final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? true;
-          final useNativeOverlay =
-              isWindows && windowsBackend.useNativeOverlay && isCurrentRoute;
-
-          if (useNativeOverlay) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-
-              // We use the GlobalKey of the actual game SizedBox to get its exact position
-              // This is much more reliable as it avoids double-counting any
-              // parent alignment or Transform.translate offsets.
-              final gameBox =
-                  _gameKey.currentContext?.findRenderObject() as RenderBox?;
-              if (gameBox == null || !gameBox.hasSize) return;
-
-              final globalOffset = gameBox.localToGlobal(Offset.zero);
-              final dpr = MediaQuery.of(context).devicePixelRatio;
-
-              // Use enclosing rectangle to ensure we cover any sub-pixel gaps.
-              // Left/Top: Floor to include the starting pixel.
-              // Right/Bottom: Ceil to include the ending pixel.
-              final left = (globalOffset.dx * dpr).floorToDouble();
-              final top = (globalOffset.dy * dpr).floorToDouble();
-              final right = ((globalOffset.dx + viewport.width) * dpr)
-                  .ceilToDouble();
-              final bottom = ((globalOffset.dy + viewport.height) * dpr)
-                  .ceilToDouble();
-
-              final rect = Rect.fromLTWH(left, top, right - left, bottom - top);
-
-              // Only update if significantly changed
-              if (_lastOverlayRect == null ||
-                  (rect.left - _lastOverlayRect!.left).abs() > 0.1 ||
-                  (rect.top - _lastOverlayRect!.top).abs() > 0.1 ||
-                  (rect.width - _lastOverlayRect!.width).abs() > 0.1 ||
-                  (rect.height - _lastOverlayRect!.height).abs() > 0.1) {
-                _lastOverlayRect = rect;
-                ref
-                    .read(nesTextureServiceProvider)
-                    .setNativeOverlay(
-                      enabled: true,
-                      x: rect.left,
-                      y: rect.top,
-                      width: rect.width,
-                      height: rect.height,
-                    );
-              }
-            });
-          } else if (isWindows) {
-            // Ensure overlay is disabled if setting is off
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              if (_lastOverlayRect != null) {
-                _lastOverlayRect = null;
-                ref
-                    .read(nesTextureServiceProvider)
-                    .setNativeOverlay(enabled: false);
-              }
-            });
-          }
-
-          final child = SizedBox(
-            key: _gameKey,
-            width: viewport.width,
-            height: viewport.height,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (useNativeOverlay)
-                  // Use BlendMode.clear to punch a hole through to the DWM transparency
-                  CustomPaint(
-                    painter: const _HolePunchPainter(),
-                    child: const SizedBox.expand(),
-                  )
-                else
-                  Texture(
-                    textureId: widget.textureId!,
-                    filterQuality: shouldUseHighRes
-                        ? FilterQuality.low
-                        : FilterQuality.none,
-                  ),
-                if (hasRom) const EmulationStatusOverlay(),
-              ],
-            ),
-          );
-
-          return MouseRegion(
-            cursor: _cursorHidden ? SystemMouseCursors.none : MouseCursor.defer,
-            onEnter: (_) => _showCursorAndArmTimer(),
-            onHover: (_) => _showCursorAndArmTimer(),
-            onExit: (_) => _showCursorAndCancelTimer(),
-            child: child,
-          );
-        },
-      );
-    } else {
-      content = const SizedBox.shrink();
-    }
 
     return Container(
       color: Colors.black,
       alignment: Alignment.center,
       child: Transform.translate(
         offset: Offset(0, widget.screenVerticalOffset),
-        child: content,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final viewport = NesScreenView.computeViewportSize(
+              constraints,
+              integerScaling: integerScaling,
+              aspectRatio: aspectRatio,
+            );
+            if (viewport == null) return const SizedBox.shrink();
+
+            Widget content;
+            if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+              content = _buildAndroidContent(viewport, hasRom);
+            } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+              content = _buildIosContent(viewport, hasRom, settings);
+            } else if (widget.textureId != null) {
+              content = _buildTextureContent(viewport, hasRom, settings);
+            } else {
+              content = const SizedBox.shrink();
+            }
+
+            return _wrapWithMouseRegion(content);
+          },
+        ),
       ),
     );
   }
