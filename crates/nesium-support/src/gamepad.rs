@@ -549,7 +549,7 @@ mod tests {
     fn test_default_button_mapping() {
         let mapping = ButtonMapping::default();
         assert_eq!(mapping.a, Some(Button::South));
-        assert_eq!(mapping.b, Some(Button::East));
+        assert_eq!(mapping.b, Some(Button::West));
         assert_eq!(mapping.start, Some(Button::Start));
         assert_eq!(mapping.select, Some(Button::Select));
     }
