@@ -10,10 +10,14 @@
 #[cfg(target_os = "android")]
 mod android;
 pub mod api;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod apple;
 pub mod aux_texture;
 pub mod event_worker;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 mod senders;
+#[cfg(target_os = "windows")]
+pub mod windows;
 
 #[cfg(all(
     feature = "mimalloc",
@@ -35,34 +39,24 @@ use nesium_core::{
     },
 };
 use nesium_runtime::{
-    AudioMode, Runtime, RuntimeConfig, RuntimeHandle, VideoConfig, VideoExternalConfig,
+    AudioMode, Runtime, RuntimeConfig, RuntimeHandle, VideoBackendConfig, VideoConfig,
 };
-
-#[cfg(target_os = "android")]
-use nesium_runtime::VideoSwapchainConfig;
 
 pub const FRAME_WIDTH: usize = SCREEN_WIDTH;
 pub const FRAME_HEIGHT: usize = SCREEN_HEIGHT;
 
-struct VideoBackingStore {
-    _plane0: Box<[u8]>,
-    _plane1: Box<[u8]>,
-}
-
 #[cfg(target_os = "android")]
-enum VideoBacking {
-    Cpu(#[allow(dead_code)] VideoBackingStore),
-    Ahb(Box<android::AhbSwapchain>),
+pub enum VideoBacking {
+    Upload,
+    Ahb(Arc<android::AhbSwapchain>),
 }
 
 struct RuntimeHolder {
-    #[cfg(target_os = "android")]
-    _video: VideoBacking,
-    #[cfg(not(target_os = "android"))]
-    _video: VideoBackingStore,
     handle: RuntimeHandle,
     frame_handle: Option<Arc<ExternalFrameHandle>>,
     _runtime: Runtime,
+    #[cfg(target_os = "android")]
+    _video: VideoBacking,
 }
 
 static RUNTIME: OnceLock<RuntimeHolder> = OnceLock::new();
@@ -86,63 +80,43 @@ pub fn platform_color_format() -> ColorFormat {
 fn ensure_runtime() -> &'static RuntimeHolder {
     RUNTIME.get_or_init(|| {
         let color_format = platform_color_format();
+        let video_cfg = VideoConfig {
+            color_format,
+            output_width: FRAME_WIDTH as u32,
+            output_height: FRAME_HEIGHT as u32,
+            backend: VideoBackendConfig::Owned,
+        };
+
         #[cfg(target_os = "android")]
-        let (video_cfg, video_backing): (VideoConfig, VideoBacking) = {
-            if android::use_ahb_video_backend() {
-                let swapchain = Box::new(android::AhbSwapchain::new(
-                    FRAME_WIDTH as u32,
-                    FRAME_HEIGHT as u32,
-                ));
-                let user_data = (&*swapchain as *const android::AhbSwapchain) as *mut c_void;
-                let cfg = VideoConfig::Swapchain(VideoSwapchainConfig {
-                    color_format,
-                    lock: android::ahb_lock_plane,
-                    unlock: android::ahb_unlock_plane,
-                    user_data,
-                });
-                // NOTE: callbacks own a clone-like handle; keep the backing store alive too.
-                (cfg, VideoBacking::Ahb(swapchain))
-            } else {
-                let len = FRAME_WIDTH * FRAME_HEIGHT * color_format.bytes_per_pixel();
-                let plane0 = vec![0u8; len].into_boxed_slice();
-                let plane1 = vec![0u8; len].into_boxed_slice();
-                let mut video = VideoBackingStore {
-                    _plane0: plane0,
-                    _plane1: plane1,
-                };
-                let cfg = VideoConfig::External(VideoExternalConfig {
-                    color_format,
-                    pitch_bytes: FRAME_WIDTH * color_format.bytes_per_pixel(),
-                    plane0: video._plane0.as_mut_ptr(),
-                    plane1: video._plane1.as_mut_ptr(),
-                });
-                (cfg, VideoBacking::Cpu(video))
-            }
+        let (runtime, video_backing) = if android::use_ahb_video_backend() {
+            let mut video_cfg = video_cfg;
+            let swapchain = Arc::new(android::AhbSwapchain::new(
+                video_cfg.output_width,
+                video_cfg.output_height,
+            ));
+            let user_data = Arc::as_ptr(&swapchain) as *mut c_void;
+            video_cfg.backend = VideoBackendConfig::Swapchain {
+                lock: android::ahb_lock_plane,
+                unlock: android::ahb_unlock_plane,
+                user_data,
+            };
+            let runtime = Runtime::start(RuntimeConfig {
+                video: video_cfg,
+                audio: AudioMode::Auto,
+            })
+            .expect("failed to start nesium runtime");
+            (runtime, VideoBacking::Ahb(swapchain))
+        } else {
+            let runtime = Runtime::start(RuntimeConfig {
+                video: video_cfg,
+                audio: AudioMode::Auto,
+            })
+            .expect("failed to start nesium runtime");
+            (runtime, VideoBacking::Upload)
         };
 
         #[cfg(not(target_os = "android"))]
-        let (video_cfg, video_backing): (VideoConfig, VideoBackingStore) = {
-            let len = FRAME_WIDTH * FRAME_HEIGHT * color_format.bytes_per_pixel();
-            let plane0 = vec![0u8; len].into_boxed_slice();
-            let plane1 = vec![0u8; len].into_boxed_slice();
-            let mut video = VideoBackingStore {
-                _plane0: plane0,
-                _plane1: plane1,
-            };
-            let cfg = VideoConfig::External(VideoExternalConfig {
-                color_format,
-                pitch_bytes: FRAME_WIDTH * color_format.bytes_per_pixel(),
-                plane0: video._plane0.as_mut_ptr(),
-                plane1: video._plane1.as_mut_ptr(),
-            });
-            (cfg, video)
-        };
-
-        // SAFETY:
-        // - CPU backend: `video_backing` keeps the two planes alive for the lifetime of the process.
-        // - AHB backend: the swapchain callbacks manage per-frame locking and pointer validity.
-
-        let runtime = Runtime::start_pending(RuntimeConfig {
+        let runtime = Runtime::start(RuntimeConfig {
             video: video_cfg,
             audio: AudioMode::Auto,
         })
@@ -164,23 +138,17 @@ fn ensure_runtime() -> &'static RuntimeHolder {
         let frame_handle = handle.frame_handle().cloned();
 
         RuntimeHolder {
-            _video: video_backing,
             handle,
             frame_handle,
             _runtime: runtime,
+            #[cfg(target_os = "android")]
+            _video: video_backing,
         }
     })
 }
 
 pub(crate) fn runtime_handle() -> &'static RuntimeHandle {
     &ensure_runtime().handle
-}
-
-fn frame_handle_ref() -> &'static ExternalFrameHandle {
-    ensure_runtime()
-        .frame_handle
-        .as_ref()
-        .expect("frame handle not available for this video backend")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -261,25 +229,37 @@ pub unsafe extern "C" fn nesium_copy_frame(
         return;
     }
 
-    let frame_handle = frame_handle_ref();
+    let Some(frame_handle) = ensure_runtime().frame_handle.as_deref() else {
+        return;
+    };
     let idx = frame_handle.begin_front_copy();
     let src_slice = frame_handle.plane_slice(idx);
 
-    let height = FRAME_HEIGHT.min(dst_height as usize);
-    let src_pitch = FRAME_WIDTH * frame_handle.bytes_per_pixel();
+    let src_width = frame_handle.width();
+    let src_height = frame_handle.height();
+    let bpp = frame_handle.bytes_per_pixel();
+    let src_pitch = frame_handle.pitch_bytes();
     let dst_pitch = dst_pitch as usize;
 
-    let dst_slice = unsafe {
-        std::slice::from_raw_parts_mut(
-            dst,
-            dst_pitch
-                .saturating_mul(dst_height as usize)
-                .min(src_pitch * FRAME_HEIGHT),
-        )
+    let dst_len = match dst_pitch.checked_mul(dst_height as usize) {
+        Some(v) => v,
+        None => {
+            frame_handle.end_front_copy();
+            return;
+        }
     };
+    let dst_slice = unsafe { std::slice::from_raw_parts_mut(dst, dst_len) };
+
+    let height = src_height.min(dst_height as usize);
+    if height == 0 {
+        frame_handle.end_front_copy();
+        return;
+    }
+
+    let row_bytes = src_width * bpp;
 
     if dst_pitch == src_pitch {
-        let bytes = src_pitch * height;
+        let bytes = src_pitch.saturating_mul(height);
         let src_len = src_slice.len();
         let dst_len = dst_slice.len();
         let bytes = bytes.min(src_len).min(dst_len);
@@ -287,12 +267,20 @@ pub unsafe extern "C" fn nesium_copy_frame(
         let dst = &mut dst_slice[..bytes];
         dst.copy_from_slice(src);
     } else {
+        let row_copy = row_bytes.min(dst_pitch).min(src_pitch);
+        if row_copy == 0 {
+            frame_handle.end_front_copy();
+            return;
+        }
         for y in 0..height {
             let src_off = y * src_pitch;
             let dst_off = y * dst_pitch;
-            let src_row = &src_slice[src_off..src_off + src_pitch];
-            let dst_row = &mut dst_slice[dst_off..dst_off + src_pitch.min(dst_pitch)];
-            dst_row.copy_from_slice(&src_row[..dst_row.len()]);
+            if src_off + row_copy > src_slice.len() || dst_off + row_copy > dst_slice.len() {
+                break;
+            }
+            let src_row = &src_slice[src_off..src_off + row_copy];
+            let dst_row = &mut dst_slice[dst_off..dst_off + row_copy];
+            dst_row.copy_from_slice(src_row);
         }
     }
 

@@ -26,6 +26,13 @@ At a high level, the Flutter app drives UI and input, and loads a native dynamic
 - **Control / debug messages** flow through **flutter_rust_bridge** (method calls / streams) between Dart and Rust via the glue layer (`crates/nesium-flutter`).
 - **Build requirements**: desktop builds require a working **Rust toolchain** in addition to Flutter (because the Rust core is built as a native library).
 
+### Video output resizing (filters/upscalers)
+
+The NES core canonical index buffer is fixed at `256x240`. The runtime derives a packed output buffer whose resolution can be changed at runtime. Each frame-ready callback reports the current output `width/height/pitch`, and the platform texture code reallocates as needed and only performs a copy (no per-platform scaling).
+
+- Rust (FRB): `setVideoFilter(...)` (single-select filter; some filters rescale the output)
+- Dart MethodChannel: `setPresentBufferSize` (presentation buffer size; required on Android to avoid compositor scaling)
+
 ## Getting started
 
 ```bash

@@ -31,7 +31,6 @@ class NesRenderer(
     private val surface: Surface,
     private val releaseSurface: Boolean,
     private val onDispose: (() -> Unit)? = null,
-    private val highPriorityEnabled: Boolean = false,
 ) {
     private companion object {
         private const val TAG = "NesRenderer"
@@ -65,7 +64,7 @@ class NesRenderer(
     private var running = true
     private var lastSeq = -1L
 
-    // Cached native constants (NES frame size is fixed).
+    // Cached native frame size (can change at runtime).
     private var frameW = 0
     private var frameH = 0
 
@@ -134,12 +133,8 @@ class NesRenderer(
         thread.start()
         handler = Handler(thread.looper)
         handler.post {
-            if (highPriorityEnabled) {
-                try {
-                    Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
-                } catch (t: Throwable) {
-                    Log.w(TAG, "Failed to raise GL thread priority", t)
-                }
+            bestEffort("registerRendererTid") {
+                NesiumNative.nativeRegisterRendererTid(Process.myTid())
             }
             initGLAndLoop()
         }
@@ -421,6 +416,34 @@ class NesRenderer(
         }
     }
 
+    private fun ensureFrameResourcesUpToDate() {
+        val newW = NesiumNative.nativeFrameWidth()
+        val newH = NesiumNative.nativeFrameHeight()
+        if (newW <= 0 || newH <= 0) return
+        if (newW == frameW && newH == frameH) return
+
+        frameW = newW
+        frameH = newH
+
+        // Refresh DirectByteBuffers because the native backing store may have been reallocated.
+        planeBuffers[0] = NesiumNative.nativePlaneBuffer(0)
+        planeBuffers[1] = NesiumNative.nativePlaneBuffer(1)
+
+        // Reallocate GL texture storage for the new size.
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
+        GLES20.glTexImage2D(
+            GLES20.GL_TEXTURE_2D,
+            0,
+            GLES20.GL_RGBA,
+            frameW,
+            frameH,
+            0,
+            GLES20.GL_RGBA,
+            GLES20.GL_UNSIGNED_BYTE,
+            null
+        )
+    }
+
     private fun handleSwapFailure() {
         val err = EGL14.eglGetError()
         // EGL_CONTEXT_LOST requires full context recreation.
@@ -512,6 +535,8 @@ class NesRenderer(
         // We observed a new frame seq.
         hasNewFrameSignal = false
         lastSeq = seq
+
+        ensureFrameResourcesUpToDate()
 
         val idx = NesiumNative.nativeBeginFrontCopy()
         try {

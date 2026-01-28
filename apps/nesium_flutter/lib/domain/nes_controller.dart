@@ -1,9 +1,9 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nesium_flutter/bridge/api/load_rom.dart' as nes_api;
 import 'package:nesium_flutter/logging/app_logger.dart';
 import 'package:nesium_flutter/platform/platform_capabilities.dart';
+import 'package:nesium_flutter/platform/nes_video.dart' as nes_video;
 
 import 'nes_state.dart';
 import 'nes_texture_service.dart';
@@ -26,6 +26,38 @@ class NesController extends Notifier<NesState> {
     try {
       final textureId = await _textureService.createTexture();
       state = state.copyWith(textureId: textureId);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  /// Applies the selected single video filter.
+  ///
+  /// Some filters are scaling filters and will resize the runtime's output framebuffer.
+  /// In that case, we also best-effort resize the platform presentation buffer to match.
+  Future<void> setVideoFilter(nes_video.VideoFilter filter) async {
+    state = state.copyWith(clearError: true);
+    try {
+      final prevW = state.videoOutputWidth;
+      final prevH = state.videoOutputHeight;
+      final info = await nes_video.setVideoFilter(filter: filter);
+      final w = info.outputWidth;
+      final h = info.outputHeight;
+
+      final needsResize = w != prevW || h != prevH;
+      if (needsResize) {
+        if (kIsWeb) {
+          // Web renders via OffscreenCanvas in a Worker; there is no platform presentation buffer.
+        } else if (useAndroidNativeGameView) {
+          // Keep the SurfaceView buffer size driven by layout so scaling happens in our
+          // renderer with nearest-neighbor sampling (avoids system compositor bilinear scaling).
+          await _textureService.resetAndroidSurfaceSizeFromLayout();
+        } else {
+          await _textureService.setPresentBufferSize(width: w, height: h);
+        }
+      }
+
+      state = state.copyWith(videoOutputWidth: w, videoOutputHeight: h);
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
@@ -69,6 +101,19 @@ class NesController extends Notifier<NesState> {
       state = state.copyWith(romBytes: bytes);
     } else {
       state = state.copyWith(clearRomBytes: true);
+    }
+  }
+
+  /// Updates the presentation buffer size to match the physical window size.
+  ///
+  /// This is critical for shaders on Windows to render at native resolution (HiDPI).
+  Future<void> updateWindowOutputSize(int width, int height) async {
+    // Only applied on Windows for now where we use the GPU texture path with decoupled resolution.
+    if (useAndroidNativeGameView) return;
+    try {
+      await _textureService.setPresentBufferSize(width: width, height: height);
+    } catch (e) {
+      logError(e, message: 'updateWindowOutputSize failed');
     }
   }
 }

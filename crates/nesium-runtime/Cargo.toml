@@ -20,9 +20,17 @@ thiserror.workspace = true
 lz4_flex.workspace = true
 parking_lot.workspace = true
 postcard.workspace = true
+tracing.workspace = true
 
-[target.'cfg(target_os = "android")'.dependencies]
+[target.'cfg(any(target_os = "android", target_os = "macos", target_os = "ios", target_os = "linux"))'.dependencies]
 libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Media",
+    "Win32_System_Threading",
+    "Win32_Foundation",
+] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [

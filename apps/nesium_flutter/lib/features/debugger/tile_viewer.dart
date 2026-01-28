@@ -193,12 +193,22 @@ class _TileViewerState extends ConsumerState<TileViewer> {
       );
 
       await _tileSnapshotSub?.cancel();
-      _tileSnapshotSub = bridge.tileStateStream().listen((snap) {
-        if (!mounted) return;
-        // Store snapshot for tooltip data WITHOUT triggering rebuild.
-        // Texture updates automatically; setState spam kills performance.
-        _tileSnapshot = snap;
-      }, onError: (_) {});
+      _tileSnapshotSub = bridge.tileStateStream().listen(
+        (snap) {
+          if (!mounted) return;
+          // Store snapshot for tooltip data WITHOUT triggering rebuild.
+          // Texture updates automatically; setState spam kills performance.
+          _tileSnapshot = snap;
+        },
+        onError: (e, st) {
+          logError(
+            e,
+            stackTrace: st,
+            message: 'Tile state stream error',
+            logger: 'tile_viewer',
+          );
+        },
+      );
 
       unawaitedLogged(
         _applyCaptureMode(),

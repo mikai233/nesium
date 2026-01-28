@@ -16,4 +16,4 @@ parking_lot.workspace = true
 
 [build-dependencies]
 bindgen.workspace = true
-ureq = { workspace = true, features = ["tls"] }
+ureq = { workspace = true }

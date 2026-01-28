@@ -3,8 +3,8 @@ import Flutter
 
 /// A FlutterTexture backed by a pair of CVPixelBuffers (double buffering).
 final class NesiumTexture: NSObject, FlutterTexture {
-    let width: Int
-    let height: Int
+    private(set) var width: Int
+    private(set) var height: Int
 
     private var pixelBuffers: [CVPixelBuffer] = []
     private let lock = NSLock()
@@ -70,5 +70,24 @@ final class NesiumTexture: NSObject, FlutterTexture {
 
         let pb = pixelBuffers[latestReadyIndex]
         return Unmanaged.passRetained(pb)
+    }
+
+    func resize(width: Int, height: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard width > 0, height > 0 else { return }
+        if width == self.width, height == self.height { return }
+
+        guard let pb0 = NesiumTexture.makePixelBuffer(width: width, height: height),
+              let pb1 = NesiumTexture.makePixelBuffer(width: width, height: height) else {
+            NSLog("NesiumTexture(iOS): failed to resize CVPixelBuffer(s) to %dx%d", width, height)
+            return
+        }
+
+        self.width = width
+        self.height = height
+        self.pixelBuffers = [pb0, pb1]
+        self.latestReadyIndex = 0
     }
 }

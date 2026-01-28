@@ -12,18 +12,52 @@ pub fn init_app_paths(data_dir: String) {
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
-    // Default utilities - feel free to customize
+    init_logging();
+
     flutter_rust_bridge::setup_default_user_utils();
+}
 
-    // Initialize tracing (netd/netplay, etc.).
-    // VSCode Flutter "Debug Console" typically shows stdout, but may not show stderr,
-    // so prefer stdout for logs here.
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+#[cfg(target_os = "android")]
+fn init_logging() {
+    android_logger::init_once(
+        android_logger::Config::default()
+            .with_max_level(log::LevelFilter::Info)
+            .with_tag("nesium"),
+    );
+}
 
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_writer(std::io::stdout)
-        .with_ansi(false)
-        .try_init();
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn init_logging() {
+    use tracing_subscriber::EnvFilter;
+    use tracing_subscriber::prelude::*;
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_oslog::OsLogger::new(
+            "io.github.mikai233.nesium",
+            "main",
+        ))
+        .with(tracing_subscriber::fmt::layer());
+
+    if let Err(e) = registry.try_init() {
+        eprintln!("Failed to initialize tracing: {:?}", e);
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios", target_os = "macos")))]
+fn init_logging() {
+    use tracing_subscriber::EnvFilter;
+    use tracing_subscriber::prelude::*;
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer());
+
+    if let Err(e) = registry.try_init() {
+        eprintln!("Failed to initialize tracing: {:?}", e);
+    }
 }

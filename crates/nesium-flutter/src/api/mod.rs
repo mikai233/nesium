@@ -9,3 +9,4 @@ pub mod palette;
 pub mod pause;
 pub mod server;
 pub mod simple;
+pub mod video;

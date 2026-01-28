@@ -71,7 +71,7 @@ flutter_rust_bridge = "=2.11.1"
 gilrs = "0.11.1"
 once_cell = "1.19"
 bindgen = "0.72"
-ureq = "2.9"
+ureq = "3.1.4"
 serde = "1.0.228"
 postcard = "1.1.3"
 anyhow = "1.0.100"
@@ -125,3 +125,5 @@ governor = { version = "0.8", default-features = false, features = [
   "dashmap",
   "jitter",
 ] }
+xbrz-rs = "0.1.0"
+librashader = { version = "0.10.1", default-features = false }

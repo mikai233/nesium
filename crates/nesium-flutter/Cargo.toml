@@ -23,7 +23,7 @@ nesium-support.workspace = true
 tokio = { workspace = true, features = ["full"] }
 dashmap = { workspace = true, features = ["inline"] }
 crossbeam-channel.workspace = true
-tracing.workspace = true
+tracing = { workspace = true, features = ["log"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 parking_lot.workspace = true
 serde.workspace = true
@@ -32,6 +32,14 @@ if-addrs = "0.14.0"
 stun-rs = "0.1.11"
 ureq.workspace = true
 easy-upnp = "0.3.0"
+
+# Enable C++ filters for all non-wasm targets
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+nesium-support = { workspace = true, features = [
+    "hqx-cpp",
+    "ntsc-cpp",
+    "ntsc-bisqwit-cpp",
+] }
 
 # Enable gamepad feature on desktop platforms (not Android, not iOS, not WASM)
 [target.'cfg(all(not(target_os = "android"), not(target_os = "ios"), not(target_arch = "wasm32")))'.dependencies]
@@ -49,3 +57,36 @@ mimalloc = ["dep:mimalloc"]
 jni.workspace = true
 ndk-context.workspace = true
 libc.workspace = true
+librashader = { workspace = true, features = [
+    "runtime-gl",
+    "presets",
+    "preprocess",
+    "stable",
+] }
+glow = "0.16.0"
+android_logger = "0.13"
+log = "0.4"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+librashader = { workspace = true, features = [
+    "runtime-d3d11",
+    "presets",
+    "preprocess",
+    "stable",
+] }
+windows = { version = "0.62.2", features = [
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi_Common",
+] }
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+librashader = { workspace = true, features = [
+    "runtime-metal",
+    "presets",
+    "preprocess",
+    "stable",
+] }
+# metal-rs for FFI types
+metal = "0.33.0"
+objc = "0.2.7"
+tracing-oslog = "0.3.0"

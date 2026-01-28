@@ -6,13 +6,23 @@ import '../../platform/nes_gamepad.dart' as nes_gamepad;
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 import '../../logging/app_logger.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
 import '../../domain/connected_gamepads_provider.dart';
+
+final StorageKey<JsonMap> _gamepadAssignmentsKey = StorageKey(
+  StorageKeys.settingsGamepadAssignments,
+  jsonMapStringCodec(
+    fallback: <String, dynamic>{},
+    storageKey: StorageKeys.settingsGamepadAssignments,
+  ),
+);
 
 class GamepadAssignmentController extends Notifier<Map<String, int>> {
   @override
   Map<String, int> build() {
     final storage = ref.read(appStorageProvider);
-    final saved = storage.get(StorageKeys.settingsGamepadAssignments);
+    final saved = storage.read(_gamepadAssignmentsKey);
     final state = _fromStorage(saved);
 
     // Initial restoration logic: check current gamepads once they are available
@@ -62,21 +72,29 @@ class GamepadAssignmentController extends Notifier<Map<String, int>> {
   }
 
   void _persist() {
+    final payload = <String, dynamic>{
+      for (final entry in state.entries) entry.key: entry.value,
+    };
     unawaitedLogged(
       Future<void>.sync(
-        () => ref
-            .read(appStorageProvider)
-            .put(StorageKeys.settingsGamepadAssignments, state),
+        () =>
+            ref.read(appStorageProvider).write(_gamepadAssignmentsKey, payload),
       ),
       message: 'Persist gamepad assignments',
       logger: 'gamepad_assignment',
     );
   }
 
-  Map<String, int> _fromStorage(Object? value) {
-    if (value is! Map) return {};
+  Map<String, int> _fromStorage(JsonMap? value) {
+    if (value == null) return {};
     try {
-      return value.map((key, val) => MapEntry(key as String, val as int));
+      return value.map((key, val) {
+        final port = val is num ? val.toInt() : null;
+        if (port == null) {
+          throw StateError('Invalid port type for $key: ${val.runtimeType}');
+        }
+        return MapEntry(key, port);
+      });
     } catch (e) {
       logError(e, message: 'Failed to load gamepad assignments');
       return {};

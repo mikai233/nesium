@@ -25,11 +25,11 @@ jobs:
       matrix:
         include:
           # Windows x64 Only
-          - name: windows-x86_64-msi
+          - name: windows-x86_64-setup
             os: windows-latest
             target_arch: x64
-            asset_ext: msi
-            asset_suffix: windows-x86_64
+            asset_ext: exe
+            asset_suffix: windows-x86_64-setup
 
           # macOS Universal
           - name: macos-universal-dmg
@@ -71,7 +71,7 @@ jobs:
             echo "FLUTTER_BUILD_NAME=0.0.0" >> "$GITHUB_ENV"
             echo "FLUTTER_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
             echo "DEB_VERSION=0.0.0~dev.${GITHUB_RUN_NUMBER}+${SHORT_SHA}" >> "$GITHUB_ENV"
-            echo "MSI_VERSION=0.0.0" >> "$GITHUB_ENV"
+            echo "DEB_VERSION=0.0.0~dev.${GITHUB_RUN_NUMBER}+${SHORT_SHA}" >> "$GITHUB_ENV"
           else
             # Pre-release / Release: read Flutter version from pubspec.yaml
             python3 - <<'PY' >> "$GITHUB_ENV"
@@ -90,18 +90,10 @@ jobs:
               if not build.isdigit():
                   sys.exit(f'ERROR: pubspec build number must be digits, got: {build}')
               
-              # MSI Product Version must be numeric x.y.z
-              base = re.split(r'[-+]', name)[0]
-              parts = base.split('.')
-              while len(parts) < 3:
-                  parts.append('0')
-              msi = '.'.join(parts[:3])
-              
               print(f'ASSET_TAG={v}')
               print(f'FLUTTER_BUILD_NAME={name}')
               print(f'FLUTTER_BUILD_NUMBER={build}')
               print(f'DEB_VERSION={v}')
-              print(f'MSI_VERSION={msi}')
           except Exception as e:
               sys.exit(f'ERROR: Script failed: {e}')
           PY
@@ -239,6 +231,10 @@ jobs:
           set -euo pipefail
           flutter --version
           flutter pub get
+
+      - name: Generate shaders.zip
+        working-directory: apps/nesium_flutter
+        run: dart tool/package_shaders.dart
 
       - name: Install fonttools (Python)
         shell: bash
@@ -453,13 +449,13 @@ jobs:
 
           ls -la "$DIST"
 
-      - name: Install WiX Toolset (Windows)
+      - name: Install Inno Setup (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install wixtoolset -y
+        run: choco install innosetup -y
 
       # ===================================================
-      # FLUTTER WINDOWS BUILD & MSI & PORTABLE
+      # FLUTTER WINDOWS BUILD & INNO SETUP & PORTABLE
       # ===================================================
       - name: Build + package (Windows)
         if: runner.os == 'Windows'
@@ -496,49 +492,28 @@ jobs:
           if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "README.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "README.md") $portableDir -Force }
           if (Test-Path (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md")) { Copy-Item (Join-Path $env:GITHUB_WORKSPACE "LICENSE.md") $portableDir -Force }
 
-          # 4. Create MSI
-          $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.11\bin"
-          if (-not (Test-Path $wixBin)) { $wixBin = Join-Path ${env:ProgramFiles(x86)} "WiX Toolset v3.14\bin" }
+          # 4. Create Inno Setup Installer
+          $outSetup = "nesium-setup-$env:ASSET_TAG.exe"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DMyAppVersion="$env:ASSET_TAG" `
+            /DSourceDir="$src" `
+            /O"$env:RUNNER_TEMP" `
+            /F"nesium-setup-$env:ASSET_TAG" `
+            "apps\nesium_flutter\windows\installer.iss"
 
-          $outMsi = Join-Path $env:RUNNER_TEMP "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.${{ matrix.asset_ext }}"
-          $wxsAppFiles = Join-Path $env:RUNNER_TEMP "appfiles.wxs"
-
-          & (Join-Path $wixBin "heat.exe") dir $src -cg AppFiles -dr INSTALLFOLDER -gg -srd -sreg -var var.SourceDir -out $wxsAppFiles
-
-          $wxsProduct = Join-Path $env:RUNNER_TEMP "product.wxs"
-
-          @"
-          <?xml version="1.0" encoding="UTF-8"?>
-          <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-            <Product Id="*" Name="Nesium" Language="1033" Version="$env:MSI_VERSION" Manufacturer="Nesium" UpgradeCode="8B9D6C11-2E7C-4EAB-9C75-6B0F7B4E1C5A">
-              <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
-              <MediaTemplate />
-              <Directory Id="TARGETDIR" Name="SourceDir">
-                <Directory Id="ProgramFilesFolder">
-                  <Directory Id="INSTALLFOLDER" Name="Nesium" />
-                </Directory>
-              </Directory>
-              <Feature Id="MainFeature" Title="Nesium" Level="1">
-                <ComponentGroupRef Id="AppFiles" />
-              </Feature>
-              <UIRef Id="WixUI_Minimal" />
-              <UIRef Id="WixUI_ErrorProgressText" />
-            </Product>
-          </Wix>
-          "@ | Set-Content -Path $wxsProduct -Encoding UTF8
-
-          Push-Location $env:RUNNER_TEMP
-          & (Join-Path $wixBin "candle.exe") -dSourceDir="$src" $wxsProduct $wxsAppFiles
-          & (Join-Path $wixBin "light.exe") -ext WixUIExtension -o $outMsi product.wixobj appfiles.wixobj
-          Pop-Location
+          $finalSetupPath = Join-Path $env:RUNNER_TEMP $outSetup
 
           # 5. Code Signing
           if ("${{ secrets.WINDOWS_CERT_PFX_BASE64 }}" -ne "") {
             $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
             [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String("${{ secrets.WINDOWS_CERT_PFX_BASE64 }}"))
+            
+            # Sign the main executable in the build folder
             $exe = Get-ChildItem -Path $src -Filter *.exe | Select-Object -First 1
             if ($exe) { & signtool sign /f $pfxPath /p "${{ secrets.WINDOWS_CERT_PASSWORD }}" /tr http://timestamp.digicert.com /td sha256 /fd sha256 $exe.FullName }
-            & signtool sign /f $pfxPath /p "${{ secrets.WINDOWS_CERT_PASSWORD }}" /tr http://timestamp.digicert.com /td sha256 /fd sha256 $outMsi
+            
+            # Sign the Setup installer
+            & signtool sign /f $pfxPath /p "${{ secrets.WINDOWS_CERT_PASSWORD }}" /tr http://timestamp.digicert.com /td sha256 /fd sha256 $finalSetupPath
           }
 
           # 6. Consolidation
@@ -549,8 +524,8 @@ jobs:
           # Add Portable version
           Copy-Item -Path $portableDir -Destination (Join-Path $consolidatedDir "portable") -Recurse -Force
           
-          # Add MSI
-          Copy-Item -Path $outMsi -Destination $consolidatedDir -Force
+          # Add Setup EXE
+          Copy-Item -Path $finalSetupPath -Destination $consolidatedDir -Force
           
           # Create Final ZIP
           $finalZip = "nesium-flutter-$env:ASSET_TAG-${{ matrix.asset_suffix }}.zip"

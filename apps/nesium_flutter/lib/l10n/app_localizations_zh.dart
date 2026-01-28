@@ -814,6 +814,141 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoTitle => '画面';
 
   @override
+  String get videoFilterLabel => '画面滤镜';
+
+  @override
+  String get videoFilterCategoryCpu => 'CPU 滤镜';
+
+  @override
+  String get videoFilterCategoryGpu => 'GPU 滤镜 (Shaders)';
+
+  @override
+  String get videoFilterNone => '无 (1 倍)';
+
+  @override
+  String get videoFilterPrescale2x => '预缩放 2 倍';
+
+  @override
+  String get videoFilterPrescale3x => '预缩放 3 倍';
+
+  @override
+  String get videoFilterPrescale4x => '预缩放 4 倍';
+
+  @override
+  String get videoFilterHq2x => 'HQ2x';
+
+  @override
+  String get videoFilterHq3x => 'HQ3x';
+
+  @override
+  String get videoFilterHq4x => 'HQ4x';
+
+  @override
+  String get videoFilter2xSai => '2xSaI';
+
+  @override
+  String get videoFilterSuper2xSai => 'Super 2xSaI';
+
+  @override
+  String get videoFilterSuperEagle => 'Super Eagle';
+
+  @override
+  String get videoFilterLcdGrid => 'LCD 网格（2 倍）';
+
+  @override
+  String get videoFilterScanlines => '扫描线（2 倍）';
+
+  @override
+  String get videoFilterXbrz2x => 'xBRZ 2 倍';
+
+  @override
+  String get videoFilterXbrz3x => 'xBRZ 3 倍';
+
+  @override
+  String get videoFilterXbrz4x => 'xBRZ 4 倍';
+
+  @override
+  String get videoFilterXbrz5x => 'xBRZ 5 倍';
+
+  @override
+  String get videoFilterXbrz6x => 'xBRZ 6 倍';
+
+  @override
+  String get videoLcdGridStrengthLabel => 'LCD 网格强度';
+
+  @override
+  String get videoScanlinesIntensityLabel => '扫描线强度';
+
+  @override
+  String get videoFilterNtscComposite => 'NTSC（复合视频）';
+
+  @override
+  String get videoFilterNtscSvideo => 'NTSC（S-Video）';
+
+  @override
+  String get videoFilterNtscRgb => 'NTSC（RGB）';
+
+  @override
+  String get videoFilterNtscMonochrome => 'NTSC（黑白）';
+
+  @override
+  String get videoFilterNtscBisqwit2x => 'NTSC（Bisqwit）2 倍';
+
+  @override
+  String get videoFilterNtscBisqwit4x => 'NTSC（Bisqwit）4 倍';
+
+  @override
+  String get videoFilterNtscBisqwit8x => 'NTSC（Bisqwit）8 倍';
+
+  @override
+  String get videoNtscAdvancedTitle => 'NTSC 高级';
+
+  @override
+  String get videoNtscMergeFieldsLabel => '合并场（减少闪烁）';
+
+  @override
+  String get videoNtscHueLabel => '色相';
+
+  @override
+  String get videoNtscSaturationLabel => '饱和度';
+
+  @override
+  String get videoNtscContrastLabel => '对比度';
+
+  @override
+  String get videoNtscBrightnessLabel => '亮度';
+
+  @override
+  String get videoNtscSharpnessLabel => '锐度';
+
+  @override
+  String get videoNtscGammaLabel => 'Gamma';
+
+  @override
+  String get videoNtscResolutionLabel => '解析度';
+
+  @override
+  String get videoNtscArtifactsLabel => '伪影';
+
+  @override
+  String get videoNtscFringingLabel => '彩边';
+
+  @override
+  String get videoNtscBleedLabel => '出血';
+
+  @override
+  String get videoNtscBisqwitSettingsTitle => 'NTSC 设置（Bisqwit）';
+
+  @override
+  String get videoNtscBisqwitYFilterLengthLabel => 'Y 滤波器（水平模糊）';
+
+  @override
+  String get videoNtscBisqwitIFilterLengthLabel => 'I 滤波器';
+
+  @override
+  String get videoNtscBisqwitQFilterLengthLabel => 'Q 滤波器';
+
+  @override
   String get videoIntegerScalingTitle => '整数缩放';
 
   @override
@@ -833,6 +968,42 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoAspectRatioStretch => '拉伸';
+
+  @override
+  String get videoShaderLibrashaderTitle => 'RetroArch 着色器';
+
+  @override
+  String get videoShaderLibrashaderSubtitle => '需要 GLES3 + 硬件后端 (AHB 交换链)。';
+
+  @override
+  String get videoShaderLibrashaderSubtitleWindows => '需要 D3D11 GPU 后端。';
+
+  @override
+  String get videoShaderLibrashaderSubtitleApple => '需要 Metal 后端。';
+
+  @override
+  String get videoShaderLibrashaderSubtitleDisabled => '切换 Android 后端到“硬件”以启用。';
+
+  @override
+  String get videoShaderLibrashaderSubtitleDisabledWindows =>
+      '切换 Windows 后端到“D3D11 GPU”以启用。';
+
+  @override
+  String get videoShaderPresetLabel => '预设 (.slangp)';
+
+  @override
+  String get videoShaderPresetNotSet => '未设置';
+
+  @override
+  String get shaderBrowserTitle => '着色器';
+
+  @override
+  String get shaderBrowserNoShaders => '未找到着色器';
+
+  @override
+  String shaderBrowserError(String error) {
+    return '错误: $error';
+  }
 
   @override
   String get aboutTitle => '关于 Nesium';
@@ -883,6 +1054,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoBackendRestartHint => '重启后生效。';
+
+  @override
+  String videoBackendCurrent(String backend) {
+    return '当前后端：$backend';
+  }
+
+  @override
+  String get windowsNativeOverlayTitle => 'Windows 原生覆盖 (实验性)';
+
+  @override
+  String get windowsNativeOverlaySubtitle =>
+      '绕过 Flutter 合成器以获得完美流畅度。禁用着色器并将 UI 叠加在游戏后面。';
 
   @override
   String get highPerformanceModeLabel => '高性能模式';
@@ -1401,6 +1584,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get longPressToClear => '长按清除';
+
+  @override
+  String get videoBackendD3D11 => 'D3D11 GPU (零拷贝)';
+
+  @override
+  String get videoBackendSoftware => '软件 CPU (回退)';
 
   @override
   String get netplayBackToSetup => '返回设置';

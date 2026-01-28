@@ -117,15 +117,25 @@ class _TilemapViewerState extends ConsumerState<TilemapViewer> {
       );
 
       await _tilemapSnapshotSub?.cancel();
-      _tilemapSnapshotSub = bridge.tilemapStateStream().listen((snap) {
-        if (!mounted) return;
-        // Store snapshot for tooltip data access.
-        _tilemapSnapshot = snap;
-        // Update scroll overlay rects via ValueNotifier (isolated repaint).
-        if (_showScrollOverlay) {
-          _scrollOverlayRects.value = _scrollOverlayRectsFromSnapshot(snap);
-        }
-      }, onError: (_) {});
+      _tilemapSnapshotSub = bridge.tilemapStateStream().listen(
+        (snap) {
+          if (!mounted) return;
+          // Store snapshot for tooltip data access.
+          _tilemapSnapshot = snap;
+          // Update scroll overlay rects via ValueNotifier (isolated repaint).
+          if (_showScrollOverlay) {
+            _scrollOverlayRects.value = _scrollOverlayRectsFromSnapshot(snap);
+          }
+        },
+        onError: (e, st) {
+          logError(
+            e,
+            stackTrace: st,
+            message: 'Tilemap state stream error',
+            logger: 'tilemap_viewer',
+          );
+        },
+      );
       unawaitedLogged(
         _applyCaptureMode(),
         message: 'Failed to set tilemap capture point',

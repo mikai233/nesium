@@ -1,63 +1,45 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
 import '../../bridge/api/netplay.dart';
 import '../../bridge/api/server.dart';
 import '../netplay/netplay_models.dart';
 
-/// Server configuration settings.
-class ServerSettings {
-  const ServerSettings({
-    this.port = 5233,
-    this.playerName = 'Player',
-    this.p2pServerAddr = 'nesium.mikai.link:5233',
-    this.p2pEnabled = false,
-    this.p2pHostRoomCode,
-    this.transport = NetplayTransportOption.auto,
-    this.sni = 'localhost',
-    this.fingerprint = '',
-    this.directAddr = 'localhost',
-  });
+part 'server_settings.freezed.dart';
+part 'server_settings.g.dart';
 
-  final int port;
-  final String playerName;
-  final String p2pServerAddr;
-  final bool p2pEnabled;
-  final int? p2pHostRoomCode;
-  final NetplayTransportOption transport;
-  final String sni;
-  final String fingerprint;
-  final String directAddr;
+final StorageKey<ServerSettings> _serverSettingsKey = StorageKey(
+  StorageKeys.settingsServer,
+  jsonModelStringCodec<ServerSettings>(
+    fromJson: ServerSettings.fromJson,
+    toJson: (value) => value.toJson(),
+    storageKey: StorageKeys.settingsServer,
+  ),
+);
 
-  ServerSettings copyWith({
-    int? port,
-    String? playerName,
-    String? p2pServerAddr,
-    bool? p2pEnabled,
-    int? Function()? p2pHostRoomCode,
-    NetplayTransportOption? transport,
-    String? sni,
-    String? fingerprint,
-    String? directAddr,
-  }) {
-    return ServerSettings(
-      port: port ?? this.port,
-      playerName: playerName ?? this.playerName,
-      p2pServerAddr: p2pServerAddr ?? this.p2pServerAddr,
-      p2pEnabled: p2pEnabled ?? this.p2pEnabled,
-      p2pHostRoomCode: p2pHostRoomCode != null
-          ? p2pHostRoomCode()
-          : this.p2pHostRoomCode,
-      transport: transport ?? this.transport,
-      sni: sni ?? this.sni,
-      fingerprint: fingerprint ?? this.fingerprint,
-      directAddr: directAddr ?? this.directAddr,
-    );
-  }
+@freezed
+sealed class ServerSettings with _$ServerSettings {
+  const factory ServerSettings({
+    @Default(5233) int port,
+    @Default('Player') String playerName,
+    @Default('nesium.mikai.link:5233') String p2pServerAddr,
+    @Default(false) bool p2pEnabled,
+    int? p2pHostRoomCode,
+    @Default(NetplayTransportOption.auto) NetplayTransportOption transport,
+    @Default('localhost') String sni,
+    @Default('') String fingerprint,
+    @Default('localhost') String directAddr,
+  }) = _ServerSettings;
+
+  factory ServerSettings.fromJson(Map<String, dynamic> json) =>
+      _$ServerSettingsFromJson(json);
 }
 
 class ServerSettingsController extends Notifier<ServerSettings> {
@@ -75,63 +57,9 @@ class ServerSettingsController extends Notifier<ServerSettings> {
   Future<void> _load() async {
     try {
       final storage = ref.read(appStorageProvider);
-      final port = storage.get(StorageKeys.serverPort) as int?;
-      if (port != null) {
-        state = state.copyWith(port: port);
-      }
-      final playerName =
-          storage.get(StorageKeys.settingsNetplayPlayerName) as String?;
-      if (playerName != null) {
-        state = state.copyWith(playerName: playerName);
-      }
-      final p2pServerAddr =
-          storage.get(StorageKeys.settingsNetplayP2PServerAddr) as String?;
-      if (p2pServerAddr != null) {
-        state = state.copyWith(p2pServerAddr: p2pServerAddr);
-      } else {
-        // Migration: Check old signaling/relay keys
-        final oldSignaling =
-            storage.get('settings.netplay.signaling_addr.v1') as String?;
-        final oldRelay =
-            storage.get('settings.netplay.relay_addr.v1') as String?;
-        final migrationAddr = oldSignaling ?? oldRelay;
-        if (migrationAddr != null) {
-          state = state.copyWith(p2pServerAddr: migrationAddr);
-          // Auto-persist new key
-          unawaited(setP2PServerAddr(migrationAddr));
-        }
-      }
-
-      final p2pEnabled =
-          storage.get(StorageKeys.settingsNetplayP2PEnabled) as bool?;
-      if (p2pEnabled != null) {
-        state = state.copyWith(p2pEnabled: p2pEnabled);
-      }
-
-      final transportIndex =
-          storage.get(StorageKeys.settingsNetplayTransport) as int?;
-      if (transportIndex != null &&
-          transportIndex < NetplayTransportOption.values.length) {
-        state = state.copyWith(
-          transport: NetplayTransportOption.values[transportIndex],
-        );
-      }
-
-      final sni = storage.get(StorageKeys.settingsNetplaySni) as String?;
-      if (sni != null) {
-        state = state.copyWith(sni: sni);
-      }
-
-      final fingerprint =
-          storage.get(StorageKeys.settingsNetplayFingerprint) as String?;
-      if (fingerprint != null) {
-        state = state.copyWith(fingerprint: fingerprint);
-      }
-
-      final directAddr =
-          storage.get(StorageKeys.settingsNetplayDirectAddr) as String?;
-      if (directAddr != null) {
-        state = state.copyWith(directAddr: directAddr);
+      final stored = storage.read(_serverSettingsKey);
+      if (stored != null) {
+        state = stored;
       }
     } catch (e, st) {
       logWarning(
@@ -146,44 +74,19 @@ class ServerSettingsController extends Notifier<ServerSettings> {
   Future<void> setPort(int port) async {
     if (port == state.port) return;
     state = state.copyWith(port: port);
-    try {
-      await ref.read(appStorageProvider).put(StorageKeys.serverPort, port);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'Failed to persist server port',
-        logger: 'server_settings',
-      );
-    }
+    await _persist();
   }
 
   Future<void> setPlayerName(String name) async {
     if (name == state.playerName) return;
     state = state.copyWith(playerName: name);
-    try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsNetplayPlayerName, name);
-    } catch (e, st) {
-      logWarning(e, stackTrace: st, message: 'Failed to persist player name');
-    }
+    await _persist();
   }
 
   Future<void> setP2PServerAddr(String addr) async {
     if (addr == state.p2pServerAddr) return;
     state = state.copyWith(p2pServerAddr: addr);
-    try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsNetplayP2PServerAddr, addr);
-    } catch (e, st) {
-      logWarning(
-        e,
-        stackTrace: st,
-        message: 'Failed to persist p2p server addr',
-      );
-    }
+    await _persist();
   }
 
   Future<int> startServer() async {
@@ -197,71 +100,51 @@ class ServerSettingsController extends Notifier<ServerSettings> {
 
   Future<void> setP2PEnabled(bool enabled) async {
     if (enabled == state.p2pEnabled) return;
-    state = state.copyWith(
-      p2pEnabled: enabled,
-      p2pHostRoomCode: () => enabled ? state.p2pHostRoomCode : null,
-    );
-    try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsNetplayP2PEnabled, enabled);
-    } catch (e, st) {
-      logWarning(e, stackTrace: st, message: 'Failed to persist p2p enabled');
-    }
+    state = state.copyWith(p2pEnabled: enabled);
+    await _persist();
   }
 
   Future<void> setTransport(NetplayTransportOption option) async {
     if (option == state.transport) return;
     state = state.copyWith(transport: option);
-    try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsNetplayTransport, option.index);
-    } catch (e, st) {
-      logWarning(e, stackTrace: st, message: 'Failed to persist transport');
-    }
+    await _persist();
   }
 
   Future<void> setSni(String sni) async {
     if (sni == state.sni) return;
     state = state.copyWith(sni: sni);
-    try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsNetplaySni, sni);
-    } catch (e, st) {
-      logWarning(e, stackTrace: st, message: 'Failed to persist sni');
-    }
+    await _persist();
   }
 
   Future<void> setFingerprint(String fingerprint) async {
     if (fingerprint == state.fingerprint) return;
     state = state.copyWith(fingerprint: fingerprint);
-    try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsNetplayFingerprint, fingerprint);
-    } catch (e, st) {
-      logWarning(e, stackTrace: st, message: 'Failed to persist fingerprint');
-    }
+    await _persist();
   }
 
   Future<void> setDirectAddr(String addr) async {
     if (addr == state.directAddr) return;
     state = state.copyWith(directAddr: addr);
+    await _persist();
+  }
+
+  Future<void> _persist() async {
     try {
-      await ref
-          .read(appStorageProvider)
-          .put(StorageKeys.settingsNetplayDirectAddr, addr);
+      await ref.read(appStorageProvider).write(_serverSettingsKey, state);
     } catch (e, st) {
-      logWarning(e, stackTrace: st, message: 'Failed to persist direct addr');
+      logError(
+        e,
+        stackTrace: st,
+        message: 'Failed to persist server settings',
+        logger: 'server_settings',
+      );
     }
   }
 
   Future<void> stopServer() async {
     try {
       await netserverStop();
-      state = state.copyWith(p2pHostRoomCode: () => null);
+      state = state.copyWith(p2pHostRoomCode: null);
     } catch (e) {
       rethrow;
     }
@@ -280,13 +163,20 @@ class ServerSettingsController extends Notifier<ServerSettings> {
         relayAddr: addr,
         playerName: state.playerName,
       );
-      state = state.copyWith(p2pHostRoomCode: () => roomCode);
+      state = state.copyWith(p2pHostRoomCode: roomCode);
       return roomCode;
     } catch (e) {
       if (!wasRunning) {
         try {
           await netserverStop();
-        } catch (_) {}
+        } catch (stopError, st) {
+          logWarning(
+            stopError,
+            stackTrace: st,
+            message: 'Failed to stop netserver after failed P2P host start',
+            logger: 'server_settings',
+          );
+        }
       }
       rethrow;
     }

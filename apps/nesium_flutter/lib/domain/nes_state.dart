@@ -4,6 +4,8 @@ class NesState {
   const NesState({
     this.error,
     this.textureId,
+    this.videoOutputWidth = 256,
+    this.videoOutputHeight = 240,
     this.romHash,
     this.romName,
     this.romBytes,
@@ -11,6 +13,8 @@ class NesState {
 
   final String? error;
   final int? textureId;
+  final int videoOutputWidth;
+  final int videoOutputHeight;
   final String? romHash;
   final String? romName;
 
@@ -22,6 +26,8 @@ class NesState {
   NesState copyWith({
     String? error,
     int? textureId,
+    int? videoOutputWidth,
+    int? videoOutputHeight,
     String? romHash,
     String? romName,
     Uint8List? romBytes,
@@ -31,6 +37,8 @@ class NesState {
     return NesState(
       error: clearError ? null : (error ?? this.error),
       textureId: textureId ?? this.textureId,
+      videoOutputWidth: videoOutputWidth ?? this.videoOutputWidth,
+      videoOutputHeight: videoOutputHeight ?? this.videoOutputHeight,
       romHash: romHash ?? this.romHash,
       romName: romName ?? this.romName,
       romBytes: clearRomBytes ? null : (romBytes ?? this.romBytes),

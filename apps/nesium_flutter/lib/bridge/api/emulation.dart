@@ -47,3 +47,8 @@ Future<void> setRewindSpeed({required int speedPercent}) => RustLib.instance.api
 
 Future<void> loadTasMovie({required String data}) =>
     RustLib.instance.api.crateApiEmulationLoadTasMovie(data: data);
+
+Future<void> setHighPriorityEnabled({required bool enabled}) => RustLib
+    .instance
+    .api
+    .crateApiEmulationSetHighPriorityEnabled(enabled: enabled);

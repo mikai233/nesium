@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/screen/nes_screen_view.dart';
+import '../features/settings/video_settings.dart';
 import '../domain/nes_state.dart';
 import '../domain/nes_controller.dart';
 import '../features/save_state/save_state_repository.dart';
@@ -22,6 +23,10 @@ class DesktopShell extends ConsumerWidget {
       nesControllerProvider.select((s) => s.romHash != null),
     );
 
+    final screenVerticalOffset = ref.watch(
+      videoSettingsProvider.select((s) => s.screenVerticalOffset),
+    );
+
     return Scaffold(
       body: MediaQuery.removePadding(
         context: context,
@@ -40,6 +45,7 @@ class DesktopShell extends ConsumerWidget {
               child: NesScreenView(
                 error: state.error,
                 textureId: state.textureId,
+                screenVerticalOffset: screenVerticalOffset,
               ),
             ),
           ],

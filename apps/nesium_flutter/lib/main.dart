@@ -11,7 +11,9 @@ import 'package:nesium_flutter/platform/window_manager_shim.dart';
 import 'package:nesium_flutter/startup/launch_args.dart';
 import 'package:nesium_flutter/startup/macos_splash.dart';
 import 'package:nesium_flutter/windows/window_routing.dart';
+import 'package:nesium_flutter/windows/current_window_kind.dart';
 
+import 'features/shaders/shader_asset_service.dart';
 import 'app.dart';
 
 Future<void> main(List<String> args) async {
@@ -53,11 +55,15 @@ Future<void> main(List<String> args) async {
 
       await initAppStorage();
       await initRustRuntime();
+      unawaited(ShaderAssetService().syncShaders());
       final kind = await resolveWindowKind();
 
       runApp(
         ProviderScope(
-          overrides: [launchArgsProvider.overrideWithValue(launchArgs)],
+          overrides: [
+            launchArgsProvider.overrideWithValue(launchArgs),
+            currentWindowKindProvider.overrideWithValue(kind),
+          ],
           child: NesiumApp(windowKind: kind),
         ),
       );

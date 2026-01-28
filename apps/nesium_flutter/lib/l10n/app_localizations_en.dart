@@ -826,6 +826,141 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoTitle => 'Video';
 
   @override
+  String get videoFilterLabel => 'Video Filter';
+
+  @override
+  String get videoFilterCategoryCpu => 'CPU Filters';
+
+  @override
+  String get videoFilterCategoryGpu => 'GPU Filters (Shaders)';
+
+  @override
+  String get videoFilterNone => 'None (1x)';
+
+  @override
+  String get videoFilterPrescale2x => 'Prescale 2x';
+
+  @override
+  String get videoFilterPrescale3x => 'Prescale 3x';
+
+  @override
+  String get videoFilterPrescale4x => 'Prescale 4x';
+
+  @override
+  String get videoFilterHq2x => 'HQ2x';
+
+  @override
+  String get videoFilterHq3x => 'HQ3x';
+
+  @override
+  String get videoFilterHq4x => 'HQ4x';
+
+  @override
+  String get videoFilter2xSai => '2xSaI';
+
+  @override
+  String get videoFilterSuper2xSai => 'Super 2xSaI';
+
+  @override
+  String get videoFilterSuperEagle => 'Super Eagle';
+
+  @override
+  String get videoFilterLcdGrid => 'LCD Grid (2x)';
+
+  @override
+  String get videoFilterScanlines => 'Scanlines (2x)';
+
+  @override
+  String get videoFilterXbrz2x => 'xBRZ 2x';
+
+  @override
+  String get videoFilterXbrz3x => 'xBRZ 3x';
+
+  @override
+  String get videoFilterXbrz4x => 'xBRZ 4x';
+
+  @override
+  String get videoFilterXbrz5x => 'xBRZ 5x';
+
+  @override
+  String get videoFilterXbrz6x => 'xBRZ 6x';
+
+  @override
+  String get videoLcdGridStrengthLabel => 'LCD Grid Strength';
+
+  @override
+  String get videoScanlinesIntensityLabel => 'Scanline Intensity';
+
+  @override
+  String get videoFilterNtscComposite => 'NTSC (Composite)';
+
+  @override
+  String get videoFilterNtscSvideo => 'NTSC (S-Video)';
+
+  @override
+  String get videoFilterNtscRgb => 'NTSC (RGB)';
+
+  @override
+  String get videoFilterNtscMonochrome => 'NTSC (Monochrome)';
+
+  @override
+  String get videoFilterNtscBisqwit2x => 'NTSC (Bisqwit) 2x';
+
+  @override
+  String get videoFilterNtscBisqwit4x => 'NTSC (Bisqwit) 4x';
+
+  @override
+  String get videoFilterNtscBisqwit8x => 'NTSC (Bisqwit) 8x';
+
+  @override
+  String get videoNtscAdvancedTitle => 'NTSC Advanced';
+
+  @override
+  String get videoNtscMergeFieldsLabel => 'Merge fields (reduce flicker)';
+
+  @override
+  String get videoNtscHueLabel => 'Hue';
+
+  @override
+  String get videoNtscSaturationLabel => 'Saturation';
+
+  @override
+  String get videoNtscContrastLabel => 'Contrast';
+
+  @override
+  String get videoNtscBrightnessLabel => 'Brightness';
+
+  @override
+  String get videoNtscSharpnessLabel => 'Sharpness';
+
+  @override
+  String get videoNtscGammaLabel => 'Gamma';
+
+  @override
+  String get videoNtscResolutionLabel => 'Resolution';
+
+  @override
+  String get videoNtscArtifactsLabel => 'Artifacts';
+
+  @override
+  String get videoNtscFringingLabel => 'Fringing';
+
+  @override
+  String get videoNtscBleedLabel => 'Bleed';
+
+  @override
+  String get videoNtscBisqwitSettingsTitle => 'NTSC settings (Bisqwit)';
+
+  @override
+  String get videoNtscBisqwitYFilterLengthLabel => 'Y Filter (Horizontal Blur)';
+
+  @override
+  String get videoNtscBisqwitIFilterLengthLabel => 'I Filter';
+
+  @override
+  String get videoNtscBisqwitQFilterLengthLabel => 'Q Filter';
+
+  @override
   String get videoIntegerScalingTitle => 'Integer scaling';
 
   @override
@@ -846,6 +981,45 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoAspectRatioStretch => 'Stretch';
+
+  @override
+  String get videoShaderLibrashaderTitle => 'RetroArch Shaders';
+
+  @override
+  String get videoShaderLibrashaderSubtitle =>
+      'Requires GLES3 + Hardware backend (AHB swapchain).';
+
+  @override
+  String get videoShaderLibrashaderSubtitleWindows =>
+      'Requires D3D11 GPU backend.';
+
+  @override
+  String get videoShaderLibrashaderSubtitleApple => 'Requires Metal backend.';
+
+  @override
+  String get videoShaderLibrashaderSubtitleDisabled =>
+      'Switch Android backend to Hardware to enable.';
+
+  @override
+  String get videoShaderLibrashaderSubtitleDisabledWindows =>
+      'Switch Windows backend to D3D11 GPU to enable.';
+
+  @override
+  String get videoShaderPresetLabel => 'Preset (.slangp)';
+
+  @override
+  String get videoShaderPresetNotSet => 'Not set';
+
+  @override
+  String get shaderBrowserTitle => 'Shaders';
+
+  @override
+  String get shaderBrowserNoShaders => 'No shaders found';
+
+  @override
+  String shaderBrowserError(String error) {
+    return 'Error: $error';
+  }
 
   @override
   String get aboutTitle => 'About Nesium';
@@ -897,6 +1071,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoBackendRestartHint => 'Takes effect after app restart.';
+
+  @override
+  String videoBackendCurrent(String backend) {
+    return 'Current Backend: $backend';
+  }
+
+  @override
+  String get windowsNativeOverlayTitle =>
+      'Windows Native Overlay (Experimental)';
+
+  @override
+  String get windowsNativeOverlaySubtitle =>
+      'Bypasses Flutter compositor for perfect smoothness. Disables shaders and overlays UI behind the game.';
 
   @override
   String get highPerformanceModeLabel => 'High Performance Mode';
@@ -1418,6 +1605,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get longPressToClear => 'Long press to clear';
+
+  @override
+  String get videoBackendD3D11 => 'D3D11 GPU (Zero-Copy)';
+
+  @override
+  String get videoBackendSoftware => 'Software CPU (Fallback)';
 
   @override
   String get netplayBackToSetup => 'Back to Setup';

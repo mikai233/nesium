@@ -7,6 +7,7 @@ import 'package:nesium_flutter/widgets/animated_dropdown_menu.dart';
 
 import '../../domain/nes_controller.dart';
 import '../../l10n/app_localizations.dart';
+import '../../logging/app_logger.dart';
 import '../../bridge/api/netplay.dart';
 import 'netplay_constants.dart';
 import '../../persistence/app_storage.dart';
@@ -123,7 +124,14 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
           _p2pServerAddrController.text = addr.trim();
         }
       });
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to load netplay join prefs',
+        logger: 'netplay_screen',
+      );
+    }
   }
 
   Future<void> _persistJoinEnabled(bool enabled) async {
@@ -131,7 +139,14 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsNetplayJoinP2PEnabled, enabled);
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to persist P2P join enabled=$enabled',
+        logger: 'netplay_screen',
+      );
+    }
   }
 
   Future<void> _persistJoinServerAddr(String value) async {
@@ -139,20 +154,25 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
       await ref
           .read(appStorageProvider)
           .put(StorageKeys.settingsNetplayJoinP2PServerAddr, value.trim());
-    } catch (_) {}
+    } catch (e, st) {
+      logWarning(
+        e,
+        stackTrace: st,
+        message: 'Failed to persist P2P join server addr',
+        logger: 'netplay_screen',
+      );
+    }
   }
 
   String _deriveServerNameFromAddr(String serverAddr) {
     final trimmed = serverAddr.trim();
     if (trimmed.isEmpty) return 'localhost';
 
-    try {
-      final uri = trimmed.contains('://')
-          ? Uri.parse(trimmed)
-          : Uri.parse('dummy://$trimmed');
-      final host = uri.host.trim();
-      if (host.isNotEmpty) return host;
-    } catch (_) {}
+    final uri = Uri.tryParse(
+      trimmed.contains('://') ? trimmed : 'dummy://$trimmed',
+    );
+    final host = uri?.host.trim();
+    if (host != null && host.isNotEmpty) return host;
 
     return 'localhost';
   }

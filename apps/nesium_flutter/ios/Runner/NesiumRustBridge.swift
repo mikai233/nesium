@@ -26,6 +26,19 @@ func nesium_copy_frame(
     _ dstHeight: UInt32
 )
 
+@_silgen_name("nesium_apply_shader_metal")
+func nesium_apply_shader_metal(
+    _ device: UnsafeMutableRawPointer,
+    _ commandQueue: UnsafeMutableRawPointer,
+    _ commandBuffer: UnsafeMutableRawPointer,
+    _ inputTex: UnsafeMutableRawPointer,
+    _ outputTex: UnsafeMutableRawPointer,
+    _ srcWidth: UInt32,
+    _ srcHeight: UInt32,
+    _ dstWidth: UInt32,
+    _ dstHeight: UInt32
+) -> Bool
+
 protocol NesiumFrameConsumer: AnyObject {
     func nesiumOnFrameReady(bufferIndex: UInt32, width: Int, height: Int, pitch: Int)
 }

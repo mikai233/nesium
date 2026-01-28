@@ -287,7 +287,12 @@ class _WebShellState extends ConsumerState<WebShell> {
     if (_audioContext != null) {
       try {
         return (_audioContext!['sampleRate'] as JSNumber).toDartInt;
-      } catch (_) {
+      } catch (e, st) {
+        Logger('web_shell').fine(
+          'Failed to read existing AudioContext.sampleRate; defaulting to 48000',
+          e,
+          st,
+        );
         return 48_000;
       }
     }
@@ -330,7 +335,12 @@ class _WebShellState extends ConsumerState<WebShell> {
 
     try {
       return (ctx['sampleRate'] as JSNumber).toDartInt;
-    } catch (_) {
+    } catch (e, st) {
+      Logger('web_shell').fine(
+        'Failed to read AudioContext.sampleRate; defaulting to 48000',
+        e,
+        st,
+      );
       return 48_000;
     }
   }
@@ -342,8 +352,8 @@ class _WebShellState extends ConsumerState<WebShell> {
     if (ctx != null) {
       try {
         ctx.callMethod<JSAny?>('close'.toJS);
-      } catch (_) {
-        // Ignore.
+      } catch (e, st) {
+        Logger('web_shell').fine('Failed to close AudioContext', e, st);
       }
     }
   }

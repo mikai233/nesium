@@ -43,6 +43,25 @@ func nesium_copy_frame(
     _ dstHeight: UInt32
 )
 
+@_silgen_name("nesium_apply_shader_metal")
+func nesium_apply_shader_metal(
+    _ device: UnsafeMutableRawPointer,
+    _ commandQueue: UnsafeMutableRawPointer,
+    _ commandBuffer: UnsafeMutableRawPointer,
+    _ inputTex: UnsafeMutableRawPointer,
+    _ outputTex: UnsafeMutableRawPointer,
+    _ srcWidth: UInt32,
+    _ srcHeight: UInt32,
+    _ dstWidth: UInt32,
+    _ dstHeight: UInt32
+) -> Bool
+
+@_silgen_name("nesium_set_shader_enabled")
+func nesium_set_shader_enabled(_ enabled: Bool)
+
+@_silgen_name("nesium_set_shader_preset_path")
+func nesium_set_shader_preset_path(_ path: UnsafePointer<Int8>?)
+
 // MARK: - High-level Swift bridge
 
 /// Protocol that any Swift object can adopt if it wants to receive frame

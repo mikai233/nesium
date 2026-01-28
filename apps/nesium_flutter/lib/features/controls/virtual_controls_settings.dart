@@ -6,6 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import '../../persistence/storage_codec.dart';
+import '../../persistence/storage_key.dart';
+
+final StorageKey<JsonMap> _virtualControlsSettingsKey = StorageKey(
+  StorageKeys.settingsVirtualControls,
+  jsonMapStringCodec(storageKey: StorageKeys.settingsVirtualControls),
+);
 
 @immutable
 class VirtualControlsSettings {
@@ -275,7 +282,7 @@ class VirtualControlsSettingsController
   @override
   VirtualControlsSettings build() {
     final loaded = _virtualControlsFromStorage(
-      ref.read(appStorageProvider).get(StorageKeys.settingsVirtualControls),
+      ref.read(appStorageProvider).read(_virtualControlsSettingsKey),
     );
     return loaded ?? VirtualControlsSettings.defaults;
   }
@@ -336,13 +343,11 @@ class VirtualControlsSettingsController
   }
 
   void _persist(VirtualControlsSettings value) {
+    final payload = Map<String, dynamic>.from(_virtualControlsToStorage(value));
     unawaited(
       ref
           .read(appStorageProvider)
-          .put(
-            StorageKeys.settingsVirtualControls,
-            _virtualControlsToStorage(value),
-          )
+          .write(_virtualControlsSettingsKey, payload)
           .catchError((_) {}),
     );
   }
@@ -408,9 +413,10 @@ Map<String, Object?> _virtualControlsToStorage(VirtualControlsSettings value) {
   };
 }
 
-VirtualControlsSettings? _virtualControlsFromStorage(Object? value) {
-  if (value is! Map) return null;
-  final map = value.cast<String, Object?>();
+VirtualControlsSettings? _virtualControlsFromStorage(
+  Map<String, dynamic>? map,
+) {
+  if (map == null) return null;
   final defaults = VirtualControlsSettings.defaults;
 
   double d(Object? v, double fallback) => v is num ? v.toDouble() : fallback;

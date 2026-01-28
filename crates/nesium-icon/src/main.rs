@@ -66,8 +66,32 @@ fn main() -> Result<(), String> {
         #[cfg(feature = "svg")]
         Some(Command::Svg { out }) => nesium_icon::render_svg(out.to_string_lossy().as_ref()),
         None => {
-            let out_path = cli.out.unwrap_or_else(|| PathBuf::from("icon_1024.png"));
-            nesium_icon::render_png(out_path.to_string_lossy().as_ref())
+            let out_path = cli.out.unwrap_or_else(|| PathBuf::from("icon.ico"));
+            let ext = out_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("png");
+
+            match ext {
+                "ico" => {
+                    let sizes = [16u32, 24, 32, 48, 64, 96, 128, 256];
+                    let mut icon_dir = ico::IconDir::new(ico::ResourceType::Icon);
+                    for size in sizes {
+                        let rgba = nesium_icon::render_rgba_unpremul(size);
+                        let image = ico::IconImage::from_rgba_data(size, size, rgba);
+                        let entry = ico::IconDirEntry::encode(&image).map_err(|e| e.to_string())?;
+                        icon_dir.add_entry(entry);
+                    }
+                    let file = std::fs::File::create(&out_path).map_err(|e| e.to_string())?;
+                    icon_dir.write(file).map_err(|e| e.to_string())?;
+                    println!("Successfully generated ICO: {}", out_path.display());
+                }
+                _ => {
+                    nesium_icon::render_png(out_path.to_string_lossy().as_ref())?;
+                    println!("Successfully generated PNG: {}", out_path.display());
+                }
+            }
+            Ok(())
         }
     }
 }

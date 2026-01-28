@@ -60,16 +60,12 @@ fn fetch_remote_header(url: &str, destination: &Path) -> Result<(), String> {
         .call()
         .map_err(|err| format!("request failed: {err}"))?;
 
-    let status = response.status();
+    let status = response.status().as_u16();
     if !(200..300).contains(&status) {
-        return Err(format!(
-            "server returned {} {}",
-            status,
-            response.status_text()
-        ));
+        return Err(format!("server returned {}", status));
     }
 
-    let mut reader = response.into_reader();
+    let mut reader = response.into_body().into_reader();
     let mut file = File::create(destination)
         .map_err(|err| format!("unable to create {}: {err}", destination.display()))?;
 

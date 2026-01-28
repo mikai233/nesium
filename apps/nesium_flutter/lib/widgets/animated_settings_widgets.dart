@@ -288,12 +288,16 @@ class AnimatedExpansionTile extends StatefulWidget {
     required this.children,
     this.initiallyExpanded = false,
     this.leading,
+    this.labelText,
+    this.enabled = true,
   });
 
   final Widget title;
   final List<Widget> children;
   final bool initiallyExpanded;
   final Widget? leading;
+  final String? labelText;
+  final bool enabled;
 
   @override
   State<AnimatedExpansionTile> createState() => _AnimatedExpansionTileState();
@@ -334,6 +338,7 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
   }
 
   void _toggle() {
+    if (!widget.enabled) return;
     setState(() {
       _isExpanded = !_isExpanded;
       if (_isExpanded) {
@@ -346,26 +351,83 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    Widget header = Row(
+      children: [
+        if (widget.leading != null) ...[
+          widget.leading!,
+          const SizedBox(width: 16),
+        ],
+        Expanded(
+          child: DefaultTextStyle(
+            style: theme.textTheme.bodyLarge ?? const TextStyle(),
+            child: widget.title,
+          ),
+        ),
+        RotationTransition(
+          turns: _iconRotation,
+          child: Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
+
+    if (widget.labelText != null) {
+      const radius = 12.0;
+      final enabledBorder = OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radius),
+        borderSide: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+        ),
+      );
+      final focusedBorder = OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radius),
+        borderSide: BorderSide(
+          color: colorScheme.primary.withValues(alpha: 0.9),
+          width: 1.2,
+        ),
+      );
+
+      final decoration =
+          InputDecoration(
+            labelText: widget.labelText,
+            enabled: widget.enabled,
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+          ).applyDefaults(
+            InputDecorationTheme(
+              filled: true,
+              fillColor: colorScheme.surface,
+              isDense: true,
+              contentPadding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+              border: enabledBorder,
+              enabledBorder: enabledBorder,
+              focusedBorder: focusedBorder,
+            ),
+          );
+
+      header = InputDecorator(
+        decoration: decoration,
+        isFocused: _isExpanded,
+        child: header,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          onTap: _toggle,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                if (widget.leading != null) ...[
-                  widget.leading!,
-                  const SizedBox(width: 16),
-                ],
-                Expanded(child: widget.title),
-                RotationTransition(
-                  turns: _iconRotation,
-                  child: const Icon(Icons.expand_more),
-                ),
-              ],
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.enabled ? _toggle : null,
+            borderRadius: BorderRadius.circular(
+              widget.labelText != null ? 12 : 8,
+            ),
+            child: Padding(
+              padding: widget.labelText != null
+                  ? EdgeInsets.zero
+                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: header,
             ),
           ),
         ),
