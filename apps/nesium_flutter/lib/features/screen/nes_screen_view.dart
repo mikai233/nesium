@@ -4,10 +4,10 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/nes_controller.dart';
-import '../../platform/platform_capabilities.dart';
 import '../../platform/nes_video.dart' show VideoFilter;
 import '../settings/video_settings.dart';
 import '../settings/windows_shader_settings.dart';
@@ -174,7 +174,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           Text(widget.error!, textAlign: TextAlign.center),
         ],
       );
-    } else if (useAndroidNativeGameView) {
+    } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       content = LayoutBuilder(
         builder: (context, constraints) {
           final viewport = NesScreenView.computeViewportSize(
@@ -191,6 +191,48 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
               fit: StackFit.expand,
               children: [
                 const AndroidView(viewType: 'nesium_game_view'),
+                if (hasRom) const EmulationStatusOverlay(),
+              ],
+            ),
+          );
+
+          return MouseRegion(
+            cursor: _cursorHidden ? SystemMouseCursors.none : MouseCursor.defer,
+            onEnter: (_) => _showCursorAndArmTimer(),
+            onHover: (_) => _showCursorAndArmTimer(),
+            onExit: (_) => _showCursorAndCancelTimer(),
+            child: child,
+          );
+        },
+      );
+    } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      content = LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = NesScreenView.computeViewportSize(
+            constraints,
+            integerScaling: integerScaling,
+            aspectRatio: aspectRatio,
+          );
+          if (viewport == null) return const SizedBox.shrink();
+
+          final appleShaderSettings = ref.watch(appleShaderSettingsProvider);
+          final shouldUseHighRes =
+              settings.videoFilter != VideoFilter.none ||
+              appleShaderSettings.enabled;
+
+          _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
+
+          final child = SizedBox(
+            width: viewport.width,
+            height: viewport.height,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const UiKitView(
+                  viewType: 'plugins.nesium.com/native_view',
+                  creationParams: {},
+                  creationParamsCodec: StandardMessageCodec(),
+                ),
                 if (hasRom) const EmulationStatusOverlay(),
               ],
             ),
