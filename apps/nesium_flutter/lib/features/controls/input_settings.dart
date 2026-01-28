@@ -351,6 +351,33 @@ bool _supportsVirtualController() {
 class InputSettingsController extends Notifier<InputSettingsState> {
   @override
   InputSettingsState build() {
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsInput) {
+        unawaitedLogged(
+          reloadFromStorage(),
+          logger: 'input_settings',
+          message: 'Reloading input settings from stream',
+        );
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
+    return _load() ?? _allDefaults();
+  }
+
+  Future<void> reloadFromStorage() async {
+    final stored = _load();
+    if (stored != null && stored != state) {
+      ref.read(nesInputMasksProvider.notifier).clearAll();
+      state = stored;
+    }
+  }
+
+  InputSettingsState? _load() {
     try {
       final stored = ref.read(appStorageProvider).read(_inputSettingsKey);
       if (stored != null) {
@@ -364,7 +391,7 @@ class InputSettingsController extends Notifier<InputSettingsState> {
         logger: 'input_settings',
       );
     }
-    return _allDefaults();
+    return null;
   }
 
   InputSettingsState _allDefaults() {

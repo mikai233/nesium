@@ -31,6 +31,17 @@ class LinuxPerformanceSettingsController
       _applyHighPerformance(highPerformance);
     }
 
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsLinuxHighPerformance) {
+        state = build();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     return LinuxPerformanceSettings(highPerformance: highPerformance);
   }
 

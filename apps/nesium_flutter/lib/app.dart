@@ -50,6 +50,8 @@ class NesiumApp extends ConsumerWidget {
             return l10n.menuSpriteViewer;
           case WindowKind.paletteViewer:
             return l10n.menuPaletteViewer;
+          case WindowKind.settings:
+            return l10n.settingsTitle;
           case WindowKind.main:
             return l10n.appName;
         }

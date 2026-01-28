@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../platform/nes_gamepad.dart';
@@ -20,7 +21,29 @@ final StorageKey<JsonMap> _gamepadSettingsKey = StorageKey(
 class GamepadSettingsController extends Notifier<Map<String, GamepadMapping>> {
   @override
   Map<String, GamepadMapping> build() {
-    return _fromStorage(ref.read(appStorageProvider).read(_gamepadSettingsKey));
+    final storage = ref.read(appStorageProvider);
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsGamepad) {
+        unawaitedLogged(
+          _reloadFromStorage(),
+          logger: 'gamepad_settings',
+          message: 'Reloading gamepad settings from stream',
+        );
+      }
+    });
+    ref.onDispose(() => subscription.cancel());
+
+    return _fromStorage(storage.read(_gamepadSettingsKey));
+  }
+
+  Future<void> _reloadFromStorage() async {
+    final storage = ref.read(appStorageProvider);
+    final value = storage.read(_gamepadSettingsKey);
+    final newState = _fromStorage(value);
+    // Compare and update if different
+    if (!mapEquals(state, newState)) {
+      state = newState;
+    }
   }
 
   /// Restores saved mappings for any assigned gamepads in the list.

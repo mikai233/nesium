@@ -6,4 +6,5 @@ enum WindowKind {
   tileViewer,
   spriteViewer,
   paletteViewer,
+  settings,
 }

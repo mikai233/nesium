@@ -191,6 +191,29 @@ class VideoSettingsController extends Notifier<VideoSettings> {
         ? settings.copyWith(paletteMode: PaletteMode.builtin)
         : settings;
 
+    // Listen to storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      switch (event.key) {
+        case StorageKeys.settingsVideo:
+          unawaitedLogged(
+            reloadFromStorage(),
+            logger: 'video_settings',
+            message: 'Reloading video settings from stream',
+          );
+        case StorageKeys.settingsVideoCustomPaletteBytes:
+          // Reload custom palette if bytes changed
+          unawaitedLogged(
+            reloadFromStorage(),
+            logger: 'video_settings',
+            message: 'Reloading video settings (custom palette) from stream',
+          );
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     scheduleMicrotask(() {
       unawaitedLogged(
         applyToRuntime(),

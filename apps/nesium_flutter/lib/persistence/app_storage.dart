@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../logging/app_logger.dart';
-import '../windows/settings_sync.dart';
+import '../windows/app_data_sync.dart';
 import '../windows/window_types.dart';
 
 abstract class AppStorage {
@@ -15,20 +14,26 @@ abstract class AppStorage {
   /// Called when a sync message is received from another window.
   Future<void> handleSyncUpdate(String key, Object? value);
 
-  /// Called when a child window requests a full sync.
-  Future<void> handleRequestFullSync(Object replyToId);
+  /// Returns whether a key should be synced across windows.
+  bool shouldSync(String key);
 
   /// Stream of key-value changes.
   Stream<({String key, Object? value})> get onKeyChanged;
+
+  /// Returns all data that should be synced across windows.
+  Map<String, dynamic> exportSyncableData();
 }
 
 AppStorage appStorage = _MemoryAppStorage();
 
 final appStorageProvider = Provider<AppStorage>((_) => appStorage);
 
-Future<void> initAppStorage(WindowKind kind) async {
+Future<void> initAppStorage(
+  WindowKind kind, {
+  Map<String, dynamic>? initialData,
+}) async {
   if (kind != WindowKind.main) {
-    appStorage = _RemoteAppStorage();
+    appStorage = _RemoteAppStorage(initialData: initialData);
     return;
   }
 
@@ -75,20 +80,24 @@ final class _HiveAppStorage with _AppStorageStreamMixin implements AppStorage {
     await _box.put(key, value);
     _notify(key, value);
     // Broadcast to children
-    await SettingsSync.broadcast(
-      group: SettingsSync.methodSyncKV,
-      payload: {'key': key, 'value': value},
-    );
+    if (shouldSync(key)) {
+      await AppDataSync.broadcast(
+        group: AppDataSync.methodSyncKV,
+        payload: {'key': key, 'value': value},
+      );
+    }
   }
 
   @override
   Future<void> delete(String key) async {
     await _box.delete(key);
     _notify(key, null);
-    await SettingsSync.broadcast(
-      group: SettingsSync.methodSyncKV,
-      payload: {'key': key, 'value': null},
-    );
+    if (shouldSync(key)) {
+      await AppDataSync.broadcast(
+        group: AppDataSync.methodSyncKV,
+        payload: {'key': key, 'value': null},
+      );
+    }
   }
 
   @override
@@ -103,84 +112,46 @@ final class _HiveAppStorage with _AppStorageStreamMixin implements AppStorage {
     _notify(key, value);
 
     // 2. Broadcast to *other* children.
-    await SettingsSync.broadcast(
-      group: SettingsSync.methodSyncKV,
+    await AppDataSync.broadcast(
+      group: AppDataSync.methodSyncKV,
       payload: {'key': key, 'value': value},
     );
   }
 
   @override
-  Future<void> handleRequestFullSync(Object replyToId) async {
-    final targetId = replyToId.toString();
-    // Iterate all keys and send to the requester.
+  bool shouldSync(String key) => key.startsWith('settings.');
+
+  @override
+  Map<String, dynamic> exportSyncableData() {
+    final Map<String, dynamic> data = {};
     for (final key in _box.keys) {
       final k = key.toString();
-      final value = _box.get(key);
-      try {
-        await WindowController.fromWindowId(targetId).invokeMethod(
-          SettingsSync.methodSettingsChanged,
-          {
-            'group': SettingsSync.methodSyncKV,
-            'payload': {'key': k, 'value': value},
-          },
-        );
-      } catch (e, st) {
-        logWarning(
-          e,
-          stackTrace: st,
-          message: 'HiveAppStorage failed to sync key $k to window $targetId',
-          logger: 'app_storage',
-        );
+      if (shouldSync(k)) {
+        data[k] = _box.get(key);
       }
     }
+    return data;
   }
 }
 
 final class _RemoteAppStorage
     with _AppStorageStreamMixin
     implements AppStorage {
-  final Map<String, Object?> _cache = <String, Object?>{};
+  late final Map<String, Object?> _cache;
 
-  _RemoteAppStorage() {
-    // Request full sync on startup.
-    // Fire and forget, but with internal retry.
-    _requestFullSync();
+  _RemoteAppStorage({Map<String, dynamic>? initialData}) {
+    _cache = initialData != null
+        ? Map<String, Object?>.from(initialData)
+        : <String, Object?>{};
   }
 
-  Future<void> _requestFullSync([int attempt = 0]) async {
-    try {
-      if (attempt > 0) {
-        await Future.delayed(Duration(milliseconds: 500 * attempt));
-      }
-
-      // Check if we can get the current engine's controller first.
-      final controller = await WindowController.fromCurrentEngine();
-      final myId = controller.windowId;
-
-      // Broadcast a "request full sync" to ALL windows.
-      // The Main window will respond directly to us.
-      await SettingsSync.broadcast(
-        group: SettingsSync.methodRequestFullSync,
-        payload: myId,
-      );
-    } catch (e, st) {
-      if (attempt < 5) {
-        logWarning(
-          'RemoteAppStorage failed to request full sync (attempt ${attempt + 1}), retrying... Error: $e',
-          logger: 'app_storage',
-        );
-        return _requestFullSync(attempt + 1);
-      }
-
-      logError(
-        e,
-        stackTrace: st,
-        message:
-            'RemoteAppStorage failed to request full sync after 6 attempts',
-        logger: 'app_storage',
-      );
-    }
+  @override
+  Map<String, dynamic> exportSyncableData() {
+    return Map<String, dynamic>.from(_cache);
   }
+
+  @override
+  bool shouldSync(String key) => key.startsWith('settings.');
 
   @override
   T? get<T>(String key) {
@@ -193,7 +164,7 @@ final class _RemoteAppStorage
   Future<void> put(String key, Object? value) async {
     _cache[key] = value;
     _notify(key, value);
-    // Send to Main Window (and implicitly others via Main's broadcast)
+    // Send to Main Window
     await _sendToMain(key, value);
   }
 
@@ -214,18 +185,14 @@ final class _RemoteAppStorage
     _notify(key, value);
   }
 
-  @override
-  Future<void> handleRequestFullSync(Object replyToId) async {
-    // Remote storage doesn't store the source of truth, so it shouldn't be asked for full sync.
-  }
-
   Future<void> _sendToMain(String key, Object? value) async {
-    // We broadcast the KV update to ALL windows (including Main).
-    // Main will hear it and persist it. Other children will hear it and update their cache.
-    await SettingsSync.broadcast(
-      group: SettingsSync.methodSyncKV,
-      payload: {'key': key, 'value': value},
-    );
+    // Only broadcast to Main if the key should be synced.
+    if (shouldSync(key)) {
+      await AppDataSync.broadcast(
+        group: AppDataSync.methodSyncKV,
+        payload: {'key': key, 'value': value},
+      );
+    }
   }
 }
 
@@ -259,7 +226,10 @@ final class _MemoryAppStorage
   }
 
   @override
-  Future<void> handleRequestFullSync(Object replyToId) async {
-    // Memory storage doesn't sync.
+  bool shouldSync(String key) => false;
+
+  @override
+  Map<String, dynamic> exportSyncableData() {
+    return {};
   }
 }

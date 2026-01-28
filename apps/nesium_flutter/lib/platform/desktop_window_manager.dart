@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 import '../logging/app_logger.dart';
+import '../persistence/app_storage.dart';
 import '../windows/window_routing.dart';
 import 'platform_capabilities.dart';
 
@@ -38,9 +39,23 @@ class DesktopWindowManager {
     WindowKind kind, {
     String? languageCode,
   }) async {
-    final routeOnlyArgs = encodeWindowArguments(kind);
+    final currentController = await WindowController.fromCurrentEngine();
+    final mainId = currentController.windowId;
+
+    final initialData = appStorage.exportSyncableData();
+
+    final routeOnlyArgs = encodeWindowArguments(
+      kind,
+      mainWindowId: mainId,
+      initialData: initialData,
+    );
     final targetRoute = _routeFromArgs(routeOnlyArgs);
-    final args = encodeWindowArguments(kind, languageCode: languageCode);
+    final args = encodeWindowArguments(
+      kind,
+      languageCode: languageCode,
+      mainWindowId: mainId,
+      initialData: initialData,
+    );
 
     // First, try to find an existing window with the same arguments.
     final existingWindows = await WindowController.getAll();
@@ -88,5 +103,10 @@ class DesktopWindowManager {
   Future<void> openPaletteViewerWindow({String? languageCode}) async {
     if (!isSupported) return;
     await _openOrCreate(WindowKind.paletteViewer, languageCode: languageCode);
+  }
+
+  Future<void> openSettingsWindow({String? languageCode}) async {
+    if (!isSupported) return;
+    await _openOrCreate(WindowKind.settings, languageCode: languageCode);
   }
 }

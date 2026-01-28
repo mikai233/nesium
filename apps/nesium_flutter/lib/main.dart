@@ -54,10 +54,11 @@ Future<void> main(List<String> args) async {
       }
 
       final kind = await resolveWindowKind();
+      final initialData = await resolveInitialData();
 
       // We must initialize storage AFTER resolving the window kind,
       // because child windows use RemoteAppStorage to avoid Hive lock contention.
-      await initAppStorage(kind);
+      await initAppStorage(kind, initialData: initialData);
       await initRustRuntime();
       unawaited(ShaderAssetService().syncShaders());
 

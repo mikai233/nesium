@@ -34,6 +34,17 @@ class ApplePerformanceSettingsController
       _applyHighPerformance(highPerformance);
     }
 
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsAppleHighPerformance) {
+        state = build();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     return ApplePerformanceSettings(highPerformance: highPerformance);
   }
 

@@ -42,9 +42,22 @@ class AndroidVideoBackendSettingsController
     final stored = ref
         .read(appStorageProvider)
         .get(StorageKeys.settingsAndroidVideoBackend);
-    return AndroidVideoBackendSettings(
+    final settings = AndroidVideoBackendSettings(
       backend: androidVideoBackendFromMode(stored),
     );
+
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsAndroidVideoBackend) {
+        state = build();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
+    return settings;
   }
 
   Future<void> setBackend(AndroidVideoBackend backend) async {

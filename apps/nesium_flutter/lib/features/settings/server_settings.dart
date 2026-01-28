@@ -47,6 +47,21 @@ class ServerSettingsController extends Notifier<ServerSettings> {
 
   @override
   ServerSettings build() {
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsServer) {
+        unawaitedLogged(
+          _load(),
+          logger: 'server_settings',
+          message: 'Reloading server settings from stream',
+        );
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     if (!_initialized) {
       _initialized = true;
       scheduleMicrotask(_load);

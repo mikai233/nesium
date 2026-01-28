@@ -44,9 +44,22 @@ class TurboSettings {
 class TurboSettingsController extends Notifier<TurboSettings> {
   @override
   TurboSettings build() {
+    // Listen for storage changes
+    final storage = ref.read(appStorageProvider);
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsTurbo) {
+        unawaitedLogged(
+          _reloadFromStorage(),
+          logger: 'turbo_settings',
+          message: 'Reloading turbo settings from stream',
+        );
+      }
+    });
+    ref.onDispose(() => subscription.cancel());
+
     final defaults = TurboSettings.defaults;
     final loaded = _turboFromStorage(
-      ref.read(appStorageProvider).read(_turboSettingsKey),
+      storage.read(_turboSettingsKey),
       defaults: defaults,
     );
     final settings = loaded ?? defaults;
@@ -54,6 +67,16 @@ class TurboSettingsController extends Notifier<TurboSettings> {
     scheduleMicrotask(applyToRuntime);
 
     return settings;
+  }
+
+  Future<void> _reloadFromStorage() async {
+    final defaults = TurboSettings.defaults;
+    final value = ref.read(appStorageProvider).read(_turboSettingsKey);
+    final newState = _turboFromStorage(value, defaults: defaults) ?? defaults;
+    if (newState != state) {
+      state = newState;
+      applyToRuntime();
+    }
   }
 
   void applyToRuntime() {

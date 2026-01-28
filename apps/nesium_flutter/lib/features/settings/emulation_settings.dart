@@ -47,12 +47,36 @@ sealed class EmulationSettings with _$EmulationSettings {
 class EmulationSettingsController extends Notifier<EmulationSettings> {
   @override
   EmulationSettings build() {
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsEmulation) {
+        unawaitedLogged(
+          reloadFromStorage(),
+          logger: 'emulation_settings',
+          message: 'Reloading emulation settings from stream',
+        );
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     final defaults = EmulationSettings.defaults();
     final settings = _loadSettingsFromStorage(defaults: defaults) ?? defaults;
     scheduleMicrotask(() {
       applyToRuntime();
     });
     return settings;
+  }
+
+  Future<void> reloadFromStorage() async {
+    final defaults = EmulationSettings.defaults();
+    final settings = _loadSettingsFromStorage(defaults: defaults);
+    if (settings != null && settings != state) {
+      state = settings;
+      applyToRuntime();
+    }
   }
 
   EmulationSettings? _loadSettingsFromStorage({

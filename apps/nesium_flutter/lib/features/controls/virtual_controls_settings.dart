@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../logging/app_logger.dart';
+
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 import '../../persistence/storage_codec.dart';
@@ -281,10 +283,33 @@ class VirtualControlsSettingsController
     extends Notifier<VirtualControlsSettings> {
   @override
   VirtualControlsSettings build() {
+    final storage = ref.read(appStorageProvider);
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsVirtualControls) {
+        unawaitedLogged(
+          _reloadFromStorage(),
+          logger: 'virtual_controls_settings',
+          message: 'Reloading virtual controls settings from stream',
+        );
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     final loaded = _virtualControlsFromStorage(
-      ref.read(appStorageProvider).read(_virtualControlsSettingsKey),
+      storage.read(_virtualControlsSettingsKey),
     );
     return loaded ?? VirtualControlsSettings.defaults;
+  }
+
+  Future<void> _reloadFromStorage() async {
+    final storage = ref.read(appStorageProvider);
+    final value = storage.read(_virtualControlsSettingsKey);
+    final newState =
+        _virtualControlsFromStorage(value) ?? VirtualControlsSettings.defaults;
+    if (newState != state) {
+      state = newState;
+    }
   }
 
   void replace(VirtualControlsSettings value) => _set(value);

@@ -44,6 +44,18 @@ class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
       );
     });
 
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsAndroidShaderEnabled ||
+          event.key == StorageKeys.settingsAndroidShaderPresetPath) {
+        state = build();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     return settings;
   }
 

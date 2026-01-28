@@ -951,10 +951,17 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   Future<void> _openSettings() async {
-    if (!mounted) return;
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
+    if (_desktopWindowManager.isSupported) {
+      final languageCode = ref.read(appLanguageProvider).languageCode;
+      await _desktopWindowManager.openSettingsWindow(
+        languageCode: languageCode,
+      );
+    } else {
+      if (!mounted) return;
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
+    }
   }
 
   Future<void> _openAbout() async {

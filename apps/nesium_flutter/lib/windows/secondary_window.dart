@@ -128,6 +128,7 @@ class _SecondaryWindowState extends State<SecondaryWindow> with WindowListener {
         await bestEffort(bridge.unsubscribePaletteState);
         break;
       case WindowKind.tools:
+      case WindowKind.settings:
       case WindowKind.main:
         break;
     }

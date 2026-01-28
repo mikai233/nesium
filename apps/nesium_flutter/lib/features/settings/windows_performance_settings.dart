@@ -6,7 +6,6 @@ import 'package:nesium_flutter/domain/nes_texture_service.dart';
 import 'package:nesium_flutter/persistence/app_storage.dart';
 import 'package:nesium_flutter/persistence/keys.dart';
 import 'package:nesium_flutter/windows/current_window_kind.dart';
-import 'package:nesium_flutter/windows/settings_sync.dart';
 import 'package:nesium_flutter/windows/window_types.dart';
 
 class WindowsPerformanceSettings {
@@ -40,6 +39,17 @@ class WindowsPerformanceSettingsController
       _applyHighPerformance(highPerformance);
     }
 
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsWindowsHighPerformance) {
+        state = build();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     return WindowsPerformanceSettings(highPerformance: highPerformance);
   }
 
@@ -48,12 +58,6 @@ class WindowsPerformanceSettingsController
 
     final storage = ref.read(appStorageProvider);
     await storage.put(StorageKeys.settingsWindowsHighPerformance, enabled);
-    unawaited(
-      SettingsSync.broadcast(
-        group: 'windowsPerformance',
-        fields: const ['highPerformance'],
-      ),
-    );
     state = state.copyWith(highPerformance: enabled);
 
     if (!_isMainWindow) return;

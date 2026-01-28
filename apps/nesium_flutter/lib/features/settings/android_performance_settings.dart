@@ -30,6 +30,17 @@ class AndroidPerformanceSettingsController
       _applyHighPerformance(highPerformance);
     }
 
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsAndroidHighPerformance) {
+        state = build();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     return AndroidPerformanceSettings(highPerformance: highPerformance);
   }
 

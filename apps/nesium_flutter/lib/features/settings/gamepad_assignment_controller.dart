@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../platform/nes_gamepad.dart' as nes_gamepad;
@@ -22,6 +23,18 @@ class GamepadAssignmentController extends Notifier<Map<String, int>> {
   @override
   Map<String, int> build() {
     final storage = ref.read(appStorageProvider);
+
+    final subscription = storage.onKeyChanged.listen((event) {
+      if (event.key == StorageKeys.settingsGamepadAssignments) {
+        unawaitedLogged(
+          _reloadFromStorage(),
+          logger: 'gamepad_assignment',
+          message: 'Reloading gamepad assignments from stream',
+        );
+      }
+    });
+    ref.onDispose(() => subscription.cancel());
+
     final saved = storage.read(_gamepadAssignmentsKey);
     final state = _fromStorage(saved);
 
@@ -33,6 +46,20 @@ class GamepadAssignmentController extends Notifier<Map<String, int>> {
     }, fireImmediately: true);
 
     return state;
+  }
+
+  Future<void> _reloadFromStorage() async {
+    final storage = ref.read(appStorageProvider);
+    final saved = storage.read(_gamepadAssignmentsKey);
+    final newState = _fromStorage(saved);
+    if (!mapEquals(state, newState)) {
+      state = newState;
+      // Re-run restoration to ensure hardware is bound correctly
+      final gamepads = ref.read(connectedGamepadsProvider).asData?.value;
+      if (gamepads != null) {
+        _restoreAssignments(gamepads);
+      }
+    }
   }
 
   void saveAssignment(String gamepadName, int port) {

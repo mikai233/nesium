@@ -7,47 +7,49 @@ import '../l10n/app_localizations.dart';
 import '../logging/app_logger.dart';
 import '../platform/platform_capabilities.dart';
 import '../shell/nes_shell.dart';
+import '../features/settings/settings_page.dart';
 import 'secondary_window.dart';
 import 'window_types.dart';
 
-String encodeWindowArguments(WindowKind kind, {String? languageCode}) {
+String encodeWindowArguments(
+  WindowKind kind, {
+  String? languageCode,
+  String? mainWindowId,
+  Map<String, dynamic>? initialData,
+}) {
+  final Map<String, dynamic> args = {
+    if (languageCode != null) 'lang': languageCode,
+    if (mainWindowId != null) 'mainId': mainWindowId,
+    if (initialData != null) 'initialData': initialData,
+  };
+
   switch (kind) {
     case WindowKind.main:
-      return jsonEncode({
-        'route': 'main',
-        if (languageCode != null) 'lang': languageCode,
-      });
+      args['route'] = 'main';
+      break;
     case WindowKind.debugger:
-      return jsonEncode({
-        'route': 'debugger',
-        if (languageCode != null) 'lang': languageCode,
-      });
+      args['route'] = 'debugger';
+      break;
     case WindowKind.tools:
-      return jsonEncode({
-        'route': 'tools',
-        if (languageCode != null) 'lang': languageCode,
-      });
+      args['route'] = 'tools';
+      break;
     case WindowKind.tilemap:
-      return jsonEncode({
-        'route': 'tilemap',
-        if (languageCode != null) 'lang': languageCode,
-      });
+      args['route'] = 'tilemap';
+      break;
     case WindowKind.tileViewer:
-      return jsonEncode({
-        'route': 'tileViewer',
-        if (languageCode != null) 'lang': languageCode,
-      });
+      args['route'] = 'tileViewer';
+      break;
     case WindowKind.spriteViewer:
-      return jsonEncode({
-        'route': 'spriteViewer',
-        if (languageCode != null) 'lang': languageCode,
-      });
+      args['route'] = 'spriteViewer';
+      break;
     case WindowKind.paletteViewer:
-      return jsonEncode({
-        'route': 'paletteViewer',
-        if (languageCode != null) 'lang': languageCode,
-      });
+      args['route'] = 'paletteViewer';
+      break;
+    case WindowKind.settings:
+      args['route'] = 'settings';
+      break;
   }
+  return jsonEncode(args);
 }
 
 WindowKind _parseWindowKindFromArguments(String? arguments) {
@@ -71,6 +73,8 @@ WindowKind _parseWindowKindFromArguments(String? arguments) {
           return WindowKind.spriteViewer;
         case 'paletteViewer':
           return WindowKind.paletteViewer;
+        case 'settings':
+          return WindowKind.settings;
       }
     }
   } catch (e, st) {
@@ -82,6 +86,56 @@ WindowKind _parseWindowKindFromArguments(String? arguments) {
     );
   }
   return WindowKind.main;
+}
+
+Future<String?> resolveMainWindowId() async {
+  if (!isNativeDesktop) {
+    return null;
+  }
+
+  try {
+    final controller = await WindowController.fromCurrentEngine();
+    final args = controller.arguments;
+    if (args.isEmpty) return null;
+
+    final data = jsonDecode(args);
+    if (data is Map && data['mainId'] is String) {
+      return data['mainId'] as String;
+    }
+  } catch (e, st) {
+    logWarning(
+      e,
+      stackTrace: st,
+      message: 'Failed to resolve main window ID',
+      logger: 'window_routing',
+    );
+  }
+  return null;
+}
+
+Future<Map<String, dynamic>?> resolveInitialData() async {
+  if (!isNativeDesktop) {
+    return null;
+  }
+
+  try {
+    final controller = await WindowController.fromCurrentEngine();
+    final args = controller.arguments;
+    if (args.isEmpty) return null;
+
+    final data = jsonDecode(args);
+    if (data is Map && data['initialData'] is Map) {
+      return Map<String, dynamic>.from(data['initialData'] as Map);
+    }
+  } catch (e, st) {
+    logWarning(
+      e,
+      stackTrace: st,
+      message: 'Failed to resolve initial data',
+      logger: 'window_routing',
+    );
+  }
+  return null;
 }
 
 Future<WindowKind> resolveWindowKind() async {
@@ -189,6 +243,12 @@ class _WindowRouterState extends State<WindowRouter> {
           kind: WindowKind.paletteViewer,
           title: l10n.menuPaletteViewer,
           child: const SecondaryPaletteViewerContent(),
+        );
+      case WindowKind.settings:
+        return SecondaryWindow(
+          kind: WindowKind.settings,
+          title: l10n.settingsTitle,
+          child: const SettingsPage(),
         );
     }
   }

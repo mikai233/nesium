@@ -44,6 +44,18 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
       );
     });
 
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsWindowsShaderEnabled ||
+          event.key == StorageKeys.settingsWindowsShaderPresetPath) {
+        state = build();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     return settings;
   }
 

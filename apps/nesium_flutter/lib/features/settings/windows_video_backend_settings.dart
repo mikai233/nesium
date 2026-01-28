@@ -7,7 +7,6 @@ import '../../persistence/keys.dart';
 import '../../persistence/app_storage.dart';
 import '../../domain/nes_controller.dart';
 import '../../windows/current_window_kind.dart';
-import '../../windows/settings_sync.dart';
 import '../../windows/window_types.dart';
 
 enum WindowsVideoBackend { d3d11Gpu, softwareCpu }
@@ -63,6 +62,18 @@ class WindowsVideoBackendSettingsController
       }
     }
 
+    // Listen for storage changes
+    final subscription = ref.read(appStorageProvider).onKeyChanged.listen((
+      event,
+    ) {
+      if (event.key == StorageKeys.settingsWindowsVideoBackend ||
+          event.key == StorageKeys.settingsWindowsNativeOverlay) {
+        state = build();
+      }
+    });
+
+    ref.onDispose(() => subscription.cancel());
+
     return WindowsVideoBackendSettings(
       backend: backend,
       useNativeOverlay: useNativeOverlayValue ?? false,
@@ -76,12 +87,6 @@ class WindowsVideoBackendSettingsController
     await storage.put(
       StorageKeys.settingsWindowsVideoBackend,
       backend == WindowsVideoBackend.d3d11Gpu,
-    );
-    unawaited(
-      SettingsSync.broadcast(
-        group: 'windowsVideoBackend',
-        fields: const ['backend'],
-      ),
     );
 
     state = state.copyWith(backend: backend);
@@ -98,12 +103,6 @@ class WindowsVideoBackendSettingsController
 
     final storage = ref.read(appStorageProvider);
     await storage.put(StorageKeys.settingsWindowsNativeOverlay, value);
-    unawaited(
-      SettingsSync.broadcast(
-        group: 'windowsVideoBackend',
-        fields: const ['useNativeOverlay'],
-      ),
-    );
 
     state = state.copyWith(useNativeOverlay: value);
   }
