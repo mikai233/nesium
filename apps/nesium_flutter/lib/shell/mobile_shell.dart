@@ -91,9 +91,10 @@ class _MobileShellState extends ConsumerState<MobileShell>
         editor.enabled ||
         inputState.ports[0]!.device == InputDevice.virtualController;
     final autoOffsetY = (!isLandscape && usingVirtual)
-        ? -(controlsSettings.buttonSize * 0.55)
+        ? -(controlsSettings.buttonSize * 2.8)
         : 0.0;
-    final screenOffsetY = videoSettings.screenVerticalOffset + autoOffsetY;
+    final screenOffsetY =
+        (isLandscape ? 0.0 : videoSettings.screenVerticalOffset) + autoOffsetY;
 
     return PopScope(
       canPop: !editor.enabled,

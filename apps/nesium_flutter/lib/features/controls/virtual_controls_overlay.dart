@@ -953,13 +953,23 @@ _basePositions(
     mainButtonBaseSize.height * systemScale * rewindScale,
   );
 
+  final verticalOffset = isLandscape ? 32.0 : 120.0;
+
   final dpadPos = Offset(
-    basePadding,
-    available.height - dpadSize.height - basePadding,
+    basePadding + safeInsets.left,
+    available.height -
+        dpadSize.height -
+        basePadding -
+        verticalOffset -
+        safeInsets.bottom,
   );
   final buttonsPos = Offset(
-    available.width - buttonsSize.width - basePadding,
-    available.height - buttonsSize.height - basePadding,
+    available.width - buttonsSize.width - basePadding - safeInsets.right,
+    available.height -
+        buttonsSize.height -
+        basePadding -
+        verticalOffset -
+        safeInsets.bottom,
   );
 
   final Offset selectPos;
@@ -999,10 +1009,10 @@ _basePositions(
       buttonsPos.dx + (buttonsSize.width - systemButtonSize.width) / 2,
       y,
     );
-    // Align vertically below ✅, horizontally centered with ✅
+    // Align vertically centered with ✅
     rewindPos = Offset(
       fabCenter.dx - rewindSize.width / 2.0,
-      fabCenter.dy + fabSize / 2.0 + basePadding * 2.0,
+      fabCenter.dy - rewindSize.height / 2.0,
     );
   }
 
@@ -1393,18 +1403,10 @@ Size _systemButtonVisualSize(VirtualControlsSettings settings) {
 
 Size _abClusterSize(VirtualControlsSettings settings) {
   final s = settings.buttonSize;
-  final g = settings.gap;
-  final main = s;
-  final turbo = s;
-  final mainHit = main * settings.hitboxScale;
-  final turboHit = turbo * settings.hitboxScale;
-  final dx = mainHit * 0.10;
-  final dy = mainHit * 0.10;
+  final g = settings.gap * 2.5; // Increased gap for cross layout
+  final mainHit = s * settings.hitboxScale;
   const pad = 8.0;
-  return Size(
-    pad + mainHit + g + mainHit + dx + pad,
-    pad + turboHit + g + mainHit + dy + pad,
-  );
+  return Size(pad + mainHit * 2 + g + pad, pad + mainHit * 2 + g + pad);
 }
 
 Size _mainButtonHitboxSize(VirtualControlsSettings settings) {
@@ -1429,17 +1431,21 @@ Size _systemButtonHitboxSize(VirtualControlsSettings settings) {
 ({Offset turboB, Offset turboA, Offset b, Offset a}) _buttonsLocalOffsets(
   VirtualControlsSettings settings,
 ) {
-  final g = settings.gap;
+  final g = settings.gap * 2.5; // Matches increased gap in _abClusterSize
   final mainHit = _mainButtonHitboxSize(settings).width;
-  final turboHit = _turboButtonHitboxSize(settings).width;
-  final dx = mainHit * 0.10;
-  final dy = mainHit * 0.10;
   const pad = 8.0;
+
+  final centerOffset = (mainHit + g) / 2;
+
   return (
-    turboB: const Offset(pad, pad),
-    turboA: Offset(pad + mainHit + g + dx, pad),
-    b: Offset(pad, pad + turboHit + g + dy),
-    a: Offset(pad + mainHit + g + dx, pad + turboHit + g + dy),
+    // TB is at top
+    turboB: Offset(pad + centerOffset, pad),
+    // TA is at right
+    turboA: Offset(pad + mainHit + g, pad + centerOffset),
+    // B is at left
+    b: Offset(pad, pad + centerOffset),
+    // A is at bottom
+    a: Offset(pad + centerOffset, pad + mainHit + g),
   );
 }
 

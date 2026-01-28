@@ -966,6 +966,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoScreenVerticalOffset => 'Screen vertical offset';
 
   @override
+  String get videoScreenVerticalOffsetPortraitOnly =>
+      'Only takes effect in portrait mode.';
+
+  @override
   String get videoAspectRatio => 'Aspect ratio';
 
   @override

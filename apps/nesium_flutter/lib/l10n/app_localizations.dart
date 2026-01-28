@@ -1862,6 +1862,12 @@ abstract class AppLocalizations {
   /// **'Screen vertical offset'**
   String get videoScreenVerticalOffset;
 
+  /// No description provided for @videoScreenVerticalOffsetPortraitOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only takes effect in portrait mode.'**
+  String get videoScreenVerticalOffsetPortraitOnly;
+
   /// No description provided for @videoAspectRatio.
   ///
   /// In en, this message translates to:

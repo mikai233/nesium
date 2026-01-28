@@ -506,6 +506,7 @@
   "videoFullScreenTitle": "Full Screen",
   "videoFullScreenSubtitle": "Toggle window full screen state",
   "videoScreenVerticalOffset": "Screen vertical offset",
+  "videoScreenVerticalOffsetPortraitOnly": "Only takes effect in portrait mode.",
   "videoAspectRatio": "Aspect ratio",
   "videoAspectRatioSquare": "1:1 (Square pixels)",
   "videoAspectRatioNtsc": "4:3 (NTSC)",

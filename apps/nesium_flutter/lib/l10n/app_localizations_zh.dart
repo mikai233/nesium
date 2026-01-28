@@ -953,6 +953,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoScreenVerticalOffset => '画面垂直偏移';
 
   @override
+  String get videoScreenVerticalOffsetPortraitOnly => '仅在竖屏模式下生效。';
+
+  @override
   String get videoAspectRatio => '画面比例';
 
   @override

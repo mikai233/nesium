@@ -112,6 +112,7 @@ class AnimatedSliderTile extends StatelessWidget {
     required this.onChanged,
     required this.valueLabel,
     this.divisions,
+    this.helperText,
   });
 
   final String label;
@@ -121,6 +122,7 @@ class AnimatedSliderTile extends StatelessWidget {
   final int? divisions;
   final ValueChanged<double> onChanged;
   final String valueLabel;
+  final String? helperText;
 
   @override
   Widget build(BuildContext context) {
@@ -164,6 +166,16 @@ class AnimatedSliderTile extends StatelessWidget {
             onChanged: onChanged,
           ),
         ),
+        if (helperText != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, left: 4),
+            child: Text(
+              helperText!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+              ),
+            ),
+          ),
       ],
     );
   }

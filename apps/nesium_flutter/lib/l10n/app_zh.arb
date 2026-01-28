@@ -389,6 +389,7 @@
   "videoFullScreenTitle": "全屏",
   "videoFullScreenSubtitle": "切换窗口全屏状态",
   "videoScreenVerticalOffset": "画面垂直偏移",
+  "videoScreenVerticalOffsetPortraitOnly": "仅在竖屏模式下生效。",
   "videoAspectRatio": "画面比例",
   "videoAspectRatioSquare": "1:1（方形像素）",
   "videoAspectRatioNtsc": "4:3（NTSC）",
