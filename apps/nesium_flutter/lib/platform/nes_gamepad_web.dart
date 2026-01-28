@@ -100,6 +100,7 @@ Future<GamepadPollResult?> pollGamepads() async {
   bool saveState = false;
   bool loadState = false;
   bool pause = false;
+  bool fullScreen = false;
 
   // Iterate over NES ports (0-3) to populate masks based on bindings
   for (var port = 0; port < 4; port++) {
@@ -172,6 +173,7 @@ Future<GamepadPollResult?> pollGamepads() async {
     saveState = saveState || isMappedPressed(mapping.saveState);
     loadState = loadState || isMappedPressed(mapping.loadState);
     pause = pause || isMappedPressed(mapping.pause);
+    fullScreen = fullScreen || isMappedPressed(mapping.fullScreen);
   }
 
   return GamepadPollResult(
@@ -183,6 +185,7 @@ Future<GamepadPollResult?> pollGamepads() async {
       saveState: saveState,
       loadState: loadState,
       pause: pause,
+      fullScreen: fullScreen,
     ),
   );
 }

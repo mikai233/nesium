@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:nesium_flutter/platform/window_manager_shim.dart';
 
 import '../../platform/nes_palette.dart' as nes_palette;
 import '../../platform/nes_palette.dart' show PaletteKind;
@@ -17,6 +18,9 @@ import '../../platform/nes_video.dart' as nes_video;
 import '../../platform/nes_video.dart'
     show NtscBisqwitOptions, NtscOptions, VideoFilter;
 import '../../domain/nes_controller.dart';
+import '../../windows/current_window_kind.dart';
+import '../../windows/window_types.dart';
+import '../../platform/platform_capabilities.dart';
 
 part 'video_settings.freezed.dart';
 part 'video_settings.g.dart';
@@ -171,14 +175,34 @@ sealed class VideoSettings with _$VideoSettings {
     /// Scanline intensity in `0.0..=1.0`.
     @Default(0.30) double scanlineIntensity,
     String? customPaletteName,
+    @Default(false) bool fullScreen,
   }) = _VideoSettings;
 
   factory VideoSettings.fromJson(Map<String, dynamic> json) =>
       _$VideoSettingsFromJson(json);
 }
 
-class VideoSettingsController extends Notifier<VideoSettings> {
+class VideoSettingsController extends Notifier<VideoSettings>
+    with WindowListener {
   Timer? _debounceTimer;
+
+  @override
+  void onWindowEnterFullScreen() {
+    if (ref.read(currentWindowKindProvider) != WindowKind.main) return;
+    if (!state.fullScreen) {
+      state = state.copyWith(fullScreen: true);
+      unawaited(_persist(state));
+    }
+  }
+
+  @override
+  void onWindowLeaveFullScreen() {
+    if (ref.read(currentWindowKindProvider) != WindowKind.main) return;
+    if (state.fullScreen) {
+      state = state.copyWith(fullScreen: false);
+      unawaited(_persist(state));
+    }
+  }
 
   @override
   VideoSettings build() {
@@ -215,9 +239,16 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     });
 
     ref.onDispose(() {
+      if (ref.read(currentWindowKindProvider) == WindowKind.main) {
+        windowManager.removeListener(this);
+      }
       subscription.cancel();
       _debounceTimer?.cancel();
     });
+
+    if (ref.read(currentWindowKindProvider) == WindowKind.main) {
+      windowManager.addListener(this);
+    }
 
     scheduleMicrotask(() {
       unawaitedLogged(
@@ -296,6 +327,12 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     await ref
         .read(nesControllerProvider.notifier)
         .setVideoFilter(state.videoFilter);
+
+    // Apply full screen state only if this is the main window
+    final kind = ref.read(currentWindowKindProvider);
+    if (kind == WindowKind.main && isNativeDesktop) {
+      await windowManager.setFullScreen(state.fullScreen);
+    }
 
     if (isNtsc) {
       await nes_video.setNtscOptions(options: state.ntscOptions);
@@ -403,6 +440,17 @@ class VideoSettingsController extends Notifier<VideoSettings> {
     if (clamped == state.screenVerticalOffset) return;
     state = state.copyWith(screenVerticalOffset: clamped);
     await _persist(state);
+  }
+
+  Future<void> setFullScreen(bool value) async {
+    if (value == state.fullScreen) return;
+    state = state.copyWith(fullScreen: value);
+    await _persist(state);
+
+    final kind = ref.read(currentWindowKindProvider);
+    if (kind == WindowKind.main && isNativeDesktop) {
+      await windowManager.setFullScreen(value);
+    }
   }
 
   Future<void> setNtscOptions(nes_video.NtscOptions value) async {

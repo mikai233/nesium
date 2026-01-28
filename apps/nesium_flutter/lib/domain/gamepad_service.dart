@@ -30,6 +30,7 @@ class GamepadService extends Notifier<void> {
     saveState: false,
     loadState: false,
     pause: false,
+    fullScreen: false,
   );
 
   @override
@@ -146,7 +147,8 @@ class GamepadService extends Notifier<void> {
             pollActions.fastForward ||
             pollActions.saveState ||
             pollActions.loadState ||
-            pollActions.pause;
+            pollActions.pause ||
+            pollActions.fullScreen;
 
         if (hasAnyActivity) {
           ref.read(lastInputMethodProvider.notifier).set(InputMethod.gamepad);

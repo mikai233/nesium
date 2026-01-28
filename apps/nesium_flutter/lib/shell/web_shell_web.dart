@@ -76,6 +76,7 @@ class _WebShellState extends ConsumerState<WebShell> {
 
   Timer? _cursorTimer;
   bool _cursorHidden = false;
+  bool _menuVisible = false;
 
   @override
   void initState() {
@@ -928,6 +929,16 @@ class _WebShellState extends ConsumerState<WebShell> {
         case KeyboardBindingAction.pause:
           if (pressed) _togglePause();
           break;
+        case KeyboardBindingAction.fullScreen:
+          if (pressed) {
+            final videoSettings = ref.read(videoSettingsProvider);
+            unawaited(
+              ref
+                  .read(videoSettingsProvider.notifier)
+                  .setFullScreen(!videoSettings.fullScreen),
+            );
+          }
+          break;
       }
       handled = true;
     }
@@ -949,11 +960,6 @@ class _WebShellState extends ConsumerState<WebShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     ref.watch(gamepadServiceProvider); // Keep gamepad polling running on web
-    final lastError = _lastError;
-    final slotStates = ref.watch(saveStateRepositoryProvider);
-    final hasRom = ref.watch(
-      nesControllerProvider.select((s) => s.romHash != null),
-    );
     ref.watch(autoSaveServiceProvider); // Keep auto-save timer running on web
     final actions = NesActions(
       openRom: _pickAndLoadRom,
@@ -1008,10 +1014,20 @@ class _WebShellState extends ConsumerState<WebShell> {
       openTileViewer: () async {},
     );
 
+    final videoSettings = ref.watch(videoSettingsProvider);
+    final slotStates = ref.watch(saveStateRepositoryProvider);
+    final hasRom = ref.watch(
+      nesControllerProvider.select((s) => s.romHash != null),
+    );
+    final lastError = _error ?? _lastError;
+
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final useDrawerMenu =
         MediaQuery.sizeOf(context).width < _desktopMenuMinWidth;
+
+    const double menuHeight = 28;
+    final isFullScreen = videoSettings.fullScreen;
 
     return Scaffold(
       appBar: useDrawerMenu && !isLandscape
@@ -1034,127 +1050,177 @@ class _WebShellState extends ConsumerState<WebShell> {
         focusNode: _focusNode,
         autofocus: true,
         onKeyEvent: _handleKeyEvent,
-        child: Column(
-          children: [
-            if (!useDrawerMenu)
-              NesMenuBar(
-                actions: actions,
-                sections: NesMenus.webMenuSections(),
-                slotStates: slotStates,
-                hasRom: hasRom,
-                trailing: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: lastError != null
-                      ? IconButton(
-                          tooltip: l10n.menuLastError,
-                          icon: const Icon(
-                            Icons.error_outline,
-                            color: Colors.red,
-                            size: 18,
-                          ),
-                          onPressed: _showLastErrorDialog,
-                        )
-                      : const SizedBox.shrink(),
-                ),
-              ),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final videoSettings = ref.watch(videoSettingsProvider);
-                  final inputState = ref.watch(inputSettingsProvider);
-                  final editor = ref.watch(virtualControlsEditorProvider);
-                  final controlsSettings = ref.watch(
-                    virtualControlsSettingsProvider,
-                  );
-
-                  final usingVirtual =
-                      editor.enabled ||
-                      inputState.ports[0]!.device ==
-                          InputDevice.virtualController;
-                  final autoOffsetY = (!isLandscape && usingVirtual)
-                      ? -(controlsSettings.buttonSize * 0.55)
-                      : 0.0;
-                  final screenOffsetY =
-                      videoSettings.screenVerticalOffset + autoOffsetY;
-
-                  final viewport = NesScreenView.computeViewportSize(
-                    constraints,
-                    integerScaling: videoSettings.integerScaling,
-                    aspectRatio: videoSettings.aspectRatio,
-                  );
-                  if (viewport == null) return const SizedBox.shrink();
-
-                  final view = Transform.translate(
-                    offset: Offset(0, screenOffsetY),
-                    child: SizedBox(
-                      width: viewport.width,
-                      height: viewport.height,
-                      child: GestureDetector(
-                        onTap: () => _focusNode.requestFocus(),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            HtmlElementView(viewType: _viewType),
-                            if (hasRom) const EmulationStatusOverlay(),
-                          ],
-                        ),
+        child: MouseRegion(
+          onHover: (event) {
+            if (!isFullScreen || useDrawerMenu) return;
+            // Show menu if mouse is within top 40px
+            final bool nearTop = event.localPosition.dy < 40;
+            if (nearTop != _menuVisible) {
+              setState(() => _menuVisible = nearTop);
+            }
+          },
+          child: Stack(
+            children: [
+              // Main Content
+              Positioned.fill(
+                child: Column(
+                  children: [
+                    if (!useDrawerMenu)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        height: isFullScreen ? 0 : menuHeight,
                       ),
-                    ),
-                  );
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final videoSettings = ref.watch(
+                            videoSettingsProvider,
+                          );
+                          final inputState = ref.watch(inputSettingsProvider);
+                          final editor = ref.watch(
+                            virtualControlsEditorProvider,
+                          );
+                          final controlsSettings = ref.watch(
+                            virtualControlsSettingsProvider,
+                          );
 
-                  return Container(
-                    color: Colors.black,
-                    alignment: Alignment.center,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        view,
-                        if (useDrawerMenu && isLandscape)
-                          Positioned(
-                            left: 0,
-                            top: 0,
-                            child: SafeArea(
-                              child: Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Builder(
-                                  builder: (context) => Material(
-                                    color: Colors.black54,
-                                    borderRadius: BorderRadius.circular(12),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          onPressed: () =>
-                                              Scaffold.of(context).openDrawer(),
-                                          icon: const Icon(Icons.menu),
-                                          color: Colors.white,
-                                          tooltip: l10n.menuTooltip,
-                                        ),
-                                        if (lastError != null)
-                                          IconButton(
-                                            onPressed: _showLastErrorDialog,
-                                            icon: const Icon(
-                                              Icons.error_outline,
-                                            ),
-                                            color: Colors.white,
-                                            tooltip: l10n.menuLastError,
-                                          ),
-                                      ],
-                                    ),
-                                  ),
+                          final usingVirtual =
+                              editor.enabled ||
+                              inputState.ports[0]!.device ==
+                                  InputDevice.virtualController;
+                          final autoOffsetY = (!isLandscape && usingVirtual)
+                              ? -(controlsSettings.buttonSize * 0.55)
+                              : 0.0;
+                          final screenOffsetY =
+                              videoSettings.screenVerticalOffset + autoOffsetY;
+
+                          final viewport = NesScreenView.computeViewportSize(
+                            constraints,
+                            integerScaling: videoSettings.integerScaling,
+                            aspectRatio: videoSettings.aspectRatio,
+                          );
+                          if (viewport == null) return const SizedBox.shrink();
+
+                          final view = Transform.translate(
+                            offset: Offset(0, screenOffsetY),
+                            child: SizedBox(
+                              width: viewport.width,
+                              height: viewport.height,
+                              child: GestureDetector(
+                                onTap: () => _focusNode.requestFocus(),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    HtmlElementView(viewType: _viewType),
+                                    if (hasRom) const EmulationStatusOverlay(),
+                                  ],
                                 ),
                               ),
                             ),
-                          ),
-                        VirtualControlsOverlay(isLandscape: isLandscape),
-                      ],
+                          );
+
+                          return Container(
+                            color: Colors.black,
+                            alignment: Alignment.center,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                view,
+                                if (useDrawerMenu && isLandscape)
+                                  Positioned(
+                                    left: 0,
+                                    top: 0,
+                                    child: SafeArea(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(8),
+                                        child: Builder(
+                                          builder: (context) => Material(
+                                            color: Colors.black54,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            clipBehavior: Clip.antiAlias,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  onPressed: () => Scaffold.of(
+                                                    context,
+                                                  ).openDrawer(),
+                                                  icon: const Icon(Icons.menu),
+                                                  color: Colors.white,
+                                                  tooltip: l10n.menuTooltip,
+                                                ),
+                                                if (lastError != null)
+                                                  IconButton(
+                                                    onPressed:
+                                                        _showLastErrorDialog,
+                                                    icon: const Icon(
+                                                      Icons.error_outline,
+                                                    ),
+                                                    color: Colors.white,
+                                                    tooltip: l10n.menuLastError,
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                VirtualControlsOverlay(
+                                  isLandscape: isLandscape,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
-            ),
-          ],
+
+              // Menu Bar (Overlay)
+              if (!useDrawerMenu)
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  top: (isFullScreen && !_menuVisible) ? -menuHeight : 0,
+                  left: 0,
+                  right: 0,
+                  height: menuHeight,
+                  child: MouseRegion(
+                    onEnter: (_) {
+                      if (isFullScreen) setState(() => _menuVisible = true);
+                    },
+                    onExit: (_) {
+                      if (isFullScreen) setState(() => _menuVisible = false);
+                    },
+                    child: NesMenuBar(
+                      actions: actions,
+                      sections: NesMenus.webMenuSections(),
+                      slotStates: slotStates,
+                      hasRom: hasRom,
+                      trailing: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: lastError != null
+                            ? IconButton(
+                                tooltip: l10n.menuLastError,
+                                icon: const Icon(
+                                  Icons.error_outline,
+                                  color: Colors.red,
+                                  size: 18,
+                                ),
+                                onPressed: _showLastErrorDialog,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

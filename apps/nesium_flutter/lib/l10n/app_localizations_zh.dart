@@ -298,6 +298,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get keyboardActionPause => '暂停';
 
   @override
+  String get keyboardActionFullScreen => '全屏';
+
+  @override
   String inputBindingConflictCleared(String player, String action) {
     return '$player 的 $action 绑定已清除。';
   }
@@ -939,6 +942,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoIntegerScalingSubtitle => '像素级整数缩放（减少滚动抖动）。';
+
+  @override
+  String get videoFullScreenTitle => '全屏';
+
+  @override
+  String get videoFullScreenSubtitle => '切换窗口全屏状态';
 
   @override
   String get videoScreenVerticalOffset => '画面垂直偏移';

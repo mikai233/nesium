@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../../platform/platform_capabilities.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../l10n/app_localizations.dart';
@@ -138,6 +139,17 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
               },
             ),
             const SizedBox(height: 12),
+            if (isNativeDesktop) ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.fullscreen),
+                title: Text(l10n.videoFullScreenTitle),
+                subtitle: Text(l10n.videoFullScreenSubtitle),
+                value: videoSettings.fullScreen,
+                onChanged: (value) => videoController.setFullScreen(value),
+              ),
+              const SizedBox(height: 12),
+            ],
             AnimatedDropdownMenu<NesAspectRatio>(
               labelText: l10n.videoAspectRatio,
               value: videoSettings.aspectRatio,

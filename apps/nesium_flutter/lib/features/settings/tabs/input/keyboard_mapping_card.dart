@@ -9,6 +9,7 @@ import '../../../../widgets/animated_settings_widgets.dart';
 import '../../../../widgets/binding_pill.dart';
 import '../../settings_utils.dart';
 import '../../../../features/controls/input_settings.dart';
+import '../../../../platform/platform_capabilities.dart';
 import '../../input_settings_types.dart';
 // Note: keyboardPressedKeysProvider should be imported from somewhere.
 // It seems it was used in settings_page.dart but not defined there.
@@ -322,9 +323,14 @@ class _KeyboardMappingInfoCardState
                         runSpacing: 8,
                         children: [
                           for (final action
-                              in KeyboardBindingAction.values.where(
-                                (a) => a.isExtended,
-                              ))
+                              in KeyboardBindingAction.values.where((a) {
+                                if (!a.isExtended) return false;
+                                if (a == KeyboardBindingAction.fullScreen &&
+                                    !isNativeDesktop) {
+                                  return false;
+                                }
+                                return true;
+                              }))
                             Builder(
                               builder: (context) {
                                 final key = settings.bindingForAction(action);

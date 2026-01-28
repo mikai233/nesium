@@ -99,6 +99,7 @@ sealed class GamepadMapping with _$GamepadMapping {
     GamepadButton? saveState,
     GamepadButton? loadState,
     GamepadButton? pause,
+    GamepadButton? fullScreen,
   }) = _GamepadMapping;
 
   factory GamepadMapping.fromJson(Map<String, dynamic> json) =>
@@ -141,6 +142,7 @@ class GamepadActions {
   final bool saveState;
   final bool loadState;
   final bool pause;
+  final bool fullScreen;
 
   const GamepadActions({
     required this.rewind,
@@ -148,6 +150,7 @@ class GamepadActions {
     required this.saveState,
     required this.loadState,
     required this.pause,
+    required this.fullScreen,
   });
 }
 

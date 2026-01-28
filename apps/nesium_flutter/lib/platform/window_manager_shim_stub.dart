@@ -3,6 +3,8 @@ import 'dart:ui';
 mixin class WindowListener {
   void onWindowClose() {}
   void onWindowEvent(String eventName) {}
+  void onWindowEnterFullScreen() {}
+  void onWindowLeaveFullScreen() {}
 }
 
 enum TitleBarStyle { normal, hidden, hiddenInTitleBar }
@@ -48,6 +50,8 @@ class WindowManager {
   Future<void> show() async {}
 
   Future<void> focus() async {}
+
+  Future<void> setFullScreen(bool fullScreen) async {}
 }
 
 final windowManager = WindowManager.instance;

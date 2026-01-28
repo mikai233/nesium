@@ -32,6 +32,7 @@ enum NesButtonAction {
   saveState,
   loadState,
   pause,
+  fullScreen,
 }
 
 extension NesButtonActionExt on NesButtonAction {

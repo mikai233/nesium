@@ -16,7 +16,7 @@ T _$identity<T>(T value) => value;
 mixin _$GamepadMapping {
 
  GamepadButton? get a; GamepadButton? get b; GamepadButton? get select; GamepadButton? get start; GamepadButton? get up; GamepadButton? get down; GamepadButton? get left; GamepadButton? get right; GamepadButton? get turboA; GamepadButton? get turboB;// Extended actions
- GamepadButton? get rewind; GamepadButton? get fastForward; GamepadButton? get saveState; GamepadButton? get loadState; GamepadButton? get pause;
+ GamepadButton? get rewind; GamepadButton? get fastForward; GamepadButton? get saveState; GamepadButton? get loadState; GamepadButton? get pause; GamepadButton? get fullScreen;
 /// Create a copy of GamepadMapping
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -29,16 +29,16 @@ $GamepadMappingCopyWith<GamepadMapping> get copyWith => _$GamepadMappingCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is GamepadMapping&&(identical(other.a, a) || other.a == a)&&(identical(other.b, b) || other.b == b)&&(identical(other.select, select) || other.select == select)&&(identical(other.start, start) || other.start == start)&&(identical(other.up, up) || other.up == up)&&(identical(other.down, down) || other.down == down)&&(identical(other.left, left) || other.left == left)&&(identical(other.right, right) || other.right == right)&&(identical(other.turboA, turboA) || other.turboA == turboA)&&(identical(other.turboB, turboB) || other.turboB == turboB)&&(identical(other.rewind, rewind) || other.rewind == rewind)&&(identical(other.fastForward, fastForward) || other.fastForward == fastForward)&&(identical(other.saveState, saveState) || other.saveState == saveState)&&(identical(other.loadState, loadState) || other.loadState == loadState)&&(identical(other.pause, pause) || other.pause == pause));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is GamepadMapping&&(identical(other.a, a) || other.a == a)&&(identical(other.b, b) || other.b == b)&&(identical(other.select, select) || other.select == select)&&(identical(other.start, start) || other.start == start)&&(identical(other.up, up) || other.up == up)&&(identical(other.down, down) || other.down == down)&&(identical(other.left, left) || other.left == left)&&(identical(other.right, right) || other.right == right)&&(identical(other.turboA, turboA) || other.turboA == turboA)&&(identical(other.turboB, turboB) || other.turboB == turboB)&&(identical(other.rewind, rewind) || other.rewind == rewind)&&(identical(other.fastForward, fastForward) || other.fastForward == fastForward)&&(identical(other.saveState, saveState) || other.saveState == saveState)&&(identical(other.loadState, loadState) || other.loadState == loadState)&&(identical(other.pause, pause) || other.pause == pause)&&(identical(other.fullScreen, fullScreen) || other.fullScreen == fullScreen));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,a,b,select,start,up,down,left,right,turboA,turboB,rewind,fastForward,saveState,loadState,pause);
+int get hashCode => Object.hash(runtimeType,a,b,select,start,up,down,left,right,turboA,turboB,rewind,fastForward,saveState,loadState,pause,fullScreen);
 
 @override
 String toString() {
-  return 'GamepadMapping(a: $a, b: $b, select: $select, start: $start, up: $up, down: $down, left: $left, right: $right, turboA: $turboA, turboB: $turboB, rewind: $rewind, fastForward: $fastForward, saveState: $saveState, loadState: $loadState, pause: $pause)';
+  return 'GamepadMapping(a: $a, b: $b, select: $select, start: $start, up: $up, down: $down, left: $left, right: $right, turboA: $turboA, turboB: $turboB, rewind: $rewind, fastForward: $fastForward, saveState: $saveState, loadState: $loadState, pause: $pause, fullScreen: $fullScreen)';
 }
 
 
@@ -49,7 +49,7 @@ abstract mixin class $GamepadMappingCopyWith<$Res>  {
   factory $GamepadMappingCopyWith(GamepadMapping value, $Res Function(GamepadMapping) _then) = _$GamepadMappingCopyWithImpl;
 @useResult
 $Res call({
- GamepadButton? a, GamepadButton? b, GamepadButton? select, GamepadButton? start, GamepadButton? up, GamepadButton? down, GamepadButton? left, GamepadButton? right, GamepadButton? turboA, GamepadButton? turboB, GamepadButton? rewind, GamepadButton? fastForward, GamepadButton? saveState, GamepadButton? loadState, GamepadButton? pause
+ GamepadButton? a, GamepadButton? b, GamepadButton? select, GamepadButton? start, GamepadButton? up, GamepadButton? down, GamepadButton? left, GamepadButton? right, GamepadButton? turboA, GamepadButton? turboB, GamepadButton? rewind, GamepadButton? fastForward, GamepadButton? saveState, GamepadButton? loadState, GamepadButton? pause, GamepadButton? fullScreen
 });
 
 
@@ -66,7 +66,7 @@ class _$GamepadMappingCopyWithImpl<$Res>
 
 /// Create a copy of GamepadMapping
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? a = freezed,Object? b = freezed,Object? select = freezed,Object? start = freezed,Object? up = freezed,Object? down = freezed,Object? left = freezed,Object? right = freezed,Object? turboA = freezed,Object? turboB = freezed,Object? rewind = freezed,Object? fastForward = freezed,Object? saveState = freezed,Object? loadState = freezed,Object? pause = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? a = freezed,Object? b = freezed,Object? select = freezed,Object? start = freezed,Object? up = freezed,Object? down = freezed,Object? left = freezed,Object? right = freezed,Object? turboA = freezed,Object? turboB = freezed,Object? rewind = freezed,Object? fastForward = freezed,Object? saveState = freezed,Object? loadState = freezed,Object? pause = freezed,Object? fullScreen = freezed,}) {
   return _then(_self.copyWith(
 a: freezed == a ? _self.a : a // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,b: freezed == b ? _self.b : b // ignore: cast_nullable_to_non_nullable
@@ -83,6 +83,7 @@ as GamepadButton?,fastForward: freezed == fastForward ? _self.fastForward : fast
 as GamepadButton?,saveState: freezed == saveState ? _self.saveState : saveState // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,loadState: freezed == loadState ? _self.loadState : loadState // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,pause: freezed == pause ? _self.pause : pause // ignore: cast_nullable_to_non_nullable
+as GamepadButton?,fullScreen: freezed == fullScreen ? _self.fullScreen : fullScreen // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,
   ));
 }
@@ -165,10 +166,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( GamepadButton? a,  GamepadButton? b,  GamepadButton? select,  GamepadButton? start,  GamepadButton? up,  GamepadButton? down,  GamepadButton? left,  GamepadButton? right,  GamepadButton? turboA,  GamepadButton? turboB,  GamepadButton? rewind,  GamepadButton? fastForward,  GamepadButton? saveState,  GamepadButton? loadState,  GamepadButton? pause)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( GamepadButton? a,  GamepadButton? b,  GamepadButton? select,  GamepadButton? start,  GamepadButton? up,  GamepadButton? down,  GamepadButton? left,  GamepadButton? right,  GamepadButton? turboA,  GamepadButton? turboB,  GamepadButton? rewind,  GamepadButton? fastForward,  GamepadButton? saveState,  GamepadButton? loadState,  GamepadButton? pause,  GamepadButton? fullScreen)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _GamepadMapping() when $default != null:
-return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_that.left,_that.right,_that.turboA,_that.turboB,_that.rewind,_that.fastForward,_that.saveState,_that.loadState,_that.pause);case _:
+return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_that.left,_that.right,_that.turboA,_that.turboB,_that.rewind,_that.fastForward,_that.saveState,_that.loadState,_that.pause,_that.fullScreen);case _:
   return orElse();
 
 }
@@ -186,10 +187,10 @@ return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( GamepadButton? a,  GamepadButton? b,  GamepadButton? select,  GamepadButton? start,  GamepadButton? up,  GamepadButton? down,  GamepadButton? left,  GamepadButton? right,  GamepadButton? turboA,  GamepadButton? turboB,  GamepadButton? rewind,  GamepadButton? fastForward,  GamepadButton? saveState,  GamepadButton? loadState,  GamepadButton? pause)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( GamepadButton? a,  GamepadButton? b,  GamepadButton? select,  GamepadButton? start,  GamepadButton? up,  GamepadButton? down,  GamepadButton? left,  GamepadButton? right,  GamepadButton? turboA,  GamepadButton? turboB,  GamepadButton? rewind,  GamepadButton? fastForward,  GamepadButton? saveState,  GamepadButton? loadState,  GamepadButton? pause,  GamepadButton? fullScreen)  $default,) {final _that = this;
 switch (_that) {
 case _GamepadMapping():
-return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_that.left,_that.right,_that.turboA,_that.turboB,_that.rewind,_that.fastForward,_that.saveState,_that.loadState,_that.pause);}
+return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_that.left,_that.right,_that.turboA,_that.turboB,_that.rewind,_that.fastForward,_that.saveState,_that.loadState,_that.pause,_that.fullScreen);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -203,10 +204,10 @@ return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( GamepadButton? a,  GamepadButton? b,  GamepadButton? select,  GamepadButton? start,  GamepadButton? up,  GamepadButton? down,  GamepadButton? left,  GamepadButton? right,  GamepadButton? turboA,  GamepadButton? turboB,  GamepadButton? rewind,  GamepadButton? fastForward,  GamepadButton? saveState,  GamepadButton? loadState,  GamepadButton? pause)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( GamepadButton? a,  GamepadButton? b,  GamepadButton? select,  GamepadButton? start,  GamepadButton? up,  GamepadButton? down,  GamepadButton? left,  GamepadButton? right,  GamepadButton? turboA,  GamepadButton? turboB,  GamepadButton? rewind,  GamepadButton? fastForward,  GamepadButton? saveState,  GamepadButton? loadState,  GamepadButton? pause,  GamepadButton? fullScreen)?  $default,) {final _that = this;
 switch (_that) {
 case _GamepadMapping() when $default != null:
-return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_that.left,_that.right,_that.turboA,_that.turboB,_that.rewind,_that.fastForward,_that.saveState,_that.loadState,_that.pause);case _:
+return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_that.left,_that.right,_that.turboA,_that.turboB,_that.rewind,_that.fastForward,_that.saveState,_that.loadState,_that.pause,_that.fullScreen);case _:
   return null;
 
 }
@@ -218,7 +219,7 @@ return $default(_that.a,_that.b,_that.select,_that.start,_that.up,_that.down,_th
 @JsonSerializable()
 
 class _GamepadMapping implements GamepadMapping {
-  const _GamepadMapping({required this.a, required this.b, required this.select, required this.start, required this.up, required this.down, required this.left, required this.right, required this.turboA, required this.turboB, this.rewind, this.fastForward, this.saveState, this.loadState, this.pause});
+  const _GamepadMapping({required this.a, required this.b, required this.select, required this.start, required this.up, required this.down, required this.left, required this.right, required this.turboA, required this.turboB, this.rewind, this.fastForward, this.saveState, this.loadState, this.pause, this.fullScreen});
   factory _GamepadMapping.fromJson(Map<String, dynamic> json) => _$GamepadMappingFromJson(json);
 
 @override final  GamepadButton? a;
@@ -237,6 +238,7 @@ class _GamepadMapping implements GamepadMapping {
 @override final  GamepadButton? saveState;
 @override final  GamepadButton? loadState;
 @override final  GamepadButton? pause;
+@override final  GamepadButton? fullScreen;
 
 /// Create a copy of GamepadMapping
 /// with the given fields replaced by the non-null parameter values.
@@ -251,16 +253,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _GamepadMapping&&(identical(other.a, a) || other.a == a)&&(identical(other.b, b) || other.b == b)&&(identical(other.select, select) || other.select == select)&&(identical(other.start, start) || other.start == start)&&(identical(other.up, up) || other.up == up)&&(identical(other.down, down) || other.down == down)&&(identical(other.left, left) || other.left == left)&&(identical(other.right, right) || other.right == right)&&(identical(other.turboA, turboA) || other.turboA == turboA)&&(identical(other.turboB, turboB) || other.turboB == turboB)&&(identical(other.rewind, rewind) || other.rewind == rewind)&&(identical(other.fastForward, fastForward) || other.fastForward == fastForward)&&(identical(other.saveState, saveState) || other.saveState == saveState)&&(identical(other.loadState, loadState) || other.loadState == loadState)&&(identical(other.pause, pause) || other.pause == pause));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _GamepadMapping&&(identical(other.a, a) || other.a == a)&&(identical(other.b, b) || other.b == b)&&(identical(other.select, select) || other.select == select)&&(identical(other.start, start) || other.start == start)&&(identical(other.up, up) || other.up == up)&&(identical(other.down, down) || other.down == down)&&(identical(other.left, left) || other.left == left)&&(identical(other.right, right) || other.right == right)&&(identical(other.turboA, turboA) || other.turboA == turboA)&&(identical(other.turboB, turboB) || other.turboB == turboB)&&(identical(other.rewind, rewind) || other.rewind == rewind)&&(identical(other.fastForward, fastForward) || other.fastForward == fastForward)&&(identical(other.saveState, saveState) || other.saveState == saveState)&&(identical(other.loadState, loadState) || other.loadState == loadState)&&(identical(other.pause, pause) || other.pause == pause)&&(identical(other.fullScreen, fullScreen) || other.fullScreen == fullScreen));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,a,b,select,start,up,down,left,right,turboA,turboB,rewind,fastForward,saveState,loadState,pause);
+int get hashCode => Object.hash(runtimeType,a,b,select,start,up,down,left,right,turboA,turboB,rewind,fastForward,saveState,loadState,pause,fullScreen);
 
 @override
 String toString() {
-  return 'GamepadMapping(a: $a, b: $b, select: $select, start: $start, up: $up, down: $down, left: $left, right: $right, turboA: $turboA, turboB: $turboB, rewind: $rewind, fastForward: $fastForward, saveState: $saveState, loadState: $loadState, pause: $pause)';
+  return 'GamepadMapping(a: $a, b: $b, select: $select, start: $start, up: $up, down: $down, left: $left, right: $right, turboA: $turboA, turboB: $turboB, rewind: $rewind, fastForward: $fastForward, saveState: $saveState, loadState: $loadState, pause: $pause, fullScreen: $fullScreen)';
 }
 
 
@@ -271,7 +273,7 @@ abstract mixin class _$GamepadMappingCopyWith<$Res> implements $GamepadMappingCo
   factory _$GamepadMappingCopyWith(_GamepadMapping value, $Res Function(_GamepadMapping) _then) = __$GamepadMappingCopyWithImpl;
 @override @useResult
 $Res call({
- GamepadButton? a, GamepadButton? b, GamepadButton? select, GamepadButton? start, GamepadButton? up, GamepadButton? down, GamepadButton? left, GamepadButton? right, GamepadButton? turboA, GamepadButton? turboB, GamepadButton? rewind, GamepadButton? fastForward, GamepadButton? saveState, GamepadButton? loadState, GamepadButton? pause
+ GamepadButton? a, GamepadButton? b, GamepadButton? select, GamepadButton? start, GamepadButton? up, GamepadButton? down, GamepadButton? left, GamepadButton? right, GamepadButton? turboA, GamepadButton? turboB, GamepadButton? rewind, GamepadButton? fastForward, GamepadButton? saveState, GamepadButton? loadState, GamepadButton? pause, GamepadButton? fullScreen
 });
 
 
@@ -288,7 +290,7 @@ class __$GamepadMappingCopyWithImpl<$Res>
 
 /// Create a copy of GamepadMapping
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? a = freezed,Object? b = freezed,Object? select = freezed,Object? start = freezed,Object? up = freezed,Object? down = freezed,Object? left = freezed,Object? right = freezed,Object? turboA = freezed,Object? turboB = freezed,Object? rewind = freezed,Object? fastForward = freezed,Object? saveState = freezed,Object? loadState = freezed,Object? pause = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? a = freezed,Object? b = freezed,Object? select = freezed,Object? start = freezed,Object? up = freezed,Object? down = freezed,Object? left = freezed,Object? right = freezed,Object? turboA = freezed,Object? turboB = freezed,Object? rewind = freezed,Object? fastForward = freezed,Object? saveState = freezed,Object? loadState = freezed,Object? pause = freezed,Object? fullScreen = freezed,}) {
   return _then(_GamepadMapping(
 a: freezed == a ? _self.a : a // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,b: freezed == b ? _self.b : b // ignore: cast_nullable_to_non_nullable
@@ -305,6 +307,7 @@ as GamepadButton?,fastForward: freezed == fastForward ? _self.fastForward : fast
 as GamepadButton?,saveState: freezed == saveState ? _self.saveState : saveState // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,loadState: freezed == loadState ? _self.loadState : loadState // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,pause: freezed == pause ? _self.pause : pause // ignore: cast_nullable_to_non_nullable
+as GamepadButton?,fullScreen: freezed == fullScreen ? _self.fullScreen : fullScreen // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,
   ));
 }

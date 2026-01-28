@@ -11,6 +11,7 @@ static REPLAY_SINK: OnceLock<Mutex<Option<StreamSink<ReplayEventNotification>>>>
 pub enum ReplayEventNotification {
     QuickSave,
     QuickLoad,
+    FullScreenToggle,
 }
 
 pub fn set_replay_sink(sink: StreamSink<ReplayEventNotification>) {

@@ -47,6 +47,7 @@ Future<GamepadPollResult?> pollGamepads() async {
       saveState: result.actions.saveState,
       loadState: result.actions.loadState,
       pause: result.actions.pause,
+      fullScreen: result.actions.fullScreen,
     ),
   );
 }
@@ -203,6 +204,7 @@ extension _GamepadMappingFfiExt on GamepadMapping {
     saveState: saveState?.toFfi(),
     loadState: loadState?.toFfi(),
     pause: pause?.toFfi(),
+    fullScreen: fullScreen?.toFfi(),
   );
 }
 
@@ -226,4 +228,7 @@ GamepadMapping _gamepadMappingFromFfi(
   saveState: m.saveState != null ? _gamepadButtonFromFfi(m.saveState!) : null,
   loadState: m.loadState != null ? _gamepadButtonFromFfi(m.loadState!) : null,
   pause: m.pause != null ? _gamepadButtonFromFfi(m.pause!) : null,
+  fullScreen: m.fullScreen != null
+      ? _gamepadButtonFromFfi(m.fullScreen!)
+      : null,
 );

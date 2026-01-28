@@ -106,6 +106,9 @@ class _GamepadMappingInfoCardState
           ? button
           : currentMapping.loadState,
       pause: action == NesButtonAction.pause ? button : currentMapping.pause,
+      fullScreen: action == NesButtonAction.fullScreen
+          ? button
+          : currentMapping.fullScreen,
     );
 
     final gamepads = ref.read(connectedGamepadsProvider).value ?? [];
@@ -127,12 +130,22 @@ class _GamepadMappingInfoCardState
 
   NesButtonAction? _toNesButtonAction(KeyboardBindingAction action) {
     return switch (action) {
+      KeyboardBindingAction.up ||
+      KeyboardBindingAction.down ||
+      KeyboardBindingAction.left ||
+      KeyboardBindingAction.right ||
+      KeyboardBindingAction.a ||
+      KeyboardBindingAction.b ||
+      KeyboardBindingAction.turboA ||
+      KeyboardBindingAction.turboB ||
+      KeyboardBindingAction.select ||
+      KeyboardBindingAction.start => null,
+      KeyboardBindingAction.fullScreen => NesButtonAction.fullScreen,
       KeyboardBindingAction.rewind => NesButtonAction.rewind,
       KeyboardBindingAction.fastForward => NesButtonAction.fastForward,
       KeyboardBindingAction.saveState => NesButtonAction.saveState,
       KeyboardBindingAction.loadState => NesButtonAction.loadState,
       KeyboardBindingAction.pause => NesButtonAction.pause,
-      _ => null,
     };
   }
 
@@ -156,6 +169,7 @@ class _GamepadMappingInfoCardState
       NesButtonAction.saveState => mapping.saveState,
       NesButtonAction.loadState => mapping.loadState,
       NesButtonAction.pause => mapping.pause,
+      NesButtonAction.fullScreen => mapping.fullScreen,
     };
   }
 
@@ -185,6 +199,7 @@ class _GamepadMappingInfoCardState
       NesButtonAction.saveState => currentMapping.copyWith(saveState: null),
       NesButtonAction.loadState => currentMapping.copyWith(loadState: null),
       NesButtonAction.pause => currentMapping.copyWith(pause: null),
+      NesButtonAction.fullScreen => currentMapping.copyWith(fullScreen: null),
     };
 
     if (gp != null) {
@@ -527,7 +542,9 @@ class _GamepadMappingInfoCardState
                                   children: [
                                     for (final action
                                         in KeyboardBindingAction.values.where(
-                                          (a) => a.isExtended,
+                                          (a) =>
+                                              a.isExtended &&
+                                              _toNesButtonAction(a) != null,
                                         ))
                                       Builder(
                                         builder: (context) {

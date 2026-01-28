@@ -300,6 +300,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get keyboardActionPause => 'Pause';
 
   @override
+  String get keyboardActionFullScreen => 'Full Screen';
+
+  @override
   String inputBindingConflictCleared(String player, String action) {
     return '$player $action binding cleared.';
   }
@@ -952,6 +955,12 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get videoIntegerScalingSubtitle =>
       'Pixel-perfect scaling (reduces shimmer on scrolling).';
+
+  @override
+  String get videoFullScreenTitle => 'Full Screen';
+
+  @override
+  String get videoFullScreenSubtitle => 'Toggle window full screen state';
 
   @override
   String get videoScreenVerticalOffset => 'Screen vertical offset';

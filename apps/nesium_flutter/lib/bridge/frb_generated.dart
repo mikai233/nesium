@@ -4525,14 +4525,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   GamepadActionsFfi dco_decode_gamepad_actions_ffi(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return GamepadActionsFfi(
       rewind: dco_decode_bool(arr[0]),
       fastForward: dco_decode_bool(arr[1]),
       saveState: dco_decode_bool(arr[2]),
       loadState: dco_decode_bool(arr[3]),
       pause: dco_decode_bool(arr[4]),
+      fullScreen: dco_decode_bool(arr[5]),
     );
   }
 
@@ -4560,8 +4561,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   GamepadMappingFfi dco_decode_gamepad_mapping_ffi(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 15)
-      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    if (arr.length != 16)
+      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
     return GamepadMappingFfi(
       a: dco_decode_opt_box_autoadd_gamepad_button_ffi(arr[0]),
       b: dco_decode_opt_box_autoadd_gamepad_button_ffi(arr[1]),
@@ -4578,6 +4579,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       saveState: dco_decode_opt_box_autoadd_gamepad_button_ffi(arr[12]),
       loadState: dco_decode_opt_box_autoadd_gamepad_button_ffi(arr[13]),
       pause: dco_decode_opt_box_autoadd_gamepad_button_ffi(arr[14]),
+      fullScreen: dco_decode_opt_box_autoadd_gamepad_button_ffi(arr[15]),
     );
   }
 
@@ -5291,12 +5293,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_saveState = sse_decode_bool(deserializer);
     var var_loadState = sse_decode_bool(deserializer);
     var var_pause = sse_decode_bool(deserializer);
+    var var_fullScreen = sse_decode_bool(deserializer);
     return GamepadActionsFfi(
       rewind: var_rewind,
       fastForward: var_fastForward,
       saveState: var_saveState,
       loadState: var_loadState,
       pause: var_pause,
+      fullScreen: var_fullScreen,
     );
   }
 
@@ -5356,6 +5360,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       deserializer,
     );
     var var_pause = sse_decode_opt_box_autoadd_gamepad_button_ffi(deserializer);
+    var var_fullScreen = sse_decode_opt_box_autoadd_gamepad_button_ffi(
+      deserializer,
+    );
     return GamepadMappingFfi(
       a: var_a,
       b: var_b,
@@ -5372,6 +5379,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       saveState: var_saveState,
       loadState: var_loadState,
       pause: var_pause,
+      fullScreen: var_fullScreen,
     );
   }
 
@@ -6300,6 +6308,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.saveState, serializer);
     sse_encode_bool(self.loadState, serializer);
     sse_encode_bool(self.pause, serializer);
+    sse_encode_bool(self.fullScreen, serializer);
   }
 
   @protected
@@ -6344,6 +6353,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_gamepad_button_ffi(self.saveState, serializer);
     sse_encode_opt_box_autoadd_gamepad_button_ffi(self.loadState, serializer);
     sse_encode_opt_box_autoadd_gamepad_button_ffi(self.pause, serializer);
+    sse_encode_opt_box_autoadd_gamepad_button_ffi(self.fullScreen, serializer);
   }
 
   @protected

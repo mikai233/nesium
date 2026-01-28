@@ -228,6 +228,13 @@ class _NesShellState extends ConsumerState<NesShell>
           _quickSaveState();
         } else if (event == ReplayEventNotification.quickLoad) {
           _quickLoadState();
+        } else if (event == ReplayEventNotification.fullScreenToggle) {
+          final video = ref.read(videoSettingsProvider);
+          unawaited(
+            ref
+                .read(videoSettingsProvider.notifier)
+                .setFullScreen(!video.fullScreen),
+          );
         }
       },
       onError: (e, st) {
@@ -926,6 +933,16 @@ class _NesShellState extends ConsumerState<NesShell>
         break;
       case KeyboardBindingAction.pause:
         if (pressed) _togglePause();
+        break;
+      case KeyboardBindingAction.fullScreen:
+        if (pressed) {
+          final videoSettings = ref.read(videoSettingsProvider);
+          unawaited(
+            ref
+                .read(videoSettingsProvider.notifier)
+                .setFullScreen(!videoSettings.fullScreen),
+          );
+        }
         break;
     }
   }

@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -4704,12 +4704,14 @@ impl SseDecode for crate::api::gamepad::GamepadActionsFfi {
         let mut var_saveState = <bool>::sse_decode(deserializer);
         let mut var_loadState = <bool>::sse_decode(deserializer);
         let mut var_pause = <bool>::sse_decode(deserializer);
+        let mut var_fullScreen = <bool>::sse_decode(deserializer);
         return crate::api::gamepad::GamepadActionsFfi {
             rewind: var_rewind,
             fast_forward: var_fastForward,
             save_state: var_saveState,
             load_state: var_loadState,
             pause: var_pause,
+            full_screen: var_fullScreen,
         };
     }
 }
@@ -4790,6 +4792,8 @@ impl SseDecode for crate::api::gamepad::GamepadMappingFfi {
             <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
         let mut var_pause =
             <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
+        let mut var_fullScreen =
+            <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_decode(deserializer);
         return crate::api::gamepad::GamepadMappingFfi {
             a: var_a,
             b: var_b,
@@ -4806,6 +4810,7 @@ impl SseDecode for crate::api::gamepad::GamepadMappingFfi {
             save_state: var_saveState,
             load_state: var_loadState,
             pause: var_pause,
+            full_screen: var_fullScreen,
         };
     }
 }
@@ -5242,6 +5247,7 @@ impl SseDecode for crate::senders::replay::ReplayEventNotification {
         return match inner {
             0 => crate::senders::replay::ReplayEventNotification::QuickSave,
             1 => crate::senders::replay::ReplayEventNotification::QuickLoad,
+            2 => crate::senders::replay::ReplayEventNotification::FullScreenToggle,
             _ => unreachable!("Invalid variant for ReplayEventNotification: {}", inner),
         };
     }
@@ -6034,6 +6040,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::gamepad::GamepadActionsFfi {
             self.save_state.into_into_dart().into_dart(),
             self.load_state.into_into_dart().into_dart(),
             self.pause.into_into_dart().into_dart(),
+            self.full_screen.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6130,6 +6137,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::gamepad::GamepadMappingFfi {
             self.save_state.into_into_dart().into_dart(),
             self.load_state.into_into_dart().into_dart(),
             self.pause.into_into_dart().into_dart(),
+            self.full_screen.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6510,6 +6518,7 @@ impl flutter_rust_bridge::IntoDart for crate::senders::replay::ReplayEventNotifi
         match self {
             Self::QuickSave => 0.into_dart(),
             Self::QuickLoad => 1.into_dart(),
+            Self::FullScreenToggle => 2.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -7018,6 +7027,7 @@ impl SseEncode for crate::api::gamepad::GamepadActionsFfi {
         <bool>::sse_encode(self.save_state, serializer);
         <bool>::sse_encode(self.load_state, serializer);
         <bool>::sse_encode(self.pause, serializer);
+        <bool>::sse_encode(self.full_screen, serializer);
     }
 }
 
@@ -7083,6 +7093,7 @@ impl SseEncode for crate::api::gamepad::GamepadMappingFfi {
         <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.save_state, serializer);
         <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.load_state, serializer);
         <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.pause, serializer);
+        <Option<crate::api::gamepad::GamepadButtonFfi>>::sse_encode(self.full_screen, serializer);
     }
 }
 
@@ -7435,6 +7446,7 @@ impl SseEncode for crate::senders::replay::ReplayEventNotification {
             match self {
                 crate::senders::replay::ReplayEventNotification::QuickSave => 0,
                 crate::senders::replay::ReplayEventNotification::QuickLoad => 1,
+                crate::senders::replay::ReplayEventNotification::FullScreenToggle => 2,
                 _ => {
                     unimplemented!("");
                 }
@@ -7661,7 +7673,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -7685,7 +7697,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

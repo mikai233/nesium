@@ -74,6 +74,7 @@ class GamepadActionsFfi {
   final bool saveState;
   final bool loadState;
   final bool pause;
+  final bool fullScreen;
 
   const GamepadActionsFfi({
     required this.rewind,
@@ -81,6 +82,7 @@ class GamepadActionsFfi {
     required this.saveState,
     required this.loadState,
     required this.pause,
+    required this.fullScreen,
   });
 
   static Future<GamepadActionsFfi> default_() =>
@@ -92,7 +94,8 @@ class GamepadActionsFfi {
       fastForward.hashCode ^
       saveState.hashCode ^
       loadState.hashCode ^
-      pause.hashCode;
+      pause.hashCode ^
+      fullScreen.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -103,7 +106,8 @@ class GamepadActionsFfi {
           fastForward == other.fastForward &&
           saveState == other.saveState &&
           loadState == other.loadState &&
-          pause == other.pause;
+          pause == other.pause &&
+          fullScreen == other.fullScreen;
 }
 
 /// FFI-safe version of gilrs::Button.
@@ -176,6 +180,7 @@ class GamepadMappingFfi {
   final GamepadButtonFfi? saveState;
   final GamepadButtonFfi? loadState;
   final GamepadButtonFfi? pause;
+  final GamepadButtonFfi? fullScreen;
 
   const GamepadMappingFfi({
     this.a,
@@ -193,6 +198,7 @@ class GamepadMappingFfi {
     this.saveState,
     this.loadState,
     this.pause,
+    this.fullScreen,
   });
 
   @override
@@ -211,7 +217,8 @@ class GamepadMappingFfi {
       fastForward.hashCode ^
       saveState.hashCode ^
       loadState.hashCode ^
-      pause.hashCode;
+      pause.hashCode ^
+      fullScreen.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -232,7 +239,8 @@ class GamepadMappingFfi {
           fastForward == other.fastForward &&
           saveState == other.saveState &&
           loadState == other.loadState &&
-          pause == other.pause;
+          pause == other.pause &&
+          fullScreen == other.fullScreen;
 }
 
 /// FFI-safe version of GamepadPollResult.

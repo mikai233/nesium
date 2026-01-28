@@ -30,6 +30,7 @@ class SettingsUtils {
         NesButtonAction.saveState => l10n.inputButtonSaveState,
         NesButtonAction.loadState => l10n.inputButtonLoadState,
         NesButtonAction.pause => l10n.inputButtonPause,
+        NesButtonAction.fullScreen => l10n.keyboardActionFullScreen,
       };
     } else if (action is KeyboardBindingAction) {
       return switch (action) {
@@ -48,6 +49,7 @@ class SettingsUtils {
         KeyboardBindingAction.saveState => l10n.keyboardActionSaveState,
         KeyboardBindingAction.loadState => l10n.keyboardActionLoadState,
         KeyboardBindingAction.pause => l10n.keyboardActionPause,
+        KeyboardBindingAction.fullScreen => l10n.keyboardActionFullScreen,
       };
     }
     return 'Unknown';

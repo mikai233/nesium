@@ -124,6 +124,12 @@ pub fn init_gamepad() -> Result<(), String> {
                                         crate::senders::replay::ReplayEventNotification::QuickLoad,
                                     );
                                 }
+                                if result.actions.full_screen && !prev_actions.full_screen {
+                                    tracing::info!("Full Screen Toggle Requested");
+                                    crate::senders::replay::emit_replay_event(
+                                        crate::senders::replay::ReplayEventNotification::FullScreenToggle,
+                                    );
+                                }
 
                                 prev_actions = result.actions;
                             }
@@ -362,6 +368,7 @@ pub struct GamepadActionsFfi {
     pub save_state: bool,
     pub load_state: bool,
     pub pause: bool,
+    pub full_screen: bool,
 }
 
 #[cfg(all(
@@ -377,6 +384,7 @@ impl From<GamepadActions> for GamepadActionsFfi {
             save_state: a.save_state,
             load_state: a.load_state,
             pause: a.pause,
+            full_screen: a.full_screen,
         }
     }
 }
@@ -517,6 +525,7 @@ pub struct GamepadMappingFfi {
     pub save_state: Option<GamepadButtonFfi>,
     pub load_state: Option<GamepadButtonFfi>,
     pub pause: Option<GamepadButtonFfi>,
+    pub full_screen: Option<GamepadButtonFfi>,
 }
 
 #[cfg(all(
@@ -542,6 +551,7 @@ impl From<nesium_support::gamepad::ButtonMapping> for GamepadMappingFfi {
             save_state: None,
             load_state: None,
             pause: None,
+            full_screen: None,
         }
     }
 }
@@ -559,6 +569,7 @@ impl From<GamepadMappingFfi> for nesium_support::gamepad::ActionMapping {
             save_state: m.save_state.map(|b| b.into()),
             load_state: m.load_state.map(|b| b.into()),
             pause: m.pause.map(|b| b.into()),
+            full_screen: m.full_screen.map(|b| b.into()),
         }
     }
 }
@@ -589,6 +600,7 @@ pub fn get_gamepad_mapping(port: u8) -> Result<GamepadMappingFfi, String> {
         result.save_state = action_mapping.save_state.map(GamepadButtonFfi::from);
         result.load_state = action_mapping.load_state.map(GamepadButtonFfi::from);
         result.pause = action_mapping.pause.map(GamepadButtonFfi::from);
+        result.full_screen = action_mapping.full_screen.map(GamepadButtonFfi::from);
 
         Ok(result)
     }

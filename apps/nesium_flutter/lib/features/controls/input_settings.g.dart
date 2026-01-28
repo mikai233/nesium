@@ -58,6 +58,9 @@ _InputSettings _$InputSettingsFromJson(Map<String, dynamic> json) =>
       customPause: const LogicalKeyboardKeyNullableConverter().fromJson(
         (json['customPause'] as num?)?.toInt(),
       ),
+      customFullScreen: const LogicalKeyboardKeyNullableConverter().fromJson(
+        (json['customFullScreen'] as num?)?.toInt(),
+      ),
     );
 
 Map<String, dynamic> _$InputSettingsToJson(_InputSettings instance) =>
@@ -108,6 +111,9 @@ Map<String, dynamic> _$InputSettingsToJson(_InputSettings instance) =>
       ),
       'customPause': const LogicalKeyboardKeyNullableConverter().toJson(
         instance.customPause,
+      ),
+      'customFullScreen': const LogicalKeyboardKeyNullableConverter().toJson(
+        instance.customFullScreen,
       ),
     };
 

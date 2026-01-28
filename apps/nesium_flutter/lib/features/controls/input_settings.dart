@@ -70,6 +70,7 @@ enum KeyboardBindingAction {
   saveState,
   loadState,
   pause,
+  fullScreen,
 }
 
 extension KeyboardBindingActionExt on KeyboardBindingAction {
@@ -104,6 +105,7 @@ extension KeyboardBindingActionLabel on KeyboardBindingAction {
     KeyboardBindingAction.saveState => 'Save State',
     KeyboardBindingAction.loadState => 'Load State',
     KeyboardBindingAction.pause => 'Pause',
+    KeyboardBindingAction.fullScreen => 'Full Screen',
   };
 }
 
@@ -139,6 +141,7 @@ final actionHintProvider = Provider.family<String, KeyboardBindingAction>((
       KeyboardBindingAction.saveState => gamepadMapping.saveState,
       KeyboardBindingAction.loadState => gamepadMapping.loadState,
       KeyboardBindingAction.pause => gamepadMapping.pause,
+      KeyboardBindingAction.fullScreen => gamepadMapping.fullScreen,
     };
 
     return button?.toFriendlyName() ?? 'Unassigned';
@@ -168,6 +171,7 @@ sealed class InputSettings with _$InputSettings {
     LogicalKeyboardKey? customSaveState,
     LogicalKeyboardKey? customLoadState,
     LogicalKeyboardKey? customPause,
+    LogicalKeyboardKey? customFullScreen,
   }) = _InputSettings;
 
   factory InputSettings.fromJson(Map<String, dynamic> json) =>
@@ -205,6 +209,7 @@ sealed class InputSettings with _$InputSettings {
           KeyboardBindingAction.saveState => LogicalKeyboardKey.f5,
           KeyboardBindingAction.loadState => LogicalKeyboardKey.f7,
           KeyboardBindingAction.pause => LogicalKeyboardKey.escape,
+          KeyboardBindingAction.fullScreen => LogicalKeyboardKey.f11,
         },
         KeyboardPreset.fightStick => switch (action) {
           KeyboardBindingAction.up => LogicalKeyboardKey.keyW,
@@ -222,6 +227,7 @@ sealed class InputSettings with _$InputSettings {
           KeyboardBindingAction.saveState => LogicalKeyboardKey.f5,
           KeyboardBindingAction.loadState => LogicalKeyboardKey.f7,
           KeyboardBindingAction.pause => LogicalKeyboardKey.escape,
+          KeyboardBindingAction.fullScreen => LogicalKeyboardKey.f11,
         },
         KeyboardPreset.arcadeLayout => switch (action) {
           KeyboardBindingAction.up => LogicalKeyboardKey.arrowUp,
@@ -239,6 +245,7 @@ sealed class InputSettings with _$InputSettings {
           KeyboardBindingAction.saveState => LogicalKeyboardKey.f5,
           KeyboardBindingAction.loadState => LogicalKeyboardKey.f7,
           KeyboardBindingAction.pause => LogicalKeyboardKey.escape,
+          KeyboardBindingAction.fullScreen => LogicalKeyboardKey.f11,
         },
         KeyboardPreset.custom => customBindingFor(action),
       };
@@ -260,6 +267,7 @@ sealed class InputSettings with _$InputSettings {
         KeyboardBindingAction.saveState => customSaveState,
         KeyboardBindingAction.loadState => customLoadState,
         KeyboardBindingAction.pause => customPause,
+        KeyboardBindingAction.fullScreen => customFullScreen,
       };
 
   InputSettings solidify() {
@@ -281,6 +289,7 @@ sealed class InputSettings with _$InputSettings {
       customSaveState: bindingForAction(KeyboardBindingAction.saveState),
       customLoadState: bindingForAction(KeyboardBindingAction.loadState),
       customPause: bindingForAction(KeyboardBindingAction.pause),
+      customFullScreen: bindingForAction(KeyboardBindingAction.fullScreen),
     );
   }
 }
@@ -524,6 +533,7 @@ class InputSettingsController extends Notifier<InputSettingsState> {
       KeyboardBindingAction.saveState => s.copyWith(customSaveState: k),
       KeyboardBindingAction.loadState => s.copyWith(customLoadState: k),
       KeyboardBindingAction.pause => s.copyWith(customPause: k),
+      KeyboardBindingAction.fullScreen => s.copyWith(customFullScreen: k),
     };
   }
 
@@ -554,6 +564,7 @@ class InputSettingsController extends Notifier<InputSettingsState> {
         customSaveState: LogicalKeyboardKey.f5,
         customLoadState: LogicalKeyboardKey.f7,
         customPause: LogicalKeyboardKey.escape,
+        customFullScreen: LogicalKeyboardKey.f11,
       );
     } else {
       return InputSettings(

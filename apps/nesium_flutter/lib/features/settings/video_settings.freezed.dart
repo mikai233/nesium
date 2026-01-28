@@ -17,7 +17,7 @@ mixin _$VideoSettings implements DiagnosticableTreeMixin {
 
 @JsonKey(unknownEnumValue: PaletteMode.builtin) PaletteMode get paletteMode;@JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc) PaletteKind get builtinPreset;@JsonKey(unknownEnumValue: VideoFilter.none) VideoFilter get videoFilter; bool get integerScaling;@JsonKey(unknownEnumValue: NesAspectRatio.square) NesAspectRatio get aspectRatio; double get screenVerticalOffset;@NtscOptionsConverter() NtscOptions get ntscOptions;@NtscBisqwitOptionsConverter() NtscBisqwitOptions get ntscBisqwitOptions;/// LCD grid strength in `0.0..=1.0`.
  double get lcdGridStrength;/// Scanline intensity in `0.0..=1.0`.
- double get scanlineIntensity; String? get customPaletteName;
+ double get scanlineIntensity; String? get customPaletteName; bool get fullScreen;
 /// Create a copy of VideoSettings
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -31,21 +31,21 @@ $VideoSettingsCopyWith<VideoSettings> get copyWith => _$VideoSettingsCopyWithImp
 void debugFillProperties(DiagnosticPropertiesBuilder properties) {
   properties
     ..add(DiagnosticsProperty('type', 'VideoSettings'))
-    ..add(DiagnosticsProperty('paletteMode', paletteMode))..add(DiagnosticsProperty('builtinPreset', builtinPreset))..add(DiagnosticsProperty('videoFilter', videoFilter))..add(DiagnosticsProperty('integerScaling', integerScaling))..add(DiagnosticsProperty('aspectRatio', aspectRatio))..add(DiagnosticsProperty('screenVerticalOffset', screenVerticalOffset))..add(DiagnosticsProperty('ntscOptions', ntscOptions))..add(DiagnosticsProperty('ntscBisqwitOptions', ntscBisqwitOptions))..add(DiagnosticsProperty('lcdGridStrength', lcdGridStrength))..add(DiagnosticsProperty('scanlineIntensity', scanlineIntensity))..add(DiagnosticsProperty('customPaletteName', customPaletteName));
+    ..add(DiagnosticsProperty('paletteMode', paletteMode))..add(DiagnosticsProperty('builtinPreset', builtinPreset))..add(DiagnosticsProperty('videoFilter', videoFilter))..add(DiagnosticsProperty('integerScaling', integerScaling))..add(DiagnosticsProperty('aspectRatio', aspectRatio))..add(DiagnosticsProperty('screenVerticalOffset', screenVerticalOffset))..add(DiagnosticsProperty('ntscOptions', ntscOptions))..add(DiagnosticsProperty('ntscBisqwitOptions', ntscBisqwitOptions))..add(DiagnosticsProperty('lcdGridStrength', lcdGridStrength))..add(DiagnosticsProperty('scanlineIntensity', scanlineIntensity))..add(DiagnosticsProperty('customPaletteName', customPaletteName))..add(DiagnosticsProperty('fullScreen', fullScreen));
 }
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is VideoSettings&&(identical(other.paletteMode, paletteMode) || other.paletteMode == paletteMode)&&(identical(other.builtinPreset, builtinPreset) || other.builtinPreset == builtinPreset)&&(identical(other.videoFilter, videoFilter) || other.videoFilter == videoFilter)&&(identical(other.integerScaling, integerScaling) || other.integerScaling == integerScaling)&&(identical(other.aspectRatio, aspectRatio) || other.aspectRatio == aspectRatio)&&(identical(other.screenVerticalOffset, screenVerticalOffset) || other.screenVerticalOffset == screenVerticalOffset)&&(identical(other.ntscOptions, ntscOptions) || other.ntscOptions == ntscOptions)&&(identical(other.ntscBisqwitOptions, ntscBisqwitOptions) || other.ntscBisqwitOptions == ntscBisqwitOptions)&&(identical(other.lcdGridStrength, lcdGridStrength) || other.lcdGridStrength == lcdGridStrength)&&(identical(other.scanlineIntensity, scanlineIntensity) || other.scanlineIntensity == scanlineIntensity)&&(identical(other.customPaletteName, customPaletteName) || other.customPaletteName == customPaletteName));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is VideoSettings&&(identical(other.paletteMode, paletteMode) || other.paletteMode == paletteMode)&&(identical(other.builtinPreset, builtinPreset) || other.builtinPreset == builtinPreset)&&(identical(other.videoFilter, videoFilter) || other.videoFilter == videoFilter)&&(identical(other.integerScaling, integerScaling) || other.integerScaling == integerScaling)&&(identical(other.aspectRatio, aspectRatio) || other.aspectRatio == aspectRatio)&&(identical(other.screenVerticalOffset, screenVerticalOffset) || other.screenVerticalOffset == screenVerticalOffset)&&(identical(other.ntscOptions, ntscOptions) || other.ntscOptions == ntscOptions)&&(identical(other.ntscBisqwitOptions, ntscBisqwitOptions) || other.ntscBisqwitOptions == ntscBisqwitOptions)&&(identical(other.lcdGridStrength, lcdGridStrength) || other.lcdGridStrength == lcdGridStrength)&&(identical(other.scanlineIntensity, scanlineIntensity) || other.scanlineIntensity == scanlineIntensity)&&(identical(other.customPaletteName, customPaletteName) || other.customPaletteName == customPaletteName)&&(identical(other.fullScreen, fullScreen) || other.fullScreen == fullScreen));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,paletteMode,builtinPreset,videoFilter,integerScaling,aspectRatio,screenVerticalOffset,ntscOptions,ntscBisqwitOptions,lcdGridStrength,scanlineIntensity,customPaletteName);
+int get hashCode => Object.hash(runtimeType,paletteMode,builtinPreset,videoFilter,integerScaling,aspectRatio,screenVerticalOffset,ntscOptions,ntscBisqwitOptions,lcdGridStrength,scanlineIntensity,customPaletteName,fullScreen);
 
 @override
 String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
-  return 'VideoSettings(paletteMode: $paletteMode, builtinPreset: $builtinPreset, videoFilter: $videoFilter, integerScaling: $integerScaling, aspectRatio: $aspectRatio, screenVerticalOffset: $screenVerticalOffset, ntscOptions: $ntscOptions, ntscBisqwitOptions: $ntscBisqwitOptions, lcdGridStrength: $lcdGridStrength, scanlineIntensity: $scanlineIntensity, customPaletteName: $customPaletteName)';
+  return 'VideoSettings(paletteMode: $paletteMode, builtinPreset: $builtinPreset, videoFilter: $videoFilter, integerScaling: $integerScaling, aspectRatio: $aspectRatio, screenVerticalOffset: $screenVerticalOffset, ntscOptions: $ntscOptions, ntscBisqwitOptions: $ntscBisqwitOptions, lcdGridStrength: $lcdGridStrength, scanlineIntensity: $scanlineIntensity, customPaletteName: $customPaletteName, fullScreen: $fullScreen)';
 }
 
 
@@ -56,7 +56,7 @@ abstract mixin class $VideoSettingsCopyWith<$Res>  {
   factory $VideoSettingsCopyWith(VideoSettings value, $Res Function(VideoSettings) _then) = _$VideoSettingsCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(unknownEnumValue: PaletteMode.builtin) PaletteMode paletteMode,@JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc) PaletteKind builtinPreset,@JsonKey(unknownEnumValue: VideoFilter.none) VideoFilter videoFilter, bool integerScaling,@JsonKey(unknownEnumValue: NesAspectRatio.square) NesAspectRatio aspectRatio, double screenVerticalOffset,@NtscOptionsConverter() NtscOptions ntscOptions,@NtscBisqwitOptionsConverter() NtscBisqwitOptions ntscBisqwitOptions, double lcdGridStrength, double scanlineIntensity, String? customPaletteName
+@JsonKey(unknownEnumValue: PaletteMode.builtin) PaletteMode paletteMode,@JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc) PaletteKind builtinPreset,@JsonKey(unknownEnumValue: VideoFilter.none) VideoFilter videoFilter, bool integerScaling,@JsonKey(unknownEnumValue: NesAspectRatio.square) NesAspectRatio aspectRatio, double screenVerticalOffset,@NtscOptionsConverter() NtscOptions ntscOptions,@NtscBisqwitOptionsConverter() NtscBisqwitOptions ntscBisqwitOptions, double lcdGridStrength, double scanlineIntensity, String? customPaletteName, bool fullScreen
 });
 
 
@@ -73,7 +73,7 @@ class _$VideoSettingsCopyWithImpl<$Res>
 
 /// Create a copy of VideoSettings
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? paletteMode = null,Object? builtinPreset = null,Object? videoFilter = null,Object? integerScaling = null,Object? aspectRatio = null,Object? screenVerticalOffset = null,Object? ntscOptions = null,Object? ntscBisqwitOptions = null,Object? lcdGridStrength = null,Object? scanlineIntensity = null,Object? customPaletteName = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? paletteMode = null,Object? builtinPreset = null,Object? videoFilter = null,Object? integerScaling = null,Object? aspectRatio = null,Object? screenVerticalOffset = null,Object? ntscOptions = null,Object? ntscBisqwitOptions = null,Object? lcdGridStrength = null,Object? scanlineIntensity = null,Object? customPaletteName = freezed,Object? fullScreen = null,}) {
   return _then(_self.copyWith(
 paletteMode: null == paletteMode ? _self.paletteMode : paletteMode // ignore: cast_nullable_to_non_nullable
 as PaletteMode,builtinPreset: null == builtinPreset ? _self.builtinPreset : builtinPreset // ignore: cast_nullable_to_non_nullable
@@ -86,7 +86,8 @@ as NtscOptions,ntscBisqwitOptions: null == ntscBisqwitOptions ? _self.ntscBisqwi
 as NtscBisqwitOptions,lcdGridStrength: null == lcdGridStrength ? _self.lcdGridStrength : lcdGridStrength // ignore: cast_nullable_to_non_nullable
 as double,scanlineIntensity: null == scanlineIntensity ? _self.scanlineIntensity : scanlineIntensity // ignore: cast_nullable_to_non_nullable
 as double,customPaletteName: freezed == customPaletteName ? _self.customPaletteName : customPaletteName // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,fullScreen: null == fullScreen ? _self.fullScreen : fullScreen // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -168,10 +169,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(unknownEnumValue: PaletteMode.builtin)  PaletteMode paletteMode, @JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc)  PaletteKind builtinPreset, @JsonKey(unknownEnumValue: VideoFilter.none)  VideoFilter videoFilter,  bool integerScaling, @JsonKey(unknownEnumValue: NesAspectRatio.square)  NesAspectRatio aspectRatio,  double screenVerticalOffset, @NtscOptionsConverter()  NtscOptions ntscOptions, @NtscBisqwitOptionsConverter()  NtscBisqwitOptions ntscBisqwitOptions,  double lcdGridStrength,  double scanlineIntensity,  String? customPaletteName)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(unknownEnumValue: PaletteMode.builtin)  PaletteMode paletteMode, @JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc)  PaletteKind builtinPreset, @JsonKey(unknownEnumValue: VideoFilter.none)  VideoFilter videoFilter,  bool integerScaling, @JsonKey(unknownEnumValue: NesAspectRatio.square)  NesAspectRatio aspectRatio,  double screenVerticalOffset, @NtscOptionsConverter()  NtscOptions ntscOptions, @NtscBisqwitOptionsConverter()  NtscBisqwitOptions ntscBisqwitOptions,  double lcdGridStrength,  double scanlineIntensity,  String? customPaletteName,  bool fullScreen)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _VideoSettings() when $default != null:
-return $default(_that.paletteMode,_that.builtinPreset,_that.videoFilter,_that.integerScaling,_that.aspectRatio,_that.screenVerticalOffset,_that.ntscOptions,_that.ntscBisqwitOptions,_that.lcdGridStrength,_that.scanlineIntensity,_that.customPaletteName);case _:
+return $default(_that.paletteMode,_that.builtinPreset,_that.videoFilter,_that.integerScaling,_that.aspectRatio,_that.screenVerticalOffset,_that.ntscOptions,_that.ntscBisqwitOptions,_that.lcdGridStrength,_that.scanlineIntensity,_that.customPaletteName,_that.fullScreen);case _:
   return orElse();
 
 }
@@ -189,10 +190,10 @@ return $default(_that.paletteMode,_that.builtinPreset,_that.videoFilter,_that.in
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(unknownEnumValue: PaletteMode.builtin)  PaletteMode paletteMode, @JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc)  PaletteKind builtinPreset, @JsonKey(unknownEnumValue: VideoFilter.none)  VideoFilter videoFilter,  bool integerScaling, @JsonKey(unknownEnumValue: NesAspectRatio.square)  NesAspectRatio aspectRatio,  double screenVerticalOffset, @NtscOptionsConverter()  NtscOptions ntscOptions, @NtscBisqwitOptionsConverter()  NtscBisqwitOptions ntscBisqwitOptions,  double lcdGridStrength,  double scanlineIntensity,  String? customPaletteName)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(unknownEnumValue: PaletteMode.builtin)  PaletteMode paletteMode, @JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc)  PaletteKind builtinPreset, @JsonKey(unknownEnumValue: VideoFilter.none)  VideoFilter videoFilter,  bool integerScaling, @JsonKey(unknownEnumValue: NesAspectRatio.square)  NesAspectRatio aspectRatio,  double screenVerticalOffset, @NtscOptionsConverter()  NtscOptions ntscOptions, @NtscBisqwitOptionsConverter()  NtscBisqwitOptions ntscBisqwitOptions,  double lcdGridStrength,  double scanlineIntensity,  String? customPaletteName,  bool fullScreen)  $default,) {final _that = this;
 switch (_that) {
 case _VideoSettings():
-return $default(_that.paletteMode,_that.builtinPreset,_that.videoFilter,_that.integerScaling,_that.aspectRatio,_that.screenVerticalOffset,_that.ntscOptions,_that.ntscBisqwitOptions,_that.lcdGridStrength,_that.scanlineIntensity,_that.customPaletteName);}
+return $default(_that.paletteMode,_that.builtinPreset,_that.videoFilter,_that.integerScaling,_that.aspectRatio,_that.screenVerticalOffset,_that.ntscOptions,_that.ntscBisqwitOptions,_that.lcdGridStrength,_that.scanlineIntensity,_that.customPaletteName,_that.fullScreen);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -206,10 +207,10 @@ return $default(_that.paletteMode,_that.builtinPreset,_that.videoFilter,_that.in
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(unknownEnumValue: PaletteMode.builtin)  PaletteMode paletteMode, @JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc)  PaletteKind builtinPreset, @JsonKey(unknownEnumValue: VideoFilter.none)  VideoFilter videoFilter,  bool integerScaling, @JsonKey(unknownEnumValue: NesAspectRatio.square)  NesAspectRatio aspectRatio,  double screenVerticalOffset, @NtscOptionsConverter()  NtscOptions ntscOptions, @NtscBisqwitOptionsConverter()  NtscBisqwitOptions ntscBisqwitOptions,  double lcdGridStrength,  double scanlineIntensity,  String? customPaletteName)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(unknownEnumValue: PaletteMode.builtin)  PaletteMode paletteMode, @JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc)  PaletteKind builtinPreset, @JsonKey(unknownEnumValue: VideoFilter.none)  VideoFilter videoFilter,  bool integerScaling, @JsonKey(unknownEnumValue: NesAspectRatio.square)  NesAspectRatio aspectRatio,  double screenVerticalOffset, @NtscOptionsConverter()  NtscOptions ntscOptions, @NtscBisqwitOptionsConverter()  NtscBisqwitOptions ntscBisqwitOptions,  double lcdGridStrength,  double scanlineIntensity,  String? customPaletteName,  bool fullScreen)?  $default,) {final _that = this;
 switch (_that) {
 case _VideoSettings() when $default != null:
-return $default(_that.paletteMode,_that.builtinPreset,_that.videoFilter,_that.integerScaling,_that.aspectRatio,_that.screenVerticalOffset,_that.ntscOptions,_that.ntscBisqwitOptions,_that.lcdGridStrength,_that.scanlineIntensity,_that.customPaletteName);case _:
+return $default(_that.paletteMode,_that.builtinPreset,_that.videoFilter,_that.integerScaling,_that.aspectRatio,_that.screenVerticalOffset,_that.ntscOptions,_that.ntscBisqwitOptions,_that.lcdGridStrength,_that.scanlineIntensity,_that.customPaletteName,_that.fullScreen);case _:
   return null;
 
 }
@@ -221,7 +222,7 @@ return $default(_that.paletteMode,_that.builtinPreset,_that.videoFilter,_that.in
 @JsonSerializable()
 
 class _VideoSettings extends VideoSettings with DiagnosticableTreeMixin {
-  const _VideoSettings({@JsonKey(unknownEnumValue: PaletteMode.builtin) this.paletteMode = PaletteMode.builtin, @JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc) this.builtinPreset = PaletteKind.nesdevNtsc, @JsonKey(unknownEnumValue: VideoFilter.none) this.videoFilter = VideoFilter.none, this.integerScaling = false, @JsonKey(unknownEnumValue: NesAspectRatio.square) this.aspectRatio = NesAspectRatio.square, this.screenVerticalOffset = 0, @NtscOptionsConverter() this.ntscOptions = NtscOptionsConverter._fallback, @NtscBisqwitOptionsConverter() this.ntscBisqwitOptions = NtscBisqwitOptionsConverter._fallback, this.lcdGridStrength = 1.0, this.scanlineIntensity = 0.30, this.customPaletteName}): super._();
+  const _VideoSettings({@JsonKey(unknownEnumValue: PaletteMode.builtin) this.paletteMode = PaletteMode.builtin, @JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc) this.builtinPreset = PaletteKind.nesdevNtsc, @JsonKey(unknownEnumValue: VideoFilter.none) this.videoFilter = VideoFilter.none, this.integerScaling = false, @JsonKey(unknownEnumValue: NesAspectRatio.square) this.aspectRatio = NesAspectRatio.square, this.screenVerticalOffset = 0, @NtscOptionsConverter() this.ntscOptions = NtscOptionsConverter._fallback, @NtscBisqwitOptionsConverter() this.ntscBisqwitOptions = NtscBisqwitOptionsConverter._fallback, this.lcdGridStrength = 1.0, this.scanlineIntensity = 0.30, this.customPaletteName, this.fullScreen = false}): super._();
   factory _VideoSettings.fromJson(Map<String, dynamic> json) => _$VideoSettingsFromJson(json);
 
 @override@JsonKey(unknownEnumValue: PaletteMode.builtin) final  PaletteMode paletteMode;
@@ -237,6 +238,7 @@ class _VideoSettings extends VideoSettings with DiagnosticableTreeMixin {
 /// Scanline intensity in `0.0..=1.0`.
 @override@JsonKey() final  double scanlineIntensity;
 @override final  String? customPaletteName;
+@override@JsonKey() final  bool fullScreen;
 
 /// Create a copy of VideoSettings
 /// with the given fields replaced by the non-null parameter values.
@@ -252,21 +254,21 @@ Map<String, dynamic> toJson() {
 void debugFillProperties(DiagnosticPropertiesBuilder properties) {
   properties
     ..add(DiagnosticsProperty('type', 'VideoSettings'))
-    ..add(DiagnosticsProperty('paletteMode', paletteMode))..add(DiagnosticsProperty('builtinPreset', builtinPreset))..add(DiagnosticsProperty('videoFilter', videoFilter))..add(DiagnosticsProperty('integerScaling', integerScaling))..add(DiagnosticsProperty('aspectRatio', aspectRatio))..add(DiagnosticsProperty('screenVerticalOffset', screenVerticalOffset))..add(DiagnosticsProperty('ntscOptions', ntscOptions))..add(DiagnosticsProperty('ntscBisqwitOptions', ntscBisqwitOptions))..add(DiagnosticsProperty('lcdGridStrength', lcdGridStrength))..add(DiagnosticsProperty('scanlineIntensity', scanlineIntensity))..add(DiagnosticsProperty('customPaletteName', customPaletteName));
+    ..add(DiagnosticsProperty('paletteMode', paletteMode))..add(DiagnosticsProperty('builtinPreset', builtinPreset))..add(DiagnosticsProperty('videoFilter', videoFilter))..add(DiagnosticsProperty('integerScaling', integerScaling))..add(DiagnosticsProperty('aspectRatio', aspectRatio))..add(DiagnosticsProperty('screenVerticalOffset', screenVerticalOffset))..add(DiagnosticsProperty('ntscOptions', ntscOptions))..add(DiagnosticsProperty('ntscBisqwitOptions', ntscBisqwitOptions))..add(DiagnosticsProperty('lcdGridStrength', lcdGridStrength))..add(DiagnosticsProperty('scanlineIntensity', scanlineIntensity))..add(DiagnosticsProperty('customPaletteName', customPaletteName))..add(DiagnosticsProperty('fullScreen', fullScreen));
 }
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _VideoSettings&&(identical(other.paletteMode, paletteMode) || other.paletteMode == paletteMode)&&(identical(other.builtinPreset, builtinPreset) || other.builtinPreset == builtinPreset)&&(identical(other.videoFilter, videoFilter) || other.videoFilter == videoFilter)&&(identical(other.integerScaling, integerScaling) || other.integerScaling == integerScaling)&&(identical(other.aspectRatio, aspectRatio) || other.aspectRatio == aspectRatio)&&(identical(other.screenVerticalOffset, screenVerticalOffset) || other.screenVerticalOffset == screenVerticalOffset)&&(identical(other.ntscOptions, ntscOptions) || other.ntscOptions == ntscOptions)&&(identical(other.ntscBisqwitOptions, ntscBisqwitOptions) || other.ntscBisqwitOptions == ntscBisqwitOptions)&&(identical(other.lcdGridStrength, lcdGridStrength) || other.lcdGridStrength == lcdGridStrength)&&(identical(other.scanlineIntensity, scanlineIntensity) || other.scanlineIntensity == scanlineIntensity)&&(identical(other.customPaletteName, customPaletteName) || other.customPaletteName == customPaletteName));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _VideoSettings&&(identical(other.paletteMode, paletteMode) || other.paletteMode == paletteMode)&&(identical(other.builtinPreset, builtinPreset) || other.builtinPreset == builtinPreset)&&(identical(other.videoFilter, videoFilter) || other.videoFilter == videoFilter)&&(identical(other.integerScaling, integerScaling) || other.integerScaling == integerScaling)&&(identical(other.aspectRatio, aspectRatio) || other.aspectRatio == aspectRatio)&&(identical(other.screenVerticalOffset, screenVerticalOffset) || other.screenVerticalOffset == screenVerticalOffset)&&(identical(other.ntscOptions, ntscOptions) || other.ntscOptions == ntscOptions)&&(identical(other.ntscBisqwitOptions, ntscBisqwitOptions) || other.ntscBisqwitOptions == ntscBisqwitOptions)&&(identical(other.lcdGridStrength, lcdGridStrength) || other.lcdGridStrength == lcdGridStrength)&&(identical(other.scanlineIntensity, scanlineIntensity) || other.scanlineIntensity == scanlineIntensity)&&(identical(other.customPaletteName, customPaletteName) || other.customPaletteName == customPaletteName)&&(identical(other.fullScreen, fullScreen) || other.fullScreen == fullScreen));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,paletteMode,builtinPreset,videoFilter,integerScaling,aspectRatio,screenVerticalOffset,ntscOptions,ntscBisqwitOptions,lcdGridStrength,scanlineIntensity,customPaletteName);
+int get hashCode => Object.hash(runtimeType,paletteMode,builtinPreset,videoFilter,integerScaling,aspectRatio,screenVerticalOffset,ntscOptions,ntscBisqwitOptions,lcdGridStrength,scanlineIntensity,customPaletteName,fullScreen);
 
 @override
 String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
-  return 'VideoSettings(paletteMode: $paletteMode, builtinPreset: $builtinPreset, videoFilter: $videoFilter, integerScaling: $integerScaling, aspectRatio: $aspectRatio, screenVerticalOffset: $screenVerticalOffset, ntscOptions: $ntscOptions, ntscBisqwitOptions: $ntscBisqwitOptions, lcdGridStrength: $lcdGridStrength, scanlineIntensity: $scanlineIntensity, customPaletteName: $customPaletteName)';
+  return 'VideoSettings(paletteMode: $paletteMode, builtinPreset: $builtinPreset, videoFilter: $videoFilter, integerScaling: $integerScaling, aspectRatio: $aspectRatio, screenVerticalOffset: $screenVerticalOffset, ntscOptions: $ntscOptions, ntscBisqwitOptions: $ntscBisqwitOptions, lcdGridStrength: $lcdGridStrength, scanlineIntensity: $scanlineIntensity, customPaletteName: $customPaletteName, fullScreen: $fullScreen)';
 }
 
 
@@ -277,7 +279,7 @@ abstract mixin class _$VideoSettingsCopyWith<$Res> implements $VideoSettingsCopy
   factory _$VideoSettingsCopyWith(_VideoSettings value, $Res Function(_VideoSettings) _then) = __$VideoSettingsCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(unknownEnumValue: PaletteMode.builtin) PaletteMode paletteMode,@JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc) PaletteKind builtinPreset,@JsonKey(unknownEnumValue: VideoFilter.none) VideoFilter videoFilter, bool integerScaling,@JsonKey(unknownEnumValue: NesAspectRatio.square) NesAspectRatio aspectRatio, double screenVerticalOffset,@NtscOptionsConverter() NtscOptions ntscOptions,@NtscBisqwitOptionsConverter() NtscBisqwitOptions ntscBisqwitOptions, double lcdGridStrength, double scanlineIntensity, String? customPaletteName
+@JsonKey(unknownEnumValue: PaletteMode.builtin) PaletteMode paletteMode,@JsonKey(unknownEnumValue: PaletteKind.nesdevNtsc) PaletteKind builtinPreset,@JsonKey(unknownEnumValue: VideoFilter.none) VideoFilter videoFilter, bool integerScaling,@JsonKey(unknownEnumValue: NesAspectRatio.square) NesAspectRatio aspectRatio, double screenVerticalOffset,@NtscOptionsConverter() NtscOptions ntscOptions,@NtscBisqwitOptionsConverter() NtscBisqwitOptions ntscBisqwitOptions, double lcdGridStrength, double scanlineIntensity, String? customPaletteName, bool fullScreen
 });
 
 
@@ -294,7 +296,7 @@ class __$VideoSettingsCopyWithImpl<$Res>
 
 /// Create a copy of VideoSettings
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? paletteMode = null,Object? builtinPreset = null,Object? videoFilter = null,Object? integerScaling = null,Object? aspectRatio = null,Object? screenVerticalOffset = null,Object? ntscOptions = null,Object? ntscBisqwitOptions = null,Object? lcdGridStrength = null,Object? scanlineIntensity = null,Object? customPaletteName = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? paletteMode = null,Object? builtinPreset = null,Object? videoFilter = null,Object? integerScaling = null,Object? aspectRatio = null,Object? screenVerticalOffset = null,Object? ntscOptions = null,Object? ntscBisqwitOptions = null,Object? lcdGridStrength = null,Object? scanlineIntensity = null,Object? customPaletteName = freezed,Object? fullScreen = null,}) {
   return _then(_VideoSettings(
 paletteMode: null == paletteMode ? _self.paletteMode : paletteMode // ignore: cast_nullable_to_non_nullable
 as PaletteMode,builtinPreset: null == builtinPreset ? _self.builtinPreset : builtinPreset // ignore: cast_nullable_to_non_nullable
@@ -307,7 +309,8 @@ as NtscOptions,ntscBisqwitOptions: null == ntscBisqwitOptions ? _self.ntscBisqwi
 as NtscBisqwitOptions,lcdGridStrength: null == lcdGridStrength ? _self.lcdGridStrength : lcdGridStrength // ignore: cast_nullable_to_non_nullable
 as double,scanlineIntensity: null == scanlineIntensity ? _self.scanlineIntensity : scanlineIntensity // ignore: cast_nullable_to_non_nullable
 as double,customPaletteName: freezed == customPaletteName ? _self.customPaletteName : customPaletteName // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,fullScreen: null == fullScreen ? _self.fullScreen : fullScreen // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

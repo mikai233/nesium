@@ -52,6 +52,7 @@ _VideoSettings _$VideoSettingsFromJson(
   lcdGridStrength: (json['lcdGridStrength'] as num?)?.toDouble() ?? 1.0,
   scanlineIntensity: (json['scanlineIntensity'] as num?)?.toDouble() ?? 0.30,
   customPaletteName: json['customPaletteName'] as String?,
+  fullScreen: json['fullScreen'] as bool? ?? false,
 );
 
 Map<String, dynamic> _$VideoSettingsToJson(_VideoSettings instance) =>
@@ -69,6 +70,7 @@ Map<String, dynamic> _$VideoSettingsToJson(_VideoSettings instance) =>
       'lcdGridStrength': instance.lcdGridStrength,
       'scanlineIntensity': instance.scanlineIntensity,
       'customPaletteName': instance.customPaletteName,
+      'fullScreen': instance.fullScreen,
     };
 
 const _$PaletteModeEnumMap = {

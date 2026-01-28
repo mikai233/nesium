@@ -147,6 +147,7 @@
   "keyboardActionSaveState": "Save State",
   "keyboardActionLoadState": "Load State",
   "keyboardActionPause": "Pause",
+  "keyboardActionFullScreen": "Full Screen",
   "inputBindingConflictCleared": "{player} {action} binding cleared.",
   "@inputBindingConflictCleared": {
     "placeholders": {
@@ -502,6 +503,8 @@
   "videoNtscBisqwitQFilterLengthLabel": "Q Filter",
   "videoIntegerScalingTitle": "Integer scaling",
   "videoIntegerScalingSubtitle": "Pixel-perfect scaling (reduces shimmer on scrolling).",
+  "videoFullScreenTitle": "Full Screen",
+  "videoFullScreenSubtitle": "Toggle window full screen state",
   "videoScreenVerticalOffset": "Screen vertical offset",
   "videoAspectRatio": "Aspect ratio",
   "videoAspectRatioSquare": "1:1 (Square pixels)",

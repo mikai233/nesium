@@ -6,27 +6,26 @@ part of 'nes_gamepad_types.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_GamepadMapping _$GamepadMappingFromJson(Map<String, dynamic> json) =>
-    _GamepadMapping(
-      a: $enumDecodeNullable(_$GamepadButtonEnumMap, json['a']),
-      b: $enumDecodeNullable(_$GamepadButtonEnumMap, json['b']),
-      select: $enumDecodeNullable(_$GamepadButtonEnumMap, json['select']),
-      start: $enumDecodeNullable(_$GamepadButtonEnumMap, json['start']),
-      up: $enumDecodeNullable(_$GamepadButtonEnumMap, json['up']),
-      down: $enumDecodeNullable(_$GamepadButtonEnumMap, json['down']),
-      left: $enumDecodeNullable(_$GamepadButtonEnumMap, json['left']),
-      right: $enumDecodeNullable(_$GamepadButtonEnumMap, json['right']),
-      turboA: $enumDecodeNullable(_$GamepadButtonEnumMap, json['turboA']),
-      turboB: $enumDecodeNullable(_$GamepadButtonEnumMap, json['turboB']),
-      rewind: $enumDecodeNullable(_$GamepadButtonEnumMap, json['rewind']),
-      fastForward: $enumDecodeNullable(
-        _$GamepadButtonEnumMap,
-        json['fastForward'],
-      ),
-      saveState: $enumDecodeNullable(_$GamepadButtonEnumMap, json['saveState']),
-      loadState: $enumDecodeNullable(_$GamepadButtonEnumMap, json['loadState']),
-      pause: $enumDecodeNullable(_$GamepadButtonEnumMap, json['pause']),
-    );
+_GamepadMapping _$GamepadMappingFromJson(
+  Map<String, dynamic> json,
+) => _GamepadMapping(
+  a: $enumDecodeNullable(_$GamepadButtonEnumMap, json['a']),
+  b: $enumDecodeNullable(_$GamepadButtonEnumMap, json['b']),
+  select: $enumDecodeNullable(_$GamepadButtonEnumMap, json['select']),
+  start: $enumDecodeNullable(_$GamepadButtonEnumMap, json['start']),
+  up: $enumDecodeNullable(_$GamepadButtonEnumMap, json['up']),
+  down: $enumDecodeNullable(_$GamepadButtonEnumMap, json['down']),
+  left: $enumDecodeNullable(_$GamepadButtonEnumMap, json['left']),
+  right: $enumDecodeNullable(_$GamepadButtonEnumMap, json['right']),
+  turboA: $enumDecodeNullable(_$GamepadButtonEnumMap, json['turboA']),
+  turboB: $enumDecodeNullable(_$GamepadButtonEnumMap, json['turboB']),
+  rewind: $enumDecodeNullable(_$GamepadButtonEnumMap, json['rewind']),
+  fastForward: $enumDecodeNullable(_$GamepadButtonEnumMap, json['fastForward']),
+  saveState: $enumDecodeNullable(_$GamepadButtonEnumMap, json['saveState']),
+  loadState: $enumDecodeNullable(_$GamepadButtonEnumMap, json['loadState']),
+  pause: $enumDecodeNullable(_$GamepadButtonEnumMap, json['pause']),
+  fullScreen: $enumDecodeNullable(_$GamepadButtonEnumMap, json['fullScreen']),
+);
 
 Map<String, dynamic> _$GamepadMappingToJson(_GamepadMapping instance) =>
     <String, dynamic>{
@@ -45,6 +44,7 @@ Map<String, dynamic> _$GamepadMappingToJson(_GamepadMapping instance) =>
       'saveState': instance.saveState,
       'loadState': instance.loadState,
       'pause': instance.pause,
+      'fullScreen': instance.fullScreen,
     };
 
 const _$GamepadButtonEnumMap = {

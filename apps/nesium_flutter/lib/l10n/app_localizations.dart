@@ -644,6 +644,12 @@ abstract class AppLocalizations {
   /// **'Pause'**
   String get keyboardActionPause;
 
+  /// No description provided for @keyboardActionFullScreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Full Screen'**
+  String get keyboardActionFullScreen;
+
   /// No description provided for @inputBindingConflictCleared.
   ///
   /// In en, this message translates to:
@@ -1837,6 +1843,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pixel-perfect scaling (reduces shimmer on scrolling).'**
   String get videoIntegerScalingSubtitle;
+
+  /// No description provided for @videoFullScreenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Full Screen'**
+  String get videoFullScreenTitle;
+
+  /// No description provided for @videoFullScreenSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Toggle window full screen state'**
+  String get videoFullScreenSubtitle;
 
   /// No description provided for @videoScreenVerticalOffset.
   ///

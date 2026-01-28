@@ -97,6 +97,8 @@ pub struct GamepadActions {
     pub load_state: bool,
     /// Toggle pause.
     pub pause: bool,
+    /// Toggle full screen.
+    pub full_screen: bool,
 }
 
 /// Mapping for extended actions.
@@ -107,6 +109,7 @@ pub struct ActionMapping {
     pub save_state: Option<Button>,
     pub load_state: Option<Button>,
     pub pause: Option<Button>,
+    pub full_screen: Option<Button>,
 }
 
 impl Default for ActionMapping {
@@ -117,6 +120,7 @@ impl Default for ActionMapping {
             save_state: None,
             load_state: None,
             pause: None,
+            full_screen: None,
         }
     }
 }
@@ -506,6 +510,11 @@ impl GamepadManager {
             && is_pressed_safe(btn)
         {
             actions.pause = true;
+        }
+        if let Some(btn) = self.action_mapping.full_screen
+            && is_pressed_safe(btn)
+        {
+            actions.full_screen = true;
         }
     }
 

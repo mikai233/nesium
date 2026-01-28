@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$InputSettings implements DiagnosticableTreeMixin {
 
- InputDevice get device; KeyboardPreset get keyboardPreset; LogicalKeyboardKey? get customUp; LogicalKeyboardKey? get customDown; LogicalKeyboardKey? get customLeft; LogicalKeyboardKey? get customRight; LogicalKeyboardKey? get customA; LogicalKeyboardKey? get customB; LogicalKeyboardKey? get customSelect; LogicalKeyboardKey? get customStart; LogicalKeyboardKey? get customTurboA; LogicalKeyboardKey? get customTurboB; LogicalKeyboardKey? get customRewind; LogicalKeyboardKey? get customFastForward; LogicalKeyboardKey? get customSaveState; LogicalKeyboardKey? get customLoadState; LogicalKeyboardKey? get customPause;
+ InputDevice get device; KeyboardPreset get keyboardPreset; LogicalKeyboardKey? get customUp; LogicalKeyboardKey? get customDown; LogicalKeyboardKey? get customLeft; LogicalKeyboardKey? get customRight; LogicalKeyboardKey? get customA; LogicalKeyboardKey? get customB; LogicalKeyboardKey? get customSelect; LogicalKeyboardKey? get customStart; LogicalKeyboardKey? get customTurboA; LogicalKeyboardKey? get customTurboB; LogicalKeyboardKey? get customRewind; LogicalKeyboardKey? get customFastForward; LogicalKeyboardKey? get customSaveState; LogicalKeyboardKey? get customLoadState; LogicalKeyboardKey? get customPause; LogicalKeyboardKey? get customFullScreen;
 /// Create a copy of InputSettings
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -29,21 +29,21 @@ $InputSettingsCopyWith<InputSettings> get copyWith => _$InputSettingsCopyWithImp
 void debugFillProperties(DiagnosticPropertiesBuilder properties) {
   properties
     ..add(DiagnosticsProperty('type', 'InputSettings'))
-    ..add(DiagnosticsProperty('device', device))..add(DiagnosticsProperty('keyboardPreset', keyboardPreset))..add(DiagnosticsProperty('customUp', customUp))..add(DiagnosticsProperty('customDown', customDown))..add(DiagnosticsProperty('customLeft', customLeft))..add(DiagnosticsProperty('customRight', customRight))..add(DiagnosticsProperty('customA', customA))..add(DiagnosticsProperty('customB', customB))..add(DiagnosticsProperty('customSelect', customSelect))..add(DiagnosticsProperty('customStart', customStart))..add(DiagnosticsProperty('customTurboA', customTurboA))..add(DiagnosticsProperty('customTurboB', customTurboB))..add(DiagnosticsProperty('customRewind', customRewind))..add(DiagnosticsProperty('customFastForward', customFastForward))..add(DiagnosticsProperty('customSaveState', customSaveState))..add(DiagnosticsProperty('customLoadState', customLoadState))..add(DiagnosticsProperty('customPause', customPause));
+    ..add(DiagnosticsProperty('device', device))..add(DiagnosticsProperty('keyboardPreset', keyboardPreset))..add(DiagnosticsProperty('customUp', customUp))..add(DiagnosticsProperty('customDown', customDown))..add(DiagnosticsProperty('customLeft', customLeft))..add(DiagnosticsProperty('customRight', customRight))..add(DiagnosticsProperty('customA', customA))..add(DiagnosticsProperty('customB', customB))..add(DiagnosticsProperty('customSelect', customSelect))..add(DiagnosticsProperty('customStart', customStart))..add(DiagnosticsProperty('customTurboA', customTurboA))..add(DiagnosticsProperty('customTurboB', customTurboB))..add(DiagnosticsProperty('customRewind', customRewind))..add(DiagnosticsProperty('customFastForward', customFastForward))..add(DiagnosticsProperty('customSaveState', customSaveState))..add(DiagnosticsProperty('customLoadState', customLoadState))..add(DiagnosticsProperty('customPause', customPause))..add(DiagnosticsProperty('customFullScreen', customFullScreen));
 }
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is InputSettings&&(identical(other.device, device) || other.device == device)&&(identical(other.keyboardPreset, keyboardPreset) || other.keyboardPreset == keyboardPreset)&&(identical(other.customUp, customUp) || other.customUp == customUp)&&(identical(other.customDown, customDown) || other.customDown == customDown)&&(identical(other.customLeft, customLeft) || other.customLeft == customLeft)&&(identical(other.customRight, customRight) || other.customRight == customRight)&&(identical(other.customA, customA) || other.customA == customA)&&(identical(other.customB, customB) || other.customB == customB)&&(identical(other.customSelect, customSelect) || other.customSelect == customSelect)&&(identical(other.customStart, customStart) || other.customStart == customStart)&&(identical(other.customTurboA, customTurboA) || other.customTurboA == customTurboA)&&(identical(other.customTurboB, customTurboB) || other.customTurboB == customTurboB)&&(identical(other.customRewind, customRewind) || other.customRewind == customRewind)&&(identical(other.customFastForward, customFastForward) || other.customFastForward == customFastForward)&&(identical(other.customSaveState, customSaveState) || other.customSaveState == customSaveState)&&(identical(other.customLoadState, customLoadState) || other.customLoadState == customLoadState)&&(identical(other.customPause, customPause) || other.customPause == customPause));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is InputSettings&&(identical(other.device, device) || other.device == device)&&(identical(other.keyboardPreset, keyboardPreset) || other.keyboardPreset == keyboardPreset)&&(identical(other.customUp, customUp) || other.customUp == customUp)&&(identical(other.customDown, customDown) || other.customDown == customDown)&&(identical(other.customLeft, customLeft) || other.customLeft == customLeft)&&(identical(other.customRight, customRight) || other.customRight == customRight)&&(identical(other.customA, customA) || other.customA == customA)&&(identical(other.customB, customB) || other.customB == customB)&&(identical(other.customSelect, customSelect) || other.customSelect == customSelect)&&(identical(other.customStart, customStart) || other.customStart == customStart)&&(identical(other.customTurboA, customTurboA) || other.customTurboA == customTurboA)&&(identical(other.customTurboB, customTurboB) || other.customTurboB == customTurboB)&&(identical(other.customRewind, customRewind) || other.customRewind == customRewind)&&(identical(other.customFastForward, customFastForward) || other.customFastForward == customFastForward)&&(identical(other.customSaveState, customSaveState) || other.customSaveState == customSaveState)&&(identical(other.customLoadState, customLoadState) || other.customLoadState == customLoadState)&&(identical(other.customPause, customPause) || other.customPause == customPause)&&(identical(other.customFullScreen, customFullScreen) || other.customFullScreen == customFullScreen));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,device,keyboardPreset,customUp,customDown,customLeft,customRight,customA,customB,customSelect,customStart,customTurboA,customTurboB,customRewind,customFastForward,customSaveState,customLoadState,customPause);
+int get hashCode => Object.hash(runtimeType,device,keyboardPreset,customUp,customDown,customLeft,customRight,customA,customB,customSelect,customStart,customTurboA,customTurboB,customRewind,customFastForward,customSaveState,customLoadState,customPause,customFullScreen);
 
 @override
 String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
-  return 'InputSettings(device: $device, keyboardPreset: $keyboardPreset, customUp: $customUp, customDown: $customDown, customLeft: $customLeft, customRight: $customRight, customA: $customA, customB: $customB, customSelect: $customSelect, customStart: $customStart, customTurboA: $customTurboA, customTurboB: $customTurboB, customRewind: $customRewind, customFastForward: $customFastForward, customSaveState: $customSaveState, customLoadState: $customLoadState, customPause: $customPause)';
+  return 'InputSettings(device: $device, keyboardPreset: $keyboardPreset, customUp: $customUp, customDown: $customDown, customLeft: $customLeft, customRight: $customRight, customA: $customA, customB: $customB, customSelect: $customSelect, customStart: $customStart, customTurboA: $customTurboA, customTurboB: $customTurboB, customRewind: $customRewind, customFastForward: $customFastForward, customSaveState: $customSaveState, customLoadState: $customLoadState, customPause: $customPause, customFullScreen: $customFullScreen)';
 }
 
 
@@ -54,7 +54,7 @@ abstract mixin class $InputSettingsCopyWith<$Res>  {
   factory $InputSettingsCopyWith(InputSettings value, $Res Function(InputSettings) _then) = _$InputSettingsCopyWithImpl;
 @useResult
 $Res call({
- InputDevice device, KeyboardPreset keyboardPreset, LogicalKeyboardKey? customUp, LogicalKeyboardKey? customDown, LogicalKeyboardKey? customLeft, LogicalKeyboardKey? customRight, LogicalKeyboardKey? customA, LogicalKeyboardKey? customB, LogicalKeyboardKey? customSelect, LogicalKeyboardKey? customStart, LogicalKeyboardKey? customTurboA, LogicalKeyboardKey? customTurboB, LogicalKeyboardKey? customRewind, LogicalKeyboardKey? customFastForward, LogicalKeyboardKey? customSaveState, LogicalKeyboardKey? customLoadState, LogicalKeyboardKey? customPause
+ InputDevice device, KeyboardPreset keyboardPreset, LogicalKeyboardKey? customUp, LogicalKeyboardKey? customDown, LogicalKeyboardKey? customLeft, LogicalKeyboardKey? customRight, LogicalKeyboardKey? customA, LogicalKeyboardKey? customB, LogicalKeyboardKey? customSelect, LogicalKeyboardKey? customStart, LogicalKeyboardKey? customTurboA, LogicalKeyboardKey? customTurboB, LogicalKeyboardKey? customRewind, LogicalKeyboardKey? customFastForward, LogicalKeyboardKey? customSaveState, LogicalKeyboardKey? customLoadState, LogicalKeyboardKey? customPause, LogicalKeyboardKey? customFullScreen
 });
 
 
@@ -71,7 +71,7 @@ class _$InputSettingsCopyWithImpl<$Res>
 
 /// Create a copy of InputSettings
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? device = null,Object? keyboardPreset = null,Object? customUp = freezed,Object? customDown = freezed,Object? customLeft = freezed,Object? customRight = freezed,Object? customA = freezed,Object? customB = freezed,Object? customSelect = freezed,Object? customStart = freezed,Object? customTurboA = freezed,Object? customTurboB = freezed,Object? customRewind = freezed,Object? customFastForward = freezed,Object? customSaveState = freezed,Object? customLoadState = freezed,Object? customPause = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? device = null,Object? keyboardPreset = null,Object? customUp = freezed,Object? customDown = freezed,Object? customLeft = freezed,Object? customRight = freezed,Object? customA = freezed,Object? customB = freezed,Object? customSelect = freezed,Object? customStart = freezed,Object? customTurboA = freezed,Object? customTurboB = freezed,Object? customRewind = freezed,Object? customFastForward = freezed,Object? customSaveState = freezed,Object? customLoadState = freezed,Object? customPause = freezed,Object? customFullScreen = freezed,}) {
   return _then(_self.copyWith(
 device: null == device ? _self.device : device // ignore: cast_nullable_to_non_nullable
 as InputDevice,keyboardPreset: null == keyboardPreset ? _self.keyboardPreset : keyboardPreset // ignore: cast_nullable_to_non_nullable
@@ -90,6 +90,7 @@ as LogicalKeyboardKey?,customFastForward: freezed == customFastForward ? _self.c
 as LogicalKeyboardKey?,customSaveState: freezed == customSaveState ? _self.customSaveState : customSaveState // ignore: cast_nullable_to_non_nullable
 as LogicalKeyboardKey?,customLoadState: freezed == customLoadState ? _self.customLoadState : customLoadState // ignore: cast_nullable_to_non_nullable
 as LogicalKeyboardKey?,customPause: freezed == customPause ? _self.customPause : customPause // ignore: cast_nullable_to_non_nullable
+as LogicalKeyboardKey?,customFullScreen: freezed == customFullScreen ? _self.customFullScreen : customFullScreen // ignore: cast_nullable_to_non_nullable
 as LogicalKeyboardKey?,
   ));
 }
@@ -172,10 +173,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( InputDevice device,  KeyboardPreset keyboardPreset,  LogicalKeyboardKey? customUp,  LogicalKeyboardKey? customDown,  LogicalKeyboardKey? customLeft,  LogicalKeyboardKey? customRight,  LogicalKeyboardKey? customA,  LogicalKeyboardKey? customB,  LogicalKeyboardKey? customSelect,  LogicalKeyboardKey? customStart,  LogicalKeyboardKey? customTurboA,  LogicalKeyboardKey? customTurboB,  LogicalKeyboardKey? customRewind,  LogicalKeyboardKey? customFastForward,  LogicalKeyboardKey? customSaveState,  LogicalKeyboardKey? customLoadState,  LogicalKeyboardKey? customPause)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( InputDevice device,  KeyboardPreset keyboardPreset,  LogicalKeyboardKey? customUp,  LogicalKeyboardKey? customDown,  LogicalKeyboardKey? customLeft,  LogicalKeyboardKey? customRight,  LogicalKeyboardKey? customA,  LogicalKeyboardKey? customB,  LogicalKeyboardKey? customSelect,  LogicalKeyboardKey? customStart,  LogicalKeyboardKey? customTurboA,  LogicalKeyboardKey? customTurboB,  LogicalKeyboardKey? customRewind,  LogicalKeyboardKey? customFastForward,  LogicalKeyboardKey? customSaveState,  LogicalKeyboardKey? customLoadState,  LogicalKeyboardKey? customPause,  LogicalKeyboardKey? customFullScreen)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _InputSettings() when $default != null:
-return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDown,_that.customLeft,_that.customRight,_that.customA,_that.customB,_that.customSelect,_that.customStart,_that.customTurboA,_that.customTurboB,_that.customRewind,_that.customFastForward,_that.customSaveState,_that.customLoadState,_that.customPause);case _:
+return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDown,_that.customLeft,_that.customRight,_that.customA,_that.customB,_that.customSelect,_that.customStart,_that.customTurboA,_that.customTurboB,_that.customRewind,_that.customFastForward,_that.customSaveState,_that.customLoadState,_that.customPause,_that.customFullScreen);case _:
   return orElse();
 
 }
@@ -193,10 +194,10 @@ return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDow
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( InputDevice device,  KeyboardPreset keyboardPreset,  LogicalKeyboardKey? customUp,  LogicalKeyboardKey? customDown,  LogicalKeyboardKey? customLeft,  LogicalKeyboardKey? customRight,  LogicalKeyboardKey? customA,  LogicalKeyboardKey? customB,  LogicalKeyboardKey? customSelect,  LogicalKeyboardKey? customStart,  LogicalKeyboardKey? customTurboA,  LogicalKeyboardKey? customTurboB,  LogicalKeyboardKey? customRewind,  LogicalKeyboardKey? customFastForward,  LogicalKeyboardKey? customSaveState,  LogicalKeyboardKey? customLoadState,  LogicalKeyboardKey? customPause)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( InputDevice device,  KeyboardPreset keyboardPreset,  LogicalKeyboardKey? customUp,  LogicalKeyboardKey? customDown,  LogicalKeyboardKey? customLeft,  LogicalKeyboardKey? customRight,  LogicalKeyboardKey? customA,  LogicalKeyboardKey? customB,  LogicalKeyboardKey? customSelect,  LogicalKeyboardKey? customStart,  LogicalKeyboardKey? customTurboA,  LogicalKeyboardKey? customTurboB,  LogicalKeyboardKey? customRewind,  LogicalKeyboardKey? customFastForward,  LogicalKeyboardKey? customSaveState,  LogicalKeyboardKey? customLoadState,  LogicalKeyboardKey? customPause,  LogicalKeyboardKey? customFullScreen)  $default,) {final _that = this;
 switch (_that) {
 case _InputSettings():
-return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDown,_that.customLeft,_that.customRight,_that.customA,_that.customB,_that.customSelect,_that.customStart,_that.customTurboA,_that.customTurboB,_that.customRewind,_that.customFastForward,_that.customSaveState,_that.customLoadState,_that.customPause);}
+return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDown,_that.customLeft,_that.customRight,_that.customA,_that.customB,_that.customSelect,_that.customStart,_that.customTurboA,_that.customTurboB,_that.customRewind,_that.customFastForward,_that.customSaveState,_that.customLoadState,_that.customPause,_that.customFullScreen);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -210,10 +211,10 @@ return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDow
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( InputDevice device,  KeyboardPreset keyboardPreset,  LogicalKeyboardKey? customUp,  LogicalKeyboardKey? customDown,  LogicalKeyboardKey? customLeft,  LogicalKeyboardKey? customRight,  LogicalKeyboardKey? customA,  LogicalKeyboardKey? customB,  LogicalKeyboardKey? customSelect,  LogicalKeyboardKey? customStart,  LogicalKeyboardKey? customTurboA,  LogicalKeyboardKey? customTurboB,  LogicalKeyboardKey? customRewind,  LogicalKeyboardKey? customFastForward,  LogicalKeyboardKey? customSaveState,  LogicalKeyboardKey? customLoadState,  LogicalKeyboardKey? customPause)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( InputDevice device,  KeyboardPreset keyboardPreset,  LogicalKeyboardKey? customUp,  LogicalKeyboardKey? customDown,  LogicalKeyboardKey? customLeft,  LogicalKeyboardKey? customRight,  LogicalKeyboardKey? customA,  LogicalKeyboardKey? customB,  LogicalKeyboardKey? customSelect,  LogicalKeyboardKey? customStart,  LogicalKeyboardKey? customTurboA,  LogicalKeyboardKey? customTurboB,  LogicalKeyboardKey? customRewind,  LogicalKeyboardKey? customFastForward,  LogicalKeyboardKey? customSaveState,  LogicalKeyboardKey? customLoadState,  LogicalKeyboardKey? customPause,  LogicalKeyboardKey? customFullScreen)?  $default,) {final _that = this;
 switch (_that) {
 case _InputSettings() when $default != null:
-return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDown,_that.customLeft,_that.customRight,_that.customA,_that.customB,_that.customSelect,_that.customStart,_that.customTurboA,_that.customTurboB,_that.customRewind,_that.customFastForward,_that.customSaveState,_that.customLoadState,_that.customPause);case _:
+return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDown,_that.customLeft,_that.customRight,_that.customA,_that.customB,_that.customSelect,_that.customStart,_that.customTurboA,_that.customTurboB,_that.customRewind,_that.customFastForward,_that.customSaveState,_that.customLoadState,_that.customPause,_that.customFullScreen);case _:
   return null;
 
 }
@@ -225,7 +226,7 @@ return $default(_that.device,_that.keyboardPreset,_that.customUp,_that.customDow
 @JsonSerializable()
 @LogicalKeyboardKeyNullableConverter()
 class _InputSettings extends InputSettings with DiagnosticableTreeMixin {
-  const _InputSettings({required this.device, required this.keyboardPreset, this.customUp, this.customDown, this.customLeft, this.customRight, this.customA, this.customB, this.customSelect, this.customStart, this.customTurboA, this.customTurboB, this.customRewind, this.customFastForward, this.customSaveState, this.customLoadState, this.customPause}): super._();
+  const _InputSettings({required this.device, required this.keyboardPreset, this.customUp, this.customDown, this.customLeft, this.customRight, this.customA, this.customB, this.customSelect, this.customStart, this.customTurboA, this.customTurboB, this.customRewind, this.customFastForward, this.customSaveState, this.customLoadState, this.customPause, this.customFullScreen}): super._();
   factory _InputSettings.fromJson(Map<String, dynamic> json) => _$InputSettingsFromJson(json);
 
 @override final  InputDevice device;
@@ -245,6 +246,7 @@ class _InputSettings extends InputSettings with DiagnosticableTreeMixin {
 @override final  LogicalKeyboardKey? customSaveState;
 @override final  LogicalKeyboardKey? customLoadState;
 @override final  LogicalKeyboardKey? customPause;
+@override final  LogicalKeyboardKey? customFullScreen;
 
 /// Create a copy of InputSettings
 /// with the given fields replaced by the non-null parameter values.
@@ -260,21 +262,21 @@ Map<String, dynamic> toJson() {
 void debugFillProperties(DiagnosticPropertiesBuilder properties) {
   properties
     ..add(DiagnosticsProperty('type', 'InputSettings'))
-    ..add(DiagnosticsProperty('device', device))..add(DiagnosticsProperty('keyboardPreset', keyboardPreset))..add(DiagnosticsProperty('customUp', customUp))..add(DiagnosticsProperty('customDown', customDown))..add(DiagnosticsProperty('customLeft', customLeft))..add(DiagnosticsProperty('customRight', customRight))..add(DiagnosticsProperty('customA', customA))..add(DiagnosticsProperty('customB', customB))..add(DiagnosticsProperty('customSelect', customSelect))..add(DiagnosticsProperty('customStart', customStart))..add(DiagnosticsProperty('customTurboA', customTurboA))..add(DiagnosticsProperty('customTurboB', customTurboB))..add(DiagnosticsProperty('customRewind', customRewind))..add(DiagnosticsProperty('customFastForward', customFastForward))..add(DiagnosticsProperty('customSaveState', customSaveState))..add(DiagnosticsProperty('customLoadState', customLoadState))..add(DiagnosticsProperty('customPause', customPause));
+    ..add(DiagnosticsProperty('device', device))..add(DiagnosticsProperty('keyboardPreset', keyboardPreset))..add(DiagnosticsProperty('customUp', customUp))..add(DiagnosticsProperty('customDown', customDown))..add(DiagnosticsProperty('customLeft', customLeft))..add(DiagnosticsProperty('customRight', customRight))..add(DiagnosticsProperty('customA', customA))..add(DiagnosticsProperty('customB', customB))..add(DiagnosticsProperty('customSelect', customSelect))..add(DiagnosticsProperty('customStart', customStart))..add(DiagnosticsProperty('customTurboA', customTurboA))..add(DiagnosticsProperty('customTurboB', customTurboB))..add(DiagnosticsProperty('customRewind', customRewind))..add(DiagnosticsProperty('customFastForward', customFastForward))..add(DiagnosticsProperty('customSaveState', customSaveState))..add(DiagnosticsProperty('customLoadState', customLoadState))..add(DiagnosticsProperty('customPause', customPause))..add(DiagnosticsProperty('customFullScreen', customFullScreen));
 }
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _InputSettings&&(identical(other.device, device) || other.device == device)&&(identical(other.keyboardPreset, keyboardPreset) || other.keyboardPreset == keyboardPreset)&&(identical(other.customUp, customUp) || other.customUp == customUp)&&(identical(other.customDown, customDown) || other.customDown == customDown)&&(identical(other.customLeft, customLeft) || other.customLeft == customLeft)&&(identical(other.customRight, customRight) || other.customRight == customRight)&&(identical(other.customA, customA) || other.customA == customA)&&(identical(other.customB, customB) || other.customB == customB)&&(identical(other.customSelect, customSelect) || other.customSelect == customSelect)&&(identical(other.customStart, customStart) || other.customStart == customStart)&&(identical(other.customTurboA, customTurboA) || other.customTurboA == customTurboA)&&(identical(other.customTurboB, customTurboB) || other.customTurboB == customTurboB)&&(identical(other.customRewind, customRewind) || other.customRewind == customRewind)&&(identical(other.customFastForward, customFastForward) || other.customFastForward == customFastForward)&&(identical(other.customSaveState, customSaveState) || other.customSaveState == customSaveState)&&(identical(other.customLoadState, customLoadState) || other.customLoadState == customLoadState)&&(identical(other.customPause, customPause) || other.customPause == customPause));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _InputSettings&&(identical(other.device, device) || other.device == device)&&(identical(other.keyboardPreset, keyboardPreset) || other.keyboardPreset == keyboardPreset)&&(identical(other.customUp, customUp) || other.customUp == customUp)&&(identical(other.customDown, customDown) || other.customDown == customDown)&&(identical(other.customLeft, customLeft) || other.customLeft == customLeft)&&(identical(other.customRight, customRight) || other.customRight == customRight)&&(identical(other.customA, customA) || other.customA == customA)&&(identical(other.customB, customB) || other.customB == customB)&&(identical(other.customSelect, customSelect) || other.customSelect == customSelect)&&(identical(other.customStart, customStart) || other.customStart == customStart)&&(identical(other.customTurboA, customTurboA) || other.customTurboA == customTurboA)&&(identical(other.customTurboB, customTurboB) || other.customTurboB == customTurboB)&&(identical(other.customRewind, customRewind) || other.customRewind == customRewind)&&(identical(other.customFastForward, customFastForward) || other.customFastForward == customFastForward)&&(identical(other.customSaveState, customSaveState) || other.customSaveState == customSaveState)&&(identical(other.customLoadState, customLoadState) || other.customLoadState == customLoadState)&&(identical(other.customPause, customPause) || other.customPause == customPause)&&(identical(other.customFullScreen, customFullScreen) || other.customFullScreen == customFullScreen));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,device,keyboardPreset,customUp,customDown,customLeft,customRight,customA,customB,customSelect,customStart,customTurboA,customTurboB,customRewind,customFastForward,customSaveState,customLoadState,customPause);
+int get hashCode => Object.hash(runtimeType,device,keyboardPreset,customUp,customDown,customLeft,customRight,customA,customB,customSelect,customStart,customTurboA,customTurboB,customRewind,customFastForward,customSaveState,customLoadState,customPause,customFullScreen);
 
 @override
 String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
-  return 'InputSettings(device: $device, keyboardPreset: $keyboardPreset, customUp: $customUp, customDown: $customDown, customLeft: $customLeft, customRight: $customRight, customA: $customA, customB: $customB, customSelect: $customSelect, customStart: $customStart, customTurboA: $customTurboA, customTurboB: $customTurboB, customRewind: $customRewind, customFastForward: $customFastForward, customSaveState: $customSaveState, customLoadState: $customLoadState, customPause: $customPause)';
+  return 'InputSettings(device: $device, keyboardPreset: $keyboardPreset, customUp: $customUp, customDown: $customDown, customLeft: $customLeft, customRight: $customRight, customA: $customA, customB: $customB, customSelect: $customSelect, customStart: $customStart, customTurboA: $customTurboA, customTurboB: $customTurboB, customRewind: $customRewind, customFastForward: $customFastForward, customSaveState: $customSaveState, customLoadState: $customLoadState, customPause: $customPause, customFullScreen: $customFullScreen)';
 }
 
 
@@ -285,7 +287,7 @@ abstract mixin class _$InputSettingsCopyWith<$Res> implements $InputSettingsCopy
   factory _$InputSettingsCopyWith(_InputSettings value, $Res Function(_InputSettings) _then) = __$InputSettingsCopyWithImpl;
 @override @useResult
 $Res call({
- InputDevice device, KeyboardPreset keyboardPreset, LogicalKeyboardKey? customUp, LogicalKeyboardKey? customDown, LogicalKeyboardKey? customLeft, LogicalKeyboardKey? customRight, LogicalKeyboardKey? customA, LogicalKeyboardKey? customB, LogicalKeyboardKey? customSelect, LogicalKeyboardKey? customStart, LogicalKeyboardKey? customTurboA, LogicalKeyboardKey? customTurboB, LogicalKeyboardKey? customRewind, LogicalKeyboardKey? customFastForward, LogicalKeyboardKey? customSaveState, LogicalKeyboardKey? customLoadState, LogicalKeyboardKey? customPause
+ InputDevice device, KeyboardPreset keyboardPreset, LogicalKeyboardKey? customUp, LogicalKeyboardKey? customDown, LogicalKeyboardKey? customLeft, LogicalKeyboardKey? customRight, LogicalKeyboardKey? customA, LogicalKeyboardKey? customB, LogicalKeyboardKey? customSelect, LogicalKeyboardKey? customStart, LogicalKeyboardKey? customTurboA, LogicalKeyboardKey? customTurboB, LogicalKeyboardKey? customRewind, LogicalKeyboardKey? customFastForward, LogicalKeyboardKey? customSaveState, LogicalKeyboardKey? customLoadState, LogicalKeyboardKey? customPause, LogicalKeyboardKey? customFullScreen
 });
 
 
@@ -302,7 +304,7 @@ class __$InputSettingsCopyWithImpl<$Res>
 
 /// Create a copy of InputSettings
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? device = null,Object? keyboardPreset = null,Object? customUp = freezed,Object? customDown = freezed,Object? customLeft = freezed,Object? customRight = freezed,Object? customA = freezed,Object? customB = freezed,Object? customSelect = freezed,Object? customStart = freezed,Object? customTurboA = freezed,Object? customTurboB = freezed,Object? customRewind = freezed,Object? customFastForward = freezed,Object? customSaveState = freezed,Object? customLoadState = freezed,Object? customPause = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? device = null,Object? keyboardPreset = null,Object? customUp = freezed,Object? customDown = freezed,Object? customLeft = freezed,Object? customRight = freezed,Object? customA = freezed,Object? customB = freezed,Object? customSelect = freezed,Object? customStart = freezed,Object? customTurboA = freezed,Object? customTurboB = freezed,Object? customRewind = freezed,Object? customFastForward = freezed,Object? customSaveState = freezed,Object? customLoadState = freezed,Object? customPause = freezed,Object? customFullScreen = freezed,}) {
   return _then(_InputSettings(
 device: null == device ? _self.device : device // ignore: cast_nullable_to_non_nullable
 as InputDevice,keyboardPreset: null == keyboardPreset ? _self.keyboardPreset : keyboardPreset // ignore: cast_nullable_to_non_nullable
@@ -321,6 +323,7 @@ as LogicalKeyboardKey?,customFastForward: freezed == customFastForward ? _self.c
 as LogicalKeyboardKey?,customSaveState: freezed == customSaveState ? _self.customSaveState : customSaveState // ignore: cast_nullable_to_non_nullable
 as LogicalKeyboardKey?,customLoadState: freezed == customLoadState ? _self.customLoadState : customLoadState // ignore: cast_nullable_to_non_nullable
 as LogicalKeyboardKey?,customPause: freezed == customPause ? _self.customPause : customPause // ignore: cast_nullable_to_non_nullable
+as LogicalKeyboardKey?,customFullScreen: freezed == customFullScreen ? _self.customFullScreen : customFullScreen // ignore: cast_nullable_to_non_nullable
 as LogicalKeyboardKey?,
   ));
 }
