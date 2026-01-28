@@ -49,6 +49,7 @@ NesiumNativeWindow::Create(HWND parent_hwnd, ID3D11Device *device) {
     wc.hInstance = GetModuleHandle(nullptr);
     wc.lpszClassName = kClassName;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
     RegisterClassExW(&wc);
     class_registered = true;
   }
@@ -131,6 +132,7 @@ bool NesiumNativeWindow::CreateSwapChain() {
   swap_chain_->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
   device_->CreateRenderTargetView(back_buffer.Get(), nullptr, &rtv_);
 
+  ClearToBlack();
   return true;
 }
 
@@ -223,6 +225,7 @@ void NesiumNativeWindow::Resize(int x, int y, int width, int height) {
           ComPtr<ID3D11Texture2D> back_buffer;
           swap_chain_->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
           device_->CreateRenderTargetView(back_buffer.Get(), nullptr, &rtv_);
+          ClearToBlack();
         }
       } else {
         CreateSwapChain();
@@ -278,4 +281,12 @@ bool NesiumNativeWindow::PresentTexture(ID3D11Texture2D *src_texture,
   // Present with V-Sync.
   swap_chain_->Present(1, 0);
   return true;
+}
+
+void NesiumNativeWindow::ClearToBlack() {
+  if (!context_ || !rtv_ || !swap_chain_)
+    return;
+  float clear_color[4] = {0, 0, 0, 1};
+  context_->ClearRenderTargetView(rtv_.Get(), clear_color);
+  swap_chain_->Present(0, 0);
 }

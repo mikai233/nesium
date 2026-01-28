@@ -113,6 +113,10 @@ class NesTextureService {
     });
   }
 
+  Future<void> setVideoFilter(int filter) async {
+    await _channel.invokeMethod('setVideoFilter', {'filter': filter});
+  }
+
   // ---------------------------------------------------------------------------
   // Auxiliary Textures (Tilemap, Pattern, etc.)
   // ---------------------------------------------------------------------------

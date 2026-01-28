@@ -251,12 +251,17 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
               final globalOffset = gameBox.localToGlobal(Offset.zero);
               final dpr = MediaQuery.of(context).devicePixelRatio;
 
-              final rect = Rect.fromLTWH(
-                (globalOffset.dx * dpr).roundToDouble(),
-                (globalOffset.dy * dpr).roundToDouble(),
-                (viewport.width * dpr).roundToDouble(),
-                (viewport.height * dpr).roundToDouble(),
-              );
+              // Use enclosing rectangle to ensure we cover any sub-pixel gaps.
+              // Left/Top: Floor to include the starting pixel.
+              // Right/Bottom: Ceil to include the ending pixel.
+              final left = (globalOffset.dx * dpr).floorToDouble();
+              final top = (globalOffset.dy * dpr).floorToDouble();
+              final right = ((globalOffset.dx + viewport.width) * dpr)
+                  .ceilToDouble();
+              final bottom = ((globalOffset.dy + viewport.height) * dpr)
+                  .ceilToDouble();
+
+              final rect = Rect.fromLTWH(left, top, right - left, bottom - top);
 
               // Only update if significantly changed
               if (_lastOverlayRect == null ||

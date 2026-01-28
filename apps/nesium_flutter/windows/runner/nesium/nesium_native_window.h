@@ -43,4 +43,5 @@ private:
   std::mutex mu_;
 
   bool CreateResources();
+  void ClearToBlack();
 };

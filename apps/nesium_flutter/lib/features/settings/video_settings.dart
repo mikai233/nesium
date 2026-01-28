@@ -12,12 +12,14 @@ import '../../platform/nes_palette.dart' show PaletteKind;
 import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
+import 'windows_shader_settings.dart';
 import '../../persistence/storage_codec.dart';
 import '../../persistence/storage_key.dart';
 import '../../platform/nes_video.dart' as nes_video;
 import '../../platform/nes_video.dart'
     show NtscBisqwitOptions, NtscOptions, VideoFilter;
 import '../../domain/nes_controller.dart';
+import '../../domain/nes_texture_service.dart';
 import '../../windows/current_window_kind.dart';
 import '../../windows/window_types.dart';
 import '../../platform/platform_capabilities.dart';
@@ -327,6 +329,23 @@ class VideoSettingsController extends Notifier<VideoSettings>
     await ref
         .read(nesControllerProvider.notifier)
         .setVideoFilter(state.videoFilter);
+
+    if (isNativeDesktop) {
+      final shaderSettings = ref.read(windowsShaderSettingsProvider);
+      // 0 = Linear, 1 = Point (None)
+      // Use Linear if checking a filter OR if a GPU shader is enabled
+      final useLinear =
+          state.videoFilter != nes_video.VideoFilter.none ||
+          shaderSettings.enabled;
+
+      final filterMode = useLinear ? 0 : 1;
+
+      // Only the main window has the native texture plugin registered.
+      // Secondary windows (like Settings) should not update the texture directly.
+      if (ref.read(currentWindowKindProvider) == WindowKind.main) {
+        await ref.read(nesTextureServiceProvider).setVideoFilter(filterMode);
+      }
+    }
 
     // Apply full screen state only if this is the main window
     final kind = ref.read(currentWindowKindProvider);

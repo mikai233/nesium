@@ -106,6 +106,8 @@ private:
       SetWindowsVideoBackend(call, std::move(result));
     } else if (method == "setNativeOverlay") {
       SetNativeOverlay(call, std::move(result));
+    } else if (method == "setVideoFilter") {
+      SetVideoFilter(call, std::move(result));
     } else {
       result->NotImplemented();
     }
@@ -168,6 +170,25 @@ private:
       }
     }
 
+    result->Success();
+  }
+
+  void SetVideoFilter(
+      const flutter::MethodCall<flutter::EncodableValue> &call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+    const auto *args = std::get_if<flutter::EncodableMap>(call.arguments());
+    if (!args) {
+      result->Error("Invalid arguments", "Expected map");
+      return;
+    }
+
+    // 0: Linear, 1: Point/Nearest
+    auto it_filter = args->find(flutter::EncodableValue("filter"));
+    if (it_filter != args->end()) {
+      int filter = std::get<int>(it_filter->second);
+      // Store filter state: 0 = Linear, 1 = Point
+      use_linear_filter_.store(filter == 0, std::memory_order_release);
+    }
     result->Success();
   }
 
@@ -433,9 +454,9 @@ private:
         int idx_to_present = gpu_texture->UnmapAndCommit();
 
         if (native_window_ && idx_to_present >= 0) {
+          bool use_linear = use_linear_filter_.load(std::memory_order_acquire);
           native_window_->PresentTexture(
-              gpu_texture->GetTexture(idx_to_present),
-              gpu_texture->was_shader_applied());
+              gpu_texture->GetTexture(idx_to_present), use_linear);
         }
       }
     } else if (cpu_texture) {
@@ -498,6 +519,10 @@ private:
   int overlay_y_ = 0;
   int overlay_w_ = 0;
   int overlay_h_ = 0;
+
+  // Default to Point (false) to prioritize sharp, pixel-perfect rendering
+  // for retro gaming content.
+  std::atomic<bool> use_linear_filter_{false};
 };
 
 } // namespace

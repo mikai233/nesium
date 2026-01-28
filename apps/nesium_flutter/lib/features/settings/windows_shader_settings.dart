@@ -10,6 +10,10 @@ import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 import '../../platform/nes_video.dart' as nes_video;
+import '../../domain/nes_texture_service.dart';
+import 'video_settings.dart';
+import '../../windows/current_window_kind.dart';
+import '../../windows/window_types.dart';
 
 @immutable
 class WindowsShaderSettings {
@@ -149,6 +153,18 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
 
     await nes_video.setShaderPresetPath(path: absolutePath);
     await nes_video.setShaderEnabled(enabled: settings.enabled);
+
+    final videoSettings = ref.read(videoSettingsProvider);
+    final useLinear =
+        videoSettings.videoFilter != nes_video.VideoFilter.none ||
+        settings.enabled;
+
+    // Only the main window has the native texture plugin registered.
+    if (ref.read(currentWindowKindProvider) == WindowKind.main) {
+      await ref
+          .read(nesTextureServiceProvider)
+          .setVideoFilter(useLinear ? 0 : 1);
+    }
   }
 
   Future<void> setEnabled(bool enabled) async {
