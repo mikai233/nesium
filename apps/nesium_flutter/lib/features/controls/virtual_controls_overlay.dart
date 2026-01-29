@@ -1149,15 +1149,20 @@ _basePositions(
     mainButtonBaseSize.height * systemScale * fastForwardScale,
   );
 
-  final verticalOffset = isLandscape ? 32.0 : 120.0;
+  final verticalOffset = isLandscape ? 20.0 : 120.0;
+  final dpadDisc = _dpadDiscDiameter(settings);
+  final dpadInternalPad = (dpadBaseSize.width - dpadDisc) / 2;
+  const abClusterPad = 8.0; // Match 'pad' in _abClusterSize
+  final dpadAlignmentOffset = abClusterPad - dpadInternalPad;
 
   final dpadPos = Offset(
-    basePadding + safeInsets.left,
+    basePadding + safeInsets.left + dpadAlignmentOffset,
     available.height -
         dpadBaseSize.height -
         basePadding -
         verticalOffset -
-        safeInsets.bottom,
+        safeInsets.bottom -
+        dpadAlignmentOffset,
   );
   final buttonsPos = Offset(
     available.width - buttonsBaseSize.width - basePadding - safeInsets.right,
@@ -1188,14 +1193,14 @@ _basePositions(
       available.width - basePadding - systemButtonSize.width,
       y,
     );
-    // Align horizontally to the left of ✅, vertically centered with ✅
+    final rightMargin = available.width - safeInsets.right - basePadding;
     rewindPos = Offset(
-      fabCenter.dx - fabSize / 2.0 - basePadding * 2.0 - rewindSize.width,
+      rightMargin - rewindSize.width,
       fabCenter.dy - rewindSize.height / 2.0,
     );
     // Align horizontally to the left of Rewind
     fastForwardPos = Offset(
-      rewindPos.dx - fastForwardSize.width - 8.0,
+      rewindPos.dx - fastForwardSize.width - 12.0,
       rewindPos.dy,
     );
   } else {
@@ -1224,12 +1229,12 @@ _basePositions(
           (buttonsBaseSize.width - systemButtonSize.width) / 2,
       y,
     );
-    // Align vertically centered with ✅
+    final rightMargin = available.width - safeInsets.right - basePadding;
     rewindPos = Offset(
-      fabCenter.dx - rewindSize.width / 2.0,
+      rightMargin - rewindSize.width,
       fabCenter.dy - rewindSize.height / 2.0,
     );
-    // Align to the left of Rewind
+    // Align horizontally to the left of Rewind
     fastForwardPos = Offset(
       rewindPos.dx - fastForwardSize.width - 12.0,
       rewindPos.dy,
