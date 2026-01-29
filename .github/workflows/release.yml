@@ -229,6 +229,45 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Compute ASSET_TAG (from pubspec.yaml)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import re, pathlib, sys
+          try:
+              p = pathlib.Path('apps/nesium_flutter/pubspec.yaml')
+              s = p.read_text(encoding='utf-8')
+              m = re.search(r'^version:\s*([^\s]+)\s*$', s, re.M)
+              if not m:
+                  sys.exit('ERROR: version: not found in apps/nesium_flutter/pubspec.yaml')
+              v = m.group(1)
+              print(f'ASSET_TAG={v}')
+          except Exception as e:
+              sys.exit(f'ERROR: Script failed: {e}')
+          PY
+
+      - name: Generate Release Body
+        shell: bash
+        env:
+          TAG: ${{ needs.setup.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          cat > release_body.md <<EOF
+          ### 🚀 Download Nesium (Flutter)
+          
+          | Platform | Download |
+          | :--- | :--- |
+          | **Android** | [![APK v8a](https://img.shields.io/badge/APK-arm64--v8a-green?style=for-the-badge&logo=android)](https://github.com/${{ github.repository }}/releases/download/${TAG}/nesium-flutter-${ASSET_TAG}-arm64-v8a.apk) [![APK Universal](https://img.shields.io/badge/APK-universal-green?style=for-the-badge&logo=android)](https://github.com/${{ github.repository }}/releases/download/${TAG}/nesium-flutter-${ASSET_TAG}-universal.apk) |
+          | **Windows** | [![Setup x64](https://img.shields.io/badge/Setup-x86--64-blue?style=for-the-badge&logo=windows)](https://github.com/${{ github.repository }}/releases/download/${TAG}/nesium-flutter-${ASSET_TAG}-windows-x86_64-setup.zip) |
+          | **macOS** | [![DMG Universal](https://img.shields.io/badge/DMG-universal-black?style=for-the-badge&logo=apple)](https://github.com/${{ github.repository }}/releases/download/${TAG}/nesium-flutter-${ASSET_TAG}-macos-universal.zip) |
+          | **Linux** | [![tar.gz x64](https://img.shields.io/badge/tar.gz-x86--64-orange?style=for-the-badge&logo=linux)](https://github.com/${{ github.repository }}/releases/download/${TAG}/nesium-flutter-${ASSET_TAG}-linux-x86_64.tar.gz) [![tar.gz arm64](https://img.shields.io/badge/tar.gz-aarch64-orange?style=for-the-badge&logo=linux)](https://github.com/${{ github.repository }}/releases/download/${TAG}/nesium-flutter-${ASSET_TAG}-linux-aarch64.tar.gz) |
+          
+          EOF
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -240,6 +279,7 @@ jobs:
           tag_name: ${{ needs.setup.outputs.release_tag }}
           prerelease: ${{ needs.setup.outputs.prerelease == 'true' }}
           generate_release_notes: true
+          body_path: release_body.md
           files: |
             # --- Nesium Egui (Native) ---
             artifacts/**/nesium-egui-*.zip
@@ -254,6 +294,8 @@ jobs:
             artifacts/nesium-libretro/nesium-libretro-*.sha256
 
             # --- Nesium Flutter ---
+            artifacts/**/nesium-flutter-*.apk
+            artifacts/**/nesium-flutter-*.apk.sha256
             artifacts/**/nesium-flutter-*.zip
             artifacts/**/nesium-flutter-*.zip.sha256
             artifacts/**/nesium-flutter-*.tar.gz
