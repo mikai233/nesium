@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../bridge/api/emulation.dart' as emulation;
+import '../bridge/api/video.dart' as video;
 
 final nesTextureServiceProvider = Provider((ref) => NesTextureService());
 
@@ -141,4 +142,14 @@ class NesTextureService {
   /// Disposes an auxiliary texture.
   Future<void> disposeAuxTexture(int id) =>
       _auxChannel.invokeMethod<void>('disposeAuxTexture', {'id': id});
+
+  // ---------------------------------------------------------------------------
+  // Shader Parameters
+  // ---------------------------------------------------------------------------
+
+  Stream<video.ShaderParameters> shaderParametersStream() =>
+      video.shaderParametersStream();
+
+  Future<void> setShaderParameter(String name, double value) =>
+      video.setShaderParameter(name: name, value: value);
 }

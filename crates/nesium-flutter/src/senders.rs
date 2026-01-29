@@ -3,6 +3,7 @@ pub mod emulation_status;
 pub mod palette;
 pub mod replay;
 pub mod runtime;
+pub mod shader;
 pub mod sprite;
 pub mod tile;
 pub mod tilemap;

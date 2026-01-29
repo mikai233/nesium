@@ -1,4 +1,6 @@
+use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
+use librashader::runtime::FilterChainParameters;
 use nesium_core::ppu::buffer::{NearestPostProcessor, VideoPostProcessor};
 use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use nesium_support::video::filters::NesNtscPostProcessor;
@@ -51,6 +53,35 @@ pub enum VideoFilter {
 pub struct VideoOutputInfo {
     pub output_width: u32,
     pub output_height: u32,
+}
+
+#[frb]
+pub struct ShaderParameter {
+    pub name: String,
+    pub description: String,
+    pub initial: f32,
+    pub current: f32,
+    pub minimum: f32,
+    pub maximum: f32,
+    pub step: f32,
+}
+
+#[frb]
+pub struct ShaderParameters {
+    pub path: String,
+    pub parameters: std::collections::HashMap<String, ShaderParameter>,
+}
+
+#[frb]
+pub fn shader_parameters_stream(sink: StreamSink<ShaderParameters>) -> Result<(), String> {
+    crate::senders::shader::set_shader_sink(sink);
+
+    // After registering, we should emit the current state if it exists.
+    // This avoids needing a separate manual fetch on startup.
+    let current = get_shader_parameters();
+    crate::senders::shader::emit_shader_parameters_update(current);
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -554,5 +585,144 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
     {
         let _ = path;
         Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
+    }
+}
+
+pub fn get_shader_parameters() -> ShaderParameters {
+    let mut current_path = String::new();
+    let mut parameters = std::collections::HashMap::new();
+
+    #[cfg(target_os = "android")]
+    {
+        let state = crate::android::android_shader_state().lock();
+        if let Some(state) = state.as_ref() {
+            current_path = state.path.clone();
+            for (name, meta) in state.parameters.iter() {
+                parameters.insert(
+                    name.to_string(),
+                    ShaderParameter {
+                        name: name.to_string(),
+                        description: meta.description.clone(),
+                        initial: meta.initial,
+                        current: state
+                            .chain
+                            .as_ref()
+                            .and_then(|c| c.parameters().parameter_value(name))
+                            .unwrap_or(meta.initial),
+                        minimum: meta.minimum,
+                        maximum: meta.maximum,
+                        step: meta.step,
+                    },
+                );
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let state = crate::windows::SHADER_STATE.load();
+        if let Some(state) = state.as_ref() {
+            current_path = state.path.clone();
+            for (name, meta) in state.parameters.iter() {
+                let current = {
+                    let chain = state.chain.lock();
+                    if let Some(chain) = chain.as_ref() {
+                        chain
+                            .parameters()
+                            .parameter_value(name)
+                            .unwrap_or(meta.initial)
+                    } else {
+                        meta.initial
+                    }
+                };
+
+                parameters.insert(
+                    name.to_string(),
+                    ShaderParameter {
+                        name: name.to_string(),
+                        description: meta.description.clone(),
+                        initial: meta.initial,
+                        current,
+                        minimum: meta.minimum,
+                        maximum: meta.maximum,
+                        step: meta.step,
+                    },
+                );
+            }
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        let state = crate::apple::SHADER_STATE.lock();
+        if let Some(state) = state.as_ref() {
+            current_path = state.path.clone();
+            for (name, meta) in state.parameters.iter() {
+                let current = if let Some(chain) = state.chain.as_ref() {
+                    chain
+                        .parameters()
+                        .parameter_value(name)
+                        .unwrap_or(meta.initial)
+                } else {
+                    meta.initial
+                };
+
+                parameters.insert(
+                    name.to_string(),
+                    ShaderParameter {
+                        name: name.to_string(),
+                        description: meta.description.clone(),
+                        initial: meta.initial,
+                        current,
+                        minimum: meta.minimum,
+                        maximum: meta.maximum,
+                        step: meta.step,
+                    },
+                );
+            }
+        }
+    }
+
+    tracing::info!(
+        "get_shader_parameters: path={}, count={}",
+        current_path,
+        parameters.len()
+    );
+
+    ShaderParameters {
+        path: current_path,
+        parameters,
+    }
+}
+
+#[frb]
+pub fn set_shader_parameter(name: String, value: f32) {
+    #[cfg(target_os = "android")]
+    {
+        let state = crate::android::android_shader_state().lock();
+        state
+            .as_ref()
+            .and_then(|s| s.chain.as_ref())
+            .map(|chain| chain.parameters().set_parameter_value(&name, value));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let state = crate::windows::SHADER_STATE.load();
+        if let Some(state) = state.as_ref() {
+            let mut chain = state.chain.lock();
+            if let Some(chain) = chain.as_mut() {
+                chain.parameters().set_parameter_value(&name, value);
+            }
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        let state = crate::apple::SHADER_STATE.lock();
+        state
+            .as_ref()
+            .and_then(|s| s.chain.as_ref())
+            .map(|chain| chain.parameters().set_parameter_value(&name, value));
     }
 }

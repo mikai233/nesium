@@ -36,6 +36,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  Map<String, ShaderParameter> dco_decode_Map_String_shader_parameter_None(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<DebugStateNotification>
   dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw);
 
@@ -68,6 +73,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<ServerStatus> dco_decode_StreamSink_server_status_Sse(
+    dynamic raw,
+  );
+
+  @protected
+  RustStreamSink<ShaderParameters> dco_decode_StreamSink_shader_parameters_Sse(
     dynamic raw,
   );
 
@@ -176,6 +186,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(String, ShaderParameter)>
+  dco_decode_list_record_string_shader_parameter(dynamic raw);
+
+  @protected
   List<SpriteInfo> dco_decode_list_sprite_info(dynamic raw);
 
   @protected
@@ -227,6 +241,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PaletteSnapshot dco_decode_palette_snapshot(dynamic raw);
 
   @protected
+  (String, ShaderParameter) dco_decode_record_string_shader_parameter(
+    dynamic raw,
+  );
+
+  @protected
   ReplayEventNotification dco_decode_replay_event_notification(dynamic raw);
 
   @protected
@@ -240,6 +259,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ServerStatus dco_decode_server_status(dynamic raw);
+
+  @protected
+  ShaderParameter dco_decode_shader_parameter(dynamic raw);
+
+  @protected
+  ShaderParameters dco_decode_shader_parameters(dynamic raw);
 
   @protected
   SpriteInfo dco_decode_sprite_info(dynamic raw);
@@ -281,6 +306,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
+  Map<String, ShaderParameter> sse_decode_Map_String_shader_parameter_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<DebugStateNotification>
   sse_decode_StreamSink_debug_state_notification_Sse(
     SseDeserializer deserializer,
@@ -319,6 +349,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<ServerStatus> sse_decode_StreamSink_server_status_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<ShaderParameters> sse_decode_StreamSink_shader_parameters_Sse(
     SseDeserializer deserializer,
   );
 
@@ -453,6 +488,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<(String, ShaderParameter)>
+  sse_decode_list_record_string_shader_parameter(SseDeserializer deserializer);
+
+  @protected
   List<SpriteInfo> sse_decode_list_sprite_info(SseDeserializer deserializer);
 
   @protected
@@ -510,6 +549,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PaletteSnapshot sse_decode_palette_snapshot(SseDeserializer deserializer);
 
   @protected
+  (String, ShaderParameter) sse_decode_record_string_shader_parameter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ReplayEventNotification sse_decode_replay_event_notification(
     SseDeserializer deserializer,
   );
@@ -529,6 +573,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ServerStatus sse_decode_server_status(SseDeserializer deserializer);
+
+  @protected
+  ShaderParameter sse_decode_shader_parameter(SseDeserializer deserializer);
+
+  @protected
+  ShaderParameters sse_decode_shader_parameters(SseDeserializer deserializer);
 
   @protected
   SpriteInfo sse_decode_sprite_info(SseDeserializer deserializer);
@@ -569,6 +619,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Map_String_shader_parameter_None(
+    Map<String, ShaderParameter> self,
     SseSerializer serializer,
   );
 
@@ -617,6 +673,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_server_status_Sse(
     RustStreamSink<ServerStatus> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_shader_parameters_Sse(
+    RustStreamSink<ShaderParameters> self,
     SseSerializer serializer,
   );
 
@@ -783,6 +845,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_string_shader_parameter(
+    List<(String, ShaderParameter)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_sprite_info(
     List<SpriteInfo> self,
     SseSerializer serializer,
@@ -861,6 +929,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_record_string_shader_parameter(
+    (String, ShaderParameter) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_replay_event_notification(
     ReplayEventNotification self,
     SseSerializer serializer,
@@ -886,6 +960,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_server_status(ServerStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_shader_parameter(
+    ShaderParameter self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_shader_parameters(
+    ShaderParameters self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_sprite_info(SpriteInfo self, SseSerializer serializer);

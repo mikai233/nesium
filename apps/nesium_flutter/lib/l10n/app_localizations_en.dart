@@ -1644,4 +1644,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get netplayProceed => 'Proceed';
+
+  @override
+  String get videoShaderParametersTitle => 'Shader Parameters';
+
+  @override
+  String get videoShaderParametersSubtitle =>
+      'Adjust shader parameters in real-time';
 }

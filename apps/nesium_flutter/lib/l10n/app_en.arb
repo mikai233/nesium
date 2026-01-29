@@ -817,5 +817,7 @@
   "netplayStartP2PSession": "Start P2P Session",
   "netplayJoinP2PSession": "Join P2P Session",
   "netplayInvalidP2PServerAddr": "Invalid P2P server address",
-  "netplayProceed": "Proceed"
+  "netplayProceed": "Proceed",
+  "videoShaderParametersTitle": "Shader Parameters",
+  "videoShaderParametersSubtitle": "Adjust shader parameters in real-time"
 }

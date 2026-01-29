@@ -1,8 +1,11 @@
+use arc_swap::ArcSwapOption;
+use librashader::preprocess::ShaderParameter;
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem::{ManuallyDrop, transmute_copy};
 use std::sync::atomic::AtomicUsize;
-use std::sync::{OnceLock, atomic::Ordering};
+use std::sync::{Arc, atomic::Ordering};
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::Graphics::Direct3D::D3D11_SRV_DIMENSION_TEXTURE2D;
 use windows::core::{HRESULT, Interface};
@@ -30,20 +33,19 @@ struct WindowsShaderConfig {
     generation: u64,
 }
 
-static WINDOWS_SHADER_CONFIG: OnceLock<Mutex<WindowsShaderConfig>> = OnceLock::new();
+static WINDOWS_SHADER_CONFIG: ArcSwapOption<WindowsShaderConfig> = ArcSwapOption::const_empty();
 
-fn windows_shader_config() -> &'static Mutex<WindowsShaderConfig> {
-    WINDOWS_SHADER_CONFIG.get_or_init(|| {
-        Mutex::new(WindowsShaderConfig {
+fn windows_shader_snapshot() -> WindowsShaderConfig {
+    let guard = WINDOWS_SHADER_CONFIG.load();
+    if let Some(arc) = &*guard {
+        (**arc).clone()
+    } else {
+        WindowsShaderConfig {
             enabled: false,
             preset_path: None,
             generation: 1,
-        })
-    })
-}
-
-fn windows_shader_snapshot() -> WindowsShaderConfig {
-    windows_shader_config().lock().clone()
+        }
+    }
 }
 
 fn get_passthrough_preset() -> std::path::PathBuf {
@@ -91,32 +93,59 @@ void main() {
 }
 
 pub(crate) fn windows_set_shader_enabled(enabled: bool) {
-    let mut cfg = windows_shader_config().lock();
-    if cfg.enabled == enabled {
-        return;
-    }
-    cfg.enabled = enabled;
-    cfg.generation = cfg.generation.wrapping_add(1);
+    WINDOWS_SHADER_CONFIG.rcu(|old| {
+        let mut new = old
+            .as_ref()
+            .map(|a| (**a).clone())
+            .unwrap_or(WindowsShaderConfig {
+                enabled: false,
+                preset_path: None,
+                generation: 1,
+            });
+
+        if new.enabled == enabled {
+            old.clone()
+        } else {
+            new.enabled = enabled;
+            new.generation = new.generation.wrapping_add(1);
+            Some(Arc::new(new))
+        }
+    });
 }
 
 pub(crate) fn windows_set_shader_preset_path(path: Option<String>) {
-    let mut cfg = windows_shader_config().lock();
-    if cfg.preset_path == path {
-        return;
-    }
-    cfg.preset_path = path;
-    cfg.generation = cfg.generation.wrapping_add(1);
+    WINDOWS_SHADER_CONFIG.rcu(|old| {
+        let mut new = old
+            .as_ref()
+            .map(|a| (**a).clone())
+            .unwrap_or(WindowsShaderConfig {
+                enabled: false,
+                preset_path: None,
+                generation: 1,
+            });
+
+        if new.preset_path == path {
+            old.clone()
+        } else {
+            new.preset_path = path.clone();
+            new.generation = new.generation.wrapping_add(1);
+            Some(Arc::new(new))
+        }
+    });
 }
 
-struct ShaderState {
-    chain: Option<LibrashaderFilterChain>,
-    generation: u64,
+pub(crate) struct ShaderState {
+    // Chain needs to be mutable for frame() calls, but ShaderState is held in ArcSwap (Arc)
+    pub(crate) chain: Mutex<Option<LibrashaderFilterChain>>,
+    pub(crate) generation: u64,
     // Store device address to detect if the underlying D3D11 device has changed
     // (e.g. backend switch or recreation).
-    device_addr: usize,
+    pub(crate) device_addr: usize,
+    pub(crate) parameters: HashMap<String, ShaderParameter>,
+    pub(crate) path: String,
 }
 
-static SHADER_STATE: Mutex<Option<ShaderState>> = Mutex::new(None);
+pub(crate) static SHADER_STATE: ArcSwapOption<ShaderState> = ArcSwapOption::const_empty();
 static FRAME_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 fn hresult_from_windows_error(e: &windows::core::Error) -> HRESULT {
@@ -206,10 +235,10 @@ pub unsafe extern "C" fn nesium_apply_shader(
             return false;
         }
 
-        let mut state_lock = SHADER_STATE.lock();
+        let current_state = SHADER_STATE.load();
 
         // Reload if generation changed OR device changed OR shader not loaded
-        let needs_reload = match &*state_lock {
+        let needs_reload = match &*current_state {
             Some(state) => {
                 state.generation != cfg.generation || state.device_addr != device as usize
             }
@@ -220,11 +249,12 @@ pub unsafe extern "C" fn nesium_apply_shader(
             tracing::info!(
                 "Reloading shader chain (path={}, device changed={})",
                 effective_path,
-                match &*state_lock {
+                match &*current_state {
                     Some(state) => state.device_addr != device as usize,
                     None => true,
                 }
             );
+
             let features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
                 | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
 
@@ -236,22 +266,58 @@ pub unsafe extern "C" fn nesium_apply_shader(
 
             unsafe {
                 let device_ptr = device;
-                let device: std::mem::ManuallyDrop<ID3D11Device> =
-                    std::mem::ManuallyDrop::new(std::mem::transmute_copy(&device));
+                let device: ManuallyDrop<ID3D11Device> = ManuallyDrop::new(transmute_copy(&device));
 
-                match LibrashaderFilterChain::load_from_path(
-                    &effective_path,
-                    features,
-                    &*device,
-                    Some(&options),
-                ) {
+                let mut parameters = HashMap::new();
+                let load_result = (|| {
+                    let preset =
+                        librashader::presets::ShaderPreset::try_parse(&effective_path, features)
+                            .map_err(|e| format!("{:?}", e))?;
+
+                    if let Ok(meta) = librashader::presets::get_parameter_meta(&preset) {
+                        for p in meta {
+                            parameters.insert(p.id.to_string(), p);
+                        }
+                    }
+
+                    LibrashaderFilterChain::load_from_preset(preset, &*device, Some(&options))
+                        .map_err(|e| format!("{:?}", e))
+                })();
+
+                match load_result {
                     Ok(chain) => {
                         tracing::info!("Windows shader chain loaded from {}", effective_path);
-                        *state_lock = Some(ShaderState {
-                            chain: Some(chain),
+
+                        // Emit update to Flutter immediately using local data
+                        let mut api_parameters = std::collections::HashMap::new();
+                        for (name, meta) in parameters.iter() {
+                            api_parameters.insert(
+                                name.clone(),
+                                crate::api::video::ShaderParameter {
+                                    name: name.clone(),
+                                    description: meta.description.clone(),
+                                    initial: meta.initial,
+                                    current: meta.initial,
+                                    minimum: meta.minimum,
+                                    maximum: meta.maximum,
+                                    step: meta.step,
+                                },
+                            );
+                        }
+                        crate::senders::shader::emit_shader_parameters_update(
+                            crate::api::video::ShaderParameters {
+                                path: effective_path.clone(),
+                                parameters: api_parameters,
+                            },
+                        );
+
+                        SHADER_STATE.store(Some(Arc::new(ShaderState {
+                            chain: Mutex::new(Some(chain)),
                             generation: cfg.generation,
                             device_addr: device_ptr as usize,
-                        });
+                            parameters,
+                            path: effective_path,
+                        })));
                     }
                     Err(e) => {
                         tracing::error!(
@@ -259,21 +325,35 @@ pub unsafe extern "C" fn nesium_apply_shader(
                             effective_path,
                             e
                         );
-                        // Save the failure state for this generation to prevent lag
-                        *state_lock = Some(ShaderState {
-                            chain: None,
+
+                        crate::senders::shader::emit_shader_parameters_update(
+                            crate::api::video::ShaderParameters {
+                                path: effective_path.clone(),
+                                parameters: std::collections::HashMap::new(),
+                            },
+                        );
+
+                        SHADER_STATE.store(Some(Arc::new(ShaderState {
+                            chain: Mutex::new(None),
                             generation: cfg.generation,
                             device_addr: device_ptr as usize,
-                        });
+                            parameters: HashMap::new(),
+                            path: effective_path,
+                        })));
                     }
                 }
             }
         }
 
-        let Some(state) = state_lock.as_mut() else {
+        // Re-load state after potential reload
+        let current_state = SHADER_STATE.load();
+        let Some(state) = &*current_state else {
             return false;
         };
-        let Some(chain) = state.chain.as_mut() else {
+
+        // Lock the internal chain for rendering
+        let mut chain = state.chain.lock();
+        let Some(chain) = chain.as_mut() else {
             return false;
         };
 

@@ -14,8 +14,8 @@ use std::{
 use glow::HasContext;
 use jni::{
     JNIEnv,
-    objects::{GlobalRef, JByteBuffer, JClass, JObject, JString},
-    sys::{jboolean, jint, jlong, jobject},
+    objects::{GlobalRef, JByteBuffer, JClass, JObject},
+    sys::{jint, jlong, jobject},
 };
 use librashader::presets::ShaderFeatures as LibrashaderShaderFeatures;
 use librashader::runtime::Size as LibrashaderSize;
@@ -68,7 +68,15 @@ struct AndroidShaderConfig {
     generation: u64,
 }
 
+pub(crate) struct AndroidShaderState {
+    pub(crate) chain: Option<LibrashaderFilterChain>,
+    pub(crate) parameters:
+        std::collections::HashMap<String, librashader::preprocess::ShaderParameter>,
+    pub(crate) path: String,
+}
+
 static ANDROID_SHADER_CONFIG: OnceLock<Mutex<AndroidShaderConfig>> = OnceLock::new();
+static ANDROID_SHADER_STATE: OnceLock<Mutex<Option<AndroidShaderState>>> = OnceLock::new();
 
 fn android_shader_config() -> &'static Mutex<AndroidShaderConfig> {
     ANDROID_SHADER_CONFIG.get_or_init(|| {
@@ -78,6 +86,10 @@ fn android_shader_config() -> &'static Mutex<AndroidShaderConfig> {
             generation: 1,
         })
     })
+}
+
+pub(crate) fn android_shader_state() -> &'static Mutex<Option<AndroidShaderState>> {
+    ANDROID_SHADER_STATE.get_or_init(|| Mutex::new(None))
 }
 
 fn android_shader_snapshot() -> AndroidShaderConfig {
@@ -1313,7 +1325,7 @@ unsafe fn run_rust_renderer(
                 Ok(v) => v,
                 Err(_) => return std::ptr::null(),
             };
-            unsafe { eglGetProcAddress(name.as_ptr()) as *const c_void }
+            eglGetProcAddress(name.as_ptr()) as *const c_void
         })
     });
 
@@ -1392,7 +1404,7 @@ unsafe fn run_rust_renderer(
     let mut images = [EGL_NO_IMAGE_KHR; 2];
     let mut seen_generation = swapchain.generation();
 
-    let mut destroy_images = |images: &mut [EGLImageKHR; 2]| unsafe {
+    let destroy_images = |images: &mut [EGLImageKHR; 2]| unsafe {
         for img in images.iter_mut() {
             if *img != EGL_NO_IMAGE_KHR {
                 let _ = egl_destroy_image(dpy, *img);
@@ -1401,42 +1413,41 @@ unsafe fn run_rust_renderer(
         }
     };
 
-    let mut recreate_textures_and_images =
-        |textures: &mut [u32; 2], images: &mut [EGLImageKHR; 2]| {
-            unsafe { glGenTextures(2, textures.as_mut_ptr()) };
+    let recreate_textures_and_images = |textures: &mut [u32; 2], images: &mut [EGLImageKHR; 2]| {
+        unsafe { glGenTextures(2, textures.as_mut_ptr()) };
 
-            for i in 0..2 {
-                unsafe { glBindTexture(GL_TEXTURE_2D, textures[i]) };
+        for i in 0..2 {
+            unsafe { glBindTexture(GL_TEXTURE_2D, textures[i]) };
 
-                let client_buf = unsafe { get_native_client_buffer(swapchain.buffer(i)) };
-                let img_attribs = [EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE];
-                let image = unsafe {
-                    egl_create_image(
-                        dpy,
-                        EGL_NO_CONTEXT,
-                        EGL_NATIVE_BUFFER_ANDROID,
-                        client_buf,
-                        img_attribs.as_ptr(),
-                    )
-                };
-                if image == EGL_NO_IMAGE_KHR {
-                    tracing::error!("eglCreateImageKHR failed: 0x{:x}", unsafe { eglGetError() });
-                    continue;
-                }
-                images[i] = image;
-                unsafe { gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void) };
-
-                // Set texture parameters AFTER binding the EGLImage. Some Android GPU drivers
-                // reset texture parameters to defaults (GL_LINEAR) when glEGLImageTargetTexture2DOES
-                // is called, causing blurry rendering if set beforehand.
-                unsafe {
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                }
+            let client_buf = unsafe { get_native_client_buffer(swapchain.buffer(i)) };
+            let img_attribs = [EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE];
+            let image = unsafe {
+                egl_create_image(
+                    dpy,
+                    EGL_NO_CONTEXT,
+                    EGL_NATIVE_BUFFER_ANDROID,
+                    client_buf,
+                    img_attribs.as_ptr(),
+                )
+            };
+            if image == EGL_NO_IMAGE_KHR {
+                tracing::error!("eglCreateImageKHR failed: 0x{:x}", unsafe { eglGetError() });
+                continue;
             }
-        };
+            images[i] = image;
+            unsafe { gl_egl_image_target_texture(GL_TEXTURE_2D, image as *const c_void) };
+
+            // Set texture parameters AFTER binding the EGLImage. Some Android GPU drivers
+            // reset texture parameters to defaults (GL_LINEAR) when glEGLImageTargetTexture2DOES
+            // is called, causing blurry rendering if set beforehand.
+            unsafe {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            }
+        }
+    };
 
     recreate_textures_and_images(&mut textures, &mut images);
 
@@ -1616,7 +1627,6 @@ void main() {
 
     // Librashader state (optional; only enabled when we successfully created a GLES3 context).
     let mut shader_seen_generation: u64 = 0;
-    let mut shader_chain: Option<LibrashaderFilterChain> = None;
     let shader_features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
         | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
     let shader_chain_options = LibrashaderFilterChainOptions {
@@ -1693,23 +1703,98 @@ void main() {
             let cfg = android_shader_snapshot();
             if cfg.generation != shader_seen_generation {
                 shader_seen_generation = cfg.generation;
-                shader_chain = None;
+                let mut shader_state = android_shader_state().lock();
+                *shader_state = None;
                 if cfg.enabled {
                     if let Some(path) = cfg.preset_path {
-                        let res = unsafe {
-                            LibrashaderFilterChain::load_from_path(
-                                path,
-                                shader_features,
-                                Arc::clone(&glow_ctx),
-                                Some(&shader_chain_options),
-                            )
-                        };
-                        match res {
-                            Ok(chain) => {
-                                tracing::info!("Shader chain loaded successfully");
-                                shader_chain = Some(chain);
+                        let load_result = (|| {
+                            let preset =
+                                librashader::presets::ShaderPreset::try_parse_with_driver_context(
+                                    &path,
+                                    shader_features,
+                                    librashader::presets::context::VideoDriver::GlCore,
+                                )
+                                .map_err(|e| format!("{:?}", e))?;
+
+                            let mut parameters = std::collections::HashMap::new();
+                            if let Ok(meta) = librashader::presets::get_parameter_meta(&preset) {
+                                for p in meta {
+                                    parameters.insert(p.id.to_string(), p);
+                                }
                             }
-                            Err(e) => tracing::error!("Failed to load shader preset: {e:?}"),
+
+                            let chain = unsafe {
+                                LibrashaderFilterChain::load_from_preset(
+                                    preset,
+                                    Arc::clone(&glow_ctx),
+                                    Some(&shader_chain_options),
+                                )
+                            }
+                            .map_err(|e| format!("{:?}", e))?;
+
+                            Ok::<
+                                (
+                                    LibrashaderFilterChain,
+                                    std::collections::HashMap<
+                                        String,
+                                        librashader::preprocess::ShaderParameter,
+                                    >,
+                                    String,
+                                ),
+                                String,
+                            >((chain, parameters, path.to_string()))
+                        })();
+
+                        match load_result {
+                            Ok((chain, parameters, path)) => {
+                                tracing::info!("Shader chain loaded successfully");
+
+                                // Emit update to Flutter immediately using local data
+                                let mut api_parameters = std::collections::HashMap::new();
+                                for (name, meta) in parameters.iter() {
+                                    api_parameters.insert(
+                                        name.clone(),
+                                        crate::api::video::ShaderParameter {
+                                            name: name.clone(),
+                                            description: meta.description.clone(),
+                                            initial: meta.initial,
+                                            current: meta.initial,
+                                            minimum: meta.minimum,
+                                            maximum: meta.maximum,
+                                            step: meta.step,
+                                        },
+                                    );
+                                }
+                                crate::senders::shader::emit_shader_parameters_update(
+                                    crate::api::video::ShaderParameters {
+                                        path: path.clone(),
+                                        parameters: api_parameters,
+                                    },
+                                );
+
+                                *shader_state = Some(AndroidShaderState {
+                                    chain: Some(chain),
+                                    parameters,
+                                    path,
+                                });
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to load shader preset: {e:?}");
+
+                                crate::senders::shader::emit_shader_parameters_update(
+                                    crate::api::video::ShaderParameters {
+                                        path: path.clone(),
+                                        parameters: std::collections::HashMap::new(),
+                                    },
+                                );
+
+                                // Still update the state with the path so synchronization works
+                                *shader_state = Some(AndroidShaderState {
+                                    chain: None,
+                                    parameters: std::collections::HashMap::new(),
+                                    path: path.to_string(),
+                                });
+                            }
                         }
                     }
                 }
@@ -1717,58 +1802,61 @@ void main() {
         }
 
         // Ensure shader output texture is allocated for the current surface size.
-        if is_gles3 && shader_chain.is_some() {
-            if shader_output_size.width != surf_w || shader_output_size.height != surf_h {
-                shader_output_size = LibrashaderSize {
-                    width: surf_w,
-                    height: surf_h,
-                };
-                unsafe {
-                    if let Some(tex) = shader_output_tex.take() {
-                        glow_ctx.delete_texture(tex);
-                    }
-                    let tex = match glow_ctx.create_texture() {
-                        Ok(v) => v,
-                        Err(e) => {
-                            tracing::error!("create shader output texture failed: {e}");
-                            shader_chain = None;
-                            continue;
-                        }
+        if is_gles3 {
+            let shader_chain_active = android_shader_state().lock().is_some();
+            if shader_chain_active {
+                if shader_output_size.width != surf_w || shader_output_size.height != surf_h {
+                    shader_output_size = LibrashaderSize {
+                        width: surf_w,
+                        height: surf_h,
                     };
-                    glow_ctx.bind_texture(glow::TEXTURE_2D, Some(tex));
-                    glow_ctx.tex_parameter_i32(
-                        glow::TEXTURE_2D,
-                        glow::TEXTURE_MIN_FILTER,
-                        glow::NEAREST as i32,
-                    );
-                    glow_ctx.tex_parameter_i32(
-                        glow::TEXTURE_2D,
-                        glow::TEXTURE_MAG_FILTER,
-                        glow::NEAREST as i32,
-                    );
-                    glow_ctx.tex_parameter_i32(
-                        glow::TEXTURE_2D,
-                        glow::TEXTURE_WRAP_S,
-                        glow::CLAMP_TO_EDGE as i32,
-                    );
-                    glow_ctx.tex_parameter_i32(
-                        glow::TEXTURE_2D,
-                        glow::TEXTURE_WRAP_T,
-                        glow::CLAMP_TO_EDGE as i32,
-                    );
-                    glow_ctx.tex_image_2d(
-                        glow::TEXTURE_2D,
-                        0,
-                        glow::RGBA8 as i32,
-                        surf_w as i32,
-                        surf_h as i32,
-                        0,
-                        glow::RGBA,
-                        glow::UNSIGNED_BYTE,
-                        glow::PixelUnpackData::Slice(None),
-                    );
-                    glow_ctx.bind_texture(glow::TEXTURE_2D, None);
-                    shader_output_tex = Some(tex);
+                    unsafe {
+                        if let Some(tex) = shader_output_tex.take() {
+                            glow_ctx.delete_texture(tex);
+                        }
+                        let tex = match glow_ctx.create_texture() {
+                            Ok(v) => v,
+                            Err(e) => {
+                                tracing::error!("create shader output texture failed: {e}");
+                                *android_shader_state().lock() = None;
+                                continue;
+                            }
+                        };
+                        glow_ctx.bind_texture(glow::TEXTURE_2D, Some(tex));
+                        glow_ctx.tex_parameter_i32(
+                            glow::TEXTURE_2D,
+                            glow::TEXTURE_MIN_FILTER,
+                            glow::NEAREST as i32,
+                        );
+                        glow_ctx.tex_parameter_i32(
+                            glow::TEXTURE_2D,
+                            glow::TEXTURE_MAG_FILTER,
+                            glow::NEAREST as i32,
+                        );
+                        glow_ctx.tex_parameter_i32(
+                            glow::TEXTURE_2D,
+                            glow::TEXTURE_WRAP_S,
+                            glow::CLAMP_TO_EDGE as i32,
+                        );
+                        glow_ctx.tex_parameter_i32(
+                            glow::TEXTURE_2D,
+                            glow::TEXTURE_WRAP_T,
+                            glow::CLAMP_TO_EDGE as i32,
+                        );
+                        glow_ctx.tex_image_2d(
+                            glow::TEXTURE_2D,
+                            0,
+                            glow::RGBA8 as i32,
+                            surf_w as i32,
+                            surf_h as i32,
+                            0,
+                            glow::RGBA,
+                            glow::UNSIGNED_BYTE,
+                            glow::PixelUnpackData::Slice(None),
+                        );
+                        glow_ctx.bind_texture(glow::TEXTURE_2D, None);
+                        shader_output_tex = Some(tex);
+                    }
                 }
             }
         }
@@ -1776,38 +1864,41 @@ void main() {
         // Optional shader pass: render into offscreen texture first.
         let mut present_tex_id = textures[idx];
         if is_gles3 {
-            if let (Some(chain), Some(out_tex)) = (shader_chain.as_mut(), shader_output_tex) {
-                let in_tex = NonZeroU32::new(textures[idx]).map(glow::NativeTexture);
-                let input = LibrashaderGlImage {
-                    handle: in_tex,
-                    format: glow::RGBA8,
-                    size: LibrashaderSize {
-                        width: swapchain.width(),
-                        height: swapchain.height(),
-                    },
-                };
+            let mut shader_state = android_shader_state().lock();
+            if let (Some(state), Some(out_tex)) = (shader_state.as_mut(), shader_output_tex) {
+                if let Some(chain) = state.chain.as_mut() {
+                    let in_tex = NonZeroU32::new(textures[idx]).map(glow::NativeTexture);
+                    let input = LibrashaderGlImage {
+                        handle: in_tex,
+                        format: glow::RGBA8,
+                        size: LibrashaderSize {
+                            width: swapchain.width(),
+                            height: swapchain.height(),
+                        },
+                    };
 
-                let output = LibrashaderGlImage {
-                    handle: Some(out_tex),
-                    format: glow::RGBA8,
-                    size: shader_output_size,
-                };
+                    let output = LibrashaderGlImage {
+                        handle: Some(out_tex),
+                        format: glow::RGBA8,
+                        size: shader_output_size,
+                    };
 
-                let viewport =
-                    LibrashaderViewport::new_render_target_sized_origin(&output, None).unwrap();
+                    let viewport =
+                        LibrashaderViewport::new_render_target_sized_origin(&output, None).unwrap();
 
-                let frame_options = LibrashaderFrameOptions {
-                    frames_per_second: 60.0,
-                    frametime_delta: 17,
-                    ..Default::default()
-                };
+                    let frame_options = LibrashaderFrameOptions {
+                        frames_per_second: 60.0,
+                        frametime_delta: 17,
+                        ..Default::default()
+                    };
 
-                if let Err(e) =
-                    unsafe { chain.frame(&input, &viewport, frame_count, Some(&frame_options)) }
-                {
-                    tracing::error!("Shader frame failed: {e:?}");
-                } else {
-                    present_tex_id = out_tex.0.get();
+                    if let Err(e) =
+                        unsafe { chain.frame(&input, &viewport, frame_count, Some(&frame_options)) }
+                    {
+                        tracing::error!("Shader frame failed: {e:?}");
+                    } else {
+                        present_tex_id = out_tex.0.get();
+                    }
                 }
             }
         }

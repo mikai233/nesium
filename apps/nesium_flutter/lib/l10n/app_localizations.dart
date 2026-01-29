@@ -3127,6 +3127,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Proceed'**
   String get netplayProceed;
+
+  /// No description provided for @videoShaderParametersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shader Parameters'**
+  String get videoShaderParametersTitle;
+
+  /// No description provided for @videoShaderParametersSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust shader parameters in real-time'**
+  String get videoShaderParametersSubtitle;
 }
 
 class _AppLocalizationsDelegate

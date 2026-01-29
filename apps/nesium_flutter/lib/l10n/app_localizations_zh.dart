@@ -1621,4 +1621,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get netplayProceed => '继续';
+
+  @override
+  String get videoShaderParametersTitle => '着色器参数';
+
+  @override
+  String get videoShaderParametersSubtitle => '实时调整着色器参数';
 }
