@@ -102,39 +102,46 @@ class _KeyboardMappingInfoCardState
     // Proceeding with assuming it is available or I will fix it later.
     final pressedKeys = ref.watch(keyboardPressedKeysProvider).value ?? {};
 
-    return AnimatedSize(
+    return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        transitionBuilder: (Widget child, Animation<double> animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: SizeTransition(
-              sizeFactor: animation,
-              axisAlignment: -1.0,
-              child: child,
-            ),
-          );
-        },
-        child: settings.keyboardPreset == KeyboardPreset.none
-            ? const SizedBox.shrink()
-            : AnimatedSettingsCard(
-                key: const ValueKey('keyboard_mapping_card'),
-                index: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axisAlignment: -1.0,
+            child: child,
+          ),
+        );
+      },
+      child: settings.keyboardPreset == KeyboardPreset.none
+          ? const SizedBox.shrink()
+          : AnimatedSettingsCard(
+              key: const ValueKey('keyboard_mapping_card'),
+              index: 3,
+              animateSize: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      alignment: Alignment.topLeft,
+                      child: Wrap(
+                        spacing: 12, // Horizontal gap between items
+                        runSpacing: 8, // Vertical gap when wrapping
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        alignment: WrapAlignment.spaceBetween,
                         children: [
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                l10n.inputGamepadMappingLabel, // Use "Mapping" label for unification
+                                l10n.inputGamepadMappingLabel,
                                 style: Theme.of(context).textTheme.labelLarge
                                     ?.copyWith(
                                       color: Theme.of(
@@ -241,143 +248,143 @@ class _KeyboardMappingInfoCardState
                         ],
                       ),
                     ),
-                    const Divider(),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final action
-                              in KeyboardBindingAction.values.where(
-                                (a) => a.isCore,
-                              ))
-                            Builder(
-                              builder: (context) {
-                                final key = settings.bindingForAction(action);
-                                final conflict = key != null
-                                    ? inputState.findConflict(
-                                        key,
-                                        excludePort: widget.port,
-                                        excludeAction: action,
-                                      )
-                                    : null;
+                  ),
+                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final action in KeyboardBindingAction.values.where(
+                          (a) => a.isCore,
+                        ))
+                          Builder(
+                            builder: (context) {
+                              final key = settings.bindingForAction(action);
+                              final conflict = key != null
+                                  ? inputState.findConflict(
+                                      key,
+                                      excludePort: widget.port,
+                                      excludeAction: action,
+                                    )
+                                  : null;
 
-                                final isRemapping =
-                                    currentRemap?.action == action &&
-                                    currentRemap?.port == widget.port;
+                              final isRemapping =
+                                  currentRemap?.action == action &&
+                                  currentRemap?.port == widget.port;
 
-                                return SizedBox(
-                                  width: 155,
-                                  child: BindingPill(
-                                    label: SettingsUtils.actionLabel(
-                                      l10n,
-                                      action,
-                                    ),
-                                    buttonName: _keyLabel(l10n, key),
-                                    isPressed: pressedKeys.contains(key),
-                                    isRemapping: isRemapping,
-                                    isConflicted: conflict != null,
-                                    isEnabled: true,
-                                    conflictLabel:
-                                        (conflict != null &&
-                                            conflict.port != widget.port)
-                                        ? 'P${conflict.port + 1}'
-                                        : null,
-                                    onTap: () => _startRemapping(action),
-                                    onLongPress: () => inputController
-                                        .setCustomBinding(action, null),
-                                    icon: Icons.keyboard,
+                              return SizedBox(
+                                width: 155,
+                                child: BindingPill(
+                                  label: SettingsUtils.actionLabel(
+                                    l10n,
+                                    action,
                                   ),
-                                );
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                    const Divider(),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.keyboard_command_key,
-                            size: 16,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            l10n.globalHotkeysTitle,
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
+                                  buttonName: _keyLabel(l10n, key),
+                                  isPressed: pressedKeys.contains(key),
+                                  isRemapping: isRemapping,
+                                  isConflicted: conflict != null,
+                                  isEnabled: true,
+                                  conflictLabel:
+                                      (conflict != null &&
+                                          conflict.port != widget.port)
+                                      ? 'P${conflict.port + 1}'
+                                      : null,
+                                  onTap: () => _startRemapping(action),
+                                  onLongPress: () => inputController
+                                      .setCustomBinding(action, null),
+                                  icon: Icons.keyboard,
                                 ),
+                              );
+                            },
                           ),
-                        ],
-                      ),
+                      ],
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final action
-                              in KeyboardBindingAction.values.where((a) {
-                                if (!a.isExtended) return false;
-                                if (a == KeyboardBindingAction.fullScreen &&
-                                    !isNativeDesktop) {
-                                  return false;
-                                }
-                                return true;
-                              }))
-                            Builder(
-                              builder: (context) {
-                                final key = settings.bindingForAction(action);
-                                final conflict = key != null
-                                    ? inputState.findConflict(
-                                        key,
-                                        excludePort: widget.port,
-                                        excludeAction: action,
-                                      )
-                                    : null;
+                  ),
+                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.keyboard_command_key,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          l10n.globalHotkeysTitle,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final action in KeyboardBindingAction.values.where(
+                          (a) {
+                            if (!a.isExtended) return false;
+                            if (a == KeyboardBindingAction.fullScreen &&
+                                !isNativeDesktop) {
+                              return false;
+                            }
+                            return true;
+                          },
+                        ))
+                          Builder(
+                            builder: (context) {
+                              final key = settings.bindingForAction(action);
+                              final conflict = key != null
+                                  ? inputState.findConflict(
+                                      key,
+                                      excludePort: widget.port,
+                                      excludeAction: action,
+                                    )
+                                  : null;
 
-                                final isRemapping =
-                                    currentRemap?.action == action &&
-                                    currentRemap?.port == widget.port;
+                              final isRemapping =
+                                  currentRemap?.action == action &&
+                                  currentRemap?.port == widget.port;
 
-                                return SizedBox(
-                                  width: 155,
-                                  child: BindingPill(
-                                    label: SettingsUtils.actionLabel(
-                                      l10n,
-                                      action,
-                                    ),
-                                    buttonName: _keyLabel(l10n, key),
-                                    isPressed: pressedKeys.contains(key),
-                                    isRemapping: isRemapping,
-                                    isConflicted: conflict != null,
-                                    isEnabled: true,
-                                    conflictLabel:
-                                        (conflict != null &&
-                                            conflict.port != widget.port)
-                                        ? 'P${conflict.port + 1}'
-                                        : null,
-                                    onTap: () => _startRemapping(action),
-                                    onLongPress: () => inputController
-                                        .setCustomBinding(action, null),
-                                    icon: Icons.keyboard,
+                              return SizedBox(
+                                width: 155,
+                                child: BindingPill(
+                                  label: SettingsUtils.actionLabel(
+                                    l10n,
+                                    action,
                                   ),
-                                );
-                              },
-                            ),
-                        ],
-                      ),
+                                  buttonName: _keyLabel(l10n, key),
+                                  isPressed: pressedKeys.contains(key),
+                                  isRemapping: isRemapping,
+                                  isConflicted: conflict != null,
+                                  isEnabled: true,
+                                  conflictLabel:
+                                      (conflict != null &&
+                                          conflict.port != widget.port)
+                                      ? 'P${conflict.port + 1}'
+                                      : null,
+                                  onTap: () => _startRemapping(action),
+                                  onLongPress: () => inputController
+                                      .setCustomBinding(action, null),
+                                  icon: Icons.keyboard,
+                                ),
+                              );
+                            },
+                          ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-      ),
+            ),
     );
   }
 }
