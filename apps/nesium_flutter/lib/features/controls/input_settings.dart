@@ -445,8 +445,37 @@ class InputSettingsController extends Notifier<InputSettingsState> {
 
   void resetToDefault(int port) {
     ref.read(nesInputMasksProvider.notifier).clearAll();
+    final currentDevice = state.ports[port]?.device;
+    var newSettings = _defaults(port: port);
+
+    // Preserve the currently selected input device to avoid unintended mode switching
+    // (e.g., reverting to Virtual Controller after resetting Keyboard bindings).
+    if (currentDevice != null) {
+      // Ensure the reset configuration aligns with the active input device:
+      // - Keyboard: Revert to NES Standard preset.
+      // - Gamepad: Revert to default gamepad configuration (unassigned).
+      // - Virtual Controller: Revert to default on-screen controls.
+      //
+      // This is necessary because _defaults() may prioritize VirtualController on mobile platforms,
+      // potentially overriding the user's current device selection.
+      if (newSettings.device != currentDevice) {
+        newSettings = switch (currentDevice) {
+          InputDevice.keyboard => _defaults(port: port).copyWith(
+            device: InputDevice.keyboard,
+            keyboardPreset: KeyboardPreset.nesStandard,
+          ),
+          InputDevice.gamepad => newSettings.copyWith(
+            device: InputDevice.gamepad,
+          ),
+          InputDevice.virtualController => newSettings.copyWith(
+            device: InputDevice.virtualController,
+          ),
+        };
+      }
+    }
+
     final nextPorts = Map<int, InputSettings>.from(state.ports);
-    nextPorts[port] = _defaults(port: port);
+    nextPorts[port] = newSettings;
     state = state.copyWith(ports: nextPorts);
     _persist(state);
   }
