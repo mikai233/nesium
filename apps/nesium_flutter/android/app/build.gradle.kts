@@ -69,8 +69,7 @@ android {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String?
             keyPassword = keystoreProperties["keyPassword"] as String?
-            // Explicitly name the lambda parameter to avoid 'Unresolved reference: it' issues in some Gradle Kotlin DSL scopes
-            storeFile = file(keystoreProperties["storeFile"].toString())
+            storeFile = rootProject.file(keystoreProperties["storeFile"].toString())
             storePassword = keystoreProperties["storePassword"] as String?
         }
     }
