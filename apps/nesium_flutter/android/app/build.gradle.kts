@@ -59,8 +59,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-
-    aaptOptions {
+    androidResources {
         ignoreAssetsPattern = "!*.git:!.git"
     }
 }
