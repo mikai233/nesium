@@ -174,7 +174,9 @@ void main(List<String> args) async {
         for (final entity in entities) {
           if (entity is File) {
             final relPath = path.relative(entity.path, from: _destRoot);
-            await encoder.addFile(entity, relPath);
+            // Ensure ZIP entries use forward slashes for cross-platform compatibility
+            final zipEntryPath = relPath.replaceAll('\\', '/');
+            await encoder.addFile(entity, zipEntryPath);
           }
         }
       }
@@ -261,7 +263,10 @@ Future<void> _processDirectory(Directory dir, {bool recursive = true}) async {
         await _copyFile(entity.path);
 
         final ext = path.extension(entity.path).toLowerCase();
-        if (ext == '.slangp' || ext == '.slang' || ext == '.inc') {
+        if (ext == '.slangp' ||
+            ext == '.slang' ||
+            ext == '.inc' ||
+            ext == '.h') {
           await _parseDependencies(entity);
         }
       }
@@ -334,6 +339,7 @@ Future<void> _parseDependencies(File file) async {
             '.slang',
             '.slangp',
             '.inc',
+            '.h',
             '.png',
             '.jpg',
             '.jpeg',
@@ -396,7 +402,7 @@ Future<void> _resolveAndCopy(
       await _copyFile(targetPath);
 
       final ext = path.extension(targetPath).toLowerCase();
-      if (ext == '.slangp' || ext == '.slang' || ext == '.inc') {
+      if (ext == '.slangp' || ext == '.slang' || ext == '.inc' || ext == '.h') {
         await _parseDependencies(File(targetPath));
       }
     }
