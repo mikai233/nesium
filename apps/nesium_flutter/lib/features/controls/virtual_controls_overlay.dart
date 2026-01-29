@@ -1155,15 +1155,6 @@ _basePositions(
   const abClusterPad = 8.0; // Match 'pad' in _abClusterSize
   final dpadAlignmentOffset = abClusterPad - dpadInternalPad;
 
-  final dpadPos = Offset(
-    basePadding + safeInsets.left + dpadAlignmentOffset,
-    available.height -
-        dpadBaseSize.height -
-        basePadding -
-        verticalOffset -
-        safeInsets.bottom -
-        dpadAlignmentOffset,
-  );
   final buttonsPos = Offset(
     available.width - buttonsBaseSize.width - basePadding - safeInsets.right,
     available.height -
@@ -1171,6 +1162,13 @@ _basePositions(
         basePadding -
         verticalOffset -
         safeInsets.bottom,
+  );
+
+  // Align D-Pad visually with the buttons cluster by centering them vertically relative to each other.
+  final buttonsCenterY = buttonsPos.dy + buttonsBaseSize.height / 2;
+  final dpadPos = Offset(
+    basePadding + safeInsets.left + dpadAlignmentOffset,
+    buttonsCenterY - dpadBaseSize.height / 2,
   );
 
   final Offset selectPos;
