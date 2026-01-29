@@ -151,16 +151,30 @@ void main(List<String> args) async {
 
     try {
       final encoder = ZipFileEncoder();
+
+      // Ensure fresh zip
+      final zipFile = File(zipOutput);
+      if (zipFile.existsSync()) {
+        try {
+          zipFile.deleteSync();
+        } catch (e) {
+          logWarning('⚠️ Could not delete old ZIP: $e');
+        }
+      }
+
       encoder.create(zipOutput);
 
       // Add all files from _destRoot to the zip, but with relative paths
-      // This mimics "tar -C _destRoot -cf ... ."
       final destDir = Directory(_destRoot);
       if (destDir.existsSync()) {
-        await for (final entity in destDir.list(recursive: true)) {
+        final List<FileSystemEntity> entities = destDir.listSync(
+          recursive: true,
+        );
+        logInfo('📦 Zipping ${_copiedFiles.length} files...');
+        for (final entity in entities) {
           if (entity is File) {
             final relPath = path.relative(entity.path, from: _destRoot);
-            encoder.addFile(entity, relPath);
+            await encoder.addFile(entity, relPath);
           }
         }
       }
@@ -270,13 +284,16 @@ bool _shouldCopy(String filePath) {
 
 Future<void> _copyFile(String absSourcePath) async {
   // Normalize source path
-  absSourcePath = File(absSourcePath).absolute.path;
+  absSourcePath = path.normalize(File(absSourcePath).absolute.path);
+  final normalizedRoot = path.normalize(_sourceRoot);
 
   if (_copiedFiles.contains(absSourcePath)) return;
 
-  // Verify it's inside source root (simple check)
-  if (!absSourcePath.startsWith(_sourceRoot)) {
-    logWarning('⚠️ Skipping external file: $absSourcePath');
+  // Verify it's inside source root
+  if (!absSourcePath.toLowerCase().startsWith(normalizedRoot.toLowerCase())) {
+    logWarning(
+      '⚠️ Skipping external file: $absSourcePath (Root: $normalizedRoot)',
+    );
     return;
   }
 
