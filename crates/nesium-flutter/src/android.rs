@@ -40,6 +40,20 @@ pub enum AndroidVideoBackend {
 
 static VIDEO_BACKEND: AtomicI32 = AtomicI32::new(AndroidVideoBackend::AhbSwapchain as i32);
 
+/// Global flag indicating whether fast-forwarding is active.
+/// When true, the AHB swapchain skips GPU sync to allow faster emulation.
+static FAST_FORWARD_FLAG: AtomicBool = AtomicBool::new(false);
+
+/// Sets the fast-forward flag for the Android video backend.
+pub fn set_android_fast_forward_flag(enabled: bool) {
+    FAST_FORWARD_FLAG.store(enabled, Ordering::Release);
+}
+
+/// Returns true if fast-forwarding is currently active.
+fn is_fast_forwarding() -> bool {
+    FAST_FORWARD_FLAG.load(Ordering::Acquire)
+}
+
 pub fn use_ahb_video_backend() -> bool {
     VIDEO_BACKEND.load(Ordering::Acquire) == AndroidVideoBackend::AhbSwapchain as i32
 }
@@ -340,7 +354,10 @@ impl AhbSwapchain {
     fn lock_plane(&self, idx: usize) -> *mut u8 {
         let (buffer, fallback_ptr) = {
             let mut state = self.sync_mu.lock();
-            while state.resizing || state.gpu_busy[idx] {
+            // During fast-forward, skip GPU sync wait to allow faster emulation.
+            // Frames may be overwritten before the GPU renders them (dropped frames).
+            let skip_gpu_wait = is_fast_forwarding();
+            while state.resizing || (!skip_gpu_wait && state.gpu_busy[idx]) {
                 self.sync_cv.wait(&mut state);
             }
             state.cpu_locked[idx] = true;
