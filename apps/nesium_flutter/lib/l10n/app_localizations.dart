@@ -914,6 +914,18 @@ abstract class AppLocalizations {
   /// **'Reset layout'**
   String get virtualControlsReset;
 
+  /// No description provided for @virtualControlsDiscardChangesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo changes'**
+  String get virtualControlsDiscardChangesTitle;
+
+  /// No description provided for @virtualControlsDiscardChangesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert to last saved layout'**
+  String get virtualControlsDiscardChangesSubtitle;
+
   /// No description provided for @virtualControlsTurboFramesPerToggle.
   ///
   /// In en, this message translates to:
@@ -1861,6 +1873,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Screen vertical offset'**
   String get videoScreenVerticalOffset;
+
+  /// No description provided for @videoScreenVerticalOffsetPortraitOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only takes effect in portrait mode.'**
+  String get videoScreenVerticalOffsetPortraitOnly;
 
   /// No description provided for @videoAspectRatio.
   ///

@@ -51,6 +51,9 @@ pub fn set_rewinding(rewinding: bool) -> Result<(), String> {
 
 #[frb]
 pub fn set_fast_forwarding(fast_forwarding: bool) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    crate::android::set_android_fast_forward_flag(fast_forwarding);
+
     crate::runtime_handle()
         .set_fast_forwarding(fast_forwarding)
         .map_err(|e| e.to_string())
