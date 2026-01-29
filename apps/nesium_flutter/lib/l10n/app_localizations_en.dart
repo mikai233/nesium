@@ -461,6 +461,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get virtualControlsReset => 'Reset layout';
 
   @override
+  String get virtualControlsDiscardChangesTitle => 'Undo changes';
+
+  @override
+  String get virtualControlsDiscardChangesSubtitle =>
+      'Revert to last saved layout';
+
+  @override
   String get virtualControlsTurboFramesPerToggle => 'Turbo frames per toggle';
 
   @override
@@ -964,6 +971,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoScreenVerticalOffset => 'Screen vertical offset';
+
+  @override
+  String get videoScreenVerticalOffsetPortraitOnly =>
+      'Only takes effect in portrait mode.';
 
   @override
   String get videoAspectRatio => 'Aspect ratio';

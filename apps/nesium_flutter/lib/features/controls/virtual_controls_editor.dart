@@ -57,8 +57,13 @@ class VirtualControlsEditorController
       return;
     }
 
-    // Discard changes when disabling without saving.
-    state = state.copyWith(enabled: false, draft: null);
+    // Apply changes when disabling.
+    save();
+
+    // Ensure it's disabled even if save() skipped (e.g. draft was null).
+    if (state.enabled) {
+      state = state.copyWith(enabled: false, draft: null);
+    }
   }
 
   void save() {

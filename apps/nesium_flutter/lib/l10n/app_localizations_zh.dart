@@ -452,6 +452,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get virtualControlsReset => '重置布局';
 
   @override
+  String get virtualControlsDiscardChangesTitle => '撤销当前调整';
+
+  @override
+  String get virtualControlsDiscardChangesSubtitle => '还原到上次保存的布局';
+
+  @override
   String get virtualControlsTurboFramesPerToggle => '连发切换帧数';
 
   @override
@@ -951,6 +957,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoScreenVerticalOffset => '画面垂直偏移';
+
+  @override
+  String get videoScreenVerticalOffsetPortraitOnly => '仅在竖屏模式下生效。';
 
   @override
   String get videoAspectRatio => '画面比例';

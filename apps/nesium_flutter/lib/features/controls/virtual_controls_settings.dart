@@ -66,6 +66,10 @@ class VirtualControlsSettings {
     required this.landscapeRewindOffset,
     required this.portraitRewindScale,
     required this.landscapeRewindScale,
+    required this.portraitFastForwardOffset,
+    required this.landscapeFastForwardOffset,
+    required this.portraitFastForwardScale,
+    required this.landscapeFastForwardScale,
   });
 
   final double buttonSize;
@@ -119,6 +123,11 @@ class VirtualControlsSettings {
   final double portraitRewindScale;
   final double landscapeRewindScale;
 
+  final Offset portraitFastForwardOffset;
+  final Offset landscapeFastForwardOffset;
+  final double portraitFastForwardScale;
+  final double landscapeFastForwardScale;
+
   VirtualControlsSettings copyWith({
     double? buttonSize,
     double? gap,
@@ -167,6 +176,10 @@ class VirtualControlsSettings {
     Offset? landscapeRewindOffset,
     double? portraitRewindScale,
     double? landscapeRewindScale,
+    Offset? portraitFastForwardOffset,
+    Offset? landscapeFastForwardOffset,
+    double? portraitFastForwardScale,
+    double? landscapeFastForwardScale,
   }) {
     return VirtualControlsSettings(
       buttonSize: buttonSize ?? this.buttonSize,
@@ -225,6 +238,14 @@ class VirtualControlsSettings {
           landscapeRewindOffset ?? this.landscapeRewindOffset,
       portraitRewindScale: portraitRewindScale ?? this.portraitRewindScale,
       landscapeRewindScale: landscapeRewindScale ?? this.landscapeRewindScale,
+      portraitFastForwardOffset:
+          portraitFastForwardOffset ?? this.portraitFastForwardOffset,
+      landscapeFastForwardOffset:
+          landscapeFastForwardOffset ?? this.landscapeFastForwardOffset,
+      portraitFastForwardScale:
+          portraitFastForwardScale ?? this.portraitFastForwardScale,
+      landscapeFastForwardScale:
+          landscapeFastForwardScale ?? this.landscapeFastForwardScale,
     );
   }
 
@@ -276,6 +297,10 @@ class VirtualControlsSettings {
     landscapeRewindOffset: Offset.zero,
     portraitRewindScale: 1.0,
     landscapeRewindScale: 1.0,
+    portraitFastForwardOffset: Offset.zero,
+    landscapeFastForwardOffset: Offset.zero,
+    portraitFastForwardScale: 1.0,
+    landscapeFastForwardScale: 1.0,
   );
 }
 
@@ -360,6 +385,15 @@ class VirtualControlsSettingsController
   void setLandscapeRewindScale(double value) =>
       _set(state.copyWith(landscapeRewindScale: value));
 
+  void setPortraitFastForwardOffset(Offset value) =>
+      _set(state.copyWith(portraitFastForwardOffset: value));
+  void setLandscapeFastForwardOffset(Offset value) =>
+      _set(state.copyWith(landscapeFastForwardOffset: value));
+  void setPortraitFastForwardScale(double value) =>
+      _set(state.copyWith(portraitFastForwardScale: value));
+  void setLandscapeFastForwardScale(double value) =>
+      _set(state.copyWith(landscapeFastForwardScale: value));
+
   void resetToDefault() => _set(VirtualControlsSettings.defaults);
 
   void _set(VirtualControlsSettings next) {
@@ -435,6 +469,10 @@ Map<String, Object?> _virtualControlsToStorage(VirtualControlsSettings value) {
     'landscapeRewindOffset': offset(value.landscapeRewindOffset),
     'portraitRewindScale': value.portraitRewindScale,
     'landscapeRewindScale': value.landscapeRewindScale,
+    'portraitFastForwardOffset': offset(value.portraitFastForwardOffset),
+    'landscapeFastForwardOffset': offset(value.landscapeFastForwardOffset),
+    'portraitFastForwardScale': value.portraitFastForwardScale,
+    'landscapeFastForwardScale': value.landscapeFastForwardScale,
   };
 }
 
@@ -596,6 +634,22 @@ VirtualControlsSettings? _virtualControlsFromStorage(
     landscapeRewindScale: d(
       map['landscapeRewindScale'],
       defaults.landscapeRewindScale,
+    ),
+    portraitFastForwardOffset: o(
+      map['portraitFastForwardOffset'],
+      defaults.portraitFastForwardOffset,
+    ),
+    landscapeFastForwardOffset: o(
+      map['landscapeFastForwardOffset'],
+      defaults.landscapeFastForwardOffset,
+    ),
+    portraitFastForwardScale: d(
+      map['portraitFastForwardScale'],
+      defaults.portraitFastForwardScale,
+    ),
+    landscapeFastForwardScale: d(
+      map['landscapeFastForwardScale'],
+      defaults.landscapeFastForwardScale,
     ),
   );
 }
