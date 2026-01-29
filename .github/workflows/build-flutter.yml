@@ -416,6 +416,22 @@ jobs:
 
           pushd "$ROOT/apps/nesium_flutter" >/dev/null
 
+          # Decode Keystore and create key.properties if secrets are available
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Decoding Keystore..."
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/upload-keystore.jks
+            
+            echo "Creating key.properties..."
+            cat > android/key.properties <<EOF
+            storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
+            keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+            keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+            storeFile=upload-keystore.jks
+            EOF
+          else
+            echo "Warning: ANDROID_KEYSTORE_BASE64 secret is not set. Skipping release signing configuration."
+          fi
+
           # 1. Build Universal APK (FAT)
           flutter build apk --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nesium-universal.apk
