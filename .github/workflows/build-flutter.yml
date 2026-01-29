@@ -422,12 +422,10 @@ jobs:
             echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/upload-keystore.jks
             
             echo "Creating key.properties..."
-            cat > android/key.properties <<EOF
-            storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
-            keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-            keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-            storeFile=upload-keystore.jks
-            EOF
+            echo "storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}" > android/key.properties
+            echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> android/key.properties
+            echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> android/key.properties
+            echo "storeFile=upload-keystore.jks" >> android/key.properties
           else
             echo "Warning: ANDROID_KEYSTORE_BASE64 secret is not set. Skipping release signing configuration."
           fi
