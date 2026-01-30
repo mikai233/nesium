@@ -19,7 +19,7 @@ final class NesiumTexture: NSObject, FlutterTexture {
            let pb1 = NesiumTexture.makePixelBuffer(width: width, height: height) {
             self.pixelBuffers = [pb0, pb1]
         } else {
-            NSLog("NesiumTexture(iOS): failed to create CVPixelBuffer(s) for %dx%d", width, height)
+            NSLog("[Nesium] Failed to create CVPixelBuffers (%dx%d)", width, height)
         }
     }
 
@@ -81,7 +81,7 @@ final class NesiumTexture: NSObject, FlutterTexture {
 
         guard let pb0 = NesiumTexture.makePixelBuffer(width: width, height: height),
               let pb1 = NesiumTexture.makePixelBuffer(width: width, height: height) else {
-            NSLog("NesiumTexture(iOS): failed to resize CVPixelBuffer(s) to %dx%d", width, height)
+            NSLog("[Nesium] Failed to resize CVPixelBuffers to %dx%d", width, height)
             return
         }
 
