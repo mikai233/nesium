@@ -650,19 +650,16 @@ pub fn get_shader_parameters() -> ShaderParameters {
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
-        let state = crate::apple::SHADER_STATE.lock();
-        if let Some(state) = state.as_ref() {
-            current_path = state.path.clone();
-            for meta in state.parameters.iter() {
+        let session = crate::apple::session::SHADER_SESSION.load();
+        if let Some(session) = session.as_ref() {
+            current_path = session.path.clone();
+            let chain_guard = session.chain.lock();
+            for meta in session.parameters.iter() {
                 let name = &meta.id;
-                let current = if let Some(chain) = state.chain.as_ref() {
-                    chain
-                        .parameters()
-                        .parameter_value(name)
-                        .unwrap_or(meta.initial)
-                } else {
-                    meta.initial
-                };
+                let current = chain_guard
+                    .as_ref()
+                    .and_then(|c| c.parameters().parameter_value(name))
+                    .unwrap_or(meta.initial);
 
                 parameters.push(ShaderParameter {
                     name: name.to_string(),
@@ -712,11 +709,12 @@ pub fn set_shader_parameter(name: String, value: f32) {
         });
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    {
-        let state = crate::apple::SHADER_STATE.lock();
-        state
-            .as_ref()
-            .and_then(|s| s.chain.as_ref())
-            .map(|chain| chain.parameters().set_parameter_value(&name, value));
-    }
+    crate::apple::session::SHADER_SESSION
+        .load()
+        .as_ref()
+        .map(|session| {
+            session.chain.lock().as_mut().map(|chain| {
+                chain.parameters().set_parameter_value(&name, value);
+            });
+        });
 }
