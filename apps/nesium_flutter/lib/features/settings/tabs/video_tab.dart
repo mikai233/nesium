@@ -49,7 +49,7 @@ class VideoTab extends ConsumerWidget {
               ),
               const GpuShaderCard(),
               const ShaderSettingsCard(),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
             ],
           ),
         ),

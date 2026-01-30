@@ -13,30 +13,35 @@ class ShaderSettingsCard extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final paramsAsync = ref.watch(shaderParametersProvider);
 
-    if (!paramsAsync.hasValue || (paramsAsync.value?.isEmpty ?? true)) {
-      return const SizedBox.shrink();
-    }
+    final hasParams =
+        paramsAsync.hasValue && (paramsAsync.value?.isNotEmpty ?? false);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 1),
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          leading: const Icon(Icons.tune),
-          title: Text(l10n.videoShaderParametersTitle),
-          subtitle: Text(l10n.videoShaderParametersSubtitle),
-          trailing: const Icon(Icons.navigate_next),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const ShaderParametersPage(),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-      ],
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+      alignment: Alignment.topCenter,
+      child: hasParams
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 1),
+                ListTile(
+                  contentPadding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                  leading: const Icon(Icons.tune),
+                  title: Text(l10n.videoShaderParametersTitle),
+                  subtitle: Text(l10n.videoShaderParametersSubtitle),
+                  trailing: const Icon(Icons.navigate_next),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const ShaderParametersPage(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            )
+          : const SizedBox(width: double.infinity, height: 0),
     );
   }
 }
