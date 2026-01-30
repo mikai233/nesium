@@ -508,7 +508,7 @@ pub fn set_ntsc_bisqwit_options(options: NtscBisqwitOptions) -> Result<(), Strin
 pub fn set_shader_enabled(enabled: bool) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
-        crate::android::android_set_shader_enabled(enabled);
+        crate::android::session::android_set_shader_enabled(enabled);
         Ok(())
     }
 
@@ -548,7 +548,7 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
                 Some(trimmed.to_string())
             }
         });
-        crate::android::android_set_shader_preset_path(path);
+        crate::android::session::android_set_shader_preset_path(path);
         Ok(())
     }
 
@@ -598,19 +598,20 @@ pub fn get_shader_parameters() -> ShaderParameters {
 
     #[cfg(target_os = "android")]
     {
-        let state = crate::android::android_shader_state().lock();
-        if let Some(state) = state.as_ref() {
-            current_path = state.path.clone();
-            for meta in state.parameters.iter() {
+        use librashader::runtime::gl::FilterChain as LibrashaderFilterChain;
+        let session_guard = crate::android::session::ANDROID_SHADER_SESSION.load();
+        if let Some(session) = session_guard.as_ref() {
+            current_path = session.path.clone();
+            let chain_guard = session.chain.lock();
+            for meta in session.parameters.iter() {
                 let name = &meta.id;
                 parameters.push(ShaderParameter {
                     name: name.to_string(),
                     description: meta.description.clone(),
                     initial: meta.initial,
-                    current: state
-                        .chain
+                    current: chain_guard
                         .as_ref()
-                        .and_then(|c| c.parameters().parameter_value(name))
+                        .and_then(|c: &LibrashaderFilterChain| c.parameters().parameter_value(name))
                         .unwrap_or(meta.initial),
                     minimum: meta.minimum,
                     maximum: meta.maximum,
@@ -691,14 +692,16 @@ pub fn get_shader_parameters() -> ShaderParameters {
 #[frb]
 pub fn set_shader_parameter(name: String, value: f32) {
     #[cfg(target_os = "android")]
-    {
-        let state = crate::android::android_shader_state().lock();
-        state
-            .as_ref()
-            .and_then(|s| s.chain.as_ref())
-            .map(|chain| chain.parameters().set_parameter_value(&name, value));
-    }
+    crate::android::session::ANDROID_SHADER_SESSION
+        .load()
+        .as_ref()
+        .map(|s| {
+            s.chain.lock().as_mut().map(|chain| {
+                chain.parameters().set_parameter_value(&name, value);
+            });
+        });
 
+    #[cfg(target_os = "windows")]
     crate::windows::SHADER_SESSION
         .load()
         .as_ref()

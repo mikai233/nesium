@@ -90,10 +90,10 @@ fn ensure_runtime() -> &'static RuntimeHolder {
         #[cfg(target_os = "android")]
         let (runtime, video_backing) = if android::use_ahb_video_backend() {
             let mut video_cfg = video_cfg;
-            let swapchain = Arc::new(android::AhbSwapchain::new(
-                video_cfg.output_width,
-                video_cfg.output_height,
-            ));
+            let swapchain = Arc::new(
+                android::AhbSwapchain::new(video_cfg.output_width, video_cfg.output_height)
+                    .expect("failed to initialize AHB swapchain"),
+            );
             let user_data = Arc::as_ptr(&swapchain) as *mut c_void;
             video_cfg.backend = VideoBackendConfig::Swapchain {
                 lock: android::ahb_lock_plane,
