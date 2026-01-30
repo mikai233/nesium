@@ -19,6 +19,16 @@ class _ShaderBrowserPageState extends ConsumerState<ShaderBrowserPage> {
   bool _isSearching = false;
 
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      if (mounted) {
+        ref.read(shaderBrowserProvider.notifier).search('');
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
