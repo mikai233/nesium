@@ -1,5 +1,4 @@
 use flutter_rust_bridge::frb;
-use librashader::runtime::FilterChainParameters;
 use nesium_core::ppu::buffer::{NearestPostProcessor, VideoPostProcessor};
 use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use nesium_support::video::filters::NesNtscPostProcessor;
@@ -607,6 +606,7 @@ pub fn set_shader_parameter(name: String, value: f32) {
             .load()
             .as_ref()
             .map(|s| {
+                use librashader::runtime::FilterChainParameters as _;
                 s.chain.lock().as_mut().map(|chain| {
                     chain.parameters().set_parameter_value(&name, value);
                 });
@@ -625,6 +625,7 @@ pub fn set_shader_parameter(name: String, value: f32) {
             .load()
             .as_ref()
             .map(|session| {
+                use librashader::runtime::FilterChainParameters as _;
                 session.chain.lock().as_mut().map(|chain| {
                     chain.parameters().set_parameter_value(&name, value);
                 });
@@ -643,6 +644,7 @@ pub fn set_shader_parameter(name: String, value: f32) {
             .load()
             .as_ref()
             .map(|session| {
+                use librashader::runtime::FilterChainParameters as _;
                 session.chain.lock().as_mut().map(|chain| {
                     chain.parameters().set_parameter_value(&name, value);
                 });
