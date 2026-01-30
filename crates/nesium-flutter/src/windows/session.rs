@@ -149,8 +149,7 @@ pub async fn windows_set_shader_config(
         .to_string();
 
     if !changed {
-        let config = WINDOWS_SHADER_CONFIG.load();
-        let config = config.as_ref().ok_or("Config is missing")?;
+        let config = windows_shader_snapshot();
 
         let api_parameters = config
             .preparsed_preset
