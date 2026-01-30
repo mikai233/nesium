@@ -1630,4 +1630,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoShaderParametersReset => '重置参数';
+
+  @override
+  String get searchHint => '搜索...';
+
+  @override
+  String get searchTooltip => '搜索';
+
+  @override
+  String get noResults => '未找到匹配的参数';
 }

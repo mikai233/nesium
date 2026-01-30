@@ -92,9 +92,17 @@ class ShaderParameterNotifier
       final storage = ref.read(appStorageProvider);
       final service = ref.read(nesTextureServiceProvider);
       final List<video.ShaderParameter> updatedParams = [];
+      final seenNames = <String>{};
 
       for (final meta in parameters.parameters) {
         final name = meta.name;
+
+        // Deduplicate parameters. librashader may report the same parameter multiple times
+        // if it is used in multiple shader passes (e.g. in complex presets like CRT-Royale).
+        // We only want to show one control for each unique parameter name.
+        if (seenNames.contains(name)) continue;
+        seenNames.add(name);
+
         final storageKey = _getStorageKey(requestedPreset, name);
         final savedValue = storage.get(storageKey);
 

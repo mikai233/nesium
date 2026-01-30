@@ -820,5 +820,8 @@
   "netplayProceed": "Proceed",
   "videoShaderParametersTitle": "Shader Parameters",
   "videoShaderParametersSubtitle": "Adjust shader parameters in real-time",
-  "videoShaderParametersReset": "Reset Parameters"
+  "videoShaderParametersReset": "Reset Parameters",
+  "searchHint": "Search...",
+  "searchTooltip": "Search",
+  "noResults": "No matching parameters found"
 }

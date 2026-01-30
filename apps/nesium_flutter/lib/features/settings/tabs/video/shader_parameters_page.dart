@@ -6,24 +6,78 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../widgets/animated_settings_widgets.dart';
 import '../../shader_parameter_provider.dart';
 
-class ShaderParametersPage extends ConsumerWidget {
+class ShaderParametersPage extends ConsumerStatefulWidget {
   const ShaderParametersPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ShaderParametersPage> createState() =>
+      _ShaderParametersPageState();
+}
+
+class _ShaderParametersPageState extends ConsumerState<ShaderParametersPage> {
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final paramsAsync = ref.watch(shaderParametersProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.videoShaderParametersTitle),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: l10n.searchHint, // reusing search label or similar
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.toLowerCase();
+                  });
+                },
+              )
+            : Text(l10n.videoShaderParametersTitle),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: l10n.videoShaderParametersReset,
-            onPressed: () =>
-                ref.read(shaderParametersProvider.notifier).resetParameters(),
+            icon: Icon(_isSearching ? Icons.close : Icons.search),
+            tooltip: _isSearching ? l10n.cancel : l10n.searchTooltip,
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _isSearching = false;
+                  _searchQuery = '';
+                  _searchController.clear();
+                } else {
+                  _isSearching = true;
+                }
+              });
+            },
           ),
+          if (!_isSearching)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: l10n.videoShaderParametersReset,
+              onPressed: () =>
+                  ref.read(shaderParametersProvider.notifier).resetParameters(),
+            ),
         ],
       ),
       body: paramsAsync.when(
@@ -31,19 +85,33 @@ class ShaderParametersPage extends ConsumerWidget {
           if (params.isEmpty) {
             return Center(
               child: Text(
-                l10n.videoShaderPresetNotSet, // Or generic "No parameters"
+                l10n.videoShaderPresetNotSet,
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
             );
           }
 
+          final filteredParams = params.where((p) {
+            // Always show separators if we are not searching,
+            // or if we are searching, maybe only show them if they match?
+            // Simple approach: Filter strictly by content.
+            // If query is empty, show everything.
+            if (_searchQuery.isEmpty) return true;
+
+            final name = p.name.toLowerCase();
+            final desc = p.description.toLowerCase();
+            return name.contains(_searchQuery) || desc.contains(_searchQuery);
+          }).toList();
+
+          if (filteredParams.isEmpty) {
+            return Center(child: Text(l10n.noResults));
+          }
+
           return ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            itemCount: params.length,
+            itemCount: filteredParams.length,
             itemBuilder: (context, index) {
-              final p = params[index];
-              // Detect separators/headings: parameters where min == max are usually
-              // used as labels in librashader/RetroArch shader presets.
+              final p = filteredParams[index];
               final bool isSeparator = (p.minimum - p.maximum).abs() < 0.0001;
 
               if (isSeparator) {
@@ -75,7 +143,11 @@ class ShaderParametersPage extends ConsumerWidget {
                   horizontal: 16,
                   vertical: 4,
                 ),
-                child: _ShaderParameterSlider(parameter: p),
+                child: _ShaderParameterSlider(
+                  // Key is important if the list changes order/filtering
+                  key: ValueKey(p.name),
+                  parameter: p,
+                ),
               );
             },
           );
@@ -88,7 +160,7 @@ class ShaderParametersPage extends ConsumerWidget {
 }
 
 class _ShaderParameterSlider extends ConsumerStatefulWidget {
-  const _ShaderParameterSlider({required this.parameter});
+  const _ShaderParameterSlider({super.key, required this.parameter});
 
   final video.ShaderParameter parameter;
 

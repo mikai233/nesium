@@ -1654,4 +1654,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoShaderParametersReset => 'Reset Parameters';
+
+  @override
+  String get searchHint => 'Search...';
+
+  @override
+  String get searchTooltip => 'Search';
+
+  @override
+  String get noResults => 'No matching parameters found';
 }

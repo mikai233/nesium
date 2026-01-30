@@ -3145,6 +3145,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reset Parameters'**
   String get videoShaderParametersReset;
+
+  /// No description provided for @searchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search...'**
+  String get searchHint;
+
+  /// No description provided for @searchTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchTooltip;
+
+  /// No description provided for @noResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching parameters found'**
+  String get noResults;
 }
 
 class _AppLocalizationsDelegate
