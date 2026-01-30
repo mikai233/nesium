@@ -154,8 +154,7 @@ pub async fn apple_set_shader_config(
         .to_string();
 
     if !changed {
-        let config = APPLE_SHADER_CONFIG.load();
-        let config = config.as_ref().ok_or("Config is missing")?;
+        let config = apple_shader_snapshot();
 
         let api_parameters = config
             .preparsed_preset
