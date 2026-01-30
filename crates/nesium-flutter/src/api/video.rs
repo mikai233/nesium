@@ -622,22 +622,17 @@ pub fn get_shader_parameters() -> ShaderParameters {
 
     #[cfg(target_os = "windows")]
     {
-        let state = crate::windows::SHADER_STATE.load();
-        if let Some(state) = state.as_ref() {
-            current_path = state.path.clone();
-            for meta in state.parameters.iter() {
+        let session = crate::windows::SHADER_SESSION.load();
+        if let Some(session) = session.as_ref() {
+            current_path = session.path.clone();
+            for meta in session.parameters.iter() {
                 let name = &meta.id;
-                let current = {
-                    let chain = state.chain.lock();
-                    if let Some(chain) = chain.as_ref() {
-                        chain
-                            .parameters()
-                            .parameter_value(name)
-                            .unwrap_or(meta.initial)
-                    } else {
-                        meta.initial
-                    }
-                };
+                let current = session
+                    .chain
+                    .lock()
+                    .as_ref()
+                    .and_then(|c| c.parameters().parameter_value(name))
+                    .unwrap_or(meta.initial);
 
                 parameters.push(ShaderParameter {
                     name: name.to_string(),
@@ -704,16 +699,14 @@ pub fn set_shader_parameter(name: String, value: f32) {
             .map(|chain| chain.parameters().set_parameter_value(&name, value));
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        let state = crate::windows::SHADER_STATE.load();
-        if let Some(state) = state.as_ref() {
-            let mut chain = state.chain.lock();
-            if let Some(chain) = chain.as_mut() {
+    crate::windows::SHADER_SESSION
+        .load()
+        .as_ref()
+        .map(|session| {
+            session.chain.lock().as_mut().map(|chain| {
                 chain.parameters().set_parameter_value(&name, value);
-            }
-        }
-    }
+            });
+        });
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
