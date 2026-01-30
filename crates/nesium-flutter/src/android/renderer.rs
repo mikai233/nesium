@@ -1,10 +1,12 @@
-use librashader::runtime::Size as LibrashaderSize;
-use librashader::runtime::Viewport as LibrashaderViewport;
-use librashader::runtime::gl::FilterChainOptions as LibrashaderFilterChainOptions;
 use librashader::runtime::gl::FrameOptions as LibrashaderFrameOptions;
 use librashader::runtime::gl::GLImage as LibrashaderGlImage;
+use librashader::runtime::gl::{
+    FilterChain as LibrashaderFilterChain, FilterChainOptions as LibrashaderFilterChainOptions,
+};
+use librashader::runtime::{
+    FilterChainParameters as _, Size as LibrashaderSize, Viewport as LibrashaderViewport,
+};
 
-use crate::api::video::{ShaderParameter, ShaderParameters};
 use crate::runtime_handle;
 use glow::HasContext;
 use std::num::NonZeroU32;
@@ -18,8 +20,9 @@ use std::time::Duration;
 
 use super::ahb::{AhbSwapchain, GpuBusyGuard, release_buffers};
 use super::gles::*;
-use super::session::{
-    ANDROID_SHADER_SESSION, PENDING_SHADER_DATA, ShaderSession, android_shader_snapshot,
+use crate::android::session::{
+    ANDROID_SHADER_CONFIG, ANDROID_SHADER_SESSION, AndroidShaderConfig, ShaderSession,
+    android_shader_snapshot,
 };
 
 pub struct RustRendererHandle {
@@ -740,98 +743,52 @@ impl GlesRenderer {
     fn update_shader_state(&mut self, surf_w: u32, surf_h: u32) -> Result<(), String> {
         let cfg = android_shader_snapshot();
         if cfg.generation != self.shader_seen_generation {
-            let mut final_result: Option<Result<ShaderParameters, String>> = None;
-
-            if !cfg.enabled || cfg.preset_path.is_none() {
-                // Disabling or clearing doesn't require background parsing
+            if !cfg.enabled {
+                // Clear shader
                 self.shader_seen_generation = cfg.generation;
                 ANDROID_SHADER_SESSION.store(None);
-                final_result = Some(Ok(ShaderParameters {
-                    path: String::new(),
-                    parameters: Vec::new(),
-                }));
-            } else {
-                // Check if background parsing is complete for this generation
-                let pending_guard = PENDING_SHADER_DATA.load();
-                if let Some(pending) = &*pending_guard {
-                    if pending.generation == cfg.generation {
-                        // IO and Preprocessing done in background, now do GL resource creation
-                        self.shader_seen_generation = cfg.generation;
-                        ANDROID_SHADER_SESSION.store(None);
+            } else if let Some(preset) = &cfg.preparsed_preset {
+                // Pre-parsed preset is available (from UI thread parsing)
+                self.shader_seen_generation = cfg.generation;
+                ANDROID_SHADER_SESSION.store(None);
 
-                        let shader_chain_options = LibrashaderFilterChainOptions {
-                            glsl_version: 0,
-                            use_dsa: false,
-                            force_no_mipmaps: false,
-                            disable_cache: true,
-                        };
+                let shader_chain_options = LibrashaderFilterChainOptions {
+                    glsl_version: 0,
+                    use_dsa: false,
+                    force_no_mipmaps: false,
+                    disable_cache: true,
+                };
 
-                        // We take the preset out of pending by clearing it if we are the ones who use it?
-                        // Actually, it's simpler to just use it and let it be replaced by next request.
-                        // But we should probably clear it to avoid using it again (though generation check protects us).
-                        let path = cfg.preset_path.unwrap();
-                        match super::chain::load_from_parsed_preset(
-                            &self.glow_ctx,
-                            pending.preset.clone(),
-                            &shader_chain_options,
-                        ) {
-                            Ok(chain) => {
-                                tracing::info!("Android shader chain loaded from {}", path);
-                                let mut api_parameters = Vec::new();
-                                for meta in pending.parameters.iter() {
-                                    api_parameters.push(ShaderParameter {
-                                        name: meta.id.to_string(),
-                                        description: meta.description.clone(),
-                                        initial: meta.initial,
-                                        current: meta.initial,
-                                        minimum: meta.minimum,
-                                        maximum: meta.maximum,
-                                        step: meta.step,
-                                    });
-                                }
+                let path = cfg.preset_path.clone().unwrap_or_else(|| {
+                    crate::android::passthrough::get_passthrough_preset()
+                        .to_string_lossy()
+                        .to_string()
+                });
 
-                                let parameters = ShaderParameters {
-                                    path: path.clone(),
-                                    parameters: api_parameters,
-                                };
+                match super::chain::load_from_parsed_preset(
+                    &self.glow_ctx,
+                    preset.clone(),
+                    &shader_chain_options,
+                ) {
+                    Ok(chain) => {
+                        tracing::info!("Android shader chain loaded from {}", path);
 
-                                ANDROID_SHADER_SESSION.store(Some(Arc::new(ShaderSession {
-                                    chain: Mutex::new(Some(chain)),
-                                    parameters: pending.parameters.clone(),
-                                    path,
-                                })));
-                                final_result = Some(Ok(parameters));
-                            }
-                            Err(e) => {
-                                tracing::error!(
-                                    "Failed to load GL shader chain from preset: {}",
-                                    e
-                                );
-                                final_result = Some(Err(e));
-                            }
+                        // Apply parameter overrides
+                        for (name, value) in &cfg.parameters {
+                            chain.parameters().set_parameter_value(name, *value);
                         }
-                    } else if pending.generation > cfg.generation {
-                        // Should not happen normally, but if it does, we must have missed a generation.
-                        // We reset and wait for a matching or newer one.
-                        self.shader_seen_generation = cfg.generation;
-                    } else {
-                        // Background parsing still in progress for current or older generation.
-                        // Just wait for next loop/wake.
-                        return Ok(());
-                    }
-                } else {
-                    // Background parsing hasn't stored anything yet.
-                    // Just wait for next loop/wake.
-                    return Ok(());
-                }
-            }
 
-            // If we have a final result (success or definitive failure), fulfill pending async requests
-            if let Some(res) = final_result {
-                let mut channels = super::session::RELOAD_CHANNELS.lock();
-                while let Some(tx) = channels.pop_front() {
-                    let _ = tx.send(res.clone());
+                        ANDROID_SHADER_SESSION.store(Some(Arc::new(ShaderSession {
+                            chain: Mutex::new(Some(chain)),
+                        })));
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to load Android shader chain: {}", e);
+                    }
                 }
+            } else {
+                // Pre-parsed preset not available yet (background thread still working)
+                return Ok(());
             }
         }
 

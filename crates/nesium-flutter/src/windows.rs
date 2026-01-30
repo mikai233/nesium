@@ -11,13 +11,15 @@ use librashader::runtime::Size as LibrashaderSize;
 use librashader::runtime::Viewport as LibrashaderViewport;
 use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11DeviceContext, ID3D11Resource};
 
-use chain::{reload_shader_chain, render_shader_frame};
-use passthrough::get_passthrough_preset;
-use session::{FRAME_COUNT, windows_shader_snapshot};
+use chain::render_shader_frame;
+use session::FRAME_COUNT;
 use utils::{log_hresult_context, validate_resource_device};
 
 // Re-export state functions and state for api/video.rs
-pub use session::{SHADER_SESSION, windows_set_shader_config, windows_set_shader_preset_path};
+pub use session::{
+    SHADER_SESSION, WINDOWS_SHADER_CONFIG, windows_set_shader_config,
+    windows_set_shader_preset_path,
+};
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nesium_apply_shader(
@@ -31,13 +33,6 @@ pub unsafe extern "C" fn nesium_apply_shader(
     dst_height: u32,
 ) -> bool {
     let result = std::panic::catch_unwind(|| {
-        let cfg = windows_shader_snapshot();
-        let effective_path = if cfg.enabled && cfg.preset_path.is_some() {
-            cfg.preset_path.clone().unwrap()
-        } else {
-            get_passthrough_preset().to_string_lossy().to_string()
-        };
-
         if input_tex.is_null() || output_tex.is_null() || device.is_null() || context.is_null() {
             tracing::error!("nesium_apply_shader: null ptr(s)");
             return false;
@@ -48,34 +43,8 @@ pub unsafe extern "C" fn nesium_apply_shader(
             return false;
         }
 
-        let current_session = SHADER_SESSION.load();
-
         session::LAST_DEVICE_ADDR.store(device as usize, Ordering::Release);
-
-        let needs_reload_gen = match &*current_session {
-            Some(session) => session.generation != cfg.generation,
-            None => true,
-        };
-        let needs_reload_device = match &*current_session {
-            Some(session) => session.device_addr != device as usize,
-            None => false,
-        };
-
-        let loading_gen = session::LOADING_GENERATION.load(Ordering::Acquire);
-        if needs_reload_device
-            || (needs_reload_gen
-                && loading_gen != cfg.generation
-                && session::LOADING_GENERATION
-                    .compare_exchange(
-                        loading_gen,
-                        cfg.generation,
-                        Ordering::SeqCst,
-                        Ordering::SeqCst,
-                    )
-                    .is_ok())
-        {
-            reload_shader_chain(&effective_path, device, cfg.generation);
-        }
+        session::try_trigger_reload(device as usize);
 
         // Re-load session after potential reload
         let current_session = SHADER_SESSION.load();

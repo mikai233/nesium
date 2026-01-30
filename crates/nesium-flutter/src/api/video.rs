@@ -596,32 +596,56 @@ pub async fn set_shader_config(
 #[frb]
 pub fn set_shader_parameter(name: String, value: f32) {
     #[cfg(target_os = "android")]
-    crate::android::session::ANDROID_SHADER_SESSION
-        .load()
-        .as_ref()
-        .map(|s| {
-            s.chain.lock().as_mut().map(|chain| {
-                chain.parameters().set_parameter_value(&name, value);
-            });
+    {
+        crate::android::session::ANDROID_SHADER_CONFIG.rcu(|old| {
+            let mut new = old.as_ref()?.as_ref().clone();
+            new.parameters.insert(name.clone(), value);
+            Some(std::sync::Arc::new(new))
         });
+
+        crate::android::session::ANDROID_SHADER_SESSION
+            .load()
+            .as_ref()
+            .map(|s| {
+                s.chain.lock().as_mut().map(|chain| {
+                    chain.parameters().set_parameter_value(&name, value);
+                });
+            });
+    }
 
     #[cfg(target_os = "windows")]
-    crate::windows::SHADER_SESSION
-        .load()
-        .as_ref()
-        .map(|session| {
-            session.chain.lock().as_mut().map(|chain| {
-                chain.parameters().set_parameter_value(&name, value);
-            });
+    {
+        crate::windows::WINDOWS_SHADER_CONFIG.rcu(|old| {
+            let mut new = old.as_ref()?.as_ref().clone();
+            new.parameters.insert(name.clone(), value);
+            Some(std::sync::Arc::new(new))
         });
 
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    crate::apple::session::SHADER_SESSION
-        .load()
-        .as_ref()
-        .map(|session| {
-            session.chain.lock().as_mut().map(|chain| {
-                chain.parameters().set_parameter_value(&name, value);
+        crate::windows::SHADER_SESSION
+            .load()
+            .as_ref()
+            .map(|session| {
+                session.chain.lock().as_mut().map(|chain| {
+                    chain.parameters().set_parameter_value(&name, value);
+                });
             });
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        crate::apple::session::APPLE_SHADER_CONFIG.rcu(|old| {
+            let mut new = old.as_ref()?.as_ref().clone();
+            new.parameters.insert(name.clone(), value);
+            Some(std::sync::Arc::new(new))
         });
+
+        crate::apple::session::SHADER_SESSION
+            .load()
+            .as_ref()
+            .map(|session| {
+                session.chain.lock().as_mut().map(|chain| {
+                    chain.parameters().set_parameter_value(&name, value);
+                });
+            });
+    }
 }

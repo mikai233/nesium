@@ -5,9 +5,8 @@ pub mod session;
 use std::ffi::c_void;
 use std::sync::atomic::Ordering;
 
-use chain::{reload_shader_chain, render_shader_frame};
-use passthrough::get_passthrough_preset;
-use session::{FRAME_COUNT, LOADING_GENERATION, SHADER_SESSION, apple_shader_snapshot};
+use chain::render_shader_frame;
+use session::{FRAME_COUNT, SHADER_SESSION};
 
 // Re-export state functions and state for api/video.rs
 pub use session::{apple_set_shader_config, apple_set_shader_preset_path};
@@ -25,13 +24,6 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
     dst_height: u32,
 ) -> bool {
     let result = std::panic::catch_unwind(|| {
-        let cfg = apple_shader_snapshot();
-        let effective_path = if cfg.enabled && cfg.preset_path.is_some() {
-            cfg.preset_path.clone().unwrap()
-        } else {
-            get_passthrough_preset().to_string_lossy().to_string()
-        };
-
         if input_tex_ptr.is_null() || output_tex_ptr.is_null() {
             return false;
         }
@@ -42,38 +34,8 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
             return false;
         }
 
-        let current_session = SHADER_SESSION.load();
-        let loading_gen = LOADING_GENERATION.load(Ordering::Acquire);
-
-        let needs_reload_gen = match &*current_session {
-            Some(session) => session.generation != cfg.generation,
-            None => true,
-        };
-        let needs_reload_device = match &*current_session {
-            Some(session) => session.device_addr != device_ptr as usize,
-            None => false,
-        };
-
-        let loading_gen = LOADING_GENERATION.load(Ordering::Acquire);
-        if needs_reload_device
-            || (needs_reload_gen
-                && loading_gen != cfg.generation
-                && LOADING_GENERATION
-                    .compare_exchange(
-                        loading_gen,
-                        cfg.generation,
-                        Ordering::SeqCst,
-                        Ordering::SeqCst,
-                    )
-                    .is_ok())
-        {
-            reload_shader_chain(
-                effective_path,
-                device_ptr,
-                command_queue_ptr,
-                cfg.generation,
-            );
-        }
+        session::LAST_DEVICE_ADDR.store(device_ptr as usize, Ordering::Release);
+        session::try_trigger_reload(device_ptr, command_queue_ptr);
 
         // Re-load session after potential reload
         let current_session = SHADER_SESSION.load();

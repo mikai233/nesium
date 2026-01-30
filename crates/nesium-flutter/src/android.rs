@@ -1,6 +1,7 @@
 pub(crate) mod ahb;
 pub(crate) mod chain;
 pub(crate) mod gles;
+pub(crate) mod passthrough;
 mod renderer;
 pub mod session;
 

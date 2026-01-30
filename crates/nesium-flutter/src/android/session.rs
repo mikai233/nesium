@@ -3,9 +3,8 @@ use arc_swap::ArcSwapOption;
 use librashader::presets::ShaderPreset;
 use librashader::runtime::gl::FilterChain as LibrashaderFilterChain;
 use parking_lot::Mutex;
-use std::collections::VecDeque;
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::oneshot;
 
 use super::renderer::rust_renderer_wake;
 
@@ -14,34 +13,35 @@ pub struct AndroidShaderConfig {
     pub enabled: bool,
     pub preset_path: Option<String>,
     pub generation: u64,
+    pub preparsed_preset: Option<ShaderPreset>,
+    pub parameters: HashMap<String, f32>,
+}
+
+impl Default for AndroidShaderConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            preset_path: None,
+            generation: 1,
+            preparsed_preset: None,
+            parameters: HashMap::new(),
+        }
+    }
 }
 
 pub struct ShaderSession {
     pub chain: Mutex<Option<LibrashaderFilterChain>>,
-    pub parameters: Vec<librashader::preprocess::ShaderParameter>,
-    pub path: String,
-}
-
-pub struct PendingShaderData {
-    pub preset: ShaderPreset,
-    pub parameters: Vec<librashader::preprocess::ShaderParameter>,
-    pub generation: u64,
 }
 
 pub static ANDROID_SHADER_CONFIG: ArcSwapOption<AndroidShaderConfig> = ArcSwapOption::const_empty();
 pub static ANDROID_SHADER_SESSION: ArcSwapOption<ShaderSession> = ArcSwapOption::const_empty();
-pub static PENDING_SHADER_DATA: ArcSwapOption<PendingShaderData> = ArcSwapOption::const_empty();
 
 pub fn android_shader_snapshot() -> AndroidShaderConfig {
     let guard = ANDROID_SHADER_CONFIG.load();
     if let Some(arc) = &*guard {
         (**arc).clone()
     } else {
-        AndroidShaderConfig {
-            enabled: false,
-            preset_path: None,
-            generation: 1,
-        }
+        AndroidShaderConfig::default()
     }
 }
 
@@ -55,8 +55,6 @@ pub async fn android_set_shader_config(
     enabled: bool,
     path: Option<String>,
 ) -> Result<ShaderParameters, String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-
     let mut new_gen = 0;
     let mut changed = false;
 
@@ -64,16 +62,9 @@ pub async fn android_set_shader_config(
         let mut new = old
             .as_ref()
             .map(|a| (**a).clone())
-            .unwrap_or(AndroidShaderConfig {
-                enabled: false,
-                preset_path: None,
-                generation: 1,
-            });
+            .unwrap_or(AndroidShaderConfig::default());
 
-        let mut target_path = path.clone();
-        if target_path.is_none() && path.is_none() {
-            target_path = new.preset_path.clone();
-        }
+        let target_path = path.clone().or_else(|| new.preset_path.clone());
 
         if new.enabled == enabled && new.preset_path == target_path {
             changed = false;
@@ -83,76 +74,69 @@ pub async fn android_set_shader_config(
             new.enabled = enabled;
             new.preset_path = target_path;
             new.generation = new.generation.wrapping_add(1);
+            new.preparsed_preset = None; // Avoid race condition with old preset
+            new.parameters.clear(); // Path changed, clear overrides
             new_gen = new.generation;
             Some(Arc::new(new))
         }
     });
 
-    if !changed {
-        if let Some(session) = &*ANDROID_SHADER_SESSION.load() {
-            let api_parameters = session
-                .parameters
-                .iter()
-                .map(|meta| crate::api::video::ShaderParameter {
-                    name: meta.id.to_string(),
-                    description: meta.description.clone(),
-                    initial: meta.initial,
-                    current: meta.initial,
-                    minimum: meta.minimum,
-                    maximum: meta.maximum,
-                    step: meta.step,
-                })
-                .collect();
+    let passthrough_path = crate::android::passthrough::get_passthrough_preset()
+        .to_string_lossy()
+        .to_string();
 
-            return Ok(ShaderParameters {
-                path: session.path.clone(),
-                parameters: api_parameters,
-            });
-        }
+    if !changed {
+        let config = android_shader_snapshot();
+
+        let api_parameters = config
+            .preparsed_preset
+            .as_ref()
+            .map(|p| crate::shader_utils::map_parameters(p))
+            .transpose()?
+            .unwrap_or_default();
+
+        let effective_path = crate::shader_utils::get_effective_path(
+            config.enabled,
+            config.preset_path.clone(),
+            passthrough_path,
+        );
+
         return Ok(ShaderParameters {
-            path: String::new(),
-            parameters: Vec::new(),
+            path: effective_path,
+            parameters: api_parameters,
         });
     }
 
-    RELOAD_CHANNELS.lock().push_back(tx);
+    // Unified Pull Model logic:
+    let config_snapshot = android_shader_snapshot();
+    let effective_path = crate::shader_utils::get_effective_path(
+        config_snapshot.enabled,
+        config_snapshot.preset_path.clone(),
+        passthrough_path,
+    );
 
-    let config = android_shader_snapshot();
-    match config.preset_path {
-        Some(p) if config.enabled => {
-            std::thread::spawn(move || {
-                tracing::info!(
-                    "Reloading Android GLES shader chain (async, path={}, generation={})",
-                    p,
-                    new_gen
-                );
-                let features = librashader::presets::ShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
-                    | librashader::presets::ShaderFeatures::FRAMETIME_UNIFORMS;
+    let rx = crate::shader_utils::preparse_preset(effective_path.clone());
+    let (preset, api_parameters) = rx
+        .await
+        .map_err(|e| format!("Join error: {:?}", e))?
+        .map_err(|e| format!("Parse error: {:?}", e))?;
 
-                match super::chain::parse_preset(&p, features) {
-                    Ok((preset, parameters)) => {
-                        PENDING_SHADER_DATA.store(Some(Arc::new(PendingShaderData {
-                            preset,
-                            parameters,
-                            generation: new_gen,
-                        })));
-                        rust_renderer_wake();
-                    }
-                    Err(e) => {
-                        tracing::error!("Background shader parsing failed: {}", e);
-                        rust_renderer_wake();
-                    }
-                }
-            });
+    // Update config with preparsed preset
+    ANDROID_SHADER_CONFIG.rcu(|old| {
+        let mut new = old.as_ref()?.as_ref().clone();
+        if new.generation == new_gen {
+            new.preparsed_preset = Some(preset.clone());
+            Some(Arc::new(new))
+        } else {
+            None
         }
-        _ => {
-            rust_renderer_wake();
-        }
-    }
+    });
 
-    rx.await
-        .map_err(|e| format!("Reload task cancelled: {:?}", e))?
+    // Wake the renderer to pick up the change
+    rust_renderer_wake();
+
+    Ok(ShaderParameters {
+        path: effective_path,
+        parameters: api_parameters,
+    })
 }
-
-pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
-    Mutex::new(VecDeque::new());

@@ -1,20 +1,36 @@
 use crate::api::video::ShaderParameters;
 use arc_swap::ArcSwapOption;
-use librashader::preprocess::ShaderParameter;
+use librashader::presets::ShaderPreset;
 use librashader::runtime::mtl::FilterChain as LibrashaderFilterChain;
 use parking_lot::Mutex;
-use std::collections::VecDeque;
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize};
-use tokio::sync::oneshot;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-pub static LOADING_GENERATION: AtomicU64 = AtomicU64::new(0);
+/// Tracks the generation currently being loaded or already active in renderer.
+pub static ACTIVE_GENERATION: AtomicU64 = AtomicU64::new(0);
+pub static ACTIVE_DEVICE_ADDR: AtomicUsize = AtomicUsize::new(0);
+pub static LAST_DEVICE_ADDR: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Clone)]
 pub struct AppleShaderConfig {
     pub enabled: bool,
     pub preset_path: Option<String>,
     pub generation: u64,
+    pub preparsed_preset: Option<ShaderPreset>,
+    pub parameters: HashMap<String, f32>,
+}
+
+impl Default for AppleShaderConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            preset_path: None,
+            generation: 1,
+            preparsed_preset: None,
+            parameters: HashMap::new(),
+        }
+    }
 }
 
 pub static APPLE_SHADER_CONFIG: ArcSwapOption<AppleShaderConfig> = ArcSwapOption::const_empty();
@@ -23,8 +39,6 @@ pub struct ShaderSession {
     pub(crate) chain: Mutex<Option<LibrashaderFilterChain>>,
     pub(crate) generation: u64,
     pub(crate) device_addr: usize,
-    pub(crate) parameters: Vec<ShaderParameter>,
-    pub(crate) path: String,
 }
 
 // SAFETY:
@@ -43,11 +57,7 @@ pub fn apple_shader_snapshot() -> AppleShaderConfig {
     if let Some(arc) = &*guard {
         (**arc).clone()
     } else {
-        AppleShaderConfig {
-            enabled: false,
-            preset_path: None,
-            generation: 1,
-        }
+        AppleShaderConfig::default()
     }
 }
 
@@ -57,28 +67,63 @@ pub async fn apple_set_shader_preset_path(
     apple_set_shader_config(true, path).await
 }
 
+/// Attempts to trigger a reload if the desired configuration or device differs from active.
+pub fn try_trigger_reload(device_ptr: *mut c_void, command_queue_ptr: *mut c_void) -> bool {
+    let cfg = apple_shader_snapshot();
+    let active_gen = ACTIVE_GENERATION.load(Ordering::Acquire);
+    let active_device = ACTIVE_DEVICE_ADDR.load(Ordering::Acquire);
+
+    let needs_reload_gen = active_gen != cfg.generation;
+    let needs_reload_device = active_device != device_ptr as usize;
+
+    if needs_reload_gen || needs_reload_device {
+        if ACTIVE_GENERATION
+            .compare_exchange(
+                active_gen,
+                cfg.generation,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .is_ok()
+        {
+            ACTIVE_DEVICE_ADDR.store(device_ptr as usize, Ordering::Release);
+
+            let effective_path = if cfg.enabled && cfg.preset_path.is_some() {
+                cfg.preset_path.clone().unwrap()
+            } else {
+                crate::apple::passthrough::get_passthrough_preset()
+                    .to_string_lossy()
+                    .to_string()
+            };
+
+            super::chain::reload_shader_chain(
+                effective_path,
+                device_ptr,
+                command_queue_ptr,
+                cfg.generation,
+                cfg.preparsed_preset.clone(),
+                cfg.parameters.clone(),
+            );
+            return true;
+        }
+    }
+    false
+}
+
 pub async fn apple_set_shader_config(
     enabled: bool,
     path: Option<String>,
 ) -> Result<ShaderParameters, String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-
+    let mut new_gen = 0;
     let mut changed = false;
 
     APPLE_SHADER_CONFIG.rcu(|old| {
         let mut new = old
             .as_ref()
             .map(|a| (**a).clone())
-            .unwrap_or(AppleShaderConfig {
-                enabled: false,
-                preset_path: None,
-                generation: 1,
-            });
+            .unwrap_or(AppleShaderConfig::default());
 
-        let mut target_path = path.clone();
-        if target_path.is_none() && path.is_none() {
-            target_path = new.preset_path.clone();
-        }
+        let target_path = path.clone().or_else(|| new.preset_path.clone());
 
         if new.enabled == enabled && new.preset_path == target_path {
             changed = false;
@@ -88,46 +133,85 @@ pub async fn apple_set_shader_config(
             new.enabled = enabled;
             new.preset_path = target_path;
             new.generation = new.generation.wrapping_add(1);
-
+            new.preparsed_preset = None; // Avoid race condition with old preset
+            new.parameters.clear(); // Path changed, clear overrides
+            new_gen = new.generation;
             Some(Arc::new(new))
         }
     });
 
-    if !changed {
-        if let Some(session) = &*SHADER_SESSION.load() {
-            let api_parameters = session
-                .parameters
-                .iter()
-                .map(|meta| crate::api::video::ShaderParameter {
-                    name: meta.id.to_string(),
-                    description: meta.description.clone(),
-                    initial: meta.initial,
-                    current: meta.initial,
-                    minimum: meta.minimum,
-                    maximum: meta.maximum,
-                    step: meta.step,
-                })
-                .collect();
+    let passthrough_path = crate::apple::passthrough::get_passthrough_preset()
+        .to_string_lossy()
+        .to_string();
 
-            return Ok(ShaderParameters {
-                path: session.path.clone(),
-                parameters: api_parameters,
-            });
-        }
+    if !changed {
+        let config = APPLE_SHADER_CONFIG.load();
+        let config = config.as_ref().ok_or("Config is missing")?;
+
+        let api_parameters = config
+            .preparsed_preset
+            .as_ref()
+            .map(|p| crate::shader_utils::map_parameters(p))
+            .transpose()?
+            .unwrap_or_default();
+
+        let effective_path = crate::shader_utils::get_effective_path(
+            config.enabled,
+            config.preset_path.clone(),
+            passthrough_path,
+        );
+
         return Ok(ShaderParameters {
-            path: String::new(),
-            parameters: Vec::new(),
+            path: effective_path,
+            parameters: api_parameters,
         });
     }
 
-    RELOAD_CHANNELS.lock().push_back(tx);
+    let config_snapshot = apple_shader_snapshot();
+    let effective_path = crate::shader_utils::get_effective_path(
+        config_snapshot.enabled,
+        config_snapshot.preset_path.clone(),
+        passthrough_path,
+    );
 
-    // For Apple, we rely on the renderer to trigger the initial reload
-    // because we need the device/queue pointers which are passed by the shell
-    // only during the rendering callback.
-    rx.await
-        .map_err(|e| format!("Reload task cancelled: {:?}", e))?
+    let rx = crate::shader_utils::preparse_preset(effective_path.clone());
+    let (preset, api_parameters) = rx
+        .await
+        .map_err(|e| format!("Join error: {:?}", e))?
+        .map_err(|e| format!("Parse error: {:?}", e))?;
+
+    // Update the config with the preparsed preset
+    APPLE_SHADER_CONFIG.rcu(|old| {
+        let mut new = old.as_ref()?.as_ref().clone();
+        if new.generation == new_gen {
+            new.preparsed_preset = Some(preset.clone());
+            Some(Arc::new(new))
+        } else {
+            None
+        }
+    });
+
+    let device_addr = LAST_DEVICE_ADDR.load(Ordering::Acquire);
+    if device_addr != 0 {
+        // For Metal, reloading requires both device and command queue which are not immediately available here.
+        // It's safe to skip as the renderer's next frame will trigger the reload.
+    } else {
+        SHADER_SESSION.rcu(move |old| {
+            if let Some(curr) = old {
+                if curr.generation >= new_gen {
+                    return None;
+                }
+            }
+            Some(Arc::new(ShaderSession {
+                chain: Mutex::new(None),
+                generation: new_gen,
+                device_addr: 0,
+            }))
+        });
+    }
+
+    Ok(ShaderParameters {
+        path: effective_path,
+        parameters: api_parameters,
+    })
 }
-
-pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
-    Mutex::new(VecDeque::new());
