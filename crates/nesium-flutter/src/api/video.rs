@@ -1,4 +1,3 @@
-use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use librashader::runtime::FilterChainParameters;
 use nesium_core::ppu::buffer::{NearestPostProcessor, VideoPostProcessor};
@@ -56,6 +55,7 @@ pub struct VideoOutputInfo {
 }
 
 #[frb]
+#[derive(Clone)]
 pub struct ShaderParameter {
     pub name: String,
     pub description: String,
@@ -67,6 +67,7 @@ pub struct ShaderParameter {
 }
 
 #[frb]
+#[derive(Clone)]
 pub struct ShaderParameters {
     pub path: String,
     // We use a Vec here instead of a HashMap to preserve the order of parameters
@@ -74,18 +75,6 @@ pub struct ShaderParameters {
     // preserves insertion order for small sets (n < 32), which covers most
     // shader presets. Standard `std::collections::HashMap` does not guarantee order.
     pub parameters: Vec<ShaderParameter>,
-}
-
-#[frb]
-pub fn shader_parameters_stream(sink: StreamSink<ShaderParameters>) -> Result<(), String> {
-    crate::senders::shader::set_shader_sink(sink);
-
-    // After registering, we should emit the current state if it exists.
-    // This avoids needing a separate manual fetch on startup.
-    let current = get_shader_parameters();
-    crate::senders::shader::emit_shader_parameters_update(current);
-
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -537,7 +526,7 @@ pub fn set_shader_enabled(enabled: bool) -> Result<(), String> {
 }
 
 #[frb]
-pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
+pub async fn set_shader_preset_path(path: Option<String>) -> Result<ShaderParameters, String> {
     #[cfg(target_os = "android")]
     {
         let path = path.and_then(|p| {
@@ -548,8 +537,7 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
                 Some(trimmed.to_string())
             }
         });
-        crate::android::session::android_set_shader_preset_path(path);
-        Ok(())
+        crate::android::session::android_set_shader_preset_path(path).await
     }
 
     #[cfg(target_os = "windows")]
@@ -562,8 +550,7 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
                 Some(trimmed.to_string())
             }
         });
-        crate::windows::windows_set_shader_preset_path(path);
-        Ok(())
+        crate::windows::windows_set_shader_preset_path(path).await
     }
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -576,8 +563,7 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
                 Some(trimmed.to_string())
             }
         });
-        crate::apple::apple_set_shader_preset_path(path);
-        Ok(())
+        crate::apple::apple_set_shader_preset_path(path).await
     }
 
     #[cfg(not(any(
@@ -589,100 +575,6 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
     {
         let _ = path;
         Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
-    }
-}
-
-pub fn get_shader_parameters() -> ShaderParameters {
-    let mut current_path = String::new();
-    let mut parameters = Vec::new();
-
-    #[cfg(target_os = "android")]
-    {
-        use librashader::runtime::gl::FilterChain as LibrashaderFilterChain;
-        let session_guard = crate::android::session::ANDROID_SHADER_SESSION.load();
-        if let Some(session) = session_guard.as_ref() {
-            current_path = session.path.clone();
-            let chain_guard = session.chain.lock();
-            for meta in session.parameters.iter() {
-                let name = &meta.id;
-                parameters.push(ShaderParameter {
-                    name: name.to_string(),
-                    description: meta.description.clone(),
-                    initial: meta.initial,
-                    current: chain_guard
-                        .as_ref()
-                        .and_then(|c: &LibrashaderFilterChain| c.parameters().parameter_value(name))
-                        .unwrap_or(meta.initial),
-                    minimum: meta.minimum,
-                    maximum: meta.maximum,
-                    step: meta.step,
-                });
-            }
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        let session = crate::windows::SHADER_SESSION.load();
-        if let Some(session) = session.as_ref() {
-            current_path = session.path.clone();
-            for meta in session.parameters.iter() {
-                let name = &meta.id;
-                let current = session
-                    .chain
-                    .lock()
-                    .as_ref()
-                    .and_then(|c| c.parameters().parameter_value(name))
-                    .unwrap_or(meta.initial);
-
-                parameters.push(ShaderParameter {
-                    name: name.to_string(),
-                    description: meta.description.clone(),
-                    initial: meta.initial,
-                    current,
-                    minimum: meta.minimum,
-                    maximum: meta.maximum,
-                    step: meta.step,
-                });
-            }
-        }
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    {
-        let session = crate::apple::session::SHADER_SESSION.load();
-        if let Some(session) = session.as_ref() {
-            current_path = session.path.clone();
-            let chain_guard = session.chain.lock();
-            for meta in session.parameters.iter() {
-                let name = &meta.id;
-                let current = chain_guard
-                    .as_ref()
-                    .and_then(|c| c.parameters().parameter_value(name))
-                    .unwrap_or(meta.initial);
-
-                parameters.push(ShaderParameter {
-                    name: name.to_string(),
-                    description: meta.description.clone(),
-                    initial: meta.initial,
-                    current,
-                    minimum: meta.minimum,
-                    maximum: meta.maximum,
-                    step: meta.step,
-                });
-            }
-        }
-    }
-
-    tracing::info!(
-        "get_shader_parameters: path={}, count={}",
-        current_path,
-        parameters.len()
-    );
-
-    ShaderParameters {
-        path: current_path,
-        parameters,
     }
 }
 

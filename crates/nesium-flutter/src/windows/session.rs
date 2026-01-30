@@ -1,9 +1,12 @@
+use crate::api::video::ShaderParameters;
 use arc_swap::ArcSwapOption;
 use librashader::preprocess::ShaderParameter;
 use librashader::runtime::d3d11::FilterChain as LibrashaderFilterChain;
 use parking_lot::Mutex;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
+use tokio::sync::oneshot;
 
 #[derive(Debug, Clone)]
 pub struct WindowsShaderConfig {
@@ -62,7 +65,16 @@ pub fn windows_set_shader_enabled(enabled: bool) {
     });
 }
 
-pub fn windows_set_shader_preset_path(path: Option<String>) {
+pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
+    Mutex::new(VecDeque::new());
+
+pub async fn windows_set_shader_preset_path(
+    path: Option<String>,
+) -> Result<ShaderParameters, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    RELOAD_CHANNELS.lock().push_back(tx);
+
     WINDOWS_SHADER_CONFIG.rcu(|old| {
         let mut new = old
             .as_ref()
@@ -73,12 +85,11 @@ pub fn windows_set_shader_preset_path(path: Option<String>) {
                 generation: 1,
             });
 
-        if new.preset_path == path {
-            old.clone()
-        } else {
-            new.preset_path = path.clone();
-            new.generation = new.generation.wrapping_add(1);
-            Some(Arc::new(new))
-        }
+        new.preset_path = path.clone();
+        new.generation = new.generation.wrapping_add(1);
+        Some(Arc::new(new))
     });
+
+    rx.await
+        .map_err(|e| format!("Reload task cancelled: {:?}", e))?
 }

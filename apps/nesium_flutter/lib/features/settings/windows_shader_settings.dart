@@ -14,6 +14,7 @@ import '../../domain/nes_texture_service.dart';
 import 'video_settings.dart';
 import '../../windows/current_window_kind.dart';
 import '../../windows/window_types.dart';
+import 'shader_parameter_provider.dart';
 
 @immutable
 class WindowsShaderSettings {
@@ -151,8 +152,32 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
       logger: 'windows_shader_settings',
     );
 
-    await nes_video.setShaderPresetPath(path: absolutePath);
-    await nes_video.setShaderEnabled(enabled: settings.enabled);
+    try {
+      await nes_video.setShaderEnabled(enabled: settings.enabled);
+
+      if (!settings.enabled || absolutePath == null) {
+        ref.read(shaderParametersProvider.notifier).clear();
+        if (absolutePath == null) {
+          await nes_video.setShaderPresetPath(path: null);
+        }
+      } else {
+        final parameters = await nes_video.setShaderPresetPath(
+          path: absolutePath,
+        );
+        if (settings.presetPath != null) {
+          await ref
+              .read(shaderParametersProvider.notifier)
+              .onShaderLoaded(parameters, settings.presetPath!);
+        }
+      }
+    } catch (e, st) {
+      logError(
+        e,
+        stackTrace: st,
+        message: 'Failed to set shader options',
+        logger: 'windows_shader_settings',
+      );
+    }
 
     final videoSettings = ref.read(videoSettingsProvider);
     final useLinear =

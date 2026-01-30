@@ -5,7 +5,8 @@ export '../bridge/api/video.dart'
         NtscBisqwitOptions,
         ScanlineOptions,
         VideoFilter,
-        VideoOutputInfo;
+        VideoOutputInfo,
+        ShaderParameters;
 
 import '../bridge/api/video.dart' as frb_video;
 import 'web_cmd_sender.dart';
@@ -131,7 +132,9 @@ Future<void> setShaderEnabled({required bool enabled}) {
   return Future.value();
 }
 
-Future<void> setShaderPresetPath({String? path}) {
+Future<frb_video.ShaderParameters> setShaderPresetPath({String? path}) {
   // Librashader is not supported on web.
-  return Future.value();
+  return Future.value(
+    const frb_video.ShaderParameters(path: '', parameters: []),
+  );
 }

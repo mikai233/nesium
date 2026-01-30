@@ -1,5 +1,4 @@
 use crate::api::video::ShaderParameters;
-use crate::senders::shader::emit_shader_parameters_update;
 
 use super::session::{SHADER_SESSION, ShaderSession};
 use librashader::presets::{
@@ -87,7 +86,7 @@ pub(crate) fn reload_shader_chain(
                 .map_err(|e| format!("{:?}", e))
         })();
 
-        match res {
+        let final_result: Result<ShaderParameters, String> = match res {
             Ok(chain) => {
                 tracing::info!("Windows shader chain loaded from {}", effective_path);
 
@@ -105,10 +104,10 @@ pub(crate) fn reload_shader_chain(
                     })
                     .collect();
 
-                emit_shader_parameters_update(ShaderParameters {
+                let params = ShaderParameters {
                     path: effective_path.to_string(),
                     parameters: api_parameters,
-                });
+                };
 
                 SHADER_SESSION.store(Some(Arc::new(ShaderSession {
                     chain: Mutex::new(Some(chain)),
@@ -117,7 +116,7 @@ pub(crate) fn reload_shader_chain(
                     parameters,
                     path: effective_path.to_string(),
                 })));
-                true
+                Ok(params)
             }
             Err(e) => {
                 tracing::error!(
@@ -126,11 +125,6 @@ pub(crate) fn reload_shader_chain(
                     e
                 );
 
-                emit_shader_parameters_update(ShaderParameters {
-                    path: effective_path.to_string(),
-                    parameters: Vec::new(),
-                });
-
                 SHADER_SESSION.store(Some(Arc::new(ShaderSession {
                     chain: Mutex::new(None),
                     generation,
@@ -138,9 +132,17 @@ pub(crate) fn reload_shader_chain(
                     parameters: Vec::new(),
                     path: effective_path.to_string(),
                 })));
-                false
+                Err(e)
             }
+        };
+
+        // Fulfill pending async requests
+        let mut channels = super::session::RELOAD_CHANNELS.lock();
+        while let Some(tx) = channels.pop_front() {
+            let _ = tx.send(final_result.clone());
         }
+
+        final_result.is_ok()
     };
 
     load_result

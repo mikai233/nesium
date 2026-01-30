@@ -5,7 +5,8 @@ export '../bridge/api/video.dart'
         NtscBisqwitOptions,
         ScanlineOptions,
         VideoFilter,
-        VideoOutputInfo;
+        VideoOutputInfo,
+        ShaderParameters;
 
 import '../bridge/api/video.dart' as frb_video;
 
@@ -29,5 +30,5 @@ Future<void> setNtscBisqwitOptions({
 Future<void> setShaderEnabled({required bool enabled}) =>
     frb_video.setShaderEnabled(enabled: enabled);
 
-Future<void> setShaderPresetPath({String? path}) =>
+Future<frb_video.ShaderParameters> setShaderPresetPath({String? path}) =>
     frb_video.setShaderPresetPath(path: path);

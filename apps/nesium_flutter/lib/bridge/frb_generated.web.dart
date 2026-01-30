@@ -72,11 +72,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RustStreamSink<ShaderParameters> dco_decode_StreamSink_shader_parameters_Sse(
-    dynamic raw,
-  );
-
-  @protected
   RustStreamSink<SpriteSnapshot> dco_decode_StreamSink_sprite_snapshot_Sse(
     dynamic raw,
   );
@@ -333,11 +328,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<ServerStatus> sse_decode_StreamSink_server_status_Sse(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  RustStreamSink<ShaderParameters> sse_decode_StreamSink_shader_parameters_Sse(
     SseDeserializer deserializer,
   );
 
@@ -647,12 +637,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_server_status_Sse(
     RustStreamSink<ServerStatus> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_StreamSink_shader_parameters_Sse(
-    RustStreamSink<ShaderParameters> self,
     SseSerializer serializer,
   );
 

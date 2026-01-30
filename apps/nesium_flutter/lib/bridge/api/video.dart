@@ -7,10 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `apply_video_filter`, `current_filter`, `is_ntsc_bisqwit_filter`, `is_ntsc_filter`, `lcd_grid_options`, `ntsc_bisqwit_options`, `ntsc_options`, `output_size`, `scale_factor`, `scanline_options`, `set_current_filter`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
-
-Stream<ShaderParameters> shaderParametersStream() =>
-    RustLib.instance.api.crateApiVideoShaderParametersStream();
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<VideoOutputInfo> setVideoFilter({required VideoFilter filter}) =>
     RustLib.instance.api.crateApiVideoSetVideoFilter(filter: filter);
@@ -30,11 +27,8 @@ Future<void> setNtscBisqwitOptions({required NtscBisqwitOptions options}) =>
 Future<void> setShaderEnabled({required bool enabled}) =>
     RustLib.instance.api.crateApiVideoSetShaderEnabled(enabled: enabled);
 
-Future<void> setShaderPresetPath({String? path}) =>
+Future<ShaderParameters> setShaderPresetPath({String? path}) =>
     RustLib.instance.api.crateApiVideoSetShaderPresetPath(path: path);
-
-Future<ShaderParameters> getShaderParameters() =>
-    RustLib.instance.api.crateApiVideoGetShaderParameters();
 
 Future<void> setShaderParameter({
   required String name,

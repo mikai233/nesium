@@ -6,7 +6,6 @@ use librashader::runtime::gl::FrameOptions as LibrashaderFrameOptions;
 use librashader::runtime::gl::GLImage as LibrashaderGlImage;
 
 use crate::api::video::{ShaderParameter, ShaderParameters};
-use crate::senders::shader::emit_shader_parameters_update;
 use crate::{FRAME_HEIGHT, FRAME_WIDTH, runtime_handle};
 use glow::HasContext;
 use std::num::NonZeroU32;
@@ -752,6 +751,9 @@ impl GlesRenderer {
             self.shader_seen_generation = cfg.generation;
             ANDROID_SHADER_SESSION.store(None);
 
+            let mut final_result: Result<ShaderParameters, String> =
+                Err("Shader disabled or no path provided".to_string());
+
             if cfg.enabled {
                 if let Some(path) = cfg.preset_path {
                     let shader_features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
@@ -763,38 +765,57 @@ impl GlesRenderer {
                         disable_cache: true,
                     };
 
-                    if let Ok((chain, params)) = super::chain::reload_shader_chain(
+                    match super::chain::reload_shader_chain(
                         &self.glow_ctx,
                         &path,
                         shader_features,
                         &shader_chain_options,
                     ) {
-                        // Emit update to Flutter
-                        let params: Vec<librashader::preprocess::ShaderParameter> = params;
-                        let mut api_parameters = Vec::new();
-                        for meta in params.iter() {
-                            api_parameters.push(ShaderParameter {
-                                name: meta.id.to_string(),
-                                description: meta.description.clone(),
-                                initial: meta.initial,
-                                current: meta.initial,
-                                minimum: meta.minimum,
-                                maximum: meta.maximum,
-                                step: meta.step,
-                            });
-                        }
-                        emit_shader_parameters_update(ShaderParameters {
-                            path: path.clone(),
-                            parameters: api_parameters,
-                        });
+                        Ok((chain, params)) => {
+                            // Emit update to Flutter
+                            let mut api_parameters = Vec::new();
+                            for meta in params.iter() {
+                                api_parameters.push(ShaderParameter {
+                                    name: meta.id.to_string(),
+                                    description: meta.description.clone(),
+                                    initial: meta.initial,
+                                    current: meta.initial,
+                                    minimum: meta.minimum,
+                                    maximum: meta.maximum,
+                                    step: meta.step,
+                                });
+                            }
 
-                        ANDROID_SHADER_SESSION.store(Some(Arc::new(ShaderSession {
-                            chain: Mutex::new(Some(chain)),
-                            parameters: params,
-                            path,
-                        })));
+                            let parameters = ShaderParameters {
+                                path: path.clone(),
+                                parameters: api_parameters,
+                            };
+
+                            ANDROID_SHADER_SESSION.store(Some(Arc::new(ShaderSession {
+                                chain: Mutex::new(Some(chain)),
+                                parameters: params,
+                                path,
+                            })));
+                            final_result = Ok(parameters);
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to reload Android shader chain: {}", e);
+                            final_result = Err(e);
+                        }
                     }
                 }
+            } else {
+                // Shader disabled
+                final_result = Ok(ShaderParameters {
+                    path: String::new(),
+                    parameters: Vec::new(),
+                });
+            }
+
+            // Fulfill pending async requests
+            let mut channels = super::session::RELOAD_CHANNELS.lock();
+            while let Some(tx) = channels.pop_front() {
+                let _ = tx.send(final_result.clone());
             }
         }
 

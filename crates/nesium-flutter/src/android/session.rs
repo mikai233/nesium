@@ -1,8 +1,11 @@
+use crate::api::video::ShaderParameters;
 use arc_swap::ArcSwapOption;
 use librashader::preprocess::ShaderParameter;
 use librashader::runtime::gl::FilterChain as LibrashaderFilterChain;
 use parking_lot::Mutex;
+use std::collections::VecDeque;
 use std::sync::Arc;
+use tokio::sync::oneshot;
 
 use super::renderer::rust_renderer_wake;
 
@@ -59,7 +62,16 @@ pub fn android_set_shader_enabled(enabled: bool) {
     rust_renderer_wake();
 }
 
-pub fn android_set_shader_preset_path(path: Option<String>) {
+pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
+    Mutex::new(VecDeque::new());
+
+pub async fn android_set_shader_preset_path(
+    path: Option<String>,
+) -> Result<ShaderParameters, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    RELOAD_CHANNELS.lock().push_back(tx);
+
     ANDROID_SHADER_CONFIG.rcu(|old| {
         let mut new = old
             .as_ref()
@@ -70,14 +82,13 @@ pub fn android_set_shader_preset_path(path: Option<String>) {
                 generation: 1,
             });
 
-        if new.preset_path == path {
-            old.clone()
-        } else {
-            new.preset_path = path.clone();
-            new.generation = new.generation.wrapping_add(1);
-            Some(Arc::new(new))
-        }
+        new.preset_path = path.clone();
+        new.generation = new.generation.wrapping_add(1);
+        Some(Arc::new(new))
     });
 
     rust_renderer_wake();
+
+    rx.await
+        .map_err(|e| format!("Reload task cancelled: {:?}", e))?
 }

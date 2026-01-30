@@ -147,9 +147,6 @@ class NesTextureService {
   // Shader Parameters
   // ---------------------------------------------------------------------------
 
-  Stream<video.ShaderParameters> shaderParametersStream() =>
-      video.shaderParametersStream();
-
   Future<void> setShaderParameter(String name, double value) =>
       video.setShaderParameter(name: name, value: value);
 }

@@ -1,5 +1,4 @@
 use crate::api::video::ShaderParameters;
-use crate::senders::shader::emit_shader_parameters_update;
 
 use super::session::{SHADER_SESSION, ShaderSession};
 use librashader::presets::{
@@ -108,9 +107,17 @@ pub(crate) fn reload_shader_chain(
             .map_err(|e| format!("{:?}", e))
         })();
 
-        match load_result {
+        let final_result: Result<ShaderParameters, String> = match load_result {
             Ok(chain) => {
                 tracing::info!("Apple shader chain loaded from {}", effective_path);
+
+                SHADER_SESSION.store(Some(Arc::new(ShaderSession {
+                    chain: Mutex::new(Some(chain)),
+                    generation,
+                    device_addr: device_ptr as usize,
+                    parameters: parameters.clone(),
+                    path: effective_path.to_string(),
+                })));
 
                 // Emit update to Flutter immediately using local data
                 let mut api_parameters = Vec::new();
@@ -120,24 +127,19 @@ pub(crate) fn reload_shader_chain(
                         name: name.to_string(),
                         description: meta.description.clone(),
                         initial: meta.initial,
-                        current: meta.initial,
+                        current: meta.initial, // Initial load: current = initial
                         minimum: meta.minimum,
                         maximum: meta.maximum,
                         step: meta.step,
                     });
                 }
-                emit_shader_parameters_update(ShaderParameters {
+
+                let params = ShaderParameters {
                     path: effective_path.to_string(),
                     parameters: api_parameters,
-                });
+                };
 
-                SHADER_SESSION.store(Some(Arc::new(ShaderSession {
-                    chain: Mutex::new(Some(chain)),
-                    generation,
-                    device_addr: device_ptr as usize,
-                    parameters,
-                    path: effective_path.to_string(),
-                })));
+                Ok(params)
             }
             Err(e) => {
                 tracing::error!(
@@ -146,11 +148,6 @@ pub(crate) fn reload_shader_chain(
                     e
                 );
 
-                emit_shader_parameters_update(ShaderParameters {
-                    path: effective_path.to_string(),
-                    parameters: Vec::new(),
-                });
-
                 SHADER_SESSION.store(Some(Arc::new(ShaderSession {
                     chain: Mutex::new(None),
                     generation,
@@ -158,7 +155,14 @@ pub(crate) fn reload_shader_chain(
                     parameters: Vec::new(),
                     path: effective_path.to_string(),
                 })));
+                Err(e)
             }
+        };
+
+        // Fulfill pending async requests
+        let mut channels = super::session::RELOAD_CHANNELS.lock();
+        while let Some(tx) = channels.pop_front() {
+            let _ = tx.send(final_result.clone());
         }
     });
 }
