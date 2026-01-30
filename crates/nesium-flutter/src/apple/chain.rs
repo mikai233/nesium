@@ -62,97 +62,103 @@ pub(crate) unsafe fn render_shader_frame(
 }
 
 pub(crate) fn reload_shader_chain(
-    effective_path: &str,
+    effective_path: String,
     device_ptr: *mut c_void,
     command_queue_ptr: *mut c_void,
     generation: u64,
-) -> bool {
-    tracing::info!(
-        "Reloading Apple Metal shader chain (path={})",
-        effective_path
-    );
-    let features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
-        | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
+) {
+    let device_addr = device_ptr as usize;
+    let command_queue_addr = command_queue_ptr as usize;
 
-    let options = LibrashaderFilterChainOptions {
-        force_no_mipmaps: true,
-        ..Default::default()
-    };
+    std::thread::spawn(move || {
+        let device_ptr = device_addr as *mut c_void;
+        let command_queue_ptr = command_queue_addr as *mut c_void;
 
-    let mut parameters = Vec::new();
-    let load_result = (|| {
-        let preset =
-            ShaderPreset::try_parse(effective_path, features).map_err(|e| format!("{:?}", e))?;
+        tracing::info!(
+            "Reloading Apple Metal shader chain (async, path={})",
+            effective_path
+        );
+        let features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
+            | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
 
-        if let Ok(meta) = get_parameter_meta(&preset) {
-            for p in meta {
-                parameters.push(p.clone());
+        let options = LibrashaderFilterChainOptions {
+            force_no_mipmaps: true,
+            ..Default::default()
+        };
+
+        let mut parameters = Vec::new();
+        let load_result = (|| {
+            let preset = ShaderPreset::try_parse(&effective_path, features)
+                .map_err(|e| format!("{:?}", e))?;
+
+            if let Ok(meta) = get_parameter_meta(&preset) {
+                for p in meta {
+                    parameters.push(p.clone());
+                }
             }
-        }
 
-        unsafe {
-            LibrashaderFilterChain::load_from_preset(
-                preset,
-                // SAFETY: Trust that command_queue_ptr is valid id<MTLCommandQueue> compatible with librashader
-                std::mem::transmute(command_queue_ptr),
-                Some(&options),
-            )
-        }
-        .map_err(|e| format!("{:?}", e))
-    })();
+            unsafe {
+                LibrashaderFilterChain::load_from_preset(
+                    preset,
+                    // SAFETY: Trust that command_queue_ptr is valid id<MTLCommandQueue> compatible with librashader
+                    std::mem::transmute(command_queue_ptr),
+                    Some(&options),
+                )
+            }
+            .map_err(|e| format!("{:?}", e))
+        })();
 
-    match load_result {
-        Ok(chain) => {
-            tracing::info!("Apple shader chain loaded from {}", effective_path);
+        match load_result {
+            Ok(chain) => {
+                tracing::info!("Apple shader chain loaded from {}", effective_path);
 
-            // Emit update to Flutter immediately using local data
-            let mut api_parameters = Vec::new();
-            for meta in parameters.iter() {
-                let name = &meta.id;
-                api_parameters.push(crate::api::video::ShaderParameter {
-                    name: name.to_string(),
-                    description: meta.description.clone(),
-                    initial: meta.initial,
-                    current: meta.initial,
-                    minimum: meta.minimum,
-                    maximum: meta.maximum,
-                    step: meta.step,
+                // Emit update to Flutter immediately using local data
+                let mut api_parameters = Vec::new();
+                for meta in parameters.iter() {
+                    let name = &meta.id;
+                    api_parameters.push(crate::api::video::ShaderParameter {
+                        name: name.to_string(),
+                        description: meta.description.clone(),
+                        initial: meta.initial,
+                        current: meta.initial,
+                        minimum: meta.minimum,
+                        maximum: meta.maximum,
+                        step: meta.step,
+                    });
+                }
+                emit_shader_parameters_update(ShaderParameters {
+                    path: effective_path.to_string(),
+                    parameters: api_parameters,
                 });
+
+                SHADER_SESSION.store(Some(Arc::new(ShaderSession {
+                    chain: Mutex::new(Some(chain)),
+                    generation,
+                    device_addr: device_ptr as usize,
+                    parameters,
+                    path: effective_path.to_string(),
+                })));
             }
-            emit_shader_parameters_update(ShaderParameters {
-                path: effective_path.to_string(),
-                parameters: api_parameters,
-            });
+            Err(e) => {
+                tracing::error!(
+                    "Failed to load Apple shader preset ({}): {:?}",
+                    effective_path,
+                    e
+                );
 
-            SHADER_SESSION.store(Some(Arc::new(ShaderSession {
-                chain: Mutex::new(Some(chain)),
-                generation,
-                device_addr: device_ptr as usize,
-                parameters,
-                path: effective_path.to_string(),
-            })));
-            true
+                emit_shader_parameters_update(ShaderParameters {
+                    path: effective_path.to_string(),
+                    parameters: Vec::new(),
+                });
+
+                SHADER_SESSION.store(Some(Arc::new(ShaderSession {
+                    chain: Mutex::new(None),
+                    generation,
+                    device_addr: device_ptr as usize,
+                    parameters: Vec::new(),
+                    path: effective_path.to_string(),
+                })));
+            }
         }
-        Err(e) => {
-            tracing::error!(
-                "Failed to load Apple shader preset ({}): {:?}",
-                effective_path,
-                e
-            );
-
-            emit_shader_parameters_update(ShaderParameters {
-                path: effective_path.to_string(),
-                parameters: Vec::new(),
-            });
-
-            SHADER_SESSION.store(Some(Arc::new(ShaderSession {
-                chain: Mutex::new(None),
-                generation,
-                device_addr: device_ptr as usize,
-                parameters: Vec::new(),
-                path: effective_path.to_string(),
-            })));
-            false
-        }
-    }
+    });
 }

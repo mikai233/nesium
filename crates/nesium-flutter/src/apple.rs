@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 
 use chain::{reload_shader_chain, render_shader_frame};
 use passthrough::get_passthrough_preset;
-use session::{FRAME_COUNT, SHADER_SESSION, apple_shader_snapshot};
+use session::{FRAME_COUNT, LOADING_GENERATION, SHADER_SESSION, apple_shader_snapshot};
 
 // Re-export state functions and state for api/video.rs
 pub use session::{apple_set_shader_enabled, apple_set_shader_preset_path};
@@ -43,8 +43,10 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
         }
 
         let current_session = SHADER_SESSION.load();
+        let loading_gen = LOADING_GENERATION.load(Ordering::Acquire);
 
         // Reload if generation changed OR device changed OR shader not loaded
+        // AND we are not already loading this generation.
         let needs_reload = match &*current_session {
             Some(session) => {
                 session.generation != cfg.generation || session.device_addr != device_ptr as usize
@@ -52,9 +54,10 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
             None => true,
         };
 
-        if needs_reload {
+        if needs_reload && loading_gen != cfg.generation {
+            LOADING_GENERATION.store(cfg.generation, Ordering::Release);
             reload_shader_chain(
-                &effective_path,
+                effective_path,
                 device_ptr,
                 command_queue_ptr,
                 cfg.generation,

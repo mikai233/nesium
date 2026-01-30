@@ -3,7 +3,9 @@ use librashader::preprocess::ShaderParameter;
 use librashader::runtime::mtl::FilterChain as LibrashaderFilterChain;
 use parking_lot::Mutex;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicU64, AtomicUsize};
+
+pub static LOADING_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone)]
 pub struct AppleShaderConfig {
