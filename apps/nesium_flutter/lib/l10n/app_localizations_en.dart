@@ -819,6 +819,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionLoadPalette => 'Load palette';
 
   @override
+  String get videoResetToDefault => 'Reset to default';
+
+  @override
   String get videoTitle => 'Video';
 
   @override
@@ -1644,4 +1647,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get netplayProceed => 'Proceed';
+
+  @override
+  String get videoShaderParametersTitle => 'Shader Parameters';
+
+  @override
+  String get videoShaderParametersSubtitle =>
+      'Adjust shader parameters in real-time';
+
+  @override
+  String get videoShaderParametersReset => 'Reset Parameters';
+
+  @override
+  String get searchHint => 'Search...';
+
+  @override
+  String get searchTooltip => 'Search';
+
+  @override
+  String get noResults => 'No matching parameters found';
 }

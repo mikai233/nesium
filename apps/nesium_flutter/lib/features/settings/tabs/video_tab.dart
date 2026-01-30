@@ -9,6 +9,7 @@ import 'video/gpu_shader_card.dart';
 import 'video/ntsc_settings_card.dart';
 import 'video/palette_settings_card.dart';
 import 'video/general_video_settings_card.dart';
+import 'video/shader_settings_card.dart';
 
 class VideoTab extends ConsumerWidget {
   const VideoTab({required this.pickAndApplyCustomPalette, super.key});
@@ -47,7 +48,8 @@ class VideoTab extends ConsumerWidget {
                 pickAndApplyCustomPalette: pickAndApplyCustomPalette,
               ),
               const GpuShaderCard(),
-              const SizedBox(height: 12),
+              const ShaderSettingsCard(),
+              const SizedBox(height: 8),
             ],
           ),
         ),

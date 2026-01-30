@@ -457,6 +457,7 @@
   "actionPowerResetNes": "Power Reset NES",
   "actionEjectNes": "Power Off",
   "actionLoadPalette": "Load palette",
+  "videoResetToDefault": "Reset to default",
   "videoTitle": "Video",
   "videoFilterLabel": "Video Filter",
   "videoFilterCategoryCpu": "CPU Filters",
@@ -817,5 +818,11 @@
   "netplayStartP2PSession": "Start P2P Session",
   "netplayJoinP2PSession": "Join P2P Session",
   "netplayInvalidP2PServerAddr": "Invalid P2P server address",
-  "netplayProceed": "Proceed"
+  "netplayProceed": "Proceed",
+  "videoShaderParametersTitle": "Shader Parameters",
+  "videoShaderParametersSubtitle": "Adjust shader parameters in real-time",
+  "videoShaderParametersReset": "Reset Parameters",
+  "searchHint": "Search...",
+  "searchTooltip": "Search",
+  "noResults": "No matching parameters found"
 }

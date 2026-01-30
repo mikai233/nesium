@@ -1568,6 +1568,12 @@ abstract class AppLocalizations {
   /// **'Load palette'**
   String get actionLoadPalette;
 
+  /// No description provided for @videoResetToDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get videoResetToDefault;
+
   /// No description provided for @videoTitle.
   ///
   /// In en, this message translates to:
@@ -3127,6 +3133,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Proceed'**
   String get netplayProceed;
+
+  /// No description provided for @videoShaderParametersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shader Parameters'**
+  String get videoShaderParametersTitle;
+
+  /// No description provided for @videoShaderParametersSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust shader parameters in real-time'**
+  String get videoShaderParametersSubtitle;
+
+  /// No description provided for @videoShaderParametersReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Parameters'**
+  String get videoShaderParametersReset;
+
+  /// No description provided for @searchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search...'**
+  String get searchHint;
+
+  /// No description provided for @searchTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchTooltip;
+
+  /// No description provided for @noResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching parameters found'**
+  String get noResults;
 }
 
 class _AppLocalizationsDelegate

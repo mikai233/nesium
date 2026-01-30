@@ -52,6 +52,8 @@ class WindowManager {
   Future<void> focus() async {}
 
   Future<void> setFullScreen(bool fullScreen) async {}
+
+  Future<bool> isFullScreen() async => false;
 }
 
 final windowManager = WindowManager.instance;

@@ -806,6 +806,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get actionLoadPalette => '加载调色板';
 
   @override
+  String get videoResetToDefault => '重置为默认值';
+
+  @override
   String get videoTitle => '画面';
 
   @override
@@ -1621,4 +1624,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get netplayProceed => '继续';
+
+  @override
+  String get videoShaderParametersTitle => '着色器参数';
+
+  @override
+  String get videoShaderParametersSubtitle => '实时调整着色器参数';
+
+  @override
+  String get videoShaderParametersReset => '重置参数';
+
+  @override
+  String get searchHint => '搜索...';
+
+  @override
+  String get searchTooltip => '搜索';
+
+  @override
+  String get noResults => '未找到匹配的参数';
 }

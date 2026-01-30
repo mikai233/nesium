@@ -16,6 +16,12 @@ pub mod aux_texture;
 pub mod event_worker;
 mod frb_generated; /* AUTO INJECTED BY flutter_rust_bridge. This line may not be accurate, and you can change it according to your needs. */
 mod senders;
+#[cfg(any(
+    target_os = "android",
+    target_os = "windows",
+    any(target_os = "macos", target_os = "ios")
+))]
+mod shader_utils;
 #[cfg(target_os = "windows")]
 pub mod windows;
 
@@ -90,10 +96,10 @@ fn ensure_runtime() -> &'static RuntimeHolder {
         #[cfg(target_os = "android")]
         let (runtime, video_backing) = if android::use_ahb_video_backend() {
             let mut video_cfg = video_cfg;
-            let swapchain = Arc::new(android::AhbSwapchain::new(
-                video_cfg.output_width,
-                video_cfg.output_height,
-            ));
+            let swapchain = Arc::new(
+                android::AhbSwapchain::new(video_cfg.output_width, video_cfg.output_height)
+                    .expect("failed to initialize AHB swapchain"),
+            );
             let user_data = Arc::as_ptr(&swapchain) as *mut c_void;
             video_cfg.backend = VideoBackendConfig::Swapchain {
                 lock: android::ahb_lock_plane,

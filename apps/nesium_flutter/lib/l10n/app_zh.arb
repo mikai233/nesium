@@ -340,6 +340,7 @@
   "actionPowerResetNes": "电源重置 NES",
   "actionEjectNes": "关机",
   "actionLoadPalette": "加载调色板",
+  "videoResetToDefault": "重置为默认值",
   "videoTitle": "画面",
   "videoFilterLabel": "画面滤镜",
   "videoFilterCategoryCpu": "CPU 滤镜",
@@ -675,5 +676,11 @@
   "netplayInvalidP2PServerAddr": "P2P 服务器地址无效",
   "netplayProceed": "继续",
   "videoBackendD3D11": "D3D11 GPU (零拷贝)",
-  "videoBackendSoftware": "软件 CPU (回退)"
+  "videoBackendSoftware": "软件 CPU (回退)",
+  "videoShaderParametersTitle": "着色器参数",
+  "videoShaderParametersSubtitle": "实时调整着色器参数",
+  "videoShaderParametersReset": "重置参数",
+  "searchHint": "搜索...",
+  "searchTooltip": "搜索",
+  "noResults": "未找到匹配的参数"
 }

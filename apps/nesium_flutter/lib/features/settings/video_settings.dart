@@ -350,7 +350,9 @@ class VideoSettingsController extends Notifier<VideoSettings>
     // Apply full screen state only if this is the main window
     final kind = ref.read(currentWindowKindProvider);
     if (kind == WindowKind.main && isNativeDesktop) {
-      await windowManager.setFullScreen(state.fullScreen);
+      if (await windowManager.isFullScreen() != state.fullScreen) {
+        await windowManager.setFullScreen(state.fullScreen);
+      }
     }
 
     if (isNtsc) {
@@ -500,6 +502,24 @@ class VideoSettingsController extends Notifier<VideoSettings>
     if (clamped == state.scanlineIntensity) return;
     state = state.copyWith(scanlineIntensity: clamped);
     _debouncePersist(state);
+  }
+
+  Future<void> resetNtscOptions() async {
+    const defaults = NtscOptionsConverter._fallback;
+    await setNtscOptions(defaults);
+  }
+
+  Future<void> resetNtscBisqwitOptions() async {
+    const defaults = NtscBisqwitOptionsConverter._fallback;
+    await setNtscBisqwitOptions(defaults);
+  }
+
+  Future<void> resetLcdGridStrength() async {
+    await setLcdGridStrength(1.0);
+  }
+
+  Future<void> resetScanlineIntensity() async {
+    await setScanlineIntensity(0.30);
   }
 
   void useCustomIfAvailable() {
