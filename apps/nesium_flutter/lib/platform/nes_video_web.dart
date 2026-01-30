@@ -138,3 +138,13 @@ Future<frb_video.ShaderParameters> setShaderPresetPath({String? path}) {
     const frb_video.ShaderParameters(path: '', parameters: []),
   );
 }
+
+Future<frb_video.ShaderParameters> setShaderConfig({
+  required bool enabled,
+  String? path,
+}) {
+  // Librashader is not supported on web.
+  return Future.value(
+    const frb_video.ShaderParameters(path: '', parameters: []),
+  );
+}

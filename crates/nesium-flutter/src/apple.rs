@@ -10,7 +10,7 @@ use passthrough::get_passthrough_preset;
 use session::{FRAME_COUNT, LOADING_GENERATION, SHADER_SESSION, apple_shader_snapshot};
 
 // Re-export state functions and state for api/video.rs
-pub use session::{apple_set_shader_enabled, apple_set_shader_preset_path};
+pub use session::{apple_set_shader_config, apple_set_shader_preset_path};
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nesium_apply_shader_metal(
@@ -45,17 +45,28 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
         let current_session = SHADER_SESSION.load();
         let loading_gen = LOADING_GENERATION.load(Ordering::Acquire);
 
-        // Reload if generation changed OR device changed OR shader not loaded
-        // AND we are not already loading this generation.
-        let needs_reload = match &*current_session {
-            Some(session) => {
-                session.generation != cfg.generation || session.device_addr != device_ptr as usize
-            }
+        let needs_reload_gen = match &*current_session {
+            Some(session) => session.generation != cfg.generation,
             None => true,
         };
+        let needs_reload_device = match &*current_session {
+            Some(session) => session.device_addr != device_ptr as usize,
+            None => false,
+        };
 
-        if needs_reload && loading_gen != cfg.generation {
-            LOADING_GENERATION.store(cfg.generation, Ordering::Release);
+        let loading_gen = LOADING_GENERATION.load(Ordering::Acquire);
+        if needs_reload_device
+            || (needs_reload_gen
+                && loading_gen != cfg.generation
+                && LOADING_GENERATION
+                    .compare_exchange(
+                        loading_gen,
+                        cfg.generation,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    )
+                    .is_ok())
+        {
             reload_shader_chain(
                 effective_path,
                 device_ptr,

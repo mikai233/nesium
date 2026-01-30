@@ -494,35 +494,9 @@ pub fn set_ntsc_bisqwit_options(options: NtscBisqwitOptions) -> Result<(), Strin
 }
 
 #[frb]
-pub fn set_shader_enabled(enabled: bool) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        crate::android::session::android_set_shader_enabled(enabled);
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        crate::windows::windows_set_shader_enabled(enabled);
-        Ok(())
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    {
-        crate::apple::apple_set_shader_enabled(enabled);
-        Ok(())
-    }
-
-    #[cfg(not(any(
-        target_os = "android",
-        target_os = "windows",
-        target_os = "macos",
-        target_os = "ios"
-    )))]
-    {
-        let _ = enabled;
-        Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
-    }
+pub async fn set_shader_enabled(enabled: bool) -> Result<(), String> {
+    set_shader_config(enabled, None).await?;
+    Ok(())
 }
 
 #[frb]
@@ -574,6 +548,47 @@ pub async fn set_shader_preset_path(path: Option<String>) -> Result<ShaderParame
     )))]
     {
         let _ = path;
+        Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
+    }
+}
+
+#[frb]
+pub async fn set_shader_config(
+    enabled: bool,
+    path: Option<String>,
+) -> Result<ShaderParameters, String> {
+    let path = path.and_then(|p| {
+        let trimmed = p.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+
+    #[cfg(target_os = "android")]
+    {
+        crate::android::session::android_set_shader_config(enabled, path).await
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        crate::windows::session::windows_set_shader_config(enabled, path).await
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        crate::apple::session::apple_set_shader_config(enabled, path).await
+    }
+
+    #[cfg(not(any(
+        target_os = "android",
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "ios"
+    )))]
+    {
+        let _ = (enabled, path);
         Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
     }
 }

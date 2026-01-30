@@ -776,6 +776,7 @@ impl GlesRenderer {
                             &shader_chain_options,
                         ) {
                             Ok(chain) => {
+                                tracing::info!("Android shader chain loaded from {}", path);
                                 let mut api_parameters = Vec::new();
                                 for meta in pending.parameters.iter() {
                                     api_parameters.push(ShaderParameter {

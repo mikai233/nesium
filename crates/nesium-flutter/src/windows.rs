@@ -17,7 +17,7 @@ use session::{FRAME_COUNT, windows_shader_snapshot};
 use utils::{log_hresult_context, validate_resource_device};
 
 // Re-export state functions and state for api/video.rs
-pub use session::{SHADER_SESSION, windows_set_shader_enabled, windows_set_shader_preset_path};
+pub use session::{SHADER_SESSION, windows_set_shader_config, windows_set_shader_preset_path};
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nesium_apply_shader(
@@ -52,17 +52,28 @@ pub unsafe extern "C" fn nesium_apply_shader(
 
         session::LAST_DEVICE_ADDR.store(device as usize, Ordering::Release);
 
-        // Reload if generation changed OR device changed OR shader not loaded
-        // AND we are not already loading this generation.
-        let needs_reload = match &*current_session {
-            Some(session) => {
-                session.generation != cfg.generation || session.device_addr != device as usize
-            }
+        let needs_reload_gen = match &*current_session {
+            Some(session) => session.generation != cfg.generation,
             None => true,
         };
+        let needs_reload_device = match &*current_session {
+            Some(session) => session.device_addr != device as usize,
+            None => false,
+        };
 
-        if needs_reload && session::LOADING_GENERATION.load(Ordering::Acquire) != cfg.generation {
-            session::LOADING_GENERATION.store(cfg.generation, Ordering::Release);
+        let loading_gen = session::LOADING_GENERATION.load(Ordering::Acquire);
+        if needs_reload_device
+            || (needs_reload_gen
+                && loading_gen != cfg.generation
+                && session::LOADING_GENERATION
+                    .compare_exchange(
+                        loading_gen,
+                        cfg.generation,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    )
+                    .is_ok())
+        {
             reload_shader_chain(&effective_path, device, cfg.generation);
         }
 

@@ -32,3 +32,8 @@ Future<void> setShaderEnabled({required bool enabled}) =>
 
 Future<frb_video.ShaderParameters> setShaderPresetPath({String? path}) =>
     frb_video.setShaderPresetPath(path: path);
+
+Future<frb_video.ShaderParameters> setShaderConfig({
+  required bool enabled,
+  String? path,
+}) => frb_video.setShaderConfig(enabled: enabled, path: path);

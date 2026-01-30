@@ -153,17 +153,14 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
     );
 
     try {
-      await nes_video.setShaderEnabled(enabled: settings.enabled);
+      final parameters = await nes_video.setShaderConfig(
+        enabled: settings.enabled,
+        path: absolutePath,
+      );
 
       if (!settings.enabled || absolutePath == null) {
         ref.read(shaderParametersProvider.notifier).clear();
-        if (absolutePath == null) {
-          await nes_video.setShaderPresetPath(path: null);
-        }
       } else {
-        final parameters = await nes_video.setShaderPresetPath(
-          path: absolutePath,
-        );
         if (settings.presetPath != null) {
           await ref
               .read(shaderParametersProvider.notifier)

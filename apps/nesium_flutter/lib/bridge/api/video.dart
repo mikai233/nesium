@@ -30,6 +30,14 @@ Future<void> setShaderEnabled({required bool enabled}) =>
 Future<ShaderParameters> setShaderPresetPath({String? path}) =>
     RustLib.instance.api.crateApiVideoSetShaderPresetPath(path: path);
 
+Future<ShaderParameters> setShaderConfig({
+  required bool enabled,
+  String? path,
+}) => RustLib.instance.api.crateApiVideoSetShaderConfig(
+  enabled: enabled,
+  path: path,
+);
+
 Future<void> setShaderParameter({
   required String name,
   required double value,

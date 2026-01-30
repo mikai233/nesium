@@ -74,8 +74,11 @@ pub(crate) fn reload_shader_chain(
         let command_queue_ptr = command_queue_addr as *mut c_void;
 
         tracing::info!(
-            "Reloading Apple Metal shader chain (async, path={})",
-            effective_path
+            "Reloading Apple Metal shader chain (async, path={}, generation={}, device={:?}, queue={:?})",
+            effective_path,
+            generation,
+            device_ptr,
+            command_queue_ptr
         );
         let features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
             | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
@@ -109,7 +112,12 @@ pub(crate) fn reload_shader_chain(
 
         let final_result: Result<ShaderParameters, String> = match load_result {
             Ok(chain) => {
-                tracing::info!("Apple shader chain loaded from {}", effective_path);
+                tracing::info!(
+                    "Apple shader chain loaded from {} (device={:?}, queue={:?})",
+                    effective_path,
+                    device_ptr,
+                    command_queue_ptr
+                );
 
                 SHADER_SESSION.store(Some(Arc::new(ShaderSession {
                     chain: Mutex::new(Some(chain)),

@@ -45,41 +45,21 @@ pub fn android_shader_snapshot() -> AndroidShaderConfig {
     }
 }
 
-pub fn android_set_shader_enabled(enabled: bool) {
-    ANDROID_SHADER_CONFIG.rcu(|old| {
-        let mut new = old
-            .as_ref()
-            .map(|a| (**a).clone())
-            .unwrap_or(AndroidShaderConfig {
-                enabled: false,
-                preset_path: None,
-                generation: 1,
-            });
-
-        if new.enabled == enabled {
-            old.clone()
-        } else {
-            new.enabled = enabled;
-            new.generation = new.generation.wrapping_add(1);
-            Some(Arc::new(new))
-        }
-    });
-
-    // Wake renderer so it reloads promptly.
-    rust_renderer_wake();
+pub async fn android_set_shader_preset_path(
+    path: Option<String>,
+) -> Result<ShaderParameters, String> {
+    android_set_shader_config(true, path).await
 }
 
-pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
-    Mutex::new(VecDeque::new());
-
-pub async fn android_set_shader_preset_path(
+pub async fn android_set_shader_config(
+    enabled: bool,
     path: Option<String>,
 ) -> Result<ShaderParameters, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    RELOAD_CHANNELS.lock().push_back(tx);
-
     let mut new_gen = 0;
+    let mut changed = false;
+
     ANDROID_SHADER_CONFIG.rcu(|old| {
         let mut new = old
             .as_ref()
@@ -90,16 +70,62 @@ pub async fn android_set_shader_preset_path(
                 generation: 1,
             });
 
-        new.preset_path = path.clone();
-        new.generation = new.generation.wrapping_add(1);
-        new_gen = new.generation;
-        Some(Arc::new(new))
+        let mut target_path = path.clone();
+        if target_path.is_none() && path.is_none() {
+            target_path = new.preset_path.clone();
+        }
+
+        if new.enabled == enabled && new.preset_path == target_path {
+            changed = false;
+            old.clone()
+        } else {
+            changed = true;
+            new.enabled = enabled;
+            new.preset_path = target_path;
+            new.generation = new.generation.wrapping_add(1);
+            new_gen = new.generation;
+            Some(Arc::new(new))
+        }
     });
 
-    match path {
-        Some(p) => {
-            // Background parsing to avoid blocking renderer thread with IO/Preprocessing
+    if !changed {
+        if let Some(session) = &*ANDROID_SHADER_SESSION.load() {
+            let api_parameters = session
+                .parameters
+                .iter()
+                .map(|meta| crate::api::video::ShaderParameter {
+                    name: meta.id.to_string(),
+                    description: meta.description.clone(),
+                    initial: meta.initial,
+                    current: meta.initial,
+                    minimum: meta.minimum,
+                    maximum: meta.maximum,
+                    step: meta.step,
+                })
+                .collect();
+
+            return Ok(ShaderParameters {
+                path: session.path.clone(),
+                parameters: api_parameters,
+            });
+        }
+        return Ok(ShaderParameters {
+            path: String::new(),
+            parameters: Vec::new(),
+        });
+    }
+
+    RELOAD_CHANNELS.lock().push_back(tx);
+
+    let config = android_shader_snapshot();
+    match config.preset_path {
+        Some(p) if config.enabled => {
             std::thread::spawn(move || {
+                tracing::info!(
+                    "Reloading Android GLES shader chain (async, path={}, generation={})",
+                    p,
+                    new_gen
+                );
                 let features = librashader::presets::ShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
                     | librashader::presets::ShaderFeatures::FRAMETIME_UNIFORMS;
 
@@ -113,14 +139,13 @@ pub async fn android_set_shader_preset_path(
                         rust_renderer_wake();
                     }
                     Err(e) => {
-                        // If parsing fails, we still wake the renderer so it can fulfill the channel with the error
                         tracing::error!("Background shader parsing failed: {}", e);
                         rust_renderer_wake();
                     }
                 }
             });
         }
-        None => {
+        _ => {
             rust_renderer_wake();
         }
     }
@@ -128,3 +153,6 @@ pub async fn android_set_shader_preset_path(
     rx.await
         .map_err(|e| format!("Reload task cancelled: {:?}", e))?
 }
+
+pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
+    Mutex::new(VecDeque::new());

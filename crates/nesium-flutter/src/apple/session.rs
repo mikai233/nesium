@@ -51,36 +51,19 @@ pub fn apple_shader_snapshot() -> AppleShaderConfig {
     }
 }
 
-pub fn apple_set_shader_enabled(enabled: bool) {
-    APPLE_SHADER_CONFIG.rcu(|old| {
-        let mut new = old
-            .as_ref()
-            .map(|a| (**a).clone())
-            .unwrap_or(AppleShaderConfig {
-                enabled: false,
-                preset_path: None,
-                generation: 1,
-            });
-
-        if new.enabled == enabled {
-            old.clone()
-        } else {
-            new.enabled = enabled;
-            new.generation = new.generation.wrapping_add(1);
-            Some(Arc::new(new))
-        }
-    });
+pub async fn apple_set_shader_preset_path(
+    path: Option<String>,
+) -> Result<ShaderParameters, String> {
+    apple_set_shader_config(true, path).await
 }
 
-pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
-    Mutex::new(VecDeque::new());
-
-pub async fn apple_set_shader_preset_path(
+pub async fn apple_set_shader_config(
+    enabled: bool,
     path: Option<String>,
 ) -> Result<ShaderParameters, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    RELOAD_CHANNELS.lock().push_back(tx);
+    let mut changed = false;
 
     APPLE_SHADER_CONFIG.rcu(|old| {
         let mut new = old
@@ -92,12 +75,59 @@ pub async fn apple_set_shader_preset_path(
                 generation: 1,
             });
 
-        new.preset_path = path.clone();
-        new.generation = new.generation.wrapping_add(1);
+        let mut target_path = path.clone();
+        if target_path.is_none() && path.is_none() {
+            target_path = new.preset_path.clone();
+        }
 
-        Some(Arc::new(new))
+        if new.enabled == enabled && new.preset_path == target_path {
+            changed = false;
+            old.clone()
+        } else {
+            changed = true;
+            new.enabled = enabled;
+            new.preset_path = target_path;
+            new.generation = new.generation.wrapping_add(1);
+
+            Some(Arc::new(new))
+        }
     });
 
+    if !changed {
+        if let Some(session) = &*SHADER_SESSION.load() {
+            let api_parameters = session
+                .parameters
+                .iter()
+                .map(|meta| crate::api::video::ShaderParameter {
+                    name: meta.id.to_string(),
+                    description: meta.description.clone(),
+                    initial: meta.initial,
+                    current: meta.initial,
+                    minimum: meta.minimum,
+                    maximum: meta.maximum,
+                    step: meta.step,
+                })
+                .collect();
+
+            return Ok(ShaderParameters {
+                path: session.path.clone(),
+                parameters: api_parameters,
+            });
+        }
+        return Ok(ShaderParameters {
+            path: String::new(),
+            parameters: Vec::new(),
+        });
+    }
+
+    RELOAD_CHANNELS.lock().push_back(tx);
+
+    // For Apple, we rely on the renderer to trigger the initial reload
+    // because we need the device/queue pointers which are passed by the shell
+    // only during the rendering callback.
     rx.await
         .map_err(|e| format!("Reload task cancelled: {:?}", e))?
 }
+
+pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
+    Mutex::new(VecDeque::new());

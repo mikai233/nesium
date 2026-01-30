@@ -47,10 +47,21 @@ pub fn windows_shader_snapshot() -> WindowsShaderConfig {
     }
 }
 
-pub fn windows_set_shader_enabled(enabled: bool) {
+pub async fn windows_set_shader_preset_path(
+    path: Option<String>,
+) -> Result<ShaderParameters, String> {
+    windows_set_shader_config(true, path).await
+}
+
+pub async fn windows_set_shader_config(
+    enabled: bool,
+    path: Option<String>,
+) -> Result<ShaderParameters, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
     let mut new_gen = 0;
-    let mut path = None;
     let mut changed = false;
+    let mut effective_path = String::new();
 
     WINDOWS_SHADER_CONFIG.rcu(|old| {
         let mut new = old
@@ -62,82 +73,79 @@ pub fn windows_set_shader_enabled(enabled: bool) {
                 generation: 1,
             });
 
-        if new.enabled == enabled {
+        // Use new path if provided, otherwise keep old
+        let mut target_path = path.clone();
+        if target_path.is_none() && path.is_none() {
+            target_path = new.preset_path.clone();
+        }
+
+        if new.enabled == enabled && new.preset_path == target_path {
             changed = false;
             old.clone()
         } else {
             changed = true;
             new.enabled = enabled;
+            new.preset_path = target_path.clone();
             new.generation = new.generation.wrapping_add(1);
             new_gen = new.generation;
-            path = new.preset_path.clone();
-            Some(Arc::new(new))
-        }
-    });
 
-    if changed {
-        let device_addr = LAST_DEVICE_ADDR.load(Ordering::Acquire);
-        if device_addr != 0 {
-            LOADING_GENERATION.store(new_gen, Ordering::Release);
-
-            let effective_path = if enabled && path.is_some() {
-                path.unwrap()
+            effective_path = if enabled && target_path.is_some() {
+                target_path.unwrap()
             } else {
                 crate::windows::passthrough::get_passthrough_preset()
                     .to_string_lossy()
                     .to_string()
             };
 
-            super::chain::reload_shader_chain(&effective_path, device_addr as *mut _, new_gen);
+            Some(Arc::new(new))
         }
+    });
+
+    if !changed {
+        // Return current parameters if no change
+        if let Some(session) = &*SHADER_SESSION.load() {
+            let api_parameters = session
+                .parameters
+                .iter()
+                .map(|meta| crate::api::video::ShaderParameter {
+                    name: meta.id.to_string(),
+                    description: meta.description.clone(),
+                    initial: meta.initial,
+                    current: meta.initial,
+                    minimum: meta.minimum,
+                    maximum: meta.maximum,
+                    step: meta.step,
+                })
+                .collect();
+
+            return Ok(ShaderParameters {
+                path: session.path.clone(),
+                parameters: api_parameters,
+            });
+        }
+        return Ok(ShaderParameters {
+            path: String::new(),
+            parameters: Vec::new(),
+        });
     }
-}
-
-pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
-    Mutex::new(VecDeque::new());
-
-pub async fn windows_set_shader_preset_path(
-    path: Option<String>,
-) -> Result<ShaderParameters, String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
 
     RELOAD_CHANNELS.lock().push_back(tx);
 
-    let mut new_gen = 0;
-    let mut config_enabled = false;
-    WINDOWS_SHADER_CONFIG.rcu(|old| {
-        let mut new = old
-            .as_ref()
-            .map(|a| (**a).clone())
-            .unwrap_or(WindowsShaderConfig {
-                enabled: false,
-                preset_path: None,
-                generation: 1,
-            });
-
-        new.preset_path = path.clone();
-        new.generation = new.generation.wrapping_add(1);
-        new_gen = new.generation;
-        config_enabled = new.enabled;
-        Some(Arc::new(new))
-    });
-
-    // Use stored device to trigger reload immediately.
     let device_addr = LAST_DEVICE_ADDR.load(Ordering::Acquire);
     if device_addr != 0 {
-        LOADING_GENERATION.store(new_gen, Ordering::Release);
-
-        let effective_path = if config_enabled && path.is_some() {
-            path.unwrap()
-        } else {
-            crate::windows::passthrough::get_passthrough_preset()
-                .to_string_lossy()
-                .to_string()
-        };
-
-        super::chain::reload_shader_chain(&effective_path, device_addr as *mut _, new_gen);
+        let loading_gen = LOADING_GENERATION.load(Ordering::Acquire);
+        if loading_gen != new_gen
+            && LOADING_GENERATION
+                .compare_exchange(loading_gen, new_gen, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+        {
+            super::chain::reload_shader_chain(&effective_path, device_addr as *mut _, new_gen);
+        }
     }
 
     rx.await
         .map_err(|e| format!("Reload task cancelled: {:?}", e))?
 }
+
+pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
+    Mutex::new(VecDeque::new());

@@ -59,9 +59,10 @@ pub(crate) fn reload_shader_chain(
         let device_ptr = device_addr as *mut std::ffi::c_void;
 
         tracing::info!(
-            "Reloading Windows D3D11 shader chain (async, path={}, generation={})",
+            "Reloading Windows D3D11 shader chain (async, path={}, generation={}, device={:?})",
             path,
-            generation
+            generation,
+            device_ptr
         );
 
         let features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
@@ -97,7 +98,11 @@ pub(crate) fn reload_shader_chain(
 
         let final_result: Result<ShaderParameters, String> = match load_result {
             Ok(chain) => {
-                tracing::info!("Windows shader chain loaded from {}", path);
+                tracing::info!(
+                    "Windows shader chain loaded from {} (device={:?})",
+                    path,
+                    device_ptr
+                );
 
                 // Emit update to Flutter immediately
                 let api_parameters = parameters
