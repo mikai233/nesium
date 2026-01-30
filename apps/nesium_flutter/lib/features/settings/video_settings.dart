@@ -350,7 +350,9 @@ class VideoSettingsController extends Notifier<VideoSettings>
     // Apply full screen state only if this is the main window
     final kind = ref.read(currentWindowKindProvider);
     if (kind == WindowKind.main && isNativeDesktop) {
-      await windowManager.setFullScreen(state.fullScreen);
+      if (await windowManager.isFullScreen() != state.fullScreen) {
+        await windowManager.setFullScreen(state.fullScreen);
+      }
     }
 
     if (isNtsc) {
