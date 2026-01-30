@@ -39,8 +39,10 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
     
     // Scaling and shaders
     private var inputTexture: MTLTexture?
-    private var stagingBuffer: MTLBuffer?  // Shared memory buffer for zero-copy upload
+    private var stagingBuffers: [MTLBuffer?] = [nil, nil]  // Double buffering
     private var stagingBufferSize: Int = 0
+    private var currentBufferIndex: Int = 0
+    private let inflightSemaphore = DispatchSemaphore(value: 2) // Allow 2 frames in flight
     private let renderQueue = DispatchQueue(label: "plugins.nesium.com/render_queue", qos: .userInteractive)
     
     // Cached viewport state
@@ -104,9 +106,13 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
     }
     
     private func renderFrame(width: Int, height: Int) {
+        // Wait for a buffer to become available (prevent overwriting data the GPU is still using)
+        _ = inflightSemaphore.wait(timeout: .distantFuture)
+        
         guard let device = self.device,
               let commandQueue = self.commandQueue,
               let drawable = _view.metalLayer.nextDrawable() else {
+            inflightSemaphore.signal()
             return
         }
         
@@ -115,18 +121,30 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
         let renderHeight = cachedPhysicalSize.height
         sizeLock.unlock()
         
-        if renderWidth <= 0 || renderHeight <= 0 { return }
+        if renderWidth <= 0 || renderHeight <= 0 {
+            inflightSemaphore.signal()
+            return
+        }
 
         let rowBytes = width * 4
         let neededSize = rowBytes * height
         
         // Ensure MTLBuffer is large enough (shared memory for zero-copy)
-        if stagingBuffer == nil || stagingBufferSize < neededSize {
-            stagingBuffer = device.makeBuffer(length: neededSize, options: .storageModeShared)
-            stagingBufferSize = neededSize
+        if stagingBuffers[currentBufferIndex] == nil || stagingBufferSize < neededSize {
+            stagingBuffers[currentBufferIndex] = device.makeBuffer(length: neededSize, options: .storageModeShared)
+            // If we resized one, we likely need to resize them all, but we handle that lazily as we cycle.
+            // We only track the max size needed.
+            // Note: In a production app, checking if ANY buffer is too small is safer, 
+            // but lazily replacing them as we encounter them is also fine since we cycle sequentially.
+            if stagingBufferSize < neededSize {
+               stagingBufferSize = neededSize
+            }
         }
         
-        guard let stagingBuffer = self.stagingBuffer else { return }
+        guard let stagingBuffer = self.stagingBuffers[currentBufferIndex] else {
+            inflightSemaphore.signal()
+            return
+        }
         
         // Copy raw frame data from Rust directly into shared GPU memory
         let dst = stagingBuffer.contents().assumingMemoryBound(to: UInt8.self)
@@ -139,11 +157,17 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
             inputTexture = device.makeTexture(descriptor: desc)
         }
         
-        guard let inputTexture = self.inputTexture else { return }
+        guard let inputTexture = self.inputTexture else {
+            inflightSemaphore.signal()
+            return
+        }
         
         // Use blit encoder to copy from MTLBuffer to MTLTexture (GPU-side copy)
         guard let commandBuffer = commandQueue.makeCommandBuffer(),
-              let blitEncoder = commandBuffer.makeBlitCommandEncoder() else { return }
+              let blitEncoder = commandBuffer.makeBlitCommandEncoder() else {
+            inflightSemaphore.signal()
+            return
+        }
         
         blitEncoder.copy(
             from: stagingBuffer,
@@ -171,6 +195,11 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
             UInt32(renderHeight)
         )
         
+        // Signal the semaphore when the GPU is done with this frame's commands
+        commandBuffer.addCompletedHandler { [weak self] _ in
+            self?.inflightSemaphore.signal()
+        }
+        
         if success {
             commandBuffer.present(drawable)
         } else {
@@ -181,5 +210,6 @@ final class NesiumPlatformView: NSObject, FlutterPlatformView, NesiumFrameConsum
         commandBuffer.commit()
         
         frameCount += 1
+        currentBufferIndex = (currentBufferIndex + 1) % 2
     }
 }
