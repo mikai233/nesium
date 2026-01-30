@@ -177,10 +177,6 @@ struct GlesRenderer {
     shader_output_size: LibrashaderSize<u32>,
     frame_count: usize,
 
-    // Surface state
-    current_surf_w: u32,
-    current_surf_h: u32,
-
     // FFI pointers
     egl_procs: EglProcs,
 }
@@ -409,8 +405,6 @@ impl GlesRenderer {
             },
             frame_count: 0,
             egl_procs,
-            current_surf_w: 0,
-            current_surf_h: 0,
         };
 
         this.recreate_textures_and_images(swapchain)?;
@@ -619,23 +613,6 @@ impl GlesRenderer {
                 }
             };
 
-            let cfg_gen = android_shader_snapshot().generation;
-            if generation != self.seen_generation || cfg_gen != self.shader_seen_generation {
-                let mut surf_w: EGLint = 0;
-                let mut surf_h: EGLint = 0;
-                // SAFETY: display and surface are established for the lifetime of run_rust_renderer.
-                unsafe {
-                    let _ = eglQuerySurface(self.egl.dpy, self.egl.surf, EGL_WIDTH, &mut surf_w);
-                    let _ = eglQuerySurface(self.egl.dpy, self.egl.surf, EGL_HEIGHT, &mut surf_h);
-                }
-                self.current_surf_w = (surf_w as i32).max(1) as u32;
-                self.current_surf_h = (surf_h as i32).max(1) as u32;
-            }
-
-            if is_gles3 {
-                self.update_shader_state(self.current_surf_w, self.current_surf_h)?;
-            }
-
             let Some(buffer_index) = msg else {
                 continue;
             };
@@ -644,6 +621,19 @@ impl GlesRenderer {
             // SAFETY: swapchain buffer index is from signal queue.
             let _busy = GpuBusyGuard::new(swapchain, idx as u32);
 
+            let mut surf_w: EGLint = 0;
+            let mut surf_h: EGLint = 0;
+            // SAFETY: display and surface are established for the lifetime of run_rust_renderer.
+            unsafe {
+                let _ = eglQuerySurface(self.egl.dpy, self.egl.surf, EGL_WIDTH, &mut surf_w);
+                let _ = eglQuerySurface(self.egl.dpy, self.egl.surf, EGL_HEIGHT, &mut surf_h);
+            }
+            let surf_w = (surf_w as i32).max(1) as u32;
+            let surf_h = (surf_h as i32).max(1) as u32;
+
+            if is_gles3 {
+                self.update_shader_state(surf_w, surf_h)?;
+            }
             let mut present_tex_id = self.textures[idx];
             if is_gles3 {
                 if let Ok(Some(shader_tex)) = self.render_shader_pass(idx, swapchain) {
@@ -655,12 +645,7 @@ impl GlesRenderer {
 
             // Blit pass
             unsafe {
-                self.glow_ctx.viewport(
-                    0,
-                    0,
-                    self.current_surf_w as i32,
-                    self.current_surf_h as i32,
-                );
+                self.glow_ctx.viewport(0, 0, surf_w as i32, surf_h as i32);
                 self.glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
                 self.glow_ctx.clear(glow::COLOR_BUFFER_BIT);
                 self.glow_ctx.disable(glow::CULL_FACE);
