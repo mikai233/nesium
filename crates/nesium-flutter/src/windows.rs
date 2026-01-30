@@ -50,7 +50,10 @@ pub unsafe extern "C" fn nesium_apply_shader(
 
         let current_session = SHADER_SESSION.load();
 
+        session::LAST_DEVICE_ADDR.store(device as usize, Ordering::Release);
+
         // Reload if generation changed OR device changed OR shader not loaded
+        // AND we are not already loading this generation.
         let needs_reload = match &*current_session {
             Some(session) => {
                 session.generation != cfg.generation || session.device_addr != device as usize
@@ -58,7 +61,8 @@ pub unsafe extern "C" fn nesium_apply_shader(
             None => true,
         };
 
-        if needs_reload {
+        if needs_reload && session::LOADING_GENERATION.load(Ordering::Acquire) != cfg.generation {
+            session::LOADING_GENERATION.store(cfg.generation, Ordering::Release);
             reload_shader_chain(&effective_path, device, cfg.generation);
         }
 

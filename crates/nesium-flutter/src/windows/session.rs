@@ -5,8 +5,11 @@ use librashader::runtime::d3d11::FilterChain as LibrashaderFilterChain;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use tokio::sync::oneshot;
+
+pub static LOADING_GENERATION: AtomicU64 = AtomicU64::new(0);
+pub static LAST_DEVICE_ADDR: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Clone)]
 pub struct WindowsShaderConfig {
@@ -45,6 +48,10 @@ pub fn windows_shader_snapshot() -> WindowsShaderConfig {
 }
 
 pub fn windows_set_shader_enabled(enabled: bool) {
+    let mut new_gen = 0;
+    let mut path = None;
+    let mut changed = false;
+
     WINDOWS_SHADER_CONFIG.rcu(|old| {
         let mut new = old
             .as_ref()
@@ -56,13 +63,34 @@ pub fn windows_set_shader_enabled(enabled: bool) {
             });
 
         if new.enabled == enabled {
+            changed = false;
             old.clone()
         } else {
+            changed = true;
             new.enabled = enabled;
             new.generation = new.generation.wrapping_add(1);
+            new_gen = new.generation;
+            path = new.preset_path.clone();
             Some(Arc::new(new))
         }
     });
+
+    if changed {
+        let device_addr = LAST_DEVICE_ADDR.load(Ordering::Acquire);
+        if device_addr != 0 {
+            LOADING_GENERATION.store(new_gen, Ordering::Release);
+
+            let effective_path = if enabled && path.is_some() {
+                path.unwrap()
+            } else {
+                crate::windows::passthrough::get_passthrough_preset()
+                    .to_string_lossy()
+                    .to_string()
+            };
+
+            super::chain::reload_shader_chain(&effective_path, device_addr as *mut _, new_gen);
+        }
+    }
 }
 
 pub static RELOAD_CHANNELS: Mutex<VecDeque<oneshot::Sender<Result<ShaderParameters, String>>>> =
@@ -75,6 +103,8 @@ pub async fn windows_set_shader_preset_path(
 
     RELOAD_CHANNELS.lock().push_back(tx);
 
+    let mut new_gen = 0;
+    let mut config_enabled = false;
     WINDOWS_SHADER_CONFIG.rcu(|old| {
         let mut new = old
             .as_ref()
@@ -87,8 +117,26 @@ pub async fn windows_set_shader_preset_path(
 
         new.preset_path = path.clone();
         new.generation = new.generation.wrapping_add(1);
+        new_gen = new.generation;
+        config_enabled = new.enabled;
         Some(Arc::new(new))
     });
+
+    // Use stored device to trigger reload immediately.
+    let device_addr = LAST_DEVICE_ADDR.load(Ordering::Acquire);
+    if device_addr != 0 {
+        LOADING_GENERATION.store(new_gen, Ordering::Release);
+
+        let effective_path = if config_enabled && path.is_some() {
+            path.unwrap()
+        } else {
+            crate::windows::passthrough::get_passthrough_preset()
+                .to_string_lossy()
+                .to_string()
+        };
+
+        super::chain::reload_shader_chain(&effective_path, device_addr as *mut _, new_gen);
+    }
 
     rx.await
         .map_err(|e| format!("Reload task cancelled: {:?}", e))?

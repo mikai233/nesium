@@ -1,6 +1,6 @@
 use crate::api::video::ShaderParameters;
 use arc_swap::ArcSwapOption;
-use librashader::preprocess::ShaderParameter;
+use librashader::presets::ShaderPreset;
 use librashader::runtime::gl::FilterChain as LibrashaderFilterChain;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
@@ -18,12 +18,19 @@ pub struct AndroidShaderConfig {
 
 pub struct ShaderSession {
     pub chain: Mutex<Option<LibrashaderFilterChain>>,
-    pub parameters: Vec<ShaderParameter>,
+    pub parameters: Vec<librashader::preprocess::ShaderParameter>,
     pub path: String,
+}
+
+pub struct PendingShaderData {
+    pub preset: ShaderPreset,
+    pub parameters: Vec<librashader::preprocess::ShaderParameter>,
+    pub generation: u64,
 }
 
 pub static ANDROID_SHADER_CONFIG: ArcSwapOption<AndroidShaderConfig> = ArcSwapOption::const_empty();
 pub static ANDROID_SHADER_SESSION: ArcSwapOption<ShaderSession> = ArcSwapOption::const_empty();
+pub static PENDING_SHADER_DATA: ArcSwapOption<PendingShaderData> = ArcSwapOption::const_empty();
 
 pub fn android_shader_snapshot() -> AndroidShaderConfig {
     let guard = ANDROID_SHADER_CONFIG.load();
@@ -72,6 +79,7 @@ pub async fn android_set_shader_preset_path(
 
     RELOAD_CHANNELS.lock().push_back(tx);
 
+    let mut new_gen = 0;
     ANDROID_SHADER_CONFIG.rcu(|old| {
         let mut new = old
             .as_ref()
@@ -84,10 +92,38 @@ pub async fn android_set_shader_preset_path(
 
         new.preset_path = path.clone();
         new.generation = new.generation.wrapping_add(1);
+        new_gen = new.generation;
         Some(Arc::new(new))
     });
 
-    rust_renderer_wake();
+    match path {
+        Some(p) => {
+            // Background parsing to avoid blocking renderer thread with IO/Preprocessing
+            std::thread::spawn(move || {
+                let features = librashader::presets::ShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
+                    | librashader::presets::ShaderFeatures::FRAMETIME_UNIFORMS;
+
+                match super::chain::parse_preset(&p, features) {
+                    Ok((preset, parameters)) => {
+                        PENDING_SHADER_DATA.store(Some(Arc::new(PendingShaderData {
+                            preset,
+                            parameters,
+                            generation: new_gen,
+                        })));
+                        rust_renderer_wake();
+                    }
+                    Err(e) => {
+                        // If parsing fails, we still wake the renderer so it can fulfill the channel with the error
+                        tracing::error!("Background shader parsing failed: {}", e);
+                        rust_renderer_wake();
+                    }
+                }
+            });
+        }
+        None => {
+            rust_renderer_wake();
+        }
+    }
 
     rx.await
         .map_err(|e| format!("Reload task cancelled: {:?}", e))?

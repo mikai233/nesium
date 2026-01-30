@@ -51,44 +51,53 @@ pub(crate) fn reload_shader_chain(
     effective_path: &str,
     device_ptr: *mut std::ffi::c_void,
     generation: u64,
-) -> bool {
-    tracing::info!(
-        "Reloading shader chain (path={}, device changed=...)",
-        effective_path
-    );
+) {
+    let path = effective_path.to_string();
+    let device_addr = device_ptr as usize;
 
-    let features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
-        | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
+    std::thread::spawn(move || {
+        let device_ptr = device_addr as *mut std::ffi::c_void;
 
-    let options = LibrashaderFilterChainOptions {
-        force_no_mipmaps: true,
-        disable_cache: true,
-        ..Default::default()
-    };
+        tracing::info!(
+            "Reloading Windows D3D11 shader chain (async, path={}, generation={})",
+            path,
+            generation
+        );
 
-    // SAFETY: The device_ptr is provided by the platform (Flutter/Win32) and must be a valid ID3D11Device.
-    // We wrap it in ManuallyDrop to prevent it from being released when the local variable goes out of scope.
-    let load_result = unsafe {
-        let device: ManuallyDrop<ID3D11Device> = ManuallyDrop::new(transmute_copy(&device_ptr));
+        let features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
+            | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
 
+        let options = LibrashaderFilterChainOptions {
+            force_no_mipmaps: true,
+            disable_cache: true,
+            ..Default::default()
+        };
+
+        // SAFETY: The device_ptr is provided by the platform (Flutter/Win32) and must be a valid ID3D11Device.
+        // We wrap it in ManuallyDrop to prevent it from being released when the local variable goes out of scope.
         let mut parameters = Vec::new();
-        let res = (|| {
-            let preset = ShaderPreset::try_parse(effective_path, features)
-                .map_err(|e| format!("{:?}", e))?;
+        let load_result = unsafe {
+            let device: ManuallyDrop<ID3D11Device> = ManuallyDrop::new(transmute_copy(&device_ptr));
 
-            if let Ok(meta) = get_parameter_meta(&preset) {
-                for p in meta {
-                    parameters.push(p.clone());
+            let res = (|| {
+                let preset =
+                    ShaderPreset::try_parse(&path, features).map_err(|e| format!("{:?}", e))?;
+
+                if let Ok(meta) = get_parameter_meta(&preset) {
+                    for p in meta {
+                        parameters.push(p.clone());
+                    }
                 }
-            }
 
-            LibrashaderFilterChain::load_from_preset(preset, &*device, Some(&options))
-                .map_err(|e| format!("{:?}", e))
-        })();
+                LibrashaderFilterChain::load_from_preset(preset, &*device, Some(&options))
+                    .map_err(|e| format!("{:?}", e))
+            })();
+            res
+        };
 
-        let final_result: Result<ShaderParameters, String> = match res {
+        let final_result: Result<ShaderParameters, String> = match load_result {
             Ok(chain) => {
-                tracing::info!("Windows shader chain loaded from {}", effective_path);
+                tracing::info!("Windows shader chain loaded from {}", path);
 
                 // Emit update to Flutter immediately
                 let api_parameters = parameters
@@ -105,7 +114,7 @@ pub(crate) fn reload_shader_chain(
                     .collect();
 
                 let params = ShaderParameters {
-                    path: effective_path.to_string(),
+                    path: path.to_string(),
                     parameters: api_parameters,
                 };
 
@@ -114,23 +123,19 @@ pub(crate) fn reload_shader_chain(
                     generation,
                     device_addr: device_ptr as usize,
                     parameters,
-                    path: effective_path.to_string(),
+                    path: path.to_string(),
                 })));
                 Ok(params)
             }
             Err(e) => {
-                tracing::error!(
-                    "Failed to load Windows shader preset ({}): {:?}",
-                    effective_path,
-                    e
-                );
+                tracing::error!("Failed to load Windows shader preset ({}): {:?}", path, e);
 
                 SHADER_SESSION.store(Some(Arc::new(ShaderSession {
                     chain: Mutex::new(None),
                     generation,
                     device_addr: device_ptr as usize,
                     parameters: Vec::new(),
-                    path: effective_path.to_string(),
+                    path: path.to_string(),
                 })));
                 Err(e)
             }
@@ -141,9 +146,5 @@ pub(crate) fn reload_shader_chain(
         while let Some(tx) = channels.pop_front() {
             let _ = tx.send(final_result.clone());
         }
-
-        final_result.is_ok()
-    };
-
-    load_result
+    });
 }

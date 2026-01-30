@@ -10,12 +10,10 @@ use librashader::preprocess::ShaderParameter;
 use librashader::presets::context::VideoDriver;
 use librashader::presets::{ShaderPreset, get_parameter_meta};
 
-pub fn reload_shader_chain(
-    glow_ctx: &Arc<glow::Context>,
+pub fn parse_preset(
     path: &str,
     features: LibrashaderShaderFeatures,
-    options: &LibrashaderFilterChainOptions,
-) -> Result<(LibrashaderFilterChain, Vec<ShaderParameter>), String> {
+) -> Result<(ShaderPreset, Vec<ShaderParameter>), String> {
     let preset = ShaderPreset::try_parse_with_driver_context(path, features, VideoDriver::GlCore)
         .map_err(|e| format!("{:?}", e))?;
 
@@ -26,11 +24,30 @@ pub fn reload_shader_chain(
         }
     }
 
+    Ok((preset, parameters))
+}
+
+pub fn load_from_parsed_preset(
+    glow_ctx: &Arc<glow::Context>,
+    preset: ShaderPreset,
+    options: &LibrashaderFilterChainOptions,
+) -> Result<LibrashaderFilterChain, String> {
     let chain = unsafe {
         LibrashaderFilterChain::load_from_preset(preset, Arc::clone(glow_ctx), Some(options))
     }
     .map_err(|e| format!("{:?}", e))?;
 
+    Ok(chain)
+}
+
+pub fn reload_shader_chain(
+    glow_ctx: &Arc<glow::Context>,
+    path: &str,
+    features: LibrashaderShaderFeatures,
+    options: &LibrashaderFilterChainOptions,
+) -> Result<(LibrashaderFilterChain, Vec<ShaderParameter>), String> {
+    let (preset, parameters) = parse_preset(path, features)?;
+    let chain = load_from_parsed_preset(glow_ctx, preset, options)?;
     Ok((chain, parameters))
 }
 

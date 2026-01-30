@@ -1,4 +1,3 @@
-use librashader::presets::ShaderFeatures as LibrashaderShaderFeatures;
 use librashader::runtime::Size as LibrashaderSize;
 use librashader::runtime::Viewport as LibrashaderViewport;
 use librashader::runtime::gl::FilterChainOptions as LibrashaderFilterChainOptions;
@@ -6,7 +5,7 @@ use librashader::runtime::gl::FrameOptions as LibrashaderFrameOptions;
 use librashader::runtime::gl::GLImage as LibrashaderGlImage;
 
 use crate::api::video::{ShaderParameter, ShaderParameters};
-use crate::{FRAME_HEIGHT, FRAME_WIDTH, runtime_handle};
+use crate::runtime_handle;
 use glow::HasContext;
 use std::num::NonZeroU32;
 
@@ -19,7 +18,9 @@ use std::time::Duration;
 
 use super::ahb::{AhbSwapchain, GpuBusyGuard, release_buffers};
 use super::gles::*;
-use super::session::{ANDROID_SHADER_SESSION, ShaderSession, android_shader_snapshot};
+use super::session::{
+    ANDROID_SHADER_SESSION, PENDING_SHADER_DATA, ShaderSession, android_shader_snapshot,
+};
 
 pub struct RustRendererHandle {
     pub stop: Arc<AtomicBool>,
@@ -175,6 +176,10 @@ struct GlesRenderer {
     shader_output_tex: Option<glow::Texture>,
     shader_output_size: LibrashaderSize<u32>,
     frame_count: usize,
+
+    // Surface state
+    current_surf_w: u32,
+    current_surf_h: u32,
 
     // FFI pointers
     egl_procs: EglProcs,
@@ -404,6 +409,8 @@ impl GlesRenderer {
             },
             frame_count: 0,
             egl_procs,
+            current_surf_w: 0,
+            current_surf_h: 0,
         };
 
         this.recreate_textures_and_images(swapchain)?;
@@ -612,35 +619,30 @@ impl GlesRenderer {
                 }
             };
 
-            let Some(buffer_index) = msg else { continue };
+            let cfg_gen = android_shader_snapshot().generation;
+            if generation != self.seen_generation || cfg_gen != self.shader_seen_generation {
+                let mut surf_w: EGLint = 0;
+                let mut surf_h: EGLint = 0;
+                // SAFETY: display and surface are established for the lifetime of run_rust_renderer.
+                unsafe {
+                    let _ = eglQuerySurface(self.egl.dpy, self.egl.surf, EGL_WIDTH, &mut surf_w);
+                    let _ = eglQuerySurface(self.egl.dpy, self.egl.surf, EGL_HEIGHT, &mut surf_h);
+                }
+                self.current_surf_w = (surf_w as i32).max(1) as u32;
+                self.current_surf_h = (surf_h as i32).max(1) as u32;
+            }
+
+            if is_gles3 {
+                self.update_shader_state(self.current_surf_w, self.current_surf_h)?;
+            }
+
+            let Some(buffer_index) = msg else {
+                continue;
+            };
             let idx = buffer_index as usize;
 
             // SAFETY: swapchain buffer index is from signal queue.
             let _busy = GpuBusyGuard::new(swapchain, idx as u32);
-
-            let mut surf_w: EGLint = FRAME_WIDTH as i32;
-            let mut surf_h: EGLint = FRAME_HEIGHT as i32;
-            // SAFETY: EGL surface is active.
-            unsafe {
-                let _ = eglQuerySurface(
-                    self.egl.dpy,
-                    self.egl.surf,
-                    EGL_WIDTH,
-                    &mut surf_w as *mut _,
-                );
-                let _ = eglQuerySurface(
-                    self.egl.dpy,
-                    self.egl.surf,
-                    EGL_HEIGHT,
-                    &mut surf_h as *mut _,
-                );
-            }
-            let surf_w = (surf_w as i32).max(1) as u32;
-            let surf_h = (surf_h as i32).max(1) as u32;
-
-            if is_gles3 {
-                self.update_shader_state(surf_w, surf_h)?;
-            }
 
             let mut present_tex_id = self.textures[idx];
             if is_gles3 {
@@ -653,7 +655,12 @@ impl GlesRenderer {
 
             // Blit pass
             unsafe {
-                self.glow_ctx.viewport(0, 0, surf_w as i32, surf_h as i32);
+                self.glow_ctx.viewport(
+                    0,
+                    0,
+                    self.current_surf_w as i32,
+                    self.current_surf_h as i32,
+                );
                 self.glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
                 self.glow_ctx.clear(glow::COLOR_BUFFER_BIT);
                 self.glow_ctx.disable(glow::CULL_FACE);
@@ -748,74 +755,97 @@ impl GlesRenderer {
     fn update_shader_state(&mut self, surf_w: u32, surf_h: u32) -> Result<(), String> {
         let cfg = android_shader_snapshot();
         if cfg.generation != self.shader_seen_generation {
-            self.shader_seen_generation = cfg.generation;
-            ANDROID_SHADER_SESSION.store(None);
+            let mut final_result: Option<Result<ShaderParameters, String>> = None;
 
-            let mut final_result: Result<ShaderParameters, String> =
-                Err("Shader disabled or no path provided".to_string());
-
-            if cfg.enabled {
-                if let Some(path) = cfg.preset_path {
-                    let shader_features = LibrashaderShaderFeatures::ORIGINAL_ASPECT_UNIFORMS
-                        | LibrashaderShaderFeatures::FRAMETIME_UNIFORMS;
-                    let shader_chain_options = LibrashaderFilterChainOptions {
-                        glsl_version: 0,
-                        use_dsa: false,
-                        force_no_mipmaps: false,
-                        disable_cache: true,
-                    };
-
-                    match super::chain::reload_shader_chain(
-                        &self.glow_ctx,
-                        &path,
-                        shader_features,
-                        &shader_chain_options,
-                    ) {
-                        Ok((chain, params)) => {
-                            // Emit update to Flutter
-                            let mut api_parameters = Vec::new();
-                            for meta in params.iter() {
-                                api_parameters.push(ShaderParameter {
-                                    name: meta.id.to_string(),
-                                    description: meta.description.clone(),
-                                    initial: meta.initial,
-                                    current: meta.initial,
-                                    minimum: meta.minimum,
-                                    maximum: meta.maximum,
-                                    step: meta.step,
-                                });
-                            }
-
-                            let parameters = ShaderParameters {
-                                path: path.clone(),
-                                parameters: api_parameters,
-                            };
-
-                            ANDROID_SHADER_SESSION.store(Some(Arc::new(ShaderSession {
-                                chain: Mutex::new(Some(chain)),
-                                parameters: params,
-                                path,
-                            })));
-                            final_result = Ok(parameters);
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to reload Android shader chain: {}", e);
-                            final_result = Err(e);
-                        }
-                    }
-                }
-            } else {
-                // Shader disabled
-                final_result = Ok(ShaderParameters {
+            if !cfg.enabled || cfg.preset_path.is_none() {
+                // Disabling or clearing doesn't require background parsing
+                self.shader_seen_generation = cfg.generation;
+                ANDROID_SHADER_SESSION.store(None);
+                final_result = Some(Ok(ShaderParameters {
                     path: String::new(),
                     parameters: Vec::new(),
-                });
+                }));
+            } else {
+                // Check if background parsing is complete for this generation
+                let pending_guard = PENDING_SHADER_DATA.load();
+                if let Some(pending) = &*pending_guard {
+                    if pending.generation == cfg.generation {
+                        // IO and Preprocessing done in background, now do GL resource creation
+                        self.shader_seen_generation = cfg.generation;
+                        ANDROID_SHADER_SESSION.store(None);
+
+                        let shader_chain_options = LibrashaderFilterChainOptions {
+                            glsl_version: 0,
+                            use_dsa: false,
+                            force_no_mipmaps: false,
+                            disable_cache: true,
+                        };
+
+                        // We take the preset out of pending by clearing it if we are the ones who use it?
+                        // Actually, it's simpler to just use it and let it be replaced by next request.
+                        // But we should probably clear it to avoid using it again (though generation check protects us).
+                        let path = cfg.preset_path.unwrap();
+                        match super::chain::load_from_parsed_preset(
+                            &self.glow_ctx,
+                            pending.preset.clone(),
+                            &shader_chain_options,
+                        ) {
+                            Ok(chain) => {
+                                let mut api_parameters = Vec::new();
+                                for meta in pending.parameters.iter() {
+                                    api_parameters.push(ShaderParameter {
+                                        name: meta.id.to_string(),
+                                        description: meta.description.clone(),
+                                        initial: meta.initial,
+                                        current: meta.initial,
+                                        minimum: meta.minimum,
+                                        maximum: meta.maximum,
+                                        step: meta.step,
+                                    });
+                                }
+
+                                let parameters = ShaderParameters {
+                                    path: path.clone(),
+                                    parameters: api_parameters,
+                                };
+
+                                ANDROID_SHADER_SESSION.store(Some(Arc::new(ShaderSession {
+                                    chain: Mutex::new(Some(chain)),
+                                    parameters: pending.parameters.clone(),
+                                    path,
+                                })));
+                                final_result = Some(Ok(parameters));
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    "Failed to load GL shader chain from preset: {}",
+                                    e
+                                );
+                                final_result = Some(Err(e));
+                            }
+                        }
+                    } else if pending.generation > cfg.generation {
+                        // Should not happen normally, but if it does, we must have missed a generation.
+                        // We reset and wait for a matching or newer one.
+                        self.shader_seen_generation = cfg.generation;
+                    } else {
+                        // Background parsing still in progress for current or older generation.
+                        // Just wait for next loop/wake.
+                        return Ok(());
+                    }
+                } else {
+                    // Background parsing hasn't stored anything yet.
+                    // Just wait for next loop/wake.
+                    return Ok(());
+                }
             }
 
-            // Fulfill pending async requests
-            let mut channels = super::session::RELOAD_CHANNELS.lock();
-            while let Some(tx) = channels.pop_front() {
-                let _ = tx.send(final_result.clone());
+            // If we have a final result (success or definitive failure), fulfill pending async requests
+            if let Some(res) = final_result {
+                let mut channels = super::session::RELOAD_CHANNELS.lock();
+                while let Some(tx) = channels.pop_front() {
+                    let _ = tx.send(res.clone());
+                }
             }
         }
 
