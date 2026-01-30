@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../bridge/api/video.dart' as video;
 import '../../../../l10n/app_localizations.dart';
-import '../../../../widgets/animated_settings_widgets.dart';
 import '../../shader_parameter_provider.dart';
+import 'shader_parameters_page.dart';
 
 class ShaderSettingsCard extends ConsumerWidget {
   const ShaderSettingsCard({super.key});
@@ -14,135 +13,30 @@ class ShaderSettingsCard extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
     final paramsAsync = ref.watch(shaderParametersProvider);
 
-    return paramsAsync.when(
-      data: (params) {
-        if (params.isEmpty) return const SizedBox.shrink();
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-              AnimatedExpansionTile(
-                labelText: l10n.videoShaderParametersTitle,
-                title: Row(
-                  children: [
-                    Expanded(child: Text(l10n.videoShaderParametersSubtitle)),
-                    IconButton(
-                      icon: const Icon(Icons.refresh, size: 20),
-                      tooltip: l10n.videoShaderParametersReset,
-                      onPressed: () => ref
-                          .read(shaderParametersProvider.notifier)
-                          .resetParameters(),
-                    ),
-                  ],
-                ),
-                initiallyExpanded: false,
-                children: [
-                  ...params.map((p) {
-                    // Detect separators/headings: parameters where min == max are usually
-                    // used as labels in librashader/RetroArch shader presets.
-                    final bool isSeparator =
-                        (p.minimum - p.maximum).abs() < 0.0001;
-
-                    if (isSeparator) {
-                      return Padding(
-                        padding: const EdgeInsets.only(
-                          left: 16,
-                          right: 16,
-                          top: 16,
-                          bottom: 8,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              p.description.isNotEmpty ? p.description : p.name,
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                            ),
-                            const Divider(thickness: 1),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      child: _ShaderParameterSlider(parameter: p),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        );
-      },
-      loading: () => const SizedBox.shrink(),
-      error: (err, stack) => const SizedBox.shrink(),
-    );
-  }
-}
-
-class _ShaderParameterSlider extends ConsumerStatefulWidget {
-  const _ShaderParameterSlider({required this.parameter});
-
-  final video.ShaderParameter parameter;
-
-  @override
-  ConsumerState<_ShaderParameterSlider> createState() =>
-      _ShaderParameterSliderState();
-}
-
-class _ShaderParameterSliderState
-    extends ConsumerState<_ShaderParameterSlider> {
-  late double _currentValue;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentValue = widget.parameter.current;
-  }
-
-  @override
-  void didUpdateWidget(_ShaderParameterSlider oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.parameter.current != widget.parameter.current) {
-      _currentValue = widget.parameter.current;
+    if (!paramsAsync.hasValue || (paramsAsync.value?.isEmpty ?? true)) {
+      return const SizedBox.shrink();
     }
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    final p = widget.parameter;
-    return AnimatedSliderTile(
-      label: p.name,
-      helperText: p.description.isNotEmpty ? p.description : null,
-      value: _currentValue,
-      min: p.minimum,
-      max: p.maximum,
-      // Calculate divisions based on step
-      divisions: (p.step > 0 && (p.maximum - p.minimum) > 0)
-          ? ((p.maximum - p.minimum) / p.step).round()
-          : null,
-      valueLabel: _currentValue.toStringAsFixed(3),
-      onChanged: (value) {
-        setState(() => _currentValue = value);
-        ref
-            .read(shaderParametersProvider.notifier)
-            .updateParameter(p.name, value);
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 1),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          leading: const Icon(Icons.tune),
+          title: Text(l10n.videoShaderParametersTitle),
+          subtitle: Text(l10n.videoShaderParametersSubtitle),
+          trailing: const Icon(Icons.navigate_next),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const ShaderParametersPage(),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 }

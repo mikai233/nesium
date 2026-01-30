@@ -321,16 +321,26 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
   late AnimationController _controller;
   late Animation<double> _iconRotation;
   late Animation<double> _heightFactor;
+  bool _shouldBuildChildren = false;
 
   @override
   void initState() {
     super.initState();
     _isExpanded = widget.initiallyExpanded;
+    _shouldBuildChildren = _isExpanded;
     _controller = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
       value: _isExpanded ? 1.0 : 0.0,
     );
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed) {
+        setState(() {
+          _shouldBuildChildren = false;
+        });
+      }
+    });
 
     _iconRotation = Tween<double>(
       begin: 0.0,
@@ -354,6 +364,7 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
     setState(() {
       _isExpanded = !_isExpanded;
       if (_isExpanded) {
+        _shouldBuildChildren = true;
         _controller.forward();
       } else {
         _controller.reverse();
@@ -445,10 +456,12 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
         ),
         SizeTransition(
           sizeFactor: _heightFactor,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: widget.children,
-          ),
+          child: _shouldBuildChildren
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: widget.children,
+                )
+              : const SizedBox.shrink(),
         ),
       ],
     );
