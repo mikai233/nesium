@@ -3,17 +3,24 @@ use librashader::presets::{ShaderFeatures, ShaderPreset, get_parameter_meta};
 use tokio::sync::oneshot;
 
 /// Shared helper to map librashader parameter metadata to API types.
-pub fn map_parameters(preset: &ShaderPreset) -> Result<Vec<ShaderParameter>, String> {
+pub fn map_parameters(
+    preset: &ShaderPreset,
+    overrides: &std::collections::HashMap<String, f32>,
+) -> Result<Vec<ShaderParameter>, String> {
     let meta = get_parameter_meta(preset).map_err(|e| format!("{:?}", e))?;
     Ok(meta
-        .map(|meta| ShaderParameter {
-            name: meta.id.to_string(),
-            description: meta.description.clone(),
-            initial: meta.initial,
-            current: meta.initial,
-            minimum: meta.minimum,
-            maximum: meta.maximum,
-            step: meta.step,
+        .map(|meta| {
+            let name = meta.id.to_string();
+            let current = overrides.get(&name).cloned().unwrap_or(meta.initial);
+            ShaderParameter {
+                name,
+                description: meta.description.clone(),
+                initial: meta.initial,
+                current,
+                minimum: meta.minimum,
+                maximum: meta.maximum,
+                step: meta.step,
+            }
         })
         .collect())
 }
@@ -22,6 +29,7 @@ pub fn map_parameters(preset: &ShaderPreset) -> Result<Vec<ShaderParameter>, Str
 /// Returns a receiver for the (Preset, Parameters) result.
 pub fn preparse_preset(
     path: String,
+    overrides: std::collections::HashMap<String, f32>,
 ) -> oneshot::Receiver<Result<(ShaderPreset, Vec<ShaderParameter>), String>> {
     let (tx, rx) = oneshot::channel();
     let features = ShaderFeatures::ORIGINAL_ASPECT_UNIFORMS | ShaderFeatures::FRAMETIME_UNIFORMS;
@@ -30,7 +38,7 @@ pub fn preparse_preset(
         let res = (|| {
             let preset =
                 ShaderPreset::try_parse(&path, features).map_err(|e| format!("{:?}", e))?;
-            let api_parameters = map_parameters(&preset)?;
+            let api_parameters = map_parameters(&preset, &overrides)?;
             Ok((preset, api_parameters))
         })();
         let _ = tx.send(res);

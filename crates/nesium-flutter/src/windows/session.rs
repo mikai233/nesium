@@ -125,11 +125,20 @@ pub async fn windows_set_shader_config(
             old.clone()
         } else {
             changed = true;
+            let path_changed = new.preset_path != target_path;
+
             new.enabled = enabled;
             new.preset_path = target_path;
             new.generation = new.generation.wrapping_add(1);
-            new.preparsed_preset = None; // Avoid race condition with old preset
-            new.parameters.clear(); // Path changed, clear overrides
+
+            // ALWAYS clear preparsed_preset when enabled or path changes,
+            // as the effective_path (and thus the preset meta) will change.
+            new.preparsed_preset = None;
+
+            if path_changed {
+                new.parameters.clear();
+            }
+
             new_gen = new.generation;
             Some(Arc::new(new))
         }
@@ -146,7 +155,7 @@ pub async fn windows_set_shader_config(
         let api_parameters = config
             .preparsed_preset
             .as_ref()
-            .map(|p| crate::shader_utils::map_parameters(p))
+            .map(|p| crate::shader_utils::map_parameters(p, &config.parameters))
             .transpose()?
             .unwrap_or_default();
 
@@ -169,7 +178,10 @@ pub async fn windows_set_shader_config(
         passthrough_path,
     );
 
-    let rx = crate::shader_utils::preparse_preset(effective_path.clone());
+    let rx = crate::shader_utils::preparse_preset(
+        effective_path.clone(),
+        config_snapshot.parameters.clone(),
+    );
     let (preset, api_parameters) = rx
         .await
         .map_err(|e| format!("Join error: {:?}", e))?

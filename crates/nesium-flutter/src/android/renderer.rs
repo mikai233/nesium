@@ -773,8 +773,17 @@ impl GlesRenderer {
                     Ok(chain) => {
                         tracing::info!("Android shader chain loaded from {}", path);
 
-                        // Apply parameter overrides
-                        for (name, value) in &cfg.parameters {
+                        // Apply parameter overrides.
+                        // We pull the latest parameters again here because they might have been updated by the UI thread
+                        // while we were performining the (long-running) shader load.
+                        let latest_cfg = crate::android::session::android_shader_snapshot();
+                        let params_to_apply = if latest_cfg.generation == cfg.generation {
+                            &latest_cfg.parameters
+                        } else {
+                            &cfg.parameters
+                        };
+
+                        for (name, value) in params_to_apply {
                             chain.parameters().set_parameter_value(name, *value);
                         }
 

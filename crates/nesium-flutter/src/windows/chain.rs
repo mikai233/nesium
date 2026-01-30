@@ -100,8 +100,18 @@ pub(crate) fn reload_shader_chain(
                     device_ptr
                 );
 
-                // Apply parameter overrides
-                for (name, value) in &parameters {
+                // Apply parameter overrides.
+                // We combine the captured parameters with the latest global config to prevent race conditions during loading.
+                let mut final_parameters = parameters;
+                if let Some(cfg) = crate::windows::WINDOWS_SHADER_CONFIG.load().as_ref() {
+                    if cfg.generation == generation {
+                        for (name, value) in &cfg.parameters {
+                            final_parameters.insert(name.clone(), *value);
+                        }
+                    }
+                }
+
+                for (name, value) in &final_parameters {
                     chain.parameters().set_parameter_value(name, *value);
                 }
 
