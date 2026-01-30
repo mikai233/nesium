@@ -340,6 +340,7 @@
   "actionPowerResetNes": "电源重置 NES",
   "actionEjectNes": "关机",
   "actionLoadPalette": "加载调色板",
+  "videoResetToDefault": "重置为默认值",
   "videoTitle": "画面",
   "videoFilterLabel": "画面滤镜",
   "videoFilterCategoryCpu": "CPU 滤镜",

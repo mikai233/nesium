@@ -806,6 +806,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get actionLoadPalette => '加载调色板';
 
   @override
+  String get videoResetToDefault => '重置为默认值';
+
+  @override
   String get videoTitle => '画面';
 
   @override

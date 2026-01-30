@@ -113,6 +113,7 @@ class AnimatedSliderTile extends StatelessWidget {
     required this.valueLabel,
     this.divisions,
     this.helperText,
+    this.trailing,
   });
 
   final String label;
@@ -123,6 +124,7 @@ class AnimatedSliderTile extends StatelessWidget {
   final ValueChanged<double> onChanged;
   final String valueLabel;
   final String? helperText;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +138,10 @@ class AnimatedSliderTile extends StatelessWidget {
             Expanded(
               child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
             ),
+            if (trailing != null) ...[
+              SizedBox(height: 24, width: 24, child: trailing!),
+              const SizedBox(width: 8),
+            ],
             Text(
               valueLabel,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -302,6 +308,7 @@ class AnimatedExpansionTile extends StatefulWidget {
     this.leading,
     this.labelText,
     this.enabled = true,
+    this.trailing,
   });
 
   final Widget title;
@@ -310,6 +317,7 @@ class AnimatedExpansionTile extends StatefulWidget {
   final Widget? leading;
   final String? labelText;
   final bool enabled;
+  final Widget? trailing;
 
   @override
   State<AnimatedExpansionTile> createState() => _AnimatedExpansionTileState();
@@ -329,7 +337,7 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
     _isExpanded = widget.initiallyExpanded;
     _shouldBuildChildren = _isExpanded;
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 200),
       vsync: this,
       value: _isExpanded ? 1.0 : 0.0,
     );
@@ -345,7 +353,7 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
     _iconRotation = Tween<double>(
       begin: 0.0,
       end: 0.5,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     _heightFactor = CurvedAnimation(
       parent: _controller,
@@ -377,6 +385,25 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final overlayColor = WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.hovered) ||
+          states.contains(WidgetState.focused)) {
+        return Colors.transparent;
+      }
+      if (states.contains(WidgetState.pressed)) {
+        return colorScheme.primary.withValues(alpha: 0.08);
+      }
+      return null;
+    });
+
+    final suffixIcon = RotationTransition(
+      turns: _iconRotation,
+      child: Icon(
+        Icons.expand_more_rounded,
+        color: colorScheme.onSurfaceVariant,
+      ),
+    );
+
     Widget header = Row(
       children: [
         if (widget.leading != null) ...[
@@ -389,10 +416,11 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
             child: widget.title,
           ),
         ),
-        RotationTransition(
-          turns: _iconRotation,
-          child: Icon(Icons.expand_more, color: colorScheme.onSurfaceVariant),
-        ),
+        if (widget.trailing != null) ...[
+          widget.trailing!,
+          const SizedBox(width: 4),
+        ],
+        if (widget.labelText == null) suffixIcon,
       ],
     );
 
@@ -417,6 +445,7 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
             labelText: widget.labelText,
             enabled: widget.enabled,
             floatingLabelBehavior: FloatingLabelBehavior.always,
+            suffixIcon: suffixIcon,
           ).applyDefaults(
             InputDecorationTheme(
               filled: true,
@@ -443,6 +472,7 @@ class _AnimatedExpansionTileState extends State<AnimatedExpansionTile>
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.enabled ? _toggle : null,
+            overlayColor: overlayColor,
             borderRadius: BorderRadius.circular(
               widget.labelText != null ? 12 : 8,
             ),

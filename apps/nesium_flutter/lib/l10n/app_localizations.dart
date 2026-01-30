@@ -1568,6 +1568,12 @@ abstract class AppLocalizations {
   /// **'Load palette'**
   String get actionLoadPalette;
 
+  /// No description provided for @videoResetToDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get videoResetToDefault;
+
   /// No description provided for @videoTitle.
   ///
   /// In en, this message translates to:

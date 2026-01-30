@@ -819,6 +819,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionLoadPalette => 'Load palette';
 
   @override
+  String get videoResetToDefault => 'Reset to default';
+
+  @override
   String get videoTitle => 'Video';
 
   @override

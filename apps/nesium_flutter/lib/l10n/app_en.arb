@@ -457,6 +457,7 @@
   "actionPowerResetNes": "Power Reset NES",
   "actionEjectNes": "Power Off",
   "actionLoadPalette": "Load palette",
+  "videoResetToDefault": "Reset to default",
   "videoTitle": "Video",
   "videoFilterLabel": "Video Filter",
   "videoFilterCategoryCpu": "CPU Filters",
