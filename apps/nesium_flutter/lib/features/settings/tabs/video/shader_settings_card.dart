@@ -26,18 +26,61 @@ class ShaderSettingsCard extends ConsumerWidget {
               const SizedBox(height: 8),
               AnimatedExpansionTile(
                 labelText: l10n.videoShaderParametersTitle,
-                title: Text(l10n.videoShaderParametersSubtitle),
+                title: Row(
+                  children: [
+                    Expanded(child: Text(l10n.videoShaderParametersSubtitle)),
+                    IconButton(
+                      icon: const Icon(Icons.refresh, size: 20),
+                      tooltip: l10n.videoShaderParametersReset,
+                      onPressed: () => ref
+                          .read(shaderParametersProvider.notifier)
+                          .resetParameters(),
+                    ),
+                  ],
+                ),
                 initiallyExpanded: false,
                 children: [
-                  ...params.entries.map(
-                    (entry) => Padding(
+                  ...params.map((p) {
+                    // Detect separators/headings: parameters where min == max are usually
+                    // used as labels in librashader/RetroArch shader presets.
+                    final bool isSeparator =
+                        (p.minimum - p.maximum).abs() < 0.0001;
+
+                    if (isSeparator) {
+                      return Padding(
+                        padding: const EdgeInsets.only(
+                          left: 16,
+                          right: 16,
+                          top: 16,
+                          bottom: 8,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.description.isNotEmpty ? p.description : p.name,
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            const Divider(thickness: 1),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 4,
                       ),
-                      child: _ShaderParameterSlider(parameter: entry.value),
-                    ),
-                  ),
+                      child: _ShaderParameterSlider(parameter: p),
+                    );
+                  }),
                   const SizedBox(height: 12),
                 ],
               ),

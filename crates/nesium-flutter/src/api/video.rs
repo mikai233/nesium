@@ -69,7 +69,11 @@ pub struct ShaderParameter {
 #[frb]
 pub struct ShaderParameters {
     pub path: String,
-    pub parameters: std::collections::HashMap<String, ShaderParameter>,
+    // We use a Vec here instead of a HashMap to preserve the order of parameters
+    // as provided by librashader. librashader uses `halfbrown::HashMap` which
+    // preserves insertion order for small sets (n < 32), which covers most
+    // shader presets. Standard `std::collections::HashMap` does not guarantee order.
+    pub parameters: Vec<ShaderParameter>,
 }
 
 #[frb]
@@ -590,30 +594,28 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
 
 pub fn get_shader_parameters() -> ShaderParameters {
     let mut current_path = String::new();
-    let mut parameters = std::collections::HashMap::new();
+    let mut parameters = Vec::new();
 
     #[cfg(target_os = "android")]
     {
         let state = crate::android::android_shader_state().lock();
         if let Some(state) = state.as_ref() {
             current_path = state.path.clone();
-            for (name, meta) in state.parameters.iter() {
-                parameters.insert(
-                    name.to_string(),
-                    ShaderParameter {
-                        name: name.to_string(),
-                        description: meta.description.clone(),
-                        initial: meta.initial,
-                        current: state
-                            .chain
-                            .as_ref()
-                            .and_then(|c| c.parameters().parameter_value(name))
-                            .unwrap_or(meta.initial),
-                        minimum: meta.minimum,
-                        maximum: meta.maximum,
-                        step: meta.step,
-                    },
-                );
+            for meta in state.parameters.iter() {
+                let name = &meta.id;
+                parameters.push(ShaderParameter {
+                    name: name.to_string(),
+                    description: meta.description.clone(),
+                    initial: meta.initial,
+                    current: state
+                        .chain
+                        .as_ref()
+                        .and_then(|c| c.parameters().parameter_value(name))
+                        .unwrap_or(meta.initial),
+                    minimum: meta.minimum,
+                    maximum: meta.maximum,
+                    step: meta.step,
+                });
             }
         }
     }
@@ -623,7 +625,8 @@ pub fn get_shader_parameters() -> ShaderParameters {
         let state = crate::windows::SHADER_STATE.load();
         if let Some(state) = state.as_ref() {
             current_path = state.path.clone();
-            for (name, meta) in state.parameters.iter() {
+            for meta in state.parameters.iter() {
+                let name = &meta.id;
                 let current = {
                     let chain = state.chain.lock();
                     if let Some(chain) = chain.as_ref() {
@@ -636,18 +639,15 @@ pub fn get_shader_parameters() -> ShaderParameters {
                     }
                 };
 
-                parameters.insert(
-                    name.to_string(),
-                    ShaderParameter {
-                        name: name.to_string(),
-                        description: meta.description.clone(),
-                        initial: meta.initial,
-                        current,
-                        minimum: meta.minimum,
-                        maximum: meta.maximum,
-                        step: meta.step,
-                    },
-                );
+                parameters.push(ShaderParameter {
+                    name: name.to_string(),
+                    description: meta.description.clone(),
+                    initial: meta.initial,
+                    current,
+                    minimum: meta.minimum,
+                    maximum: meta.maximum,
+                    step: meta.step,
+                });
             }
         }
     }
@@ -657,7 +657,8 @@ pub fn get_shader_parameters() -> ShaderParameters {
         let state = crate::apple::SHADER_STATE.lock();
         if let Some(state) = state.as_ref() {
             current_path = state.path.clone();
-            for (name, meta) in state.parameters.iter() {
+            for meta in state.parameters.iter() {
+                let name = &meta.id;
                 let current = if let Some(chain) = state.chain.as_ref() {
                     chain
                         .parameters()
@@ -667,18 +668,15 @@ pub fn get_shader_parameters() -> ShaderParameters {
                     meta.initial
                 };
 
-                parameters.insert(
-                    name.to_string(),
-                    ShaderParameter {
-                        name: name.to_string(),
-                        description: meta.description.clone(),
-                        initial: meta.initial,
-                        current,
-                        minimum: meta.minimum,
-                        maximum: meta.maximum,
-                        step: meta.step,
-                    },
-                );
+                parameters.push(ShaderParameter {
+                    name: name.to_string(),
+                    description: meta.description.clone(),
+                    initial: meta.initial,
+                    current,
+                    minimum: meta.minimum,
+                    maximum: meta.maximum,
+                    step: meta.step,
+                });
             }
         }
     }

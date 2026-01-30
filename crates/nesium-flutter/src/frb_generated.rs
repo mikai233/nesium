@@ -4577,15 +4577,6 @@ impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
     }
 }
 
-impl SseDecode for std::collections::HashMap<String, crate::api::video::ShaderParameter> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner =
-            <Vec<(String, crate::api::video::ShaderParameter)>>::sse_decode(deserializer);
-        return inner.into_iter().collect();
-    }
-}
-
 impl SseDecode
     for StreamSink<
         crate::api::events::DebugStateNotification,
@@ -5060,13 +5051,13 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for Vec<(String, crate::api::video::ShaderParameter)> {
+impl SseDecode for Vec<crate::api::video::ShaderParameter> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
-            ans_.push(<(String, crate::api::video::ShaderParameter)>::sse_decode(
+            ans_.push(<crate::api::video::ShaderParameter>::sse_decode(
                 deserializer,
             ));
         }
@@ -5381,15 +5372,6 @@ impl SseDecode for crate::api::events::PaletteSnapshot {
     }
 }
 
-impl SseDecode for (String, crate::api::video::ShaderParameter) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <String>::sse_decode(deserializer);
-        let mut var_field1 = <crate::api::video::ShaderParameter>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
 impl SseDecode for crate::senders::replay::ReplayEventNotification {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5484,10 +5466,8 @@ impl SseDecode for crate::api::video::ShaderParameters {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_path = <String>::sse_decode(deserializer);
-        let mut var_parameters = <std::collections::HashMap<
-            String,
-            crate::api::video::ShaderParameter,
-        >>::sse_decode(deserializer);
+        let mut var_parameters =
+            <Vec<crate::api::video::ShaderParameter>>::sse_decode(deserializer);
         return crate::api::video::ShaderParameters {
             path: var_path,
             parameters: var_parameters,
@@ -7077,16 +7057,6 @@ impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
     }
 }
 
-impl SseEncode for std::collections::HashMap<String, crate::api::video::ShaderParameter> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(String, crate::api::video::ShaderParameter)>>::sse_encode(
-            self.into_iter().collect(),
-            serializer,
-        );
-    }
-}
-
 impl SseEncode
     for StreamSink<
         crate::api::events::DebugStateNotification,
@@ -7453,12 +7423,12 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for Vec<(String, crate::api::video::ShaderParameter)> {
+impl SseEncode for Vec<crate::api::video::ShaderParameter> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <(String, crate::api::video::ShaderParameter)>::sse_encode(item, serializer);
+            <crate::api::video::ShaderParameter>::sse_encode(item, serializer);
         }
     }
 }
@@ -7715,14 +7685,6 @@ impl SseEncode for crate::api::events::PaletteSnapshot {
     }
 }
 
-impl SseEncode for (String, crate::api::video::ShaderParameter) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.0, serializer);
-        <crate::api::video::ShaderParameter>::sse_encode(self.1, serializer);
-    }
-}
-
 impl SseEncode for crate::senders::replay::ReplayEventNotification {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7800,10 +7762,7 @@ impl SseEncode for crate::api::video::ShaderParameters {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.path, serializer);
-        <std::collections::HashMap<String, crate::api::video::ShaderParameter>>::sse_encode(
-            self.parameters,
-            serializer,
-        );
+        <Vec<crate::api::video::ShaderParameter>>::sse_encode(self.parameters, serializer);
     }
 }
 

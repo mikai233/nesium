@@ -70,8 +70,7 @@ struct AndroidShaderConfig {
 
 pub(crate) struct AndroidShaderState {
     pub(crate) chain: Option<LibrashaderFilterChain>,
-    pub(crate) parameters:
-        std::collections::HashMap<String, librashader::preprocess::ShaderParameter>,
+    pub(crate) parameters: Vec<librashader::preprocess::ShaderParameter>,
     pub(crate) path: String,
 }
 
@@ -1716,10 +1715,10 @@ void main() {
                                 )
                                 .map_err(|e| format!("{:?}", e))?;
 
-                            let mut parameters = std::collections::HashMap::new();
+                            let mut parameters = Vec::new();
                             if let Ok(meta) = librashader::presets::get_parameter_meta(&preset) {
                                 for p in meta {
-                                    parameters.insert(p.id.to_string(), p);
+                                    parameters.push(p.clone());
                                 }
                             }
 
@@ -1735,35 +1734,30 @@ void main() {
                             Ok::<
                                 (
                                     LibrashaderFilterChain,
-                                    std::collections::HashMap<
-                                        String,
-                                        librashader::preprocess::ShaderParameter,
-                                    >,
                                     String,
+                                    Vec<librashader::preprocess::ShaderParameter>,
                                 ),
                                 String,
-                            >((chain, parameters, path.to_string()))
+                            >((chain, path.to_string(), parameters))
                         })();
 
                         match load_result {
-                            Ok((chain, parameters, path)) => {
+                            Ok((chain, path, parameters)) => {
                                 tracing::info!("Shader chain loaded successfully");
 
                                 // Emit update to Flutter immediately using local data
-                                let mut api_parameters = std::collections::HashMap::new();
-                                for (name, meta) in parameters.iter() {
-                                    api_parameters.insert(
-                                        name.clone(),
-                                        crate::api::video::ShaderParameter {
-                                            name: name.clone(),
-                                            description: meta.description.clone(),
-                                            initial: meta.initial,
-                                            current: meta.initial,
-                                            minimum: meta.minimum,
-                                            maximum: meta.maximum,
-                                            step: meta.step,
-                                        },
-                                    );
+                                let mut api_parameters = Vec::new();
+                                for meta in parameters.iter() {
+                                    let name = &meta.id;
+                                    api_parameters.push(crate::api::video::ShaderParameter {
+                                        name: name.to_string(),
+                                        description: meta.description.clone(),
+                                        initial: meta.initial,
+                                        current: meta.initial,
+                                        minimum: meta.minimum,
+                                        maximum: meta.maximum,
+                                        step: meta.step,
+                                    });
                                 }
                                 crate::senders::shader::emit_shader_parameters_update(
                                     crate::api::video::ShaderParameters {
@@ -1784,14 +1778,14 @@ void main() {
                                 crate::senders::shader::emit_shader_parameters_update(
                                     crate::api::video::ShaderParameters {
                                         path: path.clone(),
-                                        parameters: std::collections::HashMap::new(),
+                                        parameters: Vec::new(),
                                     },
                                 );
 
                                 // Still update the state with the path so synchronization works
                                 *shader_state = Some(AndroidShaderState {
                                     chain: None,
-                                    parameters: std::collections::HashMap::new(),
+                                    parameters: Vec::new(),
                                     path: path.to_string(),
                                 });
                             }

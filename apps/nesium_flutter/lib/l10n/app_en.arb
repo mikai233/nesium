@@ -819,5 +819,6 @@
   "netplayInvalidP2PServerAddr": "Invalid P2P server address",
   "netplayProceed": "Proceed",
   "videoShaderParametersTitle": "Shader Parameters",
-  "videoShaderParametersSubtitle": "Adjust shader parameters in real-time"
+  "videoShaderParametersSubtitle": "Adjust shader parameters in real-time",
+  "videoShaderParametersReset": "Reset Parameters"
 }

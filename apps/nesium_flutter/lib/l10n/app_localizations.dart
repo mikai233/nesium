@@ -3139,6 +3139,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Adjust shader parameters in real-time'**
   String get videoShaderParametersSubtitle;
+
+  /// No description provided for @videoShaderParametersReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Parameters'**
+  String get videoShaderParametersReset;
 }
 
 class _AppLocalizationsDelegate

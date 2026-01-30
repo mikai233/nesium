@@ -1651,4 +1651,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get videoShaderParametersSubtitle =>
       'Adjust shader parameters in real-time';
+
+  @override
+  String get videoShaderParametersReset => 'Reset Parameters';
 }

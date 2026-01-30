@@ -1627,4 +1627,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoShaderParametersSubtitle => '实时调整着色器参数';
+
+  @override
+  String get videoShaderParametersReset => '重置参数';
 }

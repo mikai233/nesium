@@ -1,7 +1,7 @@
 use arc_swap::ArcSwapOption;
 use librashader::preprocess::ShaderParameter;
 use parking_lot::Mutex;
-use std::collections::HashMap;
+
 use std::ffi::c_void;
 use std::mem::{ManuallyDrop, transmute_copy};
 use std::sync::atomic::AtomicUsize;
@@ -141,7 +141,7 @@ pub(crate) struct ShaderState {
     // Store device address to detect if the underlying D3D11 device has changed
     // (e.g. backend switch or recreation).
     pub(crate) device_addr: usize,
-    pub(crate) parameters: HashMap<String, ShaderParameter>,
+    pub(crate) parameters: Vec<ShaderParameter>,
     pub(crate) path: String,
 }
 
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                 let device_ptr = device;
                 let device: ManuallyDrop<ID3D11Device> = ManuallyDrop::new(transmute_copy(&device));
 
-                let mut parameters = HashMap::new();
+                let mut parameters = Vec::new();
                 let load_result = (|| {
                     let preset =
                         librashader::presets::ShaderPreset::try_parse(&effective_path, features)
@@ -276,7 +276,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
 
                     if let Ok(meta) = librashader::presets::get_parameter_meta(&preset) {
                         for p in meta {
-                            parameters.insert(p.id.to_string(), p);
+                            parameters.push(p.clone());
                         }
                     }
 
@@ -289,20 +289,18 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         tracing::info!("Windows shader chain loaded from {}", effective_path);
 
                         // Emit update to Flutter immediately using local data
-                        let mut api_parameters = std::collections::HashMap::new();
-                        for (name, meta) in parameters.iter() {
-                            api_parameters.insert(
-                                name.clone(),
-                                crate::api::video::ShaderParameter {
-                                    name: name.clone(),
-                                    description: meta.description.clone(),
-                                    initial: meta.initial,
-                                    current: meta.initial,
-                                    minimum: meta.minimum,
-                                    maximum: meta.maximum,
-                                    step: meta.step,
-                                },
-                            );
+                        let mut api_parameters = Vec::new();
+                        for meta in parameters.iter() {
+                            let name = &meta.id;
+                            api_parameters.push(crate::api::video::ShaderParameter {
+                                name: name.to_string(),
+                                description: meta.description.clone(),
+                                initial: meta.initial,
+                                current: meta.initial,
+                                minimum: meta.minimum,
+                                maximum: meta.maximum,
+                                step: meta.step,
+                            });
                         }
                         crate::senders::shader::emit_shader_parameters_update(
                             crate::api::video::ShaderParameters {
@@ -329,7 +327,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                         crate::senders::shader::emit_shader_parameters_update(
                             crate::api::video::ShaderParameters {
                                 path: effective_path.clone(),
-                                parameters: std::collections::HashMap::new(),
+                                parameters: Vec::new(),
                             },
                         );
 
@@ -337,7 +335,7 @@ pub unsafe extern "C" fn nesium_apply_shader(
                             chain: Mutex::new(None),
                             generation: cfg.generation,
                             device_addr: device_ptr as usize,
-                            parameters: HashMap::new(),
+                            parameters: Vec::new(),
                             path: effective_path,
                         })));
                     }

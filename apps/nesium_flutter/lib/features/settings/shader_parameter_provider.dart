@@ -11,11 +11,11 @@ import 'apple_shader_settings.dart';
 import 'windows_shader_settings.dart';
 import '../../logging/app_logger.dart';
 
-/// Provides the map of parameters for the currently active shader, with persistence.
+/// Provides the list of parameters for the currently active shader, with persistence.
 class ShaderParameterNotifier
-    extends Notifier<AsyncValue<Map<String, video.ShaderParameter>>> {
+    extends Notifier<AsyncValue<List<video.ShaderParameter>>> {
   @override
-  AsyncValue<Map<String, video.ShaderParameter>> build() {
+  AsyncValue<List<video.ShaderParameter>> build() {
     // Only watch 'enabled' status. We do NOT want to rebuild when presetPath changes,
     // because that would tear down our stream listener right when we need it most
     // (during a shader switch).
@@ -37,7 +37,7 @@ class ShaderParameterNotifier
     }
 
     if (!enabled) {
-      return const AsyncValue.data({});
+      return const AsyncValue.data([]);
     }
 
     // Listen to the persistent stream for updates
@@ -91,11 +91,10 @@ class ShaderParameterNotifier
       // Apply saved overrides from storage.
       final storage = ref.read(appStorageProvider);
       final service = ref.read(nesTextureServiceProvider);
-      final Map<String, video.ShaderParameter> updatedParams = {};
+      final List<video.ShaderParameter> updatedParams = [];
 
-      for (final entry in parameters.parameters.entries) {
-        final name = entry.key;
-        final meta = entry.value;
+      for (final meta in parameters.parameters) {
+        final name = meta.name;
         final storageKey = _getStorageKey(requestedPreset, name);
         final savedValue = storage.get(storageKey);
 
@@ -103,17 +102,19 @@ class ShaderParameterNotifier
             (savedValue - meta.current).abs() > 0.0001) {
           // Apply to backend
           await service.setShaderParameter(name, savedValue);
-          updatedParams[name] = video.ShaderParameter(
-            name: meta.name,
-            description: meta.description,
-            initial: meta.initial,
-            current: savedValue,
-            minimum: meta.minimum,
-            maximum: meta.maximum,
-            step: meta.step,
+          updatedParams.add(
+            video.ShaderParameter(
+              name: meta.name,
+              description: meta.description,
+              initial: meta.initial,
+              current: savedValue,
+              minimum: meta.minimum,
+              maximum: meta.maximum,
+              step: meta.step,
+            ),
           );
         } else {
-          updatedParams[name] = meta;
+          updatedParams.add(meta);
         }
       }
 
@@ -144,17 +145,56 @@ class ShaderParameterNotifier
     await storage.put(_getStorageKey(presetPath, name), value);
 
     // 3. Update local state
-    final nextState = Map<String, video.ShaderParameter>.from(currentState);
-    final oldMeta = nextState[name]!;
-    nextState[name] = video.ShaderParameter(
-      name: oldMeta.name,
-      description: oldMeta.description,
-      initial: oldMeta.initial,
-      current: value,
-      minimum: oldMeta.minimum,
-      maximum: oldMeta.maximum,
-      step: oldMeta.step,
-    );
+    final nextState = currentState.map((p) {
+      if (p.name == name) {
+        return video.ShaderParameter(
+          name: p.name,
+          description: p.description,
+          initial: p.initial,
+          current: value,
+          minimum: p.minimum,
+          maximum: p.maximum,
+          step: p.step,
+        );
+      }
+      return p;
+    }).toList();
+    state = AsyncValue.data(nextState);
+  }
+
+  Future<void> resetParameters() async {
+    final currentState = state.asData?.value;
+    if (currentState == null) return;
+
+    final presetPath = _getActivePresetPath();
+    if (presetPath == null) return;
+
+    final service = ref.read(nesTextureServiceProvider);
+    final storage = ref.read(appStorageProvider);
+    final List<video.ShaderParameter> nextState = [];
+
+    for (final meta in currentState) {
+      final name = meta.name;
+
+      // 1. Reset backend to initial
+      await service.setShaderParameter(name, meta.initial);
+
+      // 2. Remove override from storage
+      await storage.delete(_getStorageKey(presetPath, name));
+
+      // 3. Update local state item
+      nextState.add(
+        video.ShaderParameter(
+          name: meta.name,
+          description: meta.description,
+          initial: meta.initial,
+          current: meta.initial,
+          minimum: meta.minimum,
+          maximum: meta.maximum,
+          step: meta.step,
+        ),
+      );
+    }
     state = AsyncValue.data(nextState);
   }
 
@@ -175,5 +215,5 @@ class ShaderParameterNotifier
 final shaderParametersProvider =
     NotifierProvider<
       ShaderParameterNotifier,
-      AsyncValue<Map<String, video.ShaderParameter>>
+      AsyncValue<List<video.ShaderParameter>>
     >(ShaderParameterNotifier.new);

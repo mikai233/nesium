@@ -237,7 +237,7 @@ class ShaderParameter {
 
 class ShaderParameters {
   final String path;
-  final Map<String, ShaderParameter> parameters;
+  final List<ShaderParameter> parameters;
 
   const ShaderParameters({required this.path, required this.parameters});
 

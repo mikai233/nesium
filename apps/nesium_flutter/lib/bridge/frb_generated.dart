@@ -4426,18 +4426,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Map<String, ShaderParameter> dco_decode_Map_String_shader_parameter_None(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return Map.fromEntries(
-      dco_decode_list_record_string_shader_parameter(
-        raw,
-      ).map((e) => MapEntry(e.$1, e.$2)),
-    );
-  }
-
-  @protected
   RustStreamSink<DebugStateNotification>
   dco_decode_StreamSink_debug_state_notification_Sse(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -4786,12 +4774,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<(String, ShaderParameter)>
-  dco_decode_list_record_string_shader_parameter(dynamic raw) {
+  List<ShaderParameter> dco_decode_list_shader_parameter(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_record_string_shader_parameter)
-        .toList();
+    return (raw as List<dynamic>).map(dco_decode_shader_parameter).toList();
   }
 
   @protected
@@ -4994,18 +4979,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (String, ShaderParameter) dco_decode_record_string_shader_parameter(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2) {
-      throw Exception('Expected 2 elements, got ${arr.length}');
-    }
-    return (dco_decode_String(arr[0]), dco_decode_shader_parameter(arr[1]));
-  }
-
-  @protected
   ReplayEventNotification dco_decode_replay_event_notification(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return ReplayEventNotification.values[raw as int];
@@ -5080,7 +5053,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return ShaderParameters(
       path: dco_decode_String(arr[0]),
-      parameters: dco_decode_Map_String_shader_parameter_None(arr[1]),
+      parameters: dco_decode_list_shader_parameter(arr[1]),
     );
   }
 
@@ -5223,15 +5196,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_String(deserializer);
     return AnyhowException(inner);
-  }
-
-  @protected
-  Map<String, ShaderParameter> sse_decode_Map_String_shader_parameter_None(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_list_record_string_shader_parameter(deserializer);
-    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
   }
 
   @protected
@@ -5693,14 +5657,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<(String, ShaderParameter)>
-  sse_decode_list_record_string_shader_parameter(SseDeserializer deserializer) {
+  List<ShaderParameter> sse_decode_list_shader_parameter(
+    SseDeserializer deserializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <(String, ShaderParameter)>[];
+    var ans_ = <ShaderParameter>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_record_string_shader_parameter(deserializer));
+      ans_.add(sse_decode_shader_parameter(deserializer));
     }
     return ans_;
   }
@@ -5962,16 +5927,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (String, ShaderParameter) sse_decode_record_string_shader_parameter(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_field0 = sse_decode_String(deserializer);
-    var var_field1 = sse_decode_shader_parameter(deserializer);
-    return (var_field0, var_field1);
-  }
-
-  @protected
   ReplayEventNotification sse_decode_replay_event_notification(
     SseDeserializer deserializer,
   ) {
@@ -6052,9 +6007,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ShaderParameters sse_decode_shader_parameters(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_path = sse_decode_String(deserializer);
-    var var_parameters = sse_decode_Map_String_shader_parameter_None(
-      deserializer,
-    );
+    var var_parameters = sse_decode_list_shader_parameter(deserializer);
     return ShaderParameters(path: var_path, parameters: var_parameters);
   }
 
@@ -6227,18 +6180,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.message, serializer);
-  }
-
-  @protected
-  void sse_encode_Map_String_shader_parameter_None(
-    Map<String, ShaderParameter> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_record_string_shader_parameter(
-      self.entries.map((e) => (e.key, e.value)).toList(),
-      serializer,
-    );
   }
 
   @protected
@@ -6744,14 +6685,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_record_string_shader_parameter(
-    List<(String, ShaderParameter)> self,
+  void sse_encode_list_shader_parameter(
+    List<ShaderParameter> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_record_string_shader_parameter(item, serializer);
+      sse_encode_shader_parameter(item, serializer);
     }
   }
 
@@ -6969,16 +6910,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_record_string_shader_parameter(
-    (String, ShaderParameter) self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.$1, serializer);
-    sse_encode_shader_parameter(self.$2, serializer);
-  }
-
-  @protected
   void sse_encode_replay_event_notification(
     ReplayEventNotification self,
     SseSerializer serializer,
@@ -7049,7 +6980,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.path, serializer);
-    sse_encode_Map_String_shader_parameter_None(self.parameters, serializer);
+    sse_encode_list_shader_parameter(self.parameters, serializer);
   }
 
   @protected

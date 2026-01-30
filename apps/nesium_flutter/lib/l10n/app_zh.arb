@@ -677,5 +677,6 @@
   "videoBackendD3D11": "D3D11 GPU (零拷贝)",
   "videoBackendSoftware": "软件 CPU (回退)",
   "videoShaderParametersTitle": "着色器参数",
-  "videoShaderParametersSubtitle": "实时调整着色器参数"
+  "videoShaderParametersSubtitle": "实时调整着色器参数",
+  "videoShaderParametersReset": "重置参数"
 }

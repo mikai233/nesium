@@ -100,8 +100,7 @@ pub(crate) struct ShaderState {
     pub(crate) chain: Option<LibrashaderFilterChain>,
     pub(crate) generation: u64,
     pub(crate) device_addr: usize,
-    pub(crate) parameters:
-        std::collections::HashMap<String, librashader::preprocess::ShaderParameter>,
+    pub(crate) parameters: Vec<librashader::preprocess::ShaderParameter>,
     pub(crate) path: String,
 }
 
@@ -170,7 +169,7 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
                 ..Default::default()
             };
 
-            let mut parameters = std::collections::HashMap::new();
+            let mut parameters = Vec::new();
             let load_result = (|| {
                 let preset =
                     librashader::presets::ShaderPreset::try_parse(&effective_path, features)
@@ -178,7 +177,7 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
 
                 if let Ok(meta) = librashader::presets::get_parameter_meta(&preset) {
                     for p in meta {
-                        parameters.insert(p.id.to_string(), p);
+                        parameters.push(p.clone());
                     }
                 }
 
@@ -198,20 +197,18 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
                     tracing::info!("Apple shader chain loaded from {}", effective_path);
 
                     // Emit update to Flutter immediately using local data
-                    let mut api_parameters = std::collections::HashMap::new();
-                    for (name, meta) in parameters.iter() {
-                        api_parameters.insert(
-                            name.clone(),
-                            crate::api::video::ShaderParameter {
-                                name: name.clone(),
-                                description: meta.description.clone(),
-                                initial: meta.initial,
-                                current: meta.initial,
-                                minimum: meta.minimum,
-                                maximum: meta.maximum,
-                                step: meta.step,
-                            },
-                        );
+                    let mut api_parameters = Vec::new();
+                    for meta in parameters.iter() {
+                        let name = &meta.id;
+                        api_parameters.push(crate::api::video::ShaderParameter {
+                            name: name.to_string(),
+                            description: meta.description.clone(),
+                            initial: meta.initial,
+                            current: meta.initial,
+                            minimum: meta.minimum,
+                            maximum: meta.maximum,
+                            step: meta.step,
+                        });
                     }
                     crate::senders::shader::emit_shader_parameters_update(
                         crate::api::video::ShaderParameters {
@@ -238,7 +235,7 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
                     crate::senders::shader::emit_shader_parameters_update(
                         crate::api::video::ShaderParameters {
                             path: effective_path.clone(),
-                            parameters: std::collections::HashMap::new(),
+                            parameters: Vec::new(),
                         },
                     );
 
@@ -246,7 +243,7 @@ pub unsafe extern "C" fn nesium_apply_shader_metal(
                         chain: None,
                         generation: cfg.generation,
                         device_addr: device_ptr as usize,
-                        parameters: std::collections::HashMap::new(),
+                        parameters: Vec::new(),
                         path: effective_path,
                     });
                 }
