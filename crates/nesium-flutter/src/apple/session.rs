@@ -4,6 +4,7 @@ use librashader::presets::ShaderPreset;
 use librashader::runtime::mtl::FilterChain as LibrashaderFilterChain;
 use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
@@ -38,7 +39,6 @@ pub static APPLE_SHADER_CONFIG: ArcSwapOption<AppleShaderConfig> = ArcSwapOption
 pub struct ShaderSession {
     pub(crate) chain: Mutex<Option<LibrashaderFilterChain>>,
     pub(crate) generation: u64,
-    pub(crate) device_addr: usize,
 }
 
 // SAFETY:
@@ -217,7 +217,6 @@ pub async fn apple_set_shader_config(
             Some(Arc::new(ShaderSession {
                 chain: Mutex::new(None),
                 generation: new_gen,
-                device_addr: 0,
             }))
         });
     }

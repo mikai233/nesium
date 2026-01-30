@@ -9,7 +9,7 @@ use chain::render_shader_frame;
 use session::{FRAME_COUNT, SHADER_SESSION};
 
 // Re-export state functions and state for api/video.rs
-pub use session::{apple_set_shader_config, apple_set_shader_preset_path};
+pub use session::apple_set_shader_preset_path;
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nesium_apply_shader_metal(
