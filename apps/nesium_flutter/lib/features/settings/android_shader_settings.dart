@@ -149,12 +149,13 @@ class AndroidShaderSettingsController extends Notifier<AndroidShaderSettings> {
     );
 
     try {
+      final effectiveEnabled = settings.enabled && absolutePath != null;
       final parameters = await nes_video.setShaderConfig(
-        enabled: settings.enabled,
+        enabled: effectiveEnabled,
         path: absolutePath,
       );
 
-      if (!settings.enabled || absolutePath == null) {
+      if (!effectiveEnabled) {
         ref.read(shaderParametersProvider.notifier).clear();
       } else {
         if (settings.presetPath != null) {

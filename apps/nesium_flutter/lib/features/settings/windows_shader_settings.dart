@@ -153,12 +153,13 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
     );
 
     try {
+      final effectiveEnabled = settings.enabled && absolutePath != null;
       final parameters = await nes_video.setShaderConfig(
-        enabled: settings.enabled,
+        enabled: effectiveEnabled,
         path: absolutePath,
       );
 
-      if (!settings.enabled || absolutePath == null) {
+      if (!effectiveEnabled) {
         ref.read(shaderParametersProvider.notifier).clear();
       } else {
         if (settings.presetPath != null) {
@@ -179,7 +180,7 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
     final videoSettings = ref.read(videoSettingsProvider);
     final useLinear =
         videoSettings.videoFilter != nes_video.VideoFilter.none ||
-        settings.enabled;
+        (settings.enabled && absolutePath != null);
 
     // Only the main window has the native texture plugin registered.
     if (ref.read(currentWindowKindProvider) == WindowKind.main) {

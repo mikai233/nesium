@@ -228,12 +228,19 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
               !kIsWeb &&
               (defaultTargetPlatform == TargetPlatform.macOS ||
                   defaultTargetPlatform == TargetPlatform.iOS);
+          final appleShaderActive =
+              isApple &&
+              appleShaderSettings.enabled &&
+              appleShaderSettings.presetPath != null;
+          final windowsShaderActive =
+              windowsShaderSettings.enabled &&
+              windowsShaderSettings.presetPath != null;
 
           final shouldUseHighRes =
               settings.videoFilter != VideoFilter.none ||
-              (windowsShaderSettings.enabled &&
+              (windowsShaderActive &&
                   windowsBackend.backend == WindowsVideoBackend.d3d11Gpu) ||
-              (isApple && appleShaderSettings.enabled);
+              appleShaderActive;
 
           _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
 
