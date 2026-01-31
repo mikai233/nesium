@@ -1047,18 +1047,24 @@ class _NesShellState extends ConsumerState<NesShell>
                 final previewVisible = ref.watch(
                   floatingGamePreviewProvider.select((s) => s.visible),
                 );
+                var popInProgress = false;
 
                 return PopScope(
                   canPop: !previewVisible,
-                  onPopInvokedWithResult: (didPop, result) {
+                  onPopInvokedWithResult: (didPop, result) async {
                     if (didPop) return;
-                    if (!previewVisible) return;
+                    if (popInProgress) return;
+                    popInProgress = true;
 
-                    ref.read(floatingGamePreviewProvider.notifier).hide();
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!context.mounted) return;
+                    if (previewVisible) {
+                      await ref
+                          .read(floatingGamePreviewProvider.notifier)
+                          .hideAnimated();
+                    }
+
+                    if (context.mounted) {
                       Navigator.of(context).pop(result);
-                    });
+                    }
                   },
                   child: Scaffold(
                     appBar: AppBar(
@@ -1116,18 +1122,24 @@ class _NesShellState extends ConsumerState<NesShell>
                 final previewVisible = ref.watch(
                   floatingGamePreviewProvider.select((s) => s.visible),
                 );
+                var popInProgress = false;
 
                 return PopScope(
                   canPop: !previewVisible,
-                  onPopInvokedWithResult: (didPop, result) {
+                  onPopInvokedWithResult: (didPop, result) async {
                     if (didPop) return;
-                    if (!previewVisible) return;
+                    if (popInProgress) return;
+                    popInProgress = true;
 
-                    ref.read(floatingGamePreviewProvider.notifier).hide();
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!context.mounted) return;
+                    if (previewVisible) {
+                      await ref
+                          .read(floatingGamePreviewProvider.notifier)
+                          .hideAnimated();
+                    }
+
+                    if (context.mounted) {
                       Navigator.of(context).pop(result);
-                    });
+                    }
                   },
                   child: Scaffold(
                     appBar: AppBar(

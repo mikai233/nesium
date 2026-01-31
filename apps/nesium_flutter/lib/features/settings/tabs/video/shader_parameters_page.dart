@@ -21,6 +21,7 @@ class _ShaderParametersPageState extends ConsumerState<ShaderParametersPage> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
   String _searchQuery = '';
+  bool _popInProgress = false;
 
   @override
   void dispose() {
@@ -38,6 +39,8 @@ class _ShaderParametersPageState extends ConsumerState<ShaderParametersPage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
+        if (_popInProgress) return;
+        _popInProgress = true;
 
         if (preview.visible) {
           await ref.read(floatingGamePreviewProvider.notifier).hideAnimated();

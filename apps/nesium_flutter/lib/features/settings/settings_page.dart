@@ -30,6 +30,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   StreamSubscription<InputCollision>? _collisionSubscription;
+  bool _popInProgress = false;
 
   @override
   void initState() {
@@ -106,6 +107,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
+        if (_popInProgress) return;
+        _popInProgress = true;
 
         if (preview.visible) {
           await ref.read(floatingGamePreviewProvider.notifier).hideAnimated();

@@ -61,7 +61,12 @@ class FloatingGamePreviewController extends Notifier<FloatingGamePreviewState> {
   Completer<void>? _hideCompleter;
 
   Future<void> hideAnimated() async {
-    if (!state.visible || state.isHiding) return;
+    if (!state.visible) return;
+    if (state.isHiding) {
+      final existing = _hideCompleter;
+      if (existing != null) return existing.future;
+      return;
+    }
     _hideCompleter = Completer<void>();
     state = state.copyWith(isHiding: true);
     return _hideCompleter!.future;
