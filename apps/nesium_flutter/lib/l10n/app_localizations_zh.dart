@@ -27,6 +27,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTabServer => '服务器';
 
   @override
+  String get settingsFloatingPreviewToggle => '悬浮预览';
+
+  @override
+  String get settingsFloatingPreviewTooltip => '显示游戏悬浮预览';
+
+  @override
   String get serverTitle => '联机服务器';
 
   @override

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
@@ -29,6 +30,7 @@ import '../features/settings/emulation_settings.dart';
 import '../features/settings/language_settings.dart';
 import '../features/settings/settings_page.dart';
 import '../features/settings/video_settings.dart';
+import '../features/screen/floating_game_preview_state.dart';
 import '../features/about/about_page.dart';
 import '../features/netplay/netplay_screen.dart';
 import '../features/netplay/netplay_state.dart';
@@ -1032,9 +1034,56 @@ class _NesShellState extends ConsumerState<NesShell>
         MaterialPageRoute<void>(
           builder: (_) => ProviderScope(
             overrides: [nesActionsProvider.overrideWithValue(_buildActions())],
-            child: Scaffold(
-              appBar: AppBar(title: Text(l10n.windowDebuggerTitle)),
-              body: const DebuggerPanel(),
+            child: Consumer(
+              builder: (context, ref, _) {
+                final isSupportedPlatform =
+                    !kIsWeb &&
+                    (defaultTargetPlatform == TargetPlatform.android ||
+                        defaultTargetPlatform == TargetPlatform.iOS ||
+                        defaultTargetPlatform == TargetPlatform.linux);
+                final hasRom = ref.watch(
+                  nesControllerProvider.select((s) => s.romHash != null),
+                );
+                final previewVisible = ref.watch(
+                  floatingGamePreviewProvider.select((s) => s.visible),
+                );
+
+                return PopScope(
+                  canPop: !previewVisible,
+                  onPopInvokedWithResult: (didPop, result) {
+                    if (didPop) return;
+                    if (!previewVisible) return;
+
+                    ref.read(floatingGamePreviewProvider.notifier).hide();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop(result);
+                    });
+                  },
+                  child: Scaffold(
+                    appBar: AppBar(
+                      title: Text(l10n.windowDebuggerTitle),
+                      actions: [
+                        if (isSupportedPlatform && hasRom)
+                          IconButton(
+                            onPressed: () {
+                              ref
+                                  .read(floatingGamePreviewProvider.notifier)
+                                  .toggle();
+                            },
+                            icon: Icon(
+                              previewVisible
+                                  ? Icons.fullscreen_exit
+                                  : Icons.picture_in_picture_alt,
+                            ),
+                            tooltip: l10n.settingsFloatingPreviewTooltip,
+                          ),
+                      ],
+                    ),
+                    body: const DebuggerPanel(),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -1054,9 +1103,56 @@ class _NesShellState extends ConsumerState<NesShell>
         MaterialPageRoute<void>(
           builder: (_) => ProviderScope(
             overrides: [nesActionsProvider.overrideWithValue(_buildActions())],
-            child: Scaffold(
-              appBar: AppBar(title: Text(l10n.windowToolsTitle)),
-              body: const ToolsPanel(),
+            child: Consumer(
+              builder: (context, ref, _) {
+                final isSupportedPlatform =
+                    !kIsWeb &&
+                    (defaultTargetPlatform == TargetPlatform.android ||
+                        defaultTargetPlatform == TargetPlatform.iOS ||
+                        defaultTargetPlatform == TargetPlatform.linux);
+                final hasRom = ref.watch(
+                  nesControllerProvider.select((s) => s.romHash != null),
+                );
+                final previewVisible = ref.watch(
+                  floatingGamePreviewProvider.select((s) => s.visible),
+                );
+
+                return PopScope(
+                  canPop: !previewVisible,
+                  onPopInvokedWithResult: (didPop, result) {
+                    if (didPop) return;
+                    if (!previewVisible) return;
+
+                    ref.read(floatingGamePreviewProvider.notifier).hide();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop(result);
+                    });
+                  },
+                  child: Scaffold(
+                    appBar: AppBar(
+                      title: Text(l10n.windowToolsTitle),
+                      actions: [
+                        if (isSupportedPlatform && hasRom)
+                          IconButton(
+                            onPressed: () {
+                              ref
+                                  .read(floatingGamePreviewProvider.notifier)
+                                  .toggle();
+                            },
+                            icon: Icon(
+                              previewVisible
+                                  ? Icons.fullscreen_exit
+                                  : Icons.picture_in_picture_alt,
+                            ),
+                            tooltip: l10n.settingsFloatingPreviewTooltip,
+                          ),
+                      ],
+                    ),
+                    body: const ToolsPanel(),
+                  ),
+                );
+              },
             ),
           ),
         ),

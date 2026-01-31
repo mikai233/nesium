@@ -27,6 +27,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTabServer => 'Server';
 
   @override
+  String get settingsFloatingPreviewToggle => 'Floating Preview';
+
+  @override
+  String get settingsFloatingPreviewTooltip => 'Show game preview';
+
+  @override
   String get serverTitle => 'Netplay Server';
 
   @override

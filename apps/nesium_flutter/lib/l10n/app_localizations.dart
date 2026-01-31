@@ -134,6 +134,18 @@ abstract class AppLocalizations {
   /// **'Server'**
   String get settingsTabServer;
 
+  /// No description provided for @settingsFloatingPreviewToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Floating Preview'**
+  String get settingsFloatingPreviewToggle;
+
+  /// No description provided for @settingsFloatingPreviewTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show game preview'**
+  String get settingsFloatingPreviewTooltip;
+
   /// No description provided for @serverTitle.
   ///
   /// In en, this message translates to:

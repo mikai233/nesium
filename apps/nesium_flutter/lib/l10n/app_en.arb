@@ -6,6 +6,8 @@
   "settingsTabVideo": "Video",
   "settingsTabEmulation": "Emulation",
   "settingsTabServer": "Server",
+  "settingsFloatingPreviewToggle": "Floating Preview",
+  "settingsFloatingPreviewTooltip": "Show game preview",
   "serverTitle": "Netplay Server",
   "serverPortLabel": "Port",
   "serverStartButton": "Start Server",

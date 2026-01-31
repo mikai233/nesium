@@ -2,18 +2,18 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/nes_controller.dart';
-import '../../platform/platform_capabilities.dart';
 import '../../platform/nes_video.dart' show VideoFilter;
 import '../settings/video_settings.dart';
 import '../settings/windows_shader_settings.dart';
 import '../settings/apple_shader_settings.dart';
 import '../settings/windows_video_backend_settings.dart';
+import '../settings/android_video_backend_settings.dart';
 import '../../domain/nes_texture_service.dart';
+import '../../routing/app_route_observer.dart';
 import 'emulation_status_overlay.dart';
 
 class NesScreenView extends ConsumerStatefulWidget {
@@ -64,7 +64,7 @@ class NesScreenView extends ConsumerStatefulWidget {
   ConsumerState<NesScreenView> createState() => _NesScreenViewState();
 }
 
-class _NesScreenViewState extends ConsumerState<NesScreenView> {
+class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
   static const Duration _cursorHideDelay = Duration(seconds: 2);
 
   Timer? _cursorTimer;
@@ -72,6 +72,8 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
   Size? _lastReportedSize;
   final _gameKey = GlobalKey();
   Rect? _lastOverlayRect;
+  PageRoute<dynamic>? _route;
+  bool _isCurrentRoute = true;
 
   void _showCursorAndArmTimer() {
     if (_cursorHidden) {
@@ -141,9 +143,45 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic> && route != _route) {
+      if (_route != null) {
+        appRouteObserver.unsubscribe(this);
+      }
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+      _isCurrentRoute = route.isCurrent;
+    }
+  }
+
+  @override
   void dispose() {
     _cursorTimer?.cancel();
+    appRouteObserver.unsubscribe(this);
     super.dispose();
+  }
+
+  @override
+  void didPush() {
+    if (!mounted) return;
+    if (_isCurrentRoute) return;
+    setState(() => _isCurrentRoute = true);
+  }
+
+  @override
+  void didPopNext() {
+    if (!mounted) return;
+    if (_isCurrentRoute) return;
+    setState(() => _isCurrentRoute = true);
+  }
+
+  @override
+  void didPushNext() {
+    if (!mounted) return;
+    if (!_isCurrentRoute) return;
+    setState(() => _isCurrentRoute = false);
   }
 
   @override
@@ -154,6 +192,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
     final settings = ref.watch(videoSettingsProvider);
     final windowsShaderSettings = ref.watch(windowsShaderSettingsProvider);
     final windowsBackend = ref.watch(windowsVideoBackendSettingsProvider);
+    final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
     final integerScaling = settings.integerScaling;
     final aspectRatio = settings.aspectRatio;
 
@@ -174,38 +213,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           Text(widget.error!, textAlign: TextAlign.center),
         ],
       );
-    } else if (useAndroidNativeGameView) {
-      content = LayoutBuilder(
-        builder: (context, constraints) {
-          final viewport = NesScreenView.computeViewportSize(
-            constraints,
-            integerScaling: integerScaling,
-            aspectRatio: aspectRatio,
-          );
-          if (viewport == null) return const SizedBox.shrink();
-
-          final child = SizedBox(
-            width: viewport.width,
-            height: viewport.height,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                const AndroidView(viewType: 'nesium_game_view'),
-                if (hasRom) const EmulationStatusOverlay(),
-              ],
-            ),
-          );
-
-          return MouseRegion(
-            cursor: _cursorHidden ? SystemMouseCursors.none : MouseCursor.defer,
-            onEnter: (_) => _showCursorAndArmTimer(),
-            onHover: (_) => _showCursorAndArmTimer(),
-            onExit: (_) => _showCursorAndCancelTimer(),
-            child: child,
-          );
-        },
-      );
-    } else if (widget.textureId != null) {
+    } else {
       content = LayoutBuilder(
         builder: (context, constraints) {
           final viewport = NesScreenView.computeViewportSize(
@@ -231,29 +239,25 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
 
           final isWindows =
               !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+          final isAndroid =
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-          // Only enable overlay if this is the current active route
-          final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? true;
+          final useAndroidHardware =
+              isAndroid &&
+              androidBackend.backend == AndroidVideoBackend.hardware;
+
           final useNativeOverlay =
-              isWindows && windowsBackend.useNativeOverlay && isCurrentRoute;
+              isWindows && windowsBackend.useNativeOverlay && _isCurrentRoute;
 
           if (useNativeOverlay) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
-
-              // We use the GlobalKey of the actual game SizedBox to get its exact position
-              // This is much more reliable as it avoids double-counting any
-              // parent alignment or Transform.translate offsets.
               final gameBox =
                   _gameKey.currentContext?.findRenderObject() as RenderBox?;
               if (gameBox == null || !gameBox.hasSize) return;
 
               final globalOffset = gameBox.localToGlobal(Offset.zero);
               final dpr = MediaQuery.of(context).devicePixelRatio;
-
-              // Use enclosing rectangle to ensure we cover any sub-pixel gaps.
-              // Left/Top: Floor to include the starting pixel.
-              // Right/Bottom: Ceil to include the ending pixel.
               final left = (globalOffset.dx * dpr).floorToDouble();
               final top = (globalOffset.dy * dpr).floorToDouble();
               final right = ((globalOffset.dx + viewport.width) * dpr)
@@ -262,8 +266,6 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
                   .ceilToDouble();
 
               final rect = Rect.fromLTWH(left, top, right - left, bottom - top);
-
-              // Only update if significantly changed
               if (_lastOverlayRect == null ||
                   (rect.left - _lastOverlayRect!.left).abs() > 0.1 ||
                   (rect.top - _lastOverlayRect!.top).abs() > 0.1 ||
@@ -282,7 +284,6 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
               }
             });
           } else if (isWindows) {
-            // Ensure overlay is disabled if setting is off
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
               if (_lastOverlayRect != null) {
@@ -301,13 +302,14 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (useNativeOverlay)
-                  // Use BlendMode.clear to punch a hole through to the DWM transparency
+                if (useAndroidHardware && _isCurrentRoute)
+                  const AndroidView(viewType: 'nesium_game_view')
+                else if (useNativeOverlay)
                   CustomPaint(
                     painter: const _HolePunchPainter(),
                     child: const SizedBox.expand(),
                   )
-                else
+                else if (widget.textureId != null)
                   Texture(
                     textureId: widget.textureId!,
                     filterQuality: shouldUseHighRes
@@ -328,8 +330,6 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           );
         },
       );
-    } else {
-      content = const SizedBox.shrink();
     }
 
     return Container(
@@ -348,8 +348,6 @@ class _HolePunchPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Clears the pixels to (0,0,0,0) - Transparent Black
-    // This allows DwmExtendFrameIntoClientArea to show the window behind.
     canvas.drawRect(Offset.zero & size, Paint()..blendMode = BlendMode.clear);
   }
 

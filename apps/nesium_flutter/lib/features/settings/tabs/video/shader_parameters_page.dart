@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../bridge/api/video.dart' as video;
+import '../../../../domain/nes_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../widgets/animated_settings_widgets.dart';
+import '../../../screen/floating_game_preview_state.dart';
 import '../../shader_parameter_provider.dart';
 
 class ShaderParametersPage extends ConsumerStatefulWidget {
@@ -29,6 +32,7 @@ class _ShaderParametersPageState extends ConsumerState<ShaderParametersPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final paramsAsync = ref.watch(shaderParametersProvider);
+    final preview = ref.watch(floatingGamePreviewProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -78,6 +82,24 @@ class _ShaderParametersPageState extends ConsumerState<ShaderParametersPage> {
               onPressed: () =>
                   ref.read(shaderParametersProvider.notifier).resetParameters(),
             ),
+          if (!_isSearching)
+            if (defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS ||
+                defaultTargetPlatform == TargetPlatform.linux)
+              if (ref.watch(
+                nesControllerProvider.select((s) => s.romHash != null),
+              ))
+                IconButton(
+                  onPressed: () {
+                    ref.read(floatingGamePreviewProvider.notifier).toggle();
+                  },
+                  icon: Icon(
+                    preview.visible
+                        ? Icons.fullscreen_exit
+                        : Icons.picture_in_picture_alt,
+                  ),
+                  tooltip: l10n.settingsFloatingPreviewTooltip,
+                ),
         ],
       ),
       body: paramsAsync.when(

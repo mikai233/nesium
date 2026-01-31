@@ -6,6 +6,8 @@
   "settingsTabVideo": "画面",
   "settingsTabEmulation": "模拟器",
   "settingsTabServer": "服务器",
+  "settingsFloatingPreviewToggle": "悬浮预览",
+  "settingsFloatingPreviewTooltip": "显示游戏悬浮预览",
   "serverTitle": "联机服务器",
   "serverPortLabel": "端口",
   "serverStartButton": "启动服务器",
