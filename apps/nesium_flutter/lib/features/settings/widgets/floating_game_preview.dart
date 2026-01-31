@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../screen/floating_game_preview_state.dart';
 import '../../screen/nes_screen_view.dart';
 import '../../../domain/nes_controller.dart';
 import '../../../l10n/app_localizations.dart';
@@ -57,6 +58,15 @@ class _FloatingGamePreviewState extends ConsumerState<FloatingGamePreview>
     if (_entryController.value == 0 || _entryController.value == 1.0) {
       if (mounted) setState(() {});
     }
+
+    if (_entryController.status == AnimationStatus.dismissed) {
+      final isHiding = ref.read(
+        floatingGamePreviewProvider.select((s) => s.isHiding),
+      );
+      if (isHiding) {
+        ref.read(floatingGamePreviewProvider.notifier).confirmHidden();
+      }
+    }
   }
 
   @override
@@ -78,6 +88,15 @@ class _FloatingGamePreviewState extends ConsumerState<FloatingGamePreview>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(floatingGamePreviewProvider.select((s) => s.isHiding), (
+      prev,
+      next,
+    ) {
+      if (next) {
+        _entryController.reverse();
+      }
+    });
+
     final status = _entryController.status;
     final isClosed = !widget.visible && status == AnimationStatus.dismissed;
 

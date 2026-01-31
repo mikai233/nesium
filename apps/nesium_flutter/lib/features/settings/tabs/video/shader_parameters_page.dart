@@ -34,148 +34,165 @@ class _ShaderParametersPageState extends ConsumerState<ShaderParametersPage> {
     final paramsAsync = ref.watch(shaderParametersProvider);
     final preview = ref.watch(floatingGamePreviewProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: l10n.searchHint, // reusing search label or similar
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        if (preview.visible) {
+          await ref.read(floatingGamePreviewProvider.notifier).hideAnimated();
+        }
+
+        if (context.mounted) {
+          Navigator.of(context).pop(result);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: _isSearching
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText:
+                        l10n.searchHint, // reusing search label or similar
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
                   ),
-                ),
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value.toLowerCase();
-                  });
-                },
-              )
-            : Text(l10n.videoShaderParametersTitle),
-        actions: [
-          IconButton(
-            icon: Icon(_isSearching ? Icons.close : Icons.search),
-            tooltip: _isSearching ? l10n.cancel : l10n.searchTooltip,
-            onPressed: () {
-              setState(() {
-                if (_isSearching) {
-                  _isSearching = false;
-                  _searchQuery = '';
-                  _searchController.clear();
-                } else {
-                  _isSearching = true;
-                }
-              });
-            },
-          ),
-          if (!_isSearching)
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: l10n.videoShaderParametersReset,
-              onPressed: () =>
-                  ref.read(shaderParametersProvider.notifier).resetParameters(),
-            ),
-          if (!_isSearching)
-            if (defaultTargetPlatform == TargetPlatform.android ||
-                defaultTargetPlatform == TargetPlatform.iOS ||
-                defaultTargetPlatform == TargetPlatform.linux)
-              if (ref.watch(
-                nesControllerProvider.select((s) => s.romHash != null),
-              ))
-                IconButton(
-                  onPressed: () {
-                    ref.read(floatingGamePreviewProvider.notifier).toggle();
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value.toLowerCase();
+                    });
                   },
-                  icon: Icon(
-                    preview.visible
-                        ? Icons.fullscreen_exit
-                        : Icons.picture_in_picture_alt,
-                  ),
-                  tooltip: l10n.settingsFloatingPreviewTooltip,
-                ),
-        ],
-      ),
-      body: paramsAsync.when(
-        data: (params) {
-          if (params.isEmpty) {
-            return Center(
-              child: Text(
-                l10n.videoShaderPresetNotSet,
-                style: Theme.of(context).textTheme.bodyLarge,
+                )
+              : Text(l10n.videoShaderParametersTitle),
+          actions: [
+            IconButton(
+              icon: Icon(_isSearching ? Icons.close : Icons.search),
+              tooltip: _isSearching ? l10n.cancel : l10n.searchTooltip,
+              onPressed: () {
+                setState(() {
+                  if (_isSearching) {
+                    _isSearching = false;
+                    _searchQuery = '';
+                    _searchController.clear();
+                  } else {
+                    _isSearching = true;
+                  }
+                });
+              },
+            ),
+            if (!_isSearching)
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: l10n.videoShaderParametersReset,
+                onPressed: () => ref
+                    .read(shaderParametersProvider.notifier)
+                    .resetParameters(),
               ),
-            );
-          }
-
-          final filteredParams = params.where((p) {
-            // Always show separators if we are not searching,
-            // or if we are searching, maybe only show them if they match?
-            // Simple approach: Filter strictly by content.
-            // If query is empty, show everything.
-            if (_searchQuery.isEmpty) return true;
-
-            final name = p.name.toLowerCase();
-            final desc = p.description.toLowerCase();
-            return name.contains(_searchQuery) || desc.contains(_searchQuery);
-          }).toList();
-
-          if (filteredParams.isEmpty) {
-            return Center(child: Text(l10n.noResults));
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            itemCount: filteredParams.length,
-            itemBuilder: (context, index) {
-              final p = filteredParams[index];
-              final bool isSeparator = (p.minimum - p.maximum).abs() < 0.0001;
-
-              if (isSeparator) {
-                return Padding(
-                  padding: const EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: 16,
-                    bottom: 8,
+            if (!_isSearching)
+              if (defaultTargetPlatform == TargetPlatform.android ||
+                  defaultTargetPlatform == TargetPlatform.iOS ||
+                  defaultTargetPlatform == TargetPlatform.linux)
+                if (ref.watch(
+                  nesControllerProvider.select((s) => s.romHash != null),
+                ))
+                  IconButton(
+                    onPressed: () {
+                      ref.read(floatingGamePreviewProvider.notifier).toggle();
+                    },
+                    icon: Icon(
+                      preview.visible
+                          ? Icons.fullscreen_exit
+                          : Icons.picture_in_picture_alt,
+                    ),
+                    tooltip: l10n.settingsFloatingPreviewTooltip,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        p.description.isNotEmpty ? p.description : p.name,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Divider(thickness: 1),
-                    ],
-                  ),
-                );
-              }
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                child: _ShaderParameterSlider(
-                  // Key is important if the list changes order/filtering
-                  key: ValueKey(p.name),
-                  parameter: p,
+          ],
+        ),
+        body: paramsAsync.when(
+          data: (params) {
+            if (params.isEmpty) {
+              return Center(
+                child: Text(
+                  l10n.videoShaderPresetNotSet,
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
               );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+            }
+
+            final filteredParams = params.where((p) {
+              // Always show separators if we are not searching,
+              // or if we are searching, maybe only show them if they match?
+              // Simple approach: Filter strictly by content.
+              // If query is empty, show everything.
+              if (_searchQuery.isEmpty) return true;
+
+              final name = p.name.toLowerCase();
+              final desc = p.description.toLowerCase();
+              return name.contains(_searchQuery) || desc.contains(_searchQuery);
+            }).toList();
+
+            if (filteredParams.isEmpty) {
+              return Center(child: Text(l10n.noResults));
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              itemCount: filteredParams.length,
+              itemBuilder: (context, index) {
+                final p = filteredParams[index];
+                final bool isSeparator = (p.minimum - p.maximum).abs() < 0.0001;
+
+                if (isSeparator) {
+                  return Padding(
+                    padding: const EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 16,
+                      bottom: 8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.description.isNotEmpty ? p.description : p.name,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const Divider(thickness: 1),
+                      ],
+                    ),
+                  );
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: _ShaderParameterSlider(
+                    // Key is important if the list changes order/filtering
+                    key: ValueKey(p.name),
+                    parameter: p,
+                  ),
+                );
+              },
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, stack) => Center(child: Text('Error: $err')),
+        ),
       ),
     );
   }

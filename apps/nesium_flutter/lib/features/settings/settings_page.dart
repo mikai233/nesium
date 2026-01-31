@@ -103,16 +103,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     final preview = ref.watch(floatingGamePreviewProvider);
 
     return PopScope(
-      canPop: !preview.visible,
-      onPopInvokedWithResult: (didPop, result) {
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        if (!preview.visible) return;
 
-        ref.read(floatingGamePreviewProvider.notifier).hide();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
+        if (preview.visible) {
+          await ref.read(floatingGamePreviewProvider.notifier).hideAnimated();
+        }
+
+        if (context.mounted) {
           Navigator.of(context).pop(result);
-        });
+        }
       },
       child: Scaffold(
         appBar: AppBar(
