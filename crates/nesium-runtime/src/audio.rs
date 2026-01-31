@@ -116,8 +116,8 @@ impl NesAudioPlayer {
             let l = *chunk.first().unwrap_or(&0.0);
             let r = *chunk.get(1).unwrap_or(&l);
 
-            let l = (l * 0.9).clamp(-1.0, 1.0);
-            let r = (r * 0.9).clamp(-1.0, 1.0);
+            let l = l.clamp(-1.0, 1.0);
+            let r = r.clamp(-1.0, 1.0);
 
             let _ = self.producer.try_push(l);
             let _ = self.producer.try_push(r);
