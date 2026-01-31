@@ -114,6 +114,20 @@ class NesTextureService {
     });
   }
 
+  Future<void> updateNativeOverlayRect({
+    required double x,
+    required double y,
+    required double width,
+    required double height,
+  }) async {
+    await _channel.invokeMethod('updateNativeOverlayRect', {
+      'x': x,
+      'y': y,
+      'width': width,
+      'height': height,
+    });
+  }
+
   Future<void> setVideoFilter(int filter) async {
     await _channel.invokeMethod('setVideoFilter', {'filter': filter});
   }

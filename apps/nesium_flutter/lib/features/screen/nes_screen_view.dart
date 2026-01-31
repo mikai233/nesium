@@ -66,12 +66,19 @@ class NesScreenView extends ConsumerStatefulWidget {
 
 class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
   static const Duration _cursorHideDelay = Duration(seconds: 2);
+  static const Duration _resizeDebounceDelay = Duration(milliseconds: 100);
+  static const Duration _overlayResizeDebounceDelay = Duration(
+    milliseconds: 500,
+  );
 
   Timer? _cursorTimer;
   bool _cursorHidden = false;
   Size? _lastReportedSize;
+  Timer? _resizeDebounceTimer;
+  Size? _pendingReportedSize;
   final _gameKey = GlobalKey();
   Rect? _lastOverlayRect;
+  bool _nativeOverlayEnabled = false;
   PageRoute<dynamic>? _route;
   bool _isCurrentRoute = true;
   bool _hadRom = false;
@@ -114,7 +121,28 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
     Size viewport,
     bool shouldUseHighRes,
     BuildContext context,
+    bool useNativeOverlay,
   ) {
+    void scheduleResize(Size physical) {
+      _pendingReportedSize = physical;
+      _resizeDebounceTimer?.cancel();
+      final debounce = useNativeOverlay
+          ? _overlayResizeDebounceDelay
+          : _resizeDebounceDelay;
+      _resizeDebounceTimer = Timer(debounce, () {
+        if (!mounted) return;
+        final pending = _pendingReportedSize;
+        if (pending == null) return;
+        _pendingReportedSize = null;
+        ref
+            .read(nesControllerProvider.notifier)
+            .updateWindowOutputSize(
+              pending.width.round(),
+              pending.height.round(),
+            );
+      });
+    }
+
     if (shouldUseHighRes) {
       final dpr = MediaQuery.of(context).devicePixelRatio;
       final physicalWidth = (viewport.width * dpr).round();
@@ -126,26 +154,14 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
           physicalWidth.toDouble(),
           physicalHeight.toDouble(),
         );
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ref
-                .read(nesControllerProvider.notifier)
-                .updateWindowOutputSize(physicalWidth, physicalHeight);
-          }
-        });
+        scheduleResize(_lastReportedSize!);
       }
     } else {
       // Revert to native resolution when no filters/shaders are active.
       if (_lastReportedSize?.width != 256.0 ||
           _lastReportedSize?.height != 240.0) {
         _lastReportedSize = const Size(256, 240);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ref
-                .read(nesControllerProvider.notifier)
-                .updateWindowOutputSize(256, 240);
-          }
-        });
+        scheduleResize(_lastReportedSize!);
       }
     }
   }
@@ -167,6 +183,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
   @override
   void dispose() {
     _cursorTimer?.cancel();
+    _resizeDebounceTimer?.cancel();
     appRouteObserver.unsubscribe(this);
     super.dispose();
   }
@@ -250,8 +267,6 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
                   windowsBackend.backend == WindowsVideoBackend.d3d11Gpu) ||
               appleShaderActive;
 
-          _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
-
           final isWindows =
               !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
           final isAndroid =
@@ -263,6 +278,13 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
 
           final useNativeOverlay =
               isWindows && windowsBackend.useNativeOverlay && _isCurrentRoute;
+
+          _updateBufferSizeIfNeeded(
+            viewport,
+            shouldUseHighRes,
+            context,
+            useNativeOverlay,
+          );
 
           if (useNativeOverlay && _hadRom != hasRom) {
             // Some overlay implementations only begin presenting after the ROM
@@ -297,21 +319,31 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
                   (rect.width - _lastOverlayRect!.width).abs() > 0.1 ||
                   (rect.height - _lastOverlayRect!.height).abs() > 0.1) {
                 _lastOverlayRect = rect;
-                ref
-                    .read(nesTextureServiceProvider)
-                    .setNativeOverlay(
-                      enabled: true,
-                      x: rect.left,
-                      y: rect.top,
-                      width: rect.width,
-                      height: rect.height,
-                    );
+                final service = ref.read(nesTextureServiceProvider);
+                if (!_nativeOverlayEnabled) {
+                  _nativeOverlayEnabled = true;
+                  service.setNativeOverlay(
+                    enabled: true,
+                    x: rect.left,
+                    y: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                  );
+                } else {
+                  service.updateNativeOverlayRect(
+                    x: rect.left,
+                    y: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                  );
+                }
               }
             });
           } else if (isWindows) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
-              if (_lastOverlayRect != null) {
+              if (_nativeOverlayEnabled) {
+                _nativeOverlayEnabled = false;
                 _lastOverlayRect = null;
                 ref
                     .read(nesTextureServiceProvider)

@@ -42,6 +42,7 @@ pub struct ShaderSession {
     // Chain needs to be mutable for frame() calls, but ShaderSession is held in ArcSwap (Arc)
     pub(crate) chain: Mutex<Option<LibrashaderFilterChain>>,
     pub(crate) generation: u64,
+    pub(crate) device_addr: usize,
 }
 
 pub static SHADER_SESSION: ArcSwapOption<ShaderSession> = ArcSwapOption::const_empty();
@@ -210,6 +211,7 @@ pub async fn windows_set_shader_config(
             Some(Arc::new(ShaderSession {
                 chain: Mutex::new(None),
                 generation: new_gen,
+                device_addr: device_addr,
             }))
         });
     }

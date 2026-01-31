@@ -118,6 +118,7 @@ pub(crate) fn reload_shader_chain(
                 SHADER_SESSION.store(Some(Arc::new(ShaderSession {
                     chain: Mutex::new(Some(chain)),
                     generation,
+                    device_addr: device_addr,
                 })));
             }
             Err(e) => {
@@ -126,6 +127,7 @@ pub(crate) fn reload_shader_chain(
                 SHADER_SESSION.store(Some(Arc::new(ShaderSession {
                     chain: Mutex::new(None),
                     generation,
+                    device_addr: device_addr,
                 })));
             }
         };

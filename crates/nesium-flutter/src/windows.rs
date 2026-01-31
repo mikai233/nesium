@@ -52,6 +52,15 @@ pub unsafe extern "C" fn nesium_apply_shader(
             return false;
         };
 
+        if session.device_addr != device as usize {
+            tracing::warn!(
+                "Skipping shader frame due to device mismatch: session={:p}, current={:p}",
+                session.device_addr as *mut c_void,
+                device
+            );
+            return false;
+        }
+
         // Lock the internal chain for rendering
         let mut chain = session.chain.lock();
         let Some(chain) = chain.as_mut() else {
