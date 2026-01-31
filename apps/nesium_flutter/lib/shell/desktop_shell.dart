@@ -6,6 +6,7 @@ import '../features/settings/video_settings.dart';
 import '../domain/nes_state.dart';
 import '../domain/nes_controller.dart';
 import '../features/save_state/save_state_repository.dart';
+import '../platform/platform_capabilities.dart';
 import 'nes_actions.dart';
 import 'nes_menu_bar.dart';
 import 'nes_menu_model.dart';
@@ -33,6 +34,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
     final videoSettings = ref.watch(videoSettingsProvider);
     final screenVerticalOffset = videoSettings.screenVerticalOffset;
     final isFullScreen = videoSettings.fullScreen;
+    final bool hideMenuBar = isFullScreen && !isLinux;
 
     const double menuHeight = 28;
 
@@ -44,7 +46,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
         removeBottom: true,
         child: MouseRegion(
           onHover: (event) {
-            if (!isFullScreen) return;
+            if (!hideMenuBar) return;
             // Show menu if mouse is within top 40px
             final bool nearTop = event.localPosition.dy < 40;
             if (nearTop != _menuVisible) {
@@ -56,7 +58,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
               // Main Content
               Positioned.fill(
                 child: Padding(
-                  padding: EdgeInsets.only(top: isFullScreen ? 0 : menuHeight),
+                  padding: EdgeInsets.only(top: hideMenuBar ? 0 : menuHeight),
                   child: NesScreenView(
                     error: widget.state.error,
                     textureId: widget.state.textureId,
@@ -69,16 +71,16 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeInOut,
-                top: (isFullScreen && !_menuVisible) ? -menuHeight : 0,
+                top: (hideMenuBar && !_menuVisible) ? -menuHeight : 0,
                 left: 0,
                 right: 0,
                 height: menuHeight,
                 child: MouseRegion(
                   onEnter: (_) {
-                    if (isFullScreen) setState(() => _menuVisible = true);
+                    if (hideMenuBar) setState(() => _menuVisible = true);
                   },
                   onExit: (_) {
-                    if (isFullScreen) setState(() => _menuVisible = false);
+                    if (hideMenuBar) setState(() => _menuVisible = false);
                   },
                   child: NesMenuBar(
                     actions: widget.actions,

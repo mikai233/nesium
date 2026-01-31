@@ -11,6 +11,11 @@ bool get isNativeMobile =>
     (defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS);
 
+bool get isLinux => !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+bool get isMacOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+bool get isWindows =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
 bool get supportsVirtualControls => isNativeMobile;
 
 bool get preferVirtualControlsByDefault => isNativeMobile;
