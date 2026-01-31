@@ -74,6 +74,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
   Rect? _lastOverlayRect;
   PageRoute<dynamic>? _route;
   bool _isCurrentRoute = true;
+  bool _hadRom = false;
 
   void _showCursorAndArmTimer() {
     if (_cursorHidden) {
@@ -99,6 +100,13 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
     super.didUpdateWidget(oldWidget);
     if (widget.textureId == null || widget.error != null) {
       _showCursorAndCancelTimer();
+    }
+
+    // The Windows native overlay can be reset by backend/texture reinit.
+    // Force a re-apply of the overlay rect after texture changes so the
+    // native presenter is re-enabled without requiring a settings toggle.
+    if (oldWidget.textureId != widget.textureId) {
+      _lastOverlayRect = null;
     }
   }
 
@@ -255,6 +263,16 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
 
           final useNativeOverlay =
               isWindows && windowsBackend.useNativeOverlay && _isCurrentRoute;
+
+          if (useNativeOverlay && _hadRom != hasRom) {
+            // Some overlay implementations only begin presenting after the ROM
+            // is running; ensure we refresh the native overlay rect on this
+            // transition.
+            _hadRom = hasRom;
+            _lastOverlayRect = null;
+          } else {
+            _hadRom = hasRom;
+          }
 
           if (useNativeOverlay) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
