@@ -1552,7 +1552,7 @@ class _EditableClusterState extends State<_EditableCluster> {
             Positioned.fill(child: IgnorePointer(child: handle)),
           if (widget.centerHandle != null && widget.enabled)
             Center(child: IgnorePointer(child: widget.centerHandle!)),
-          if (resizeHandle != null) resizeHandle,
+          ?resizeHandle,
         ],
       ),
     );

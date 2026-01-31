@@ -58,7 +58,7 @@ class NesMenuBar extends StatelessWidget {
                   .toList(growable: false),
             ),
           ),
-          if (trailing != null) trailing!,
+          ?trailing,
         ],
       ),
     );

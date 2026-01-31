@@ -18,9 +18,9 @@ String encodeWindowArguments(
   Map<String, dynamic>? initialData,
 }) {
   final Map<String, dynamic> args = {
-    if (languageCode != null) 'lang': languageCode,
-    if (mainWindowId != null) 'mainId': mainWindowId,
-    if (initialData != null) 'initialData': initialData,
+    'lang': ?languageCode,
+    'mainId': ?mainWindowId,
+    'initialData': ?initialData,
   };
 
   switch (kind) {
