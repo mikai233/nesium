@@ -18,9 +18,9 @@ class FloatingGamePreviewOverlay extends ConsumerWidget {
     if (!isSupportedPlatform) return const SizedBox.shrink();
 
     final preview = ref.watch(floatingGamePreviewProvider);
-    if (!preview.visible) return const SizedBox.shrink();
 
     return FloatingGamePreview(
+      visible: preview.visible,
       offset: preview.offset,
       onOffsetChanged: (newOffset) {
         ref.read(floatingGamePreviewProvider.notifier).setOffset(newOffset);

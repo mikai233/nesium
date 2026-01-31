@@ -8,11 +8,13 @@ import '../../../l10n/app_localizations.dart';
 class FloatingGamePreview extends ConsumerStatefulWidget {
   const FloatingGamePreview({
     super.key,
+    required this.visible,
     required this.offset,
     required this.onOffsetChanged,
     required this.onClose,
   });
 
+  final bool visible;
   final Offset offset;
   final ValueChanged<Offset> onOffsetChanged;
   final VoidCallback onClose;
@@ -42,17 +44,47 @@ class _FloatingGamePreviewState extends ConsumerState<FloatingGamePreview>
       parent: _entryController,
       curve: Curves.easeOutBack,
     );
-    _entryController.forward();
+
+    _entryController.addListener(_onAnimationStatusChanged);
+
+    if (widget.visible) {
+      _entryController.forward();
+    }
+  }
+
+  void _onAnimationStatusChanged() {
+    // Rebuild when animation reaches 0 to effectively remove from tree via build()
+    if (_entryController.value == 0 || _entryController.value == 1.0) {
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void didUpdateWidget(FloatingGamePreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.visible && !oldWidget.visible) {
+      _entryController.forward();
+    } else if (!widget.visible && oldWidget.visible) {
+      _entryController.reverse();
+    }
   }
 
   @override
   void dispose() {
+    _entryController.removeListener(_onAnimationStatusChanged);
     _entryController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final status = _entryController.status;
+    final isClosed = !widget.visible && status == AnimationStatus.dismissed;
+
+    if (isClosed) {
+      return const SizedBox.shrink();
+    }
+
     final nesState = ref.watch(nesControllerProvider);
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
@@ -68,8 +100,25 @@ class _FloatingGamePreviewState extends ConsumerState<FloatingGamePreview>
     final windowHeight =
         (_isMinimized ? headerHeight : (headerHeight + contentHeight)) + 2.0;
 
+    // Ensure the offset is always within screen bounds (e.g. after rotation)
+    final maxDx = math.max(0.0, screenSize.width - windowWidth);
+    final maxDy = math.max(0.0, screenSize.height - windowHeight);
+    final clampedOffset = Offset(
+      widget.offset.dx.clamp(0.0, maxDx),
+      widget.offset.dy.clamp(0.0, maxDy),
+    );
+
+    if (clampedOffset != widget.offset) {
+      // Use addPostFrameCallback to avoid updating state during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onOffsetChanged(clampedOffset);
+        }
+      });
+    }
+
     return Transform.translate(
-      offset: widget.offset,
+      offset: clampedOffset,
       child: Align(
         alignment: Alignment.topLeft,
         child: ScaleTransition(
@@ -86,12 +135,12 @@ class _FloatingGamePreviewState extends ConsumerState<FloatingGamePreview>
               var newOffset = _dragStartOffset! + pointerDelta;
 
               // Clamp X/Y with safety for small screen sizes
-              final maxDx = math.max(0.0, screenSize.width - windowWidth);
-              final maxDy = math.max(0.0, screenSize.height - windowHeight);
+              final panMaxDx = math.max(0.0, screenSize.width - windowWidth);
+              final panMaxDy = math.max(0.0, screenSize.height - windowHeight);
 
               newOffset = Offset(
-                newOffset.dx.clamp(0.0, maxDx),
-                newOffset.dy.clamp(0.0, maxDy),
+                newOffset.dx.clamp(0.0, panMaxDx),
+                newOffset.dy.clamp(0.0, panMaxDy),
               );
 
               widget.onOffsetChanged(newOffset);
@@ -188,8 +237,7 @@ class _FloatingGamePreviewState extends ConsumerState<FloatingGamePreview>
           ),
           const SizedBox(width: 16),
           InkResponse(
-            onTap: () async {
-              await _entryController.reverse();
+            onTap: () {
               widget.onClose();
             },
             radius: 20,

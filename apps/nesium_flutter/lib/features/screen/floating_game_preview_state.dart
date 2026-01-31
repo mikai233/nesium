@@ -25,11 +25,18 @@ class FloatingGamePreviewController extends Notifier<FloatingGamePreviewState> {
     );
   }
 
-  void toggle() => state = state.copyWith(visible: !state.visible);
+  void toggle() {
+    if (!state.visible) {
+      state = state.copyWith(visible: true, offset: const Offset(20, 150));
+    } else {
+      state = state.copyWith(visible: false);
+    }
+  }
 
   void hide() => state = state.copyWith(visible: false);
 
-  void show() => state = state.copyWith(visible: true);
+  void show() =>
+      state = state.copyWith(visible: true, offset: const Offset(20, 150));
 
   void setOffset(Offset offset) => state = state.copyWith(offset: offset);
 }
