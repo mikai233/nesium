@@ -1060,7 +1060,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutComponentsHeading => 'Open-source components';
 
   @override
-  String get aboutComponentsHint => 'Tap an item to copy the link.';
+  String get aboutComponentsHint => 'Tap to open, long press to copy.';
 
   @override
   String get aboutLicenseHeading => 'License';
@@ -1068,6 +1068,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get aboutLicenseBody =>
       'Nesium is licensed under GPL-3.0-or-later. See LICENSE.md in the repository root.';
+
+  @override
+  String aboutLaunchFailed(String url) {
+    return 'Could not launch: $url';
+  }
 
   @override
   String get videoBackendLabel => 'Renderer backend';

@@ -1041,7 +1041,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aboutComponentsHeading => '开源组件';
 
   @override
-  String get aboutComponentsHint => '点击条目可复制链接。';
+  String get aboutComponentsHint => '点击链接可打开网页，长按可复制。';
 
   @override
   String get aboutLicenseHeading => '许可证';
@@ -1049,6 +1049,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get aboutLicenseBody =>
       'Nesium 使用 GPL-3.0-or-later 授权。详见仓库根目录的 LICENSE.md。';
+
+  @override
+  String aboutLaunchFailed(String url) {
+    return '无法打开链接：$url';
+  }
 
   @override
   String get videoBackendLabel => '渲染后端';

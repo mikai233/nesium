@@ -417,9 +417,17 @@
   "aboutGitHubLabel": "GitHub",
   "aboutWebDemoLabel": "在线游玩",
   "aboutComponentsHeading": "开源组件",
-  "aboutComponentsHint": "点击条目可复制链接。",
+  "aboutComponentsHint": "点击链接可打开网页，长按可复制。",
   "aboutLicenseHeading": "许可证",
   "aboutLicenseBody": "Nesium 使用 GPL-3.0-or-later 授权。详见仓库根目录的 LICENSE.md。",
+  "aboutLaunchFailed": "无法打开链接：{url}",
+  "@aboutLaunchFailed": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
   "videoBackendLabel": "渲染后端",
   "videoBackendAndroidLabel": "Android 渲染后端",
   "videoBackendWindowsLabel": "Windows 渲染后端",
