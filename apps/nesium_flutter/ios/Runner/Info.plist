@@ -88,5 +88,10 @@
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Used to host or join a local netplay session.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+	</array>
 </dict>
 </plist>

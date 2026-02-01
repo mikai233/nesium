@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_localizations.dart';
 
@@ -152,16 +153,26 @@ class _LinkTile extends StatelessWidget {
   final String value;
   final String copiedLabel;
 
+  Future<void> _launch(BuildContext context) async {
+    final uri = Uri.parse(value);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.aboutLaunchFailed(value))));
+      }
+    }
+  }
+
   Future<void> _copy(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: value));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(copiedLabel),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(copiedLabel)));
   }
 
   @override
@@ -169,13 +180,21 @@ class _LinkTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(label),
-      subtitle: SelectableText(value),
-      trailing: IconButton(
-        tooltip: MaterialLocalizations.of(context).copyButtonLabel,
-        onPressed: () => _copy(context),
-        icon: const Icon(Icons.copy),
+      subtitle: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => _launch(context),
+          onLongPress: () => _copy(context),
+          child: Text(
+            value,
+            style: TextStyle(
+              color: Colors.blue[700],
+              decoration: TextDecoration.underline,
+              decorationColor: Colors.blue[700],
+            ),
+          ),
+        ),
       ),
-      onTap: () => _copy(context),
     );
   }
 }

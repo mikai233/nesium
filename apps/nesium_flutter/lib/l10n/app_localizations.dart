@@ -2033,7 +2033,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutComponentsHint.
   ///
   /// In en, this message translates to:
-  /// **'Tap an item to copy the link.'**
+  /// **'Tap to open, long press to copy.'**
   String get aboutComponentsHint;
 
   /// No description provided for @aboutLicenseHeading.
@@ -2047,6 +2047,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nesium is licensed under GPL-3.0-or-later. See LICENSE.md in the repository root.'**
   String get aboutLicenseBody;
+
+  /// No description provided for @aboutLaunchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not launch: {url}'**
+  String aboutLaunchFailed(String url);
 
   /// No description provided for @videoBackendLabel.
   ///

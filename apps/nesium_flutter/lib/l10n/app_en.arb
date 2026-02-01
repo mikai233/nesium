@@ -541,9 +541,17 @@
   "aboutGitHubLabel": "GitHub",
   "aboutWebDemoLabel": "Web demo",
   "aboutComponentsHeading": "Open-source components",
-  "aboutComponentsHint": "Tap an item to copy the link.",
+  "aboutComponentsHint": "Tap to open, long press to copy.",
   "aboutLicenseHeading": "License",
   "aboutLicenseBody": "Nesium is licensed under GPL-3.0-or-later. See LICENSE.md in the repository root.",
+  "aboutLaunchFailed": "Could not launch: {url}",
+  "@aboutLaunchFailed": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
   "videoBackendLabel": "Renderer backend",
   "videoBackendAndroidLabel": "Android renderer backend",
   "videoBackendWindowsLabel": "Windows renderer backend",
