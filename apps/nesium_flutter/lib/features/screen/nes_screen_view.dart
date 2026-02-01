@@ -14,6 +14,7 @@ import '../settings/apple_shader_settings.dart';
 import '../settings/windows_video_backend_settings.dart';
 import '../settings/android_video_backend_settings.dart';
 import '../../domain/nes_texture_service.dart';
+import '../../l10n/app_localizations.dart';
 import '../../routing/app_route_observer.dart';
 import 'emulation_status_overlay.dart';
 
@@ -196,7 +197,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
         const Icon(Icons.error_outline, color: Colors.red),
         const SizedBox(height: 8),
         Text(
-          'Failed to create texture',
+          AppLocalizations.of(context)!.errorFailedToCreateTexture,
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(color: Colors.red),
@@ -238,9 +239,9 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
           ],
         ),
       );
+    } else {
+      return _buildTextureContent(viewport, hasRom, settings);
     }
-
-    return _buildTextureContent(viewport, hasRom, settings);
   }
 
   Widget _buildIosContent(Size viewport, bool hasRom, VideoSettings settings) {

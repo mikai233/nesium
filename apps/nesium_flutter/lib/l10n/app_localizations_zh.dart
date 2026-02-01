@@ -1648,4 +1648,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noResults => '未找到匹配的参数';
+
+  @override
+  String get errorFailedToCreateTexture => '创建纹理失败';
 }

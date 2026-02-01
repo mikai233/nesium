@@ -1672,4 +1672,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noResults => 'No matching parameters found';
+
+  @override
+  String get errorFailedToCreateTexture => 'Failed to create texture';
 }

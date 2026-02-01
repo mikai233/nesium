@@ -684,5 +684,6 @@
   "videoShaderParametersReset": "重置参数",
   "searchHint": "搜索...",
   "searchTooltip": "搜索",
-  "noResults": "未找到匹配的参数"
+  "noResults": "未找到匹配的参数",
+  "errorFailedToCreateTexture": "创建纹理失败"
 }
