@@ -150,6 +150,20 @@ jobs:
           echo "EGUI_TAG=${EGUI_TAG:-}"
           echo "LIBRETRO_TAG=${LIBRETRO_TAG:-}"
 
+      - name: Install fonttools (Python)
+        if: ${{ !matrix.libretro_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pip install fonttools brotli
+
+      - name: Subset fonts (egui)
+        if: ${{ !matrix.libretro_only }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 apps/nesium-egui/tool/subset_font.py
+
       - name: Install system development libraries (Linux)
         if: runner.os == 'Linux'
         run: |

@@ -98,6 +98,14 @@ fn main() {
     if target_os == "macos" {
         generate_macos_assets(&layers);
     }
+
+    println!("cargo:rustc-check-cfg=cfg(use_subset_fonts)");
+    // Check for subset fonts (generated during CI)
+    let subset_font_path = Path::new("assets/fonts/subset/NotoSansSC-Regular.ttf");
+    if subset_font_path.exists() {
+        println!("cargo:rustc-cfg=use_subset_fonts");
+    }
+    println!("cargo:rerun-if-changed=assets/fonts/subset/NotoSansSC-Regular.ttf");
 }
 
 fn write_icon_bin(out_dir: &Path, rgba: &[u8]) -> std::io::Result<()> {
