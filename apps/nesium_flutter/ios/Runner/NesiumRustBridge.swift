@@ -43,18 +43,55 @@ protocol NesiumFrameConsumer: AnyObject {
     func nesiumOnFrameReady(bufferIndex: UInt32, width: Int, height: Int, pitch: Int)
 }
 
+/// A central coordinator that multiplexes the single Rust frame callback to multiple observers.
+/// This allows both the legacy FlutterTexture manager and new PlatformViews to co-exist.
+final class NesiumFrameCoordinator {
+    static let shared = NesiumFrameCoordinator()
+    
+    private let consumers = NSHashTable<AnyObject>.weakObjects()
+    private let lock = NSLock()
+
+    private init() {
+        let userData = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        nesium_set_frame_ready_callback(globalFrameReadyCallback, userData)
+    }
+
+    func register(_ consumer: NesiumFrameConsumer) {
+        lock.lock()
+        defer { lock.unlock() }
+        consumers.add(consumer)
+    }
+
+    func unregister(_ consumer: NesiumFrameConsumer) {
+        lock.lock()
+        defer { lock.unlock() }
+        consumers.remove(consumer)
+    }
+
+    fileprivate func broadcast(bufferIndex: UInt32, width: Int, height: Int, pitch: Int) {
+        lock.lock()
+        let observers = consumers.allObjects.compactMap { $0 as? NesiumFrameConsumer }
+        lock.unlock()
+
+        for observer in observers {
+            observer.nesiumOnFrameReady(
+                bufferIndex: bufferIndex,
+                width: width,
+                height: height,
+                pitch: pitch
+            )
+        }
+    }
+}
+
 private let globalFrameReadyCallback: NesiumFrameReadyCallback = { bufferIndex, width, height, pitch, userData in
     guard let userData = userData else { return }
 
-    let anyObject = Unmanaged<AnyObject>
+    let coordinator = Unmanaged<NesiumFrameCoordinator>
         .fromOpaque(userData)
         .takeUnretainedValue()
 
-    guard let consumer = anyObject as? NesiumFrameConsumer else {
-        return
-    }
-
-    consumer.nesiumOnFrameReady(
+    coordinator.broadcast(
         bufferIndex: bufferIndex,
         width: Int(width),
         height: Int(height),
@@ -63,9 +100,9 @@ private let globalFrameReadyCallback: NesiumFrameReadyCallback = { bufferIndex, 
 }
 
 func nesiumRegisterFrameCallback(for consumer: NesiumFrameConsumer) {
-    let anyObject = consumer as AnyObject
-    let userData = UnsafeMutableRawPointer(
-        Unmanaged.passUnretained(anyObject).toOpaque()
-    )
-    nesium_set_frame_ready_callback(globalFrameReadyCallback, userData)
+    NesiumFrameCoordinator.shared.register(consumer)
+}
+
+func nesiumUnregisterFrameCallback(for consumer: NesiumFrameConsumer) {
+    NesiumFrameCoordinator.shared.unregister(consumer)
 }
