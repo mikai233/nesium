@@ -11,10 +11,16 @@ on:
         description: "Build mode: test | prerelease | release"
         required: true
         type: string
+      is_check:
+        description: "Only check if it builds (skip packaging/signing)"
+        required: false
+        type: boolean
+        default: false
 
 env:
   RELEASE_TAG: ${{ inputs.release_tag }}
   MODE: ${{ inputs.mode }}
+  IS_CHECK: ${{ inputs.is_check }}
 
 jobs:
   build-flutter:
@@ -53,6 +59,11 @@ jobs:
           - name: android
             os: ubuntu-latest
             asset_suffix: android
+
+          # iOS
+          - name: ios
+            os: macos-latest
+            asset_suffix: ios
 
     steps:
       - uses: actions/checkout@v4
@@ -115,6 +126,16 @@ jobs:
             aarch64-linux-android \
             armv7-linux-androideabi \
             x86_64-linux-android
+
+      - name: Install Rust targets (iOS/macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          if [ "${{ matrix.name }}" = "ios" ]; then
+            rustup target add aarch64-apple-ios x86_64-apple-ios
+          fi
 
       - name: Setup MSVC env (Windows)
         if: runner.os == 'Windows'
@@ -318,7 +339,18 @@ jobs:
 
           pushd "$ROOT/apps/nesium_flutter" >/dev/null
           flutter config --enable-linux-desktop
-          flutter build linux --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+          
+          BUILD_TYPE="--release"
+          if [ "${IS_CHECK}" = "true" ]; then
+            BUILD_TYPE="--debug"
+          fi
+
+          flutter build linux ${BUILD_TYPE} --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+
+          if [ "${IS_CHECK}" = "true" ]; then
+            echo "IS_CHECK is true, skipping packaging."
+            exit 0
+          fi
 
           BUNDLE_DIR="$(find build/linux -type d -path '*/release/bundle' | head -n 1 || true)"
           if [ -z "${BUNDLE_DIR}" ] || [ ! -d "${BUNDLE_DIR}" ]; then
@@ -431,7 +463,18 @@ jobs:
           fi
 
           # 1. Build Universal APK (FAT)
-          flutter build apk --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+          BUILD_TYPE="--release"
+          if [ "${IS_CHECK}" = "true" ]; then
+            BUILD_TYPE="--debug"
+          fi
+
+          flutter build apk ${BUILD_TYPE} --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+
+          if [ "${IS_CHECK}" = "true" ]; then
+              echo "IS_CHECK is true, skipping further builds and packaging."
+              exit 0
+          fi
+
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nesium-universal.apk
 
           # 2. Build ARM64 APK (Optimized for modern devices)
@@ -486,7 +529,20 @@ jobs:
           # 1. Build (Standard x64)
           Push-Location "apps\nesium_flutter"
           flutter config --enable-windows-desktop
-          flutter build windows --release --build-name "$env:FLUTTER_BUILD_NAME" --build-number "$env:FLUTTER_BUILD_NUMBER"
+          
+          $BuildType = "--release"
+          if ($env:IS_CHECK -eq "true") {
+              $BuildType = "--debug"
+          }
+
+          flutter build windows $BuildType --build-name "$env:FLUTTER_BUILD_NAME" --build-number "$env:FLUTTER_BUILD_NUMBER"
+          
+          if ($env:IS_CHECK -eq "true") {
+              Write-Host "IS_CHECK is true, skipping packaging."
+              Pop-Location
+              exit 0
+          }
+
           Pop-Location
 
           # 2. Locate Artifacts
@@ -559,19 +615,35 @@ jobs:
           Get-ChildItem -Path "$env:GITHUB_WORKSPACE/dist" | Format-Table -AutoSize
 
       # ===================================================
-      # FLUTTER MACOS BUILD & FIX & DMG & PORTABLE
+      # FLUTTER MACOS/IOS BUILD
       # ===================================================
-      - name: Build + package (macOS universal)
+      - name: Build + package (macOS/iOS)
         if: runner.os == 'macOS'
         shell: bash
         working-directory: apps/nesium_flutter
         run: |
           set -euo pipefail
-          rustup target add aarch64-apple-darwin x86_64-apple-darwin || true
+          
+          if [ "${{ matrix.name }}" = "ios" ]; then
+            echo "Building for iOS..."
+            flutter build ios --no-codesign --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+            if [ "${IS_CHECK}" = "true" ]; then
+              echo "IS_CHECK is true, skipping further steps."
+              exit 0
+            fi
+            # iOS packaging not fully implemented in this script yet, but build-check is done.
+            echo "iOS packaging branch currently empty (skipped)."
+            exit 0
+          fi
 
-          # 1. Build Flutter App
+          # Proceed with macOS build
           flutter config --enable-macos-desktop
           flutter build macos --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+
+          if [ "${IS_CHECK}" = "true" ]; then
+            echo "IS_CHECK is true, skipping manual dylib injection and packaging."
+            exit 0
+          fi
 
           ROOT="${GITHUB_WORKSPACE}"
           DIST="$ROOT/dist"
@@ -748,6 +820,7 @@ jobs:
           ls -la "$DIST"
 
       - name: Upload artifact
+        if: inputs.is_check == false
         uses: actions/upload-artifact@v4
         with:
           name: nesium-flutter-${{ matrix.name }}

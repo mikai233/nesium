@@ -78,6 +78,7 @@ jobs:
     with:
       release_tag: ${{ needs.setup.outputs.release_tag }}
       mode: ${{ needs.setup.outputs.mode }}
+      is_check: false
     secrets: inherit
 
   # ------------------------------------------------------------------
