@@ -11,7 +11,9 @@ import 'features/settings/apple_performance_settings.dart';
 import 'features/settings/windows_performance_settings.dart';
 import 'features/settings/android_shader_settings.dart';
 import 'features/settings/windows_shader_settings.dart';
+import 'features/screen/floating_game_preview_overlay.dart';
 import 'l10n/app_localizations.dart';
+import 'routing/app_route_observer.dart';
 import 'windows/window_routing.dart';
 import 'windows/window_message_router.dart';
 
@@ -59,6 +61,11 @@ class NesiumApp extends ConsumerWidget {
       locale: language.locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      navigatorObservers: [appRouteObserver],
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        return Stack(children: [child, const FloatingGamePreviewOverlay()]);
+      },
       theme: ThemeData(
         fontFamily: 'NotoSansSC',
         colorScheme: ColorScheme.fromSeed(

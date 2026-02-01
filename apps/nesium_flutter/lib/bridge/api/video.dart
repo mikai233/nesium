@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `apply_video_filter`, `current_filter`, `is_ntsc_bisqwit_filter`, `is_ntsc_filter`, `lcd_grid_options`, `ntsc_bisqwit_options`, `ntsc_options`, `output_size`, `scale_factor`, `scanline_options`, `set_current_filter`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<VideoOutputInfo> setVideoFilter({required VideoFilter filter}) =>
     RustLib.instance.api.crateApiVideoSetVideoFilter(filter: filter);
@@ -27,8 +27,24 @@ Future<void> setNtscBisqwitOptions({required NtscBisqwitOptions options}) =>
 Future<void> setShaderEnabled({required bool enabled}) =>
     RustLib.instance.api.crateApiVideoSetShaderEnabled(enabled: enabled);
 
-Future<void> setShaderPresetPath({String? path}) =>
+Future<ShaderParameters> setShaderPresetPath({String? path}) =>
     RustLib.instance.api.crateApiVideoSetShaderPresetPath(path: path);
+
+Future<ShaderParameters> setShaderConfig({
+  required bool enabled,
+  String? path,
+}) => RustLib.instance.api.crateApiVideoSetShaderConfig(
+  enabled: enabled,
+  path: path,
+);
+
+Future<void> setShaderParameter({
+  required String name,
+  required double value,
+}) => RustLib.instance.api.crateApiVideoSetShaderParameter(
+  name: name,
+  value: value,
+);
 
 class LcdGridOptions {
   /// Strength in `0.0..=1.0` (0 = off, 1 = strongest / default).
@@ -176,6 +192,67 @@ class ScanlineOptions {
       other is ScanlineOptions &&
           runtimeType == other.runtimeType &&
           intensity == other.intensity;
+}
+
+class ShaderParameter {
+  final String name;
+  final String description;
+  final double initial;
+  final double current;
+  final double minimum;
+  final double maximum;
+  final double step;
+
+  const ShaderParameter({
+    required this.name,
+    required this.description,
+    required this.initial,
+    required this.current,
+    required this.minimum,
+    required this.maximum,
+    required this.step,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      description.hashCode ^
+      initial.hashCode ^
+      current.hashCode ^
+      minimum.hashCode ^
+      maximum.hashCode ^
+      step.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ShaderParameter &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          description == other.description &&
+          initial == other.initial &&
+          current == other.current &&
+          minimum == other.minimum &&
+          maximum == other.maximum &&
+          step == other.step;
+}
+
+class ShaderParameters {
+  final String path;
+  final List<ShaderParameter> parameters;
+
+  const ShaderParameters({required this.path, required this.parameters});
+
+  @override
+  int get hashCode => path.hashCode ^ parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ShaderParameters &&
+          runtimeType == other.runtimeType &&
+          path == other.path &&
+          parameters == other.parameters;
 }
 
 /// Single-select video filter configuration, modeled after Mesen's `VideoFilterType`.

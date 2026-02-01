@@ -53,6 +53,29 @@ pub struct VideoOutputInfo {
     pub output_height: u32,
 }
 
+#[frb]
+#[derive(Clone)]
+pub struct ShaderParameter {
+    pub name: String,
+    pub description: String,
+    pub initial: f32,
+    pub current: f32,
+    pub minimum: f32,
+    pub maximum: f32,
+    pub step: f32,
+}
+
+#[frb]
+#[derive(Clone)]
+pub struct ShaderParameters {
+    pub path: String,
+    // We use a Vec here instead of a HashMap to preserve the order of parameters
+    // as provided by librashader. librashader uses `halfbrown::HashMap` which
+    // preserves insertion order for small sets (n < 32), which covers most
+    // shader presets. Standard `std::collections::HashMap` does not guarantee order.
+    pub parameters: Vec<ShaderParameter>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NtscOptions {
     pub hue: f64,
@@ -470,39 +493,13 @@ pub fn set_ntsc_bisqwit_options(options: NtscBisqwitOptions) -> Result<(), Strin
 }
 
 #[frb]
-pub fn set_shader_enabled(enabled: bool) -> Result<(), String> {
-    #[cfg(target_os = "android")]
-    {
-        crate::android::android_set_shader_enabled(enabled);
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        crate::windows::windows_set_shader_enabled(enabled);
-        Ok(())
-    }
-
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    {
-        crate::apple::apple_set_shader_enabled(enabled);
-        Ok(())
-    }
-
-    #[cfg(not(any(
-        target_os = "android",
-        target_os = "windows",
-        target_os = "macos",
-        target_os = "ios"
-    )))]
-    {
-        let _ = enabled;
-        Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
-    }
+pub async fn set_shader_enabled(enabled: bool) -> Result<(), String> {
+    set_shader_config(enabled, None).await?;
+    Ok(())
 }
 
 #[frb]
-pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
+pub async fn set_shader_preset_path(path: Option<String>) -> Result<ShaderParameters, String> {
     #[cfg(target_os = "android")]
     {
         let path = path.and_then(|p| {
@@ -513,8 +510,7 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
                 Some(trimmed.to_string())
             }
         });
-        crate::android::android_set_shader_preset_path(path);
-        Ok(())
+        crate::android::session::android_set_shader_preset_path(path).await
     }
 
     #[cfg(target_os = "windows")]
@@ -527,8 +523,7 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
                 Some(trimmed.to_string())
             }
         });
-        crate::windows::windows_set_shader_preset_path(path);
-        Ok(())
+        crate::windows::windows_set_shader_preset_path(path).await
     }
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -541,8 +536,7 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
                 Some(trimmed.to_string())
             }
         });
-        crate::apple::apple_set_shader_preset_path(path);
-        Ok(())
+        crate::apple::apple_set_shader_preset_path(path).await
     }
 
     #[cfg(not(any(
@@ -554,5 +548,106 @@ pub fn set_shader_preset_path(path: Option<String>) -> Result<(), String> {
     {
         let _ = path;
         Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
+    }
+}
+
+#[frb]
+pub async fn set_shader_config(
+    enabled: bool,
+    path: Option<String>,
+) -> Result<ShaderParameters, String> {
+    let path = path.and_then(|p| {
+        let trimmed = p.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+
+    #[cfg(target_os = "android")]
+    {
+        crate::android::session::android_set_shader_config(enabled, path).await
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        crate::windows::session::windows_set_shader_config(enabled, path).await
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        crate::apple::session::apple_set_shader_config(enabled, path).await
+    }
+
+    #[cfg(not(any(
+        target_os = "android",
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "ios"
+    )))]
+    {
+        let _ = (enabled, path);
+        Err("Librashader is only supported on Android, Windows, macOS and iOS for now.".to_string())
+    }
+}
+
+#[frb]
+pub fn set_shader_parameter(name: String, value: f32) {
+    #[cfg(target_os = "android")]
+    {
+        crate::android::session::ANDROID_SHADER_CONFIG.rcu(|old| {
+            let mut new = old.as_ref()?.as_ref().clone();
+            new.parameters.insert(name.clone(), value);
+            Some(std::sync::Arc::new(new))
+        });
+
+        crate::android::session::ANDROID_SHADER_SESSION
+            .load()
+            .as_ref()
+            .map(|s| {
+                use librashader::runtime::FilterChainParameters as _;
+                s.chain.lock().as_mut().map(|chain| {
+                    chain.parameters().set_parameter_value(&name, value);
+                });
+            });
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        crate::windows::WINDOWS_SHADER_CONFIG.rcu(|old| {
+            let mut new = old.as_ref()?.as_ref().clone();
+            new.parameters.insert(name.clone(), value);
+            Some(std::sync::Arc::new(new))
+        });
+
+        crate::windows::SHADER_SESSION
+            .load()
+            .as_ref()
+            .map(|session| {
+                use librashader::runtime::FilterChainParameters as _;
+                session.chain.lock().as_mut().map(|chain| {
+                    chain.parameters().set_parameter_value(&name, value);
+                });
+            });
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        crate::apple::session::APPLE_SHADER_CONFIG.rcu(|old| {
+            let mut new = old.as_ref()?.as_ref().clone();
+            new.parameters.insert(name.clone(), value);
+            Some(std::sync::Arc::new(new))
+        });
+
+        crate::apple::session::SHADER_SESSION
+            .load()
+            .as_ref()
+            .map(|session| {
+                use librashader::runtime::FilterChainParameters as _;
+                session.chain.lock().as_mut().map(|chain| {
+                    chain.parameters().set_parameter_value(&name, value);
+                });
+            });
     }
 }

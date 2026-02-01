@@ -27,6 +27,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTabServer => 'Server';
 
   @override
+  String get settingsFloatingPreviewToggle => 'Floating Preview';
+
+  @override
+  String get settingsFloatingPreviewTooltip => 'Show game preview';
+
+  @override
   String get serverTitle => 'Netplay Server';
 
   @override
@@ -461,6 +467,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get virtualControlsReset => 'Reset layout';
 
   @override
+  String get virtualControlsDiscardChangesTitle => 'Undo changes';
+
+  @override
+  String get virtualControlsDiscardChangesSubtitle =>
+      'Revert to last saved layout';
+
+  @override
   String get virtualControlsTurboFramesPerToggle => 'Turbo frames per toggle';
 
   @override
@@ -812,6 +825,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionLoadPalette => 'Load palette';
 
   @override
+  String get videoResetToDefault => 'Reset to default';
+
+  @override
   String get videoTitle => 'Video';
 
   @override
@@ -964,6 +980,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoScreenVerticalOffset => 'Screen vertical offset';
+
+  @override
+  String get videoScreenVerticalOffsetPortraitOnly =>
+      'Only takes effect in portrait mode.';
 
   @override
   String get videoAspectRatio => 'Aspect ratio';
@@ -1633,4 +1653,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get netplayProceed => 'Proceed';
+
+  @override
+  String get videoShaderParametersTitle => 'Shader Parameters';
+
+  @override
+  String get videoShaderParametersSubtitle =>
+      'Adjust shader parameters in real-time';
+
+  @override
+  String get videoShaderParametersReset => 'Reset Parameters';
+
+  @override
+  String get searchHint => 'Search...';
+
+  @override
+  String get searchTooltip => 'Search';
+
+  @override
+  String get noResults => 'No matching parameters found';
 }

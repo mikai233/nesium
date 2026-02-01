@@ -1,6 +1,7 @@
 #include "nesium_gpu_texture.h"
 #include "nesium_rust_ffi.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <d3dcompiler.h>
@@ -47,6 +48,30 @@ void main(uint3 coord : SV_DispatchThreadID) {
 
 } // namespace
 
+void NesiumGpuTexture::RetireOldBufferLocked(int index) {
+  if (index < 0 || index >= kBufferCount) {
+    return;
+  }
+  if (!gpu_textures_[index] && !shared_handles_[index]) {
+    return;
+  }
+
+  RetiredBuffer retired;
+  retired.handle = std::move(shared_handles_[index]);
+  retired.texture = std::move(gpu_textures_[index]);
+  retired.retire_at_ms = ::GetTickCount64() + 2000;
+  retired_.push_back(std::move(retired));
+}
+
+void NesiumGpuTexture::CleanupRetiredLocked() {
+  const uint64_t now = ::GetTickCount64();
+  retired_.erase(std::remove_if(retired_.begin(), retired_.end(),
+                                [&](const RetiredBuffer &b) {
+                                  return b.retire_at_ms <= now;
+                                }),
+                 retired_.end());
+}
+
 std::shared_ptr<NesiumGpuTexture>
 NesiumGpuTexture::Create(int src_width, int src_height, int dst_width,
                          int dst_height, IDXGIAdapter *adapter) {
@@ -71,6 +96,7 @@ NesiumGpuTexture::NesiumGpuTexture(int src_width, int src_height, int dst_width,
 NesiumGpuTexture::~NesiumGpuTexture() {}
 
 bool NesiumGpuTexture::Initialize(IDXGIAdapter *adapter) {
+  adapter_ = adapter;
   // Create D3D11 device
   D3D_FEATURE_LEVEL feature_levels[] = {
       D3D_FEATURE_LEVEL_11_1,
@@ -125,16 +151,30 @@ bool NesiumGpuTexture::Initialize(IDXGIAdapter *adapter) {
   return CreateBuffersLocked();
 }
 
-bool NesiumGpuTexture::CreateBuffersLocked() {
-  if (!device_) {
-    return false;
+bool NesiumGpuTexture::EnsureDeviceLocked() {
+  if (!device_ || !context_) {
+    return RecreateDeviceLocked();
   }
 
-  // Reset previous resources.
+  HRESULT reason = device_->GetDeviceRemovedReason();
+  if (reason == S_OK) {
+    return true;
+  }
+
+#ifdef _DEBUG
+  LogHResult("GetDeviceRemovedReason", reason);
+#endif
+
+  return RecreateDeviceLocked();
+}
+
+bool NesiumGpuTexture::RecreateDeviceLocked() {
+  // Clear existing resources first; CreateBuffersLocked expects clean state.
   shader_input_bgra_.Reset();
   shader_input_rgba_.Reset();
   swizzle_srv_.Reset();
   swizzle_uav_.Reset();
+  swizzle_cs_blob_.Reset();
   swizzle_shader_.Reset();
 
   for (int i = 0; i < kBufferCount; ++i) {
@@ -142,6 +182,82 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
     gpu_textures_[i].Reset();
     gpu_queries_[i].Reset();
     shared_handles_[i].reset();
+    query_pending_[i] = false;
+  }
+
+  context_.Reset();
+  device_.Reset();
+
+  D3D_FEATURE_LEVEL feature_levels[] = {
+      D3D_FEATURE_LEVEL_11_1,
+      D3D_FEATURE_LEVEL_11_0,
+      D3D_FEATURE_LEVEL_10_1,
+      D3D_FEATURE_LEVEL_10_0,
+  };
+
+  UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+#ifdef _DEBUG
+  flags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+
+  D3D_FEATURE_LEVEL created_level;
+
+  auto create_device = [&](UINT device_flags) -> HRESULT {
+    if (adapter_) {
+      return D3D11CreateDevice(adapter_.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
+                               device_flags, feature_levels,
+                               ARRAYSIZE(feature_levels), D3D11_SDK_VERSION,
+                               &device_, &created_level, &context_);
+    }
+
+    return D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+                             device_flags, feature_levels,
+                             ARRAYSIZE(feature_levels), D3D11_SDK_VERSION,
+                             &device_, &created_level, &context_);
+  };
+
+  HRESULT hr = create_device(flags);
+  if (FAILED(hr)) {
+#ifdef _DEBUG
+    LogHResult("D3D11CreateDevice(recreate, with debug layer)", hr);
+#endif
+    hr = create_device(D3D11_CREATE_DEVICE_BGRA_SUPPORT);
+  }
+
+  if (FAILED(hr)) {
+    LogHResult("D3D11CreateDevice(recreate)", hr);
+    return false;
+  }
+
+  ComPtr<ID3D10Multithread> mt;
+  if (SUCCEEDED(device_.As(&mt))) {
+    mt->SetMultithreadProtected(TRUE);
+  }
+
+  return CreateBuffersLocked();
+}
+
+bool NesiumGpuTexture::CreateBuffersLocked() {
+  if (!device_) {
+    return false;
+  }
+
+  CleanupRetiredLocked();
+
+  // Reset previous resources.
+  shader_input_bgra_.Reset();
+  shader_input_rgba_.Reset();
+  swizzle_srv_.Reset();
+  swizzle_uav_.Reset();
+  // Keep swizzle_cs_blob_ and swizzle_shader_ across resizes; only textures and
+  // their views depend on dimensions. Recreate the shader only on device reset.
+
+  for (int i = 0; i < kBufferCount; ++i) {
+    RetireOldBufferLocked(i);
+    staging_textures_[i].Reset();
+    gpu_queries_[i].Reset();
+    shared_handles_[i].reset();
+    query_pending_[i] = false;
   }
 
   HRESULT hr = S_OK;
@@ -259,26 +375,29 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
     return false;
   }
 
-  // 5. Compile and create Compute Shader
-  ComPtr<ID3DBlob> cs_blob;
-  ComPtr<ID3DBlob> error_msg;
-  hr = D3DCompile(kSwizzleShaderSource, strlen(kSwizzleShaderSource), nullptr,
-                  nullptr, nullptr, "main", "cs_5_0", 0, 0, &cs_blob,
-                  &error_msg);
-  if (FAILED(hr)) {
-    if (error_msg) {
-      OutputDebugStringA((char *)error_msg->GetBufferPointer());
+  // 5. Compile (once) and create Compute Shader (per device)
+  if (!swizzle_cs_blob_) {
+    ComPtr<ID3DBlob> error_msg;
+    hr = D3DCompile(kSwizzleShaderSource, strlen(kSwizzleShaderSource), nullptr,
+                    nullptr, nullptr, "main", "cs_5_0", 0, 0, &swizzle_cs_blob_,
+                    &error_msg);
+    if (FAILED(hr)) {
+      if (error_msg) {
+        OutputDebugStringA((char *)error_msg->GetBufferPointer());
+      }
+      LogHResult("D3DCompile(SwizzleCS)", hr);
+      return false;
     }
-    LogHResult("D3DCompile(SwizzleCS)", hr);
-    return false;
   }
 
-  hr = device_->CreateComputeShader(cs_blob->GetBufferPointer(),
-                                    cs_blob->GetBufferSize(), nullptr,
-                                    &swizzle_shader_);
-  if (FAILED(hr)) {
-    LogHResult("CreateComputeShader(SwizzleCS)", hr);
-    return false;
+  if (!swizzle_shader_) {
+    hr = device_->CreateComputeShader(swizzle_cs_blob_->GetBufferPointer(),
+                                      swizzle_cs_blob_->GetBufferSize(),
+                                      nullptr, &swizzle_shader_);
+    if (FAILED(hr)) {
+      LogHResult("CreateComputeShader(SwizzleCS)", hr);
+      return false;
+    }
   }
 
   write_index_.store(0, std::memory_order_release);
@@ -289,15 +408,62 @@ bool NesiumGpuTexture::CreateBuffersLocked() {
 }
 
 std::pair<uint8_t *, uint32_t> NesiumGpuTexture::MapWriteBuffer() {
-  if (is_mapped_ || !context_) {
+  ComPtr<ID3D11DeviceContext> local_context;
+  ComPtr<ID3D11Texture2D> local_staging;
+  int idx = -1;
+
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    if (!EnsureDeviceLocked()) {
+      return {nullptr, 0};
+    }
+
+    if (is_mapped_.load(std::memory_order_acquire) || !context_) {
+      return {nullptr, 0};
+    }
+
+    idx = write_index_.load(std::memory_order_acquire);
+
+    // If the previous GPU work that referenced this buffer hasn't completed
+    // yet, avoid blocking on Map. Poll the query and skip this frame if it is
+    // still pending.
+    if (idx >= 0 && idx < kBufferCount) {
+      // Opportunistically advance read_index_ for Flutter when queries complete.
+      for (int i = 0; i < kBufferCount; i++) {
+        if (!query_pending_[i] || !gpu_queries_[i])
+          continue;
+        BOOL done = FALSE;
+        HRESULT hr =
+            context_->GetData(gpu_queries_[i].Get(), &done, sizeof(done),
+                              D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        if (hr == S_OK) {
+          query_pending_[i] = false;
+          read_index_.store(i, std::memory_order_release);
+        }
+      }
+
+      if (query_pending_[idx] && gpu_queries_[idx]) {
+        BOOL done = FALSE;
+        HRESULT hr =
+            context_->GetData(gpu_queries_[idx].Get(), &done, sizeof(done),
+                              D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        if (hr != S_OK) {
+          return {nullptr, 0};
+        }
+        query_pending_[idx] = false;
+      }
+    }
+    local_context = context_;
+    local_staging = staging_textures_[idx];
+  }
+
+  if (!local_context || !local_staging) {
     return {nullptr, 0};
   }
 
-  int idx = write_index_.load(std::memory_order_acquire);
-
   D3D11_MAPPED_SUBRESOURCE mapped = {};
-  HRESULT hr = context_->Map(staging_textures_[idx].Get(), 0, D3D11_MAP_WRITE,
-                             0, &mapped);
+  HRESULT hr =
+      local_context->Map(local_staging.Get(), 0, D3D11_MAP_WRITE, 0, &mapped);
 
   if (FAILED(hr)) {
 #ifdef _DEBUG
@@ -306,7 +472,7 @@ std::pair<uint8_t *, uint32_t> NesiumGpuTexture::MapWriteBuffer() {
     return {nullptr, 0};
   }
 
-  is_mapped_ = true;
+  is_mapped_.store(true, std::memory_order_release);
   return {static_cast<uint8_t *>(mapped.pData),
           static_cast<uint32_t>(mapped.RowPitch)};
 }
@@ -320,6 +486,10 @@ int NesiumGpuTexture::UnmapAndCommit() {
 
   {
     std::lock_guard<std::mutex> lk(mu_);
+    if (!EnsureDeviceLocked()) {
+      is_mapped_.store(false, std::memory_order_release);
+      return -1;
+    }
     if (!is_mapped_.load(std::memory_order_acquire) || !context_) {
       return -1;
     }
@@ -338,6 +508,9 @@ int NesiumGpuTexture::UnmapAndCommit() {
   {
     std::lock_guard<std::mutex> lk(
         mu_); // Temporarily take lock for shader textures/dims
+    if (!EnsureDeviceLocked()) {
+      return -1;
+    }
     if (shader_input_bgra_) {
       local_context->CopyResource(shader_input_bgra_.Get(),
                                   local_staging.Get());
@@ -386,20 +559,49 @@ int NesiumGpuTexture::UnmapAndCommit() {
   }
   local_context->Flush();
 
-  if (local_query) {
-    BOOL data = FALSE;
-    while (local_context->GetData(local_query.Get(), &data, sizeof(data), 0) ==
-           S_FALSE) {
-      YieldProcessor();
+  // Poll queries without blocking. We'll only advance the shared-texture
+  // read_index_ once the GPU signals completion, preventing cross-device races
+  // while keeping the app responsive during window resizing.
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    if (!EnsureDeviceLocked()) {
+      write_index_.store(1 - idx, std::memory_order_release);
+      return -1;
     }
+
+    if (idx >= 0 && idx < kBufferCount) {
+      query_pending_[idx] = (local_query != nullptr);
+    }
+
+    // Always publish the latest committed buffer to Flutter. We still keep the
+    // query state to reduce Map stalls during interactive resizing, but do not
+    // gate presentation on query completion (which can otherwise result in
+    // persistent black output when toggling the native overlay).
+    read_index_.store(idx, std::memory_order_release);
+
+    const int other = 1 - idx;
+    auto poll = [&](int i) {
+      if (i < 0 || i >= kBufferCount)
+        return;
+      if (!query_pending_[i] || !gpu_queries_[i] || !context_)
+        return;
+      BOOL done = FALSE;
+      HRESULT hr = context_->GetData(gpu_queries_[i].Get(), &done, sizeof(done),
+                                     D3D11_ASYNC_GETDATA_DONOTFLUSH);
+      if (hr == S_OK) {
+        query_pending_[i] = false;
+        // read_index_ is already set to the latest; keep it that way.
+      }
+    };
+
+    // Prefer the most recently committed buffer if both are ready.
+    poll(other);
+    poll(idx);
   }
 
   // Swap indices
   {
     std::lock_guard<std::mutex> lk(mu_);
-    // New read index is the one we just finished writing
-    read_index_.store(idx, std::memory_order_release);
-
     // Double buffering: next write is the other one
     int next_write = 1 - idx;
     write_index_.store(next_write, std::memory_order_release);
@@ -409,6 +611,9 @@ int NesiumGpuTexture::UnmapAndCommit() {
 
 void NesiumGpuTexture::ResizeSource(int width, int height) {
   std::lock_guard<std::mutex> lk(mu_);
+  if (!EnsureDeviceLocked()) {
+    return;
+  }
   if (width == src_width_ && height == src_height_) {
     return;
   }
@@ -430,6 +635,9 @@ void NesiumGpuTexture::ResizeSource(int width, int height) {
 
 void NesiumGpuTexture::ResizeOutput(int width, int height) {
   std::lock_guard<std::mutex> lk(mu_);
+  if (!EnsureDeviceLocked()) {
+    return;
+  }
   if (width == dst_width_ && height == dst_height_) {
     return;
   }
@@ -456,15 +664,23 @@ NesiumGpuTexture::GetGpuSurface(size_t width, size_t height) {
   }
 
   std::lock_guard<std::mutex> lk(mu_);
+  if (!EnsureDeviceLocked()) {
+    return nullptr;
+  }
+  CleanupRetiredLocked();
   int idx = read_index_.load(std::memory_order_acquire);
 
-  descriptor_->handle = shared_handles_[idx].get();
+  HANDLE handle = shared_handles_[idx].get();
+  if (!handle || handle == INVALID_HANDLE_VALUE) {
+    return nullptr;
+  }
+
+  descriptor_->handle = handle;
   descriptor_->width = dst_width_;
   descriptor_->height = dst_height_;
   descriptor_->visible_width = dst_width_;
   descriptor_->visible_height = dst_height_;
   descriptor_->format = kFlutterDesktopPixelFormatBGRA8888;
-  // Release callback not needed for persistent shared handles
   descriptor_->release_context = nullptr;
   descriptor_->release_callback = nullptr;
 

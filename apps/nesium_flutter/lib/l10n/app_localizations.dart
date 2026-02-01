@@ -134,6 +134,18 @@ abstract class AppLocalizations {
   /// **'Server'**
   String get settingsTabServer;
 
+  /// No description provided for @settingsFloatingPreviewToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Floating Preview'**
+  String get settingsFloatingPreviewToggle;
+
+  /// No description provided for @settingsFloatingPreviewTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show game preview'**
+  String get settingsFloatingPreviewTooltip;
+
   /// No description provided for @serverTitle.
   ///
   /// In en, this message translates to:
@@ -914,6 +926,18 @@ abstract class AppLocalizations {
   /// **'Reset layout'**
   String get virtualControlsReset;
 
+  /// No description provided for @virtualControlsDiscardChangesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo changes'**
+  String get virtualControlsDiscardChangesTitle;
+
+  /// No description provided for @virtualControlsDiscardChangesSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert to last saved layout'**
+  String get virtualControlsDiscardChangesSubtitle;
+
   /// No description provided for @virtualControlsTurboFramesPerToggle.
   ///
   /// In en, this message translates to:
@@ -1556,6 +1580,12 @@ abstract class AppLocalizations {
   /// **'Load palette'**
   String get actionLoadPalette;
 
+  /// No description provided for @videoResetToDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get videoResetToDefault;
+
   /// No description provided for @videoTitle.
   ///
   /// In en, this message translates to:
@@ -1861,6 +1891,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Screen vertical offset'**
   String get videoScreenVerticalOffset;
+
+  /// No description provided for @videoScreenVerticalOffsetPortraitOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only takes effect in portrait mode.'**
+  String get videoScreenVerticalOffsetPortraitOnly;
 
   /// No description provided for @videoAspectRatio.
   ///
@@ -3109,6 +3145,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Proceed'**
   String get netplayProceed;
+
+  /// No description provided for @videoShaderParametersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Shader Parameters'**
+  String get videoShaderParametersTitle;
+
+  /// No description provided for @videoShaderParametersSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust shader parameters in real-time'**
+  String get videoShaderParametersSubtitle;
+
+  /// No description provided for @videoShaderParametersReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Parameters'**
+  String get videoShaderParametersReset;
+
+  /// No description provided for @searchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search...'**
+  String get searchHint;
+
+  /// No description provided for @searchTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchTooltip;
+
+  /// No description provided for @noResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching parameters found'**
+  String get noResults;
 }
 
 class _AppLocalizationsDelegate

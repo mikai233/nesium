@@ -87,6 +87,14 @@ class _NtscSettingsCardState extends ConsumerState<NtscSettingsCard> {
               labelText: l10n.videoNtscBisqwitSettingsTitle,
               title: Text(l10n.keyboardPresetCustom),
               initiallyExpanded: false,
+              trailing: IconButton(
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                tooltip: l10n.videoResetToDefault,
+                onPressed: () => videoController.resetNtscBisqwitOptions(),
+                constraints: const BoxConstraints(),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+              ),
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -291,6 +299,14 @@ class _NtscSettingsCardState extends ConsumerState<NtscSettingsCard> {
               labelText: l10n.videoNtscAdvancedTitle,
               title: Text(l10n.keyboardPresetCustom),
               initiallyExpanded: false,
+              trailing: IconButton(
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                tooltip: l10n.videoResetToDefault,
+                onPressed: () => videoController.resetNtscOptions(),
+                constraints: const BoxConstraints(),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+              ),
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(

@@ -180,57 +180,68 @@ bool NesiumNativeWindow::CreateResources() {
 }
 
 void NesiumNativeWindow::Resize(int x, int y, int width, int height) {
+  SetRect(x, y, width, height);
+  ResizeSwapChain(width, height);
+}
+
+void NesiumNativeWindow::SetRect(int x, int y, int width, int height) {
   // Input x, y, width, height are PHYSICAL pixels relative to parent_hwnd_
   // (the Flutter View). Because we are now a direct child of it, we can use
   // them directly.
-  int px = x;
-  int py = y;
-  int pw = width;
-  int ph = height;
+  const int px = x;
+  const int py = y;
+  const int pw = width;
+  const int ph = height;
 
+  #ifdef _DEBUG
   char buf[256];
   sprintf_s(buf, "[Nesium] ResizeOverlay: view_relative(%d,%d) size(%dx%d)\n",
             px, py, pw, ph);
   OutputDebugStringA(buf);
+  #endif
 
-  // Use a temporary lock for state changes
-  {
-    std::lock_guard<std::mutex> lk(mu_);
-    // Z-Order: Place at TOP of the child list within the parent window
-    // properties: SWP_NOACTIVATE prevents stealing focus.
-    SetWindowPos(hwnd_, HWND_TOP, px, py, pw, ph,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+  // Z-Order: Place at TOP of the child list within the parent window.
+  // SWP_NOACTIVATE prevents stealing focus.
+  SetWindowPos(hwnd_, HWND_TOP, px, py, pw, ph, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+}
 
-    if (width_ != pw || height_ != ph) {
-      width_ = pw;
-      height_ = ph;
+void NesiumNativeWindow::ResizeSwapChain(int width, int height) {
+  const int pw = width;
+  const int ph = height;
 
-      if (swap_chain_) {
-        // Proper cleanup before resizing/recreating to avoid Error #297
-        // Lock ensures no one is presenting while we clear state.
-        context_->ClearState();
-        context_->Flush();
-        rtv_.Reset();
+  std::lock_guard<std::mutex> lk(mu_);
+  if (width_ == pw && height_ == ph) {
+    return;
+  }
+  width_ = pw;
+  height_ = ph;
 
-        // Use the window size for backbuffer
-        HRESULT hr =
-            swap_chain_->ResizeBuffers(0, pw, ph, DXGI_FORMAT_UNKNOWN, 0);
-        if (FAILED(hr)) {
-          char err[128];
-          sprintf_s(err, "[Nesium] ResizeBuffers FAILED (hr=0x%08lX)\n", hr);
-          OutputDebugStringA(err);
-          swap_chain_.Reset();
-          CreateSwapChain();
-        } else {
-          ComPtr<ID3D11Texture2D> back_buffer;
-          swap_chain_->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
-          device_->CreateRenderTargetView(back_buffer.Get(), nullptr, &rtv_);
-          ClearToBlack();
-        }
-      } else {
-        CreateSwapChain();
-      }
+  if (swap_chain_) {
+    // Unbind render targets/resources before resizing to avoid keeping
+    // references to the backbuffer alive.
+    context_->OMSetRenderTargets(0, nullptr, nullptr);
+    ID3D11ShaderResourceView *null_srvs[] = {nullptr};
+    context_->PSSetShaderResources(0, 1, null_srvs);
+    ID3D11UnorderedAccessView *null_uavs[] = {nullptr};
+    UINT initial_counts[] = {0};
+    context_->CSSetUnorderedAccessViews(0, 1, null_uavs, initial_counts);
+    rtv_.Reset();
+
+    HRESULT hr = swap_chain_->ResizeBuffers(0, pw, ph, DXGI_FORMAT_UNKNOWN, 0);
+    if (FAILED(hr)) {
+      char err[128];
+      sprintf_s(err, "[Nesium] ResizeBuffers FAILED (hr=0x%08lX)\n", hr);
+      OutputDebugStringA(err);
+      swap_chain_.Reset();
+      CreateSwapChain();
+    } else {
+      ComPtr<ID3D11Texture2D> back_buffer;
+      swap_chain_->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
+      device_->CreateRenderTargetView(back_buffer.Get(), nullptr, &rtv_);
+      ClearToBlack();
     }
+  } else {
+    CreateSwapChain();
   }
 }
 

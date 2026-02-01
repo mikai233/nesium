@@ -179,6 +179,9 @@ class GeneralVideoSettingsCard extends ConsumerWidget {
                   videoController.setScreenVerticalOffset(v.roundToDouble()),
               valueLabel:
                   '${videoSettings.screenVerticalOffset.toStringAsFixed(0)} px',
+              helperText: isNativeMobile
+                  ? l10n.videoScreenVerticalOffsetPortraitOnly
+                  : null,
             ),
             if (isAndroid) ...[
               const SizedBox(height: 12),

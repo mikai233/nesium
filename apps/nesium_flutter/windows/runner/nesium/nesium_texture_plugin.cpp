@@ -106,11 +106,78 @@ private:
       SetWindowsVideoBackend(call, std::move(result));
     } else if (method == "setNativeOverlay") {
       SetNativeOverlay(call, std::move(result));
+    } else if (method == "updateNativeOverlayRect") {
+      UpdateNativeOverlayRect(call, std::move(result));
     } else if (method == "setVideoFilter") {
       SetVideoFilter(call, std::move(result));
     } else {
       result->NotImplemented();
     }
+  }
+
+  void UpdateNativeOverlayRect(
+      const flutter::MethodCall<flutter::EncodableValue> &call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+    const auto *args = std::get_if<flutter::EncodableMap>(call.arguments());
+    if (!args) {
+      result->Error("Invalid arguments", "Expected map");
+      return;
+    }
+
+    auto it_x = args->find(flutter::EncodableValue("x"));
+    auto it_y = args->find(flutter::EncodableValue("y"));
+    auto it_w = args->find(flutter::EncodableValue("width"));
+    auto it_h = args->find(flutter::EncodableValue("height"));
+
+    if (it_x == args->end() || it_y == args->end() || it_w == args->end() ||
+        it_h == args->end()) {
+      result->Error("Invalid arguments", "Missing x/y/width/height");
+      return;
+    }
+
+    const uint64_t now = ::GetTickCount64();
+    overlay_x_.store(static_cast<int>(GetDouble(it_x->second)),
+                     std::memory_order_release);
+    overlay_y_.store(static_cast<int>(GetDouble(it_y->second)),
+                     std::memory_order_release);
+    overlay_w_.store(static_cast<int>(GetDouble(it_w->second)),
+                     std::memory_order_release);
+    overlay_h_.store(static_cast<int>(GetDouble(it_h->second)),
+                     std::memory_order_release);
+    overlay_dirty_.store(true, std::memory_order_release);
+    overlay_dirty_at_.store(now, std::memory_order_release);
+
+    // Apply HWND geometry updates on the owning thread (this method handler runs
+    // on Flutter's platform thread). Doing SetWindowPos from the render thread
+    // can deadlock during interactive window resizing.
+    if (native_overlay_enabled_.load(std::memory_order_acquire)) {
+      if (!native_window_) {
+        std::shared_ptr<NesiumGpuTexture> gpu_texture;
+        {
+          std::lock_guard<std::mutex> lk(texture_state_mu_);
+          gpu_texture = gpu_texture_;
+        }
+        if (gpu_texture && parent_hwnd_) {
+          std::lock_guard<std::mutex> d3d_lk(d3d_context_mu_);
+          native_window_ = NesiumNativeWindow::Create(
+              parent_hwnd_,
+              reinterpret_cast<ID3D11Device *>(gpu_texture->GetDevice()));
+          if (native_window_) {
+            native_window_->SetVisible(true);
+          }
+        }
+      }
+
+      const int x = overlay_x_.load(std::memory_order_acquire);
+      const int y = overlay_y_.load(std::memory_order_acquire);
+      const int w = overlay_w_.load(std::memory_order_acquire);
+      const int h = overlay_h_.load(std::memory_order_acquire);
+      if (native_window_ && w > 0 && h > 0) {
+        native_window_->SetRect(x, y, w, h);
+      }
+    }
+
+    result->Success();
   }
 
   void SetNativeOverlay(
@@ -126,16 +193,24 @@ private:
     auto it_enabled = args->find(flutter::EncodableValue("enabled"));
     bool enabled =
         it_enabled != args->end() && std::get<bool>(it_enabled->second);
+    const bool was_enabled =
+        native_overlay_enabled_.exchange(enabled, std::memory_order_acq_rel);
 
     if (enabled) {
-      OutputDebugStringA("[Nesium] Native Overlay Enabled\n");
+      if (!was_enabled) {
+        OutputDebugStringA("[Nesium] Native Overlay Enabled\n");
+      }
+
+      std::shared_ptr<NesiumGpuTexture> gpu_texture;
+      {
+        std::lock_guard<std::mutex> lk(texture_state_mu_);
+        gpu_texture = gpu_texture_;
+      }
+
+      std::lock_guard<std::mutex> d3d_lk(d3d_context_mu_);
+
       if (!native_window_) {
         OutputDebugStringA("[Nesium] Creating Native Window...\n");
-        std::shared_ptr<NesiumGpuTexture> gpu_texture;
-        {
-          std::lock_guard<std::mutex> lk(texture_state_mu_);
-          gpu_texture = gpu_texture_;
-        }
         if (gpu_texture && parent_hwnd_) {
           native_window_ = NesiumNativeWindow::Create(
               parent_hwnd_,
@@ -148,25 +223,48 @@ private:
         }
       }
 
-      if (native_window_) {
-        auto it_x = args->find(flutter::EncodableValue("x"));
-        auto it_y = args->find(flutter::EncodableValue("y"));
-        auto it_w = args->find(flutter::EncodableValue("width"));
-        auto it_h = args->find(flutter::EncodableValue("height"));
+      auto it_x = args->find(flutter::EncodableValue("x"));
+      auto it_y = args->find(flutter::EncodableValue("y"));
+      auto it_w = args->find(flutter::EncodableValue("width"));
+      auto it_h = args->find(flutter::EncodableValue("height"));
 
-        if (it_x != args->end() && it_y != args->end() && it_w != args->end() &&
-            it_h != args->end()) {
-          overlay_x_ = static_cast<int>(GetDouble(it_x->second));
-          overlay_y_ = static_cast<int>(GetDouble(it_y->second));
-          overlay_w_ = static_cast<int>(GetDouble(it_w->second));
-          overlay_h_ = static_cast<int>(GetDouble(it_h->second));
-          UpdateOverlayPos();
+      if (it_x != args->end() && it_y != args->end() && it_w != args->end() &&
+          it_h != args->end()) {
+        const uint64_t now = ::GetTickCount64();
+        overlay_x_.store(static_cast<int>(GetDouble(it_x->second)),
+                         std::memory_order_release);
+        overlay_y_.store(static_cast<int>(GetDouble(it_y->second)),
+                         std::memory_order_release);
+        overlay_w_.store(static_cast<int>(GetDouble(it_w->second)),
+                         std::memory_order_release);
+        overlay_h_.store(static_cast<int>(GetDouble(it_h->second)),
+                         std::memory_order_release);
+        overlay_dirty_.store(true, std::memory_order_release);
+        // Force a swapchain resize on the next frame after enable.
+        overlay_dirty_at_.store(now - 1000, std::memory_order_release);
+
+        const int x = overlay_x_.load(std::memory_order_acquire);
+        const int y = overlay_y_.load(std::memory_order_acquire);
+        const int w = overlay_w_.load(std::memory_order_acquire);
+        const int h = overlay_h_.load(std::memory_order_acquire);
+        if (native_window_ && w > 0 && h > 0) {
+          native_window_->SetRect(x, y, w, h);
         }
+      }
+
+      if (native_window_) {
         native_window_->SetVisible(true);
       }
     } else {
+      std::lock_guard<std::mutex> d3d_lk(d3d_context_mu_);
+      overlay_dirty_.store(false, std::memory_order_release);
       if (native_window_) {
         native_window_->SetVisible(false);
+        native_window_.reset();
+        if (was_enabled) {
+          OutputDebugStringA(
+              "[Nesium] Native Overlay Disabled (window destroyed)\n");
+        }
       }
     }
 
@@ -360,15 +458,14 @@ private:
     texture_width_ = width;
     texture_height_ = height;
 
-    // Best-effort: pre-resize the presentation buffer.
-    {
-      std::lock_guard<std::mutex> lk(texture_state_mu_);
-      if (gpu_texture_) {
-        gpu_texture_->ResizeOutput(width, height);
-      }
-      // CPU texture: we don't resize output here because it's driven by source
-      // content size usually. Flutter scales it.
-    }
+    // Defer actual buffer recreation to the render thread. During window resize,
+    // the engine may call this at very high frequency; recreating resources on
+    // this thread causes stutters and can race the immediate-context usage.
+    pending_output_w_.store(width, std::memory_order_release);
+    pending_output_h_.store(height, std::memory_order_release);
+    pending_output_at_.store(::GetTickCount64(), std::memory_order_release);
+    // CPU texture: we don't resize output here because it's driven by source
+    // content size usually. Flutter scales it.
     result->Success();
   }
 
@@ -401,6 +498,7 @@ private:
     // released when we dispose the texture. Using the old device's resources
     // with a new device causes crashes.
     if (native_window_) {
+      std::lock_guard<std::mutex> d3d_lk(d3d_context_mu_);
       native_window_->SetVisible(false);
       native_window_.reset();
       OutputDebugStringA(
@@ -448,6 +546,36 @@ private:
     }
 
     if (gpu_texture) {
+      std::lock_guard<std::mutex> d3d_lk(d3d_context_mu_);
+
+      // Apply deferred output resize (at most once per frame, latest wins).
+      const int pending_w = pending_output_w_.load(std::memory_order_acquire);
+      const int pending_h = pending_output_h_.load(std::memory_order_acquire);
+      const uint64_t pending_at =
+          pending_output_at_.load(std::memory_order_acquire);
+      const uint64_t now = ::GetTickCount64();
+      if (pending_w > 0 && pending_h > 0 &&
+          (now - pending_at) >= 600 &&
+          (pending_w != applied_output_w_ || pending_h != applied_output_h_)) {
+        gpu_texture->ResizeOutput(pending_w, pending_h);
+        applied_output_w_ = pending_w;
+        applied_output_h_ = pending_h;
+      }
+
+      if (native_overlay_enabled_.load(std::memory_order_acquire) &&
+          native_window_ && overlay_dirty_.load(std::memory_order_acquire)) {
+        const uint64_t dirty_at =
+            overlay_dirty_at_.load(std::memory_order_acquire);
+        if ((now - dirty_at) >= 500) {
+          overlay_dirty_.store(false, std::memory_order_release);
+          const int w = overlay_w_.load(std::memory_order_acquire);
+          const int h = overlay_h_.load(std::memory_order_acquire);
+          if (w > 0 && h > 0) {
+            native_window_->ResizeSwapChain(w, h);
+          }
+        }
+      }
+
       // Resize Source if frame size changed
       if (src_width_ != static_cast<int>(width) ||
           src_height_ != static_cast<int>(height)) {
@@ -492,10 +620,8 @@ private:
 
 public:
   void UpdateOverlayPos() {
-    if (!native_window_ || !parent_hwnd_)
-      return;
-
-    native_window_->Resize(overlay_x_, overlay_y_, overlay_w_, overlay_h_);
+    overlay_dirty_.store(true, std::memory_order_release);
+    overlay_dirty_at_.store(::GetTickCount64(), std::memory_order_release);
   }
 
 private:
@@ -519,17 +645,27 @@ private:
   int src_height_ = 240;
 
   std::mutex texture_state_mu_;
+  std::mutex d3d_context_mu_;
 
   std::atomic<bool> shutting_down_{false};
 
   HWND parent_hwnd_ = nullptr;
   std::unique_ptr<NesiumNativeWindow> native_window_;
+  std::atomic<bool> native_overlay_enabled_{false};
 
   // Overlay state for synchronization
-  int overlay_x_ = 0;
-  int overlay_y_ = 0;
-  int overlay_w_ = 0;
-  int overlay_h_ = 0;
+  std::atomic<int> overlay_x_{0};
+  std::atomic<int> overlay_y_{0};
+  std::atomic<int> overlay_w_{0};
+  std::atomic<int> overlay_h_{0};
+  std::atomic<bool> overlay_dirty_{false};
+  std::atomic<uint64_t> overlay_dirty_at_{0};
+
+  std::atomic<int> pending_output_w_{256};
+  std::atomic<int> pending_output_h_{240};
+  std::atomic<uint64_t> pending_output_at_{0};
+  int applied_output_w_ = 256;
+  int applied_output_h_ = 240;
 
   // Default to Point (false) to prioritize sharp, pixel-perfect rendering
   // for retro gaming content.

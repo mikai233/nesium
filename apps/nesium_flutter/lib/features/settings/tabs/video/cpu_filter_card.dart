@@ -205,6 +205,14 @@ class CpuFilterCard extends ConsumerWidget {
                   min: 0,
                   max: 1,
                   divisions: 100,
+                  trailing: IconButton(
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    tooltip: l10n.videoResetToDefault,
+                    onPressed: () => videoController.resetLcdGridStrength(),
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
                   valueLabel:
                       '${(videoSettings.lcdGridStrength * 100).round()}%',
                   onChanged: (value) {
@@ -220,6 +228,14 @@ class CpuFilterCard extends ConsumerWidget {
                   min: 0,
                   max: 1,
                   divisions: 100,
+                  trailing: IconButton(
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    tooltip: l10n.videoResetToDefault,
+                    onPressed: () => videoController.resetScanlineIntensity(),
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
                   valueLabel:
                       '${(videoSettings.scanlineIntensity * 100).round()}%',
                   onChanged: (value) {

@@ -151,16 +151,32 @@ void main(List<String> args) async {
 
     try {
       final encoder = ZipFileEncoder();
+
+      // Ensure fresh zip
+      final zipFile = File(zipOutput);
+      if (zipFile.existsSync()) {
+        try {
+          zipFile.deleteSync();
+        } catch (e) {
+          logWarning('⚠️ Could not delete old ZIP: $e');
+        }
+      }
+
       encoder.create(zipOutput);
 
       // Add all files from _destRoot to the zip, but with relative paths
-      // This mimics "tar -C _destRoot -cf ... ."
       final destDir = Directory(_destRoot);
       if (destDir.existsSync()) {
-        await for (final entity in destDir.list(recursive: true)) {
+        final List<FileSystemEntity> entities = destDir.listSync(
+          recursive: true,
+        );
+        logInfo('📦 Zipping ${_copiedFiles.length} files...');
+        for (final entity in entities) {
           if (entity is File) {
             final relPath = path.relative(entity.path, from: _destRoot);
-            encoder.addFile(entity, relPath);
+            // Ensure ZIP entries use forward slashes for cross-platform compatibility
+            final zipEntryPath = relPath.replaceAll('\\', '/');
+            await encoder.addFile(entity, zipEntryPath);
           }
         }
       }
@@ -246,7 +262,11 @@ Future<void> _processDirectory(Directory dir, {bool recursive = true}) async {
       if (_shouldCopy(entity.path)) {
         await _copyFile(entity.path);
 
-        if (entity.path.endsWith('.slangp')) {
+        final ext = path.extension(entity.path).toLowerCase();
+        if (ext == '.slangp' ||
+            ext == '.slang' ||
+            ext == '.inc' ||
+            ext == '.h') {
           await _parseDependencies(entity);
         }
       }
@@ -269,13 +289,16 @@ bool _shouldCopy(String filePath) {
 
 Future<void> _copyFile(String absSourcePath) async {
   // Normalize source path
-  absSourcePath = File(absSourcePath).absolute.path;
+  absSourcePath = path.normalize(File(absSourcePath).absolute.path);
+  final normalizedRoot = path.normalize(_sourceRoot);
 
   if (_copiedFiles.contains(absSourcePath)) return;
 
-  // Verify it's inside source root (simple check)
-  if (!absSourcePath.startsWith(_sourceRoot)) {
-    logWarning('⚠️ Skipping external file: $absSourcePath');
+  // Verify it's inside source root
+  if (!absSourcePath.toLowerCase().startsWith(normalizedRoot.toLowerCase())) {
+    logWarning(
+      '⚠️ Skipping external file: $absSourcePath (Root: $normalizedRoot)',
+    );
     return;
   }
 
@@ -291,96 +314,103 @@ Future<void> _copyFile(String absSourcePath) async {
   _copiedFiles.add(absSourcePath);
 }
 
-Future<void> _parseDependencies(File presetFile) async {
+Future<void> _parseDependencies(File file) async {
   try {
-    final content = await presetFile.readAsString();
+    final content = await file.readAsString();
     final lines = content.split('\n');
-    final presetDir = presetFile.parent.absolute.path;
+    final fileDir = file.parent.absolute.path;
+    final ext = path.extension(file.path).toLowerCase();
 
     for (var line in lines) {
       line = line.trim();
       if (line.isEmpty) continue;
 
-      if (line.startsWith('shader') && line.contains('=')) {
-        final key = line.split('=')[0].trim();
-        // Check if key is exactly "shader" + digits
-        // This avoids matching "shaders = 3"
-        if (!RegExp(r'^shader\d+$').hasMatch(key)) continue;
-
+      // Handle Key=Value pairs (Presets)
+      if (ext == '.slangp' && line.contains('=')) {
         final parts = line.split('=');
         if (parts.length >= 2) {
-          var shaderPath = parts[1].trim();
-          // Remove quotes if present
-          shaderPath = shaderPath.replaceAll('"', '');
+          var value = parts.sublist(1).join('=').trim().replaceAll('"', '');
 
-          // Resolve path (manual normalization)
-          // Handle ../ references
-          var targetPath = joinPath(presetDir, shaderPath);
-          targetPath = File(targetPath).absolute.path; // Resolves .. natively
+          if (value.isEmpty) continue;
 
-          // Fuzzy Resolution:
-          // If the exact path doesn't exist, try resolving against parent directories.
-          // This handles cases where presets are moved into subdirectories (e.g. crt/crt-effects)
-          // but still reference headers as if they were in the parent (e.g. ../stock.slang).
-          if (!File(targetPath).existsSync()) {
-            // specific heuristic: try stripping one or two parent levels from the base?
-            // Or simply prepend ../ to the shaderPath?
+          // Check if value looks like a relative path to a dependency
+          final valExt = path.extension(value).toLowerCase();
+          final isDependencyExt = [
+            '.slang',
+            '.slangp',
+            '.inc',
+            '.h',
+            '.png',
+            '.jpg',
+            '.jpeg',
+            '.tga',
+            '.bmp',
+          ].contains(valExt);
 
-            // Try prepending ../ up to 3 times
-            var candidate = shaderPath;
-            for (var i = 0; i < 3; i++) {
-              candidate = joinPath('..', candidate);
-              var fuzzyPath = joinPath(presetDir, candidate);
-              fuzzyPath = File(fuzzyPath).absolute.path;
-
-              // Ensure we don't go outside source root (security)
-              if (!fuzzyPath.startsWith(_sourceRoot)) break;
-
-              if (File(fuzzyPath).existsSync()) {
-                targetPath = fuzzyPath;
-                break;
-              }
-            }
-          }
-
-          // Copy dependency
-          if (File(targetPath).existsSync()) {
-            if (!_copiedFiles.contains(targetPath)) {
-              // print('  🔗 Pulling dependency: $shaderPath');
-              await _copyFile(targetPath);
-
-              if (shaderPath.endsWith('.slangp')) {
-                await _parseDependencies(File(targetPath));
-              }
-            }
-          } else {
-            logWarning(
-              '⚠️ Missing dependency: $shaderPath (in ${presetFile.path})',
-            );
+          if (isDependencyExt) {
+            await _resolveAndCopy(fileDir, value, file.path);
           }
         }
       }
 
-      // Handle #reference
-      if (line.startsWith('#reference') || line.startsWith('#include')) {
-        final parts = line.split(' ');
-        if (parts.length >= 2) {
-          var refPath = parts[1].trim().replaceAll('"', '');
-          var targetPath = joinPath(presetDir, refPath);
-          targetPath = File(targetPath).absolute.path;
-
-          if (File(targetPath).existsSync()) {
-            if (!_copiedFiles.contains(targetPath)) {
-              // print('  🔗 Pulling reference: $refPath');
-              await _copyFile(targetPath);
-              await _parseDependencies(File(targetPath));
-            }
-          }
+      // Handle #reference / #include / #import (Slang or Slangp)
+      if (line.startsWith('#')) {
+        final referenceMatch = RegExp(
+          r'^#(reference|include|import)\s+"?([^"]+)"?',
+        ).firstMatch(line);
+        if (referenceMatch != null) {
+          final refPath = referenceMatch.group(2)!;
+          await _resolveAndCopy(fileDir, refPath, file.path);
         }
       }
     }
   } catch (e) {
-    logError('  Example error parsing ${presetFile.path}: $e');
+    // Avoid crashing on binary or malformed files
+    // logError('  Error parsing ${file.path}: $e');
+  }
+}
+
+Future<void> _resolveAndCopy(
+  String baseDir,
+  String relativePath,
+  String sourceFile,
+) async {
+  // Resolve path (manual normalization)
+  var targetPath = path.normalize(path.join(baseDir, relativePath));
+  targetPath = File(targetPath).absolute.path;
+
+  // Fuzzy Resolution (matches existing heuristic)
+  if (!File(targetPath).existsSync()) {
+    var candidate = relativePath;
+    for (var i = 0; i < 3; i++) {
+      candidate = path.join('..', candidate);
+      var fuzzyPath = path.normalize(path.join(baseDir, candidate));
+      fuzzyPath = File(fuzzyPath).absolute.path;
+
+      if (!fuzzyPath.startsWith(_sourceRoot)) break;
+
+      if (File(fuzzyPath).existsSync()) {
+        targetPath = fuzzyPath;
+        break;
+      }
+    }
+  }
+
+  // Copy and Recurse
+  if (File(targetPath).existsSync()) {
+    if (!_copiedFiles.contains(targetPath)) {
+      await _copyFile(targetPath);
+
+      final ext = path.extension(targetPath).toLowerCase();
+      if (ext == '.slangp' || ext == '.slang' || ext == '.inc' || ext == '.h') {
+        await _parseDependencies(File(targetPath));
+      }
+    }
+  } else {
+    // Don't warn for obviously non-path strings that might have matched our simple regex
+    if (relativePath.contains('/') || relativePath.contains('\\')) {
+      logWarning('⚠️ Missing dependency: $relativePath (in $sourceFile)');
+    }
   }
 }
 

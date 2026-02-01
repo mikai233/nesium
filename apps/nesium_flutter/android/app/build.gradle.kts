@@ -1,3 +1,7 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -14,7 +18,20 @@ val abiSlug = targetPlatform
 
 // Isolated directory in 'build/' ensures total separation between builds (Universal vs ARM64)
 // and forces Gradle to execute the task when switching modes.
-val jniLibsOutDir = file("$buildDir/rustJniLibs/$abiSlug")
+val jniLibsOutDir = file("${layout.buildDirectory.get().asFile}/rustJniLibs/$abiSlug")
+
+// Define a Properties object to hold keystore secrets
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
 
 android {
     namespace = "io.github.mikai233.nesium"
@@ -24,10 +41,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     // Standard JNI libs mapping using a dynamic, isolated "source" directory.
@@ -52,15 +65,25 @@ android {
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            storeFile = rootProject.file(keystoreProperties["storeFile"].toString())
+            storePassword = keystoreProperties["storePassword"] as String?
         }
     }
 
-    aaptOptions {
+    buildTypes {
+        release {
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
+    }
+    androidResources {
         ignoreAssetsPattern = "!*.git:!.git"
     }
 }

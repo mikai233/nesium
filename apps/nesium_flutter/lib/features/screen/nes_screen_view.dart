@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +12,9 @@ import '../settings/video_settings.dart';
 import '../settings/windows_shader_settings.dart';
 import '../settings/apple_shader_settings.dart';
 import '../settings/windows_video_backend_settings.dart';
+import '../settings/android_video_backend_settings.dart';
 import '../../domain/nes_texture_service.dart';
+import '../../routing/app_route_observer.dart';
 import 'emulation_status_overlay.dart';
 
 class NesScreenView extends ConsumerStatefulWidget {
@@ -64,14 +65,24 @@ class NesScreenView extends ConsumerStatefulWidget {
   ConsumerState<NesScreenView> createState() => _NesScreenViewState();
 }
 
-class _NesScreenViewState extends ConsumerState<NesScreenView> {
+class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
   static const Duration _cursorHideDelay = Duration(seconds: 2);
+  static const Duration _resizeDebounceDelay = Duration(milliseconds: 100);
+  static const Duration _overlayResizeDebounceDelay = Duration(
+    milliseconds: 500,
+  );
 
   Timer? _cursorTimer;
   bool _cursorHidden = false;
   Size? _lastReportedSize;
+  Timer? _resizeDebounceTimer;
+  Size? _pendingReportedSize;
   final _gameKey = GlobalKey();
   Rect? _lastOverlayRect;
+  bool _nativeOverlayEnabled = false;
+  PageRoute<dynamic>? _route;
+  bool _isCurrentRoute = true;
+  bool _hadRom = false;
 
   void _showCursorAndArmTimer() {
     if (_cursorHidden) {
@@ -98,13 +109,41 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
     if (widget.textureId == null || widget.error != null) {
       _showCursorAndCancelTimer();
     }
+
+    // The Windows native overlay can be reset by backend/texture reinit.
+    // Force a re-apply of the overlay rect after texture changes so the
+    // native presenter is re-enabled without requiring a settings toggle.
+    if (oldWidget.textureId != widget.textureId) {
+      _lastOverlayRect = null;
+    }
   }
 
   void _updateBufferSizeIfNeeded(
     Size viewport,
     bool shouldUseHighRes,
     BuildContext context,
+    bool useNativeOverlay,
   ) {
+    void scheduleResize(Size physical) {
+      _pendingReportedSize = physical;
+      _resizeDebounceTimer?.cancel();
+      final debounce = useNativeOverlay
+          ? _overlayResizeDebounceDelay
+          : _resizeDebounceDelay;
+      _resizeDebounceTimer = Timer(debounce, () {
+        if (!mounted) return;
+        final pending = _pendingReportedSize;
+        if (pending == null) return;
+        _pendingReportedSize = null;
+        ref
+            .read(nesControllerProvider.notifier)
+            .updateWindowOutputSize(
+              pending.width.round(),
+              pending.height.round(),
+            );
+      });
+    }
+
     if (shouldUseHighRes) {
       final dpr = MediaQuery.of(context).devicePixelRatio;
       final physicalWidth = (viewport.width * dpr).round();
@@ -116,33 +155,37 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
           physicalWidth.toDouble(),
           physicalHeight.toDouble(),
         );
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ref
-                .read(nesControllerProvider.notifier)
-                .updateWindowOutputSize(physicalWidth, physicalHeight);
-          }
-        });
+        scheduleResize(_lastReportedSize!);
       }
     } else {
       // Revert to native resolution when no filters/shaders are active.
       if (_lastReportedSize?.width != 256.0 ||
           _lastReportedSize?.height != 240.0) {
         _lastReportedSize = const Size(256, 240);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ref
-                .read(nesControllerProvider.notifier)
-                .updateWindowOutputSize(256, 240);
-          }
-        });
+        scheduleResize(_lastReportedSize!);
       }
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic> && route != _route) {
+      if (_route != null) {
+        appRouteObserver.unsubscribe(this);
+      }
+      _route = route;
+      appRouteObserver.subscribe(this, route);
+      _isCurrentRoute = route.isCurrent;
     }
   }
 
   @override
   void dispose() {
     _cursorTimer?.cancel();
+    _resizeDebounceTimer?.cancel();
+    appRouteObserver.unsubscribe(this);
     super.dispose();
   }
 
@@ -174,26 +217,41 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
     );
   }
 
-  Widget _buildAndroidContent(Size viewport, bool hasRom) {
-    return SizedBox(
-      width: viewport.width,
-      height: viewport.height,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          const AndroidView(viewType: 'nesium_game_view'),
-          if (hasRom) const EmulationStatusOverlay(),
-        ],
-      ),
-    );
+  Widget _buildAndroidContent(
+    Size viewport,
+    bool hasRom,
+    VideoSettings settings,
+    AndroidVideoBackendSettings androidBackend,
+  ) {
+    final useAndroidHardware =
+        androidBackend.backend == AndroidVideoBackend.hardware;
+
+    if (useAndroidHardware && _isCurrentRoute) {
+      return SizedBox(
+        width: viewport.width,
+        height: viewport.height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const AndroidView(viewType: 'nesium_game_view'),
+            if (hasRom) const EmulationStatusOverlay(),
+          ],
+        ),
+      );
+    }
+
+    return _buildTextureContent(viewport, hasRom, settings);
   }
 
   Widget _buildIosContent(Size viewport, bool hasRom, VideoSettings settings) {
     final appleShaderSettings = ref.watch(appleShaderSettingsProvider);
-    final shouldUseHighRes =
-        settings.videoFilter != VideoFilter.none || appleShaderSettings.enabled;
+    final appleShaderActive =
+        appleShaderSettings.enabled && appleShaderSettings.presetPath != null;
 
-    _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
+    final shouldUseHighRes =
+        settings.videoFilter != VideoFilter.none || appleShaderActive;
+
+    _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context, false);
 
     return SizedBox(
       width: viewport.width,
@@ -224,22 +282,40 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
         !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.iOS);
-
-    final shouldUseHighRes =
-        settings.videoFilter != VideoFilter.none ||
-        (windowsShaderSettings.enabled &&
-            windowsBackend.backend == WindowsVideoBackend.d3d11Gpu) ||
-        (isApple && appleShaderSettings.enabled);
-
-    _updateBufferSizeIfNeeded(viewport, shouldUseHighRes, context);
-
     final isWindows =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
-    // Only enable overlay if this is the current active route
-    final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? true;
+    final appleShaderActive =
+        isApple &&
+        appleShaderSettings.enabled &&
+        appleShaderSettings.presetPath != null;
+    final windowsShaderActive =
+        isWindows &&
+        windowsShaderSettings.enabled &&
+        windowsShaderSettings.presetPath != null;
+
+    final shouldUseHighRes =
+        settings.videoFilter != VideoFilter.none ||
+        (windowsShaderActive &&
+            windowsBackend.backend == WindowsVideoBackend.d3d11Gpu) ||
+        appleShaderActive;
+
     final useNativeOverlay =
-        isWindows && windowsBackend.useNativeOverlay && isCurrentRoute;
+        isWindows && windowsBackend.useNativeOverlay && _isCurrentRoute;
+
+    _updateBufferSizeIfNeeded(
+      viewport,
+      shouldUseHighRes,
+      context,
+      useNativeOverlay,
+    );
+
+    if (useNativeOverlay && _hadRom != hasRom) {
+      _hadRom = hasRom;
+      _lastOverlayRect = null;
+    } else {
+      _hadRom = hasRom;
+    }
 
     if (useNativeOverlay) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -266,21 +342,31 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
             (rect.width - _lastOverlayRect!.width).abs() > 0.1 ||
             (rect.height - _lastOverlayRect!.height).abs() > 0.1) {
           _lastOverlayRect = rect;
-          ref
-              .read(nesTextureServiceProvider)
-              .setNativeOverlay(
-                enabled: true,
-                x: rect.left,
-                y: rect.top,
-                width: rect.width,
-                height: rect.height,
-              );
+          final service = ref.read(nesTextureServiceProvider);
+          if (!_nativeOverlayEnabled) {
+            _nativeOverlayEnabled = true;
+            service.setNativeOverlay(
+              enabled: true,
+              x: rect.left,
+              y: rect.top,
+              width: rect.width,
+              height: rect.height,
+            );
+          } else {
+            service.updateNativeOverlayRect(
+              x: rect.left,
+              y: rect.top,
+              width: rect.width,
+              height: rect.height,
+            );
+          }
         }
       });
     } else if (isWindows) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        if (_lastOverlayRect != null) {
+        if (_nativeOverlayEnabled) {
+          _nativeOverlayEnabled = false;
           _lastOverlayRect = null;
           ref.read(nesTextureServiceProvider).setNativeOverlay(enabled: false);
         }
@@ -299,7 +385,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
               painter: _HolePunchPainter(),
               child: SizedBox.expand(),
             )
-          else
+          else if (widget.textureId != null)
             Texture(
               textureId: widget.textureId!,
               filterQuality: shouldUseHighRes
@@ -310,6 +396,27 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
         ],
       ),
     );
+  }
+
+  @override
+  void didPush() {
+    if (!mounted) return;
+    if (_isCurrentRoute) return;
+    setState(() => _isCurrentRoute = true);
+  }
+
+  @override
+  void didPopNext() {
+    if (!mounted) return;
+    if (_isCurrentRoute) return;
+    setState(() => _isCurrentRoute = true);
+  }
+
+  @override
+  void didPushNext() {
+    if (!mounted) return;
+    if (!_isCurrentRoute) return;
+    setState(() => _isCurrentRoute = false);
   }
 
   @override
@@ -326,6 +433,7 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
       nesControllerProvider.select((s) => s.romHash != null),
     );
     final settings = ref.watch(videoSettingsProvider);
+    final androidBackend = ref.watch(androidVideoBackendSettingsProvider);
     final integerScaling = settings.integerScaling;
     final aspectRatio = settings.aspectRatio;
 
@@ -345,13 +453,16 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> {
 
             Widget content;
             if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-              content = _buildAndroidContent(viewport, hasRom);
+              content = _buildAndroidContent(
+                viewport,
+                hasRom,
+                settings,
+                androidBackend,
+              );
             } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
               content = _buildIosContent(viewport, hasRom, settings);
-            } else if (widget.textureId != null) {
-              content = _buildTextureContent(viewport, hasRom, settings);
             } else {
-              content = const SizedBox.shrink();
+              content = _buildTextureContent(viewport, hasRom, settings);
             }
 
             return _wrapWithMouseRegion(content);
@@ -367,8 +478,6 @@ class _HolePunchPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Clears the pixels to (0,0,0,0) - Transparent Black
-    // This allows DwmExtendFrameIntoClientArea to show the window behind.
     canvas.drawRect(Offset.zero & size, Paint()..blendMode = BlendMode.clear);
   }
 

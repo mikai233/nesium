@@ -3528,6 +3528,7 @@ version = "0.1.0"
 dependencies = [
  "android_logger 0.13.3",
  "anyhow",
+ "arc-swap",
  "crossbeam-channel",
  "dashmap 6.1.0",
  "easy-upnp",

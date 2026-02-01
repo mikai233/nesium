@@ -425,7 +425,9 @@ impl NesSoundMixer {
         // same domain into our [-1.0, 1.0] float space by scaling with
         // `4 / 32768`, which keeps typical non-expansion peaks (~5000) around
         // 0.6 and leaves ample headroom for louder content and post-filters.
-        const OUTPUT_SCALE: f64 = 4.0 / 32_768.0;
+        // Increasing to 6.0/32768 to provide a more competitive volume level
+        // while still fitting within the soft clipper's clean range.
+        const OUTPUT_SCALE: f64 = 6.0 / 32_768.0;
         (
             (mixed_l * OUTPUT_SCALE) as f32,
             (mixed_r * OUTPUT_SCALE) as f32,
@@ -544,7 +546,7 @@ mod tests {
             0.0
         };
 
-        let expected = (square_vol + tnd_vol) * (4.0 / 32_768.0);
+        let expected = (square_vol + tnd_vol) * (6.0 / 32_768.0);
         let expected_f32 = expected as f32;
 
         let diff_l = (left - expected_f32).abs();
@@ -581,7 +583,7 @@ mod tests {
 
         // In Mesen2, the expansion part of GetOutputVolume() is:
         // FDS*20 + MMC5*43 + N163*20 + S5B*15 + VRC6*5 + VRC7*1
-        let exp_sum = (20.0 + 43.0 + 20.0 + 15.0 + 5.0 + 1.0) * (4.0 / 32_768.0);
+        let exp_sum = (20.0 + 43.0 + 20.0 + 15.0 + 5.0 + 1.0) * (6.0 / 32_768.0);
         let expected_f32 = exp_sum as f32;
 
         let diff_l = (left - expected_f32).abs();

@@ -3,10 +3,12 @@
 #include <atomic>
 #include <cstdint>
 #include <d3d11.h>
+#include <d3dcompiler.h>
 #include <dxgi.h>
 #include <memory>
 #include <mutex>
 #include <utility>
+#include <vector>
 #include <windows.h>
 #include <wrl/client.h>
 
@@ -103,10 +105,21 @@ private:
     HANDLE handle_ = nullptr;
   };
 
+  struct RetiredBuffer {
+    ScopedHandle handle;
+    ComPtr<ID3D11Texture2D> texture;
+    uint64_t retire_at_ms = 0;
+  };
+
+  void RetireOldBufferLocked(int index);
+  void CleanupRetiredLocked();
+
   NesiumGpuTexture(int src_width, int src_height, int dst_width,
                    int dst_height);
   bool Initialize(IDXGIAdapter *adapter);
   bool CreateBuffersLocked();
+  bool RecreateDeviceLocked();
+  bool EnsureDeviceLocked();
 
   int src_width_;
   int src_height_;
@@ -115,6 +128,7 @@ private:
 
   ComPtr<ID3D11Device> device_;
   ComPtr<ID3D11DeviceContext> context_;
+  ComPtr<IDXGIAdapter> adapter_;
 
   // Double-buffered textures: one for writing, one for Flutter to read.
   // staging_textures_: CPU-writable staging resources.
@@ -136,13 +150,18 @@ private:
       shader_input_rgba_; // Input for librashader (R8G8B8A8)
   ComPtr<ID3D11ShaderResourceView> swizzle_srv_;
   ComPtr<ID3D11UnorderedAccessView> swizzle_uav_;
+  // Compiled bytecode is device-independent; keep it across resizes (and even
+  // device recreation) to avoid stalling on D3DCompile during window resize.
+  ComPtr<ID3DBlob> swizzle_cs_blob_;
   ComPtr<ID3D11ComputeShader> swizzle_shader_;
 
   ScopedHandle shared_handles_[kBufferCount];
+  std::vector<RetiredBuffer> retired_;
 
   std::atomic<int> write_index_{0};
   std::atomic<int> read_index_{0};
   std::atomic<bool> is_mapped_{false};
+  bool query_pending_[kBufferCount] = {false, false};
   std::atomic<bool> was_shader_applied_{false};
 
   // Use unique_ptr to avoid incomplete type issue with forward declaration

@@ -416,6 +416,20 @@ jobs:
 
           pushd "$ROOT/apps/nesium_flutter" >/dev/null
 
+          # Decode Keystore and create key.properties if secrets are available
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Decoding Keystore..."
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/upload-keystore.jks
+            
+            echo "Creating key.properties..."
+            echo "storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}" > android/key.properties
+            echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> android/key.properties
+            echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> android/key.properties
+            echo "storeFile=upload-keystore.jks" >> android/key.properties
+          else
+            echo "Warning: ANDROID_KEYSTORE_BASE64 secret is not set. Skipping release signing configuration."
+          fi
+
           # 1. Build Universal APK (FAT)
           flutter build apk --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nesium-universal.apk
@@ -446,6 +460,12 @@ jobs:
           OUT_ZIP="${DIST}/nesium-flutter-${ASSET_TAG}-${{ matrix.asset_suffix }}.zip"
           (cd "${ANDROID_BUNDLE_DIR}" && zip -r "${OUT_ZIP}" .)
           (cd "$DIST" && shasum -a 256 "$(basename "$OUT_ZIP")" > "$(basename "$OUT_ZIP").sha256")
+
+          # Also copy individual APKs to dist for direct release links
+          cp -f "$APK_ARM64" "${DIST}/nesium-flutter-${ASSET_TAG}-arm64-v8a.apk"
+          cp -f "$APK_UNIVERSAL" "${DIST}/nesium-flutter-${ASSET_TAG}-universal.apk"
+          (cd "$DIST" && shasum -a 256 "nesium-flutter-${ASSET_TAG}-arm64-v8a.apk" > "nesium-flutter-${ASSET_TAG}-arm64-v8a.apk.sha256")
+          (cd "$DIST" && shasum -a 256 "nesium-flutter-${ASSET_TAG}-universal.apk" > "nesium-flutter-${ASSET_TAG}-universal.apk.sha256")
 
           ls -la "$DIST"
 

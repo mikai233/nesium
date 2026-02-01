@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -15,6 +16,8 @@ import 'tabs/input_tab.dart';
 import 'tabs/video_tab.dart';
 import 'tabs/emulation_tab.dart';
 import 'tabs/server_tab.dart';
+import '../../domain/nes_controller.dart';
+import '../screen/floating_game_preview_state.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -27,6 +30,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   StreamSubscription<InputCollision>? _collisionSubscription;
+  bool _popInProgress = false;
 
   @override
   void initState() {
@@ -97,40 +101,79 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final preview = ref.watch(floatingGamePreviewProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.settingsTitle),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(icon: const Icon(Icons.public), text: l10n.settingsTabGeneral),
-            Tab(
-              icon: const Icon(Icons.videogame_asset),
-              text: l10n.settingsTabInput,
-            ),
-            Tab(icon: const Icon(Icons.palette), text: l10n.settingsTabVideo),
-            Tab(
-              icon: const Icon(Icons.settings_applications),
-              text: l10n.settingsTabEmulation,
-            ),
-            if (supportsTcp)
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (_popInProgress) return;
+        _popInProgress = true;
+
+        if (preview.visible) {
+          await ref.read(floatingGamePreviewProvider.notifier).hideAnimated();
+        }
+
+        if (context.mounted) {
+          Navigator.of(context).pop(result);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.settingsTitle),
+          bottom: TabBar(
+            controller: _tabController,
+            tabs: [
               Tab(
-                icon: const Icon(Icons.dns_rounded),
-                text: l10n.settingsTabServer,
+                icon: const Icon(Icons.public),
+                text: l10n.settingsTabGeneral,
               ),
+              Tab(
+                icon: const Icon(Icons.videogame_asset),
+                text: l10n.settingsTabInput,
+              ),
+              Tab(icon: const Icon(Icons.palette), text: l10n.settingsTabVideo),
+              Tab(
+                icon: const Icon(Icons.settings_applications),
+                text: l10n.settingsTabEmulation,
+              ),
+              if (supportsTcp)
+                Tab(
+                  icon: const Icon(Icons.dns_rounded),
+                  text: l10n.settingsTabServer,
+                ),
+            ],
+          ),
+          actions: [
+            if (defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS ||
+                defaultTargetPlatform == TargetPlatform.linux)
+              if (ref.watch(
+                nesControllerProvider.select((s) => s.romHash != null),
+              ))
+                IconButton(
+                  onPressed: () {
+                    ref.read(floatingGamePreviewProvider.notifier).toggle();
+                  },
+                  icon: Icon(
+                    preview.visible
+                        ? Icons.fullscreen_exit
+                        : Icons.picture_in_picture_alt,
+                  ),
+                  tooltip: l10n.settingsFloatingPreviewTooltip,
+                ),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          const GeneralTab(),
-          const InputTab(),
-          VideoTab(pickAndApplyCustomPalette: _pickAndApplyCustomPalette),
-          const EmulationTab(),
-          if (supportsTcp) const ServerTab(),
-        ],
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            const GeneralTab(),
+            const InputTab(),
+            VideoTab(pickAndApplyCustomPalette: _pickAndApplyCustomPalette),
+            const EmulationTab(),
+            if (supportsTcp) const ServerTab(),
+          ],
+        ),
       ),
     );
   }

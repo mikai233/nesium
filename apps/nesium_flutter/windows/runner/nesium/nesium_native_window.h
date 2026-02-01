@@ -15,6 +15,13 @@ public:
                                                     ID3D11Device *device);
   ~NesiumNativeWindow();
 
+  // Must be called on the window's owning thread (Flutter UI thread).
+  void SetRect(int x, int y, int width, int height);
+
+  // Resizes the swapchain/backbuffer. Does not touch HWND geometry.
+  // Safe to call from the render thread (guarded externally by d3d_context_mu_).
+  void ResizeSwapChain(int width, int height);
+
   void Resize(int x, int y, int width, int height);
   void SetVisible(bool visible);
 
@@ -22,6 +29,7 @@ public:
   bool PresentTexture(ID3D11Texture2D *src_texture, bool use_linear);
 
   HWND hwnd() const { return hwnd_; }
+  ID3D11Device *GetDevice() const { return device_.Get(); }
 
 private:
   NesiumNativeWindow(HWND hwnd, HWND parent_hwnd, ID3D11Device *device);

@@ -2,6 +2,10 @@ bool get isNativeDesktop => false;
 
 bool get isNativeMobile => false;
 
+bool get isLinux => false;
+bool get isMacOS => false;
+bool get isWindows => false;
+
 /// Web builds may run on phones/tablets, but Flutter's `defaultTargetPlatform`
 /// is often the host OS (e.g. macOS/Windows) which makes detection unreliable.
 ///

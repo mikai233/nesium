@@ -27,6 +27,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTabServer => '服务器';
 
   @override
+  String get settingsFloatingPreviewToggle => '悬浮预览';
+
+  @override
+  String get settingsFloatingPreviewTooltip => '显示游戏悬浮预览';
+
+  @override
   String get serverTitle => '联机服务器';
 
   @override
@@ -452,6 +458,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get virtualControlsReset => '重置布局';
 
   @override
+  String get virtualControlsDiscardChangesTitle => '撤销当前调整';
+
+  @override
+  String get virtualControlsDiscardChangesSubtitle => '还原到上次保存的布局';
+
+  @override
   String get virtualControlsTurboFramesPerToggle => '连发切换帧数';
 
   @override
@@ -800,6 +812,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get actionLoadPalette => '加载调色板';
 
   @override
+  String get videoResetToDefault => '重置为默认值';
+
+  @override
   String get videoTitle => '画面';
 
   @override
@@ -951,6 +966,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoScreenVerticalOffset => '画面垂直偏移';
+
+  @override
+  String get videoScreenVerticalOffsetPortraitOnly => '仅在竖屏模式下生效。';
 
   @override
   String get videoAspectRatio => '画面比例';
@@ -1612,4 +1630,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get netplayProceed => '继续';
+
+  @override
+  String get videoShaderParametersTitle => '着色器参数';
+
+  @override
+  String get videoShaderParametersSubtitle => '实时调整着色器参数';
+
+  @override
+  String get videoShaderParametersReset => '重置参数';
+
+  @override
+  String get searchHint => '搜索...';
+
+  @override
+  String get searchTooltip => '搜索';
+
+  @override
+  String get noResults => '未找到匹配的参数';
 }

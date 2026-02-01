@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../bridge/api/emulation.dart' as emulation;
+import '../bridge/api/video.dart' as video;
 
 final nesTextureServiceProvider = Provider((ref) => NesTextureService());
 
@@ -113,6 +114,20 @@ class NesTextureService {
     });
   }
 
+  Future<void> updateNativeOverlayRect({
+    required double x,
+    required double y,
+    required double width,
+    required double height,
+  }) async {
+    await _channel.invokeMethod('updateNativeOverlayRect', {
+      'x': x,
+      'y': y,
+      'width': width,
+      'height': height,
+    });
+  }
+
   Future<void> setVideoFilter(int filter) async {
     await _channel.invokeMethod('setVideoFilter', {'filter': filter});
   }
@@ -141,4 +156,11 @@ class NesTextureService {
   /// Disposes an auxiliary texture.
   Future<void> disposeAuxTexture(int id) =>
       _auxChannel.invokeMethod<void>('disposeAuxTexture', {'id': id});
+
+  // ---------------------------------------------------------------------------
+  // Shader Parameters
+  // ---------------------------------------------------------------------------
+
+  Future<void> setShaderParameter(String name, double value) =>
+      video.setShaderParameter(name: name, value: value);
 }
