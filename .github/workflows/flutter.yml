@@ -82,3 +82,13 @@ jobs:
 
       - name: Build web (release)
         run: flutter build web --release --wasm
+
+  build-native:
+    name: Native
+    needs: checks
+    uses: ./.github/workflows/build-flutter.yml
+    with:
+      mode: test
+      is_check: true
+      release_tag: "check-${{ github.run_id }}"
+    secrets: inherit
