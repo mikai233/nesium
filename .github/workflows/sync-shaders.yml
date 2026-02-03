@@ -1,0 +1,41 @@
+name: Sync Shaders
+
+on:
+  schedule:
+    # Runs at 00:00 UTC every day
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    # Allows manual triggering
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Update shader submodule
+        run: |
+          git submodule update --init --recursive --remote apps/nesium_flutter/assets/shaders
+          
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(deps): sync shaders submodule to latest"
+          committer: GitHub <noreply@github.com>
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          signoff: false
+          branch: ci/auto-sync-shaders
+          delete-branch: true
+          title: "chore(deps): sync shaders submodule to latest"
+          body: |
+            Automated daily shader submodule synchronization.
+            
+            This PR updates the `apps/nesium_flutter/assets/shaders` submodule to the latest upstream commit.
+          labels: |
+            dependencies
+            automated-pr
