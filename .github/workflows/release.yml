@@ -12,6 +12,20 @@ on:
           - test
           - prerelease
           - release
+      build_target:
+        description: "Build target"
+        required: true
+        type: choice
+        default: both
+        options:
+          - both
+          - egui
+          - flutter
+      publish_pages:
+        description: "Publish to GitHub Pages"
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   # ------------------------------------------------------------------
@@ -25,6 +39,9 @@ jobs:
       publish_release: ${{ steps.get_tag.outputs.publish_release }}
       prerelease: ${{ steps.get_tag.outputs.prerelease }}
       mode: ${{ steps.get_tag.outputs.mode }}
+      build_egui: ${{ steps.get_tag.outputs.build_egui }}
+      build_flutter: ${{ steps.get_tag.outputs.build_flutter }}
+      publish_pages: ${{ steps.get_tag.outputs.publish_pages }}
     steps:
       - name: Determine Tag
         id: get_tag
@@ -34,6 +51,11 @@ jobs:
 
           MODE="${{ github.event.inputs.mode }}"
           echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
+
+          TARGET="${{ github.event.inputs.build_target }}"
+          echo "build_egui=$([[ "$TARGET" == "both" || "$TARGET" == "egui" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "build_flutter=$([[ "$TARGET" == "both" || "$TARGET" == "flutter" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "publish_pages=${{ github.event.inputs.publish_pages }}" >> "$GITHUB_OUTPUT"
 
           SHORT_SHA="${GITHUB_SHA::7}"
           DATE_UTC="$(date -u +%Y%m%d)"
@@ -62,6 +84,8 @@ jobs:
   # [Job 2] Call Native Build (Rust/Egui)
   # ------------------------------------------------------------------
   call-build-native:
+    name: Build Egui (Native)
+    if: ${{ needs.setup.outputs.build_egui == 'true' }}
     needs: setup
     uses: ./.github/workflows/build-native.yml
     with:
@@ -73,6 +97,8 @@ jobs:
   # [Job 3] Call Flutter Build
   # ------------------------------------------------------------------
   call-build-flutter:
+    name: Build Flutter (Native)
+    if: ${{ needs.setup.outputs.build_flutter == 'true' }}
     needs: setup
     uses: ./.github/workflows/build-flutter.yml
     with:
@@ -86,7 +112,7 @@ jobs:
   # ------------------------------------------------------------------
   deploy-web-pages:
     name: Deploy Web (GitHub Pages)
-    if: ${{ needs.setup.outputs.publish_release == 'true' || (needs.setup.outputs.mode == 'test' && github.ref_name == 'master') }}
+    if: ${{ needs.setup.outputs.publish_pages == 'true' }}
     needs: setup
     runs-on: ubuntu-latest
     permissions:
