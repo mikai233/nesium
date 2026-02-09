@@ -31,7 +31,7 @@ postcard.workspace = true
 if-addrs = "0.14.0"
 stun-rs = "0.1.11"
 ureq.workspace = true
-easy-upnp = "0.3.0"
+easy-upnp = "0.3.1"
 arc-swap.workspace = true
 
 # Enable C++ filters for all non-wasm targets
