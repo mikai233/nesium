@@ -134,6 +134,7 @@ Legend:
 | `cpu_dummy_reads_suite`              | CPU dummy read behaviour                     | Yes                         |
 | `cpu_dummy_writes_suite`             | CPU dummy write behaviour                    | Yes                         |
 | `cpu_exec_space_suite`               | CPU exec space tests (APU/PPU I/O)           | Yes                         |
+| `cpu_interrupts_v2_suite`            | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
 | `cpu_reset_suite`                    | Post-reset RAM/register state                | Yes                         |
 | `cpu_timing_test6_suite`             | TASVideos CPU timing (TV SHA1)               | Yes                         |
 | `dmc_dma_during_read4_suite`         | DMC DMA interaction with CPU read cycles     | Yes                         |
@@ -175,7 +176,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | Suite name                    | Notes                                        | TASVideos accuracy-required |
 | ----------------------------- | -------------------------------------------- | --------------------------- |
 | `blargg_litewall_suite`       | Litewall / timing-related tests              | No                          |
-| `cpu_interrupts_v2_suite`     | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
 | `dpcmletterbox_suite`         | DPCM-related visual/audio test               | Yes                         |
 | `exram_suite`                 | MMC5 ExRAM behaviour (currently failing)     | No                          |
 | `full_palette_suite`          | Full palette rendering and emphasis tests    | No                          |
