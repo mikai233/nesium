@@ -461,6 +461,15 @@ impl Apu {
         self.noise.clock_length();
     }
 
+    #[inline]
+    fn commit_length_halt_flags(&mut self) {
+        for pulse in &mut self.pulse {
+            pulse.apply_length_halt();
+        }
+        self.triangle.apply_length_halt();
+        self.noise.apply_length_halt();
+    }
+
     /// Bus-attached per-CPU-cycle tick, mirroring the `Ppu::step` entrypoint shape.
     ///
     /// DMC DMA requests are queued on the bus directly so callers no longer
@@ -487,6 +496,9 @@ impl Apu {
                 apu.trace_irq_event("frame_irq_set");
             }
         }
+        // Apply control-register halt changes after frame-counter clocks so
+        // half-frame length decrements observe the previous halt state.
+        apu.commit_length_halt_flags();
 
         for pulse in &mut apu.pulse {
             pulse.step_timer();
@@ -663,6 +675,7 @@ mod tests {
         let mut apu = Apu::new();
         apu.cpu_write(apu_mem::STATUS, 0b0000_0001, 0);
         apu.cpu_write(0x4003, 0b1111_1000, 0); // load a long length value
+        apu.commit_length_halt_flags();
 
         // Length counter latched because pulse1 is enabled.
         assert!(apu.pulse[0].length_active());

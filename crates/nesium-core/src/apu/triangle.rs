@@ -23,6 +23,7 @@ impl Triangle {
     pub(super) fn write_control(&mut self, value: u8) {
         self.control_flag = value & 0b1000_0000 != 0;
         self.linear_reload_value = value & 0b0111_1111;
+        self.length.set_halt_pending(self.control_flag);
     }
 
     pub(super) fn write_timer_low(&mut self, value: u8) {
@@ -68,7 +69,11 @@ impl Triangle {
     }
 
     pub(super) fn clock_length(&mut self) {
-        self.length.clock(self.control_flag);
+        self.length.clock();
+    }
+
+    pub(super) fn apply_length_halt(&mut self) {
+        self.length.apply_pending_halt();
     }
 
     pub(super) fn output(&self) -> u8 {

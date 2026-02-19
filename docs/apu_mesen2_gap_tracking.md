@@ -27,6 +27,10 @@
   - `ProcessPendingDma` 的 GET/PUT 判定改为按“当前 CPU cycle”分类（对齐 Mesen 时序）。
   - `$4015` enable/disable 的 2/3 cycle 奇偶判定改为直接使用写入时 CPU cycle（去除 `-1` 偏移）。
   - `$4016/$4017` 端口读改为“bit0 + open-bus 掩码合成”（`0xE0`），不再固定返回 `0x40` 高位。
+- Length Counter 时序新里程碑（2026-02-19）：
+  - `halt` 由“立即生效”改为 pending 并在 frame-counter clock 之后提交（half-frame 先用旧值，再提交新值）。
+  - `reload` 改为延迟提交，并引入 `previous` 比较以处理“与 length clock 同周期写入”的忽略/生效语义。
+  - `blargg_apu_2005.07.30` 的 `10.len_halt_timing`、`11.len_reload_timing` 已通过。
 - CPU DMA internal-reg glitch 已完成第一轮对齐（非最终）：
   - `ProcessDmaRead` 改为单偷周期内完成 internal/external 双读。
   - `!enableInternalRegReads` 时，`$4000-$401F` 返回 open bus。
@@ -63,15 +67,16 @@
   - 在 `6-irq_flag_timing` 上消除首个分歧（`$4015` 首次读值对齐）。
 
 3. Length Counter reload 时序不一致
-- Rust 为“立即装载”：
-  - `crates/nesium-core/src/apu/length_counter.rs:23`
-  - `crates/nesium-core/src/apu/length_counter.rs:25`
-- Mesen2 为“延迟提交 + 指定顺序”：
-  - `Mesen2/Core/NES/APU/ApuLengthCounter.h:20`
-  - `Mesen2/Core/NES/APU/ApuLengthCounter.h:30`
-  - `Mesen2/Core/NES/APU/ApuLengthCounter.h:82`
-  - `Mesen2/Core/NES/NesApu.cpp:161`
-  - `Mesen2/Core/NES/NesApu.cpp:165`
+- 已对齐（2026-02-19）：
+  - NESium 已实现 Mesen2 风格的延迟 `reload` 与 pending `halt` 提交顺序。
+  - 关键文件：
+    - `crates/nesium-core/src/apu/length_counter.rs`
+    - `crates/nesium-core/src/apu.rs`
+    - `crates/nesium-core/src/apu/pulse.rs`
+    - `crates/nesium-core/src/apu/triangle.rs`
+    - `crates/nesium-core/src/apu/noise.rs`
+  - 对应验证：
+    - `crates/nesium-core/tests/rom_suites.rs` 中 `blargg_apu_2005_07_30_suite` 已默认启用并通过。
 
 ### P1（高优先）
 
@@ -125,22 +130,18 @@
 
 ## 4. 测试现状（关键结果）
 
-- `cargo test -p nesium-core apu -- --nocapture`
-  - 单元层：4 通过，1 忽略（`frame_counter_configuration`）。
-  - 套件层：`apu_mixer_suite`、`apu_reset_suite` 通过。
-  - 默认忽略：`blargg_apu_2005_07_30_suite`、`pal_apu_tests_suite`。
-- 手动跑忽略套件（关键结论）：
-  - `apu_test_suite`（历史）：曾出现 `0x01` 失败；当前分支已恢复通过并纳入默认回归。
-  - `blargg_apu_2005_07_30_suite`: 1800 帧超时。
-  - `pal_apu_tests_suite`: 1800 帧超时。
-  - `dmc_tests_suite`: 旧版 `run_rom_status` 路径会超时（`$6000-$6007 = 00`、无串口）。
-  - `dmc_dma_during_read4_suite`（历史）：在旧的 `$6000` 判定路径下会 1800 帧超时；该组 ROM 在 Mesen2 侧同样不走 `$6000` 握手，主要输出为串口文本/CRC。
-- 本轮新增验证：
-  - `cargo test -p nesium-core` 全量回归保持通过（默认 ignored 套件不计入）。
-  - `dmc_dma_during_read4_suite` 已从 `run_rom_status` 迁移为“对齐 Mesen2 的串口文本基线”判定；帧窗口优化至 600，并已从 ignored 移除，纳入默认回归且通过。
-  - `dmc_tests_suite` 已迁移为 Mesen2 RAM baseline 判定（frame=1800，`$0000-$07FF` 的 SHA-1/Base64），并已从 ignored 移除，纳入默认回归且通过。
-  - `dmc_dma_during_read4` 五个子 ROM 在 `read/write/read_mem`（含 `$4016/$2007/$C000` 关键窗口）与 Mesen2 已可对齐。
-  - `dma_2007_read.nes` 的串口输出在 NESium 与 Mesen2 一致（`11 22 ... 159A7A8F`）；`dma_4016_read.nes` 的 `Passed` 串口输出在 Mesen2 可复现。
+- `cargo test -p nesium-core`（当前分支）：
+  - `70 passed / 0 failed / 3 ignored`（单测）。
+  - `33 passed / 0 failed / 26 ignored`（ROM suites）。
+- APU 相关关键套件（默认回归）：
+  - `apu_mixer_suite` 通过。
+  - `apu_reset_suite` 通过。
+  - `apu_test_suite` 通过。
+  - `blargg_apu_2005_07_30_suite` 通过。
+  - `dmc_tests_suite` 通过（Mesen2 RAM baseline）。
+  - `dmc_dma_during_read4_suite` 通过（Mesen2 串口基线）。
+- 当前仍保留为 ignore 的 APU 关键项：
+  - `pal_apu_tests_suite`（PAL 时序/表尚未完整对齐）。
 - `apu_reset_suite` 虽通过，但存在测试框架特判兜底：
   - `crates/nesium-core/tests/mod.rs:297`
   - `crates/nesium-core/tests/mod.rs:309`
