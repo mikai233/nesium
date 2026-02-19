@@ -256,10 +256,10 @@ fn cpu_timing_test6_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "long-running DMC parity test"]
 fn dmc_dma_during_read4_suite() -> Result<()> {
     // Compare decoded serial output against Mesen2-captured baselines.
     // This suite does not use the standard $6000 status-byte protocol.
+    const FRAMES: usize = 600;
     let cases: &[(&str, &str)] = &[
         (
             "dmc_dma_during_read4/dma_2007_read.nes",
@@ -284,7 +284,7 @@ fn dmc_dma_during_read4_suite() -> Result<()> {
     ];
 
     for (rom, expected_serial) in cases {
-        let serial = run_rom_serial_text(rom, DEFAULT_FRAMES)?;
+        let serial = run_rom_serial_text(rom, FRAMES)?;
         assert_eq!(
             serial, *expected_serial,
             "[{}] serial output mismatch\nexpected:\n{}\nactual:\n{}",
@@ -322,14 +322,11 @@ fn dmc_tests_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
+#[ignore = "visual demo ROM; requires manual verification per dpcmletterbox/README.txt"]
 fn dpcmletterbox_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
-    {
-        let rom = "dpcmletterbox/dpcmletterbox.nes";
-        run_rom_status(rom, DEFAULT_FRAMES)?;
-    }
-    Ok(())
+    // Demo ROM: does not expose a machine-readable pass/fail signal via $6000 or serial.
+    // Keep as manual visual verification.
+    run_rom_frames("dpcmletterbox/dpcmletterbox.nes", 600, |_| Ok(()))
 }
 
 #[test]

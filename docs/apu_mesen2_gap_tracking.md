@@ -134,10 +134,10 @@
   - `blargg_apu_2005_07_30_suite`: 1800 帧超时。
   - `pal_apu_tests_suite`: 1800 帧超时。
   - `dmc_tests_suite`: 旧版 `run_rom_status` 路径会超时（`$6000-$6007 = 00`、无串口）。
-  - `dmc_dma_during_read4_suite`: 1800 帧超时；该组 ROM 在 Mesen2 侧也不走 `$6000` 握手，主要输出为串口文本/CRC。
+  - `dmc_dma_during_read4_suite`（历史）：在旧的 `$6000` 判定路径下会 1800 帧超时；该组 ROM 在 Mesen2 侧同样不走 `$6000` 握手，主要输出为串口文本/CRC。
 - 本轮新增验证：
   - `cargo test -p nesium-core` 全量回归保持通过（默认 ignored 套件不计入）。
-  - `dmc_dma_during_read4_suite` 已从 `run_rom_status` 迁移为“对齐 Mesen2 的串口文本基线”判定，并在 ignored 手动运行下通过。
+  - `dmc_dma_during_read4_suite` 已从 `run_rom_status` 迁移为“对齐 Mesen2 的串口文本基线”判定；帧窗口优化至 600，并已从 ignored 移除，纳入默认回归且通过。
   - `dmc_tests_suite` 已迁移为 Mesen2 RAM baseline 判定（frame=1800，`$0000-$07FF` 的 SHA-1/Base64），并已从 ignored 移除，纳入默认回归且通过。
   - `dmc_dma_during_read4` 五个子 ROM 在 `read/write/read_mem`（含 `$4016/$2007/$C000` 关键窗口）与 Mesen2 已可对齐。
   - `dma_2007_read.nes` 的串口输出在 NESium 与 Mesen2 一致（`11 22 ... 159A7A8F`）；`dma_4016_read.nes` 的 `Passed` 串口输出在 Mesen2 可复现。
