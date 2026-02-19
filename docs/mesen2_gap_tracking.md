@@ -144,7 +144,7 @@
 
 - `cargo test -p nesium-core`（当前分支）：
   - `70 passed / 0 failed / 3 ignored`（单测）。
-  - `39 passed / 0 failed / 20 ignored`（ROM suites）。
+  - `39 passed / 0 failed / 21 ignored`（ROM suites）。
 - APU 相关关键套件（默认回归）：
   - `apu_mixer_suite` 通过。
   - `apu_reset_suite` 通过。
@@ -157,6 +157,18 @@
   - `mmc3_irq_tests_suite` 通过（`rev A/rev B` 采用“至少一个通过”判定）。
   - `mmc3_test_suite` 通过（`MMC3/MMC6-style` 采用“至少一个通过”判定）。
   - `mmc3_test_2_suite` 通过（`MMC3/MMC3_alt` 采用“至少一个通过”判定）。
+- `nmi_sync` NTSC 基线跟踪（Mesen2 对齐）：
+  - 新增 `nmi_sync_ntsc_mesen_baseline`（ignored，定位用）；
+  - 采用分散窗口：`(240,241) (360,361) (480,481) (600,601) (720,721) (840,841) (960,961) (1080,1081) (1200,1201)`；
+  - Mesen2 哈希稳定为两值交替：`HsecswITwKxfvAbg7INnX+37zEg=` / `V3aUHSsmGbJIIpCpK159sa78Q8I=`；
+  - NESium 已在上述窗口全部对齐（`nmi_sync_ntsc_mesen_baseline` 手动运行通过）。
+  - 已建立双端 `NMITRACE` 对齐链路：
+    - NESium：`NESIUM_NMI_TRACE_PATH` + `crates/nesium-core/tests/nmi_trace_compare.rs`
+    - Mesen2：`tools/apu_compare/mesen_trace_nmi.lua`
+    - 对齐脚本：`tools/apu_compare/diff_nmi_trace.py`（建议 `uv run python`）
+  - 关键结论（frame<=260）：`$2000/$2001/$2003/$2004/$2005/$2006/$2007/$4014` 写序列 + NMI 触发点可完全对齐（`62654/62654` 事件），说明当前 `nmi_sync` 画面差异更可能位于 PPU 渲染内部实现，而非 CPU 侧寄存器/NMI 时序。
+  - 关键修复（2026-02-19）：`$2001` grayscale 位改为 Mesen2 风格 cutoff 生效（可见区回补已渲染像素，基于 raw palette index 缓存），修复了 `y=121` 的 1/3 像素稳定偏差。
+  - 注：Mesen 对 `$2002` 的 memory callback 会混入 PPU VRAM 地址重叠噪声，暂不作为自动对齐基准。
 - 当前仍保留为 ignore 的 APU 关键项：
   - `pal_apu_tests_suite`（PAL 时序/表尚未完整对齐）。
 - `apu_reset_suite` 虽通过，但存在测试框架特判兜底：

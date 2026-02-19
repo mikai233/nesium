@@ -7,7 +7,7 @@ use crate::{
     controller::{ControllerPorts, SerialLogger},
     cpu::Cpu,
     mem_block::cpu as cpu_ram,
-    memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem},
+    memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem, ppu::Register as PpuRegister},
     ppu::{Ppu, pattern_bus::PpuBus},
 };
 
@@ -150,6 +150,30 @@ impl<'a> CpuBus<'a> {
     }
 
     #[inline]
+    fn trace_nmi_bus_event(&self, ev: &str, addr: u16, value: u8) {
+        let ppu = &*self.ppu;
+        crate::nmi_trace::log_line(&format!(
+            "NMITRACE|src=nesium|ev={}|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|vblank={}|nmi_enabled={}|nmi_level={}|prevent_vblank={}",
+            ev,
+            *self.cycles,
+            *self.master_clock,
+            ppu.frame,
+            ppu.scanline,
+            ppu.cycle,
+            addr,
+            value,
+            crate::nmi_trace::flag(
+                ppu.registers
+                    .status
+                    .contains(crate::ppu::Status::VERTICAL_BLANK),
+            ),
+            crate::nmi_trace::flag(ppu.registers.control.nmi_enabled()),
+            crate::nmi_trace::flag(ppu.nmi_level),
+            crate::nmi_trace::flag(ppu.prevent_vblank_flag)
+        ));
+    }
+
+    #[inline]
     fn controller_open_bus_mask(_port: usize) -> u8 {
         // Match Mesen's default NES-001 open-bus mask for standard pads.
         0xE0
@@ -204,8 +228,13 @@ impl<'a> CpuBus<'a> {
                 self.read_internal_ram(addr)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
+                let reg = PpuRegister::from_cpu_addr(addr);
                 let mut pattern = PpuBus::new(self.cartridge.as_deref_mut(), *self.cycles);
-                self.ppu.cpu_read(addr, &mut pattern)
+                let value = self.ppu.cpu_read(addr, &mut pattern);
+                if matches!(reg, PpuRegister::Status) {
+                    self.trace_nmi_bus_event("read", PpuRegister::Status.addr(), value);
+                }
+                value
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => OpenBus::peek(addr),
             ppu_mem::OAM_DMA => OpenBus::peek(addr),
@@ -287,13 +316,29 @@ impl<'a> CpuBus<'a> {
                 self.write_internal_ram(addr, data)
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
+                let reg = PpuRegister::from_cpu_addr(addr);
                 let mut pattern = PpuBus::new(self.cartridge.as_deref_mut(), *self.cycles);
-                self.ppu.cpu_write(addr, data, &mut pattern)
+                self.ppu.cpu_write(addr, data, &mut pattern);
+                if matches!(
+                    reg,
+                    PpuRegister::Control
+                        | PpuRegister::Mask
+                        | PpuRegister::OamAddr
+                        | PpuRegister::OamData
+                        | PpuRegister::Scroll
+                        | PpuRegister::Addr
+                        | PpuRegister::Data
+                ) {
+                    self.trace_nmi_bus_event("write", reg.addr(), data);
+                }
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
                 self.apu.cpu_write(addr, data, *self.cycles)
             }
-            ppu_mem::OAM_DMA => self.write_oam_dma(data),
+            ppu_mem::OAM_DMA => {
+                self.write_oam_dma(data);
+                self.trace_nmi_bus_event("write", ppu_mem::OAM_DMA, data);
+            }
             cpu_mem::APU_STATUS => self.apu.cpu_write(addr, data, *self.cycles),
             apu_mem::FRAME_COUNTER => self.apu.cpu_write(addr, data, *self.cycles),
             cpu_mem::CONTROLLER_PORT_1 => {

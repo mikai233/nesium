@@ -60,6 +60,7 @@ use crate::{
     interceptor::Interceptor,
     mem_block::ppu::{Ciram, SecondaryOamRam},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
+    nmi_trace,
     ppu::{
         buffer::FrameBuffer,
         buffer::FrameReadyCallback,
@@ -76,6 +77,7 @@ pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + post + vblank (241..260)
+const SCREEN_PIXEL_COUNT: i32 = (SCREEN_WIDTH * SCREEN_HEIGHT) as i32;
 
 /// Entry points for the CPU PPU register mirror.
 #[derive(Clone)]
@@ -151,6 +153,17 @@ pub struct Ppu {
     /// Pending state update request from $2001/$2006/$2007/VRAM-related
     /// side effects. Mirrors Mesen's `_needStateUpdate` latch.
     pub(crate) state_update_pending: bool,
+    /// Latched grayscale mask that is applied to pixel output. This is
+    /// intentionally decoupled from `$2001` writes to mirror Mesen2's
+    /// cycle-to-pixel transition point (`UpdateGrayscaleAndIntensifyBits`).
+    pub(crate) output_grayscale: bool,
+    /// Last visible pixel index for which grayscale state has been reconciled
+    /// after mid-scanline `$2001` writes.
+    pub(crate) grayscale_last_updated_pixel: i32,
+    /// Raw (unmasked) palette indices for the current back buffer frame.
+    /// This lets `$2001` writes retroactively update already rendered pixels
+    /// to match Mesen2's grayscale transition behavior.
+    pub(crate) raw_output_indices: Vec<u8>,
     /// Background + sprite rendering target for the current frame.
     pub(crate) framebuffer: FrameBuffer,
 }
@@ -218,6 +231,9 @@ impl Ppu {
             oam_addr_disable_glitch_pending: false,
             corrupt_oam_row: [false; 32],
             state_update_pending: false,
+            output_grayscale: false,
+            grayscale_last_updated_pixel: -1,
+            raw_output_indices: vec![0; SCREEN_WIDTH * SCREEN_HEIGHT],
             framebuffer,
         }
     }
@@ -318,6 +334,9 @@ impl Ppu {
         self.render_enabled = false;
         self.prev_render_enabled = false;
         self.state_update_pending = true;
+        self.output_grayscale = self.registers.mask.contains(Mask::GRAYSCALE);
+        self.grayscale_last_updated_pixel = -1;
+        self.raw_output_indices.fill(0);
 
         // Only clear the framebuffer on power-on. Soft reset keeps the last
         // rendered frame visible, just like real hardware.
@@ -401,13 +420,14 @@ impl Ppu {
             PpuRegister::Control => {
                 self.registers.write_control(value);
                 self.maybe_apply_scroll_glitch(ScrollGlitchSource::Control2000);
-                self.update_nmi_level();
+                self.update_nmi_level(ppu_bus.cpu_cycle());
             }
             PpuRegister::Mask => {
                 // TODO: Hardware/Mesen2 model subtle mid-frame rendering enable/disable glitches (bus address reset, OAM corruption).
                 // We currently just update the mask bitfield and then update the
                 // Mesen-style rendering-enabled latch on the next `clock()`.
                 self.registers.mask = Mask::from_bits_retain(value);
+                self.apply_grayscale_change(self.registers.mask.contains(Mask::GRAYSCALE));
 
                 let mask = self.registers.mask;
                 let new_render = mask.rendering_enabled();
@@ -486,7 +506,7 @@ impl Ppu {
     /// behavior.
     pub fn cpu_read(&mut self, addr: u16, ppu_bus: &mut PpuBus<'_>) -> u8 {
         match PpuRegister::from_cpu_addr(addr) {
-            PpuRegister::Status => self.read_status(),
+            PpuRegister::Status => self.read_status(ppu_bus.cpu_cycle()),
             PpuRegister::OamData => {
                 let v = self.read_oam_data();
                 // OAMDATA drives the full bus when read.
@@ -644,10 +664,24 @@ impl Ppu {
                 (-1, 1..=256) => {
                     if ppu.cycle == 1 {
                         // Clear vblank/sprite flags at dot 1 of prerender.
+                        let had_vblank = ppu.registers.status.contains(Status::VERTICAL_BLANK);
                         ppu.registers.status.remove(Status::VERTICAL_BLANK);
                         ppu.registers
                             .status
                             .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+                        if had_vblank {
+                            nmi_trace::log_line(&format!(
+                                "NMITRACE|src=nesium|ev=vblank_clear|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|reason=prerender|nmi_enabled={}|nmi_level={}|prevent_vblank={}",
+                                cpu_cycle,
+                                ppu.master_clock,
+                                ppu.frame,
+                                ppu.scanline,
+                                ppu.cycle,
+                                nmi_trace::flag(ppu.registers.control.nmi_enabled()),
+                                nmi_trace::flag(ppu.nmi_level),
+                                nmi_trace::flag(ppu.prevent_vblank_flag)
+                            ));
+                        }
                         // Mesen2: sprite evaluation does not run on the pre-render line,
                         // so ensure scanline 0 starts with 0 active sprites.
                         ppu.sprite_eval.count = 0;
@@ -797,6 +831,27 @@ impl Ppu {
                     // the VBlank flag never sets and no NMI edge is generated for this frame.
                     if !ppu.prevent_vblank_flag {
                         ppu.registers.status.insert(Status::VERTICAL_BLANK);
+                        nmi_trace::log_line(&format!(
+                            "NMITRACE|src=nesium|ev=vblank_set|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|nmi_enabled={}|nmi_level={}",
+                            cpu_cycle,
+                            ppu.master_clock,
+                            ppu.frame,
+                            ppu.scanline,
+                            ppu.cycle,
+                            nmi_trace::flag(ppu.registers.control.nmi_enabled()),
+                            nmi_trace::flag(ppu.nmi_level)
+                        ));
+                    } else {
+                        nmi_trace::log_line(&format!(
+                            "NMITRACE|src=nesium|ev=vblank_suppressed|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|nmi_enabled={}|nmi_level={}",
+                            cpu_cycle,
+                            ppu.master_clock,
+                            ppu.frame,
+                            ppu.scanline,
+                            ppu.cycle,
+                            nmi_trace::flag(ppu.registers.control.nmi_enabled()),
+                            nmi_trace::flag(ppu.nmi_level)
+                        ));
                     }
                     // Consume the race latch each frame.
                     ppu.prevent_vblank_flag = false;
@@ -807,7 +862,7 @@ impl Ppu {
                 _ => unreachable!("PPU scanline {} out of range", ppu.scanline),
             }
 
-            ppu.update_nmi_level();
+            ppu.update_nmi_level(cpu_cycle);
             ppu.update_state_latch();
 
             (
@@ -958,16 +1013,37 @@ impl Ppu {
                 self.frame = self.frame.wrapping_add(1);
             } else if self.scanline > 260 {
                 self.scanline = -1;
+                // New frame: visible output starts from the currently latched
+                // $2001 grayscale bit and an empty raw/output history.
+                self.output_grayscale = self.registers.mask.contains(Mask::GRAYSCALE);
+                self.grayscale_last_updated_pixel = -1;
+                self.raw_output_indices.fill(0);
             }
         }
     }
 
     /// Recomputes the NMI output line based on VBlank and control register,
     /// latching a pending NMI on rising edges.
-    fn update_nmi_level(&mut self) {
+    fn update_nmi_level(&mut self, cpu_cycle: u64) {
+        let old_nmi_level = self.nmi_level;
         let new_nmi_level = self.registers.status.contains(Status::VERTICAL_BLANK)
             && self.registers.control.nmi_enabled();
         self.nmi_level = new_nmi_level;
+        if old_nmi_level != new_nmi_level {
+            nmi_trace::log_line(&format!(
+                "NMITRACE|src=nesium|ev=nmi_level|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|from={}|to={}|vblank={}|nmi_enabled={}|prevent_vblank={}",
+                cpu_cycle,
+                self.master_clock,
+                self.frame,
+                self.scanline,
+                self.cycle,
+                nmi_trace::flag(old_nmi_level),
+                nmi_trace::flag(new_nmi_level),
+                nmi_trace::flag(self.registers.status.contains(Status::VERTICAL_BLANK)),
+                nmi_trace::flag(self.registers.control.nmi_enabled()),
+                nmi_trace::flag(self.prevent_vblank_flag)
+            ));
+        }
     }
 
     /// Renders a single pixel into the framebuffer based on the current
@@ -981,6 +1057,7 @@ impl Ppu {
         if x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT {
             return;
         }
+        let pixel_index = (y * SCREEN_WIDTH + x) as i32;
 
         let mask = self.registers.mask;
         let fine_x = self.registers.vram.x;
@@ -1051,14 +1128,62 @@ impl Ppu {
         } else {
             ppu_mem::PALETTE_BASE + (final_palette as u16) * 4 + (final_color as u16)
         };
-        let mut color_index = self.palette_ram.read(palette_addr);
+        let raw_color_index = self.palette_ram.read(palette_addr);
+        self.raw_output_indices[pixel_index as usize] = raw_color_index;
+        let mut color_index = raw_color_index;
         // Apply grayscale mask when $2001 bit 0 is set: only keep the grey
         // column ($00, $10, $20, $30) as in Mesen2 / hardware.
-        if self.registers.mask.contains(Mask::GRAYSCALE) {
+        if self.output_grayscale {
             color_index &= 0x30;
         }
 
         self.framebuffer.write_index(x, y, color_index);
+    }
+
+    /// Applies a `$2001` grayscale update with Mesen2-like pixel cutoff.
+    ///
+    /// For visible scanlines, Mesen2 computes a cutoff pixel:
+    /// - `cycle < 3`: `scanline * 256 - 1`
+    /// - `cycle <= 258`: `scanline * 256 + cycle - 3`
+    /// - otherwise: end of scanline (`scanline * 256 + 255`)
+    ///
+    /// Pixels up to that cutoff keep the previous grayscale state; subsequent
+    /// pixels use the new state. Because writes can occur after a subset of
+    /// pixels were already rendered, we retroactively patch the already-written
+    /// pixels using the raw output cache.
+    fn apply_grayscale_change(&mut self, new_grayscale: bool) {
+        if !(0..=239).contains(&self.scanline) {
+            self.output_grayscale = new_grayscale;
+            return;
+        }
+
+        let cutoff_pixel = if self.cycle < 3 {
+            (self.scanline as i32) * (SCREEN_WIDTH as i32) - 1
+        } else if self.cycle <= 258 {
+            (self.scanline as i32) * (SCREEN_WIDTH as i32) + (self.cycle as i32) - 3
+        } else {
+            (self.scanline as i32) * (SCREEN_WIDTH as i32) + (SCREEN_WIDTH as i32) - 1
+        }
+        .clamp(-1, SCREEN_PIXEL_COUNT - 1);
+
+        if cutoff_pixel > self.grayscale_last_updated_pixel {
+            let start = (self.grayscale_last_updated_pixel + 1).max(0);
+            let end = cutoff_pixel.min(SCREEN_PIXEL_COUNT - 1);
+            for idx in start..=end {
+                let raw = self.raw_output_indices[idx as usize];
+                let value = if self.output_grayscale {
+                    raw & 0x30
+                } else {
+                    raw
+                };
+                let x = (idx as usize) % SCREEN_WIDTH;
+                let y = (idx as usize) / SCREEN_WIDTH;
+                self.framebuffer.write_index(x, y, value);
+            }
+            self.grayscale_last_updated_pixel = cutoff_pixel;
+        }
+
+        self.output_grayscale = new_grayscale;
     }
 
     /// Emulates the $2000/$2005/$2006 scroll glitch when writes land on
@@ -1507,7 +1632,7 @@ impl Ppu {
         base_nt + 0x03C0 + (v.coarse_y() as u16 / 4) * 8 + (v.coarse_x() as u16 / 4)
     }
 
-    fn read_status(&mut self) -> u8 {
+    fn read_status(&mut self, cpu_cycle: u64) -> u8 {
         let status = self.registers.status.bits();
         // Mesen2 / hardware: low 5 bits of $2002 come from open bus.
         // Use PpuOpenBus::apply with a mask covering the low 5 bits so only
@@ -1525,7 +1650,21 @@ impl Ppu {
             self.prevent_vblank_flag = true;
         }
 
-        self.update_nmi_level();
+        if self.scanline == 241 && self.cycle == 0 {
+            nmi_trace::log_line(&format!(
+                "NMITRACE|src=nesium|ev=vblank_suppress_latch|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|vblank={}|nmi_enabled={}|nmi_level={}",
+                cpu_cycle,
+                self.master_clock,
+                self.frame,
+                self.scanline,
+                self.cycle,
+                nmi_trace::flag(self.registers.status.contains(Status::VERTICAL_BLANK)),
+                nmi_trace::flag(self.registers.control.nmi_enabled()),
+                nmi_trace::flag(self.nmi_level)
+            ));
+        }
+
+        self.update_nmi_level(cpu_cycle);
         ret
     }
 
