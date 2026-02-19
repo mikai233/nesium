@@ -83,7 +83,6 @@ fn apu_reset_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn apu_test_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [

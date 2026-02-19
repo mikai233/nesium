@@ -128,9 +128,9 @@
 - `cargo test -p nesium-core apu -- --nocapture`
   - 单元层：4 通过，1 忽略（`frame_counter_configuration`）。
   - 套件层：`apu_mixer_suite`、`apu_reset_suite` 通过。
-  - 默认忽略：`apu_test_suite`、`blargg_apu_2005_07_30_suite`、`pal_apu_tests_suite`。
+  - 默认忽略：`blargg_apu_2005_07_30_suite`、`pal_apu_tests_suite`。
 - 手动跑忽略套件（关键结论）：
-  - `apu_test_suite`: `0x01` 失败状态。
+  - `apu_test_suite`（历史）：曾出现 `0x01` 失败；当前分支已恢复通过并纳入默认回归。
   - `blargg_apu_2005_07_30_suite`: 1800 帧超时。
   - `pal_apu_tests_suite`: 1800 帧超时。
   - `dmc_tests_suite`: 旧版 `run_rom_status` 路径会超时（`$6000-$6007 = 00`、无串口）。
