@@ -211,8 +211,7 @@ impl FrameCounter {
 
                 // 5-step write clocks both quarter+half immediately, unless
                 // a frame tick is currently blocked.
-                if self.mode == FrameCounterMode::FiveStep && self.block_frame_counter_tick == 0
-                {
+                if self.mode == FrameCounterMode::FiveStep && self.block_frame_counter_tick == 0 {
                     tick.quarter = true;
                     tick.half = true;
                     self.block_frame_counter_tick = 2;

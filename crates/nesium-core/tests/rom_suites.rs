@@ -1,9 +1,9 @@
 mod common;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use common::{
-    RESULT_ZP_ADDR, require_color_diversity, run_rom_frames, run_rom_ram_sha1,
-    run_rom_serial_text, run_rom_status, run_rom_tv_sha1, run_rom_zeropage_result,
+    RESULT_ZP_ADDR, require_color_diversity, run_rom_frames, run_rom_ram_sha1, run_rom_serial_text,
+    run_rom_status, run_rom_tv_sha1, run_rom_zeropage_result,
 };
 use ctor::ctor;
 use tracing::Level;
@@ -443,53 +443,113 @@ fn m22chrbankingtest_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc3_irq_tests_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // TASVideos accuracy-required ROMs.
+    //
+    // Per upstream readme, 5/6 validate mutually-exclusive MMC3A vs MMC3B IRQ behavior,
+    // so a single emulator implementation is expected to pass at most one of them.
     for rom in [
         "mmc3_irq_tests/1.Clocking.nes",
         "mmc3_irq_tests/2.Details.nes",
         "mmc3_irq_tests/3.A12_clocking.nes",
         "mmc3_irq_tests/4.Scanline_timing.nes",
-        "mmc3_irq_tests/5.MMC3_rev_A.nes",
-        "mmc3_irq_tests/6.MMC3_rev_B.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_zeropage_result(rom, DEFAULT_FRAMES, RESULT_ZP_ADDR, 0x01)
+            .with_context(|| format!("[mmc3_irq_tests_suite] rom={rom}"))?;
     }
+
+    let rev_a = run_rom_zeropage_result(
+        "mmc3_irq_tests/5.MMC3_rev_A.nes",
+        DEFAULT_FRAMES,
+        RESULT_ZP_ADDR,
+        0x01,
+    )
+    .with_context(|| "[mmc3_irq_tests_suite] rom=mmc3_irq_tests/5.MMC3_rev_A.nes");
+    let rev_b = run_rom_zeropage_result(
+        "mmc3_irq_tests/6.MMC3_rev_B.nes",
+        DEFAULT_FRAMES,
+        RESULT_ZP_ADDR,
+        0x01,
+    )
+    .with_context(|| "[mmc3_irq_tests_suite] rom=mmc3_irq_tests/6.MMC3_rev_B.nes");
+
+    let rev_a_ok = rev_a.is_ok();
+    let rev_b_ok = rev_b.is_ok();
+    if !rev_a_ok && !rev_b_ok {
+        let err_a = rev_a.expect_err("rev_a should be Err");
+        let err_b = rev_b.expect_err("rev_b should be Err");
+        bail!(
+            "[mmc3_irq_tests_suite] neither revision variant passed.\nrev_a error: {err_a:#}\nrev_b error: {err_b:#}"
+        );
+    }
+
     Ok(())
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc3_test_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // TASVideos accuracy-required ROMs.
+    //
+    // 5/6 validate mutually-exclusive MMC3 revision behavior ("MMC3" vs "MMC6-style" IRQ quirks),
+    // so a single implementation should pass at least one variant.
     for rom in [
         "mmc3_test/1-clocking.nes",
         "mmc3_test/2-details.nes",
         "mmc3_test/3-A12_clocking.nes",
         "mmc3_test/4-scanline_timing.nes",
-        "mmc3_test/5-MMC3.nes",
-        "mmc3_test/6-MMC6.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_status(rom, DEFAULT_FRAMES)
+            .with_context(|| format!("[mmc3_test_suite] rom={rom}"))?;
     }
+
+    let mmc3 = run_rom_status("mmc3_test/5-MMC3.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_suite] rom=mmc3_test/5-MMC3.nes");
+    let mmc6_style = run_rom_status("mmc3_test/6-MMC6.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_suite] rom=mmc3_test/6-MMC6.nes");
+
+    let mmc3_ok = mmc3.is_ok();
+    let mmc6_ok = mmc6_style.is_ok();
+    if !mmc3_ok && !mmc6_ok {
+        let err_mmc3 = mmc3.expect_err("mmc3 should be Err");
+        let err_mmc6 = mmc6_style.expect_err("mmc6_style should be Err");
+        bail!(
+            "[mmc3_test_suite] neither variant passed.\nmmc3 error: {err_mmc3:#}\nmmc6-style error: {err_mmc6:#}"
+        );
+    }
+
     Ok(())
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc3_test_2_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // TASVideos accuracy-required ROMs.
+    //
+    // 5/6 validate mutually-exclusive MMC3 revision behavior ("MMC3" vs "MMC3_alt").
     for rom in [
         "mmc3_test_2/rom_singles/1-clocking.nes",
         "mmc3_test_2/rom_singles/2-details.nes",
         "mmc3_test_2/rom_singles/3-A12_clocking.nes",
         "mmc3_test_2/rom_singles/4-scanline_timing.nes",
-        "mmc3_test_2/rom_singles/5-MMC3.nes",
-        "mmc3_test_2/rom_singles/6-MMC3_alt.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_status(rom, DEFAULT_FRAMES)
+            .with_context(|| format!("[mmc3_test_2_suite] rom={rom}"))?;
     }
+
+    let mmc3 = run_rom_status("mmc3_test_2/rom_singles/5-MMC3.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_2_suite] rom=mmc3_test_2/rom_singles/5-MMC3.nes");
+    let mmc3_alt = run_rom_status("mmc3_test_2/rom_singles/6-MMC3_alt.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_2_suite] rom=mmc3_test_2/rom_singles/6-MMC3_alt.nes");
+
+    let mmc3_ok = mmc3.is_ok();
+    let mmc3_alt_ok = mmc3_alt.is_ok();
+    if !mmc3_ok && !mmc3_alt_ok {
+        let err_mmc3 = mmc3.expect_err("mmc3 should be Err");
+        let err_mmc3_alt = mmc3_alt.expect_err("mmc3_alt should be Err");
+        bail!(
+            "[mmc3_test_2_suite] neither variant passed.\nmmc3 error: {err_mmc3:#}\nmmc3_alt error: {err_mmc3_alt:#}"
+        );
+    }
+
     Ok(())
 }
 

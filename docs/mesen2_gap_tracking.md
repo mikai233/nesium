@@ -1,4 +1,4 @@
-# NESium APU vs Mesen2 关键差距追踪
+# NESium vs Mesen2 关键差距追踪
 
 ## 1. 文档原则
 
@@ -39,6 +39,18 @@
 - 双端对比能力扩展：
   - NESium 新增 `NESIUM_APU_TRACE_READ_ADDRS`（输出 `ev=read_mem`）用于与 Mesen `read_mem` 事件逐项比对。
   - `tools/apu_compare/diff_apu_trace.py` 新增 `--include-read-mem` 开关。
+- MMC3 IRQ 关键节点（2026-02-19）：
+  - `mmc3_irq_tests` 的 `1-4` 已通过（clocking/details/A12/scanline）。
+  - `5.MMC3_rev_A` 与 `6.MMC3_rev_B` 属于互斥硬件行为测试（官方 README 明确“最多通过一个”）。
+  - Mapper4 已实现 IRQ revision 自动识别：
+    - NES2 `submapper=1` 使用 RevA 语义；
+    - 其余默认 RevB；
+    - 可用 `NESIUM_MMC3_IRQ_REV=A|B|AUTO` 强制覆盖（用于 iNES/对比实验）。
+  - 测试套件已改为 `5/6` 至少通过一个，避免把互斥 revision 行为误判为统一失败。
+  - `mmc3_test` / `mmc3_test_2` 已完成关键收敛：
+    - PRG-RAM 默认可读写（`$6000` 状态协议可用）；
+    - 背景抓取改为 8-dot 分拍（1/3/5/7）以修正 MMC3 scanline IRQ 时序；
+    - 套件判定改为“基础项必过 + 变体项二选一通过”（`MMC3` vs `MMC6/MMC3_alt`）。
 
 ## 3. 关键差距（按优先级）
 
@@ -132,7 +144,7 @@
 
 - `cargo test -p nesium-core`（当前分支）：
   - `70 passed / 0 failed / 3 ignored`（单测）。
-  - `34 passed / 0 failed / 25 ignored`（ROM suites）。
+  - `39 passed / 0 failed / 20 ignored`（ROM suites）。
 - APU 相关关键套件（默认回归）：
   - `apu_mixer_suite` 通过。
   - `apu_reset_suite` 通过。
@@ -141,6 +153,10 @@
   - `dmc_tests_suite` 通过（Mesen2 RAM baseline）。
   - `dmc_dma_during_read4_suite` 通过（Mesen2 串口基线）。
   - `sprdma_and_dmc_dma_suite` 通过。
+- MMC3 相关关键套件（默认回归）：
+  - `mmc3_irq_tests_suite` 通过（`rev A/rev B` 采用“至少一个通过”判定）。
+  - `mmc3_test_suite` 通过（`MMC3/MMC6-style` 采用“至少一个通过”判定）。
+  - `mmc3_test_2_suite` 通过（`MMC3/MMC3_alt` 采用“至少一个通过”判定）。
 - 当前仍保留为 ignore 的 APU 关键项：
   - `pal_apu_tests_suite`（PAL 时序/表尚未完整对齐）。
 - `apu_reset_suite` 虽通过，但存在测试框架特判兜底：
@@ -172,10 +188,11 @@ msbuild Mesen2\Mesen.sln /restore /m /t:UI /p:Configuration=Release /p:Platform=
 - `.git/modules/apps/nesium_flutter/assets/shaders/config` 损坏导致 `git status` 失败，已修复并恢复可用。
 - Mesen `--testRunner` 在当前环境下为异步进程模型：日志采集需使用绝对输出路径，并配合 `-timeout=<sec>` 保证自动退出。
 - `tools/apu_compare/mesen_dump_status.lua` 已修正为 `emu.memType.nesMemory`（此前 memType 使用错误会导致状态脚本不可用）。
+- `run_rom_status` 的 RAM 关键字兜底已移除，仅保留 `$6000` 协议 + serial 兜底，避免 `mmc3_test*` 上的假阳性失败。
 
 ## 6. 下一关键节点
 
-1. 保持 `read_mem` 双端对齐链路，继续覆盖 DMC 相关 ROM（优先 one-byte glitch 与 `dpcmletterbox`）。
-2. 在 DMC 内部状态层（sample buffer/bytes remaining/IRQ latch）补充对比点，缩短定位路径。
+1. Mapper4 revision 自动识别已落地（NES2 submapper + env override）；下一步是补充外部数据库映射，降低 iNES ROM 上“二选一”策略占比。
+2. 保持 `read_mem` 双端对齐链路，继续覆盖 DMC 相关 ROM（优先 one-byte glitch 与 `dpcmletterbox`）。
 3. 持续把“协议不匹配”的 ROM 从 `run_rom_status` 迁移到可自动判定基线，减少误报。
 

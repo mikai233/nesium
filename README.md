@@ -143,6 +143,9 @@ Legend:
 | `instr_test_v3_suite`                | Blargg instruction test v3                   | Yes                         |
 | `instr_test_v5_suite`                | Blargg instruction test v5                   | Yes                         |
 | `instr_timing_suite`                 | Instruction timing                           | Yes                         |
+| `mmc3_irq_tests_suite`               | MMC3 IRQ test set (passes required + one revision variant) | Yes            |
+| `mmc3_test_suite`                    | MMC3 functional test set (passes required + one MMC3/MMC6 variant) | Yes     |
+| `mmc3_test_2_suite`                  | MMC3 test set v2 (passes required + one MMC3/MMC3_alt variant) | Yes      |
 | `nes_instr_test_suite`               | Additional instruction behaviour tests       | Yes                         |
 | `ny2011_suite`                       | Visual diversity / timing                    | No                          |
 | `oam_read_suite`                     | OAM read behaviour                           | Yes                         |
@@ -180,9 +183,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `exram_suite`                 | MMC5 ExRAM behaviour (currently failing)     | No                          |
 | `full_palette_suite`          | Full palette rendering and emphasis tests    | No                          |
 | `m22chrbankingtest_suite`     | Mapper 22 CHR banking behaviour              | No                          |
-| `mmc3_irq_tests_suite`        | MMC3 IRQ behaviour                           | Yes                         |
-| `mmc3_test_suite`             | MMC3/MMC6 functional tests                   | Yes                         |
-| `mmc3_test_2_suite`           | Second MMC3 test set                         | Yes                         |
 | `mmc5test_suite`              | MMC5 functional tests                        | Yes                         |
 | `mmc5test_v2_suite`           | MMC5 test set v2                             | Yes                         |
 | `nes15_1_0_0_suite`           | `nes15` series tests (NTSC/PAL)              | Yes                         |

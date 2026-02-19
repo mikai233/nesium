@@ -352,23 +352,6 @@ where
             }
         }
 
-        if let Some(progress) = parse_ram_progress(&mut nes) {
-            match progress {
-                Progress::Passed(msg) => {
-                    verify(&mut nes)?;
-                    return Ok(message_or_none(msg));
-                }
-                Progress::Failed(code, msg) => {
-                    bail!(
-                        "failed with status byte {:#04X}{}",
-                        code,
-                        format_status(msg)
-                    )
-                }
-                Progress::Running { .. } => {}
-            }
-        }
-
         nes.run_frame(false);
     }
 
@@ -389,22 +372,6 @@ where
                 last_status = message;
             }
             if let Some(progress) = parse_serial_progress(&serial_log) {
-                match progress {
-                    Progress::Passed(msg) => {
-                        verify(&mut nes)?;
-                        return Ok(message_or_none(msg));
-                    }
-                    Progress::Failed(code, msg) => {
-                        bail!(
-                            "failed with status byte {:#04X}{}",
-                            code,
-                            format_status(msg)
-                        )
-                    }
-                    Progress::Running { .. } => {}
-                }
-            }
-            if let Some(progress) = parse_ram_progress(&mut nes) {
                 match progress {
                     Progress::Passed(msg) => {
                         verify(&mut nes)?;

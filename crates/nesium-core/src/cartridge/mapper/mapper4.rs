@@ -28,7 +28,7 @@ use std::borrow::Cow;
 use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
-        header::{Header, Mirroring},
+        header::{Header, Mirroring, RomFormat},
         mapper::{
             ChrStorage, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram_with_trainer,
             select_chr_storage,
@@ -120,6 +120,33 @@ impl Mmc3CpuRegister {
     }
 }
 
+/// MMC3 IRQ behaviour differs across board revisions.
+///
+/// - RevA-like: IRQ is only signalled when the counter reaches zero after a
+///   decrement/reload from a non-zero or explicit reload state.
+/// - RevB-like: IRQ is signalled whenever the post-clock counter is zero.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Mmc3IrqRevision {
+    RevA,
+    RevB,
+}
+
+impl Mmc3IrqRevision {
+    fn as_u8(self) -> u8 {
+        match self {
+            Self::RevA => 0,
+            Self::RevB => 1,
+        }
+    }
+
+    fn from_u8(v: u8) -> Self {
+        match v {
+            0 => Self::RevA,
+            _ => Self::RevB,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Mapper4 {
     prg_rom: crate::cartridge::PrgRom,
@@ -167,6 +194,8 @@ pub struct Mapper4 {
     irq_enabled: bool,
     /// Latched IRQ line visible to the CPU core.
     irq_pending: bool,
+    /// Selected MMC3 IRQ semantics (RevA vs RevB-like).
+    irq_revision: Mmc3IrqRevision,
 
     // PPU A12 edge detection -----------------------------------------------
     /// Last observed value of PPU address line A12.
@@ -193,6 +222,7 @@ pub struct Mapper4State {
     pub irq_reload: bool,
     pub irq_enabled: bool,
     pub irq_pending: bool,
+    pub irq_revision: u8,
     pub last_a12_high: bool,
     pub last_a12_rise_ppu_cycle: u64,
 }
@@ -203,6 +233,7 @@ impl Mapper4 {
 
         let chr = select_chr_storage(&header, chr_rom);
         let prg_bank_count = (prg_rom.len() / PRG_BANK_SIZE_8K).max(1);
+        let irq_revision = detect_mmc3_irq_revision(header);
 
         Self {
             prg_rom,
@@ -213,13 +244,14 @@ impl Mapper4 {
             mirroring: header.mirroring(),
             bank_select: 0,
             bank_regs: Mapper4BankRegs::new(),
-            prg_ram_enable: false,
-            prg_ram_write_protect: true,
+            prg_ram_enable: true,
+            prg_ram_write_protect: false,
             irq_latch: 0,
             irq_counter: 0,
             irq_reload: false,
             irq_enabled: false,
             irq_pending: false,
+            irq_revision,
             last_a12_high: false,
             last_a12_rise_ppu_cycle: 0,
         }
@@ -240,6 +272,7 @@ impl Mapper4 {
             irq_reload: self.irq_reload,
             irq_enabled: self.irq_enabled,
             irq_pending: self.irq_pending,
+            irq_revision: self.irq_revision.as_u8(),
             last_a12_high: self.last_a12_high,
             last_a12_rise_ppu_cycle: self.last_a12_rise_ppu_cycle,
         }
@@ -259,6 +292,7 @@ impl Mapper4 {
         self.irq_reload = state.irq_reload;
         self.irq_enabled = state.irq_enabled;
         self.irq_pending = state.irq_pending;
+        self.irq_revision = Mmc3IrqRevision::from_u8(state.irq_revision);
         self.last_a12_high = state.last_a12_high;
         self.last_a12_rise_ppu_cycle = state.last_a12_rise_ppu_cycle;
     }
@@ -552,7 +586,9 @@ impl Mapper4 {
     }
 
     fn write_irq_reload(&mut self) {
-        // The next A12 rising edge reloads the counter from the latch.
+        // Mesen/MMC3 behavior: writing $C001 clears the current counter and
+        // marks the next A12 rise as a reload from latch.
+        self.irq_counter = 0;
         self.irq_reload = true;
     }
 
@@ -571,46 +607,76 @@ impl Mapper4 {
     /// rendering. This clocks the internal IRQ counter in the usual MMC3
     /// manner.
     fn clock_irq_counter(&mut self) {
-        if self.irq_reload || self.irq_counter == 0 {
+        let counter_before = self.irq_counter;
+        let reload_before = self.irq_reload;
+
+        if reload_before || counter_before == 0 {
             self.irq_counter = self.irq_latch;
             self.irq_reload = false;
         } else {
-            self.irq_counter = self.irq_counter.wrapping_sub(1);
+            self.irq_counter = counter_before.wrapping_sub(1);
         }
 
-        // When the counter transitions to 0, an IRQ is requested on the next
-        // CPU instruction boundary (the CPU core observes `irq_pending`).
+        // IRQ trigger condition depends on MMC3 revision.
         if self.irq_counter == 0 && self.irq_enabled {
-            self.irq_pending = true;
+            match self.irq_revision {
+                Mmc3IrqRevision::RevA => {
+                    if counter_before > 0 || reload_before {
+                        self.irq_pending = true;
+                    }
+                }
+                Mmc3IrqRevision::RevB => {
+                    self.irq_pending = true;
+                }
+            }
         }
     }
 
     /// Observe a PPU VRAM access and detect A12 rising edges during rendering.
     fn observe_ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
-        // IRQ counter is clocked by PPU A12 rising edges while rendering.
-        if ctx.kind != PpuVramAccessKind::RenderingFetch {
-            return;
-        }
-
-        if addr >= 0x2000 {
-            // Only pattern table accesses ($0000-$1FFF) affect the counter.
+        // MMC3 clocking is driven by VRAM address changes from rendering and
+        // CPU-side $2006/$2007 accesses.
+        if !matches!(
+            ctx.kind,
+            PpuVramAccessKind::RenderingFetch
+                | PpuVramAccessKind::CpuRead
+                | PpuVramAccessKind::CpuWrite
+        ) {
             return;
         }
 
         let a12_high = addr & 0x1000 != 0;
-
-        // Nesdev: MMC3 requires A12 to be low for a period (~8 PPU cycles)
-        // before a new rising edge is recognised. We approximate this by
-        // enforcing a minimum PPU cycle distance between edges.
-        if a12_high && !self.last_a12_high {
-            let delta = ctx.ppu_cycle.saturating_sub(self.last_a12_rise_ppu_cycle);
-            if delta >= 8 {
+        if !a12_high {
+            // Track when A12 entered the low state; the next rising edge is
+            // only considered valid after a sufficiently long low period.
+            if self.last_a12_high || self.last_a12_rise_ppu_cycle == 0 {
                 self.last_a12_rise_ppu_cycle = ctx.ppu_cycle;
+            }
+            self.last_a12_high = false;
+            return;
+        }
+
+        if !self.last_a12_high {
+            let should_clock = match ctx.kind {
+                // Rendering fetches need the usual A12 low-time debounce.
+                PpuVramAccessKind::RenderingFetch => {
+                    let low_period = ctx.ppu_cycle.saturating_sub(self.last_a12_rise_ppu_cycle);
+                    // The hardware gate is effectively "A12 low long enough"
+                    // before a high transition. Our mapper callback observes
+                    // at dot granularity (not sub-dot), so use a one-dot
+                    // relaxed threshold to avoid dropping legitimate edges.
+                    self.last_a12_rise_ppu_cycle != 0 && low_period >= 7
+                }
+                // CPU-side $2006/$2007 accesses should clock on direct A12 rises.
+                PpuVramAccessKind::CpuRead | PpuVramAccessKind::CpuWrite => true,
+                _ => false,
+            };
+            if should_clock {
                 self.clock_irq_counter();
             }
         }
 
-        self.last_a12_high = a12_high;
+        self.last_a12_high = true;
     }
 }
 
@@ -620,11 +686,11 @@ impl Mapper for Mapper4 {
         // - PRG mode = 1 (swap at $C000) so that the last bank appears at
         //   $E000-$FFFF and the second last at $8000-$9FFF.
         // - CHR A12 inversion disabled.
-        // - PRG-RAM disabled until the game explicitly enables it via $A001.
+        // - PRG-RAM enabled by default for iNES mapper-4 compatibility.
         self.bank_select = 0x40;
         self.bank_regs.fill(0);
-        self.prg_ram_enable = false;
-        self.prg_ram_write_protect = true;
+        self.prg_ram_enable = true;
+        self.prg_ram_write_protect = false;
         self.irq_latch = 0;
         self.irq_counter = 0;
         self.irq_reload = false;
@@ -732,6 +798,33 @@ impl Mapper for Mapper4 {
 
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("MMC3")
+    }
+}
+
+fn detect_mmc3_irq_revision(header: Header) -> Mmc3IrqRevision {
+    if let Some(override_revision) = parse_mmc3_irq_revision_override() {
+        return override_revision;
+    }
+
+    // NES 2.0 submapper carries board-level identity that can distinguish
+    // MMC6-style boards. Legacy iNES mapper-4 dumps do not have enough data
+    // to disambiguate reliably, so default to RevB-like behavior.
+    if header.format() == RomFormat::Nes20 && header.submapper() == 1 {
+        Mmc3IrqRevision::RevA
+    } else {
+        Mmc3IrqRevision::RevB
+    }
+}
+
+fn parse_mmc3_irq_revision_override() -> Option<Mmc3IrqRevision> {
+    let value = std::env::var("NESIUM_MMC3_IRQ_REV").ok()?;
+    let normalized = value.trim().to_ascii_uppercase();
+
+    match normalized.as_str() {
+        "A" | "REVA" | "REV_A" | "MMC3A" | "MMC6" | "MMC6_STYLE" => Some(Mmc3IrqRevision::RevA),
+        "B" | "REVB" | "REV_B" | "MMC3B" => Some(Mmc3IrqRevision::RevB),
+        "AUTO" | "" => None,
+        _ => None,
     }
 }
 

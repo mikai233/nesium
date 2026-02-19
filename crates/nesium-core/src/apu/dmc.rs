@@ -175,11 +175,7 @@ impl Dmc {
     fn delay_for_cpu_cycle(cpu_cycle: u64) -> u8 {
         // Match Mesen parity directly from the CPU cycle counter used at the
         // `$4015` write site.
-        if (cpu_cycle & 0x01) == 0 {
-            2
-        } else {
-            3
-        }
+        if (cpu_cycle & 0x01) == 0 { 2 } else { 3 }
     }
 
     /// Advances the internal DMC timer by one CPU cycle and reports whether a
@@ -276,7 +272,6 @@ impl Dmc {
                     status.dmc_interrupt = true;
                 }
             }
-
         }
     }
 }
