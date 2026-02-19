@@ -15,6 +15,12 @@ pub(super) struct Dmc {
     irq_enable: bool,
     loop_flag: bool,
     enabled: bool,
+    /// Deferred disable window used after `$4015` bit-4 is cleared.
+    /// Mesen models this as a 2/3 CPU-cycle delay based on CPU parity.
+    disable_delay: u8,
+    /// Deferred DMA-start window used after enabling DMC via `$4015`.
+    /// Also follows the 2/3 CPU-cycle odd/even rule.
+    transfer_start_delay: u8,
     rate_index: u8,
     output_level: u8,
     sample_address: u16,
@@ -43,11 +49,13 @@ impl Default for Dmc {
             irq_enable: false,
             loop_flag: false,
             enabled: false,
+            disable_delay: 0,
+            transfer_start_delay: 0,
             rate_index: 0,
             output_level: 0,
             sample_address: DMC_SAMPLE_BASE,
             sample_length: 1,
-            current_address: DMC_SAMPLE_BASE,
+            current_address: 0,
             bytes_remaining: 0,
             sample_buffer: None,
             shift_register: 0,
@@ -61,7 +69,7 @@ impl Default for Dmc {
             // lookup table entries.
             timer: DMC_RATE_TABLE[0] - 1,
             timer_period: DMC_RATE_TABLE[0] - 1,
-            last_fetch_addr: DMC_SAMPLE_BASE,
+            last_fetch_addr: 0,
             pending_fetch: None,
         }
     }
@@ -97,15 +105,16 @@ impl Dmc {
         self.sample_length = (value as u16) * DMC_SAMPLE_LEN_STRIDE + 1;
     }
 
-    pub(super) fn set_enabled(&mut self, enabled: bool, status: &mut StatusFlags) {
+    pub(super) fn set_enabled(&mut self, enabled: bool, cpu_cycle: u64) {
         self.enabled = enabled;
+
         if !enabled {
-            self.bytes_remaining = 0;
+            if self.disable_delay == 0 {
+                self.disable_delay = Self::delay_for_cpu_cycle(cpu_cycle);
+            }
         } else if self.bytes_remaining == 0 {
             self.restart_sample();
-        }
-        if enabled {
-            status.dmc_interrupt = false;
+            self.transfer_start_delay = Self::delay_for_cpu_cycle(cpu_cycle);
         }
     }
 
@@ -113,13 +122,15 @@ impl Dmc {
         self.bytes_remaining > 0
     }
 
-    pub(super) fn step(&mut self, status: &mut StatusFlags, pending_dma: &mut PendingDma) {
-        if self.enabled && self.tick_timer() {
+    pub(super) fn step(&mut self, pending_dma: &mut PendingDma) {
+        self.process_delays(pending_dma);
+
+        if self.tick_timer() {
             self.shift_output();
         }
 
-        if self.enabled {
-            self.fetch_sample(status, pending_dma);
+        if self.transfer_start_delay == 0 {
+            self.fetch_sample(pending_dma);
         }
     }
 
@@ -127,17 +138,48 @@ impl Dmc {
         self.output_level
     }
 
+    pub(super) fn bytes_remaining(&self) -> u16 {
+        self.bytes_remaining
+    }
+
+    pub(super) fn sample_buffer_empty(&self) -> bool {
+        self.sample_buffer.is_none()
+    }
+
+    pub(super) fn bits_remaining(&self) -> u8 {
+        self.bits_remaining
+    }
+
+    pub(super) fn timer_value(&self) -> u16 {
+        self.timer
+    }
+
+    pub(super) fn current_address(&self) -> u16 {
+        self.current_address
+    }
+
+    pub(super) fn disable_delay(&self) -> u8 {
+        self.disable_delay
+    }
+
+    pub(super) fn transfer_start_delay(&self) -> u8 {
+        self.transfer_start_delay
+    }
+
     fn restart_sample(&mut self) {
         self.current_address = self.sample_address;
         self.bytes_remaining = self.sample_length;
     }
 
-    fn period(&self) -> u16 {
-        // Effective DMC bit period in CPU cycles. The internal down-counter
-        // counts from `timer_period` down to zero, so each bit tick spans
-        // `timer_period + 1` CPU cycles, matching the values in
-        // `DMC_RATE_TABLE`.
-        self.timer_period + 1
+    #[inline]
+    fn delay_for_cpu_cycle(cpu_cycle: u64) -> u8 {
+        // Match Mesen parity directly from the CPU cycle counter used at the
+        // `$4015` write site.
+        if (cpu_cycle & 0x01) == 0 {
+            2
+        } else {
+            3
+        }
     }
 
     /// Advances the internal DMC timer by one CPU cycle and reports whether a
@@ -161,17 +203,23 @@ impl Dmc {
         }
     }
 
-    fn shift_output(&mut self) {
-        if self.bits_remaining == 0 {
-            if let Some(sample) = self.sample_buffer.take() {
-                self.shift_register = sample;
-                self.bits_remaining = 8;
-                self.silence = false;
-            } else {
-                self.silence = true;
+    fn process_delays(&mut self, pending_dma: &mut PendingDma) {
+        if self.disable_delay > 0 {
+            self.disable_delay -= 1;
+            if self.disable_delay == 0 {
+                self.bytes_remaining = 0;
+                self.transfer_start_delay = 0;
+                self.pending_fetch = None;
+                pending_dma.dmc = Some(DmcDmaEvent::Abort);
             }
         }
 
+        if self.transfer_start_delay > 0 {
+            self.transfer_start_delay -= 1;
+        }
+    }
+
+    fn shift_output(&mut self) {
         if !self.silence {
             if self.shift_register & 1 != 0 {
                 if self.output_level <= 125 {
@@ -180,15 +228,23 @@ impl Dmc {
             } else if self.output_level >= 2 {
                 self.output_level -= 2;
             }
+
+            self.shift_register >>= 1;
         }
 
-        if self.bits_remaining > 0 {
-            self.shift_register >>= 1;
-            self.bits_remaining -= 1;
+        self.bits_remaining = self.bits_remaining.saturating_sub(1);
+        if self.bits_remaining == 0 {
+            self.bits_remaining = 8;
+            if let Some(sample) = self.sample_buffer.take() {
+                self.shift_register = sample;
+                self.silence = false;
+            } else {
+                self.silence = true;
+            }
         }
     }
 
-    fn fetch_sample(&mut self, status: &mut StatusFlags, pending_dma: &mut PendingDma) {
+    fn fetch_sample(&mut self, pending_dma: &mut PendingDma) {
         if self.sample_buffer.is_some() || self.bytes_remaining == 0 || self.pending_fetch.is_some()
         {
             return;
@@ -196,16 +252,6 @@ impl Dmc {
 
         self.last_fetch_addr = self.current_address;
         self.pending_fetch = Some(self.current_address);
-        self.current_address = Self::next_address(self.current_address);
-        self.bytes_remaining = self.bytes_remaining.saturating_sub(1);
-
-        if self.bytes_remaining == 0 {
-            if self.loop_flag {
-                self.restart_sample();
-            } else if self.irq_enable {
-                status.dmc_interrupt = true;
-            }
-        }
         // Each sample fetch steals 4 CPU cycles on hardware; queue the DMA
         // request immediately so the bus can model the stolen cycles.
         pending_dma.dmc = Some(DmcDmaEvent::Request {
@@ -217,9 +263,20 @@ impl Dmc {
         self.last_fetch_addr
     }
 
-    pub(super) fn finish_dma_fetch(&mut self, byte: u8) {
+    pub(super) fn finish_dma_fetch(&mut self, byte: u8, status: &mut StatusFlags) {
         if self.pending_fetch.take().is_some() {
             self.sample_buffer = Some(byte);
+            self.current_address = Self::next_address(self.current_address);
+            self.bytes_remaining = self.bytes_remaining.saturating_sub(1);
+
+            if self.bytes_remaining == 0 {
+                if self.loop_flag {
+                    self.restart_sample();
+                } else if self.irq_enable {
+                    status.dmc_interrupt = true;
+                }
+            }
+
         }
     }
 }

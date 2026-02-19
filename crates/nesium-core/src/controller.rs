@@ -84,7 +84,8 @@ impl Controller {
             // After 8 reads hardware keeps returning 1s; simulate by shifting in ones.
             self.latched = (self.latched >> 1) | 0x80;
         }
-        bit | 0x40 // Upper bits float high on hardware; keep them set.
+        // Return only the serial data bit; bus-level open-bus bits are merged by CpuBus.
+        bit
     }
 }
 
