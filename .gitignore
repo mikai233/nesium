@@ -1,2 +1,9 @@
 /target
 .idea
+
+# Local Mesen2 checkout used for parity/debugging
+Mesen2/
+
+# Keep compare scripts tracked, ignore generated artifacts
+tools/apu_compare/*.log
+tools/apu_compare/*.bin
