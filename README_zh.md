@@ -126,6 +126,8 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `mmc1_a12_suite` | MMC1 A12 线行为 | 否 |
 | `apu_mixer_suite` | APU 混音器 / TASVideos 测试集 | 是 |
 | `apu_reset_suite` | APU 复位行为 | 是 |
+| `apu_test_suite` | APU 精度测试（包括 `rom_singles`） | 是 |
+| `blargg_apu_2005_07_30_suite` | 早期 Blargg APU 测试 | 是 |
 | `blargg_nes_cpu_test5_suite` | CPU 精度测试 | 是 |
 | `blargg_ppu_tests_2005_09_15b_suite` | PPU 调色板/显存/滚动行为 | 是 |
 | `branch_timing_tests_suite` | 分支指令时序（零页结果） | 是 |
@@ -133,6 +135,8 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `cpu_dummy_writes_suite` | CPU 伪写行为 | 是 |
 | `cpu_reset_suite` | 复位后 RAM/寄存器状态 | 是 |
 | `cpu_timing_test6_suite` | TASVideos CPU 时序 (TV SHA1) | 是 |
+| `dmc_dma_during_read4_suite` | DMC DMA 与 CPU 读取周期的交互 | 是 |
+| `dmc_tests_suite` | DMC 缓冲/延迟/IRQ 行为 | 是 |
 | `instr_misc_suite` | 杂项指令行为 | 是 |
 | `instr_test_v3_suite` | Blargg 指令测试 v3 | 是 |
 | `instr_test_v5_suite` | Blargg 指令测试 v5 | 是 |
@@ -147,6 +151,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `sprite_hit_tests_2005_10_05_suite` | 精灵 0 命中时序和边缘情况 | 是 |
 | `sprite_overflow_tests_suite` | 精灵溢出行为 | 是 |
 | `spritecans_2011_suite` | 视觉多样性 / 精灵压力 | 否 |
+| `sprdma_and_dmc_dma_suite` | Sprite DMA 和 DMC DMA 交互 | 是 |
 | `stomper_suite` | 视觉多样性 / 时序 | 否 |
 | `tutor_suite` | 视觉多样性 / 参考演示 | 否 |
 | `vbl_nmi_timing_suite` | VBL/NMI 时序（零页结果） | 是 |
@@ -168,13 +173,9 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 
 | 套件名称 | 说明 | TASVideos 精度要求 |
 | --- | --- | --- |
-| `apu_test_suite` | APU 精度测试（包括 `rom_singles`） | 是 |
-| `blargg_apu_2005_07_30_suite` | 早期 Blargg APU 测试 | 是 |
 | `blargg_litewall_suite` | Litewall / 时序相关测试 | 否 |
 | `cpu_exec_space_suite` | CPU 执行空间测试 (APU/PPU I/O) | 是 |
 | `cpu_interrupts_v2_suite` | NMI/IRQ/BRK/DMA 中断时序 | 是 |
-| `dmc_dma_during_read4_suite` | DMC DMA 与 CPU 读取周期的交互 | 是 |
-| `dmc_tests_suite` | DMC 缓冲/延迟/IRQ 行为 | 是 |
 | `dpcmletterbox_suite` | DPCM 相关视觉/音频测试 | 是 |
 | `exram_suite` | MMC5 ExRAM 行为（当前失败） | 否 |
 | `full_palette_suite` | 全调色板渲染和 Emphasis 测试 | 否 |
@@ -193,7 +194,6 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `scanline_suite` | 扫描线时序 | 是 |
 | `scanline_a1_suite` | 替代扫描线测试 | 是 |
 | `scrolltest_suite` | 滚动行为 | 是 |
-| `sprdma_and_dmc_dma_suite` | Sprite DMA 和 DMC DMA 交互 | 是 |
 | `volume_tests_suite` | 音量/混音行为 | 是 |
 
 ## 免责声明
