@@ -132,7 +132,7 @@
 
 - `cargo test -p nesium-core`（当前分支）：
   - `70 passed / 0 failed / 3 ignored`（单测）。
-  - `33 passed / 0 failed / 26 ignored`（ROM suites）。
+  - `34 passed / 0 failed / 25 ignored`（ROM suites）。
 - APU 相关关键套件（默认回归）：
   - `apu_mixer_suite` 通过。
   - `apu_reset_suite` 通过。
@@ -140,6 +140,7 @@
   - `blargg_apu_2005_07_30_suite` 通过。
   - `dmc_tests_suite` 通过（Mesen2 RAM baseline）。
   - `dmc_dma_during_read4_suite` 通过（Mesen2 串口基线）。
+  - `sprdma_and_dmc_dma_suite` 通过。
 - 当前仍保留为 ignore 的 APU 关键项：
   - `pal_apu_tests_suite`（PAL 时序/表尚未完整对齐）。
 - `apu_reset_suite` 虽通过，但存在测试框架特判兜底：

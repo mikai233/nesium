@@ -753,7 +753,6 @@ fn scrolltest_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn sprdma_and_dmc_dma_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
