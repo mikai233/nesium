@@ -51,6 +51,7 @@ use self::{
 
 use core::ffi::c_void;
 use core::fmt;
+use std::sync::OnceLock;
 
 use crate::{
     bus::CpuBus,
@@ -79,6 +80,36 @@ pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + post + vblank (241..260)
 const SCREEN_PIXEL_COUNT: i32 = (SCREEN_WIDTH * SCREEN_HEIGHT) as i32;
+
+#[inline]
+fn debug_sprite_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_SPRITE_TRACE").is_some())
+}
+
+#[inline]
+fn debug_ppu_dot_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_PPU_DOT").is_some())
+}
+
+#[inline]
+fn debug_pixels_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_PIXELS").is_some())
+}
+
+#[inline]
+fn debug_palette_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_PALETTE_TRACE").is_some())
+}
+
+#[inline]
+fn debug_fetch_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_FETCH_TRACE").is_some())
+}
 
 /// Entry points for the CPU PPU register mirror.
 #[derive(Clone)]
@@ -671,7 +702,7 @@ impl Ppu {
                     pats_hi,
                 );
 
-                if std::env::var_os("NESIUM_DEBUG_SPRITE_TRACE").is_some()
+                if debug_sprite_trace_enabled()
                     && ppu.frame == 120
                     && (194..=195).contains(&ppu.scanline)
                 {
@@ -860,7 +891,7 @@ impl Ppu {
                         ppu.sprite_pipeline_eval_tick();
 
                         if ppu.cycle == 256
-                            && std::env::var_os("NESIUM_DEBUG_SPRITE_TRACE").is_some()
+                            && debug_sprite_trace_enabled()
                             && ppu.frame == 120
                             && (193..=194).contains(&ppu.scanline)
                         {
@@ -984,7 +1015,7 @@ impl Ppu {
 
             ppu.update_nmi_level(cpu_cycle);
 
-            if std::env::var_os("NESIUM_DEBUG_PPU_DOT").is_some()
+            if debug_ppu_dot_enabled()
                 && ppu.frame == 7
                 && ppu.scanline == 192
                 && (228..=272).contains(&ppu.cycle)
@@ -1339,7 +1370,7 @@ impl Ppu {
             color_index &= 0x30;
         }
 
-        if std::env::var_os("NESIUM_DEBUG_PIXELS").is_some()
+        if debug_pixels_enabled()
             && self.frame == 120
             && (120..=225).contains(&(x as i32))
             && (188..=222).contains(&(y as i32))
@@ -1857,7 +1888,7 @@ impl Ppu {
             self.sprite_line_next.set_pattern_low(i, pattern_low);
             self.sprite_line_next.set_pattern_high(i, pattern_high);
 
-            if std::env::var_os("NESIUM_DEBUG_SPRITE_TRACE").is_some()
+            if debug_sprite_trace_enabled()
                 && self.frame == 120
                 && self.scanline == 194
             {
@@ -2091,7 +2122,7 @@ impl Ppu {
 
         // Palette space is handled separately from nametable/CHR.
         if addr >= ppu_mem::PALETTE_BASE {
-            if std::env::var_os("NESIUM_DEBUG_PALETTE_TRACE").is_some() && self.frame == 120 {
+            if debug_palette_trace_enabled() && self.frame == 120 {
                 nmi_trace::log_line(&format!(
                     "PALDBG|src=nesium|ev=palette_write|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|v={:04X}|t={:04X}|w={}|render={}|prev_render={}|pending_v_delay={}",
                     self.frame,
@@ -2150,7 +2181,7 @@ impl Ppu {
 
     fn read_vram(&mut self, ppu_bus: &mut PpuBus<'_>, addr: u16, kind: PpuVramAccessKind) -> u8 {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
-        let trace_fetch = std::env::var_os("NESIUM_DEBUG_FETCH_TRACE").is_some()
+        let trace_fetch = debug_fetch_trace_enabled()
             && kind == PpuVramAccessKind::RenderingFetch
             && self.frame == 120
             && self.scanline == 195
@@ -2736,3 +2767,4 @@ mod tests {
         assert!(!ppu.registers.status.contains(Status::SPRITE_OVERFLOW));
     }
 }
+
