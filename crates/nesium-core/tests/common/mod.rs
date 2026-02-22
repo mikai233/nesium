@@ -566,7 +566,10 @@ pub fn run_rom_fg_mask_sha1_for_frames(
     let mut frame = nes.ppu.frame_count() as usize;
     while frame <= max_frame {
         while target_idx < targets.len() && frame == targets[target_idx] {
-            results.push((frame, compute_foreground_mask_sha1(nes.render_index_buffer())));
+            results.push((
+                frame,
+                compute_foreground_mask_sha1(nes.render_index_buffer()),
+            ));
             target_idx += 1;
         }
         if target_idx >= targets.len() || frame >= max_frame {

@@ -147,7 +147,8 @@ impl VideoPostProcessor for NearestPostProcessor {
                         let src_idx = src_y * src_width + src_x;
                         let idx = src_indices[src_idx];
                         let emphasis = src_emphasis[src_idx];
-                        let color = super::apply_emphasis(palette[(idx & 0x3F) as usize], idx, emphasis);
+                        let color =
+                            super::apply_emphasis(palette[(idx & 0x3F) as usize], idx, emphasis);
                         pack_pixel(color, dst_row.add(x_out * bpp), dst_format);
                     }
                 }

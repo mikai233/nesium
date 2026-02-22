@@ -15,9 +15,7 @@ use std::{
 };
 
 mod post_process;
-pub use post_process::{
-    NearestPostProcessor, SourceFrame, TargetFrameMut, VideoPostProcessor,
-};
+pub use post_process::{NearestPostProcessor, SourceFrame, TargetFrameMut, VideoPostProcessor};
 
 pub const SCREEN_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
@@ -683,13 +681,7 @@ impl FrameBuffer {
                 self.pipeline.post_processor.process(
                     source,
                     palette,
-                    TargetFrameMut::new(
-                        &mut planes[front_idx],
-                        dst_pitch,
-                        out_w,
-                        out_h,
-                        format,
-                    ),
+                    TargetFrameMut::new(&mut planes[front_idx], dst_pitch, out_w, out_h, format),
                 );
             }
             FrameBufferStorage::Swapchain(s) => {
@@ -715,7 +707,13 @@ impl FrameBuffer {
 
     /// Writes a single pixel at `(x, y)` using palette index and emphasis bits.
     #[inline]
-    pub(crate) fn write_index_with_emphasis(&mut self, x: usize, y: usize, index: u8, emphasis: u8) {
+    pub(crate) fn write_index_with_emphasis(
+        &mut self,
+        x: usize,
+        y: usize,
+        index: u8,
+        emphasis: u8,
+    ) {
         let pos = y * SCREEN_WIDTH + x;
         self.canonical.index_planes[self.canonical.active_index][pos] = index;
         self.canonical.emphasis_planes[self.canonical.active_index][pos] = emphasis & 0x07;
@@ -818,7 +816,8 @@ impl FrameBuffer {
             FrameBufferStorage::Swapchain(s) => {
                 let (ptr, pitch) = s.lock(front_idx);
                 debug_assert!(pitch >= row_len);
-                let src = unsafe { slice::from_raw_parts(ptr, pitch * self.pipeline.output_height) };
+                let src =
+                    unsafe { slice::from_raw_parts(ptr, pitch * self.pipeline.output_height) };
                 for y in 0..self.pipeline.output_height {
                     let src_off = y * pitch;
                     let dst_off = y * row_len;
@@ -901,7 +900,9 @@ impl FrameBuffer {
             FrameBufferStorage::Swapchain(s) => {
                 for i in 0..2 {
                     let (ptr, pitch) = s.lock(i);
-                    unsafe { slice::from_raw_parts_mut(ptr, pitch * self.pipeline.output_height).fill(0) };
+                    unsafe {
+                        slice::from_raw_parts_mut(ptr, pitch * self.pipeline.output_height).fill(0)
+                    };
                     s.unlock(i);
                 }
             }
@@ -935,7 +936,12 @@ impl FrameBuffer {
         };
 
         if let Some(hook) = self.backend.frame_ready_hook {
-            hook.call(cleared_plane, self.pipeline.output_width, self.pipeline.output_height, pitch);
+            hook.call(
+                cleared_plane,
+                self.pipeline.output_width,
+                self.pipeline.output_height,
+                pitch,
+            );
         }
     }
 

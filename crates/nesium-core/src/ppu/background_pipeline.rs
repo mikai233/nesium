@@ -146,7 +146,10 @@ impl BgPipeline {
         let palette_bit0 = self.palette[0].bit_with_fine_x(fine_x);
         let palette_bit1 = self.palette[1].bit_with_fine_x(fine_x);
 
-        ((palette_bit1 << 1) | palette_bit0, (pattern_bit1 << 1) | pattern_bit0)
+        (
+            (palette_bit1 << 1) | palette_bit0,
+            (pattern_bit1 << 1) | pattern_bit0,
+        )
     }
 
     /// Advances all background shifters by one bit (one PPU dot).

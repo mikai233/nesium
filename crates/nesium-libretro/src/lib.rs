@@ -128,12 +128,7 @@ impl LibretroCore for NesiumCore {
             && let Some(frame) = self.nes.try_render_buffer()
         {
             let pitch = WIDTH as usize * COLOR_FORMAT.bytes_per_pixel();
-            video.submit(Frame::from_pixels(
-                frame,
-                WIDTH,
-                HEIGHT,
-                pitch,
-            ));
+            video.submit(Frame::from_pixels(frame, WIDTH, HEIGHT, pitch));
         }
 
         if !audio_frames.is_empty() {

@@ -290,7 +290,8 @@ impl WasmNes {
             .ok_or_else(|| JsValue::from_str("Unsupported video filter on web"))?;
         let (output_width, output_height) = filter.output_size();
 
-        self.nes.set_video_output_config(output_width, output_height);
+        self.nes
+            .set_video_output_config(output_width, output_height);
         self.nes.set_video_post_processor(
             filter.post_processor(self.lcd_grid_strength, self.scanline_intensity),
         );
@@ -625,10 +626,9 @@ impl WasmNes {
     /// The core is configured to render RGBA8888 for WASM so the exported frame
     /// can be consumed directly by the frontend.
     fn copy_rgba_from_core(&mut self) -> Result<(), JsValue> {
-        let src = self
-            .nes
-            .try_render_buffer()
-            .ok_or_else(|| JsValue::from_str("packed render buffer unavailable (swapchain backend)"))?;
+        let src = self.nes.try_render_buffer().ok_or_else(|| {
+            JsValue::from_str("packed render buffer unavailable (swapchain backend)")
+        })?;
 
         if self.rgba.len() != src.len() {
             self.rgba.resize(src.len(), 0);
