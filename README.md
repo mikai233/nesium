@@ -117,6 +117,7 @@ Legend:
 - ✅: Enabled automated tests (no `#[ignore]`) that currently pass  
 - ❌: Tests marked with `#[ignore = "this test fails and needs investigation"]`  
 - 🔶: Interactive/manual ROMs (e.g., controller/visual tests)  
+- ℹ️: Tracking/diagnostic ROMs kept under `#[ignore]` by design  
 
 ### Automatically passing ROM suites (✅)
 
@@ -139,6 +140,7 @@ Legend:
 | `cpu_timing_test6_suite`             | TASVideos CPU timing (TV SHA1)               | Yes                         |
 | `dmc_dma_during_read4_suite`         | DMC DMA interaction with CPU read cycles     | Yes                         |
 | `dmc_tests_suite`                    | DMC buffer/delay/IRQ behaviour               | Yes                         |
+| `full_palette_suite`                 | Full palette rendering and emphasis tests (Mesen2 RGB24 baseline) | No      |
 | `instr_misc_suite`                   | Misc instruction behaviour                   | Yes                         |
 | `instr_test_v3_suite`                | Blargg instruction test v3                   | Yes                         |
 | `instr_test_v5_suite`                | Blargg instruction test v5                   | Yes                         |
@@ -168,6 +170,8 @@ These ROMs are designed for interactive/manual verification and do not expose a 
 
 | Suite name           | Notes                                                                 | TASVideos accuracy-required |
 | -------------------- | --------------------------------------------------------------------- | --------------------------- |
+| `dpcmletterbox_suite`| Visual DPCM demo ROM; verify manually per `dpcmletterbox/README.txt` | Yes                         |
+| `nmi_sync_manual`    | Visual NMI-sync demo ROM; verify manually per `nmi_sync/readme.txt`  | Yes                         |
 | `paddletest3_manual` | Paddle/analog controller test; follow ROM `Info.txt` for instructions | No                          |
 | `tvpassfail_manual`  | TV characteristics (NTSC chroma/luma, artifacts); verify visually     | No                          |
 | `vaus_test_manual`   | Arkanoid Vaus controller test (interactive)                           | No                          |
@@ -179,14 +183,11 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | Suite name                    | Notes                                        | TASVideos accuracy-required |
 | ----------------------------- | -------------------------------------------- | --------------------------- |
 | `blargg_litewall_suite`       | Litewall / timing-related tests              | No                          |
-| `dpcmletterbox_suite`         | DPCM-related visual/audio test               | Yes                         |
 | `exram_suite`                 | MMC5 ExRAM behaviour (currently failing)     | No                          |
-| `full_palette_suite`          | Full palette rendering and emphasis tests    | No                          |
 | `m22chrbankingtest_suite`     | Mapper 22 CHR banking behaviour              | No                          |
 | `mmc5test_suite`              | MMC5 functional tests                        | Yes                         |
 | `mmc5test_v2_suite`           | MMC5 test set v2                             | Yes                         |
 | `nes15_1_0_0_suite`           | `nes15` series tests (NTSC/PAL)              | Yes                         |
-| `nmi_sync_suite`              | NMI sync behaviour                           | Yes                         |
 | `nrom368_suite`               | NROM-368 mapping tests                       | No                          |
 | `other_suite`                 | Misc demos/tests bundled with nes-test-roms  | No                          |
 | `pal_apu_tests_suite`         | PAL APU behaviour                            | Yes                         |
@@ -195,6 +196,14 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `scanline_a1_suite`           | Alternate scanline tests                     | Yes                         |
 | `scrolltest_suite`            | Scrolling behaviour                          | Yes                         |
 | `volume_tests_suite`          | Volume/mixing behaviour                      | Yes                         |
+
+### Tracking / diagnostic ignored ROM suites (ℹ️)
+
+These suites are intentionally ignored for baseline tracking and do not indicate a known failing area by themselves.
+
+| Suite name                        | Notes                                                    | TASVideos accuracy-required |
+| --------------------------------- | -------------------------------------------------------- | --------------------------- |
+| `nmi_sync_ntsc_mesen_baseline`    | NTSC frame-hash baseline tracking against Mesen2 output | Yes                         |
 
 ## Disclaimer
 

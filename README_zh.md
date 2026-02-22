@@ -117,6 +117,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 - ✅: 启用的自动化测试（无 `#[ignore]`）且当前通过
 - ❌: 标记为 `#[ignore = "this test fails and needs investigation"]` 的测试
 - 🔶: 交互式/手动 ROM（例如控制器/视觉测试）
+- ℹ️: 出于基线跟踪/诊断目的保留 `#[ignore]` 的测试
 
 ### 自动通过的 ROM 套件 (✅)
 
@@ -139,6 +140,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `cpu_timing_test6_suite` | TASVideos CPU 时序 (TV SHA1) | 是 |
 | `dmc_dma_during_read4_suite` | DMC DMA 与 CPU 读取周期的交互 | 是 |
 | `dmc_tests_suite` | DMC 缓冲/延迟/IRQ 行为 | 是 |
+| `full_palette_suite` | 全调色板渲染与 Emphasis 测试（Mesen2 RGB24 基线） | 否 |
 | `instr_misc_suite` | 杂项指令行为 | 是 |
 | `instr_test_v3_suite` | Blargg 指令测试 v3 | 是 |
 | `instr_test_v5_suite` | Blargg 指令测试 v5 | 是 |
@@ -168,6 +170,8 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 
 | 套件名称 | 说明 | TASVideos 精度要求 |
 | --- | --- | --- |
+| `dpcmletterbox_suite` | 可视化 DPCM 演示 ROM；按 `dpcmletterbox/README.txt` 手动验证 | 是 |
+| `nmi_sync_manual` | 可视化 NMI 同步演示 ROM；按 `nmi_sync/readme.txt` 手动验证 | 是 |
 | `paddletest3_manual` | 旋钮/模拟控制器测试；遵循 ROM `Info.txt` 指示 | 否 |
 | `tvpassfail_manual` | TV 特性（NTSC 色度/亮度，伪影）；视觉验证 | 否 |
 | `vaus_test_manual` | Arkanoid Vaus 控制器测试（交互式） | 否 |
@@ -179,14 +183,11 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | 套件名称 | 说明 | TASVideos 精度要求 |
 | --- | --- | --- |
 | `blargg_litewall_suite` | Litewall / 时序相关测试 | 否 |
-| `dpcmletterbox_suite` | DPCM 相关视觉/音频测试 | 是 |
 | `exram_suite` | MMC5 ExRAM 行为（当前失败） | 否 |
-| `full_palette_suite` | 全调色板渲染和 Emphasis 测试 | 否 |
 | `m22chrbankingtest_suite` | Mapper 22 CHR banking 行为 | 否 |
 | `mmc5test_suite` | MMC5 功能测试 | 是 |
 | `mmc5test_v2_suite` | MMC5 测试集 v2 | 是 |
 | `nes15_1_0_0_suite` | `nes15` 系列测试 (NTSC/PAL) | 是 |
-| `nmi_sync_suite` | NMI 同步行为 | 是 |
 | `nrom368_suite` | NROM-368 映射测试 | 否 |
 | `other_suite` | nes-test-roms 绑定的杂项演示/测试 | 否 |
 | `pal_apu_tests_suite` | PAL APU 行为 | 是 |
@@ -195,6 +196,14 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `scanline_a1_suite` | 替代扫描线测试 | 是 |
 | `scrolltest_suite` | 滚动行为 | 是 |
 | `volume_tests_suite` | 音量/混音行为 | 是 |
+
+### 跟踪 / 诊断类忽略测试 (ℹ️)
+
+以下套件是为了基线跟踪而保留的 `#[ignore]`，本身不应直接视为“功能失败”。
+
+| 套件名称 | 说明 | TASVideos 精度要求 |
+| --- | --- | --- |
+| `nmi_sync_ntsc_mesen_baseline` | 与 Mesen2 输出进行 NTSC 帧哈希基线跟踪 | 是 |
 
 ## 免责声明
 
