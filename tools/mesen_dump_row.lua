@@ -6,15 +6,24 @@ local x0 = tonumber(os.getenv("NESIUM_MESEN_ROW_X0") or "0") or 0
 local x1 = tonumber(os.getenv("NESIUM_MESEN_ROW_X1") or "255") or 255
 local out_path = os.getenv("NESIUM_MESEN_TRACE_PATH")
 
-if not out_path or out_path == "" then
-  local data_folder = emu.getScriptDataFolder()
-  if data_folder ~= nil and data_folder ~= "" then
-    out_path = data_folder .. "\\mesen_row_dump.log"
+local function ensure_parent_dir(path)
+  local dir = string.match(path, "^(.*)[/\\][^/\\]+$")
+  if not dir or dir == "" then
+    return
+  end
+  local sep = package.config:sub(1, 1)
+  if sep == "\\" then
+    os.execute(string.format('mkdir "%s" >nul 2>nul', dir))
   else
-    out_path = "mesen_row_dump.log"
+    os.execute(string.format('mkdir -p "%s" >/dev/null 2>&1', dir))
   end
 end
 
+if not out_path or out_path == "" then
+  out_path = "target/compare/mesen_row_dump.log"
+end
+
+ensure_parent_dir(out_path)
 local out_file = io.open(out_path, "w")
 if out_file == nil then
   emu.log("ROWDUMP|ev=error|msg=failed_to_open_output")

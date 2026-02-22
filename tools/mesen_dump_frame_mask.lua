@@ -38,7 +38,20 @@ local max_target = target_frames[#target_frames]
 local max_frames = tonumber(os.getenv("NESIUM_MESEN_TRACE_FRAMES") or tostring(max_target)) or max_target
 local out_prefix = os.getenv("NESIUM_MESEN_MASK_OUT_PREFIX")
 if out_prefix == nil or out_prefix == "" then
-  out_prefix = "mesen_frame_mask"
+  out_prefix = "target/compare/mesen_frame_mask"
+end
+
+local function ensure_parent_dir(path)
+  local dir = string.match(path, "^(.*)[/\\][^/\\]+$")
+  if not dir or dir == "" then
+    return
+  end
+  local sep = package.config:sub(1, 1)
+  if sep == "\\" then
+    os.execute(string.format('mkdir "%s" >nul 2>nul', dir))
+  else
+    os.execute(string.format('mkdir -p "%s" >/dev/null 2>&1', dir))
+  end
 end
 
 local function compute_bg_color(screen)
@@ -61,6 +74,7 @@ local function write_mask_for_frame(frame)
   local screen = emu.getScreenBuffer()
   local bg, bg_count = compute_bg_color(screen)
   local out_path = string.format("%s_f%d.bin", out_prefix, frame)
+  ensure_parent_dir(out_path)
   local out_file = io.open(out_path, "wb")
   if out_file == nil then
     emu.log(string.format("MASK|ev=error|frame=%d|msg=open_failed|path=%s", frame, out_path))

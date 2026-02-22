@@ -5,15 +5,24 @@ local out_path = os.getenv("NESIUM_MESEN_TRACE_PATH")
 local max_frames = tonumber(os.getenv("NESIUM_MESEN_TRACE_FRAMES") or "260") or 260
 local include_status_reads = os.getenv("NESIUM_MESEN_TRACE_INCLUDE_2002") == "1"
 
-if not out_path or out_path == "" then
-  local data_folder = emu.getScriptDataFolder()
-  if data_folder ~= nil and data_folder ~= "" then
-    out_path = data_folder .. "\\mesen_nmi_trace.log"
+local function ensure_parent_dir(path)
+  local dir = string.match(path, "^(.*)[/\\][^/\\]+$")
+  if not dir or dir == "" then
+    return
+  end
+  local sep = package.config:sub(1, 1)
+  if sep == "\\" then
+    os.execute(string.format('mkdir "%s" >nul 2>nul', dir))
   else
-    out_path = "mesen_nmi_trace.log"
+    os.execute(string.format('mkdir -p "%s" >/dev/null 2>&1', dir))
   end
 end
 
+if not out_path or out_path == "" then
+  out_path = "target/compare/mesen_nmi_trace.log"
+end
+
+ensure_parent_dir(out_path)
 local out_file = io.open(out_path, "w")
 if out_file == nil then
   emu.log("NMITRACE|src=mesen|ev=error|msg=failed_to_open_output")
