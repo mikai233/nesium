@@ -47,7 +47,7 @@ local function write_line(line)
 end
 
 local function on_write_register(address, value)
-  if address ~= 0x2001 and address ~= 0x2006 and address ~= 0x2007 then
+  if address ~= 0x2000 and address ~= 0x2001 and address ~= 0x2005 and address ~= 0x2006 and address ~= 0x2007 then
     return value
   end
 
@@ -59,9 +59,10 @@ local function on_write_register(address, value)
   local v = state_number(state, "ppu.videoRamAddr")
   local t = state_number(state, "ppu.tmpVideoRamAddr")
   local x = state_number(state, "ppu.scrollX")
+  local w = state_number(state, "ppu.writeToggle")
 
   write_line(string.format(
-    "PPUREG|src=mesen|ev=write|cpu_cycle=%d|frame=%d|scanline=%d|dot=%d|addr=%04X|value=%02X|v=%04X|t=%04X|x=%02X",
+    "PPUREG|src=mesen|ev=write|cpu_cycle=%d|frame=%d|scanline=%d|dot=%d|addr=%04X|value=%02X|v=%04X|t=%04X|x=%02X|w=%d",
     cpu_cycle,
     frame,
     scanline,
@@ -70,7 +71,40 @@ local function on_write_register(address, value)
     value,
     v & 0xFFFF,
     t & 0xFFFF,
-    x & 0xFF
+    x & 0xFF,
+    w
+  ))
+
+  return value
+end
+
+local function on_read_status(address, value)
+  if address ~= 0x2002 then
+    return value
+  end
+
+  local state = emu.getState()
+  local cpu_cycle = state_number(state, "cpu.cycleCount")
+  local frame = state_number(state, "frameCount")
+  local scanline = state_number(state, "ppu.scanline")
+  local dot = state_number(state, "ppu.cycle")
+  local v = state_number(state, "ppu.videoRamAddr")
+  local t = state_number(state, "ppu.tmpVideoRamAddr")
+  local x = state_number(state, "ppu.scrollX")
+  local w = state_number(state, "ppu.writeToggle")
+
+  write_line(string.format(
+    "PPUREG|src=mesen|ev=read_status|cpu_cycle=%d|frame=%d|scanline=%d|dot=%d|addr=%04X|value=%02X|v=%04X|t=%04X|x=%02X|w=%d",
+    cpu_cycle,
+    frame,
+    scanline,
+    dot,
+    address,
+    value,
+    v & 0xFFFF,
+    t & 0xFFFF,
+    x & 0xFF,
+    w
   ))
 
   return value
@@ -88,6 +122,7 @@ end
 
 write_line(string.format("PPUREG|src=mesen|ev=start|out=%s|max_frames=%d", out_path, max_frames))
 
-emu.addMemoryCallback(on_write_register, emu.callbackType.write, 0x2001, 0x2001, emu.cpuType.nes, emu.memType.nesMemory)
-emu.addMemoryCallback(on_write_register, emu.callbackType.write, 0x2006, 0x2007, emu.cpuType.nes, emu.memType.nesMemory)
+emu.addMemoryCallback(on_write_register, emu.callbackType.write, 0x2000, 0x2001, emu.cpuType.nes, emu.memType.nesMemory)
+emu.addMemoryCallback(on_write_register, emu.callbackType.write, 0x2005, 0x2007, emu.cpuType.nes, emu.memType.nesMemory)
+emu.addMemoryCallback(on_read_status, emu.callbackType.read, 0x2002, 0x2002, emu.cpuType.nes, emu.memType.nesMemory)
 emu.addEventCallback(on_end_frame, emu.eventType.endFrame)

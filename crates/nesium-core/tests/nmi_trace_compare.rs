@@ -92,7 +92,19 @@ fn parse_u32_csv(value: &str) -> Result<Vec<u32>> {
 }
 
 fn default_out_prefix(env_key: &str, file_stem: &str) -> String {
-    std::env::var(env_key).unwrap_or_else(|_| format!("target/compare/{file_stem}"))
+    std::env::var(env_key).unwrap_or_else(|_| {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = manifest_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap_or(manifest_dir);
+        workspace_root
+            .join("target")
+            .join("compare")
+            .join(file_stem)
+            .to_string_lossy()
+            .into_owned()
+    })
 }
 
 #[test]
@@ -148,7 +160,7 @@ fn dump_nmi_sync_masks() -> Result<()> {
         eprintln!("NMI_MASK_DUMP|frame={}|path={}", frame, out_path);
 
         if let Some(y) = row_trace {
-                let ppu_frame = nes.ppu.frame_count();
+            let ppu_frame = nes.ppu.frame_count();
             if trace_frames.is_empty() || trace_frames.contains(&ppu_frame) {
                 let fb = nes.render_index_buffer();
                 let width = 256usize;

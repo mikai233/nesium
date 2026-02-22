@@ -2,9 +2,9 @@ mod common;
 
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose};
+use nesium_core::Nes;
 use nesium_core::ppu::buffer::{ColorFormat, FrameBuffer};
 use nesium_core::ppu::palette::PaletteKind;
-use nesium_core::Nes;
 use sha1::{Digest, Sha1};
 use std::collections::BTreeSet;
 use std::fs;
@@ -65,7 +65,19 @@ fn sha1_base64(bytes: &[u8]) -> String {
 }
 
 fn default_out_prefix(env_key: &str, file_stem: &str) -> String {
-    std::env::var(env_key).unwrap_or_else(|_| format!("target/compare/{file_stem}"))
+    std::env::var(env_key).unwrap_or_else(|_| {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = manifest_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap_or(manifest_dir);
+        workspace_root
+            .join("target")
+            .join("compare")
+            .join(file_stem)
+            .to_string_lossy()
+            .into_owned()
+    })
 }
 
 #[test]
