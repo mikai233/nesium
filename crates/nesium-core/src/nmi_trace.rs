@@ -9,6 +9,22 @@ pub(crate) fn flag(value: bool) -> u8 {
     u8::from(value)
 }
 
+#[inline]
+pub(crate) fn enabled() -> bool {
+    NMI_TRACE_LOG
+        .get_or_init(|| {
+            let path = std::env::var("NESIUM_NMI_TRACE_PATH").ok()?;
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path)
+                .ok()
+                .map(|f| Mutex::new(BufWriter::with_capacity(256 * 1024, f)))
+        })
+        .is_some()
+}
+
 pub(crate) fn log_line(line: &str) {
     let log = NMI_TRACE_LOG.get_or_init(|| {
         let path = std::env::var("NESIUM_NMI_TRACE_PATH").ok()?;

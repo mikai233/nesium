@@ -113,6 +113,7 @@ pub struct PpuState {
     pub bg_next_attr_byte: u8,
     pub bg_next_pattern_low: u8,
     pub bg_next_pattern_high: u8,
+    pub bg_next_tile_addr: u16,
     pub sprite_pipeline: SpritePipelineState,
     pub nmi_level: bool,
     pub prevent_vblank_flag: bool,
@@ -302,6 +303,7 @@ fn ppu_to_state(ppu: &Ppu) -> PpuState {
         bg_next_attr_byte: ppu.bg_next_attr_byte,
         bg_next_pattern_low: ppu.bg_next_pattern_low,
         bg_next_pattern_high: ppu.bg_next_pattern_high,
+        bg_next_tile_addr: ppu.bg_next_tile_addr,
         sprite_pipeline: ppu.sprite_pipeline.save_state(),
         nmi_level: ppu.nmi_level,
         prevent_vblank_flag: ppu.prevent_vblank_flag,
@@ -377,6 +379,7 @@ fn state_to_ppu(ppu: &mut Ppu, state: &PpuState) -> Result<(), NesSaveStateError
     ppu.bg_next_attr_byte = state.bg_next_attr_byte;
     ppu.bg_next_pattern_low = state.bg_next_pattern_low;
     ppu.bg_next_pattern_high = state.bg_next_pattern_high;
+    ppu.bg_next_tile_addr = state.bg_next_tile_addr;
     ppu.sprite_pipeline
         .load_state(state.sprite_pipeline.clone());
     ppu.nmi_level = state.nmi_level;

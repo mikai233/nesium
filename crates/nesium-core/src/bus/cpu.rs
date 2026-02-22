@@ -151,6 +151,9 @@ impl<'a> CpuBus<'a> {
 
     #[inline]
     fn trace_nmi_bus_event(&self, ev: &str, addr: u16, value: u8) {
+        if !crate::nmi_trace::enabled() {
+            return;
+        }
         let ppu = &*self.ppu;
         crate::nmi_trace::log_line(&format!(
             "NMITRACE|src=nesium|ev={}|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|vblank={}|nmi_enabled={}|nmi_level={}|prevent_vblank={}",
@@ -170,6 +173,52 @@ impl<'a> CpuBus<'a> {
             crate::nmi_trace::flag(ppu.registers.control.nmi_enabled()),
             crate::nmi_trace::flag(ppu.nmi_level),
             crate::nmi_trace::flag(ppu.prevent_vblank_flag)
+        ));
+    }
+
+    #[inline]
+    fn trace_ppu_reg_write(&self, addr: u16, value: u8) {
+        if !crate::nmi_trace::enabled() {
+            return;
+        }
+        let ppu = &*self.ppu;
+        crate::nmi_trace::log_line(&format!(
+            "PPUREG|src=nesium|ev=write|cpu_cycle={}|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|v={:04X}|t={:04X}|x={:02X}|w={}|render={}|prev_render={}",
+            *self.cycles,
+            ppu.frame,
+            ppu.scanline,
+            ppu.cycle,
+            addr,
+            value,
+            ppu.registers.vram.v.raw(),
+            ppu.registers.vram.t.raw(),
+            ppu.registers.vram.x,
+            if ppu.registers.vram.w { 1 } else { 0 },
+            if ppu.render_enabled { 1 } else { 0 },
+            if ppu.prev_render_enabled { 1 } else { 0 }
+        ));
+    }
+
+    #[inline]
+    fn trace_ppu_status_read(&self, value: u8) {
+        if !crate::nmi_trace::enabled() {
+            return;
+        }
+        let ppu = &*self.ppu;
+        crate::nmi_trace::log_line(&format!(
+            "PPUREG|src=nesium|ev=read_status|cpu_cycle={}|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|v={:04X}|t={:04X}|x={:02X}|w={}|render={}|prev_render={}",
+            *self.cycles,
+            ppu.frame,
+            ppu.scanline,
+            ppu.cycle,
+            PpuRegister::Status.addr(),
+            value,
+            ppu.registers.vram.v.raw(),
+            ppu.registers.vram.t.raw(),
+            ppu.registers.vram.x,
+            if ppu.registers.vram.w { 1 } else { 0 },
+            if ppu.render_enabled { 1 } else { 0 },
+            if ppu.prev_render_enabled { 1 } else { 0 }
         ));
     }
 
@@ -233,6 +282,7 @@ impl<'a> CpuBus<'a> {
                 let value = self.ppu.cpu_read(addr, &mut pattern);
                 if matches!(reg, PpuRegister::Status) {
                     self.trace_nmi_bus_event("read", PpuRegister::Status.addr(), value);
+                    self.trace_ppu_status_read(value);
                 }
                 value
             }
@@ -263,7 +313,12 @@ impl<'a> CpuBus<'a> {
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
                 let mut pattern = PpuBus::new(self.cartridge.as_deref_mut(), *self.cycles);
-                self.ppu.cpu_read(addr, &mut pattern)
+                let reg = PpuRegister::from_cpu_addr(addr);
+                let value = self.ppu.cpu_read(addr, &mut pattern);
+                if matches!(reg, PpuRegister::Status) {
+                    self.trace_ppu_status_read(value);
+                }
+                value
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
                 driven = false;
@@ -317,6 +372,18 @@ impl<'a> CpuBus<'a> {
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
                 let reg = PpuRegister::from_cpu_addr(addr);
+                if matches!(
+                    reg,
+                    PpuRegister::Control
+                        | PpuRegister::Mask
+                        | PpuRegister::Scroll
+                        | PpuRegister::Addr
+                        | PpuRegister::Data
+                ) {
+                    // Match the Mesen-side callback semantics used by our tooling:
+                    // log write intent before mutating PPU internal state.
+                    self.trace_ppu_reg_write(reg.addr(), data);
+                }
                 let mut pattern = PpuBus::new(self.cartridge.as_deref_mut(), *self.cycles);
                 self.ppu.cpu_write(addr, data, &mut pattern);
                 if matches!(
