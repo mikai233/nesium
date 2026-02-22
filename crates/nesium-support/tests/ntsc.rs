@@ -1,6 +1,6 @@
 #![cfg(feature = "ntsc-cpp")]
 
-use nesium_core::ppu::buffer::{ColorFormat, VideoPostProcessor};
+use nesium_core::ppu::buffer::{ColorFormat, SourceFrame, TargetFrameMut, VideoPostProcessor};
 use nesium_core::ppu::palette::Color;
 use nesium_support::video::filters::{NesNtscPostProcessor, NesNtscPreset};
 use nesium_support::video::ntsc::nes_ntsc_out_width;
@@ -17,6 +17,7 @@ fn ntsc_post_processor_outputs_doubled_height_and_respects_pitch() {
     let src_w = 256usize;
     let src_h = 1usize;
     let src = vec![0u8; src_w * src_h];
+    let src_emphasis = vec![0u8; src_w * src_h];
 
     let mut palette = [Color::BLACK; 64];
     palette[0] = Color::new(0x12, 0x34, 0x56);
@@ -28,15 +29,9 @@ fn ntsc_post_processor_outputs_doubled_height_and_respects_pitch() {
     let mut dst = vec![0xAAu8; dst_pitch * dst_h];
 
     processor.process(
-        &src,
-        src_w,
-        src_h,
+        SourceFrame::new(&src, &src_emphasis, src_w, src_h),
         &palette,
-        &mut dst,
-        dst_pitch,
-        dst_w,
-        dst_h,
-        ColorFormat::Rgba8888,
+        TargetFrameMut::new(&mut dst, dst_pitch, dst_w, dst_h, ColorFormat::Rgba8888),
     );
 
     let row0 = &dst[0..row_bytes];

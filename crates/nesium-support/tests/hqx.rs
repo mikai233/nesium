@@ -1,6 +1,6 @@
 #![cfg(feature = "hqx-cpp")]
 
-use nesium_core::ppu::buffer::{ColorFormat, VideoPostProcessor};
+use nesium_core::ppu::buffer::{ColorFormat, SourceFrame, TargetFrameMut, VideoPostProcessor};
 use nesium_core::ppu::palette::Color;
 use nesium_support::video::filters::HqxPostProcessor;
 use nesium_support::video::hqx::{HqxError, HqxScale, hqx_scale_argb8888};
@@ -74,6 +74,7 @@ fn hqx_post_processor_packs_rgba_and_respects_pitch() {
     let src_w = 2usize;
     let src_h = 2usize;
     let src = vec![0u8; src_w * src_h];
+    let src_emphasis = vec![0u8; src_w * src_h];
 
     let dst_w = src_w * 2;
     let dst_h = src_h * 2;
@@ -83,15 +84,9 @@ fn hqx_post_processor_packs_rgba_and_respects_pitch() {
     let mut dst = vec![0xAAu8; dst_pitch * dst_h];
 
     processor.process(
-        &src,
-        src_w,
-        src_h,
+        SourceFrame::new(&src, &src_emphasis, src_w, src_h),
         &palette,
-        &mut dst,
-        dst_pitch,
-        dst_w,
-        dst_h,
-        ColorFormat::Rgba8888,
+        TargetFrameMut::new(&mut dst, dst_pitch, dst_w, dst_h, ColorFormat::Rgba8888),
     );
 
     // Output should be solid and alpha set to 255.
