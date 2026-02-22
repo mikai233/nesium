@@ -11,7 +11,7 @@
 - Mesen2 comparison workflow is operational (`--testRunner + Lua` + Python diff scripts).
 - `cargo test -p nesium-core` currently reports:
   - Core tests: `72 passed / 0 failed / 3 ignored`
-  - ROM suites: `40 passed / 0 failed / 20 ignored`
+  - ROM suites: `41 passed / 0 failed / 19 ignored`
 - Major APU and MMC3 suites that were previously failing are now passing by default (see Section 5).
 - Remaining work is concentrated in incomplete APU corner behavior and platform/coverage gaps (PAL/expansion audio).
 
@@ -69,6 +69,7 @@
   - `dmc_dma_during_read4_suite` (Mesen2 serial baseline)
   - `sprdma_and_dmc_dma_suite`
   - `full_palette_suite` (Mesen2 RGB24 multi-frame baseline)
+  - `scanline_suite` (Mesen2 RGB24 multi-frame baseline)
 - MMC3 suites now passing:
   - `mmc3_irq_tests_suite` (RevA/RevB judged with one-of-two rule)
   - `mmc3_test_suite`
