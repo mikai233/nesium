@@ -91,6 +91,10 @@ fn parse_u32_csv(value: &str) -> Result<Vec<u32>> {
     Ok(values.into_iter().collect())
 }
 
+fn default_out_prefix(env_key: &str, file_stem: &str) -> String {
+    std::env::var(env_key).unwrap_or_else(|_| format!("target/compare/{file_stem}"))
+}
+
 #[test]
 #[ignore = "debug utility: dumps foreground masks for selected frames"]
 fn dump_nmi_sync_masks() -> Result<()> {
@@ -99,8 +103,7 @@ fn dump_nmi_sync_masks() -> Result<()> {
     let frames_env =
         std::env::var("NESIUM_NMI_MASK_FRAMES").unwrap_or_else(|_| "240,241".to_string());
     let frames = parse_frames_csv(&frames_env)?;
-    let out_prefix = std::env::var("NESIUM_NMI_MASK_OUT_PREFIX")
-        .unwrap_or_else(|_| "tools/apu_compare/nesium_nmi_sync_mask".to_string());
+    let out_prefix = default_out_prefix("NESIUM_NMI_MASK_OUT_PREFIX", "nesium_nmi_sync_mask");
 
     let max_frame = *frames.last().expect("frames not empty");
     let frame_set: BTreeSet<usize> = frames.iter().copied().collect();

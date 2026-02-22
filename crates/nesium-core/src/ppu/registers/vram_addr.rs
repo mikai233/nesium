@@ -1,7 +1,5 @@
 use bitflags::bitflags;
 
-use crate::memory::ppu as ppu_mem;
-
 // Layout (bits 0-14):
 //  14 13 12 11 10 9 8 7 6 5 4 3 2 1 0
 //  [fine_y][nt][coarse_y   ][coarse_x   ]
@@ -119,10 +117,13 @@ impl VramAddr {
         self
     }
 
-    /// Increments the address with mirroring applied to `$3FFF`.
+    /// Increments the raw internal 15-bit address (`v`/`t` style register).
+    ///
+    /// Hardware keeps bit 14 in the internal latch; only external VRAM
+    /// accesses are mirrored to `$0000-$3FFF`.
     #[inline]
     pub fn increment(&mut self, step: u16) {
-        self.0 = (self.0 + step) & ppu_mem::VRAM_MIRROR_MASK;
+        self.0 = (self.0 + step) & VramAddrMask::ALL.bits();
     }
 }
 

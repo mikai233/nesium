@@ -6,6 +6,7 @@ use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose};
 use nesium_core::memory::cpu as cpu_mem;
 use nesium_core::ppu::buffer::{ColorFormat, FrameBuffer};
+use nesium_core::ppu::palette::PaletteKind;
 use nesium_core::{Nes, reset_kind::ResetKind};
 use quick_xml::{Reader, events::Event};
 use sha1::{Digest, Sha1};
@@ -549,7 +550,6 @@ pub fn run_rom_fg_mask_sha1_for_frames(
     let mut targets = frames.to_vec();
     targets.sort_unstable();
     targets.dedup();
-
     let path = Path::new(ROM_ROOT).join(rom_rel_path);
     if !path.exists() {
         bail!("ROM not found: {}", path.display());
@@ -563,18 +563,102 @@ pub fn run_rom_fg_mask_sha1_for_frames(
     let mut target_idx = 0usize;
     let max_frame = *targets.last().expect("targets not empty");
 
-    for frame in 0..=max_frame {
-        nes.run_frame(false);
+    let mut frame = nes.ppu.frame_count() as usize;
+    while frame <= max_frame {
         while target_idx < targets.len() && frame == targets[target_idx] {
-            results.push((
-                frame,
-                compute_foreground_mask_sha1(nes.render_index_buffer()),
-            ));
+            results.push((frame, compute_foreground_mask_sha1(nes.render_index_buffer())));
             target_idx += 1;
         }
-        if target_idx >= targets.len() {
+        if target_idx >= targets.len() || frame >= max_frame {
             break;
         }
+        nes.run_frame(false);
+        frame = nes.ppu.frame_count() as usize;
+    }
+
+    if results.len() != targets.len() {
+        bail!(
+            "failed to capture all requested frames: captured {} of {}",
+            results.len(),
+            targets.len()
+        );
+    }
+
+    Ok(results)
+}
+
+fn compute_rgb24_sha1_from_rgba8888(frame_rgba: &[u8]) -> Result<String> {
+    if !frame_rgba.len().is_multiple_of(4) {
+        bail!(
+            "rgba buffer length must be multiple of 4, got {}",
+            frame_rgba.len()
+        );
+    }
+
+    let mut rgb = Vec::with_capacity(frame_rgba.len() / 4 * 3);
+    for px in frame_rgba.chunks_exact(4) {
+        rgb.push(px[0]);
+        rgb.push(px[1]);
+        rgb.push(px[2]);
+    }
+    Ok(compute_tv_sha1(&rgb))
+}
+
+/// Runs a ROM and returns RGB24 SHA1 hashes for selected frames.
+///
+/// Hash input is the visible framebuffer converted from RGBA8888 to RGB24
+/// (`R,G,B` per pixel). This matches the format dumped from Mesen2's
+/// `emu.getScreenBuffer()` helper scripts.
+pub fn run_rom_rgb24_sha1_for_frames(
+    rom_rel_path: &str,
+    frames: &[usize],
+) -> Result<Vec<(usize, String)>> {
+    if frames.is_empty() {
+        bail!("frame list must not be empty");
+    }
+
+    let mut targets = frames.to_vec();
+    targets.sort_unstable();
+    targets.dedup();
+    if targets.len() < 2 {
+        bail!(
+            "frame hash capture requires at least 2 distinct frames, got {}",
+            targets.len()
+        );
+    }
+
+    let path = Path::new(ROM_ROOT).join(rom_rel_path);
+    if !path.exists() {
+        bail!("ROM not found: {}", path.display());
+    }
+
+    let mut nes = Nes::builder()
+        .framebuffer(FrameBuffer::new(ColorFormat::Rgba8888))
+        .build();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+    // Mesen2 RGB baselines are captured with Mesen's default 2C02 palette.
+    nes.set_palette(PaletteKind::Mesen2C02.palette());
+
+    let mut results = Vec::with_capacity(targets.len());
+    let mut target_idx = 0usize;
+    let max_frame = *targets.last().expect("targets not empty");
+
+    let mut frame = nes.ppu.frame_count() as usize;
+    while frame <= max_frame {
+        while target_idx < targets.len() && frame == targets[target_idx] {
+            let packed = nes
+                .try_render_buffer()
+                .context("packed render buffer unavailable (swapchain backend)")?;
+            let hash = compute_rgb24_sha1_from_rgba8888(packed)?;
+            results.push((frame, hash));
+            target_idx += 1;
+        }
+        if target_idx >= targets.len() || frame >= max_frame {
+            break;
+        }
+        nes.run_frame(false);
+        frame = nes.ppu.frame_count() as usize;
     }
 
     if results.len() != targets.len() {
@@ -677,7 +761,9 @@ pub fn run_rom_zeropage_result(
 /// Simple heuristic to ensure the framebuffer isn't blank: require at least `min_unique` distinct color indices.
 pub fn require_color_diversity(nes: &Nes, min_unique: usize) -> Result<()> {
     let mut seen = [false; 256];
-    let fb = nes.render_buffer();
+    let fb = nes
+        .try_render_buffer()
+        .context("packed render buffer unavailable (swapchain backend)")?;
     for &b in fb {
         seen[b as usize] = true;
     }

@@ -581,13 +581,20 @@ impl Nes {
         self.apu.cycle_count()
     }
 
-    /// Palette indices for the latest frame (PPU native format).
-    pub fn render_buffer(&self) -> &[u8] {
-        self.ppu.render_buffer()
+    /// Packed pixels for the latest frame when direct access is available.
+    ///
+    /// Returns `None` when using a swapchain-backed framebuffer.
+    pub fn try_render_buffer(&self) -> Option<&[u8]> {
+        self.ppu.try_render_buffer()
     }
 
     pub fn render_index_buffer(&self) -> &[u8] {
         self.ppu.render_index_buffer()
+    }
+
+    /// Emphasis bits (`0..=7`) for the latest frame, one byte per pixel.
+    pub fn render_emphasis_buffer(&self) -> &[u8] {
+        self.ppu.render_emphasis_buffer()
     }
 
     /// Copies the current front buffer pixels into the provided destination slice.
@@ -598,6 +605,11 @@ impl Nes {
     /// Copies the current front index buffer into the provided destination slice.
     pub fn copy_render_index_buffer(&self, dst: &mut [u8]) {
         self.ppu.copy_render_index_buffer(dst);
+    }
+
+    /// Copies the current front emphasis buffer into the provided destination slice.
+    pub fn copy_render_emphasis_buffer(&self, dst: &mut [u8]) {
+        self.ppu.copy_render_emphasis_buffer(dst);
     }
 
     pub fn set_frame_ready_callback(
@@ -619,6 +631,36 @@ impl Nes {
     /// Selects one of the built-in palettes.
     pub fn set_palette(&mut self, palette: Palette) {
         self.ppu.set_palette(palette);
+    }
+
+    /// Updates video output resolution for the active framebuffer pipeline.
+    pub fn set_video_output_config(&mut self, width: usize, height: usize) {
+        self.ppu.set_video_output_config(width, height);
+    }
+
+    /// Replaces the video post-processor for the active framebuffer pipeline.
+    pub fn set_video_post_processor(
+        &mut self,
+        processor: Box<dyn crate::ppu::buffer::VideoPostProcessor>,
+    ) {
+        self.ppu.set_video_post_processor(processor);
+    }
+
+    /// Rebuilds packed output from the currently presented canonical frame.
+    pub fn rebuild_video_output(&mut self) {
+        self.ppu.rebuild_video_output();
+    }
+
+    /// Presents a canonical index frame immediately.
+    ///
+    /// Returns `false` when `indices.len() != 256 * 240`.
+    pub fn present_index_frame(&mut self, indices: &[u8]) -> bool {
+        self.ppu.present_index_frame(indices)
+    }
+
+    /// Clears framebuffers and presents black immediately.
+    pub fn clear_framebuffer_and_present(&mut self) {
+        self.ppu.clear_framebuffer_and_present();
     }
 
     /// Active palette reference.

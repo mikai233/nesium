@@ -198,8 +198,7 @@ where
         }
 
         // 3) Fetch the current framebuffer (RGB565) and present it.
-        let frame = self.nes.render_buffer();
-        if !frame.is_empty() {
+        if let Some(frame) = self.nes.try_render_buffer() {
             debug_assert_eq!(
                 frame.len(),
                 SCREEN_WIDTH * SCREEN_HEIGHT * ColorFormat::Rgb565.bytes_per_pixel()
