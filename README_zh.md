@@ -197,13 +197,13 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `scrolltest_suite` | 滚动行为 | 是 |
 | `volume_tests_suite` | 音量/混音行为 | 是 |
 
-### 跟踪 / 诊断类忽略测试 (ℹ️)
+### 跟踪 / 诊断类测试 (ℹ️)
 
-以下套件是为了基线跟踪而保留的 `#[ignore]`，本身不应直接视为“功能失败”。
+以下套件用于和参考输出做基线跟踪，本身不应直接视为“功能失败”。
 
 | 套件名称 | 说明 | TASVideos 精度要求 |
 | --- | --- | --- |
-| `nmi_sync_ntsc_mesen_baseline` | 与 Mesen2 输出进行 NTSC 帧哈希基线跟踪 | 是 |
+| `nmi_sync_ntsc_mesen_baseline` | 与 Mesen2 输出进行 NTSC 帧哈希基线跟踪（默认测试已启用） | 是 |
 
 ## 免责声明
 

@@ -197,13 +197,13 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `scrolltest_suite`            | Scrolling behaviour                          | Yes                         |
 | `volume_tests_suite`          | Volume/mixing behaviour                      | Yes                         |
 
-### Tracking / diagnostic ignored ROM suites (ℹ️)
+### Tracking / diagnostic ROM suites (ℹ️)
 
-These suites are intentionally ignored for baseline tracking and do not indicate a known failing area by themselves.
+These suites are baseline-tracking diagnostics against reference output and do not indicate a known failing area by themselves.
 
 | Suite name                        | Notes                                                    | TASVideos accuracy-required |
 | --------------------------------- | -------------------------------------------------------- | --------------------------- |
-| `nmi_sync_ntsc_mesen_baseline`    | NTSC frame-hash baseline tracking against Mesen2 output | Yes                         |
+| `nmi_sync_ntsc_mesen_baseline`    | NTSC frame-hash baseline tracking against Mesen2 output (enabled in default runs) | Yes                         |
 
 ## Disclaimer
 

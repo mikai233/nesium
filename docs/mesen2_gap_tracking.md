@@ -74,7 +74,7 @@
   - `mmc3_test_suite`
   - `mmc3_test_2_suite`
 - NMI baseline tracking kept as diagnostics:
-  - `nmi_sync_ntsc_mesen_baseline` remains ignored by default.
+  - `nmi_sync_ntsc_mesen_baseline` is enabled in default test runs.
   - Last verified behavior: stable alternating Mesen2 hashes in tracked frame windows.
 
 ## 6. Build/Environment Notes (Minimal)

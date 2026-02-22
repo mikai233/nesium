@@ -688,7 +688,6 @@ fn nmi_sync_manual() -> Result<()> {
 /// multiple distributed frame windows to reduce false positives from single-frame
 /// sampling noise. PAL is intentionally excluded for now.
 #[test]
-#[ignore = "tracking test for nmi_sync NTSC timing vs Mesen2 baseline"]
 fn nmi_sync_ntsc_mesen_baseline() -> Result<()> {
     const ROM: &str = "nmi_sync/demo_ntsc.nes";
     const EXPECTED_A: &str = "HsecswITwKxfvAbg7INnX+37zEg=";
