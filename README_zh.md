@@ -141,6 +141,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `dmc_dma_during_read4_suite` | DMC DMA 与 CPU 读取周期的交互 | 是 |
 | `full_palette_suite` | 全调色板渲染和 Emphasis 测试 | 否 |
 | `scanline_suite` | 扫描线时序（Mesen2 RGB24 多帧基线） | 是 |
+| `scanline_a1_suite` | 替代扫描线时序（Mesen2 RGB24 多帧基线） | 是 |
 | `instr_misc_suite` | 杂项指令行为 | 是 |
 | `instr_test_v3_suite` | Blargg 指令测试 v3 | 是 |
 | `instr_test_v5_suite` | Blargg 指令测试 v5 | 是 |
@@ -192,7 +193,6 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `other_suite` | nes-test-roms 绑定的杂项演示/测试 | 否 |
 | `pal_apu_tests_suite` | PAL APU 行为 | 是 |
 | `read_joy3_suite` | 控制器读取时序 | 是 |
-| `scanline_a1_suite` | 替代扫描线测试 | 是 |
 | `scrolltest_suite` | 滚动行为 | 是 |
 | `volume_tests_suite` | 音量/混音行为 | 是 |
 
