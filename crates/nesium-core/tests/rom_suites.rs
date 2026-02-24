@@ -2,8 +2,8 @@ mod common;
 
 use anyhow::Result;
 use common::{
-    RESULT_ZP_ADDR, require_color_diversity, run_rom_frames, run_rom_status, run_rom_tv_sha1,
-    run_rom_zeropage_result,
+    RESULT_ZP_ADDR, require_color_diversity, run_rom_frames, run_rom_serial_text, run_rom_status,
+    run_rom_tv_sha1, run_rom_zeropage_result,
 };
 use ctor::ctor;
 use tracing::Level;
@@ -256,17 +256,38 @@ fn cpu_timing_test6_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn dmc_dma_during_read4_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
-    for rom in [
-        "dmc_dma_during_read4/dma_2007_read.nes",
-        "dmc_dma_during_read4/dma_2007_write.nes",
-        "dmc_dma_during_read4/dma_4016_read.nes",
-        "dmc_dma_during_read4/double_2007_read.nes",
-        "dmc_dma_during_read4/read_write_2007.nes",
-    ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // Compare decoded serial output against captured baselines.
+    // These ROMs do not use the standard $6000 status-byte protocol.
+    let cases: &[(&str, &str)] = &[
+        (
+            "dmc_dma_during_read4/dma_2007_read.nes",
+            "11 22\n11 22\n33 44\n11 22\n11 22\n159A7A8F",
+        ),
+        (
+            "dmc_dma_during_read4/dma_2007_write.nes",
+            "11 11 AA 33 44 55 66 77\n11 11 AA 33 44 55 66 77\n11 11 AA 33 44 55 66 77\n11 11 AA 33 44 55 66 77\n11 11 AA 33 44 55 66 77\n\ndma_2007_write\nPassed",
+        ),
+        (
+            "dmc_dma_during_read4/dma_4016_read.nes",
+            "8 8 7 8 8\ndma_4016_read\nPassed",
+        ),
+        (
+            "dmc_dma_during_read4/double_2007_read.nes",
+            "22 33 44 55 66\n22 33 44 55 66\nF018C287",
+        ),
+        (
+            "dmc_dma_during_read4/read_write_2007.nes",
+            "33 11 22 33 09 55 66 77\n33 11 22 33 09 55 66 77\n\nread_write_2007\nPassed",
+        ),
+    ];
+    for (rom, expected_serial) in cases {
+        let serial = run_rom_serial_text(rom, DEFAULT_FRAMES)?;
+        assert_eq!(
+            serial, *expected_serial,
+            "[{}] serial output mismatch\nexpected:\n{}\nactual:\n{}",
+            rom, expected_serial, serial
+        );
     }
     Ok(())
 }

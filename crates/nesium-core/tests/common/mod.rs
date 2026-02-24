@@ -456,6 +456,27 @@ where
     verify(&mut nes)
 }
 
+/// Runs a ROM for `frames` and returns normalized serial text emitted via `$4016`.
+pub fn run_rom_serial_text(rom_rel_path: &str, frames: usize) -> Result<String> {
+    let path = Path::new(ROM_ROOT).join(rom_rel_path);
+    if !path.exists() {
+        bail!("ROM not found: {}", path.display());
+    }
+
+    let mut nes = Nes::default();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+
+    let mut serial_log = String::new();
+    for _ in 0..frames {
+        serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
+        nes.run_frame(false);
+    }
+    serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
+
+    Ok(normalize_serial_text(&serial_log))
+}
+
 /// Runs a ROM until a zero-page result byte becomes non-zero or times out.
 /// Returns the final result byte. `pass_value` marks success; any other non-zero
 /// value is treated as failure.
@@ -636,6 +657,17 @@ fn serial_bytes_to_string(bytes: &[u8]) -> String {
         }
     }
     out
+}
+
+fn normalize_serial_text(text: &str) -> String {
+    let mut lines: Vec<String> = text
+        .lines()
+        .map(|line| line.trim_end().to_string())
+        .collect();
+    while matches!(lines.last(), Some(last) if last.is_empty()) {
+        lines.pop();
+    }
+    lines.join("\n")
 }
 
 fn parse_serial_progress(log: &str) -> Option<Progress> {

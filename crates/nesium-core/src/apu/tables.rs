@@ -29,7 +29,7 @@ pub(super) const NOISE_PERIOD_TABLE: [u16; 16] = [
 
 /// DMC bit rates in CPU cycles (NTSC).
 pub(super) const DMC_RATE_TABLE: [u16; 16] = [
-    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 85, 72, 54,
+    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
 ];
 
 pub(super) const DMC_SAMPLE_BASE: u16 = 0xC000;

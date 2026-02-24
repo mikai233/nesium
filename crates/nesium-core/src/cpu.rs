@@ -647,10 +647,9 @@ impl Cpu {
                 }
             }
 
-            // Mesen decides GET/PUT based on the cycle count before starting the cycle.
-            // Our `begin_cycle` increments cycles, so use the *next* cycle to classify.
-            let next_cycle = bus.cycles().wrapping_add(1);
-            let get_cycle = (next_cycle & 1) == 0;
+            // Match Mesen: classify GET/PUT from the current CPU cycle counter
+            // *before* the next DMA cycle starts.
+            let get_cycle = (bus.cycles() & 1) == 0;
 
             // Snapshot DMC readiness BEFORE we clear `dummy_read_needed` this cycle.
             let dmc_ready_pre = self.dma.dmc_active
@@ -774,62 +773,75 @@ impl Cpu {
     ) -> u8 {
         // This models Mesen's "CPU internal register conflict" glitch during DMA.
         //
-        // TODO parity with Mesen:
-        // - When `!enable_internal_reg_reads`, reads to $4000-$401F should return open bus (no external responder).
-        // - For internal-reg reads (4015/4016/4017), the *internal* read may be performed regardless of `dma_addr`.
-        // - 4015: internal read can clear frame IRQ flag without program knowledge.
-        // - 4016/4017: bit deletions + open bus masks + external bus merge are not yet implemented.
-        // - PAL vs NTSC behavior differences.
+        // Mesen runs this logic within a single DMA cycle; "internal" and
+        // "external" reads can both occur without stealing extra cycles.
+        self.begin_cycle(true, bus, ctx);
 
-        if !enable_internal_reg_reads {
-            // TODO: $4000-$401F should read open bus on the external bus.
-            let v = bus.dma_read(dma_addr, self, ctx);
+        let value = if !enable_internal_reg_reads {
+            let v = if (0x4000..=0x401F).contains(&dma_addr) {
+                // Nothing responds on $4000-$401F on the external bus.
+                bus.open_bus.sample()
+            } else {
+                bus.read(dma_addr, self, ctx)
+            };
             *prev_read_address = dma_addr;
-            return v;
-        }
+            v
+        } else {
+            // Internal-reg glitch path: CPU reads from internal APU/Input regs
+            // regardless of the DMA address.
+            let internal_addr = 0x4000 | (dma_addr & 0x1F);
+            let is_same_address = internal_addr == dma_addr;
 
-        // Internal-reg glitch path: CPU reads from internal APU/Input regs regardless of DMA address.
-        let internal_addr = 0x4000 | (dma_addr & 0x1F);
-        let is_same_address = internal_addr == dma_addr;
-
-        let val = match internal_addr {
-            0x4015 => {
-                // TODO: side effect: reading 4015 clears the frame counter IRQ flag.
-                let v = bus.dma_read(internal_addr, self, ctx);
-                if !is_same_address {
-                    // Also trigger external bus read (DMA's intended address).
-                    bus.dma_read(dma_addr, self, ctx);
+            let v = match internal_addr {
+                0x4015 => {
+                    // Side effect matches Mesen: reading $4015 can clear frame IRQ.
+                    let read_value = bus.read(internal_addr, self, ctx);
+                    if !is_same_address {
+                        // Trigger external read on the bus as well.
+                        let _ = bus.read(dma_addr, self, ctx);
+                    }
+                    read_value
                 }
-                v
-            }
-            0x4016 | 0x4017 => {
-                // TODO: PAL behavior unknown; on NES, consecutive reads may be hidden/skipped.
-                let consecutive_same = is_nes_behavior && *prev_read_address == internal_addr;
-                let mut v = if consecutive_same {
-                    // TODO: should return open bus (and avoid bit deletion).
-                    // Using an internal read here is not accurate but keeps timing consistent.
-                    bus.dma_read(internal_addr, self, ctx)
-                } else {
-                    bus.dma_read(internal_addr, self, ctx)
-                };
+                0x4016 | 0x4017 => {
+                    // On NES/AV Famicom, repeated reads of the same input register
+                    // can be hidden from controllers during this glitch path.
+                    let consecutive_same = is_nes_behavior && *prev_read_address == internal_addr;
+                    let mut read_value = if consecutive_same {
+                        bus.open_bus.sample()
+                    } else {
+                        bus.read(internal_addr, self, ctx)
+                    };
 
-                if !is_same_address {
-                    // DMA unit is reading from a different external address too.
-                    // TODO: implement open bus mask + merge/bus-conflict behavior.
-                    let external_value = bus.dma_read(dma_addr, self, ctx);
-                    // Placeholder: prefer external value for now.
-                    v = external_value;
+                    if !is_same_address {
+                        let external_value = bus.read(dma_addr, self, ctx);
+                        let open_bus_mask = Self::controller_open_bus_mask(internal_addr - 0x4016);
+                        read_value = (external_value & open_bus_mask)
+                            | ((read_value & !open_bus_mask) & (external_value & !open_bus_mask));
+                    }
+
+                    read_value
                 }
+                _ => bus.read(dma_addr, self, ctx),
+            };
 
-                v
-            }
-            _ => bus.dma_read(dma_addr, self, ctx),
+            // Mesen updates prevReadAddress with internalAddr on this path.
+            *prev_read_address = internal_addr;
+            v
         };
 
-        // Mesen updates prevReadAddress with the internal address (0x4000|(addr&0x1F)).
-        *prev_read_address = internal_addr;
+        self.end_cycle(true, bus, ctx);
+        value
+    }
 
-        val
+    #[inline]
+    fn controller_open_bus_mask(port: u16) -> u8 {
+        // Match Mesen's default NES-001 behavior for now.
+        // TODO: plumb console model and use console-specific masks.
+        match port {
+            0 => 0xE0,
+            1 => 0xE0,
+            _ => 0xE0,
+        }
     }
 
     fn perform_interrupt(&mut self, bus: &mut CpuBus, ctx: &mut Context) {
