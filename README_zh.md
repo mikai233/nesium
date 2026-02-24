@@ -133,6 +133,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `cpu_dummy_writes_suite` | CPU 伪写行为 | 是 |
 | `cpu_reset_suite` | 复位后 RAM/寄存器状态 | 是 |
 | `cpu_timing_test6_suite` | TASVideos CPU 时序 (TV SHA1) | 是 |
+| `dmc_dma_during_read4_suite` | DMC DMA 与 CPU 读取周期的交互 | 是 |
 | `instr_misc_suite` | 杂项指令行为 | 是 |
 | `instr_test_v3_suite` | Blargg 指令测试 v3 | 是 |
 | `instr_test_v5_suite` | Blargg 指令测试 v5 | 是 |
@@ -173,7 +174,6 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `blargg_litewall_suite` | Litewall / 时序相关测试 | 否 |
 | `cpu_exec_space_suite` | CPU 执行空间测试 (APU/PPU I/O) | 是 |
 | `cpu_interrupts_v2_suite` | NMI/IRQ/BRK/DMA 中断时序 | 是 |
-| `dmc_dma_during_read4_suite` | DMC DMA 与 CPU 读取周期的交互 | 是 |
 | `dmc_tests_suite` | DMC 缓冲/延迟/IRQ 行为 | 是 |
 | `dpcmletterbox_suite` | DPCM 相关视觉/音频测试 | 是 |
 | `exram_suite` | MMC5 ExRAM 行为（当前失败） | 否 |

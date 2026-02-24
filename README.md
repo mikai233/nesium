@@ -133,6 +133,7 @@ Legend:
 | `cpu_dummy_writes_suite`             | CPU dummy write behaviour                    | Yes                         |
 | `cpu_reset_suite`                    | Post-reset RAM/register state                | Yes                         |
 | `cpu_timing_test6_suite`             | TASVideos CPU timing (TV SHA1)               | Yes                         |
+| `dmc_dma_during_read4_suite`         | DMC DMA interaction with CPU read cycles     | Yes                         |
 | `instr_misc_suite`                   | Misc instruction behaviour                   | Yes                         |
 | `instr_test_v3_suite`                | Blargg instruction test v3                   | Yes                         |
 | `instr_test_v5_suite`                | Blargg instruction test v5                   | Yes                         |
@@ -173,7 +174,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `blargg_litewall_suite`       | Litewall / timing-related tests              | No                          |
 | `cpu_exec_space_suite`        | CPU exec space tests (APU/PPU I/O)           | Yes                         |
 | `cpu_interrupts_v2_suite`     | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
-| `dmc_dma_during_read4_suite`  | DMC DMA interaction with CPU read cycles     | Yes                         |
 | `dmc_tests_suite`             | DMC buffer/delay/IRQ behaviour               | Yes                         |
 | `dpcmletterbox_suite`         | DPCM-related visual/audio test               | Yes                         |
 | `exram_suite`                 | MMC5 ExRAM behaviour (currently failing)     | No                          |

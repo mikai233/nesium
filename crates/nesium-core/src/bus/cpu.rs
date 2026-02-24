@@ -149,6 +149,20 @@ impl<'a> CpuBus<'a> {
         self.pending_dma.oam_page = Some(page);
     }
 
+    #[inline]
+    fn controller_open_bus_mask(_port: usize) -> u8 {
+        // Match Mesen's default NES-001 open-bus mask for standard pads.
+        0xE0
+    }
+
+    #[inline]
+    fn read_controller_port(&mut self, port: usize) -> u8 {
+        let mask = Self::controller_open_bus_mask(port);
+        let open_bus = self.open_bus.sample() & mask;
+        let data = self.controllers[port].read() & !mask;
+        open_bus | data
+    }
+
     pub fn devices(&self) -> BusDevices<'_> {
         BusDevices {
             ram: &*self.ram,
@@ -200,8 +214,8 @@ impl<'a> CpuBus<'a> {
                 let status = self.apu.cpu_read(addr);
                 status | (internal & 0x20)
             }
-            cpu_mem::CONTROLLER_PORT_1 => self.controllers[0].read(),
-            cpu_mem::CONTROLLER_PORT_2 => self.controllers[1].read(),
+            cpu_mem::CONTROLLER_PORT_1 => self.read_controller_port(0),
+            cpu_mem::CONTROLLER_PORT_2 => self.read_controller_port(1),
             cpu_mem::TEST_MODE_BASE..=cpu_mem::TEST_MODE_END => OpenBus::peek(addr),
             cpu_mem::CARTRIDGE_SPACE_BASE..=cpu_mem::CPU_ADDR_END => {
                 match self.read_cartridge(addr) {
@@ -242,8 +256,8 @@ impl<'a> CpuBus<'a> {
                 self.open_bus.set_internal_only(value);
                 value
             }
-            cpu_mem::CONTROLLER_PORT_1 => self.controllers[0].read(),
-            cpu_mem::CONTROLLER_PORT_2 => self.controllers[1].read(),
+            cpu_mem::CONTROLLER_PORT_1 => self.read_controller_port(0),
+            cpu_mem::CONTROLLER_PORT_2 => self.read_controller_port(1),
             cpu_mem::TEST_MODE_BASE..=cpu_mem::TEST_MODE_END => {
                 driven = false;
                 self.open_bus.sample()
@@ -262,6 +276,7 @@ impl<'a> CpuBus<'a> {
         if driven {
             self.open_bus.latch(value);
         }
+        self.apu.trace_mem_read(addr, value);
         value
     }
 
