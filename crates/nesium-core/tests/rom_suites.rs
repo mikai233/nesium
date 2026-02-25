@@ -208,7 +208,6 @@ fn cpu_dummy_writes_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn cpu_exec_space_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
