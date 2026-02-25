@@ -257,6 +257,7 @@ fn cpu_timing_test6_suite() -> Result<()> {
 
 #[test]
 fn dmc_dma_during_read4_suite() -> Result<()> {
+    // TASVideos accuracy-required ROMs
     // Compare decoded serial output against captured baselines.
     // These ROMs do not use the standard $6000 status-byte protocol.
     let cases: &[(&str, &str)] = &[
@@ -294,6 +295,7 @@ fn dmc_dma_during_read4_suite() -> Result<()> {
 
 #[test]
 fn dmc_tests_suite() -> Result<()> {
+    // TASVideos accuracy-required ROMs
     // These ROMs do not provide a directly-consumable $6000 or serial pass/fail signal.
     // Validate against Mesen2-captured 2KB CPU RAM snapshots at frame 1800.
     const RAM_BASE: u16 = 0x0000;
