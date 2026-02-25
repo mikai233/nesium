@@ -328,7 +328,6 @@ fn exram_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn full_palette_suite() -> Result<()> {
     for rom in [
         "full_palette/flowing_palette.nes",

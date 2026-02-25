@@ -1003,6 +1003,26 @@ impl Ppu {
         let pixel_index = (y * SCREEN_WIDTH + x) as i32;
 
         let mask = self.registers.mask;
+        if !mask.rendering_enabled() {
+            // Hardware quirk used by full_palette ROMs: with rendering disabled,
+            // the backdrop color comes from $3F00 unless VRAM currently points
+            // into palette space, in which case that palette entry is output.
+            let v = self.registers.vram.v.raw() & ppu_mem::VRAM_MIRROR_MASK;
+            let palette_addr = if (v & 0x3F00) == ppu_mem::PALETTE_BASE {
+                v
+            } else {
+                ppu_mem::PALETTE_BASE
+            };
+            let raw_color_index = self.palette_ram.read(palette_addr);
+            self.raw_output_indices[pixel_index as usize] = raw_color_index;
+            let mut color_index = raw_color_index;
+            if self.output_grayscale {
+                color_index &= 0x30;
+            }
+            self.framebuffer.write_index(x, y, color_index);
+            return;
+        }
+
         let fine_x = self.registers.vram.x;
 
         // Background pixel sample.
@@ -1499,14 +1519,12 @@ impl Ppu {
             (0xFF, 0)
         } else {
             let mut r = self.scanline - (y as i16);
-            debug_assert!(
-                r >= 0 && r < sprite_height,
-                "PPU sprite row out of range: scanline={} sprite_y={} sprite_height={} row={}",
-                self.scanline,
-                y,
-                sprite_height,
-                r,
-            );
+            if r < 0 || r >= sprite_height {
+                // Sprite evaluation edge cases can still leave a selected slot
+                // with an out-of-window Y. Hardware keeps fetching pattern data;
+                // fold into the sprite-height row domain instead of panicking.
+                r = r.rem_euclid(sprite_height);
+            }
 
             // Vertical flip affects row selection.
             if (attr & 0x80) != 0 {
