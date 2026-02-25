@@ -5,6 +5,7 @@ use crate::{
     apu::Apu,
     audio::mixer::MixerState,
     bus::{PendingDma, savestate::OpenBusState},
+    cartridge::mapper::PpuVramAccessKind,
     cartridge::{
         Cartridge,
         mapper::{Mapper1, Mapper2, Mapper3, Mapper4, mapper_downcast_mut, mapper_downcast_ref},
@@ -109,6 +110,10 @@ pub struct PpuState {
     pub frame: u32,
     pub master_clock: u64,
     pub bg_pipeline: BgPipelineState,
+    pub bg_next_tile_index: u8,
+    pub bg_next_attr_byte: u8,
+    pub bg_next_pattern_low: u8,
+    pub bg_next_pattern_high: u8,
     pub sprite_pipeline: SpritePipelineState,
     pub nmi_level: bool,
     pub prevent_vblank_flag: bool,
@@ -116,6 +121,7 @@ pub struct PpuState {
     pub ignore_vram_read: u8,
     pub oam_copybuffer: u8,
     pub pending_vram_increment: PendingVramIncrementState,
+    pub pending_vram_increment_kind: u8,
     pub secondary_oam: Vec<u8>,
     pub sprite_eval: SpriteEvalState,
     pub sprite_fetch: SpriteFetchState,
@@ -200,7 +206,7 @@ impl SaveState for Nes {
     type State = NesState;
     type Error = NesSaveStateError;
     type Meta = SnapshotMeta;
-    const FORMAT_VERSION: u32 = 2;
+    const FORMAT_VERSION: u32 = 3;
 
     fn save(&self, mut meta: Self::Meta) -> Result<Snapshot<Self::State, Self::Meta>, Self::Error> {
         if let Some(cart) = self.cartridge.as_ref() {
@@ -298,6 +304,10 @@ fn ppu_to_state(ppu: &Ppu) -> PpuState {
         frame: ppu.frame,
         master_clock: ppu.master_clock,
         bg_pipeline: ppu.bg_pipeline.save_state(),
+        bg_next_tile_index: ppu.bg_next_tile_index,
+        bg_next_attr_byte: ppu.bg_next_attr_byte,
+        bg_next_pattern_low: ppu.bg_next_pattern_low,
+        bg_next_pattern_high: ppu.bg_next_pattern_high,
         sprite_pipeline: ppu.sprite_pipeline.save_state(),
         nmi_level: ppu.nmi_level,
         prevent_vblank_flag: ppu.prevent_vblank_flag,
@@ -309,6 +319,7 @@ fn ppu_to_state(ppu: &Ppu) -> PpuState {
             PendingVramIncrement::By1 => PendingVramIncrementState::by1(),
             PendingVramIncrement::By32 => PendingVramIncrementState::by32(),
         },
+        pending_vram_increment_kind: ppu_vram_access_kind_to_u8(ppu.pending_vram_increment_kind),
         secondary_oam: ppu.secondary_oam.as_slice().to_vec(),
         sprite_eval: SpriteEvalState {
             sprite_addr_h: ppu.sprite_eval.sprite_addr_h,
@@ -372,6 +383,10 @@ fn state_to_ppu(ppu: &mut Ppu, state: &PpuState) -> Result<(), NesSaveStateError
     ppu.frame = state.frame;
     ppu.master_clock = state.master_clock;
     ppu.bg_pipeline.load_state(state.bg_pipeline);
+    ppu.bg_next_tile_index = state.bg_next_tile_index;
+    ppu.bg_next_attr_byte = state.bg_next_attr_byte;
+    ppu.bg_next_pattern_low = state.bg_next_pattern_low;
+    ppu.bg_next_pattern_high = state.bg_next_pattern_high;
     ppu.sprite_pipeline
         .load_state(state.sprite_pipeline.clone());
     ppu.nmi_level = state.nmi_level;
@@ -384,6 +399,8 @@ fn state_to_ppu(ppu: &mut Ppu, state: &PpuState) -> Result<(), NesSaveStateError
         32 => PendingVramIncrement::By32,
         _ => PendingVramIncrement::None,
     };
+    ppu.pending_vram_increment_kind =
+        ppu_vram_access_kind_from_u8(state.pending_vram_increment_kind);
 
     if ppu.secondary_oam.as_slice().len() != state.secondary_oam.len() {
         return Err(NesSaveStateError::CorruptState(
@@ -454,6 +471,24 @@ fn sprite_line_buffers_from_state(buffers: &mut SpriteLineBuffers, state: &Sprit
         .pattern_high
         .as_mut_slice()
         .copy_from_slice(&state.pattern_high);
+}
+
+fn ppu_vram_access_kind_to_u8(kind: PpuVramAccessKind) -> u8 {
+    match kind {
+        PpuVramAccessKind::RenderingFetch => 0,
+        PpuVramAccessKind::CpuRead => 1,
+        PpuVramAccessKind::CpuWrite => 2,
+        PpuVramAccessKind::Other => 3,
+    }
+}
+
+fn ppu_vram_access_kind_from_u8(value: u8) -> PpuVramAccessKind {
+    match value {
+        0 => PpuVramAccessKind::RenderingFetch,
+        1 => PpuVramAccessKind::CpuRead,
+        2 => PpuVramAccessKind::CpuWrite,
+        _ => PpuVramAccessKind::Other,
+    }
 }
 
 #[cfg(feature = "savestate-postcard")]
@@ -538,6 +573,11 @@ mod tests {
 
         nes.ppu.output_grayscale = true;
         nes.ppu.grayscale_last_updated_pixel = 17_321;
+        nes.ppu.bg_next_tile_index = 0x11;
+        nes.ppu.bg_next_attr_byte = 0x22;
+        nes.ppu.bg_next_pattern_low = 0x33;
+        nes.ppu.bg_next_pattern_high = 0x44;
+        nes.ppu.pending_vram_increment_kind = PpuVramAccessKind::CpuWrite;
         for (i, px) in nes.ppu.raw_output_indices.iter_mut().enumerate() {
             *px = (i as u8).wrapping_mul(3).wrapping_add(7);
         }
@@ -553,6 +593,11 @@ mod tests {
         nes2.run_frame(false);
         nes2.ppu.output_grayscale = false;
         nes2.ppu.grayscale_last_updated_pixel = -1;
+        nes2.ppu.bg_next_tile_index = 0;
+        nes2.ppu.bg_next_attr_byte = 0;
+        nes2.ppu.bg_next_pattern_low = 0;
+        nes2.ppu.bg_next_pattern_high = 0;
+        nes2.ppu.pending_vram_increment_kind = PpuVramAccessKind::Other;
         nes2.ppu.raw_output_indices.fill(0);
 
         <crate::Nes as SaveState>::load(&mut nes2, &snap).expect("load snapshot");
@@ -561,6 +606,14 @@ mod tests {
         assert_eq!(
             nes2.ppu.grayscale_last_updated_pixel,
             nes.ppu.grayscale_last_updated_pixel
+        );
+        assert_eq!(nes2.ppu.bg_next_tile_index, nes.ppu.bg_next_tile_index);
+        assert_eq!(nes2.ppu.bg_next_attr_byte, nes.ppu.bg_next_attr_byte);
+        assert_eq!(nes2.ppu.bg_next_pattern_low, nes.ppu.bg_next_pattern_low);
+        assert_eq!(nes2.ppu.bg_next_pattern_high, nes.ppu.bg_next_pattern_high);
+        assert_eq!(
+            nes2.ppu.pending_vram_increment_kind,
+            nes.ppu.pending_vram_increment_kind
         );
         assert_eq!(nes2.ppu.raw_output_indices, nes.ppu.raw_output_indices);
     }
