@@ -51,6 +51,7 @@ use self::{
 
 use core::ffi::c_void;
 use core::fmt;
+use std::sync::OnceLock;
 
 use crate::{
     bus::CpuBus,
@@ -64,6 +65,7 @@ use crate::{
     ppu::{
         buffer::FrameBuffer,
         buffer::FrameReadyCallback,
+        buffer::VideoPostProcessor,
         open_bus::PpuOpenBus,
         palette::{Palette, PaletteRam},
         pattern_bus::PpuBus,
@@ -78,6 +80,36 @@ pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + post + vblank (241..260)
 const SCREEN_PIXEL_COUNT: i32 = (SCREEN_WIDTH * SCREEN_HEIGHT) as i32;
+
+#[inline]
+fn debug_sprite_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_SPRITE_TRACE").is_some())
+}
+
+#[inline]
+fn debug_ppu_dot_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_PPU_DOT").is_some())
+}
+
+#[inline]
+fn debug_pixels_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_PIXELS").is_some())
+}
+
+#[inline]
+fn debug_palette_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_PALETTE_TRACE").is_some())
+}
+
+#[inline]
+fn debug_fetch_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_FETCH_TRACE").is_some())
+}
 
 /// Entry points for the CPU PPU register mirror.
 #[derive(Clone)]
@@ -156,12 +188,18 @@ pub struct Ppu {
     /// Pending state update request from $2001/$2006/$2007/VRAM-related
     /// side effects. Mirrors Mesen's `_needStateUpdate` latch.
     pub(crate) state_update_pending: bool,
-    /// Latched grayscale mask applied to output pixels. This is decoupled from
-    /// immediate $2001 writes to match Mesen2/hardware transition timing.
+    /// Latched grayscale mask that is applied to pixel output. This is
+    /// intentionally decoupled from `$2001` writes to mirror Mesen2's
+    /// cycle-to-pixel transition point (`UpdateGrayscaleAndIntensifyBits`).
     pub(crate) output_grayscale: bool,
-    /// Last visible pixel index reconciled after a mid-scanline grayscale change.
-    pub(crate) grayscale_last_updated_pixel: i32,
-    /// Raw (unmasked) palette indices of the current back buffer frame.
+    /// Latched emphasis bits (`$2001` bits 5-7) applied to pixel output.
+    pub(crate) output_emphasis: u8,
+    /// Last visible pixel index for which grayscale/emphasis state has been
+    /// reconciled after mid-scanline `$2001` writes.
+    pub(crate) color_mask_last_updated_pixel: i32,
+    /// Raw (unmasked) palette indices for the current back buffer frame.
+    /// This lets `$2001` writes retroactively update already rendered pixels
+    /// to match Mesen2's grayscale transition behavior.
     pub(crate) raw_output_indices: Vec<u8>,
     /// Background + sprite rendering target for the current frame.
     pub(crate) framebuffer: FrameBuffer,
@@ -232,7 +270,8 @@ impl Ppu {
             corrupt_oam_row: [false; 32],
             state_update_pending: false,
             output_grayscale: false,
-            grayscale_last_updated_pixel: -1,
+            output_emphasis: 0,
+            color_mask_last_updated_pixel: -1,
             raw_output_indices: vec![0; SCREEN_WIDTH * SCREEN_HEIGHT],
             framebuffer,
         }
@@ -336,7 +375,8 @@ impl Ppu {
         self.prev_render_enabled = false;
         self.state_update_pending = true;
         self.output_grayscale = self.registers.mask.contains(Mask::GRAYSCALE);
-        self.grayscale_last_updated_pixel = -1;
+        self.output_emphasis = (self.registers.mask.bits() >> 5) & 0x07;
+        self.color_mask_last_updated_pixel = -1;
         self.raw_output_indices.fill(0);
 
         // Only clear the framebuffer on power-on. Soft reset keeps the last
@@ -351,12 +391,17 @@ impl Ppu {
     /// In color mode the buffer contains packed pixels in the active
     /// [`buffer::ColorFormat`]. In index mode it contains one byte per pixel
     /// with palette indices (`0..=63`).
-    pub fn render_buffer(&self) -> &[u8] {
-        self.framebuffer.render()
+    pub fn try_render_buffer(&self) -> Option<&[u8]> {
+        self.framebuffer.try_render_packed()
     }
 
     pub fn render_index_buffer(&self) -> &[u8] {
         self.framebuffer.render_index()
+    }
+
+    /// Returns the current front emphasis plane (`0..=7` per pixel).
+    pub fn render_emphasis_buffer(&self) -> &[u8] {
+        self.framebuffer.render_emphasis()
     }
 
     /// Copies the current front buffer pixels into the provided destination slice.
@@ -367,6 +412,11 @@ impl Ppu {
     /// Copies the current front index buffer into the provided destination slice.
     pub fn copy_render_index_buffer(&self, dst: &mut [u8]) {
         self.framebuffer.copy_render_index_buffer(dst);
+    }
+
+    /// Copies the current front emphasis plane into the provided destination slice.
+    pub fn copy_render_emphasis_buffer(&self, dst: &mut [u8]) {
+        self.framebuffer.copy_render_emphasis_buffer(dst);
     }
 
     pub fn set_frame_ready_callback(
@@ -405,9 +455,41 @@ impl Ppu {
         &self.palette
     }
 
-    /// Mutable reference to the internal framebuffer.
-    pub fn framebuffer_mut(&mut self) -> &mut FrameBuffer {
-        &mut self.framebuffer
+    /// Applies a new video output size to the internal framebuffer pipeline.
+    pub fn set_video_output_config(&mut self, width: usize, height: usize) {
+        self.framebuffer.set_output_config(width, height);
+    }
+
+    /// Replaces the post-processor used by the internal framebuffer pipeline.
+    pub fn set_video_post_processor(&mut self, processor: Box<dyn VideoPostProcessor>) {
+        self.framebuffer.set_post_processor(processor);
+    }
+
+    /// Rebuilds the currently presented packed frame from the front canonical plane.
+    pub fn rebuild_video_output(&mut self) {
+        let palette = *self.palette.as_colors();
+        self.framebuffer.rebuild_packed(&palette);
+    }
+
+    /// Presents a full canonical index frame as the next output frame.
+    ///
+    /// Returns `false` when the source length does not match `256 * 240`.
+    pub fn present_index_frame(&mut self, indices: &[u8]) -> bool {
+        let back_indices = self.framebuffer.write();
+        if back_indices.len() != indices.len() {
+            return false;
+        }
+        back_indices.copy_from_slice(indices);
+        self.framebuffer
+            .apply_color_mask_range(0, (SCREEN_WIDTH * SCREEN_HEIGHT) - 1, false, 0);
+        let palette = *self.palette.as_colors();
+        self.framebuffer.present(&palette);
+        true
+    }
+
+    /// Clears framebuffers and presents a black frame immediately.
+    pub fn clear_framebuffer_and_present(&mut self) {
+        self.framebuffer.clear_and_present();
     }
 
     /// Handles CPU writes to the mirrored PPU register space (`$2000-$3FFF`).
@@ -417,7 +499,9 @@ impl Ppu {
     pub fn cpu_write(&mut self, addr: u16, value: u8, ppu_bus: &mut PpuBus) {
         // Writes to PPU registers fully drive the bus.
         self.open_bus.set(0xFF, value, self.frame);
-        match PpuRegister::from_cpu_addr(addr) {
+        let reg = PpuRegister::from_cpu_addr(addr);
+
+        match reg {
             PpuRegister::Control => {
                 self.registers.write_control(value);
                 self.maybe_apply_scroll_glitch(ScrollGlitchSource::Control2000);
@@ -428,7 +512,10 @@ impl Ppu {
                 // We currently just update the mask bitfield and then update the
                 // Mesen-style rendering-enabled latch on the next `clock()`.
                 self.registers.mask = Mask::from_bits_retain(value);
-                self.apply_grayscale_change(self.registers.mask.contains(Mask::GRAYSCALE));
+                self.apply_color_mask_change(
+                    self.registers.mask.contains(Mask::GRAYSCALE),
+                    (self.registers.mask.bits() >> 5) & 0x07,
+                );
 
                 let mask = self.registers.mask;
                 let new_render = mask.rendering_enabled();
@@ -614,6 +701,45 @@ impl Ppu {
                     pats_lo,
                     pats_hi,
                 );
+
+                if debug_sprite_trace_enabled()
+                    && ppu.frame == 120
+                    && (194..=195).contains(&ppu.scanline)
+                {
+                    let count = sprite_count as usize;
+                    let attrs_hex = attrs[..count]
+                        .iter()
+                        .map(|v| format!("{:02X}", v))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let xs_hex = xs[..count]
+                        .iter()
+                        .map(|v| format!("{:02X}", v))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let lo_hex = pats_lo[..count]
+                        .iter()
+                        .map(|v| format!("{:02X}", v))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let hi_hex = pats_hi[..count]
+                        .iter()
+                        .map(|v| format!("{:02X}", v))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    nmi_trace::log_line(&format!(
+                        "SPRDBG|src=nesium|ev=load_scanline|frame={}|scanline={}|dot={}|count={}|sprite0_next={}|attrs={}|xs={}|pat_lo={}|pat_hi={}",
+                        ppu.frame,
+                        ppu.scanline,
+                        ppu.cycle,
+                        sprite_count,
+                        nmi_trace::flag(ppu.sprite_eval.sprite0_in_range_next),
+                        attrs_hex,
+                        xs_hex,
+                        lo_hex,
+                        hi_hex
+                    ));
+                }
             }
 
             // If rendering is disabled, keep pipelines idle to avoid stale data.
@@ -639,7 +765,7 @@ impl Ppu {
                         ppu.registers
                             .status
                             .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
-                        if had_vblank && nmi_trace::enabled() {
+                        if had_vblank {
                             nmi_trace::log_line(&format!(
                                 "NMITRACE|src=nesium|ev=vblank_clear|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|reason=prerender|nmi_enabled={}|nmi_level={}|prevent_vblank={}",
                                 cpu_cycle,
@@ -658,6 +784,11 @@ impl Ppu {
                         ppu.sprite_eval.sprite0_in_range_next = false;
                     }
                     if rendering_enabled {
+                        // Hardware cadence: background shifters tick on dots 2..=257.
+                        if ppu.cycle >= 2 {
+                            ppu.bg_pipeline.shift();
+                        }
+
                         // Mesen2: OAMADDR bug on prerender, cycles 1..=8.
                         // If OAMADDR >= 8 when rendering starts, the 8 bytes starting at
                         // OAMADDR & 0xF8 are copied to the first 8 bytes of OAM.
@@ -668,9 +799,7 @@ impl Ppu {
                             ppu.registers.oam[dst as usize] = ppu.registers.oam[src as usize];
                         }
 
-                        // Shift background shifters each dot.
-                        let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
-                        // Fetch/reload background data at tile boundaries.
+                        // Pre-render warmup fetches.
                         ppu.fetch_background_data(&mut ppu_bus);
 
                         if ppu.cycle == 256 && ppu.prev_render_enabled {
@@ -710,11 +839,15 @@ impl Ppu {
                 // Dots 321..=336: prefetch first two background tiles for scanline 0.
                 (-1, 321..=336) => {
                     if rendering_enabled {
+                        // Hardware cadence: background prefetch shift window is 322..=337.
+                        if ppu.cycle >= 322 {
+                            ppu.bg_pipeline.shift();
+                        }
+
                         if ppu.cycle == 321 {
                             // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
                             ppu.oam_copybuffer = ppu.secondary_oam[0];
                         }
-                        let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
                         ppu.fetch_background_data(&mut ppu_bus);
                     }
                 }
@@ -728,6 +861,9 @@ impl Ppu {
                 // the last dot of the scanline when we are on the pre-render
                 // scanline, cycle 339 of an odd frame with rendering enabled.
                 (-1, 337..=340) => {
+                    if ppu.cycle == 337 && rendering_enabled {
+                        ppu.bg_pipeline.shift();
+                    }
                     if ppu.cycle == 339 && ppu.frame % 2 == 1 && ppu.render_enabled {
                         // Force the next `advance_cycle()` call to wrap directly
                         // to scanline 0, cycle 0, effectively removing dot 340
@@ -744,10 +880,37 @@ impl Ppu {
                     ppu.render_pixel();
 
                     if rendering_enabled {
+                        // Hardware cadence: background shifters tick on dots 2..=257.
+                        if ppu.cycle >= 2 {
+                            ppu.bg_pipeline.shift();
+                        }
+
                         // Fetch background data for this dot.
                         ppu.fetch_background_data(&mut ppu_bus);
                         // Sprite evaluation for the *next* scanline runs during dots 1..=256.
                         ppu.sprite_pipeline_eval_tick();
+
+                        if ppu.cycle == 256
+                            && debug_sprite_trace_enabled()
+                            && ppu.frame == 120
+                            && (193..=194).contains(&ppu.scanline)
+                        {
+                            let sec_oam = ppu
+                                .secondary_oam
+                                .iter()
+                                .map(|v| format!("{:02X}", v))
+                                .collect::<Vec<_>>()
+                                .join(",");
+                            nmi_trace::log_line(&format!(
+                                "SPRDBG|src=nesium|ev=eval_done|frame={}|scanline={}|dot={}|count={}|sprite0_next={}|sec_oam={}",
+                                ppu.frame,
+                                ppu.scanline,
+                                ppu.cycle,
+                                ppu.sprite_eval.count.min(8),
+                                nmi_trace::flag(ppu.sprite_eval.sprite0_in_range_next),
+                                sec_oam
+                            ));
+                        }
 
                         if ppu.cycle == 256 && ppu.prev_render_enabled {
                             ppu.increment_scroll_y();
@@ -780,20 +943,26 @@ impl Ppu {
                 // Dots 321..=336: prefetch first two background tiles for next scanline.
                 (0..=239, 321..=336) => {
                     if rendering_enabled {
+                        // Hardware cadence: background prefetch shift window is 322..=337.
+                        if ppu.cycle >= 322 {
+                            ppu.bg_pipeline.shift();
+                        }
+
                         if ppu.cycle == 321 {
                             // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
                             ppu.oam_copybuffer = ppu.secondary_oam[0];
                         }
-                        // Visible scanline prefetch window: keep BG shifters advancing
-                        // here as well so that the prefetched tiles for the *next*
-                        // scanline are aligned with dots 0 and 8 when rendering resumes.
-                        let _ = ppu.bg_pipeline.sample_and_shift(ppu.registers.vram.x);
+                        // Visible scanline prefetch window for the next scanline.
                         ppu.fetch_background_data(&mut ppu_bus);
                     }
                 }
 
                 // Dots 337..=340: dummy nametable fetches (no visible effect).
-                (0..=239, 337..=340) => {}
+                (0..=239, 337..=340) => {
+                    if ppu.cycle == 337 && rendering_enabled {
+                        ppu.bg_pipeline.shift();
+                    }
+                }
 
                 // ----------------------
                 // Post-render scanline (240)
@@ -821,17 +990,19 @@ impl Ppu {
                                 nmi_trace::flag(ppu.nmi_level)
                             ));
                         }
-                    } else if nmi_trace::enabled() {
-                        nmi_trace::log_line(&format!(
-                            "NMITRACE|src=nesium|ev=vblank_suppressed|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|nmi_enabled={}|nmi_level={}",
-                            cpu_cycle,
-                            ppu.master_clock,
-                            ppu.frame,
-                            ppu.scanline,
-                            ppu.cycle,
-                            nmi_trace::flag(ppu.registers.control.nmi_enabled()),
-                            nmi_trace::flag(ppu.nmi_level)
-                        ));
+                    } else {
+                        if nmi_trace::enabled() {
+                            nmi_trace::log_line(&format!(
+                                "NMITRACE|src=nesium|ev=vblank_suppressed|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|nmi_enabled={}|nmi_level={}",
+                                cpu_cycle,
+                                ppu.master_clock,
+                                ppu.frame,
+                                ppu.scanline,
+                                ppu.cycle,
+                                nmi_trace::flag(ppu.registers.control.nmi_enabled()),
+                                nmi_trace::flag(ppu.nmi_level)
+                            ));
+                        }
                     }
                     // Consume the race latch each frame.
                     ppu.prevent_vblank_flag = false;
@@ -843,6 +1014,25 @@ impl Ppu {
             }
 
             ppu.update_nmi_level(cpu_cycle);
+
+            if debug_ppu_dot_enabled()
+                && ppu.frame == 7
+                && ppu.scanline == 192
+                && (228..=272).contains(&ppu.cycle)
+            {
+                nmi_trace::log_line(&format!(
+                    "PPUDBG|src=nesium|ev=dot|cpu_cycle={}|frame={}|scanline={}|dot={}|v={:04X}|t={:04X}|w={}|render={}|prev_render={}",
+                    cpu_cycle,
+                    ppu.frame,
+                    ppu.scanline,
+                    ppu.cycle,
+                    ppu.registers.vram.v.raw(),
+                    ppu.registers.vram.t.raw(),
+                    if ppu.registers.vram.w { 1 } else { 0 },
+                    if ppu.render_enabled { 1 } else { 0 },
+                    if ppu.prev_render_enabled { 1 } else { 0 }
+                ));
+            }
             ppu.update_state_latch();
 
             // Mesen2/hardware: apply delayed $2006 VRAM-address commits at the
@@ -1027,9 +1217,11 @@ impl Ppu {
                 self.frame = self.frame.wrapping_add(1);
             } else if self.scanline > 260 {
                 self.scanline = -1;
-                // New frame starts with current mask state and a fresh raw-output history.
+                // New frame: visible output starts from the currently latched
+                // $2001 grayscale/emphasis bits and an empty raw/output history.
                 self.output_grayscale = self.registers.mask.contains(Mask::GRAYSCALE);
-                self.grayscale_last_updated_pixel = -1;
+                self.output_emphasis = (self.registers.mask.bits() >> 5) & 0x07;
+                self.color_mask_last_updated_pixel = -1;
                 self.raw_output_indices.fill(0);
             }
         }
@@ -1073,30 +1265,37 @@ impl Ppu {
         let pixel_index = (y * SCREEN_WIDTH + x) as i32;
 
         let mask = self.registers.mask;
-        if !mask.rendering_enabled() {
-            // Hardware quirk used by full_palette ROMs: with rendering disabled,
-            // the backdrop color comes from $3F00 unless VRAM currently points
-            // into palette space, in which case that palette entry is output.
-            let v = self.registers.vram.v.raw() & ppu_mem::VRAM_MIRROR_MASK;
+        let rendering_enabled = mask.rendering_enabled();
+
+        // Hardware quirk (used by full_palette test ROMs): when rendering is
+        // disabled, the pixel color normally comes from $3F00, except if the
+        // current VRAM address points into palette space ($3F00-$3FFF). In
+        // that case, the addressed palette entry is output directly.
+        if !rendering_enabled {
+            // Match Mesen2: forced-blank output is driven by the committed `v`
+            // register value. Delayed $2006 commits are applied at end-of-dot.
+            let v = self.registers.vram.v.raw();
             let palette_addr = if (v & 0x3F00) == ppu_mem::PALETTE_BASE {
-                v
+                ppu_mem::PALETTE_BASE | (v & 0x1F)
             } else {
                 ppu_mem::PALETTE_BASE
             };
             let raw_color_index = self.palette_ram.read(palette_addr);
-            self.raw_output_indices[pixel_index as usize] = raw_color_index;
+            let idx = pixel_index as usize;
+            self.raw_output_indices[idx] = raw_color_index;
             let mut color_index = raw_color_index;
             if self.output_grayscale {
                 color_index &= 0x30;
             }
-            self.framebuffer.write_index(x, y, color_index);
+            self.framebuffer
+                .write_index_with_emphasis(x, y, color_index, self.output_emphasis);
             return;
         }
 
         let fine_x = self.registers.vram.x;
 
         // Background pixel sample.
-        let (mut bg_palette, mut bg_color) = self.bg_pipeline.sample_and_shift(fine_x);
+        let (mut bg_palette, mut bg_color) = self.bg_pipeline.sample(fine_x);
         let bg_visible = mask.contains(Mask::SHOW_BACKGROUND)
             && (x >= 8 || mask.contains(Mask::SHOW_BACKGROUND_LEFT));
         if !bg_visible {
@@ -1162,7 +1361,8 @@ impl Ppu {
             ppu_mem::PALETTE_BASE + (final_palette as u16) * 4 + (final_color as u16)
         };
         let raw_color_index = self.palette_ram.read(palette_addr);
-        self.raw_output_indices[pixel_index as usize] = raw_color_index;
+        let idx = pixel_index as usize;
+        self.raw_output_indices[idx] = raw_color_index;
         let mut color_index = raw_color_index;
         // Apply grayscale mask when $2001 bit 0 is set: only keep the grey
         // column ($00, $10, $20, $30) as in Mesen2 / hardware.
@@ -1170,25 +1370,67 @@ impl Ppu {
             color_index &= 0x30;
         }
 
-        self.framebuffer.write_index(x, y, color_index);
+        if debug_pixels_enabled()
+            && self.frame == 120
+            && (120..=225).contains(&(x as i32))
+            && (188..=222).contains(&(y as i32))
+        {
+            nmi_trace::log_line(&format!(
+                "PIXDBG|src=nesium|frame={}|y={}|x={}|dot={}|v={:04X}|t={:04X}|bg_vis={}|sp_vis={}|bg_p={}|bg_c={}|sp_p={}|sp_c={}|sp_pri={}|final_p={}|final_c={}|from_sp={}|pal={:04X}|raw_idx={:02X}|idx={:02X}",
+                self.frame,
+                y,
+                x,
+                self.cycle,
+                self.registers.vram.v.raw(),
+                self.registers.vram.t.raw(),
+                if bg_visible { 1 } else { 0 },
+                if sprite_visible { 1 } else { 0 },
+                bg_palette,
+                bg_color,
+                sprite_pixel.palette,
+                sprite_pixel.color,
+                if sprite_pixel.priority_behind_bg {
+                    1
+                } else {
+                    0
+                },
+                final_palette,
+                final_color,
+                if from_sprite { 1 } else { 0 },
+                palette_addr,
+                raw_color_index,
+                color_index
+            ));
+        }
+
+        self.framebuffer
+            .write_index_with_emphasis(x, y, color_index, self.output_emphasis);
     }
 
-    /// Applies a `$2001` grayscale update with Mesen2-like pixel cutoff.
+    /// Applies a `$2001` grayscale/emphasis update with Mesen2-like pixel cutoff.
     ///
-    /// For visible scanlines, the cutoff pixel depends on the current dot:
+    /// For visible scanlines, Mesen2 computes a cutoff pixel:
     /// - `cycle < 3`: `scanline * 256 - 1`
     /// - `cycle <= 258`: `scanline * 256 + cycle - 3`
     /// - otherwise: end of scanline (`scanline * 256 + 255`)
     ///
-    /// Pixels up to that cutoff retain the previous grayscale state. Already
-    /// rendered pixels are patched retroactively using the raw-output cache.
-    fn apply_grayscale_change(&mut self, new_grayscale: bool) {
-        if !(0..=239).contains(&self.scanline) {
+    /// Pixels up to that cutoff keep the previous grayscale/emphasis state; subsequent
+    /// pixels use the new state. Because writes can occur after a subset of
+    /// pixels were already rendered, we retroactively patch the already-written
+    /// pixels using the raw output cache.
+    fn apply_color_mask_change(&mut self, new_grayscale: bool, new_emphasis: u8) {
+        // Mirror Mesen2's UpdateGrayscaleAndIntensifyBits timing gates:
+        // - scanline < 0 or > 241: only update the active mask state
+        // - scanline 0..241: compute a cutoff pixel and patch [last+1..cutoff]
+        if self.scanline < 0 || self.scanline > 241 {
             self.output_grayscale = new_grayscale;
+            self.output_emphasis = new_emphasis & 0x07;
             return;
         }
 
-        let cutoff_pixel = if self.cycle < 3 {
+        let cutoff_pixel = if self.scanline >= 240 {
+            SCREEN_PIXEL_COUNT - 1
+        } else if self.cycle < 3 {
             (self.scanline as i32) * (SCREEN_WIDTH as i32) - 1
         } else if self.cycle <= 258 {
             (self.scanline as i32) * (SCREEN_WIDTH as i32) + (self.cycle as i32) - 3
@@ -1197,29 +1439,35 @@ impl Ppu {
         }
         .clamp(-1, SCREEN_PIXEL_COUNT - 1);
 
-        if cutoff_pixel > self.grayscale_last_updated_pixel {
-            let start = (self.grayscale_last_updated_pixel + 1).max(0);
+        if cutoff_pixel > self.color_mask_last_updated_pixel {
+            let start = (self.color_mask_last_updated_pixel + 1).max(0);
             let end = cutoff_pixel.min(SCREEN_PIXEL_COUNT - 1);
-            for idx in start..=end {
-                let raw = self.raw_output_indices[idx as usize];
-                let value = if self.output_grayscale {
-                    raw & 0x30
-                } else {
-                    raw
-                };
-                let x = (idx as usize) % SCREEN_WIDTH;
-                let y = (idx as usize) / SCREEN_WIDTH;
-                self.framebuffer.write_index(x, y, value);
-            }
-            self.grayscale_last_updated_pixel = cutoff_pixel;
+            self.framebuffer.apply_color_mask_range(
+                start as usize,
+                end as usize,
+                self.output_grayscale,
+                self.output_emphasis,
+            );
+            self.color_mask_last_updated_pixel = cutoff_pixel;
         }
 
         self.output_grayscale = new_grayscale;
+        self.output_emphasis = new_emphasis & 0x07;
     }
 
     /// Emulates the $2000/$2005/$2006 scroll glitch when writes land on
     /// dot 257 of a visible scanline while rendering is enabled (Mesen2-style).
     fn maybe_apply_scroll_glitch(&mut self, source: ScrollGlitchSource) {
+        // Match Mesen2 defaults: these glitches are optional and disabled
+        // unless explicitly requested.
+        let glitch_enabled = std::env::var("NESIUM_ENABLE_PPU_SCROLL_GLITCH")
+            .ok()
+            .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "True"))
+            .unwrap_or(false);
+        if !glitch_enabled {
+            return;
+        }
+
         // Only visible scanlines, when rendering is enabled, at dot 257.
         if !(0..=239).contains(&self.scanline) {
             return;
@@ -1587,55 +1835,46 @@ impl Ppu {
         let active_sprites = self.sprite_eval.count.min(8);
         let fetch_last_sprite = (i as u8) >= active_sprites || y >= 240;
 
-        let (effective_tile, row): (u8, i16) = if fetch_last_sprite {
-            // Mesen2: when there are fewer than 8 sprites, the PPU still performs
-            // dummy pattern fetches to sprite tile $FF, row 0 (used by MMC3 IRQ counters).
+        // Mesen2 behavior: line offset is computed in u8 space (wrapping),
+        // even when the selected sprite data is garbage/out-of-range.
+        let (effective_tile, line_offset): (u8, u8) = if fetch_last_sprite {
+            // Dummy fetches for hidden/unused sprites use tile $FF row 0.
             (0xFF, 0)
         } else {
-            let mut r = self.scanline - (y as i16);
-            if r < 0 || r >= sprite_height {
-                // Sprite evaluation edge cases can still leave a selected slot
-                // with an out-of-window Y. Hardware keeps fetching pattern data;
-                // fold into the sprite-height row domain instead of panicking.
-                r = r.rem_euclid(sprite_height);
-            }
-
-            // Vertical flip affects row selection.
-            if (attr & 0x80) != 0 {
-                r = (sprite_height - 1) - r;
-            }
-            (tile, r)
+            let delta = (self.scanline as u8).wrapping_sub(y);
+            let line_offset = if (attr & 0x80) != 0 {
+                // Vertical flip.
+                (if sprite_height == 16 { 15u8 } else { 7u8 }).wrapping_sub(delta)
+            } else {
+                delta
+            };
+            (tile, line_offset)
         };
 
-        // Determine pattern table base and tile index for 8x8 vs 8x16.
-        let (pattern_base, tile_index) = if sprite_height == 16 {
-            // For 8x16, bit 0 selects table, and tile index is even.
+        // Build sprite pattern address using Mesen2's line-offset formula.
+        let addr = if sprite_height == 16 {
+            // 8x16: bit0 selects pattern table and tile index is even.
             let base = if (effective_tile & 0x01) != 0 {
                 ppu_mem::PATTERN_TABLE_1
             } else {
                 ppu_mem::PATTERN_TABLE_0
             };
-            let top_tile = effective_tile & 0xFE;
-            let tile_idx = if row < 8 {
-                top_tile
+            let tile_base = ((effective_tile & 0xFE) as u16) * 16;
+            let row = if line_offset >= 8 {
+                line_offset.wrapping_add(8)
             } else {
-                top_tile.wrapping_add(1)
+                line_offset
             };
-            let r = (row & 7) as u16;
-            (base, (tile_idx, r))
+            base + tile_base + row as u16
         } else {
-            // For 8x8, PPUCTRL bit 3 selects sprite pattern table.
+            // 8x8: PPUCTRL bit 3 selects sprite pattern table.
             let base = if (self.registers.control.bits() & 0x08) != 0 {
                 ppu_mem::PATTERN_TABLE_1
             } else {
                 ppu_mem::PATTERN_TABLE_0
             };
-            let r = (row & 7) as u16;
-            (base, (effective_tile, r))
+            base + (effective_tile as u16) * 16 + line_offset as u16
         };
-
-        let (tile_idx, fine_y) = tile_index;
-        let addr = pattern_base + (tile_idx as u16) * 16 + fine_y;
 
         // Mesen2: perform both pattern reads during the same sub-step (case 4),
         // as an approximation of the 8-step internal fetch pipeline.
@@ -1648,6 +1887,26 @@ impl Ppu {
             );
             self.sprite_line_next.set_pattern_low(i, pattern_low);
             self.sprite_line_next.set_pattern_high(i, pattern_high);
+
+            if debug_sprite_trace_enabled() && self.frame == 120 && self.scanline == 194 {
+                nmi_trace::log_line(&format!(
+                    "SPRDBG|src=nesium|ev=fetch_pattern|frame={}|scanline={}|dot={}|slot={}|count={}|y={:02X}|tile={:02X}|attr={:02X}|x={:02X}|fetch_dummy={}|line_off={:02X}|addr={:04X}|lo={:02X}|hi={:02X}",
+                    self.frame,
+                    self.scanline,
+                    self.cycle,
+                    i,
+                    active_sprites,
+                    y,
+                    tile,
+                    attr,
+                    x,
+                    nmi_trace::flag(fetch_last_sprite),
+                    line_offset,
+                    addr,
+                    pattern_low,
+                    pattern_high
+                ));
+            }
         }
     }
 
@@ -1860,6 +2119,22 @@ impl Ppu {
 
         // Palette space is handled separately from nametable/CHR.
         if addr >= ppu_mem::PALETTE_BASE {
+            if debug_palette_trace_enabled() && self.frame == 120 {
+                nmi_trace::log_line(&format!(
+                    "PALDBG|src=nesium|ev=palette_write|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|v={:04X}|t={:04X}|w={}|render={}|prev_render={}|pending_v_delay={}",
+                    self.frame,
+                    self.scanline,
+                    self.cycle,
+                    addr,
+                    value,
+                    self.registers.vram.v.raw(),
+                    self.registers.vram.t.raw(),
+                    nmi_trace::flag(self.registers.vram.w),
+                    nmi_trace::flag(self.render_enabled),
+                    nmi_trace::flag(self.prev_render_enabled),
+                    self.pending_vram_delay
+                ));
+            }
             self.palette_ram.write(addr, value);
             return;
         }
@@ -1903,6 +2178,11 @@ impl Ppu {
 
     fn read_vram(&mut self, ppu_bus: &mut PpuBus<'_>, addr: u16, kind: PpuVramAccessKind) -> u8 {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
+        let trace_fetch = debug_fetch_trace_enabled()
+            && kind == PpuVramAccessKind::RenderingFetch
+            && self.frame == 120
+            && self.scanline == 195
+            && (1..=256).contains(&self.cycle);
 
         // read_vram is intended for nametable/pattern table accesses only; palette
         // RAM is handled separately in read_vram_data / write_vram_data.
@@ -1921,7 +2201,20 @@ impl Ppu {
                 kind,
             };
             // Open bus: Mesen2 returns the address LSB when CHR is disabled.
-            return ppu_bus.read(addr, ctx).unwrap_or_else(|| addr as u8);
+            let value = ppu_bus.read(addr, ctx).unwrap_or_else(|| addr as u8);
+            if trace_fetch {
+                nmi_trace::log_line(&format!(
+                    "FETCHDBG|src=nesium|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|v={:04X}|t={:04X}",
+                    self.frame,
+                    self.scanline,
+                    self.cycle,
+                    addr,
+                    value,
+                    self.registers.vram.v.raw(),
+                    self.registers.vram.t.raw()
+                ));
+            }
+            return value;
         }
 
         let ctx = PpuVramAccessContext {
@@ -1933,7 +2226,7 @@ impl Ppu {
         ppu_bus.notify_vram_access(addr, ctx);
 
         // Nametable space ($2000-$3EFF).
-        match ppu_bus.map_nametable(addr) {
+        let value = match ppu_bus.map_nametable(addr) {
             NametableTarget::Ciram(offset) => {
                 // CIRAM is 2 KiB, offset is 0-0x7FF
                 let ciram_index = (offset & 0x07FF) as usize;
@@ -1949,7 +2242,22 @@ impl Ppu {
                 // Open bus: Mesen2 returns address LSB.
                 addr as u8
             }
+        };
+
+        if trace_fetch {
+            nmi_trace::log_line(&format!(
+                "FETCHDBG|src=nesium|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|v={:04X}|t={:04X}",
+                self.frame,
+                self.scanline,
+                self.cycle,
+                addr,
+                value,
+                self.registers.vram.v.raw(),
+                self.registers.vram.t.raw()
+            ));
         }
+
+        value
     }
 
     /// Increments the coarse X scroll component in `v`, wrapping nametable horizontally.
@@ -2028,39 +2336,37 @@ impl Ppu {
             || self.pending_vram_increment.is_pending()
             || self.ignore_vram_read > 0;
 
-        if need_state {
-            let mask = self.registers.mask;
-            let new_render = mask.rendering_enabled();
+        if !need_state {
+            return;
+        }
 
-            // Preserve the old value for prev_render_enabled, then latch the
-            // new effective rendering state.
-            let old_render = self.render_enabled;
-            self.prev_render_enabled = old_render;
-            self.render_enabled = new_render;
-
-            if old_render != new_render && self.scanline < 240 {
-                if new_render {
-                    // Rendering was just enabled: perform any pending OAM corruption.
+        // Mirror Mesen2 UpdateState():
+        // 1) First, apply transition side effects when prev != current render latch.
+        if self.prev_render_enabled != self.render_enabled {
+            self.prev_render_enabled = self.render_enabled;
+            if self.scanline < 240 {
+                if self.prev_render_enabled {
+                    // Rendering became active (one-dot delayed transition).
                     self.process_oam_corruption();
                 } else {
-                    // Rendering was just disabled: flag potential OAM corruption.
+                    // Rendering became inactive (one-dot delayed transition).
                     self.set_oam_corruption_flags();
-
-                    // Disabling rendering during sprite evaluation triggers an OAMADDR glitch.
                     if (65..=256).contains(&self.cycle) {
                         self.oam_addr_disable_glitch_pending = true;
                     }
                 }
             }
+        }
 
-            // Clear the explicit "dirty" flag; the other conditions
-            // (pending_vram_delay, pending increment, ignore_vram_read) are
-            // transient and will clear themselves over subsequent dots.
-            self.state_update_pending = false;
+        // 2) Then refresh the current render latch from the raw mask bits.
+        let new_render = self.registers.mask.rendering_enabled();
+        if self.render_enabled != new_render {
+            self.render_enabled = new_render;
+            // Keep updating state next dot so `prev_render_enabled` catches up
+            // exactly one PPU cycle later.
+            self.state_update_pending = true;
         } else {
-            // No explicit state change requested; just propagate the previous
-            // latched state into `prev_render_enabled` for this dot.
-            self.prev_render_enabled = self.render_enabled;
+            self.state_update_pending = false;
         }
     }
 
@@ -2187,6 +2493,39 @@ mod tests {
 
         let value = ppu.cpu_read(PpuRegister::Data.addr(), &mut ppu_bus);
         assert_eq!(value, 0xD5);
+    }
+
+    #[test]
+    fn forced_blank_uses_pre_commit_v_on_commit_dot() {
+        let mut ppu = Ppu::default();
+        ppu.scanline = 0;
+        ppu.cycle = 2; // x = 1
+        ppu.registers.mask = Mask::from_bits_retain(0);
+        ppu.render_enabled = false;
+        ppu.prev_render_enabled = false;
+        ppu.output_grayscale = false;
+        ppu.output_emphasis = 0;
+
+        // Old address resolves to a black slot, new address resolves to $00
+        // (visible grey). We expect the commit dot to still output old v.
+        ppu.palette_ram.write(0x3F1D, 0x0D);
+        ppu.palette_ram.write(0x3F1F, 0x00);
+        ppu.registers.vram.v.set_raw(0x3F1D);
+        ppu.pending_vram_addr.set_raw(0x3F1F);
+        ppu.pending_vram_delay = 1;
+
+        ppu.render_pixel();
+        let back = ppu.framebuffer.active_plane_index();
+        assert_eq!(ppu.framebuffer.index_plane(back)[1] & 0x3F, 0x0D);
+
+        // End-of-dot commit (mirrors clock/update ordering).
+        ppu.step_pending_vram_addr();
+        assert_eq!(ppu.registers.vram.v.raw() & 0x3FFF, 0x3F1F);
+
+        // Next dot should use the committed address/color.
+        ppu.cycle = 3; // x = 2
+        ppu.render_pixel();
+        assert_eq!(ppu.framebuffer.index_plane(back)[2] & 0x3F, 0x00);
     }
 
     #[test]

@@ -560,25 +560,15 @@ impl Runner {
         if let Some((snapshot, indices)) = self.rewind.rewind_frame()
             && self.nes.load_snapshot(&snapshot).is_ok()
         {
-            // Copy the palette array to avoid borrow checker issues.
-            let palette = *self.nes.ppu.palette().as_colors();
             // Refresh the framebuffer with the saved palette indices.
             //
             // The rewind history stores the canonical index plane (one byte per pixel).
-            // We write it into the back index plane and present it as a full frame.
-            let fb = self.nes.ppu.framebuffer_mut();
-            let back_indices = fb.write();
-
-            if back_indices.len() != indices.len() {
+            // Presenting from indices converts to packed pixels once and swaps the plane.
+            if !self.nes.present_index_frame(&indices) {
                 // A size mismatch indicates an incompatible framebuffer configuration.
                 // Keep the current frame rather than presenting corrupted data.
                 return;
             }
-
-            back_indices.copy_from_slice(&indices);
-
-            // Present converts indices to packed pixels once and swaps the presented plane.
-            fb.present(&palette);
 
             if let Some(audio) = &self.audio {
                 audio.clear();
@@ -1314,8 +1304,7 @@ impl Runner {
         // Clear framebuffer to display black screen and notify frontend.
         // clear_and_present() fills buffers with 0 bytes (black) and triggers the callback,
         // without re-rendering using the palette (which would produce gray from palette[0]).
-        let fb = self.nes.ppu.framebuffer_mut();
-        fb.clear_and_present();
+        self.nes.clear_framebuffer_and_present();
 
         // Deactivate netplay to prevent lockstep issues on next ROM load
         if let Some(np) = &self.netplay_input {
@@ -1361,9 +1350,7 @@ impl Runner {
         }
 
         self.nes
-            .ppu
-            .framebuffer_mut()
-            .set_output_config(width as usize, height as usize);
+            .set_video_output_config(width as usize, height as usize);
 
         let _ = reply.send(Ok(()));
     }
@@ -1373,7 +1360,7 @@ impl Runner {
         processor: Box<dyn VideoPostProcessor>,
         reply: ControlReplySender,
     ) {
-        self.nes.ppu.framebuffer_mut().set_post_processor(processor);
+        self.nes.set_video_post_processor(processor);
         let _ = reply.send(Ok(()));
     }
 
@@ -1388,9 +1375,9 @@ impl Runner {
             let _ = reply.send(Err(RuntimeError::InvalidVideoOutputSize { width, height }));
             return;
         }
-        let fb = self.nes.ppu.framebuffer_mut();
-        fb.set_output_config(width as usize, height as usize);
-        fb.set_post_processor(processor);
+        self.nes
+            .set_video_output_config(width as usize, height as usize);
+        self.nes.set_video_post_processor(processor);
         let _ = reply.send(Ok(()));
     }
 

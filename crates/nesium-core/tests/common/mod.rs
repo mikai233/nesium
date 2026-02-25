@@ -650,7 +650,10 @@ pub fn run_rom_rgb24_sha1_for_frames(
     let mut frame = nes.ppu.frame_count() as usize;
     while frame <= max_frame {
         while target_idx < targets.len() && frame == targets[target_idx] {
-            let hash = compute_rgb24_sha1_from_rgba8888(nes.render_buffer())?;
+            let packed = nes
+                .try_render_buffer()
+                .context("packed render buffer unavailable (swapchain backend)")?;
+            let hash = compute_rgb24_sha1_from_rgba8888(packed)?;
             results.push((frame, hash));
             target_idx += 1;
         }
@@ -761,7 +764,9 @@ pub fn run_rom_zeropage_result(
 /// Simple heuristic to ensure the framebuffer isn't blank: require at least `min_unique` distinct color indices.
 pub fn require_color_diversity(nes: &Nes, min_unique: usize) -> Result<()> {
     let mut seen = [false; 256];
-    let fb = nes.render_buffer();
+    let fb = nes
+        .try_render_buffer()
+        .context("packed render buffer unavailable (swapchain backend)")?;
     for &b in fb {
         seen[b as usize] = true;
     }

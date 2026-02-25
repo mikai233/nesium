@@ -380,6 +380,8 @@ impl<'a> CpuBus<'a> {
                         | PpuRegister::Addr
                         | PpuRegister::Data
                 ) {
+                    // Match the Mesen-side callback semantics used by our tooling:
+                    // log write intent before mutating PPU internal state.
                     self.trace_ppu_reg_write(reg.addr(), data);
                 }
                 let mut pattern = PpuBus::new(self.cartridge.as_deref_mut(), *self.cycles);

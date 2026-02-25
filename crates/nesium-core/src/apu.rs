@@ -85,6 +85,22 @@ fn apu_trace_log_write(line: &str) {
 }
 
 #[inline]
+fn apu_trace_enabled() -> bool {
+    APU_TRACE_LOG
+        .get_or_init(|| {
+            let path = std::env::var("NESIUM_APU_TRACE_PATH").ok()?;
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path)
+                .ok()
+                .map(|f| Mutex::new(BufWriter::with_capacity(256 * 1024, f)))
+        })
+        .is_some()
+}
+
+#[inline]
 fn parse_trace_addr_token(token: &str) -> Option<u16> {
     let t = token.trim();
     if t.is_empty() {
@@ -199,6 +215,9 @@ impl Apu {
 
     #[inline]
     fn trace_write_register(&self, addr: u16, value: u8) {
+        if !apu_trace_enabled() {
+            return;
+        }
         let dmc_state = self.dmc_trace_state_fields();
         apu_trace_log_write(&format!(
             "APUTRACE|src=nesium|ev=write|cycle={}|addr={:04X}|value={:02X}|frame_irq={}|dmc_irq={}|{}",
@@ -220,6 +239,9 @@ impl Apu {
         frame_irq_after: bool,
         dmc_irq_after: bool,
     ) {
+        if !apu_trace_enabled() {
+            return;
+        }
         apu_trace_log_write(&format!(
             "APUTRACE|src=nesium|ev=read|cycle={}|addr=4015|value={:02X}|frame_irq_before={}|dmc_irq_before={}|frame_irq_after={}|dmc_irq_after={}",
             self.cycles,
@@ -233,7 +255,7 @@ impl Apu {
 
     #[inline]
     pub(crate) fn trace_mem_read(&self, addr: u16, value: u8) {
-        if !apu_trace_should_log_read_mem(addr) {
+        if !apu_trace_enabled() || !apu_trace_should_log_read_mem(addr) {
             return;
         }
         apu_trace_log_write(&format!(
@@ -244,6 +266,9 @@ impl Apu {
 
     #[inline]
     fn trace_irq_event(&self, event: &str) {
+        if !apu_trace_enabled() {
+            return;
+        }
         apu_trace_log_write(&format!(
             "APUTRACE|src=nesium|ev={}|cycle={}|frame_irq={}|dmc_irq={}",
             event,
@@ -255,6 +280,9 @@ impl Apu {
 
     #[inline]
     fn trace_dmc_dma_event(&self, event: DmcDmaEvent) {
+        if !apu_trace_enabled() {
+            return;
+        }
         let dmc_state = self.dmc_trace_state_fields();
         match event {
             DmcDmaEvent::Request { addr } => {
@@ -274,6 +302,9 @@ impl Apu {
 
     #[inline]
     fn trace_dmc_dma_complete(&self, byte: u8) {
+        if !apu_trace_enabled() {
+            return;
+        }
         let dmc_state = self.dmc_trace_state_fields();
         apu_trace_log_write(&format!(
             "APUTRACE|src=nesium|ev=dmc_dma_complete|cycle={}|addr={:04X}|value={:02X}|{}",
