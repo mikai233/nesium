@@ -14,6 +14,7 @@ use crate::cpu::mnemonic::Mnemonic;
 use crate::memory::cpu::{IRQ_VECTOR_HI, IRQ_VECTOR_LO, NMI_VECTOR_HI, NMI_VECTOR_LO};
 use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
 use crate::memory::ppu::{self as ppu_mem, Register as PpuRegister};
+use crate::nmi_trace;
 use crate::reset_kind::ResetKind;
 
 // Debug builds keep the standard checks; release uses unchecked hints to avoid
@@ -351,6 +352,25 @@ impl Cpu {
         let nmi_level = bus.nmi_level();
         if nmi_level && !self.prev_nmi_level {
             self.nmi_latch = true;
+            if nmi_trace::enabled() {
+                nmi_trace::log_line(&format!(
+                    "NMITRACE|src=nesium|ev=nmi_latch_set|cpu_cycle={}|cpu_master={}|pc={:04X}|frame={}|scanline={}|dot={}|vblank={}|nmi_enabled={}|nmi_level={}",
+                    bus.cycles(),
+                    bus.master_clock(),
+                    self.pc,
+                    bus.ppu.frame,
+                    bus.ppu.scanline,
+                    bus.ppu.cycle,
+                    nmi_trace::flag(
+                        bus.ppu
+                            .registers
+                            .status
+                            .contains(crate::ppu::Status::VERTICAL_BLANK)
+                    ),
+                    nmi_trace::flag(bus.ppu.registers.control.nmi_enabled()),
+                    nmi_trace::flag(bus.ppu.nmi_level)
+                ));
+            }
         }
         self.prev_nmi_level = nmi_level;
 
@@ -868,6 +888,18 @@ impl Cpu {
                 let lo = bus.mem_read(NMI_VECTOR_LO, self, ctx);
                 let hi = bus.mem_read(NMI_VECTOR_HI, self, ctx);
                 self.pc = ((hi as u16) << 8) | (lo as u16);
+                if nmi_trace::enabled() {
+                    nmi_trace::log_line(&format!(
+                        "NMITRACE|src=nesium|ev=nmi_take|cpu_cycle={}|cpu_master={}|pc={:04X}|vector={:04X}|frame={}|scanline={}|dot={}",
+                        bus.cycles(),
+                        bus.master_clock(),
+                        self.pc,
+                        ((hi as u16) << 8) | (lo as u16),
+                        bus.ppu.frame,
+                        bus.ppu.scanline,
+                        bus.ppu.cycle
+                    ));
+                }
             }
             IrqKind::Irq => {
                 let lo = bus.mem_read(IRQ_VECTOR_LO, self, ctx);

@@ -60,6 +60,7 @@ use crate::{
     interceptor::Interceptor,
     mem_block::ppu::{Ciram, SecondaryOamRam},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
+    nmi_trace,
     ppu::{
         buffer::FrameBuffer,
         buffer::FrameReadyCallback,
@@ -420,7 +421,7 @@ impl Ppu {
             PpuRegister::Control => {
                 self.registers.write_control(value);
                 self.maybe_apply_scroll_glitch(ScrollGlitchSource::Control2000);
-                self.update_nmi_level();
+                self.update_nmi_level(ppu_bus.cpu_cycle());
             }
             PpuRegister::Mask => {
                 // TODO: Hardware/Mesen2 model subtle mid-frame rendering enable/disable glitches (bus address reset, OAM corruption).
@@ -506,7 +507,7 @@ impl Ppu {
     /// behavior.
     pub fn cpu_read(&mut self, addr: u16, ppu_bus: &mut PpuBus<'_>) -> u8 {
         match PpuRegister::from_cpu_addr(addr) {
-            PpuRegister::Status => self.read_status(),
+            PpuRegister::Status => self.read_status(ppu_bus.cpu_cycle()),
             PpuRegister::OamData => {
                 let v = self.read_oam_data();
                 // OAMDATA drives the full bus when read.
@@ -633,10 +634,24 @@ impl Ppu {
                 (-1, 1..=256) => {
                     if ppu.cycle == 1 {
                         // Clear vblank/sprite flags at dot 1 of prerender.
+                        let had_vblank = ppu.registers.status.contains(Status::VERTICAL_BLANK);
                         ppu.registers.status.remove(Status::VERTICAL_BLANK);
                         ppu.registers
                             .status
                             .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+                        if had_vblank && nmi_trace::enabled() {
+                            nmi_trace::log_line(&format!(
+                                "NMITRACE|src=nesium|ev=vblank_clear|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|reason=prerender|nmi_enabled={}|nmi_level={}|prevent_vblank={}",
+                                cpu_cycle,
+                                ppu.master_clock,
+                                ppu.frame,
+                                ppu.scanline,
+                                ppu.cycle,
+                                nmi_trace::flag(ppu.registers.control.nmi_enabled()),
+                                nmi_trace::flag(ppu.nmi_level),
+                                nmi_trace::flag(ppu.prevent_vblank_flag)
+                            ));
+                        }
                         // Mesen2: sprite evaluation does not run on the pre-render line,
                         // so ensure scanline 0 starts with 0 active sprites.
                         ppu.sprite_eval.count = 0;
@@ -794,6 +809,29 @@ impl Ppu {
                     // the VBlank flag never sets and no NMI edge is generated for this frame.
                     if !ppu.prevent_vblank_flag {
                         ppu.registers.status.insert(Status::VERTICAL_BLANK);
+                        if nmi_trace::enabled() {
+                            nmi_trace::log_line(&format!(
+                                "NMITRACE|src=nesium|ev=vblank_set|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|nmi_enabled={}|nmi_level={}",
+                                cpu_cycle,
+                                ppu.master_clock,
+                                ppu.frame,
+                                ppu.scanline,
+                                ppu.cycle,
+                                nmi_trace::flag(ppu.registers.control.nmi_enabled()),
+                                nmi_trace::flag(ppu.nmi_level)
+                            ));
+                        }
+                    } else if nmi_trace::enabled() {
+                        nmi_trace::log_line(&format!(
+                            "NMITRACE|src=nesium|ev=vblank_suppressed|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|nmi_enabled={}|nmi_level={}",
+                            cpu_cycle,
+                            ppu.master_clock,
+                            ppu.frame,
+                            ppu.scanline,
+                            ppu.cycle,
+                            nmi_trace::flag(ppu.registers.control.nmi_enabled()),
+                            nmi_trace::flag(ppu.nmi_level)
+                        ));
                     }
                     // Consume the race latch each frame.
                     ppu.prevent_vblank_flag = false;
@@ -804,7 +842,7 @@ impl Ppu {
                 _ => unreachable!("PPU scanline {} out of range", ppu.scanline),
             }
 
-            ppu.update_nmi_level();
+            ppu.update_nmi_level(cpu_cycle);
             ppu.update_state_latch();
 
             // Mesen2/hardware: apply delayed $2006 VRAM-address commits at the
@@ -999,10 +1037,26 @@ impl Ppu {
 
     /// Recomputes the NMI output line based on VBlank and control register,
     /// latching a pending NMI on rising edges.
-    fn update_nmi_level(&mut self) {
+    fn update_nmi_level(&mut self, cpu_cycle: u64) {
+        let old_nmi_level = self.nmi_level;
         let new_nmi_level = self.registers.status.contains(Status::VERTICAL_BLANK)
             && self.registers.control.nmi_enabled();
         self.nmi_level = new_nmi_level;
+        if old_nmi_level != new_nmi_level && nmi_trace::enabled() {
+            nmi_trace::log_line(&format!(
+                "NMITRACE|src=nesium|ev=nmi_level|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|from={}|to={}|vblank={}|nmi_enabled={}|prevent_vblank={}",
+                cpu_cycle,
+                self.master_clock,
+                self.frame,
+                self.scanline,
+                self.cycle,
+                nmi_trace::flag(old_nmi_level),
+                nmi_trace::flag(new_nmi_level),
+                nmi_trace::flag(self.registers.status.contains(Status::VERTICAL_BLANK)),
+                nmi_trace::flag(self.registers.control.nmi_enabled()),
+                nmi_trace::flag(self.prevent_vblank_flag)
+            ));
+        }
     }
 
     /// Renders a single pixel into the framebuffer based on the current
@@ -1611,7 +1665,7 @@ impl Ppu {
         base_nt + 0x03C0 + (v.coarse_y() as u16 / 4) * 8 + (v.coarse_x() as u16 / 4)
     }
 
-    fn read_status(&mut self) -> u8 {
+    fn read_status(&mut self, cpu_cycle: u64) -> u8 {
         let status = self.registers.status.bits();
         // Mesen2 / hardware: low 5 bits of $2002 come from open bus.
         // Use PpuOpenBus::apply with a mask covering the low 5 bits so only
@@ -1629,7 +1683,21 @@ impl Ppu {
             self.prevent_vblank_flag = true;
         }
 
-        self.update_nmi_level();
+        if self.scanline == 241 && self.cycle == 0 && nmi_trace::enabled() {
+            nmi_trace::log_line(&format!(
+                "NMITRACE|src=nesium|ev=vblank_suppress_latch|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|vblank={}|nmi_enabled={}|nmi_level={}",
+                cpu_cycle,
+                self.master_clock,
+                self.frame,
+                self.scanline,
+                self.cycle,
+                nmi_trace::flag(self.registers.status.contains(Status::VERTICAL_BLANK)),
+                nmi_trace::flag(self.registers.control.nmi_enabled()),
+                nmi_trace::flag(self.nmi_level)
+            ));
+        }
+
+        self.update_nmi_level(cpu_cycle);
         ret
     }
 
