@@ -167,6 +167,46 @@ fn compute_tv_sha1(bytes: &[u8]) -> String {
     general_purpose::STANDARD.encode(hasher.finalize())
 }
 
+fn compute_foreground_mask_sha1(index_buffer: &[u8]) -> String {
+    if index_buffer.is_empty() {
+        return compute_tv_sha1(&[]);
+    }
+
+    let mut counts = [0usize; 256];
+    for &px in index_buffer {
+        counts[px as usize] += 1;
+    }
+
+    let mut bg_index = 0usize;
+    let mut bg_count = 0usize;
+    for (idx, &count) in counts.iter().enumerate() {
+        if count > bg_count {
+            bg_count = count;
+            bg_index = idx;
+        }
+    }
+
+    let mut mask = Vec::with_capacity(index_buffer.len().div_ceil(8));
+    let mut packed = 0u8;
+    let mut bit = 0u8;
+    for &px in index_buffer {
+        if px as usize != bg_index {
+            packed |= 1u8 << bit;
+        }
+        bit += 1;
+        if bit == 8 {
+            mask.push(packed);
+            packed = 0;
+            bit = 0;
+        }
+    }
+    if bit != 0 {
+        mask.push(packed);
+    }
+
+    compute_tv_sha1(&mask)
+}
+
 /// Runs a ROM and validates its video output by comparing a SHA-1 hash of the framebuffer against
 /// the expected `tvsha1` entry recorded in `test_roms.xml`. This is useful for ROMs that don't
 /// expose a $6000 status protocol (e.g., `cpu_timing_test6`).
@@ -475,6 +515,60 @@ pub fn run_rom_serial_text(rom_rel_path: &str, frames: usize) -> Result<String> 
     serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
 
     Ok(normalize_serial_text(&serial_log))
+}
+
+/// Runs a ROM and returns foreground-mask SHA1 hashes for requested frames.
+///
+/// The foreground mask treats the most frequent palette index of each frame as
+/// background and all other indices as foreground.
+pub fn run_rom_fg_mask_sha1_for_frames(
+    rom_rel_path: &str,
+    frames: &[usize],
+) -> Result<Vec<(usize, String)>> {
+    if frames.is_empty() {
+        bail!("frame list must not be empty");
+    }
+
+    let mut targets = frames.to_vec();
+    targets.sort_unstable();
+    targets.dedup();
+
+    let path = Path::new(ROM_ROOT).join(rom_rel_path);
+    if !path.exists() {
+        bail!("ROM not found: {}", path.display());
+    }
+
+    let mut nes = Nes::default();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+
+    let mut results = Vec::with_capacity(targets.len());
+    let mut target_idx = 0usize;
+    let max_frame = *targets.last().expect("targets not empty");
+
+    for frame in 0..=max_frame {
+        nes.run_frame(false);
+        while target_idx < targets.len() && frame == targets[target_idx] {
+            results.push((
+                frame,
+                compute_foreground_mask_sha1(nes.render_index_buffer()),
+            ));
+            target_idx += 1;
+        }
+        if target_idx >= targets.len() {
+            break;
+        }
+    }
+
+    if results.len() != targets.len() {
+        bail!(
+            "failed to capture all requested frames: captured {} of {}",
+            results.len(),
+            targets.len()
+        );
+    }
+
+    Ok(results)
 }
 
 /// Runs a ROM until a zero-page result byte becomes non-zero or times out.
