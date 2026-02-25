@@ -3,8 +3,8 @@ mod common;
 use anyhow::{Context, Result, bail};
 use common::{
     RESULT_ZP_ADDR, require_color_diversity, run_rom_fg_mask_sha1_for_frames, run_rom_frames,
-    run_rom_rgb24_sha1_for_frames, run_rom_serial_text, run_rom_status, run_rom_tv_sha1,
-    run_rom_zeropage_result,
+    run_rom_ram_sha1, run_rom_rgb24_sha1_for_frames, run_rom_serial_text, run_rom_status,
+    run_rom_tv_sha1, run_rom_zeropage_result,
 };
 use ctor::ctor;
 use tracing::Level;
@@ -257,6 +257,7 @@ fn cpu_timing_test6_suite() -> Result<()> {
 
 #[test]
 fn dmc_dma_during_read4_suite() -> Result<()> {
+    // TASVideos accuracy-required ROMs
     // Compare decoded serial output against captured baselines.
     // These ROMs do not use the standard $6000 status-byte protocol.
     let cases: &[(&str, &str)] = &[
@@ -293,16 +294,29 @@ fn dmc_dma_during_read4_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn dmc_tests_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in [
-        "dmc_tests/buffer_retained.nes",
-        "dmc_tests/latency.nes",
-        "dmc_tests/status.nes",
-        "dmc_tests/status_irq.nes",
-    ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // These ROMs do not provide a directly-consumable $6000 or serial pass/fail signal.
+    // Validate against Mesen2-captured 2KB CPU RAM snapshots at frame 1800.
+    const RAM_BASE: u16 = 0x0000;
+    const RAM_LEN: usize = 0x0800;
+    let cases: &[(&str, &str)] = &[
+        (
+            "dmc_tests/buffer_retained.nes",
+            "amCvSsAi2iiOJ1ZfjtPRwIEUFRY=",
+        ),
+        ("dmc_tests/latency.nes", "XHjhiTk6RWzf2G6ZdCH6+wBIgvM="),
+        ("dmc_tests/status.nes", "amCvSsAi2iiOJ1ZfjtPRwIEUFRY="),
+        ("dmc_tests/status_irq.nes", "9H7NkKJEDyBR7bOPq67NUS65j7M="),
+    ];
+
+    for (rom, expected_hash) in cases {
+        let actual_hash = run_rom_ram_sha1(rom, DEFAULT_FRAMES, RAM_BASE, RAM_LEN)?;
+        assert_eq!(
+            actual_hash, *expected_hash,
+            "[{}] RAM sha1 mismatch at frame {} (base={:#06X}, len={:#06X})",
+            rom, DEFAULT_FRAMES, RAM_BASE, RAM_LEN
+        );
     }
     Ok(())
 }

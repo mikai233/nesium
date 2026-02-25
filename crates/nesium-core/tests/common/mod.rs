@@ -518,6 +518,24 @@ pub fn run_rom_serial_text(rom_rel_path: &str, frames: usize) -> Result<String> 
     Ok(normalize_serial_text(&serial_log))
 }
 
+/// Runs a ROM for `frames`, snapshots a CPU memory range, and returns the SHA-1
+/// hash (Base64) of that snapshot.
+pub fn run_rom_ram_sha1(
+    rom_rel_path: &str,
+    frames: usize,
+    base_addr: u16,
+    len: usize,
+) -> Result<String> {
+    let mut hash = String::new();
+    run_rom_frames(rom_rel_path, frames, |nes| {
+        let mut buf = vec![0u8; len];
+        nes.peek_cpu_slice(base_addr, &mut buf);
+        hash = compute_tv_sha1(&buf);
+        Ok(())
+    })?;
+    Ok(hash)
+}
+
 /// Runs a ROM and returns foreground-mask SHA1 hashes for requested frames.
 ///
 /// The foreground mask treats the most frequent palette index of each frame as
