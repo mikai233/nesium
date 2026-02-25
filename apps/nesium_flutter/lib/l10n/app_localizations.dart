@@ -3187,6 +3187,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No matching parameters found'**
   String get noResults;
+
+  /// No description provided for @errorFailedToCreateTexture.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to create texture'**
+  String get errorFailedToCreateTexture;
 }
 
 class _AppLocalizationsDelegate

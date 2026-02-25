@@ -43,7 +43,7 @@ final class AuxTextureEntry: NSObject, FlutterTexture {
            let pb1 = Self.makePixelBuffer(width: width, height: height) {
             self.pixelBuffers = [pb0, pb1]
         } else {
-            NSLog("AuxTextureEntry: failed to create CVPixelBuffer(s) for %dx%d", width, height)
+            NSLog("[Nesium] AuxTexture failed to create CVPixelBuffers (%dx%d)", width, height)
         }
         
         // Create the Rust-side backing store.

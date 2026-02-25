@@ -16,8 +16,12 @@ import UIKit
        let registrar = controller.registrar(forPlugin: "NesiumTexturePlugin") {
       let textures = registrar.textures()
       let messenger = registrar.messenger()
-      let channel = FlutterMethodChannel(name: "nesium", binaryMessenger: messenger)
 
+      // Register Platform View Factory for low-latency iOS rendering
+      let platformViewFactory = NesiumPlatformViewFactory(messenger: messenger)
+      registrar.register(platformViewFactory, withId: "plugins.nesium.com/native_view")
+
+      let channel = FlutterMethodChannel(name: "nesium", binaryMessenger: messenger)
       let manager = NesiumTextureManager(textureRegistry: textures)
       nesiumManager = manager
 
