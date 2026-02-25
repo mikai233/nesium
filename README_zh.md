@@ -171,6 +171,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 
 | 套件名称 | 说明 | TASVideos 精度要求 |
 | --- | --- | --- |
+| `dpcmletterbox_suite` | 可视化 DPCM 演示 ROM；按 `dpcmletterbox/README.txt` 手动验证 | 是 |
 | `paddletest3_manual` | 旋钮/模拟控制器测试；遵循 ROM `Info.txt` 指示 | 否 |
 | `tvpassfail_manual` | TV 特性（NTSC 色度/亮度，伪影）；视觉验证 | 否 |
 | `vaus_test_manual` | Arkanoid Vaus 控制器测试（交互式） | 否 |
@@ -183,7 +184,6 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | --- | --- | --- |
 | `blargg_litewall_suite` | Litewall / 时序相关测试 | 否 |
 | `dmc_tests_suite` | DMC 缓冲/延迟/IRQ 行为 | 是 |
-| `dpcmletterbox_suite` | DPCM 相关视觉/音频测试 | 是 |
 | `exram_suite` | MMC5 ExRAM 行为（当前失败） | 否 |
 | `m22chrbankingtest_suite` | Mapper 22 CHR banking 行为 | 否 |
 | `mmc5test_suite` | MMC5 功能测试 | 是 |

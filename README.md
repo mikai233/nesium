@@ -171,6 +171,7 @@ These ROMs are designed for interactive/manual verification and do not expose a 
 
 | Suite name           | Notes                                                                 | TASVideos accuracy-required |
 | -------------------- | --------------------------------------------------------------------- | --------------------------- |
+| `dpcmletterbox_suite`| Visual DPCM demo ROM; verify manually per `dpcmletterbox/README.txt` | Yes                         |
 | `paddletest3_manual` | Paddle/analog controller test; follow ROM `Info.txt` for instructions | No                          |
 | `tvpassfail_manual`  | TV characteristics (NTSC chroma/luma, artifacts); verify visually     | No                          |
 | `vaus_test_manual`   | Arkanoid Vaus controller test (interactive)                           | No                          |
@@ -183,7 +184,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | ----------------------------- | -------------------------------------------- | --------------------------- |
 | `blargg_litewall_suite`       | Litewall / timing-related tests              | No                          |
 | `dmc_tests_suite`             | DMC buffer/delay/IRQ behaviour               | Yes                         |
-| `dpcmletterbox_suite`         | DPCM-related visual/audio test               | Yes                         |
 | `exram_suite`                 | MMC5 ExRAM behaviour (currently failing)     | No                          |
 | `m22chrbankingtest_suite`     | Mapper 22 CHR banking behaviour              | No                          |
 | `mmc5test_suite`              | MMC5 functional tests                        | Yes                         |
