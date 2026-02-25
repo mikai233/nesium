@@ -126,6 +126,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `mmc1_a12_suite` | MMC1 A12 线行为 | 否 |
 | `apu_mixer_suite` | APU 混音器 / TASVideos 测试集 | 是 |
 | `apu_reset_suite` | APU 复位行为 | 是 |
+| `sprdma_and_dmc_dma_suite` | Sprite DMA 和 DMC DMA 交互 | 是 |
 | `blargg_apu_2005_07_30_suite` | 早期 Blargg APU 测试 | 是 |
 | `blargg_nes_cpu_test5_suite` | CPU 精度测试 | 是 |
 | `blargg_ppu_tests_2005_09_15b_suite` | PPU 调色板/显存/滚动行为 | 是 |
@@ -193,7 +194,6 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `scanline_suite` | 扫描线时序 | 是 |
 | `scanline_a1_suite` | 替代扫描线测试 | 是 |
 | `scrolltest_suite` | 滚动行为 | 是 |
-| `sprdma_and_dmc_dma_suite` | Sprite DMA 和 DMC DMA 交互 | 是 |
 | `volume_tests_suite` | 音量/混音行为 | 是 |
 
 ## 免责声明
