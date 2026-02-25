@@ -490,19 +490,36 @@ fn mmc3_irq_tests_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc3_test_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // TASVideos accuracy-required ROMs.
+    //
+    // 5/6 validate mutually-exclusive MMC3 revision behavior ("MMC3" vs "MMC6-style" IRQ quirks),
+    // so a single implementation should pass at least one variant.
     for rom in [
         "mmc3_test/1-clocking.nes",
         "mmc3_test/2-details.nes",
         "mmc3_test/3-A12_clocking.nes",
         "mmc3_test/4-scanline_timing.nes",
-        "mmc3_test/5-MMC3.nes",
-        "mmc3_test/6-MMC6.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_status(rom, DEFAULT_FRAMES)
+            .with_context(|| format!("[mmc3_test_suite] rom={rom}"))?;
     }
+
+    let mmc3 = run_rom_status("mmc3_test/5-MMC3.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_suite] rom=mmc3_test/5-MMC3.nes");
+    let mmc6_style = run_rom_status("mmc3_test/6-MMC6.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_suite] rom=mmc3_test/6-MMC6.nes");
+
+    let mmc3_ok = mmc3.is_ok();
+    let mmc6_ok = mmc6_style.is_ok();
+    if !mmc3_ok && !mmc6_ok {
+        let err_mmc3 = mmc3.expect_err("mmc3 should be Err");
+        let err_mmc6 = mmc6_style.expect_err("mmc6_style should be Err");
+        bail!(
+            "[mmc3_test_suite] neither variant passed.\nmmc3 error: {err_mmc3:#}\nmmc6-style error: {err_mmc6:#}"
+        );
+    }
+
     Ok(())
 }
 
