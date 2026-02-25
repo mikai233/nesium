@@ -606,10 +606,26 @@ fn nes_instr_test_suite() -> Result<()> {
     Ok(())
 }
 
+/// NMI synchronization demo ROMs.
+/// See `vendor/nes-test-roms/nmi_sync/readme.txt`. These are visual demos that
+/// show whether timed writes stay stable; they do not expose a machine-readable
+/// pass/fail signal via $6000 or serial output.
 #[test]
-fn nmi_sync_suite() -> Result<()> {
-    // NTSC baseline tracking against Mesen2 using foreground-mask hashes over
-    // multiple frame windows. PAL visual demo remains manual-only for now.
+#[ignore = "visual demo ROM; requires manual verification per nmi_sync/readme.txt"]
+fn nmi_sync_manual() -> Result<()> {
+    for rom in ["nmi_sync/demo_ntsc.nes", "nmi_sync/demo_pal.nes"] {
+        run_rom_frames(rom, 600, |_| Ok(()))?;
+    }
+    Ok(())
+}
+
+/// NTSC-only automated baseline check for the nmi_sync demo.
+///
+/// This compares foreground geometry masks against Mesen2-captured hashes over
+/// multiple distributed frame windows to reduce false positives from single-frame
+/// sampling noise. PAL is intentionally excluded for now.
+#[test]
+fn nmi_sync_ntsc_mesen_baseline() -> Result<()> {
     const ROM: &str = "nmi_sync/demo_ntsc.nes";
     const EXPECTED_A: &str = "HsecswITwKxfvAbg7INnX+37zEg=";
     const EXPECTED_B: &str = "V3aUHSsmGbJIIpCpK159sa78Q8I=";
@@ -649,7 +665,7 @@ fn nmi_sync_suite() -> Result<()> {
             || (hash_a == EXPECTED_B && hash_b == EXPECTED_A);
         if !is_expected_pair {
             bail!(
-                "[nmi_sync_suite] frame pair ({}, {}) mismatch: got ({}, {}), expected pair {{{}, {}}}",
+                "[nmi_sync_ntsc_mesen_baseline] frame pair ({}, {}) mismatch: got ({}, {}), expected pair {{{}, {}}}",
                 a,
                 b,
                 hash_a,
