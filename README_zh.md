@@ -148,6 +148,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `instr_timing_suite` | 指令时序 | 是 |
 | `mmc3_irq_tests_suite` | MMC3 IRQ 测试集（必测项通过 + revision 变体至少通过一个） | 是 |
 | `mmc3_test_suite` | MMC3 功能测试集（必测项通过 + MMC3/MMC6 变体至少通过一个） | 是 |
+| `mmc3_test_2_suite` | MMC3 第二组测试集（必测项通过 + MMC3/MMC3_alt 变体至少通过一个） | 是 |
 | `nes_instr_test_suite` | 额外指令行为测试 | 是 |
 | `nmi_sync_suite` | NMI 同步 NTSC 基线（前景遮罩哈希） | 是 |
 | `ny2011_suite` | 视觉多样性 / 时序 | 否 |
@@ -185,7 +186,6 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `dpcmletterbox_suite` | DPCM 相关视觉/音频测试 | 是 |
 | `exram_suite` | MMC5 ExRAM 行为（当前失败） | 否 |
 | `m22chrbankingtest_suite` | Mapper 22 CHR banking 行为 | 否 |
-| `mmc3_test_2_suite` | 第二组 MMC3 测试集 | 是 |
 | `mmc5test_suite` | MMC5 功能测试 | 是 |
 | `mmc5test_v2_suite` | MMC5 测试集 v2 | 是 |
 | `nes15_1_0_0_suite` | `nes15` 系列测试 (NTSC/PAL) | 是 |
