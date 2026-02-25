@@ -322,14 +322,11 @@ fn dmc_tests_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
+#[ignore = "visual demo ROM; requires manual verification per dpcmletterbox/README.txt"]
 fn dpcmletterbox_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
-    {
-        let rom = "dpcmletterbox/dpcmletterbox.nes";
-        run_rom_status(rom, DEFAULT_FRAMES)?;
-    }
-    Ok(())
+    // Demo ROM: does not expose a machine-readable pass/fail signal via $6000 or serial.
+    // Keep as manual visual verification.
+    run_rom_frames("dpcmletterbox/dpcmletterbox.nes", 600, |_| Ok(()))
 }
 
 #[test]
