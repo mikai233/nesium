@@ -140,6 +140,7 @@ Legend:
 | `cpu_timing_test6_suite`             | TASVideos CPU timing (TV SHA1)               | Yes                         |
 | `dmc_dma_during_read4_suite`         | DMC DMA interaction with CPU read cycles     | Yes                         |
 | `full_palette_suite`                 | Full palette rendering and emphasis tests    | No                          |
+| `scanline_suite`                     | Scanline timing (Mesen2 RGB24 multi-frame baseline) | Yes                    |
 | `instr_misc_suite`                   | Misc instruction behaviour                   | Yes                         |
 | `instr_test_v3_suite`                | Blargg instruction test v3                   | Yes                         |
 | `instr_test_v5_suite`                | Blargg instruction test v5                   | Yes                         |
@@ -191,7 +192,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `other_suite`                 | Misc demos/tests bundled with nes-test-roms  | No                          |
 | `pal_apu_tests_suite`         | PAL APU behaviour                            | Yes                         |
 | `read_joy3_suite`             | Controller read timing                       | Yes                         |
-| `scanline_suite`              | Scanline timing                              | Yes                         |
 | `scanline_a1_suite`           | Alternate scanline tests                     | Yes                         |
 | `scrolltest_suite`            | Scrolling behaviour                          | Yes                         |
 | `volume_tests_suite`          | Volume/mixing behaviour                      | Yes                         |
