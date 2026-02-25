@@ -9,6 +9,10 @@ use super::tables::LENGTH_TABLE;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct LengthCounter {
     value: u8,
+    halt: bool,
+    pending_halt: bool,
+    pending_reload: u8,
+    reload_prev_value: u8,
 }
 
 impl LengthCounter {
@@ -22,12 +26,29 @@ impl LengthCounter {
 
     pub(super) fn load(&mut self, index: u8, enabled: bool) {
         if enabled {
-            self.value = LENGTH_TABLE[index as usize];
+            self.pending_reload = LENGTH_TABLE[index as usize];
+            self.reload_prev_value = self.value;
         }
     }
 
-    pub(super) fn clock(&mut self, halt: bool) {
-        if self.value > 0 && !halt {
+    pub(super) fn set_halt_pending(&mut self, halt: bool) {
+        self.pending_halt = halt;
+    }
+
+    pub(super) fn apply_pending_halt(&mut self) {
+        if self.pending_reload != 0 {
+            // If reload and length clock happen on the same tick, hardware keeps
+            // the clocked result unless no decrement occurred.
+            if self.value == self.reload_prev_value {
+                self.value = self.pending_reload;
+            }
+            self.pending_reload = 0;
+        }
+        self.halt = self.pending_halt;
+    }
+
+    pub(super) fn clock(&mut self) {
+        if self.value > 0 && !self.halt {
             self.value -= 1;
         }
     }
