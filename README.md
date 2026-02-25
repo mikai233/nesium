@@ -117,6 +117,7 @@ Legend:
 - ✅: Enabled automated tests (no `#[ignore]`) that currently pass  
 - ❌: Tests marked with `#[ignore = "this test fails and needs investigation"]`  
 - 🔶: Interactive/manual ROMs (e.g., controller/visual tests)  
+- ℹ️: Tracking/diagnostic ROMs kept under `#[ignore]` by design  
 
 ### Automatically passing ROM suites (✅)
 
@@ -150,7 +151,6 @@ Legend:
 | `mmc3_test_suite`                    | MMC3 functional test set (passes required + one MMC3/MMC6 variant) | Yes     |
 | `mmc3_test_2_suite`                  | MMC3 test set v2 (passes required + one MMC3/MMC3_alt variant) | Yes      |
 | `nes_instr_test_suite`               | Additional instruction behaviour tests       | Yes                         |
-| `nmi_sync_suite`                     | NMI sync NTSC baseline (foreground-mask hash) | Yes                       |
 | `ny2011_suite`                       | Visual diversity / timing                    | No                          |
 | `oam_read_suite`                     | OAM read behaviour                           | Yes                         |
 | `oam_stress_suite`                   | OAM stress / overflow conditions             | Yes                         |
@@ -172,6 +172,7 @@ These ROMs are designed for interactive/manual verification and do not expose a 
 | Suite name           | Notes                                                                 | TASVideos accuracy-required |
 | -------------------- | --------------------------------------------------------------------- | --------------------------- |
 | `dpcmletterbox_suite`| Visual DPCM demo ROM; verify manually per `dpcmletterbox/README.txt` | Yes                         |
+| `nmi_sync_manual`    | Visual NMI-sync demo ROM; verify manually per `nmi_sync/readme.txt`  | Yes                         |
 | `paddletest3_manual` | Paddle/analog controller test; follow ROM `Info.txt` for instructions | No                          |
 | `tvpassfail_manual`  | TV characteristics (NTSC chroma/luma, artifacts); verify visually     | No                          |
 | `vaus_test_manual`   | Arkanoid Vaus controller test (interactive)                           | No                          |
@@ -195,6 +196,14 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `read_joy3_suite`             | Controller read timing                       | Yes                         |
 | `scrolltest_suite`            | Scrolling behaviour                          | Yes                         |
 | `volume_tests_suite`          | Volume/mixing behaviour                      | Yes                         |
+
+### Tracking / diagnostic ROM suites (ℹ️)
+
+These suites are baseline-tracking diagnostics against reference output and do not indicate a known failing area by themselves.
+
+| Suite name                        | Notes                                                    | TASVideos accuracy-required |
+| --------------------------------- | -------------------------------------------------------- | --------------------------- |
+| `nmi_sync_ntsc_mesen_baseline`    | NTSC frame-hash baseline tracking against Mesen2 output (enabled in default runs) | Yes                         |
 
 ## Disclaimer
 
