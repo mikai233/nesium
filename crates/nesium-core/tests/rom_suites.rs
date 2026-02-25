@@ -524,19 +524,35 @@ fn mmc3_test_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc3_test_2_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // TASVideos accuracy-required ROMs.
+    //
+    // 5/6 validate mutually-exclusive MMC3 revision behavior ("MMC3" vs "MMC3_alt").
     for rom in [
         "mmc3_test_2/rom_singles/1-clocking.nes",
         "mmc3_test_2/rom_singles/2-details.nes",
         "mmc3_test_2/rom_singles/3-A12_clocking.nes",
         "mmc3_test_2/rom_singles/4-scanline_timing.nes",
-        "mmc3_test_2/rom_singles/5-MMC3.nes",
-        "mmc3_test_2/rom_singles/6-MMC3_alt.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_status(rom, DEFAULT_FRAMES)
+            .with_context(|| format!("[mmc3_test_2_suite] rom={rom}"))?;
     }
+
+    let mmc3 = run_rom_status("mmc3_test_2/rom_singles/5-MMC3.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_2_suite] rom=mmc3_test_2/rom_singles/5-MMC3.nes");
+    let mmc3_alt = run_rom_status("mmc3_test_2/rom_singles/6-MMC3_alt.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_2_suite] rom=mmc3_test_2/rom_singles/6-MMC3_alt.nes");
+
+    let mmc3_ok = mmc3.is_ok();
+    let mmc3_alt_ok = mmc3_alt.is_ok();
+    if !mmc3_ok && !mmc3_alt_ok {
+        let err_mmc3 = mmc3.expect_err("mmc3 should be Err");
+        let err_mmc3_alt = mmc3_alt.expect_err("mmc3_alt should be Err");
+        bail!(
+            "[mmc3_test_2_suite] neither variant passed.\nmmc3 error: {err_mmc3:#}\nmmc3_alt error: {err_mmc3_alt:#}"
+        );
+    }
+
     Ok(())
 }
 
