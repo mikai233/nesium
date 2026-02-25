@@ -110,6 +110,9 @@ pub struct Ppu {
     pub(crate) bg_next_pattern_low: u8,
     /// Latched pattern high byte for the tile currently being fetched.
     pub(crate) bg_next_pattern_high: u8,
+    /// Latched pattern base address (`tile_index << 4 | fine_y | table_base`)
+    /// computed on fetch phase 1 and reused on phases 5/7.
+    pub(crate) bg_next_tile_addr: u16,
     /// Sprite pixel pipeline for the current scanline.
     pub(crate) sprite_pipeline: SpritePipeline,
     /// Current level of the NMI output line (true = asserted).
@@ -208,6 +211,7 @@ impl Ppu {
             bg_next_attr_byte: 0,
             bg_next_pattern_low: 0,
             bg_next_pattern_high: 0,
+            bg_next_tile_addr: 0,
             sprite_pipeline: SpritePipeline::new(),
             nmi_level: false,
             prevent_vblank_flag: false,
@@ -306,6 +310,7 @@ impl Ppu {
         self.bg_next_attr_byte = 0;
         self.bg_next_pattern_low = 0;
         self.bg_next_pattern_high = 0;
+        self.bg_next_tile_addr = 0;
         self.sprite_pipeline.clear();
         self.sprite_eval = SpriteEvalState::default();
         self.sprite_fetch = SpriteFetchState::default();
@@ -586,37 +591,6 @@ impl Ppu {
             }
 
             let rendering_enabled = ppu.render_enabled;
-            ppu.step_pending_vram_addr();
-
-            if ppu.ignore_vram_read > 0 {
-                ppu.ignore_vram_read -= 1;
-            }
-
-            if ppu.pending_vram_increment.is_pending() {
-                // Mesen2 / hardware: the simple "+1 or +32" VRAM increment after
-                // a $2007 access only applies when rendering is disabled or during
-                // VBlank/post-render scanlines. While rendering is active on the
-                // prerender/visible scanlines, VRAM address progression is driven
-                // by the scroll increment logic (coarse/fine X/Y) instead.
-                if ppu.scanline >= 240 || !rendering_enabled {
-                    let step = ppu.pending_vram_increment.amount();
-                    if step != 0 {
-                        let old_v = ppu.registers.vram.v.raw();
-                        ppu.registers.vram.v.increment(step);
-                        let new_v = ppu.registers.vram.v.raw();
-                        if new_v != old_v {
-                            let ctx = PpuVramAccessContext {
-                                ppu_cycle: ppu.current_ppu_cycle(),
-                                cpu_cycle: ppu_bus.cpu_cycle(),
-                                kind: ppu.pending_vram_increment_kind,
-                            };
-                            ppu_bus.notify_vram_access(new_v & ppu_mem::VRAM_MIRROR_MASK, ctx);
-                        }
-                    }
-                }
-                ppu.pending_vram_increment = PendingVramIncrement::None;
-                ppu.pending_vram_increment_kind = PpuVramAccessKind::Other;
-            }
 
             // NOTE: We clear VBlank and drop NMI output at dot 1 of prerender.
             // Dot 0 should NOT clear VBlank on normal frames (avoids early NMI fall).
@@ -684,7 +658,7 @@ impl Ppu {
                         // Fetch/reload background data at tile boundaries.
                         ppu.fetch_background_data(&mut ppu_bus);
 
-                        if ppu.cycle == 256 {
+                        if ppu.cycle == 256 && ppu.prev_render_enabled {
                             ppu.increment_scroll_y();
                         }
                     }
@@ -692,8 +666,12 @@ impl Ppu {
 
                 // Dot 257: copy horizontal scroll bits from t -> v.
                 (-1, 257) => {
-                    if rendering_enabled {
+                    if ppu.prev_render_enabled {
+                        // Hardware cadence: dot 257 still shifts background shifters.
+                        ppu.bg_pipeline.shift();
                         ppu.copy_horizontal_scroll();
+                    }
+                    if rendering_enabled {
                         // NESdev/Mesen2: during sprite tile loading (257..=320) the PPU
                         // forces OAMADDR to 0. This also means OAMADDR is 0 after a
                         // normal rendered frame.
@@ -756,7 +734,7 @@ impl Ppu {
                         // Sprite evaluation for the *next* scanline runs during dots 1..=256.
                         ppu.sprite_pipeline_eval_tick();
 
-                        if ppu.cycle == 256 {
+                        if ppu.cycle == 256 && ppu.prev_render_enabled {
                             ppu.increment_scroll_y();
                         }
                     }
@@ -764,8 +742,12 @@ impl Ppu {
 
                 // Dot 257: copy horizontal scroll bits for next scanline.
                 (0..=239, 257) => {
-                    if rendering_enabled {
+                    if ppu.prev_render_enabled {
+                        // Hardware cadence: dot 257 still shifts background shifters.
+                        ppu.bg_pipeline.shift();
                         ppu.copy_horizontal_scroll();
+                    }
+                    if rendering_enabled {
                         // NESdev/Mesen2: force OAMADDR to 0 for the sprite fetch window.
                         ppu.registers.oam_addr = 0;
                         // Mesen2: sprite tile loading also performs a garbage NT fetch on dot 257.
@@ -824,6 +806,45 @@ impl Ppu {
 
             ppu.update_nmi_level();
             ppu.update_state_latch();
+
+            // Mesen2/hardware: apply delayed $2006 VRAM-address commits at the
+            // end of the PPU dot (inside UpdateState), not at dot start.
+            ppu.step_pending_vram_addr();
+
+            // Keep $2007 read suppression countdown in the same end-of-dot
+            // update phase as Mesen2's UpdateState.
+            if ppu.ignore_vram_read > 0 {
+                ppu.ignore_vram_read -= 1;
+            }
+
+            // Mesen2/hardware: apply the delayed $2007 VRAM increment at the end
+            // of the PPU dot (after rendering/fetch for this dot), not at dot start.
+            if ppu.pending_vram_increment.is_pending() {
+                let step = ppu.pending_vram_increment.amount();
+                if step != 0 {
+                    let old_v = ppu.registers.vram.v.raw();
+                    if ppu.scanline >= 240 || !ppu.render_enabled {
+                        ppu.registers.vram.v.increment(step);
+                    } else {
+                        // During prerender/visible rendering, $2007 access performs the
+                        // special "both-axes" increment behavior.
+                        ppu.increment_scroll_x();
+                        ppu.increment_scroll_y();
+                    }
+
+                    let new_v = ppu.registers.vram.v.raw();
+                    if new_v != old_v {
+                        let ctx = PpuVramAccessContext {
+                            ppu_cycle: ppu.current_ppu_cycle(),
+                            cpu_cycle: ppu_bus.cpu_cycle(),
+                            kind: ppu.pending_vram_increment_kind,
+                        };
+                        ppu_bus.notify_vram_access(new_v & ppu_mem::VRAM_MIRROR_MASK, ctx);
+                    }
+                }
+                ppu.pending_vram_increment = PendingVramIncrement::None;
+                ppu.pending_vram_increment_kind = PpuVramAccessKind::Other;
+            }
 
             (
                 ppu.scanline,
@@ -894,14 +915,6 @@ impl Ppu {
                     // Landing on the Y increment (scanline increment): AND the
                     // entire V with the written value.
                     cur_raw & new_raw
-                } else if self.cycle > 0
-                    && (self.cycle & 0x07) == 0
-                    && (self.cycle <= 256 || self.cycle > 320)
-                {
-                    // Landing on an X increment (every 8 dots while rendering):
-                    // only the coarse X and horizontal nametable bits (mask 0x041F)
-                    // are corrupted by ANDing with the written value.
-                    (new_raw & !0x041F) | (cur_raw & new_raw & 0x041F)
                 } else {
                     new_raw
                 };
@@ -909,6 +922,9 @@ impl Ppu {
             } else {
                 self.registers.vram.v = new_v;
             }
+            // Match Mesen2: when delayed $2006 commit lands, both `v` and `t`
+            // end up with the committed value.
+            self.registers.vram.t = self.registers.vram.v;
         }
     }
 
@@ -1207,6 +1223,14 @@ impl Ppu {
                     self.nametable_addr(),
                     PpuVramAccessKind::RenderingFetch,
                 );
+                let fine_y = self.registers.vram.v.fine_y() as u16;
+                let pattern_base = if self.registers.control.contains(Control::BACKGROUND_TABLE) {
+                    ppu_mem::PATTERN_TABLE_1
+                } else {
+                    ppu_mem::PATTERN_TABLE_0
+                };
+                self.bg_next_tile_addr =
+                    pattern_base + (self.bg_next_tile_index as u16 * 16) + fine_y;
             }
             3 => {
                 self.bg_next_attr_byte = self.read_vram(
@@ -1216,26 +1240,18 @@ impl Ppu {
                 );
             }
             5 => {
-                let fine_y = self.registers.vram.v.fine_y() as u16;
-                let pattern_base = if self.registers.control.contains(Control::BACKGROUND_TABLE) {
-                    ppu_mem::PATTERN_TABLE_1
-                } else {
-                    ppu_mem::PATTERN_TABLE_0
-                };
-                let pattern_addr = pattern_base + (self.bg_next_tile_index as u16 * 16) + fine_y;
-                self.bg_next_pattern_low =
-                    self.read_vram(ppu_bus, pattern_addr, PpuVramAccessKind::RenderingFetch);
+                self.bg_next_pattern_low = self.read_vram(
+                    ppu_bus,
+                    self.bg_next_tile_addr,
+                    PpuVramAccessKind::RenderingFetch,
+                );
             }
             7 => {
-                let fine_y = self.registers.vram.v.fine_y() as u16;
-                let pattern_base = if self.registers.control.contains(Control::BACKGROUND_TABLE) {
-                    ppu_mem::PATTERN_TABLE_1
-                } else {
-                    ppu_mem::PATTERN_TABLE_0
-                };
-                let pattern_addr = pattern_base + (self.bg_next_tile_index as u16 * 16) + fine_y;
-                self.bg_next_pattern_high =
-                    self.read_vram(ppu_bus, pattern_addr + 8, PpuVramAccessKind::RenderingFetch);
+                self.bg_next_pattern_high = self.read_vram(
+                    ppu_bus,
+                    self.bg_next_tile_addr + 8,
+                    PpuVramAccessKind::RenderingFetch,
+                );
             }
             0 => {
                 let v = self.registers.vram.v;
@@ -1245,7 +1261,11 @@ impl Ppu {
                     [self.bg_next_pattern_low, self.bg_next_pattern_high],
                     palette_index,
                 );
-                self.increment_scroll_x();
+                // Match Mesen2: coarse-X increments are driven by the
+                // one-dot-delayed render latch (`_prevRenderingEnabled`).
+                if self.prev_render_enabled {
+                    self.increment_scroll_x();
+                }
             }
             _ => {}
         }

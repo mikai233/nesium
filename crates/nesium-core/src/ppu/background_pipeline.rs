@@ -129,8 +129,7 @@ impl BgPipeline {
         }
     }
 
-    /// Samples the current background pixel (respecting fine X scroll) and
-    /// advances the pipeline.
+    /// Samples the current background pixel (respecting fine X scroll).
     ///
     /// Returns `(palette_bits, pattern_bits)`:
     /// - `palette_bits` (`0..=3`): 2-bit palette index from attribute data,
@@ -139,9 +138,7 @@ impl BgPipeline {
     /// Both values can then be used to look up a final color in the PPU
     /// palette RAM (e.g. at $3F00 + palette * 4 + color_index).
     ///
-    /// This method also shifts all four shifters by one bit to prepare for
-    /// the next pixel.
-    pub fn sample_and_shift(&mut self, fine_x: u8) -> (u8, u8) {
+    pub fn sample(&self, fine_x: u8) -> (u8, u8) {
         // Sample the relevant bit of each shifter; fine X offsets which bit is
         // visible without altering the shift cadence.
         let pattern_bit0 = self.pattern[0].bit_with_fine_x(fine_x);
@@ -149,17 +146,25 @@ impl BgPipeline {
         let palette_bit0 = self.palette[0].bit_with_fine_x(fine_x);
         let palette_bit1 = self.palette[1].bit_with_fine_x(fine_x);
 
-        let pattern_bits = (pattern_bit1 << 1) | pattern_bit0;
-        let palette_bits = (palette_bit1 << 1) | palette_bit0;
+        (
+            (palette_bit1 << 1) | palette_bit0,
+            (pattern_bit1 << 1) | pattern_bit0,
+        )
+    }
 
-        // Advance all shifters by one bit (one PPU dot) *after* sampling.
-        // This keeps the visible pixel aligned with the current MSB.
+    /// Advances all background shifters by one bit (one PPU dot).
+    pub fn shift(&mut self) {
         for i in 0..=1 {
             self.pattern[i].shift();
             self.palette[i].shift();
         }
+    }
 
-        (palette_bits, pattern_bits)
+    /// Samples current background pixel and advances all background shifters.
+    pub fn sample_and_shift(&mut self, fine_x: u8) -> (u8, u8) {
+        let sampled = self.sample(fine_x);
+        self.shift();
+        sampled
     }
 
     pub(crate) fn save_state(&self) -> BgPipelineState {
