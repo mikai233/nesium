@@ -35,7 +35,7 @@ use nesium_runtime::{
 
 use self::{
     controller::{ControllerDevice, ControllerInput, InputPreset},
-    fonts::install_cjk_font,
+    fonts::setup_fonts,
     gamepad::GamepadManager,
     i18n::{I18n, Language, TextId},
 };
@@ -207,7 +207,7 @@ pub struct NesiumApp {
 impl NesiumApp {
     pub fn new(cc: &eframe::CreationContext<'_>, config: AppConfig) -> Self {
         cc.egui_ctx.set_visuals(Visuals::light());
-        let has_cjk_font = install_cjk_font(&cc.egui_ctx);
+        let has_cjk_font = setup_fonts(&cc.egui_ctx);
 
         let (notification_tx, notification_rx) = unbounded();
         let sender = Box::new(EguiNotificationSender {

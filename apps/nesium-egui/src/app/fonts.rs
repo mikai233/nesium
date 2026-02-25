@@ -1,113 +1,53 @@
-use std::borrow::Cow;
-
 use eframe::egui::{Context, FontData, FontDefinitions, FontFamily};
-use fontdb::{Database, Family, Query};
-use ttf_parser::{Face, Tag};
 
-/// Install a CJK-capable system font as a fallback.
-///
-/// We avoid shipping huge embedded font files and keep egui's built-in Latin UI fonts
-/// as the primary choice. When CJK glyphs are needed, egui will fall back to the system font.
-pub fn install_cjk_font(ctx: &Context) -> bool {
-    let mut db = Database::new();
-    db.load_system_fonts();
+#[cfg(use_subset_fonts)]
+const NOTO_REGULAR: &[u8] = include_bytes!("../../assets/fonts/subset/NotoSansSC-Regular.ttf");
+#[cfg(use_subset_fonts)]
+const NOTO_MEDIUM: &[u8] = include_bytes!("../../assets/fonts/subset/NotoSansSC-Medium.ttf");
+#[cfg(use_subset_fonts)]
+const NOTO_BOLD: &[u8] = include_bytes!("../../assets/fonts/subset/NotoSansSC-Bold.ttf");
 
-    let mut candidates: Vec<Cow<'static, str>> = Vec::new();
-    if let Ok(name) = std::env::var("NESIUM_EGUI_FONT")
-        && !name.trim().is_empty()
-    {
-        candidates.push(Cow::Owned(name));
-    }
-    candidates.extend(default_candidates().into_iter().map(Cow::Borrowed));
+#[cfg(not(use_subset_fonts))]
+const NOTO_REGULAR: &[u8] =
+    include_bytes!("../../../../apps/nesium_flutter/assets/fonts/NotoSansSC-Regular.ttf");
+#[cfg(not(use_subset_fonts))]
+const NOTO_MEDIUM: &[u8] =
+    include_bytes!("../../../../apps/nesium_flutter/assets/fonts/NotoSansSC-Medium.ttf");
+#[cfg(not(use_subset_fonts))]
+const NOTO_BOLD: &[u8] =
+    include_bytes!("../../../../apps/nesium_flutter/assets/fonts/NotoSansSC-Bold.ttf");
 
-    let probe = ['你', '汉', '测', '试'];
+/// Install Noto Sans SC as the primary font.
+pub fn setup_fonts(ctx: &Context) -> bool {
+    let mut fonts = FontDefinitions::default();
 
-    for family in candidates {
-        let id = db.query(&Query {
-            families: &[Family::Name(&family)],
-            ..Default::default()
-        });
-        let Some(id) = id else { continue };
-        let Some(face) = db.face(id) else { continue };
+    // Load embedded Noto Sans SC
+    fonts.font_data.insert(
+        "noto_regular".to_owned(),
+        FontData::from_static(NOTO_REGULAR).into(),
+    );
+    fonts.font_data.insert(
+        "noto_medium".to_owned(),
+        FontData::from_static(NOTO_MEDIUM).into(),
+    );
+    fonts.font_data.insert(
+        "noto_bold".to_owned(),
+        FontData::from_static(NOTO_BOLD).into(),
+    );
 
-        let Some((bytes, index)) = db.with_face_data(face.id, |data, idx| (data.to_vec(), idx))
-        else {
-            continue;
-        };
-        if !is_compatible_truetype(&bytes, index, &probe) {
-            continue;
-        }
+    // Set as primary for both Proportional and Monospace to ensure consistent UI
+    fonts
+        .families
+        .entry(FontFamily::Proportional)
+        .or_default()
+        .insert(0, "noto_regular".to_owned());
+    fonts
+        .families
+        .entry(FontFamily::Monospace)
+        .or_default()
+        .insert(0, "noto_regular".to_owned());
 
-        let mut fonts = FontDefinitions::default();
-        let mut fd = FontData::from_owned(bytes);
-        fd.index = index;
-        fonts.font_data.insert("sys_cjk".to_owned(), fd.into());
-
-        // Add as a fallback (NOT primary) to avoid a full UI text disappearance on edge cases.
-        fonts
-            .families
-            .entry(FontFamily::Proportional)
-            .or_default()
-            .push("sys_cjk".to_owned());
-        fonts
-            .families
-            .entry(FontFamily::Monospace)
-            .or_default()
-            .push("sys_cjk".to_owned());
-
-        ctx.set_fonts(fonts);
-        tracing::info!(family = %family, index, "installed system CJK font fallback");
-        return true;
-    }
-
-    tracing::warn!("no compatible system CJK font found; using egui defaults");
-    false
-}
-
-fn default_candidates() -> Vec<&'static str> {
-    #[cfg(target_os = "windows")]
-    {
-        return vec![
-            "Microsoft YaHei UI",
-            "Microsoft YaHei",
-            "DengXian",
-            "SimHei",
-            "SimSun",
-        ];
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        vec!["PingFang SC", "Hiragino Sans GB", "Heiti SC", "Songti SC"]
-    }
-
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        return vec![
-            "Noto Sans CJK SC",
-            "Noto Sans SC",
-            "Source Han Sans SC",
-            "WenQuanYi Micro Hei",
-            "WenQuanYi Zen Hei",
-        ];
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
-    {
-        vec![]
-    }
-}
-
-fn is_compatible_truetype(data: &[u8], index: u32, probe: &[char]) -> bool {
-    let Ok(face) = Face::parse(data, index) else {
-        return false;
-    };
-    let raw = face.raw_face();
-
-    // Filter out CFF-only OTF fonts (common source of "text renders nowhere").
-    if raw.table(Tag::from_bytes(b"glyf")).is_none() {
-        return false;
-    }
-
-    probe.iter().all(|&ch| face.glyph_index(ch).is_some())
+    ctx.set_fonts(fonts);
+    tracing::info!("installed embedded Noto Sans SC fonts as primary");
+    true
 }
