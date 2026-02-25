@@ -103,9 +103,10 @@ fn apu_test_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn blargg_apu_2005_07_30_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
+    // This suite reports pass/fail through zero-page $00F0.
+    const RESULT_ZP: u16 = 0x00F0;
     for rom in [
         "blargg_apu_2005.07.30/01.len_ctr.nes",
         "blargg_apu_2005.07.30/02.len_table.nes",
@@ -119,7 +120,7 @@ fn blargg_apu_2005_07_30_suite() -> Result<()> {
         "blargg_apu_2005.07.30/10.len_halt_timing.nes",
         "blargg_apu_2005.07.30/11.len_reload_timing.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_zeropage_result(rom, DEFAULT_FRAMES, RESULT_ZP, 0x01)?;
     }
     Ok(())
 }

@@ -127,6 +127,7 @@ impl Pulse {
     pub(super) fn write_control(&mut self, value: u8) {
         self.duty = (value >> 6) & 0b0000_0011;
         self.envelope.configure(value);
+        self.length.set_halt_pending(self.envelope.halt_length());
     }
 
     pub(super) fn write_sweep(&mut self, value: u8) {
@@ -173,7 +174,11 @@ impl Pulse {
     }
 
     pub(super) fn clock_length(&mut self) {
-        self.length.clock(self.envelope.halt_length());
+        self.length.clock();
+    }
+
+    pub(super) fn apply_length_halt(&mut self) {
+        self.length.apply_pending_halt();
     }
 
     pub(super) fn clock_sweep(&mut self) {

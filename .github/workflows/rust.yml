@@ -68,25 +68,26 @@ jobs:
       - name: Clippy
         run: cargo clippy ${{ env.WORKSPACE_FLAGS }} --all-targets
 
-      - name: Install cargo-llvm-cov
-        if: matrix.rust == 'stable'
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov
-
-      - name: Generate coverage report
-        if: matrix.rust == 'stable'
-        run: cargo llvm-cov ${{ env.COVERAGE_FLAGS }} --lcov --output-path lcov.info
-
-      - name: Upload coverage to Codecov
-        if: matrix.rust == 'stable'
-        uses: codecov/codecov-action@v4
-        with:
-          files: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
-          flags: nesium-core
-          name: codecov-nesium-core
-          fail_ci_if_error: true
+      # Coverage is temporarily disabled because it significantly slows CI.
+      # - name: Install cargo-llvm-cov
+      #   if: matrix.rust == 'stable'
+      #   uses: taiki-e/install-action@v2
+      #   with:
+      #     tool: cargo-llvm-cov
+      #
+      # - name: Generate coverage report
+      #   if: matrix.rust == 'stable'
+      #   run: cargo llvm-cov ${{ env.COVERAGE_FLAGS }} --lcov --output-path lcov.info
+      #
+      # - name: Upload coverage to Codecov
+      #   if: matrix.rust == 'stable'
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     files: lcov.info
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     flags: nesium-core
+      #     name: codecov-nesium-core
+      #     fail_ci_if_error: true
 
   release:
     needs: build
