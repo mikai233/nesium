@@ -3,7 +3,8 @@ mod common;
 use anyhow::{Context, Result, bail};
 use common::{
     RESULT_ZP_ADDR, require_color_diversity, run_rom_fg_mask_sha1_for_frames, run_rom_frames,
-    run_rom_serial_text, run_rom_status, run_rom_tv_sha1, run_rom_zeropage_result,
+    run_rom_rgb24_sha1_for_frames, run_rom_serial_text, run_rom_status, run_rom_tv_sha1,
+    run_rom_zeropage_result,
 };
 use ctor::ctor;
 use tracing::Level;
@@ -754,12 +755,44 @@ fn read_joy3_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn scanline_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
-    {
-        let rom = "scanline/scanline.nes";
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // TASVideos accuracy-required ROMs.
+    // This ROM is primarily a visual/timing output check, so use Mesen2 RGB24
+    // frame hashes instead of the blargg $6000 status protocol.
+    //
+    // Baseline capture:
+    //   tools/mesen_dump_frame_rgb.lua on `startFrame`, NTSC ROM:
+    //   scanline/scanline.nes
+    const FRAMES: &[usize] = &[120, 121, 240, 241, 480, 481, 960, 961];
+    const EXPECTED_HASHES: &[&str] = &[
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+    ];
+
+    if EXPECTED_HASHES.len() != FRAMES.len() {
+        bail!(
+            "[scanline/scanline.nes] expected hash list len {} does not match frames len {}",
+            EXPECTED_HASHES.len(),
+            FRAMES.len()
+        );
+    }
+
+    let hashes = run_rom_rgb24_sha1_for_frames("scanline/scanline.nes", FRAMES)?;
+    for ((frame, actual_hash), expected_hash) in hashes.into_iter().zip(EXPECTED_HASHES.iter()) {
+        if actual_hash != *expected_hash {
+            bail!(
+                "[scanline/scanline.nes] mesen_rgb24_sha1 mismatch at frame {}: expected {}, got {}",
+                frame,
+                expected_hash,
+                actual_hash
+            );
+        }
     }
     Ok(())
 }
