@@ -798,12 +798,44 @@ fn scanline_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn scanline_a1_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
-    {
-        let rom = "scanline-a1/scanline.nes";
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // TASVideos accuracy-required ROMs.
+    // This ROM is also a visual/timing output check, so use Mesen2 RGB24
+    // frame hashes instead of the blargg $6000 status protocol.
+    //
+    // Baseline capture:
+    //   tools/mesen_dump_frame_rgb.lua on `startFrame`, NTSC ROM:
+    //   scanline-a1/scanline.nes
+    const FRAMES: &[usize] = &[120, 121, 240, 241, 480, 481, 960, 961];
+    const EXPECTED_HASHES: &[&str] = &[
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+    ];
+
+    if EXPECTED_HASHES.len() != FRAMES.len() {
+        bail!(
+            "[scanline-a1/scanline.nes] expected hash list len {} does not match frames len {}",
+            EXPECTED_HASHES.len(),
+            FRAMES.len()
+        );
+    }
+
+    let hashes = run_rom_rgb24_sha1_for_frames("scanline-a1/scanline.nes", FRAMES)?;
+    for ((frame, actual_hash), expected_hash) in hashes.into_iter().zip(EXPECTED_HASHES.iter()) {
+        if actual_hash != *expected_hash {
+            bail!(
+                "[scanline-a1/scanline.nes] mesen_rgb24_sha1 mismatch at frame {}: expected {}, got {}",
+                frame,
+                expected_hash,
+                actual_hash
+            );
+        }
     }
     Ok(())
 }
