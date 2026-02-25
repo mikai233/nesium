@@ -128,7 +128,6 @@ Legend:
 | `apu_mixer_suite`                    | APU mixer / TASVideos test set               | Yes                         |
 | `apu_reset_suite`                    | APU reset behaviour                          | Yes                         |
 | `apu_test_suite`                     | APU accuracy tests (including `rom_singles`) | Yes                         |
-| `sprdma_and_dmc_dma_suite`           | Sprite DMA and DMC DMA interaction           | Yes                         |
 | `blargg_apu_2005_07_30_suite`        | Early Blargg APU tests                       | Yes                         |
 | `blargg_nes_cpu_test5_suite`         | CPU precision tests                          | Yes                         |
 | `blargg_ppu_tests_2005_09_15b_suite` | PPU palette/VRAM/scrolling behaviour         | Yes                         |
@@ -140,7 +139,8 @@ Legend:
 | `cpu_reset_suite`                    | Post-reset RAM/register state                | Yes                         |
 | `cpu_timing_test6_suite`             | TASVideos CPU timing (TV SHA1)               | Yes                         |
 | `dmc_dma_during_read4_suite`         | DMC DMA interaction with CPU read cycles     | Yes                         |
-| `full_palette_suite`                 | Full palette rendering and emphasis tests    | No                          |
+| `dmc_tests_suite`                    | DMC buffer/delay/IRQ behaviour               | Yes                         |
+| `full_palette_suite`                 | Full palette rendering and emphasis tests (Mesen2 RGB24 baseline) | No      |
 | `scanline_suite`                     | Scanline timing (Mesen2 RGB24 multi-frame baseline) | Yes                    |
 | `scanline_a1_suite`                  | Alternate scanline timing (Mesen2 RGB24 multi-frame baseline) | Yes          |
 | `instr_misc_suite`                   | Misc instruction behaviour                   | Yes                         |
@@ -160,6 +160,7 @@ Legend:
 | `sprite_hit_tests_2005_10_05_suite`  | Sprite 0 hit timing and edge cases           | Yes                         |
 | `sprite_overflow_tests_suite`        | Sprite overflow behaviour                    | Yes                         |
 | `spritecans_2011_suite`              | Visual diversity / sprite stress             | No                          |
+| `sprdma_and_dmc_dma_suite`           | Sprite DMA and DMC DMA interaction           | Yes                         |
 | `stomper_suite`                      | Visual diversity / timing                    | No                          |
 | `tutor_suite`                        | Visual diversity / reference demo            | No                          |
 | `vbl_nmi_timing_suite`               | VBL/NMI timing (zeropage result)             | Yes                         |
@@ -184,7 +185,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | Suite name                    | Notes                                        | TASVideos accuracy-required |
 | ----------------------------- | -------------------------------------------- | --------------------------- |
 | `blargg_litewall_suite`       | Litewall / timing-related tests              | No                          |
-| `dmc_tests_suite`             | DMC buffer/delay/IRQ behaviour               | Yes                         |
 | `exram_suite`                 | MMC5 ExRAM behaviour (currently failing)     | No                          |
 | `m22chrbankingtest_suite`     | Mapper 22 CHR banking behaviour              | No                          |
 | `mmc5test_suite`              | MMC5 functional tests                        | Yes                         |
