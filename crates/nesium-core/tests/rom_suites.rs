@@ -446,19 +446,46 @@ fn m22chrbankingtest_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc3_irq_tests_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // TASVideos accuracy-required ROMs.
+    //
+    // Per upstream readme, 5/6 validate mutually-exclusive MMC3A vs MMC3B IRQ behavior,
+    // so a single emulator implementation is expected to pass at most one of them.
     for rom in [
         "mmc3_irq_tests/1.Clocking.nes",
         "mmc3_irq_tests/2.Details.nes",
         "mmc3_irq_tests/3.A12_clocking.nes",
         "mmc3_irq_tests/4.Scanline_timing.nes",
-        "mmc3_irq_tests/5.MMC3_rev_A.nes",
-        "mmc3_irq_tests/6.MMC3_rev_B.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_zeropage_result(rom, DEFAULT_FRAMES, RESULT_ZP_ADDR, 0x01)
+            .with_context(|| format!("[mmc3_irq_tests_suite] rom={rom}"))?;
     }
+
+    let rev_a = run_rom_zeropage_result(
+        "mmc3_irq_tests/5.MMC3_rev_A.nes",
+        DEFAULT_FRAMES,
+        RESULT_ZP_ADDR,
+        0x01,
+    )
+    .with_context(|| "[mmc3_irq_tests_suite] rom=mmc3_irq_tests/5.MMC3_rev_A.nes");
+    let rev_b = run_rom_zeropage_result(
+        "mmc3_irq_tests/6.MMC3_rev_B.nes",
+        DEFAULT_FRAMES,
+        RESULT_ZP_ADDR,
+        0x01,
+    )
+    .with_context(|| "[mmc3_irq_tests_suite] rom=mmc3_irq_tests/6.MMC3_rev_B.nes");
+
+    let rev_a_ok = rev_a.is_ok();
+    let rev_b_ok = rev_b.is_ok();
+    if !rev_a_ok && !rev_b_ok {
+        let err_a = rev_a.expect_err("rev_a should be Err");
+        let err_b = rev_b.expect_err("rev_b should be Err");
+        bail!(
+            "[mmc3_irq_tests_suite] neither revision variant passed.\nrev_a error: {err_a:#}\nrev_b error: {err_b:#}"
+        );
+    }
+
     Ok(())
 }
 
