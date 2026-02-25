@@ -1,4 +1,6 @@
-use nesium_core::ppu::buffer::{ColorFormat, NearestPostProcessor, VideoPostProcessor};
+use nesium_core::ppu::buffer::{
+    ColorFormat, NearestPostProcessor, SourceFrame, TargetFrameMut, VideoPostProcessor,
+};
 use nesium_core::ppu::palette::Color;
 
 use crate::video::scanline::scanline_apply_argb8888;
@@ -24,33 +26,36 @@ impl ScanlinePostProcessor {
 }
 
 impl VideoPostProcessor for ScanlinePostProcessor {
-    fn process(
-        &mut self,
-        src_indices: &[u8],
-        src_width: usize,
-        src_height: usize,
-        palette: &[Color; 64],
-        dst: &mut [u8],
-        dst_pitch: usize,
-        dst_width: usize,
-        dst_height: usize,
-        dst_format: ColorFormat,
-    ) {
+    fn process(&mut self, src: SourceFrame<'_>, palette: &[Color; 64], dst: TargetFrameMut<'_>) {
+        let SourceFrame {
+            indices: src_indices,
+            emphasis: _src_emphasis,
+            width: src_width,
+            height: src_height,
+        } = src;
+        let TargetFrameMut {
+            buffer: dst,
+            pitch: dst_pitch,
+            width: dst_width,
+            height: dst_height,
+            format: dst_format,
+        } = dst;
+
         if src_width == 0 || src_height == 0 || dst_width == 0 || dst_height == 0 {
             return;
         }
 
         if self.intensity <= 0.0 {
             self.fallback.process(
-                src_indices,
-                src_width,
-                src_height,
+                src,
                 palette,
-                dst,
-                dst_pitch,
-                dst_width,
-                dst_height,
-                dst_format,
+                TargetFrameMut {
+                    buffer: dst,
+                    pitch: dst_pitch,
+                    width: dst_width,
+                    height: dst_height,
+                    format: dst_format,
+                },
             );
             return;
         }
@@ -60,15 +65,15 @@ impl VideoPostProcessor for ScanlinePostProcessor {
         let expected_h = src_height.saturating_mul(scale);
         if dst_width != expected_w || dst_height != expected_h {
             self.fallback.process(
-                src_indices,
-                src_width,
-                src_height,
+                src,
                 palette,
-                dst,
-                dst_pitch,
-                dst_width,
-                dst_height,
-                dst_format,
+                TargetFrameMut {
+                    buffer: dst,
+                    pitch: dst_pitch,
+                    width: dst_width,
+                    height: dst_height,
+                    format: dst_format,
+                },
             );
             return;
         }
@@ -76,15 +81,15 @@ impl VideoPostProcessor for ScanlinePostProcessor {
         let bpp = dst_format.bytes_per_pixel();
         if bpp != 4 {
             self.fallback.process(
-                src_indices,
-                src_width,
-                src_height,
+                src,
                 palette,
-                dst,
-                dst_pitch,
-                dst_width,
-                dst_height,
-                dst_format,
+                TargetFrameMut {
+                    buffer: dst,
+                    pitch: dst_pitch,
+                    width: dst_width,
+                    height: dst_height,
+                    format: dst_format,
+                },
             );
             return;
         }
@@ -190,15 +195,15 @@ impl VideoPostProcessor for ScanlinePostProcessor {
             }
             _ => {
                 self.fallback.process(
-                    src_indices,
-                    src_width,
-                    src_height,
+                    src,
                     palette,
-                    dst,
-                    dst_pitch,
-                    dst_width,
-                    dst_height,
-                    dst_format,
+                    TargetFrameMut {
+                        buffer: dst,
+                        pitch: dst_pitch,
+                        width: dst_width,
+                        height: dst_height,
+                        format: dst_format,
+                    },
                 );
             }
         }

@@ -624,6 +624,14 @@ mod tests {
     }
 
     #[test]
+    fn mesen_2c02_palette_hash_matches_reference() {
+        assert_eq!(
+            digest(&MESEN_2C02_DATA),
+            103230626129420882480081790984154954439
+        );
+    }
+
+    #[test]
     fn sony_cxa_palette_hash_matches_reference() {
         assert_eq!(
             digest(&SONY_CXA2025AS_US_DATA),

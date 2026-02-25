@@ -160,13 +160,6 @@ impl BgPipeline {
         }
     }
 
-    /// Samples current background pixel and advances all background shifters.
-    pub fn sample_and_shift(&mut self, fine_x: u8) -> (u8, u8) {
-        let sampled = self.sample(fine_x);
-        self.shift();
-        sampled
-    }
-
     pub(crate) fn save_state(&self) -> BgPipelineState {
         BgPipelineState {
             pattern: [self.pattern[0].0, self.pattern[1].0],

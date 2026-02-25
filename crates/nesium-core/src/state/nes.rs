@@ -132,7 +132,8 @@ pub struct PpuState {
     pub corrupt_oam_row: [bool; 32],
     pub state_update_pending: bool,
     pub output_grayscale: bool,
-    pub grayscale_last_updated_pixel: i32,
+    pub output_emphasis: u8,
+    pub color_mask_last_updated_pixel: i32,
     pub raw_output_indices: Vec<u8>,
 }
 
@@ -342,7 +343,8 @@ fn ppu_to_state(ppu: &Ppu) -> PpuState {
         corrupt_oam_row: ppu.corrupt_oam_row,
         state_update_pending: ppu.state_update_pending,
         output_grayscale: ppu.output_grayscale,
-        grayscale_last_updated_pixel: ppu.grayscale_last_updated_pixel,
+        output_emphasis: ppu.output_emphasis,
+        color_mask_last_updated_pixel: ppu.color_mask_last_updated_pixel,
         raw_output_indices: ppu.raw_output_indices.clone(),
     }
 }
@@ -431,7 +433,8 @@ fn state_to_ppu(ppu: &mut Ppu, state: &PpuState) -> Result<(), NesSaveStateError
     ppu.corrupt_oam_row = state.corrupt_oam_row;
     ppu.state_update_pending = state.state_update_pending;
     ppu.output_grayscale = state.output_grayscale;
-    ppu.grayscale_last_updated_pixel = state.grayscale_last_updated_pixel;
+    ppu.output_emphasis = state.output_emphasis;
+    ppu.color_mask_last_updated_pixel = state.color_mask_last_updated_pixel;
     if ppu.raw_output_indices.len() != state.raw_output_indices.len() {
         return Err(NesSaveStateError::CorruptState(
             "ppu raw output indices size mismatch",
@@ -572,7 +575,8 @@ mod tests {
         nes.run_frame(false);
 
         nes.ppu.output_grayscale = true;
-        nes.ppu.grayscale_last_updated_pixel = 17_321;
+        nes.ppu.output_emphasis = 5;
+        nes.ppu.color_mask_last_updated_pixel = 17_321;
         nes.ppu.bg_next_tile_index = 0x11;
         nes.ppu.bg_next_attr_byte = 0x22;
         nes.ppu.bg_next_pattern_low = 0x33;
@@ -592,7 +596,8 @@ mod tests {
         nes2.insert_cartridge(cart);
         nes2.run_frame(false);
         nes2.ppu.output_grayscale = false;
-        nes2.ppu.grayscale_last_updated_pixel = -1;
+        nes2.ppu.output_emphasis = 0;
+        nes2.ppu.color_mask_last_updated_pixel = -1;
         nes2.ppu.bg_next_tile_index = 0;
         nes2.ppu.bg_next_attr_byte = 0;
         nes2.ppu.bg_next_pattern_low = 0;
@@ -603,9 +608,10 @@ mod tests {
         <crate::Nes as SaveState>::load(&mut nes2, &snap).expect("load snapshot");
 
         assert_eq!(nes2.ppu.output_grayscale, nes.ppu.output_grayscale);
+        assert_eq!(nes2.ppu.output_emphasis, nes.ppu.output_emphasis);
         assert_eq!(
-            nes2.ppu.grayscale_last_updated_pixel,
-            nes.ppu.grayscale_last_updated_pixel
+            nes2.ppu.color_mask_last_updated_pixel,
+            nes.ppu.color_mask_last_updated_pixel
         );
         assert_eq!(nes2.ppu.bg_next_tile_index, nes.ppu.bg_next_tile_index);
         assert_eq!(nes2.ppu.bg_next_attr_byte, nes.ppu.bg_next_attr_byte);
