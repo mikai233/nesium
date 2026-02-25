@@ -144,6 +144,7 @@ Legend:
 | `instr_test_v5_suite`                | Blargg instruction test v5                   | Yes                         |
 | `instr_timing_suite`                 | Instruction timing                           | Yes                         |
 | `nes_instr_test_suite`               | Additional instruction behaviour tests       | Yes                         |
+| `nmi_sync_suite`                     | NMI sync NTSC baseline (foreground-mask hash) | Yes                       |
 | `ny2011_suite`                       | Visual diversity / timing                    | No                          |
 | `oam_read_suite`                     | OAM read behaviour                           | Yes                         |
 | `oam_stress_suite`                   | OAM stress / overflow conditions             | Yes                         |
@@ -186,7 +187,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `mmc5test_suite`              | MMC5 functional tests                        | Yes                         |
 | `mmc5test_v2_suite`           | MMC5 test set v2                             | Yes                         |
 | `nes15_1_0_0_suite`           | `nes15` series tests (NTSC/PAL)              | Yes                         |
-| `nmi_sync_suite`              | NMI sync behaviour                           | Yes                         |
 | `nrom368_suite`               | NROM-368 mapping tests                       | No                          |
 | `other_suite`                 | Misc demos/tests bundled with nes-test-roms  | No                          |
 | `pal_apu_tests_suite`         | PAL APU behaviour                            | Yes                         |

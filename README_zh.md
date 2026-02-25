@@ -144,6 +144,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `instr_test_v5_suite` | Blargg 指令测试 v5 | 是 |
 | `instr_timing_suite` | 指令时序 | 是 |
 | `nes_instr_test_suite` | 额外指令行为测试 | 是 |
+| `nmi_sync_suite` | NMI 同步 NTSC 基线（前景遮罩哈希） | 是 |
 | `ny2011_suite` | 视觉多样性 / 时序 | 否 |
 | `oam_read_suite` | OAM 读取行为 | 是 |
 | `oam_stress_suite` | OAM 压力 / 溢出条件 | 是 |
@@ -186,7 +187,6 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `mmc5test_suite` | MMC5 功能测试 | 是 |
 | `mmc5test_v2_suite` | MMC5 测试集 v2 | 是 |
 | `nes15_1_0_0_suite` | `nes15` 系列测试 (NTSC/PAL) | 是 |
-| `nmi_sync_suite` | NMI 同步行为 | 是 |
 | `nrom368_suite` | NROM-368 映射测试 | 否 |
 | `other_suite` | nes-test-roms 绑定的杂项演示/测试 | 否 |
 | `pal_apu_tests_suite` | PAL APU 行为 | 是 |

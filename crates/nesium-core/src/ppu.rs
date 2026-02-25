@@ -76,6 +76,7 @@ pub const SCREEN_WIDTH: usize = 256;
 pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + post + vblank (241..260)
+const SCREEN_PIXEL_COUNT: i32 = (SCREEN_WIDTH * SCREEN_HEIGHT) as i32;
 
 /// Entry points for the CPU PPU register mirror.
 #[derive(Clone)]
@@ -141,6 +142,13 @@ pub struct Ppu {
     /// Pending state update request from $2001/$2006/$2007/VRAM-related
     /// side effects. Mirrors Mesen's `_needStateUpdate` latch.
     pub(crate) state_update_pending: bool,
+    /// Latched grayscale mask applied to output pixels. This is decoupled from
+    /// immediate $2001 writes to match Mesen2/hardware transition timing.
+    pub(crate) output_grayscale: bool,
+    /// Last visible pixel index reconciled after a mid-scanline grayscale change.
+    pub(crate) grayscale_last_updated_pixel: i32,
+    /// Raw (unmasked) palette indices of the current back buffer frame.
+    pub(crate) raw_output_indices: Vec<u8>,
     /// Background + sprite rendering target for the current frame.
     pub(crate) framebuffer: FrameBuffer,
 }
@@ -203,6 +211,9 @@ impl Ppu {
             oam_addr_disable_glitch_pending: false,
             corrupt_oam_row: [false; 32],
             state_update_pending: false,
+            output_grayscale: false,
+            grayscale_last_updated_pixel: -1,
+            raw_output_indices: vec![0; SCREEN_WIDTH * SCREEN_HEIGHT],
             framebuffer,
         }
     }
@@ -298,6 +309,9 @@ impl Ppu {
         self.render_enabled = false;
         self.prev_render_enabled = false;
         self.state_update_pending = true;
+        self.output_grayscale = self.registers.mask.contains(Mask::GRAYSCALE);
+        self.grayscale_last_updated_pixel = -1;
+        self.raw_output_indices.fill(0);
 
         // Only clear the framebuffer on power-on. Soft reset keeps the last
         // rendered frame visible, just like real hardware.
@@ -388,6 +402,7 @@ impl Ppu {
                 // We currently just update the mask bitfield and then update the
                 // Mesen-style rendering-enabled latch on the next `clock()`.
                 self.registers.mask = Mask::from_bits_retain(value);
+                self.apply_grayscale_change(self.registers.mask.contains(Mask::GRAYSCALE));
 
                 let mask = self.registers.mask;
                 let new_render = mask.rendering_enabled();
@@ -915,6 +930,10 @@ impl Ppu {
                 self.frame = self.frame.wrapping_add(1);
             } else if self.scanline > 260 {
                 self.scanline = -1;
+                // New frame starts with current mask state and a fresh raw-output history.
+                self.output_grayscale = self.registers.mask.contains(Mask::GRAYSCALE);
+                self.grayscale_last_updated_pixel = -1;
+                self.raw_output_indices.fill(0);
             }
         }
     }
@@ -938,6 +957,7 @@ impl Ppu {
         if x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT {
             return;
         }
+        let pixel_index = (y * SCREEN_WIDTH + x) as i32;
 
         let mask = self.registers.mask;
         let fine_x = self.registers.vram.x;
@@ -1008,14 +1028,60 @@ impl Ppu {
         } else {
             ppu_mem::PALETTE_BASE + (final_palette as u16) * 4 + (final_color as u16)
         };
-        let mut color_index = self.palette_ram.read(palette_addr);
+        let raw_color_index = self.palette_ram.read(palette_addr);
+        self.raw_output_indices[pixel_index as usize] = raw_color_index;
+        let mut color_index = raw_color_index;
         // Apply grayscale mask when $2001 bit 0 is set: only keep the grey
         // column ($00, $10, $20, $30) as in Mesen2 / hardware.
-        if self.registers.mask.contains(Mask::GRAYSCALE) {
+        if self.output_grayscale {
             color_index &= 0x30;
         }
 
         self.framebuffer.write_index(x, y, color_index);
+    }
+
+    /// Applies a `$2001` grayscale update with Mesen2-like pixel cutoff.
+    ///
+    /// For visible scanlines, the cutoff pixel depends on the current dot:
+    /// - `cycle < 3`: `scanline * 256 - 1`
+    /// - `cycle <= 258`: `scanline * 256 + cycle - 3`
+    /// - otherwise: end of scanline (`scanline * 256 + 255`)
+    ///
+    /// Pixels up to that cutoff retain the previous grayscale state. Already
+    /// rendered pixels are patched retroactively using the raw-output cache.
+    fn apply_grayscale_change(&mut self, new_grayscale: bool) {
+        if !(0..=239).contains(&self.scanline) {
+            self.output_grayscale = new_grayscale;
+            return;
+        }
+
+        let cutoff_pixel = if self.cycle < 3 {
+            (self.scanline as i32) * (SCREEN_WIDTH as i32) - 1
+        } else if self.cycle <= 258 {
+            (self.scanline as i32) * (SCREEN_WIDTH as i32) + (self.cycle as i32) - 3
+        } else {
+            (self.scanline as i32) * (SCREEN_WIDTH as i32) + (SCREEN_WIDTH as i32) - 1
+        }
+        .clamp(-1, SCREEN_PIXEL_COUNT - 1);
+
+        if cutoff_pixel > self.grayscale_last_updated_pixel {
+            let start = (self.grayscale_last_updated_pixel + 1).max(0);
+            let end = cutoff_pixel.min(SCREEN_PIXEL_COUNT - 1);
+            for idx in start..=end {
+                let raw = self.raw_output_indices[idx as usize];
+                let value = if self.output_grayscale {
+                    raw & 0x30
+                } else {
+                    raw
+                };
+                let x = (idx as usize) % SCREEN_WIDTH;
+                let y = (idx as usize) / SCREEN_WIDTH;
+                self.framebuffer.write_index(x, y, value);
+            }
+            self.grayscale_last_updated_pixel = cutoff_pixel;
+        }
+
+        self.output_grayscale = new_grayscale;
     }
 
     /// Emulates the $2000/$2005/$2006 scroll glitch when writes land on

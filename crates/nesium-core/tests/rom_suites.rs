@@ -1,9 +1,9 @@
 mod common;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use common::{
-    RESULT_ZP_ADDR, require_color_diversity, run_rom_frames, run_rom_serial_text, run_rom_status,
-    run_rom_tv_sha1, run_rom_zeropage_result,
+    RESULT_ZP_ADDR, require_color_diversity, run_rom_fg_mask_sha1_for_frames, run_rom_frames,
+    run_rom_serial_text, run_rom_status, run_rom_tv_sha1, run_rom_zeropage_result,
 };
 use ctor::ctor;
 use tracing::Level;
@@ -536,12 +536,59 @@ fn nes_instr_test_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn nmi_sync_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
-    for rom in ["nmi_sync/demo_ntsc.nes", "nmi_sync/demo_pal.nes"] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // NTSC baseline tracking against Mesen2 using foreground-mask hashes over
+    // multiple frame windows. PAL visual demo remains manual-only for now.
+    const ROM: &str = "nmi_sync/demo_ntsc.nes";
+    const EXPECTED_A: &str = "HsecswITwKxfvAbg7INnX+37zEg=";
+    const EXPECTED_B: &str = "V3aUHSsmGbJIIpCpK159sa78Q8I=";
+    const WINDOWS: &[(usize, usize)] = &[
+        (240, 241),
+        (360, 361),
+        (480, 481),
+        (600, 601),
+        (720, 721),
+        (840, 841),
+        (960, 961),
+        (1080, 1081),
+        (1200, 1201),
+    ];
+
+    let mut targets = Vec::with_capacity(WINDOWS.len() * 2);
+    for (a, b) in WINDOWS {
+        targets.push(*a);
+        targets.push(*b);
     }
+    let captured = run_rom_fg_mask_sha1_for_frames(ROM, &targets)?;
+
+    let mut by_frame = std::collections::BTreeMap::new();
+    for (frame, hash) in captured {
+        by_frame.insert(frame, hash);
+    }
+
+    for (a, b) in WINDOWS {
+        let hash_a = by_frame
+            .get(a)
+            .with_context(|| format!("missing captured hash for frame {a}"))?;
+        let hash_b = by_frame
+            .get(b)
+            .with_context(|| format!("missing captured hash for frame {b}"))?;
+
+        let is_expected_pair = (hash_a == EXPECTED_A && hash_b == EXPECTED_B)
+            || (hash_a == EXPECTED_B && hash_b == EXPECTED_A);
+        if !is_expected_pair {
+            bail!(
+                "[nmi_sync_suite] frame pair ({}, {}) mismatch: got ({}, {}), expected pair {{{}, {}}}",
+                a,
+                b,
+                hash_a,
+                hash_b,
+                EXPECTED_A,
+                EXPECTED_B
+            );
+        }
+    }
+
     Ok(())
 }
 
