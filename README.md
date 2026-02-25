@@ -126,6 +126,7 @@ Legend:
 | `mmc1_a12_suite`                     | MMC1 A12 line behaviour                      | No                          |
 | `apu_mixer_suite`                    | APU mixer / TASVideos test set               | Yes                         |
 | `apu_reset_suite`                    | APU reset behaviour                          | Yes                         |
+| `apu_test_suite`                     | APU accuracy tests (including `rom_singles`) | Yes                         |
 | `sprdma_and_dmc_dma_suite`           | Sprite DMA and DMC DMA interaction           | Yes                         |
 | `blargg_apu_2005_07_30_suite`        | Early Blargg APU tests                       | Yes                         |
 | `blargg_nes_cpu_test5_suite`         | CPU precision tests                          | Yes                         |
@@ -172,7 +173,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 
 | Suite name                    | Notes                                        | TASVideos accuracy-required |
 | ----------------------------- | -------------------------------------------- | --------------------------- |
-| `apu_test_suite`              | APU accuracy tests (including `rom_singles`) | Yes                         |
 | `blargg_litewall_suite`       | Litewall / timing-related tests              | No                          |
 | `cpu_interrupts_v2_suite`     | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
 | `dmc_tests_suite`             | DMC buffer/delay/IRQ behaviour               | Yes                         |
