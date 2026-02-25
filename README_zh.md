@@ -126,6 +126,7 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | `mmc1_a12_suite` | MMC1 A12 线行为 | 否 |
 | `apu_mixer_suite` | APU 混音器 / TASVideos 测试集 | 是 |
 | `apu_reset_suite` | APU 复位行为 | 是 |
+| `blargg_apu_2005_07_30_suite` | 早期 Blargg APU 测试 | 是 |
 | `blargg_nes_cpu_test5_suite` | CPU 精度测试 | 是 |
 | `blargg_ppu_tests_2005_09_15b_suite` | PPU 调色板/显存/滚动行为 | 是 |
 | `branch_timing_tests_suite` | 分支指令时序（零页结果） | 是 |
@@ -170,7 +171,6 @@ Nesium 集成了大量的 NES 测试 ROM 套件（通过 `rom_suites.rs`）来�
 | 套件名称 | 说明 | TASVideos 精度要求 |
 | --- | --- | --- |
 | `apu_test_suite` | APU 精度测试（包括 `rom_singles`） | 是 |
-| `blargg_apu_2005_07_30_suite` | 早期 Blargg APU 测试 | 是 |
 | `blargg_litewall_suite` | Litewall / 时序相关测试 | 否 |
 | `cpu_exec_space_suite` | CPU 执行空间测试 (APU/PPU I/O) | 是 |
 | `cpu_interrupts_v2_suite` | NMI/IRQ/BRK/DMA 中断时序 | 是 |
