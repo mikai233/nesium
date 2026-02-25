@@ -133,6 +133,7 @@ Legend:
 | `branch_timing_tests_suite`          | Branch instruction timing (zero-page result) | Yes                         |
 | `cpu_dummy_reads_suite`              | CPU dummy read behaviour                     | Yes                         |
 | `cpu_dummy_writes_suite`             | CPU dummy write behaviour                    | Yes                         |
+| `cpu_exec_space_suite`               | CPU exec space tests (APU/PPU I/O)           | Yes                         |
 | `cpu_reset_suite`                    | Post-reset RAM/register state                | Yes                         |
 | `cpu_timing_test6_suite`             | TASVideos CPU timing (TV SHA1)               | Yes                         |
 | `dmc_dma_during_read4_suite`         | DMC DMA interaction with CPU read cycles     | Yes                         |
@@ -173,7 +174,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | ----------------------------- | -------------------------------------------- | --------------------------- |
 | `apu_test_suite`              | APU accuracy tests (including `rom_singles`) | Yes                         |
 | `blargg_litewall_suite`       | Litewall / timing-related tests              | No                          |
-| `cpu_exec_space_suite`        | CPU exec space tests (APU/PPU I/O)           | Yes                         |
 | `cpu_interrupts_v2_suite`     | NMI/IRQ/BRK/DMA interrupt timing             | Yes                         |
 | `dmc_tests_suite`             | DMC buffer/delay/IRQ behaviour               | Yes                         |
 | `dpcmletterbox_suite`         | DPCM-related visual/audio test               | Yes                         |
