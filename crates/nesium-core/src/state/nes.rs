@@ -125,6 +125,9 @@ pub struct PpuState {
     pub oam_addr_disable_glitch_pending: bool,
     pub corrupt_oam_row: [bool; 32],
     pub state_update_pending: bool,
+    pub output_grayscale: bool,
+    pub grayscale_last_updated_pixel: i32,
+    pub raw_output_indices: Vec<u8>,
 }
 
 /// Save-state snapshot of the cartridge and mapper (ROM data not included).
@@ -197,6 +200,7 @@ impl SaveState for Nes {
     type State = NesState;
     type Error = NesSaveStateError;
     type Meta = SnapshotMeta;
+    const FORMAT_VERSION: u32 = 2;
 
     fn save(&self, mut meta: Self::Meta) -> Result<Snapshot<Self::State, Self::Meta>, Self::Error> {
         if let Some(cart) = self.cartridge.as_ref() {
@@ -326,6 +330,9 @@ fn ppu_to_state(ppu: &Ppu) -> PpuState {
         oam_addr_disable_glitch_pending: ppu.oam_addr_disable_glitch_pending,
         corrupt_oam_row: ppu.corrupt_oam_row,
         state_update_pending: ppu.state_update_pending,
+        output_grayscale: ppu.output_grayscale,
+        grayscale_last_updated_pixel: ppu.grayscale_last_updated_pixel,
+        raw_output_indices: ppu.raw_output_indices.clone(),
     }
 }
 
@@ -406,6 +413,16 @@ fn state_to_ppu(ppu: &mut Ppu, state: &PpuState) -> Result<(), NesSaveStateError
     ppu.oam_addr_disable_glitch_pending = state.oam_addr_disable_glitch_pending;
     ppu.corrupt_oam_row = state.corrupt_oam_row;
     ppu.state_update_pending = state.state_update_pending;
+    ppu.output_grayscale = state.output_grayscale;
+    ppu.grayscale_last_updated_pixel = state.grayscale_last_updated_pixel;
+    if ppu.raw_output_indices.len() != state.raw_output_indices.len() {
+        return Err(NesSaveStateError::CorruptState(
+            "ppu raw output indices size mismatch",
+        ));
+    }
+    ppu.raw_output_indices
+        .as_mut_slice()
+        .copy_from_slice(&state.raw_output_indices);
     Ok(())
 }
 
@@ -509,6 +526,43 @@ mod tests {
             <crate::Nes as SaveState>::save(&nes2, decoded.meta.clone()).expect("save again");
         let bytes2 = snap2.to_postcard_bytes().expect("encode again");
         assert_eq!(bytes, bytes2);
+    }
+
+    #[test]
+    fn savestate_restores_ppu_grayscale_transition_caches() {
+        let cart = cartridge::load_cartridge(dummy_nrom_rom()).expect("load dummy cartridge");
+
+        let mut nes = crate::Nes::new(ColorFormat::Rgb555);
+        nes.insert_cartridge(cart.clone());
+        nes.run_frame(false);
+
+        nes.ppu.output_grayscale = true;
+        nes.ppu.grayscale_last_updated_pixel = 17_321;
+        for (i, px) in nes.ppu.raw_output_indices.iter_mut().enumerate() {
+            *px = (i as u8).wrapping_mul(3).wrapping_add(7);
+        }
+
+        let meta = SnapshotMeta {
+            tick: 456,
+            ..SnapshotMeta::default()
+        };
+        let snap = <crate::Nes as SaveState>::save(&nes, meta).expect("save snapshot");
+
+        let mut nes2 = crate::Nes::new(ColorFormat::Rgb555);
+        nes2.insert_cartridge(cart);
+        nes2.run_frame(false);
+        nes2.ppu.output_grayscale = false;
+        nes2.ppu.grayscale_last_updated_pixel = -1;
+        nes2.ppu.raw_output_indices.fill(0);
+
+        <crate::Nes as SaveState>::load(&mut nes2, &snap).expect("load snapshot");
+
+        assert_eq!(nes2.ppu.output_grayscale, nes.ppu.output_grayscale);
+        assert_eq!(
+            nes2.ppu.grayscale_last_updated_pixel,
+            nes.ppu.grayscale_last_updated_pixel
+        );
+        assert_eq!(nes2.ppu.raw_output_indices, nes.ppu.raw_output_indices);
     }
 }
 
