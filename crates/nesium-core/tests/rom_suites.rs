@@ -341,12 +341,75 @@ fn exram_suite() -> Result<()> {
 
 #[test]
 fn full_palette_suite() -> Result<()> {
-    for rom in [
-        "full_palette/flowing_palette.nes",
-        "full_palette/full_palette.nes",
-        "full_palette/full_palette_smooth.nes",
-    ] {
-        run_rom_frames(rom, 120, |nes| require_color_diversity(nes, 32))?;
+    // Mesen2 RGB24 baseline sampled across distributed even/odd frames.
+    // Baseline is captured by `tools/mesen_dump_frame_rgb.lua`
+    // on `startFrame`, aligned to NESium's `ppu.frame_count()` numbering.
+    const FRAMES: &[usize] = &[60, 61, 180, 181, 360, 361, 600, 601];
+    const CASES: &[(&str, &[&str])] = &[
+        (
+            "full_palette/flowing_palette.nes",
+            &[
+                "/i6v7PI3soT8yYF8h+RvMgyIw1k=",
+                "kJP0YwzaH7oFiNarBWF25miMLRc=",
+                "/i6v7PI3soT8yYF8h+RvMgyIw1k=",
+                "kJP0YwzaH7oFiNarBWF25miMLRc=",
+                "/i6v7PI3soT8yYF8h+RvMgyIw1k=",
+                "8cMPjWTXhJ/WdyNpOs9ybx5InPg=",
+                "q37IUsmiH6+gLy21vWB4U7rPiO4=",
+                "naOBqMA19wdam3IIzLrh1QWYJJ8=",
+            ],
+        ),
+        (
+            "full_palette/full_palette.nes",
+            &[
+                "Gtzuy2H/pfvMokI6MSPX74D1tUE=",
+                "rON8jJ7X39bME4v0vo6PRjGf6OY=",
+                "Gtzuy2H/pfvMokI6MSPX74D1tUE=",
+                "rON8jJ7X39bME4v0vo6PRjGf6OY=",
+                "Gtzuy2H/pfvMokI6MSPX74D1tUE=",
+                "rON8jJ7X39bME4v0vo6PRjGf6OY=",
+                "Gtzuy2H/pfvMokI6MSPX74D1tUE=",
+                "rON8jJ7X39bME4v0vo6PRjGf6OY=",
+            ],
+        ),
+        (
+            "full_palette/full_palette_smooth.nes",
+            &[
+                "4+lzHQo7RMVu6Eo7BM7EMoHBVsA=",
+                "o+2A/7f6WLIc5SLE7y8ARl3SuSY=",
+                "4+lzHQo7RMVu6Eo7BM7EMoHBVsA=",
+                "o+2A/7f6WLIc5SLE7y8ARl3SuSY=",
+                "4+lzHQo7RMVu6Eo7BM7EMoHBVsA=",
+                "o+2A/7f6WLIc5SLE7y8ARl3SuSY=",
+                "4+lzHQo7RMVu6Eo7BM7EMoHBVsA=",
+                "o+2A/7f6WLIc5SLE7y8ARl3SuSY=",
+            ],
+        ),
+    ];
+
+    for (rom, expected_hashes) in CASES {
+        if expected_hashes.len() != FRAMES.len() {
+            bail!(
+                "[{}] expected hash list len {} does not match frames len {}",
+                rom,
+                expected_hashes.len(),
+                FRAMES.len()
+            );
+        }
+
+        let hashes = run_rom_rgb24_sha1_for_frames(rom, FRAMES)?;
+        for ((frame, actual_hash), expected_hash) in hashes.into_iter().zip(expected_hashes.iter())
+        {
+            if actual_hash != *expected_hash {
+                bail!(
+                    "[{}] mesen_rgb24_sha1 mismatch at frame {}: expected {}, got {}",
+                    rom,
+                    frame,
+                    expected_hash,
+                    actual_hash
+                );
+            }
+        }
     }
     Ok(())
 }
