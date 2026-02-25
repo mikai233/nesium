@@ -1,6 +1,6 @@
 mod common;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use common::{
     RESULT_ZP_ADDR, require_color_diversity, run_rom_frames, run_rom_serial_text, run_rom_status,
     run_rom_tv_sha1, run_rom_zeropage_result,
@@ -219,7 +219,6 @@ fn cpu_exec_space_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn cpu_interrupts_v2_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
@@ -230,7 +229,8 @@ fn cpu_interrupts_v2_suite() -> Result<()> {
         "cpu_interrupts_v2/rom_singles/4-irq_and_dma.nes",
         "cpu_interrupts_v2/rom_singles/5-branch_delays_irq.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_status(rom, DEFAULT_FRAMES)
+            .with_context(|| format!("[cpu_interrupts_v2_suite] rom={rom}"))?;
     }
     Ok(())
 }

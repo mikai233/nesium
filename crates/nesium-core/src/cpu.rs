@@ -876,6 +876,10 @@ impl Cpu {
             }
         }
 
+        // Match hardware/Mesen behavior: the first opcode in an IRQ/NMI handler
+        // must run before a newly-latched NMI can immediately retrigger.
+        self.prev_nmi_latch = false;
+
         debug_assert!(self.opcode_in_flight.is_none());
         debug_assert_eq!(self.step, 0);
     }
