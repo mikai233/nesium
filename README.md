@@ -126,6 +126,7 @@ Legend:
 | `mmc1_a12_suite`                     | MMC1 A12 line behaviour                      | No                          |
 | `apu_mixer_suite`                    | APU mixer / TASVideos test set               | Yes                         |
 | `apu_reset_suite`                    | APU reset behaviour                          | Yes                         |
+| `sprdma_and_dmc_dma_suite`           | Sprite DMA and DMC DMA interaction           | Yes                         |
 | `blargg_apu_2005_07_30_suite`        | Early Blargg APU tests                       | Yes                         |
 | `blargg_nes_cpu_test5_suite`         | CPU precision tests                          | Yes                         |
 | `blargg_ppu_tests_2005_09_15b_suite` | PPU palette/VRAM/scrolling behaviour         | Yes                         |
@@ -193,7 +194,6 @@ The following suites are currently marked with `#[ignore = "this test fails and 
 | `scanline_suite`              | Scanline timing                              | Yes                         |
 | `scanline_a1_suite`           | Alternate scanline tests                     | Yes                         |
 | `scrolltest_suite`            | Scrolling behaviour                          | Yes                         |
-| `sprdma_and_dmc_dma_suite`    | Sprite DMA and DMC DMA interaction           | Yes                         |
 | `volume_tests_suite`          | Volume/mixing behaviour                      | Yes                         |
 
 ## Disclaimer
