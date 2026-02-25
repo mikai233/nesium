@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{fs, path::Path, time::Instant};
+use std::{path::Path, time::Instant};
 
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose};
@@ -8,7 +8,6 @@ use nesium_core::memory::cpu as cpu_mem;
 use nesium_core::ppu::buffer::{ColorFormat, FrameBuffer};
 use nesium_core::ppu::palette::PaletteKind;
 use nesium_core::{Nes, reset_kind::ResetKind};
-use quick_xml::{Reader, events::Event};
 use sha1::{Digest, Sha1};
 
 pub const ROM_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/vendor/nes-test-roms");
@@ -18,15 +17,22 @@ pub const STATUS_MAX_BYTES: usize = 256;
 /// Many test ROMs that don't use the Blargg $6000 protocol store their result in ZP.
 pub const RESULT_ZP_ADDR: u16 = 0x00F8;
 const TV_HASH_DEFAULT_FRAMES: usize = 1800;
-const TEST_ROMS_XML: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/vendor/nes-test-roms/test_roms.xml"
-);
 const TV_HASH_MAX_FRAMES: usize = 5000;
-const TV_HASH_OVERRIDES: &[(&str, &str)] = &[(
-    "cpu_timing_test6/cpu_timing_test.nes",
-    "KsHe7gRNo+A4ULDQe7qPmEx3t98=",
-)];
+
+#[derive(Debug, Clone)]
+pub struct TvTestCase {
+    pub filename: &'static str,
+    pub hash: &'static str,
+    pub runframes: usize,
+    pub testnotes: Option<&'static str>,
+}
+
+const TV_TEST_CASES: &[TvTestCase] = &[TvTestCase {
+    filename: "cpu_timing_test6/cpu_timing_test.nes",
+    hash: "KsHe7gRNo+A4ULDQe7qPmEx3t98=",
+    runframes: 660,
+    testnotes: Some("No inputs -- official only"),
+}];
 
 /// Status byte protocol used by blargg-style test ROMs (see individual READMEs):
 /// - $80: test is running
@@ -38,129 +44,6 @@ const STATUS_MAGIC: [u8; 3] = [0xDE, 0xB0, 0x61];
 /// Number of NTSC frames to wait after a ROM requests reset via $81.
 /// README recommends waiting at least 100ms; ~6 frames at 60Hz is sufficient.
 const RESET_DELAY_FRAMES: usize = 6;
-
-#[derive(Debug, Clone)]
-struct TvTestEntry {
-    filename: String,
-    runframes: Option<usize>,
-    tv_sha1: Option<String>,
-    recorded_input: Option<String>,
-    testnotes: Option<String>,
-}
-
-fn load_tv_test_entries() -> Result<Vec<TvTestEntry>> {
-    let xml =
-        fs::read_to_string(TEST_ROMS_XML).with_context(|| format!("reading {}", TEST_ROMS_XML))?;
-
-    let mut reader = Reader::from_str(&xml);
-    reader.config_mut().trim_text(true);
-
-    let mut buf = Vec::new();
-    let mut entries = Vec::new();
-    let mut current: Option<TvTestEntry> = None;
-    let mut current_field: Option<&str> = None;
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"test" => {
-                let mut entry = TvTestEntry {
-                    filename: String::new(),
-                    runframes: None,
-                    tv_sha1: None,
-                    recorded_input: None,
-                    testnotes: None,
-                };
-                let decoder = reader.decoder();
-                for attr in e.attributes() {
-                    let attr = attr?;
-                    let value = attr.decode_and_unescape_value(decoder)?;
-                    match attr.key.as_ref() {
-                        b"filename" => entry.filename = value.into_owned(),
-                        b"runframes" => entry.runframes = value.parse().ok(),
-                        b"testnotes" => entry.testnotes = Some(value.into_owned()),
-                        _ => {}
-                    }
-                }
-                current = Some(entry);
-            }
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"tvsha1" => current_field = Some("tvsha1"),
-                b"recordedinput" => current_field = Some("recordedinput"),
-                _ => {}
-            },
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                b"tvsha1" | b"recordedinput" => current_field = None,
-                b"test" => {
-                    if let Some(entry) = current.take() {
-                        entries.push(entry);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Text(t)) => {
-                if let (Some(field), Some(entry)) = (current_field, current.as_mut()) {
-                    let text = t.decode()?.into_owned();
-                    match field {
-                        "tvsha1" => entry.tv_sha1 = Some(text),
-                        "recordedinput" => entry.recorded_input = Some(text),
-                        _ => {}
-                    }
-                }
-            }
-            Ok(Event::CData(t)) => {
-                if let (Some(field), Some(entry)) = (current_field, current.as_mut()) {
-                    let text = String::from_utf8_lossy(t.as_ref()).into_owned();
-                    match field {
-                        "tvsha1" => entry.tv_sha1 = Some(text),
-                        "recordedinput" => entry.recorded_input = Some(text),
-                        _ => {}
-                    }
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(err) => bail!("error parsing {}: {}", TEST_ROMS_XML, err),
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(entries)
-}
-
-fn select_tv_entry<'a>(
-    entries: &'a [TvTestEntry],
-    rom_rel_path: &str,
-    preferred_testnotes: Option<&str>,
-) -> Option<&'a TvTestEntry> {
-    let candidates: Vec<&TvTestEntry> = entries
-        .iter()
-        .filter(|entry| entry.filename == rom_rel_path)
-        .collect();
-
-    if candidates.is_empty() {
-        return None;
-    }
-
-    if let Some(note) = preferred_testnotes {
-        if let Some(entry) = candidates
-            .iter()
-            .find(|entry| entry.testnotes.as_deref() == Some(note))
-        {
-            return Some(*entry);
-        }
-    }
-
-    candidates
-        .iter()
-        .find(|entry| {
-            entry
-                .recorded_input
-                .as_deref()
-                .map_or(true, |s| s.is_empty())
-        })
-        .copied()
-        .or_else(|| candidates.first().copied())
-}
 
 fn compute_tv_sha1(bytes: &[u8]) -> String {
     let mut hasher = Sha1::new();
@@ -209,13 +92,19 @@ fn compute_foreground_mask_sha1(index_buffer: &[u8]) -> String {
 }
 
 /// Runs a ROM and validates its video output by comparing a SHA-1 hash of the framebuffer against
-/// the expected `tvsha1` entry recorded in `test_roms.xml`. This is useful for ROMs that don't
+/// the expected `tvsha1` entry recorded in `TV_TEST_CASES`. This is useful for ROMs that don't
 /// expose a $6000 status protocol (e.g., `cpu_timing_test6`).
 pub fn run_rom_tv_sha1(rom_rel_path: &str, preferred_testnotes: Option<&str>) -> Result<String> {
-    let entries = load_tv_test_entries()?;
-    let entry = select_tv_entry(&entries, rom_rel_path, preferred_testnotes)
+    let entry = TV_TEST_CASES
+        .iter()
+        .find(|entry| {
+            entry.filename == rom_rel_path
+                && (preferred_testnotes.is_none()
+                    || entry.testnotes.as_deref() == preferred_testnotes)
+        })
         .with_context(|| format!("no tvsha1 entry found for {}", rom_rel_path))?;
-    let frames = entry.runframes.unwrap_or(TV_HASH_DEFAULT_FRAMES);
+
+    let frames = entry.runframes;
     let frames_to_run = frames.max(TV_HASH_MAX_FRAMES);
 
     let path = Path::new(ROM_ROOT).join(rom_rel_path);
@@ -230,11 +119,7 @@ pub fn run_rom_tv_sha1(rom_rel_path: &str, preferred_testnotes: Option<&str>) ->
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
-    let expected_hash = TV_HASH_OVERRIDES
-        .iter()
-        .find(|(name, _)| *name == rom_rel_path)
-        .map(|(_, hash)| hash.to_string())
-        .unwrap_or_else(|| entry.tv_sha1.as_deref().unwrap_or_default().to_string());
+    let expected_hash = entry.hash.to_string();
 
     for _ in 0..frames {
         nes.run_frame(false);
