@@ -426,86 +426,8 @@ impl Nes {
         self.mixer
             .end_frame(end_clock, &mut self.mixer_frame_buffer);
 
-        // Optional debug path: dump the internal 96 kHz mixer output to a raw
-        // float file for waveform comparison against Mesen2. This writes a
-        // small header once, followed by interleaved f32 stereo samples:
-        //
-        //   magic: [u8;4] = b\"APU0\"
-        //   sample_rate: u32 (little-endian) = 96_000
-        //   channels: u16 (little-endian) = 2
-        //   reserved: u16 (little-endian) = 0
-        //   then repeated { left: f32 LE, right: f32 LE } samples.
-        //
-        // The dump is limited to roughly 60 seconds to avoid unbounded files.
-        // const DEBUG_MAX_SECONDS: u64 = 60;
-        // let max_debug_frames = INTERNAL_MIXER_SAMPLE_RATE as u64 * DEBUG_MAX_SECONDS;
-        // if self.debug_apu_frames_written < max_debug_frames {
-        //     if self.debug_apu_dump.is_none() {
-        //         if let Ok(mut file) = File::create("apu_debug.raw") {
-        //             let _ = file.write_all(b"APU0");
-        //             let _ = file.write_all(&INTERNAL_MIXER_SAMPLE_RATE.to_le_bytes());
-        //             let channels: u16 = 2;
-        //             let _ = file.write_all(&channels.to_le_bytes());
-        //             let reserved: u16 = 0;
-        //             let _ = file.write_all(&reserved.to_le_bytes());
-        //             self.debug_apu_dump = Some(file);
-        //         }
-        //     }
-        //     if let Some(file) = self.debug_apu_dump.as_mut() {
-        //         let mut buf = Vec::with_capacity(self.mixer_frame_buffer.len() * 4);
-        //         for &s in &self.mixer_frame_buffer {
-        //             buf.extend_from_slice(&s.to_le_bytes());
-        //         }
-        //         let _ = file.write_all(&buf);
-        //         self.debug_apu_frames_written += (self.mixer_frame_buffer.len() / 2) as u64;
-        //     }
-        // }
-
         self.sound_bus
             .mix_frame(&[&self.mixer_frame_buffer], &mut samples);
-
-        // Optional debug path: dump the post-bus PCM at the host sample rate
-        // (after resampling/EQ/reverb/crossfeed/master volume) to a raw float
-        // file. The format matches `apu_debug.raw`, only the sample rate
-        // differs:
-        //
-        //   magic: [u8;4] = b\"APU0\"
-        //   sample_rate: u32 (little-endian) = self.audio_sample_rate()
-        //   channels: u16 (little-endian) = 2
-        //   reserved: u16 (little-endian) = 0
-        //   then repeated { left: f32 LE, right: f32 LE } samples.
-        //
-        // Also limited to ~60s to keep file size reasonable.
-        // const DEBUG_BUS_MAX_SECONDS: u64 = 60;
-        // let max_bus_frames = self.audio_sample_rate as u64 * DEBUG_BUS_MAX_SECONDS;
-        // let new_samples = &out[out_start..];
-        // let new_frames = (new_samples.len() / 2) as u64;
-        // if self.debug_bus_frames_written < max_bus_frames && new_frames > 0 {
-        //     if self.debug_bus_dump.is_none() {
-        //         if let Ok(mut file) = File::create("bus_debug.raw") {
-        //             let _ = file.write_all(b"APU0");
-        //             let _ = file.write_all(&self.audio_sample_rate.to_le_bytes());
-        //             let channels: u16 = 2;
-        //             let _ = file.write_all(&channels.to_le_bytes());
-        //             let reserved: u16 = 0;
-        //             let _ = file.write_all(&reserved.to_le_bytes());
-        //             self.debug_bus_dump = Some(file);
-        //         }
-        //     }
-        //     if let Some(file) = self.debug_bus_dump.as_mut() {
-        //         // Clamp to remaining budget.
-        //         let frames_to_write =
-        //             (max_bus_frames - self.debug_bus_frames_written).min(new_frames) as usize;
-        //         let samples_to_write = frames_to_write * 2;
-        //         let slice = &new_samples[..samples_to_write];
-        //         let mut buf = Vec::with_capacity(slice.len() * 4);
-        //         for &s in slice {
-        //             buf.extend_from_slice(&s.to_le_bytes());
-        //         }
-        //         let _ = file.write_all(&buf);
-        //         self.debug_bus_frames_written += frames_to_write as u64;
-        //     }
-        // }
 
         self.last_frame = self.ppu.frame_count();
         self.dot_counter = self.ppu.total_dots();

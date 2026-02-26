@@ -493,27 +493,6 @@ impl Ppu {
                     // timeline, like Mesen's `_needStateUpdate`.
                     self.state_update_pending = true;
                 }
-
-                // // Debug trace: mirror Mesen's SetMaskRegister $2001 write log.
-                // let bg_en = if mask.contains(Mask::SHOW_BACKGROUND) {
-                //     1
-                // } else {
-                //     0
-                // };
-                // let sp_en = if mask.contains(Mask::SHOW_SPRITES) {
-                //     1
-                // } else {
-                //     0
-                // };
-                // tracing::debug!(
-                //     "ppu_write_2001: frame={} scanline={} cycle={} value={:02X} bg_en={} sp_en={}",
-                //     self.frame,
-                //     self.scanline,
-                //     self.cycle,
-                //     value,
-                //     bg_en,
-                //     sp_en,
-                // );
             }
 
             PpuRegister::Status => {} // read-only
@@ -580,57 +559,6 @@ impl Ppu {
     /// work, runs fetch windows, and renders pixels on visible scanlines. Call
     /// three times per CPU tick for NTSC timing.
     pub fn step(bus: &mut CpuBus, cpu: &mut Cpu, ctx: &mut Context) {
-        // let cpu_cycle = bus.cycles();
-        // if cpu_cycle > 16_000_000 && cpu_cycle < 20_000_000 {
-        //     let cpu_master_clock = bus.master_clock();
-        //     let ppu = bus.devices().ppu;
-        //     let status = ppu.registers.status;
-        //     let prevent_vbl = u8::from(ppu.prevent_vblank_flag);
-        //     let status_v = u8::from(status.contains(Status::VERTICAL_BLANK));
-        //     let status_s0 = u8::from(status.contains(Status::SPRITE_ZERO_HIT));
-        //     let status_ovf = u8::from(status.contains(Status::SPRITE_OVERFLOW));
-        //     let v_raw = ppu.registers.vram.v.raw();
-        //     let t_raw = ppu.registers.vram.t.raw();
-        //     let xscroll = ppu.registers.vram.x;
-        //     let mask = ppu.registers.mask;
-        //     let mask_bg = u8::from(mask.contains(Mask::SHOW_BACKGROUND));
-        //     let mask_sp = u8::from(mask.contains(Mask::SHOW_SPRITES));
-        //     let need_nmi = 0;
-        //     let prev_need_nmi = 0;
-        //     let prev_nmi_flag = 0;
-        //     let nmi_flag = 0;
-        //
-        //     tracing::debug!(
-        //         "cpu_mc={} cpu_cyc={} pc={:04X} a={:02X} x={:02X} y={:02X} sp={:02X} ps={:02X}  \
-        //          ppu_mc={} ppu_scanline={} ppu_cycle={} frame={} prevent_vbl={} status_v={} status_s0={} status_ovf={} \
-        //          v={:04X} t={:04X} xscroll={:02X} mask_bg={} mask_sp={} need_nmi={} prev_need_nmi={} prev_nmi_flag={} nmi_flag={}",
-        //         cpu_master_clock,
-        //         cpu_cycle,
-        //         cpu.pc,
-        //         cpu.a,
-        //         cpu.x,
-        //         cpu.y,
-        //         cpu.s,
-        //         cpu.p,
-        //         ppu.master_clock,
-        //         ppu.scanline,
-        //         ppu.cycle,
-        //         ppu.frame,
-        //         prevent_vbl,
-        //         status_v,
-        //         status_s0,
-        //         status_ovf,
-        //         v_raw,
-        //         t_raw,
-        //         xscroll,
-        //         mask_bg,
-        //         mask_sp,
-        //         need_nmi,
-        //         prev_need_nmi,
-        //         prev_nmi_flag,
-        //         nmi_flag,
-        //     );
-        // }
         // Pre-increment: Advance counters at the START of the clock.
         // This ensures scanline/cycle reflect the state *after* this cycle is processed
         // for synchronization purposes, aligning with Mesen's interpretation.
