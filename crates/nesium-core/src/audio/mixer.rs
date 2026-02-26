@@ -647,7 +647,9 @@ impl NesSoundMixer {
         if let Some(dump) = self.mix_pcm_dump.as_mut() {
             // If there is no post-processing and neutral gain, dump the exact
             // i16 stream produced by blip to avoid i16<->f32 round-trip drift.
-            if self.stereo_filter == StereoFilterType::None && (self.master_gain - 1.0).abs() < f32::EPSILON {
+            if self.stereo_filter == StereoFilterType::None
+                && (self.master_gain - 1.0).abs() < f32::EPSILON
+            {
                 dump.record_interleaved_i16(&stereo_i16);
             } else {
                 dump.record_interleaved_f32(&stereo);

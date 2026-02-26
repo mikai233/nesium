@@ -1888,10 +1888,7 @@ impl Ppu {
             self.sprite_line_next.set_pattern_low(i, pattern_low);
             self.sprite_line_next.set_pattern_high(i, pattern_high);
 
-            if debug_sprite_trace_enabled()
-                && self.frame == 120
-                && self.scanline == 194
-            {
+            if debug_sprite_trace_enabled() && self.frame == 120 && self.scanline == 194 {
                 nmi_trace::log_line(&format!(
                     "SPRDBG|src=nesium|ev=fetch_pattern|frame={}|scanline={}|dot={}|slot={}|count={}|y={:02X}|tile={:02X}|attr={:02X}|x={:02X}|fetch_dummy={}|line_off={:02X}|addr={:04X}|lo={:02X}|hi={:02X}",
                     self.frame,
@@ -2767,4 +2764,3 @@ mod tests {
         assert!(!ppu.registers.status.contains(Status::SPRITE_OVERFLOW));
     }
 }
-
