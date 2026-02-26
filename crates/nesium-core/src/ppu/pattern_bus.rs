@@ -62,13 +62,6 @@ impl<'a> PpuBus<'a> {
         }
     }
 
-    /// Notifies the mapper of a VRAM address bus access without performing a read/write.
-    pub fn notify_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.ppu_vram_access(addr, ctx);
-        }
-    }
-
     pub fn map_nametable(&self, addr: u16) -> NametableTarget {
         if let Some(cart) = self.cartridge.as_deref() {
             cart.map_nametable(addr)
@@ -77,6 +70,13 @@ impl<'a> PpuBus<'a> {
             let base = addr & 0x0FFF;
             let offset = base & 0x07FF;
             NametableTarget::Ciram(offset)
+        }
+    }
+
+    /// Notifies the mapper of a VRAM address bus access without performing a read/write.
+    pub fn notify_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.ppu_vram_access(addr, ctx);
         }
     }
 
