@@ -37,7 +37,6 @@ pub mod error;
 pub mod interceptor;
 pub mod mem_block;
 pub mod memory;
-pub(crate) mod nmi_trace;
 pub mod ppu;
 pub mod reset_kind;
 pub mod rng;

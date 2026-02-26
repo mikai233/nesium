@@ -51,7 +51,6 @@ use self::{
 
 use core::ffi::c_void;
 use core::fmt;
-use std::sync::OnceLock;
 
 use crate::{
     bus::CpuBus,
@@ -61,7 +60,6 @@ use crate::{
     interceptor::Interceptor,
     mem_block::ppu::{Ciram, SecondaryOamRam},
     memory::ppu::{self as ppu_mem, Register as PpuRegister},
-    nmi_trace,
     ppu::{
         buffer::FrameBuffer,
         buffer::FrameReadyCallback,
@@ -80,36 +78,6 @@ pub const SCREEN_HEIGHT: usize = 240;
 const CYCLES_PER_SCANLINE: u16 = 341;
 const SCANLINES_PER_FRAME: i16 = 262; // -1 (prerender) + 0..239 visible + post + vblank (241..260)
 const SCREEN_PIXEL_COUNT: i32 = (SCREEN_WIDTH * SCREEN_HEIGHT) as i32;
-
-#[inline]
-fn debug_sprite_trace_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_SPRITE_TRACE").is_some())
-}
-
-#[inline]
-fn debug_ppu_dot_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_PPU_DOT").is_some())
-}
-
-#[inline]
-fn debug_pixels_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_PIXELS").is_some())
-}
-
-#[inline]
-fn debug_palette_trace_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_PALETTE_TRACE").is_some())
-}
-
-#[inline]
-fn debug_fetch_trace_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var_os("NESIUM_DEBUG_FETCH_TRACE").is_some())
-}
 
 /// Entry points for the CPU PPU register mirror.
 #[derive(Clone)]
@@ -505,7 +473,7 @@ impl Ppu {
             PpuRegister::Control => {
                 self.registers.write_control(value);
                 self.maybe_apply_scroll_glitch(ScrollGlitchSource::Control2000);
-                self.update_nmi_level(ppu_bus.cpu_cycle());
+                self.update_nmi_level();
             }
             PpuRegister::Mask => {
                 // TODO: Hardware/Mesen2 model subtle mid-frame rendering enable/disable glitches (bus address reset, OAM corruption).
@@ -594,7 +562,7 @@ impl Ppu {
     /// behavior.
     pub fn cpu_read(&mut self, addr: u16, ppu_bus: &mut PpuBus<'_>) -> u8 {
         match PpuRegister::from_cpu_addr(addr) {
-            PpuRegister::Status => self.read_status(ppu_bus.cpu_cycle()),
+            PpuRegister::Status => self.read_status(),
             PpuRegister::OamData => {
                 let v = self.read_oam_data();
                 // OAMDATA drives the full bus when read.
@@ -701,45 +669,6 @@ impl Ppu {
                     pats_lo,
                     pats_hi,
                 );
-
-                if debug_sprite_trace_enabled()
-                    && ppu.frame == 120
-                    && (194..=195).contains(&ppu.scanline)
-                {
-                    let count = sprite_count as usize;
-                    let attrs_hex = attrs[..count]
-                        .iter()
-                        .map(|v| format!("{:02X}", v))
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    let xs_hex = xs[..count]
-                        .iter()
-                        .map(|v| format!("{:02X}", v))
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    let lo_hex = pats_lo[..count]
-                        .iter()
-                        .map(|v| format!("{:02X}", v))
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    let hi_hex = pats_hi[..count]
-                        .iter()
-                        .map(|v| format!("{:02X}", v))
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    nmi_trace::log_line(&format!(
-                        "SPRDBG|src=nesium|ev=load_scanline|frame={}|scanline={}|dot={}|count={}|sprite0_next={}|attrs={}|xs={}|pat_lo={}|pat_hi={}",
-                        ppu.frame,
-                        ppu.scanline,
-                        ppu.cycle,
-                        sprite_count,
-                        nmi_trace::flag(ppu.sprite_eval.sprite0_in_range_next),
-                        attrs_hex,
-                        xs_hex,
-                        lo_hex,
-                        hi_hex
-                    ));
-                }
             }
 
             // If rendering is disabled, keep pipelines idle to avoid stale data.
@@ -760,24 +689,10 @@ impl Ppu {
                 (-1, 1..=256) => {
                     if ppu.cycle == 1 {
                         // Clear vblank/sprite flags at dot 1 of prerender.
-                        let had_vblank = ppu.registers.status.contains(Status::VERTICAL_BLANK);
                         ppu.registers.status.remove(Status::VERTICAL_BLANK);
                         ppu.registers
                             .status
                             .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
-                        if had_vblank {
-                            nmi_trace::log_line(&format!(
-                                "NMITRACE|src=nesium|ev=vblank_clear|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|reason=prerender|nmi_enabled={}|nmi_level={}|prevent_vblank={}",
-                                cpu_cycle,
-                                ppu.master_clock,
-                                ppu.frame,
-                                ppu.scanline,
-                                ppu.cycle,
-                                nmi_trace::flag(ppu.registers.control.nmi_enabled()),
-                                nmi_trace::flag(ppu.nmi_level),
-                                nmi_trace::flag(ppu.prevent_vblank_flag)
-                            ));
-                        }
                         // Mesen2: sprite evaluation does not run on the pre-render line,
                         // so ensure scanline 0 starts with 0 active sprites.
                         ppu.sprite_eval.count = 0;
@@ -890,28 +805,6 @@ impl Ppu {
                         // Sprite evaluation for the *next* scanline runs during dots 1..=256.
                         ppu.sprite_pipeline_eval_tick();
 
-                        if ppu.cycle == 256
-                            && debug_sprite_trace_enabled()
-                            && ppu.frame == 120
-                            && (193..=194).contains(&ppu.scanline)
-                        {
-                            let sec_oam = ppu
-                                .secondary_oam
-                                .iter()
-                                .map(|v| format!("{:02X}", v))
-                                .collect::<Vec<_>>()
-                                .join(",");
-                            nmi_trace::log_line(&format!(
-                                "SPRDBG|src=nesium|ev=eval_done|frame={}|scanline={}|dot={}|count={}|sprite0_next={}|sec_oam={}",
-                                ppu.frame,
-                                ppu.scanline,
-                                ppu.cycle,
-                                ppu.sprite_eval.count.min(8),
-                                nmi_trace::flag(ppu.sprite_eval.sprite0_in_range_next),
-                                sec_oam
-                            ));
-                        }
-
                         if ppu.cycle == 256 && ppu.prev_render_enabled {
                             ppu.increment_scroll_y();
                         }
@@ -978,31 +871,6 @@ impl Ppu {
                     // the VBlank flag never sets and no NMI edge is generated for this frame.
                     if !ppu.prevent_vblank_flag {
                         ppu.registers.status.insert(Status::VERTICAL_BLANK);
-                        if nmi_trace::enabled() {
-                            nmi_trace::log_line(&format!(
-                                "NMITRACE|src=nesium|ev=vblank_set|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|nmi_enabled={}|nmi_level={}",
-                                cpu_cycle,
-                                ppu.master_clock,
-                                ppu.frame,
-                                ppu.scanline,
-                                ppu.cycle,
-                                nmi_trace::flag(ppu.registers.control.nmi_enabled()),
-                                nmi_trace::flag(ppu.nmi_level)
-                            ));
-                        }
-                    } else {
-                        if nmi_trace::enabled() {
-                            nmi_trace::log_line(&format!(
-                                "NMITRACE|src=nesium|ev=vblank_suppressed|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|nmi_enabled={}|nmi_level={}",
-                                cpu_cycle,
-                                ppu.master_clock,
-                                ppu.frame,
-                                ppu.scanline,
-                                ppu.cycle,
-                                nmi_trace::flag(ppu.registers.control.nmi_enabled()),
-                                nmi_trace::flag(ppu.nmi_level)
-                            ));
-                        }
                     }
                     // Consume the race latch each frame.
                     ppu.prevent_vblank_flag = false;
@@ -1013,26 +881,7 @@ impl Ppu {
                 _ => unreachable!("PPU scanline {} out of range", ppu.scanline),
             }
 
-            ppu.update_nmi_level(cpu_cycle);
-
-            if debug_ppu_dot_enabled()
-                && ppu.frame == 7
-                && ppu.scanline == 192
-                && (228..=272).contains(&ppu.cycle)
-            {
-                nmi_trace::log_line(&format!(
-                    "PPUDBG|src=nesium|ev=dot|cpu_cycle={}|frame={}|scanline={}|dot={}|v={:04X}|t={:04X}|w={}|render={}|prev_render={}",
-                    cpu_cycle,
-                    ppu.frame,
-                    ppu.scanline,
-                    ppu.cycle,
-                    ppu.registers.vram.v.raw(),
-                    ppu.registers.vram.t.raw(),
-                    if ppu.registers.vram.w { 1 } else { 0 },
-                    if ppu.render_enabled { 1 } else { 0 },
-                    if ppu.prev_render_enabled { 1 } else { 0 }
-                ));
-            }
+            ppu.update_nmi_level();
             ppu.update_state_latch();
 
             // Mesen2/hardware: apply delayed $2006 VRAM-address commits at the
@@ -1229,26 +1078,10 @@ impl Ppu {
 
     /// Recomputes the NMI output line based on VBlank and control register,
     /// latching a pending NMI on rising edges.
-    fn update_nmi_level(&mut self, cpu_cycle: u64) {
-        let old_nmi_level = self.nmi_level;
+    fn update_nmi_level(&mut self) {
         let new_nmi_level = self.registers.status.contains(Status::VERTICAL_BLANK)
             && self.registers.control.nmi_enabled();
         self.nmi_level = new_nmi_level;
-        if old_nmi_level != new_nmi_level && nmi_trace::enabled() {
-            nmi_trace::log_line(&format!(
-                "NMITRACE|src=nesium|ev=nmi_level|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|from={}|to={}|vblank={}|nmi_enabled={}|prevent_vblank={}",
-                cpu_cycle,
-                self.master_clock,
-                self.frame,
-                self.scanline,
-                self.cycle,
-                nmi_trace::flag(old_nmi_level),
-                nmi_trace::flag(new_nmi_level),
-                nmi_trace::flag(self.registers.status.contains(Status::VERTICAL_BLANK)),
-                nmi_trace::flag(self.registers.control.nmi_enabled()),
-                nmi_trace::flag(self.prevent_vblank_flag)
-            ));
-        }
     }
 
     /// Renders a single pixel into the framebuffer based on the current
@@ -1368,39 +1201,6 @@ impl Ppu {
         // column ($00, $10, $20, $30) as in Mesen2 / hardware.
         if self.output_grayscale {
             color_index &= 0x30;
-        }
-
-        if debug_pixels_enabled()
-            && self.frame == 120
-            && (120..=225).contains(&(x as i32))
-            && (188..=222).contains(&(y as i32))
-        {
-            nmi_trace::log_line(&format!(
-                "PIXDBG|src=nesium|frame={}|y={}|x={}|dot={}|v={:04X}|t={:04X}|bg_vis={}|sp_vis={}|bg_p={}|bg_c={}|sp_p={}|sp_c={}|sp_pri={}|final_p={}|final_c={}|from_sp={}|pal={:04X}|raw_idx={:02X}|idx={:02X}",
-                self.frame,
-                y,
-                x,
-                self.cycle,
-                self.registers.vram.v.raw(),
-                self.registers.vram.t.raw(),
-                if bg_visible { 1 } else { 0 },
-                if sprite_visible { 1 } else { 0 },
-                bg_palette,
-                bg_color,
-                sprite_pixel.palette,
-                sprite_pixel.color,
-                if sprite_pixel.priority_behind_bg {
-                    1
-                } else {
-                    0
-                },
-                final_palette,
-                final_color,
-                if from_sprite { 1 } else { 0 },
-                palette_addr,
-                raw_color_index,
-                color_index
-            ));
         }
 
         self.framebuffer
@@ -1887,26 +1687,6 @@ impl Ppu {
             );
             self.sprite_line_next.set_pattern_low(i, pattern_low);
             self.sprite_line_next.set_pattern_high(i, pattern_high);
-
-            if debug_sprite_trace_enabled() && self.frame == 120 && self.scanline == 194 {
-                nmi_trace::log_line(&format!(
-                    "SPRDBG|src=nesium|ev=fetch_pattern|frame={}|scanline={}|dot={}|slot={}|count={}|y={:02X}|tile={:02X}|attr={:02X}|x={:02X}|fetch_dummy={}|line_off={:02X}|addr={:04X}|lo={:02X}|hi={:02X}",
-                    self.frame,
-                    self.scanline,
-                    self.cycle,
-                    i,
-                    active_sprites,
-                    y,
-                    tile,
-                    attr,
-                    x,
-                    nmi_trace::flag(fetch_last_sprite),
-                    line_offset,
-                    addr,
-                    pattern_low,
-                    pattern_high
-                ));
-            }
         }
     }
 
@@ -1924,7 +1704,7 @@ impl Ppu {
         base_nt + 0x03C0 + (v.coarse_y() as u16 / 4) * 8 + (v.coarse_x() as u16 / 4)
     }
 
-    fn read_status(&mut self, cpu_cycle: u64) -> u8 {
+    fn read_status(&mut self) -> u8 {
         let status = self.registers.status.bits();
         // Mesen2 / hardware: low 5 bits of $2002 come from open bus.
         // Use PpuOpenBus::apply with a mask covering the low 5 bits so only
@@ -1942,21 +1722,7 @@ impl Ppu {
             self.prevent_vblank_flag = true;
         }
 
-        if self.scanline == 241 && self.cycle == 0 && nmi_trace::enabled() {
-            nmi_trace::log_line(&format!(
-                "NMITRACE|src=nesium|ev=vblank_suppress_latch|cpu_cycle={}|cpu_master={}|frame={}|scanline={}|dot={}|vblank={}|nmi_enabled={}|nmi_level={}",
-                cpu_cycle,
-                self.master_clock,
-                self.frame,
-                self.scanline,
-                self.cycle,
-                nmi_trace::flag(self.registers.status.contains(Status::VERTICAL_BLANK)),
-                nmi_trace::flag(self.registers.control.nmi_enabled()),
-                nmi_trace::flag(self.nmi_level)
-            ));
-        }
-
-        self.update_nmi_level(cpu_cycle);
+        self.update_nmi_level();
         ret
     }
 
@@ -2119,22 +1885,6 @@ impl Ppu {
 
         // Palette space is handled separately from nametable/CHR.
         if addr >= ppu_mem::PALETTE_BASE {
-            if debug_palette_trace_enabled() && self.frame == 120 {
-                nmi_trace::log_line(&format!(
-                    "PALDBG|src=nesium|ev=palette_write|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|v={:04X}|t={:04X}|w={}|render={}|prev_render={}|pending_v_delay={}",
-                    self.frame,
-                    self.scanline,
-                    self.cycle,
-                    addr,
-                    value,
-                    self.registers.vram.v.raw(),
-                    self.registers.vram.t.raw(),
-                    nmi_trace::flag(self.registers.vram.w),
-                    nmi_trace::flag(self.render_enabled),
-                    nmi_trace::flag(self.prev_render_enabled),
-                    self.pending_vram_delay
-                ));
-            }
             self.palette_ram.write(addr, value);
             return;
         }
@@ -2178,11 +1928,6 @@ impl Ppu {
 
     fn read_vram(&mut self, ppu_bus: &mut PpuBus<'_>, addr: u16, kind: PpuVramAccessKind) -> u8 {
         let addr = addr & ppu_mem::VRAM_MIRROR_MASK;
-        let trace_fetch = debug_fetch_trace_enabled()
-            && kind == PpuVramAccessKind::RenderingFetch
-            && self.frame == 120
-            && self.scanline == 195
-            && (1..=256).contains(&self.cycle);
 
         // read_vram is intended for nametable/pattern table accesses only; palette
         // RAM is handled separately in read_vram_data / write_vram_data.
@@ -2201,20 +1946,7 @@ impl Ppu {
                 kind,
             };
             // Open bus: Mesen2 returns the address LSB when CHR is disabled.
-            let value = ppu_bus.read(addr, ctx).unwrap_or_else(|| addr as u8);
-            if trace_fetch {
-                nmi_trace::log_line(&format!(
-                    "FETCHDBG|src=nesium|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|v={:04X}|t={:04X}",
-                    self.frame,
-                    self.scanline,
-                    self.cycle,
-                    addr,
-                    value,
-                    self.registers.vram.v.raw(),
-                    self.registers.vram.t.raw()
-                ));
-            }
-            return value;
+            return ppu_bus.read(addr, ctx).unwrap_or_else(|| addr as u8);
         }
 
         let ctx = PpuVramAccessContext {
@@ -2243,19 +1975,6 @@ impl Ppu {
                 addr as u8
             }
         };
-
-        if trace_fetch {
-            nmi_trace::log_line(&format!(
-                "FETCHDBG|src=nesium|frame={}|scanline={}|dot={}|addr={:04X}|value={:02X}|v={:04X}|t={:04X}",
-                self.frame,
-                self.scanline,
-                self.cycle,
-                addr,
-                value,
-                self.registers.vram.v.raw(),
-                self.registers.vram.t.raw()
-            ));
-        }
 
         value
     }

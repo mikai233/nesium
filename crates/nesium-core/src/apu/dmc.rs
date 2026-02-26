@@ -138,34 +138,6 @@ impl Dmc {
         self.output_level
     }
 
-    pub(super) fn bytes_remaining(&self) -> u16 {
-        self.bytes_remaining
-    }
-
-    pub(super) fn sample_buffer_empty(&self) -> bool {
-        self.sample_buffer.is_none()
-    }
-
-    pub(super) fn bits_remaining(&self) -> u8 {
-        self.bits_remaining
-    }
-
-    pub(super) fn timer_value(&self) -> u16 {
-        self.timer
-    }
-
-    pub(super) fn current_address(&self) -> u16 {
-        self.current_address
-    }
-
-    pub(super) fn disable_delay(&self) -> u8 {
-        self.disable_delay
-    }
-
-    pub(super) fn transfer_start_delay(&self) -> u8 {
-        self.transfer_start_delay
-    }
-
     fn restart_sample(&mut self) {
         self.current_address = self.sample_address;
         self.bytes_remaining = self.sample_length;

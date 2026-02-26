@@ -1,7 +1,4 @@
 use std::fmt::{Debug, Display};
-use std::fs::OpenOptions;
-use std::io::{BufWriter, Write};
-use std::sync::{Mutex, OnceLock};
 
 use crate::apu::Apu;
 use crate::bus::{CpuBus, DmcDmaEvent, STACK_ADDR};
@@ -14,7 +11,6 @@ use crate::cpu::mnemonic::Mnemonic;
 use crate::memory::cpu::{IRQ_VECTOR_HI, IRQ_VECTOR_LO, NMI_VECTOR_HI, NMI_VECTOR_LO};
 use crate::memory::cpu::{RESET_VECTOR_HI, RESET_VECTOR_LO};
 use crate::memory::ppu::{self as ppu_mem, Register as PpuRegister};
-use crate::nmi_trace;
 use crate::reset_kind::ResetKind;
 
 // Debug builds keep the standard checks; release uses unchecked hints to avoid
@@ -71,33 +67,6 @@ pub fn opcode_meta(opcode: u8) -> OpcodeMeta {
 }
 
 const OAM_DMA_TRANSFER_BYTES: u16 = ppu_mem::OAM_RAM_SIZE as u16;
-
-static CPU_OPCODE_LOG: OnceLock<Option<Mutex<BufWriter<std::fs::File>>>> = OnceLock::new();
-
-#[inline]
-fn cpu_opcode_log_write(cycle: u64, pc: u16, opcode: u8, addr_val: u8) {
-    let log = CPU_OPCODE_LOG.get_or_init(|| {
-        OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open("/Users/mikai/RustroverProjects/nesium/nesium_cpu_opcode.log")
-            .ok()
-            .map(|f| Mutex::new(BufWriter::with_capacity(256 * 1024, f)))
-    });
-
-    if let Some(writer) = log
-        && let Ok(mut w) = writer.lock()
-    {
-        // Keep the same format as the C++ logger: "cycle=<u64> opcode=<02X>"
-        writeln!(
-            w,
-            "cycle={} pc={:04X} opcode={:02X} 0200={:02X}",
-            cycle, pc, opcode, addr_val
-        )
-        .unwrap();
-    }
-}
 
 /// Unified DMA controller state to match Mesen's implementation.
 /// Handles the interleaving of OAM and DMC DMA, including the specific "Halt" and "Dummy Read" cycle stealing behavior.
@@ -309,16 +278,9 @@ impl Cpu {
                 if self.prev_irq_active || self.prev_nmi_latch {
                     self.perform_interrupt(bus, ctx);
                 } else {
-                    // let start_pc = self.pc;
-                    // let start_cycles = bus.cycles();
-                    // let addr_val = bus.ram[0x0200];
                     let opcode = self.fetch_u8(bus, ctx);
-                    // if start_cycles < 20_000_000 {
-                    //     cpu_opcode_log_write(start_cycles, start_pc, opcode, addr_val);
-                    // }
                     self.opcode_in_flight = Some(opcode);
                     let instr = &LOOKUP_TABLE[opcode as usize];
-                    // self.log_trace_line(bus, ctx, start_pc, start_cycles, instr);
                     self.prepare_step(instr);
                 }
             }
@@ -352,25 +314,6 @@ impl Cpu {
         let nmi_level = bus.nmi_level();
         if nmi_level && !self.prev_nmi_level {
             self.nmi_latch = true;
-            if nmi_trace::enabled() {
-                nmi_trace::log_line(&format!(
-                    "NMITRACE|src=nesium|ev=nmi_latch_set|cpu_cycle={}|cpu_master={}|pc={:04X}|frame={}|scanline={}|dot={}|vblank={}|nmi_enabled={}|nmi_level={}",
-                    bus.cycles(),
-                    bus.master_clock(),
-                    self.pc,
-                    bus.ppu.frame,
-                    bus.ppu.scanline,
-                    bus.ppu.cycle,
-                    nmi_trace::flag(
-                        bus.ppu
-                            .registers
-                            .status
-                            .contains(crate::ppu::Status::VERTICAL_BLANK)
-                    ),
-                    nmi_trace::flag(bus.ppu.registers.control.nmi_enabled()),
-                    nmi_trace::flag(bus.ppu.nmi_level)
-                ));
-            }
         }
         self.prev_nmi_level = nmi_level;
 
@@ -888,18 +831,6 @@ impl Cpu {
                 let lo = bus.mem_read(NMI_VECTOR_LO, self, ctx);
                 let hi = bus.mem_read(NMI_VECTOR_HI, self, ctx);
                 self.pc = ((hi as u16) << 8) | (lo as u16);
-                if nmi_trace::enabled() {
-                    nmi_trace::log_line(&format!(
-                        "NMITRACE|src=nesium|ev=nmi_take|cpu_cycle={}|cpu_master={}|pc={:04X}|vector={:04X}|frame={}|scanline={}|dot={}",
-                        bus.cycles(),
-                        bus.master_clock(),
-                        self.pc,
-                        ((hi as u16) << 8) | (lo as u16),
-                        bus.ppu.frame,
-                        bus.ppu.scanline,
-                        bus.ppu.cycle
-                    ));
-                }
             }
             IrqKind::Irq => {
                 let lo = bus.mem_read(IRQ_VECTOR_LO, self, ctx);

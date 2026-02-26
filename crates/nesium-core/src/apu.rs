@@ -20,13 +20,10 @@ mod tables;
 mod triangle;
 
 use core::fmt;
-use std::fs::OpenOptions;
-use std::io::{BufWriter, Write};
-use std::sync::{Mutex, OnceLock};
 
 use crate::{
     audio::{AudioChannel, NesSoundMixer},
-    bus::{CpuBus, DmcDmaEvent},
+    bus::CpuBus,
     context::Context,
     cpu::Cpu,
     mem_block::apu::RegisterRam,
@@ -55,91 +52,6 @@ struct StatusFlags {
 }
 
 type LastLevels = crate::mem_block::MemBlock<f32, 5>;
-
-static APU_TRACE_LOG: OnceLock<Option<Mutex<BufWriter<std::fs::File>>>> = OnceLock::new();
-static APU_TRACE_READ_ADDRS: OnceLock<Option<Box<[u16]>>> = OnceLock::new();
-
-#[inline]
-fn apu_trace_flag(value: bool) -> u8 {
-    u8::from(value)
-}
-
-fn apu_trace_log_write(line: &str) {
-    let log = APU_TRACE_LOG.get_or_init(|| {
-        let path = std::env::var("NESIUM_APU_TRACE_PATH").ok()?;
-        OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(path)
-            .ok()
-            .map(|f| Mutex::new(BufWriter::with_capacity(256 * 1024, f)))
-    });
-
-    if let Some(writer) = log
-        && let Ok(mut w) = writer.lock()
-    {
-        let _ = writeln!(w, "{line}");
-        let _ = w.flush();
-    }
-}
-
-#[inline]
-fn apu_trace_enabled() -> bool {
-    APU_TRACE_LOG
-        .get_or_init(|| {
-            let path = std::env::var("NESIUM_APU_TRACE_PATH").ok()?;
-            OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(path)
-                .ok()
-                .map(|f| Mutex::new(BufWriter::with_capacity(256 * 1024, f)))
-        })
-        .is_some()
-}
-
-#[inline]
-fn parse_trace_addr_token(token: &str) -> Option<u16> {
-    let t = token.trim();
-    if t.is_empty() {
-        return None;
-    }
-    if let Some(hex) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
-        return u16::from_str_radix(hex.trim(), 16).ok();
-    }
-    if t.chars().any(|c| c.is_ascii_alphabetic()) {
-        u16::from_str_radix(t, 16).ok()
-    } else {
-        t.parse::<u16>().ok()
-    }
-}
-
-fn apu_trace_read_addrs() -> &'static Option<Box<[u16]>> {
-    APU_TRACE_READ_ADDRS.get_or_init(|| {
-        let raw = std::env::var("NESIUM_APU_TRACE_READ_ADDRS").ok()?;
-        let mut addrs = Vec::new();
-        for token in raw.split(',') {
-            if let Some(addr) = parse_trace_addr_token(token) {
-                addrs.push(addr);
-            }
-        }
-        if addrs.is_empty() {
-            None
-        } else {
-            Some(addrs.into_boxed_slice())
-        }
-    })
-}
-
-#[inline]
-fn apu_trace_should_log_read_mem(addr: u16) -> bool {
-    match apu_trace_read_addrs() {
-        Some(addrs) => addrs.contains(&addr),
-        None => false,
-    }
-}
 
 /// Fully modelled NES APU with envelope, sweep, length/linear counters and the
 /// frame sequencer.
@@ -181,20 +93,6 @@ impl Default for Apu {
 }
 
 impl Apu {
-    #[inline]
-    fn dmc_trace_state_fields(&self) -> String {
-        format!(
-            "dmc_bytes={}|dmc_buf_empty={}|dmc_bits={}|dmc_timer={}|dmc_addr={:04X}|dmc_dis={}|dmc_start={}",
-            self.dmc.bytes_remaining(),
-            apu_trace_flag(self.dmc.sample_buffer_empty()),
-            self.dmc.bits_remaining(),
-            self.dmc.timer_value(),
-            self.dmc.current_address(),
-            self.dmc.disable_delay(),
-            self.dmc.transfer_start_delay()
-        )
-    }
-
     pub fn new() -> Self {
         Self {
             registers: RegisterRam::new(),
@@ -211,108 +109,6 @@ impl Apu {
             last_levels: LastLevels::new(),
             last_frame_counter_value: 0x00,
         }
-    }
-
-    #[inline]
-    fn trace_write_register(&self, addr: u16, value: u8) {
-        if !apu_trace_enabled() {
-            return;
-        }
-        let dmc_state = self.dmc_trace_state_fields();
-        apu_trace_log_write(&format!(
-            "APUTRACE|src=nesium|ev=write|cycle={}|addr={:04X}|value={:02X}|frame_irq={}|dmc_irq={}|{}",
-            self.cycles,
-            addr,
-            value,
-            apu_trace_flag(self.status.frame_interrupt),
-            apu_trace_flag(self.status.dmc_interrupt),
-            dmc_state
-        ));
-    }
-
-    #[inline]
-    fn trace_read_status(
-        &self,
-        value: u8,
-        frame_irq_before: bool,
-        dmc_irq_before: bool,
-        frame_irq_after: bool,
-        dmc_irq_after: bool,
-    ) {
-        if !apu_trace_enabled() {
-            return;
-        }
-        apu_trace_log_write(&format!(
-            "APUTRACE|src=nesium|ev=read|cycle={}|addr=4015|value={:02X}|frame_irq_before={}|dmc_irq_before={}|frame_irq_after={}|dmc_irq_after={}",
-            self.cycles,
-            value,
-            apu_trace_flag(frame_irq_before),
-            apu_trace_flag(dmc_irq_before),
-            apu_trace_flag(frame_irq_after),
-            apu_trace_flag(dmc_irq_after)
-        ));
-    }
-
-    #[inline]
-    pub(crate) fn trace_mem_read(&self, addr: u16, value: u8) {
-        if !apu_trace_enabled() || !apu_trace_should_log_read_mem(addr) {
-            return;
-        }
-        apu_trace_log_write(&format!(
-            "APUTRACE|src=nesium|ev=read_mem|cycle={}|addr={:04X}|value={:02X}",
-            self.cycles, addr, value
-        ));
-    }
-
-    #[inline]
-    fn trace_irq_event(&self, event: &str) {
-        if !apu_trace_enabled() {
-            return;
-        }
-        apu_trace_log_write(&format!(
-            "APUTRACE|src=nesium|ev={}|cycle={}|frame_irq={}|dmc_irq={}",
-            event,
-            self.cycles,
-            apu_trace_flag(self.status.frame_interrupt),
-            apu_trace_flag(self.status.dmc_interrupt)
-        ));
-    }
-
-    #[inline]
-    fn trace_dmc_dma_event(&self, event: DmcDmaEvent) {
-        if !apu_trace_enabled() {
-            return;
-        }
-        let dmc_state = self.dmc_trace_state_fields();
-        match event {
-            DmcDmaEvent::Request { addr } => {
-                apu_trace_log_write(&format!(
-                    "APUTRACE|src=nesium|ev=dmc_dma_request|cycle={}|addr={:04X}|{}",
-                    self.cycles, addr, dmc_state
-                ));
-            }
-            DmcDmaEvent::Abort => {
-                apu_trace_log_write(&format!(
-                    "APUTRACE|src=nesium|ev=dmc_dma_abort|cycle={}|{}",
-                    self.cycles, dmc_state
-                ));
-            }
-        }
-    }
-
-    #[inline]
-    fn trace_dmc_dma_complete(&self, byte: u8) {
-        if !apu_trace_enabled() {
-            return;
-        }
-        let dmc_state = self.dmc_trace_state_fields();
-        apu_trace_log_write(&format!(
-            "APUTRACE|src=nesium|ev=dmc_dma_complete|cycle={}|addr={:04X}|value={:02X}|{}",
-            self.cycles,
-            self.dmc.last_fetch_addr(),
-            byte,
-            dmc_state
-        ));
     }
 
     /// Applies either a power-on style reset or a warm reset to the APU.
@@ -408,10 +204,6 @@ impl Apu {
                     self.apply_frame_reset(reset);
                 }
             }
-
-            if (0x4010..=0x4017).contains(&addr) {
-                self.trace_write_register(addr, value);
-            }
         }
     }
 
@@ -443,8 +235,6 @@ impl Apu {
     }
 
     fn read_status(&mut self) -> u8 {
-        let frame_irq_before = self.status.frame_interrupt;
-        let dmc_irq_before = self.status.dmc_interrupt;
         let mut value = 0u8;
 
         value |= u8::from(self.pulse[0].length_active());
@@ -457,16 +247,6 @@ impl Apu {
 
         // Reading $4015 clears only the frame interrupt source.
         self.status.frame_interrupt = false;
-        let frame_irq_after = self.status.frame_interrupt;
-        let dmc_irq_after = self.status.dmc_interrupt;
-        self.trace_read_status(
-            value,
-            frame_irq_before,
-            dmc_irq_before,
-            frame_irq_after,
-            dmc_irq_after,
-        );
-
         value
     }
 
@@ -521,11 +301,7 @@ impl Apu {
             apu.status.frame_interrupt = false;
         }
         if tick.frame_irq {
-            let was_frame_irq = apu.status.frame_interrupt;
             apu.status.frame_interrupt = true;
-            if !was_frame_irq {
-                apu.trace_irq_event("frame_irq_set");
-            }
         }
         // Apply control-register halt changes after frame-counter clocks so
         // half-frame length decrements observe the previous halt state.
@@ -536,17 +312,7 @@ impl Apu {
         }
         apu.triangle.step_timer();
         apu.noise.step_timer();
-        let dmc_irq_before = apu.status.dmc_interrupt;
-        let dmc_dma_before = bus.pending_dma.dmc;
         apu.dmc.step(bus.pending_dma);
-        if bus.pending_dma.dmc != dmc_dma_before
-            && let Some(event) = bus.pending_dma.dmc
-        {
-            apu.trace_dmc_dma_event(event);
-        }
-        if !dmc_irq_before && apu.status.dmc_interrupt {
-            apu.trace_irq_event("dmc_irq_set");
-        }
 
         if let Some(mixer) = bus.mixer.as_deref_mut() {
             apu.push_audio_levels(mixer);
@@ -619,12 +385,7 @@ impl Apu {
 
     /// Completes a pending DMC DMA fetch with the provided PRG byte.
     pub fn finish_dma_fetch(&mut self, byte: u8) {
-        self.trace_dmc_dma_complete(byte);
-        let dmc_irq_before = self.status.dmc_interrupt;
         self.dmc.finish_dma_fetch(byte, &mut self.status);
-        if !dmc_irq_before && self.status.dmc_interrupt {
-            self.trace_irq_event("dmc_irq_set");
-        }
     }
 
     /// Last DMC sample fetch address (used for DMA stall bus access).
