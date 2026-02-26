@@ -5,8 +5,14 @@ class ShaderAssetService {
     // No-op on web
   }
 
+  Future<void> waitUntilReady() async {}
+
   Future<String?> getShadersRoot() async {
     return null;
+  }
+
+  Future<bool> shaderPresetExists(String relativePath) async {
+    return false;
   }
 
   Future<List<ShaderNode>> listShaders(String? relativePath) async {

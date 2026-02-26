@@ -11,13 +11,30 @@ class ShaderAssetService {
   static const String _hashPath = 'assets/bundled/shaders.zip.md5';
   static const String _shadersFolder = 'shaders';
   static const String _markerFile = '.md5';
+  Future<void>? _syncInFlight;
 
   Future<Directory> get _targetDir async {
     final docDir = await getApplicationSupportDirectory();
     return Directory(p.join(docDir.path, _shadersFolder));
   }
 
-  Future<void> syncShaders() async {
+  Future<void> syncShaders() {
+    final inFlight = _syncInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final future = _syncShadersImpl();
+    _syncInFlight = future.whenComplete(() {
+      _syncInFlight = null;
+    });
+    return _syncInFlight!;
+  }
+
+  Future<void> waitUntilReady() async {
+    await _syncInFlight;
+  }
+
+  Future<void> _syncShadersImpl() async {
     final target = await _targetDir;
     final marker = File(p.join(target.path, _markerFile));
 
@@ -103,6 +120,16 @@ class ShaderAssetService {
   Future<String?> getShadersRoot() async {
     final target = await _targetDir;
     return target.path;
+  }
+
+  Future<bool> shaderPresetExists(String relativePath) async {
+    final root = await _targetDir;
+    final normalized = p.normalize(relativePath.trim());
+    if (normalized.isEmpty || normalized == '.') {
+      return false;
+    }
+    final file = File(p.join(root.path, normalized));
+    return file.existsSync();
   }
 
   Future<List<ShaderNode>> listShaders(String? relativePath) async {

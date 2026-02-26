@@ -134,9 +134,20 @@ class WindowsShaderSettingsController extends Notifier<WindowsShaderSettings> {
       // We need to resolve it to an absolute path for the native backend.
       try {
         final assetService = ref.read(shaderAssetServiceProvider);
+        await assetService.waitUntilReady();
         final root = await assetService.getShadersRoot();
         if (root != null) {
-          absolutePath = p.join(root, settings.presetPath!);
+          final exists = await assetService.shaderPresetExists(
+            settings.presetPath!,
+          );
+          if (exists) {
+            absolutePath = p.join(root, settings.presetPath!);
+          } else {
+            logWarning(
+              'Shader preset not found: ${settings.presetPath} (root=$root). Applying without shader.',
+              logger: 'windows_shader_settings',
+            );
+          }
         }
       } catch (e) {
         logWarning(
