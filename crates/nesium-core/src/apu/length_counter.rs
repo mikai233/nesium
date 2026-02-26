@@ -37,8 +37,8 @@ impl LengthCounter {
 
     pub(super) fn apply_pending_halt(&mut self) {
         if self.pending_reload != 0 {
-            // If reload and length clock happen on the same tick, hardware keeps
-            // the clocked result unless no decrement occurred.
+            // A length reload written on the same cycle as a length clock only
+            // takes effect when the counter did not change during that clock.
             if self.value == self.reload_prev_value {
                 self.value = self.pending_reload;
             }

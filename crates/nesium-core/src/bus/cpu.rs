@@ -400,14 +400,27 @@ impl<'a> CpuBus<'a> {
                 }
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
-                self.apu.cpu_write(addr, data, *self.cycles)
+                self.apu.cpu_write(addr, data, *self.cycles);
+                if let Some(mixer) = self.mixer.as_deref_mut() {
+                    self.apu.sync_levels_now(mixer);
+                }
             }
             ppu_mem::OAM_DMA => {
                 self.write_oam_dma(data);
                 self.trace_nmi_bus_event("write", ppu_mem::OAM_DMA, data);
             }
-            cpu_mem::APU_STATUS => self.apu.cpu_write(addr, data, *self.cycles),
-            apu_mem::FRAME_COUNTER => self.apu.cpu_write(addr, data, *self.cycles),
+            cpu_mem::APU_STATUS => {
+                self.apu.cpu_write(addr, data, *self.cycles);
+                if let Some(mixer) = self.mixer.as_deref_mut() {
+                    self.apu.sync_levels_now(mixer);
+                }
+            }
+            apu_mem::FRAME_COUNTER => {
+                self.apu.cpu_write(addr, data, *self.cycles);
+                if let Some(mixer) = self.mixer.as_deref_mut() {
+                    self.apu.sync_levels_now(mixer);
+                }
+            }
             cpu_mem::CONTROLLER_PORT_1 => {
                 self.log_serial_bit(data);
                 for ctrl in self.controllers.iter_mut() {

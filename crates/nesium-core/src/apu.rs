@@ -527,8 +527,8 @@ impl Apu {
                 apu.trace_irq_event("frame_irq_set");
             }
         }
-        // Apply halt changes after frame clocks so half-frame length decrements
-        // observe the previous halt value for this tick.
+        // Apply control-register halt changes after frame-counter clocks so
+        // half-frame length decrements observe the previous halt state.
         apu.commit_length_halt_flags();
 
         for pulse in &mut apu.pulse {
@@ -605,6 +605,16 @@ impl Apu {
                 self.last_levels[idx] = level;
             }
         }
+    }
+
+    /// Pushes instantaneous channel level changes at the current CPU cycle.
+    ///
+    /// This is used after CPU writes to APU registers: in the bus timing model,
+    /// APU stepping happens at cycle begin and register writes occur later in
+    /// the same cycle. Any write-induced output jump must therefore be emitted
+    /// immediately at this cycle, not deferred to the next `Apu::step`.
+    pub(crate) fn sync_levels_now(&mut self, mixer: &mut NesSoundMixer) {
+        self.push_audio_levels(mixer);
     }
 
     /// Completes a pending DMC DMA fetch with the provided PRG byte.

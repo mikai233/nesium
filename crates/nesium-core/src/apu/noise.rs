@@ -14,6 +14,7 @@ pub(super) struct Noise {
     timer_period: u16,
     timer: u16,
     shift_register: u16,
+    last_output: u8,
     enabled: bool,
 }
 
@@ -23,9 +24,10 @@ impl Default for Noise {
             envelope: Envelope::default(),
             length: LengthCounter::default(),
             mode: false,
-            timer_period: NOISE_PERIOD_TABLE[0],
+            timer_period: NOISE_PERIOD_TABLE[0] - 1,
             timer: 0,
             shift_register: 1,
+            last_output: 0,
             enabled: false,
         }
     }
@@ -40,13 +42,12 @@ impl Noise {
     pub(super) fn write_mode_and_period(&mut self, value: u8) {
         self.mode = value & 0b1000_0000 != 0;
         let idx = (value & 0b0000_1111) as usize;
-        self.timer_period = NOISE_PERIOD_TABLE[idx];
+        self.timer_period = NOISE_PERIOD_TABLE[idx] - 1;
     }
 
     pub(super) fn write_length(&mut self, value: u8) {
         self.length.load(value >> 3, self.enabled);
         self.envelope.restart();
-        self.timer = self.timer_period;
     }
 
     pub(super) fn set_enabled(&mut self, enabled: bool) {
@@ -60,6 +61,12 @@ impl Noise {
         if self.timer == 0 {
             self.timer = self.timer_period;
             self.step_lfsr();
+            self.last_output =
+                if !self.enabled || !self.length.active() || (self.shift_register & 1) != 0 {
+                    0
+                } else {
+                    self.envelope.output()
+                };
         } else {
             self.timer = self.timer.saturating_sub(1);
         }
@@ -85,11 +92,7 @@ impl Noise {
     }
 
     pub(super) fn output(&self) -> u8 {
-        if !self.enabled || !self.length.active() || (self.shift_register & 1) != 0 {
-            0
-        } else {
-            self.envelope.output()
-        }
+        self.last_output
     }
 
     pub(super) fn length_active(&self) -> bool {

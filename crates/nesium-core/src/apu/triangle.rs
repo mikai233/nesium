@@ -16,6 +16,7 @@ pub(super) struct Triangle {
     timer: u16,
     timer_period: u16,
     sequence_pos: u8,
+    last_output: u8,
     enabled: bool,
 }
 
@@ -34,8 +35,7 @@ impl Triangle {
         self.timer_period = (self.timer_period & 0x00FF) | (((value & 0b0000_0111) as u16) << 8);
         self.length.load(value >> 3, self.enabled);
         self.linear_reload = true;
-        self.timer = self.timer_period;
-        self.sequence_pos = 0;
+        // Writing $400B does not reset timer or waveform sequence position.
     }
 
     pub(super) fn set_enabled(&mut self, enabled: bool) {
@@ -62,6 +62,7 @@ impl Triangle {
             self.timer = self.timer_period;
             if self.length.active() && self.linear_counter > 0 {
                 self.sequence_pos = (self.sequence_pos + 1) & 0b1_1111;
+                self.last_output = TRIANGLE_SEQUENCE[self.sequence_pos as usize];
             }
         } else {
             self.timer = self.timer.saturating_sub(1);
@@ -77,11 +78,9 @@ impl Triangle {
     }
 
     pub(super) fn output(&self) -> u8 {
-        if !self.enabled || !self.length.active() || self.linear_counter == 0 {
-            0
-        } else {
-            TRIANGLE_SEQUENCE[self.sequence_pos as usize]
-        }
+        // Triangle DAC keeps its last output value when channel gating blocks
+        // sequence advancement.
+        self.last_output
     }
 
     pub(super) fn length_active(&self) -> bool {

@@ -41,9 +41,12 @@ pub struct NesSoundMixer {
     /// Per-channel volume and panning (0.0 = hard left, 1.0 = center, 2.0 = hard right).
     volumes: ChannelVolumes,
     panning: ChannelPanning,
-    /// Cached mixed amplitude after the non-linear APU combiner (left/right).
+    /// Cached previous output in the same integer domain used by blip (`GetOutputVolume() * 4`).
     mixed_left: f32,
     mixed_right: f32,
+    /// Pending timestamp to mirror Mesen2's "per-timestamp commit" behaviour:
+    /// multiple channel deltas at the same clock are coalesced and emitted once.
+    pending_mix_clock: Option<i64>,
     /// DC-block filter state (per channel).
     dc_last_input_l: f32,
     dc_last_output_l: f32,
@@ -100,6 +103,7 @@ impl NesSoundMixer {
             panning: ChannelPanning::filled(1.0),
             mixed_left: 0.0,
             mixed_right: 0.0,
+            pending_mix_clock: None,
             dc_last_input_l: 0.0,
             dc_last_output_l: 0.0,
             dc_last_input_r: 0.0,
@@ -113,10 +117,8 @@ impl NesSoundMixer {
             dc_coeff,
             rumble_coeff,
             lowpass_alpha,
-            // Keep some headroom; the non-linear mixer and soft clipper will
-            // do the rest. Use a neutral master gain so overall loudness
-            // tracks Mesen2's `GetOutputVolume() * 4` path; headroom is
-            // primarily controlled by the scaling in `mix_channels_stereo`.
+            // Keep neutral gain here; output scaling is matched to Mesen2's
+            // `GetOutputVolume() * 4` path in `mix_output_volume_stereo`.
             master_gain: 1.0,
             has_panning: false,
             stereo_filter: StereoFilterType::None,
@@ -138,6 +140,7 @@ impl NesSoundMixer {
         self.channel_levels.fill(0.0);
         self.mixed_left = 0.0;
         self.mixed_right = 0.0;
+        self.pending_mix_clock = None;
         self.dc_last_input_l = 0.0;
         self.dc_last_output_l = 0.0;
         self.dc_last_input_r = 0.0;
@@ -174,6 +177,34 @@ impl NesSoundMixer {
             .copy_from_slice(&state.channel_levels);
         self.mixed_left = state.mixed_left;
         self.mixed_right = state.mixed_right;
+        self.pending_mix_clock = None;
+    }
+
+    #[inline]
+    fn flush_pending_mix_at(&mut self, clock_time: i64) {
+        let (left, right) = self.mix_output_volume_stereo();
+        let delta_left = left - self.mixed_left;
+        let delta_right = right - self.mixed_right;
+        if delta_left == 0.0 && delta_right == 0.0 {
+            return;
+        }
+
+        let rel_clock = clock_time - self.last_frame_clock;
+        debug_assert!(
+            rel_clock >= 0,
+            "NesSoundMixer::flush_pending_mix_at requires non-decreasing clock within frame"
+        );
+        if rel_clock >= 0 {
+            if delta_left != 0.0 {
+                self.blip_left.add_delta(rel_clock, delta_left);
+            }
+            if delta_right != 0.0 {
+                self.blip_right.add_delta(rel_clock, delta_right);
+            }
+        }
+
+        self.mixed_left = left;
+        self.mixed_right = right;
     }
 
     /// Update internal clock/sample rates, mirroring Mesen2's
@@ -255,38 +286,21 @@ impl NesSoundMixer {
         if delta == 0.0 {
             return;
         }
+
+        if let Some(pending_clock) = self.pending_mix_clock {
+            debug_assert!(
+                clock_time >= pending_clock,
+                "NesSoundMixer::add_delta must be called with non-decreasing clock times"
+            );
+            if clock_time > pending_clock {
+                self.flush_pending_mix_at(pending_clock);
+                self.pending_mix_clock = None;
+            }
+        }
+
         let idx = channel.idx();
         self.channel_levels[idx] += delta;
-
-        let (left, right) = self.mix_channels_stereo();
-        let delta_left = left - self.mixed_left;
-        let delta_right = right - self.mixed_right;
-        if delta_left != 0.0 || delta_right != 0.0 {
-            // BlipBuf expects clock times relative to the start of the
-            // current frame, so convert from the absolute CPU/APU clock.
-            let rel_clock = clock_time - self.last_frame_clock;
-            debug_assert!(
-                rel_clock >= 0,
-                "NesSoundMixer::add_delta must be called with non-decreasing clock times within a frame"
-            );
-            if rel_clock >= 0 {
-                // Map our roughly [-1.0, 1.0] mixed amplitude into the
-                // integer domain expected by the C blip_buf implementation.
-                // Mesen2 computes an int16 GetOutputVolume() and then scales
-                // it by 4 before feeding it to blip_add_delta(), so a factor
-                // of ~32768 gives similar resolution.
-                const BLIP_SCALE: f32 = 32_768.0;
-                if delta_left != 0.0 {
-                    self.blip_left.add_delta(rel_clock, delta_left * BLIP_SCALE);
-                }
-                if delta_right != 0.0 {
-                    self.blip_right
-                        .add_delta(rel_clock, delta_right * BLIP_SCALE);
-                }
-            }
-            self.mixed_left = left;
-            self.mixed_right = right;
-        }
+        self.pending_mix_clock = Some(clock_time);
     }
 
     /// Convenience helper that computes the delta against the last channel level.
@@ -304,6 +318,17 @@ impl NesSoundMixer {
     /// computed relative to the previous `frame_end_clock`, matching
     /// Mesen2's `NesSoundMixer::EndFrame` behaviour.
     pub fn end_frame(&mut self, frame_end_clock: i64, out: &mut Vec<f32>) {
+        if let Some(pending_clock) = self.pending_mix_clock {
+            debug_assert!(
+                pending_clock <= frame_end_clock,
+                "NesSoundMixer::end_frame called before pending mix clock was committed"
+            );
+            if pending_clock <= frame_end_clock {
+                self.flush_pending_mix_at(pending_clock);
+                self.pending_mix_clock = None;
+            }
+        }
+
         // Convert absolute clock into a frame-relative duration for BlipBuf.
         let duration = frame_end_clock - self.last_frame_clock;
         debug_assert!(
@@ -325,35 +350,31 @@ impl NesSoundMixer {
             return;
         }
 
-        let mut left = vec![0.0f32; avail];
-        let mut right = vec![0.0f32; avail];
-        let got_left = self.blip_left.read_samples(&mut left[..]);
-        let got_right = self.blip_right.read_samples(&mut right[..]);
+        let mut left_i16 = vec![0i16; avail];
+        let mut right_i16 = vec![0i16; avail];
+        let got_left = self.blip_left.read_samples_i16(&mut left_i16[..]);
+        let got_right = self.blip_right.read_samples_i16(&mut right_i16[..]);
         let got = got_left.min(got_right);
         let mut stereo = Vec::with_capacity(got * 2);
 
         for i in 0..got {
-            let l = left[i];
-            let r = right[i];
+            let l_i16 = left_i16[i];
+            let r_i16 = right_i16[i];
 
-            // For closer parity with Mesen2, bypass the additional DC and
-            // rumble high-pass filters here and rely primarily on the APU's
-            // own non-linear mixer characteristics plus the final low-pass.
-            let l_smoothed = low_pass(l, &mut self.lowpass_state_l, self.lowpass_alpha);
-            let r_smoothed = low_pass(r, &mut self.lowpass_state_r, self.lowpass_alpha);
-
-            let l_scaled = soft_clip(l_smoothed * self.master_gain);
-            let r_scaled = soft_clip(r_smoothed * self.master_gain);
-
-            stereo.push(l_scaled);
-            stereo.push(r_scaled);
+            // Keep this stage as close as possible to Mesen2's
+            // `NesSoundMixer::PlayAudioBuffer` path: no extra smoothing
+            // or soft-clip in this layer.
+            let l = l_i16 as f32 / 32_768.0;
+            let r = r_i16 as f32 / 32_768.0;
+            stereo.push(l * self.master_gain);
+            stereo.push(r * self.master_gain);
         }
 
         self.apply_stereo_post_filters(&mut stereo);
         out.extend_from_slice(&stereo);
     }
 
-    fn mix_channels_stereo(&self) -> (f32, f32) {
+    fn mix_output_volume_stereo(&self) -> (f32, f32) {
         let idx = |ch: AudioChannel| ch.idx();
         let base = |ch: AudioChannel| self.channel_levels[idx(ch)] as f64;
         let vol = |ch: AudioChannel| self.volumes[idx(ch)] as f64;
@@ -385,30 +406,30 @@ impl NesSoundMixer {
         let square_l = p1_l + p2_l;
         let square_r = p1_r + p2_r;
 
-        let square_vol_l = if square_l > 0.0 {
-            (95.88 * 5000.0) / (8128.0 / square_l + 100.0)
+        let square_vol_l: u16 = if square_l > 0.0 {
+            ((95.88 * 5000.0) / (8128.0 / square_l + 100.0)) as u16
         } else {
-            0.0
+            0
         };
-        let square_vol_r = if square_r > 0.0 {
-            (95.88 * 5000.0) / (8128.0 / square_r + 100.0)
+        let square_vol_r: u16 = if square_r > 0.0 {
+            ((95.88 * 5000.0) / (8128.0 / square_r + 100.0)) as u16
         } else {
-            0.0
+            0
         };
 
         // TND (triangle/noise/DMC) contribution.
         let tnd_lin_l = d_l + 2.751_671_326_1 * t_l + 1.849_358_712_5 * n_l;
         let tnd_lin_r = d_r + 2.751_671_326_1 * t_r + 1.849_358_712_5 * n_r;
 
-        let tnd_vol_l = if tnd_lin_l > 0.0 {
-            (159.79 * 5000.0) / (22638.0 / tnd_lin_l + 100.0)
+        let tnd_vol_l: u16 = if tnd_lin_l > 0.0 {
+            ((159.79 * 5000.0) / (22638.0 / tnd_lin_l + 100.0)) as u16
         } else {
-            0.0
+            0
         };
-        let tnd_vol_r = if tnd_lin_r > 0.0 {
-            (159.79 * 5000.0) / (22638.0 / tnd_lin_r + 100.0)
+        let tnd_vol_r: u16 = if tnd_lin_r > 0.0 {
+            ((159.79 * 5000.0) / (22638.0 / tnd_lin_r + 100.0)) as u16
         } else {
-            0.0
+            0
         };
 
         // Expansion audio contribution, matching Mesen2's GetOutputVolume()
@@ -418,20 +439,11 @@ impl NesSoundMixer {
         let exp_r =
             fds_r * 20.0 + mmc5_r * 43.0 + n163_r * 20.0 + s5b_r * 15.0 + vrc6_r * 5.0 + vrc7_r;
 
-        let mixed_l = square_vol_l + tnd_vol_l + exp_l;
-        let mixed_r = square_vol_r + tnd_vol_r + exp_r;
-
-        // Mesen2 feeds `GetOutputVolume() * 4` (int16) into blip_buf. Map that
-        // same domain into our [-1.0, 1.0] float space by scaling with
-        // `4 / 32768`, which keeps typical non-expansion peaks (~5000) around
-        // 0.6 and leaves ample headroom for louder content and post-filters.
-        // Increasing to 6.0/32768 to provide a more competitive volume level
-        // while still fitting within the soft clipper's clean range.
-        const OUTPUT_SCALE: f64 = 6.0 / 32_768.0;
-        (
-            (mixed_l * OUTPUT_SCALE) as f32,
-            (mixed_r * OUTPUT_SCALE) as f32,
-        )
+        // Match Mesen2:
+        // `GetOutputVolume()` returns int16, then `*4` is fed to blip_add_delta.
+        let mixed_l = (square_vol_l as f64 + tnd_vol_l as f64 + exp_l) as i16;
+        let mixed_r = (square_vol_r as f64 + tnd_vol_r as f64 + exp_r) as i16;
+        ((mixed_l as f32) * 4.0, (mixed_r as f32) * 4.0)
     }
 
     fn apply_stereo_post_filters(&mut self, samples: &mut [f32]) {
@@ -479,30 +491,6 @@ fn high_pass(input: f32, last_in: &mut f32, state: &mut f32, coeff: f32) -> f32 
     out
 }
 
-fn low_pass(input: f32, state: &mut f32, alpha: f32) -> f32 {
-    *state += (input - *state) * alpha;
-    *state
-}
-
-fn soft_clip(x: f32) -> f32 {
-    // Keep the response linear in the main [-0.95, 0.95] range so the mixer
-    // closely matches Mesen2's `GetOutputVolume() * 4` mapping, while still
-    // providing a very soft knee near full scale to avoid harsh clipping on
-    // rare transients that overshoot.
-    const KNEE_START: f32 = 0.95;
-    let abs = x.abs();
-
-    if abs <= KNEE_START {
-        x
-    } else if abs >= 1.0 {
-        x.signum()
-    } else {
-        let t = (abs - KNEE_START) / (1.0 - KNEE_START);
-        let softened = KNEE_START + (1.0 - KNEE_START) * (1.0 - (1.0 - t).powi(2));
-        softened.copysign(x)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -528,26 +516,26 @@ mod tests {
         mixer.set_channel_level(AudioChannel::Dmc, clock, d);
 
         // No expansion audio for this check.
-        let (left, right) = mixer.mix_channels_stereo();
+        let (left, right) = mixer.mix_output_volume_stereo();
 
         // Reproduce Mesen2's GetOutputVolume() math for this scenario.
         let square_output = (p1 + p2) as f64;
         let tnd_lin = d as f64 + 2.751_671_326_1 * t as f64 + 1.849_358_712_5 * n as f64;
 
-        let square_vol = if square_output > 0.0 {
-            (95.88 * 5000.0) / (8128.0 / square_output + 100.0)
+        let square_vol: u16 = if square_output > 0.0 {
+            ((95.88 * 5000.0) / (8128.0 / square_output + 100.0)) as u16
         } else {
-            0.0
+            0
         };
 
-        let tnd_vol = if tnd_lin > 0.0 {
-            (159.79 * 5000.0) / (22638.0 / tnd_lin + 100.0)
+        let tnd_vol: u16 = if tnd_lin > 0.0 {
+            ((159.79 * 5000.0) / (22638.0 / tnd_lin + 100.0)) as u16
         } else {
-            0.0
+            0
         };
 
-        let expected = (square_vol + tnd_vol) * (6.0 / 32_768.0);
-        let expected_f32 = expected as f32;
+        let expected_mixed = (square_vol as f64 + tnd_vol as f64) as i16;
+        let expected_f32 = (expected_mixed as f32) * 4.0;
 
         let diff_l = (left - expected_f32).abs();
         let diff_r = (right - expected_f32).abs();
@@ -579,11 +567,11 @@ mod tests {
         mixer.set_channel_level(AudioChannel::Vrc6, clock, 1.0);
         mixer.set_channel_level(AudioChannel::Vrc7, clock, 1.0);
 
-        let (left, right) = mixer.mix_channels_stereo();
+        let (left, right) = mixer.mix_output_volume_stereo();
 
         // In Mesen2, the expansion part of GetOutputVolume() is:
         // FDS*20 + MMC5*43 + N163*20 + S5B*15 + VRC6*5 + VRC7*1
-        let exp_sum = (20.0 + 43.0 + 20.0 + 15.0 + 5.0 + 1.0) * (6.0 / 32_768.0);
+        let exp_sum = (20.0 + 43.0 + 20.0 + 15.0 + 5.0 + 1.0) * 4.0;
         let expected_f32 = exp_sum as f32;
 
         let diff_l = (left - expected_f32).abs();
