@@ -1,9 +1,4 @@
-use std::{
-    env,
-    f32::consts::PI,
-    fs::File,
-    io::{BufWriter, Write},
-};
+use std::f32::consts::PI;
 
 use nesium_blip::BlipBuf;
 
@@ -79,245 +74,6 @@ pub struct NesSoundMixer {
     stereo_delay_state: StereoDelayState,
     stereo_panning_state: StereoPanningState,
     stereo_comb_state: StereoCombState,
-    raw_event_dump: Option<RawEventDump>,
-    mix_event_dump: Option<MixEventDump>,
-    mix_pcm_dump: Option<MixPcmDump>,
-}
-
-#[derive(Debug)]
-struct RawEventDump {
-    writer: BufWriter<File>,
-    max_clock: i64,
-    closed: bool,
-}
-
-#[derive(Debug)]
-struct MixPcmDump {
-    writer: BufWriter<File>,
-    max_frames: u64,
-    frames_written: u64,
-    closed: bool,
-}
-
-#[derive(Debug)]
-struct MixEventDump {
-    writer: BufWriter<File>,
-    max_clock: i64,
-    closed: bool,
-}
-
-impl RawEventDump {
-    fn from_env(clock_rate: f64) -> Option<Self> {
-        let path = env::var("NESIUM_APU_RAW_DUMP_PATH").ok()?;
-        if path.trim().is_empty() {
-            return None;
-        }
-
-        let seconds = env::var("NESIUM_APU_RAW_DUMP_SECONDS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(30);
-        let max_clock = (clock_rate * seconds as f64).round() as i64;
-
-        let file = File::create(path).ok()?;
-        let mut writer = BufWriter::new(file);
-
-        // Header:
-        // magic      [u8;4]  = b"ARAW"
-        // version    u16 LE  = 1
-        // channels   u16 LE  = AudioChannel::COUNT
-        // clock_rate f64 LE
-        // max_clock  i64 LE
-        let _ = writer.write_all(b"ARAW");
-        let _ = writer.write_all(&1u16.to_le_bytes());
-        let _ = writer.write_all(&(AudioChannel::COUNT as u16).to_le_bytes());
-        let _ = writer.write_all(&clock_rate.to_le_bytes());
-        let _ = writer.write_all(&max_clock.to_le_bytes());
-
-        Some(Self {
-            writer,
-            max_clock,
-            closed: false,
-        })
-    }
-
-    fn record(&mut self, clock_time: i64, channel: AudioChannel, delta: f32, level: f32) {
-        if self.closed {
-            return;
-        }
-        if clock_time > self.max_clock {
-            let _ = self.writer.flush();
-            self.closed = true;
-            return;
-        }
-
-        // Event:
-        // clock    i64 LE
-        // channel  u8
-        // reserved [u8;3]
-        // delta    f32 LE
-        // level    f32 LE
-        let _ = self.writer.write_all(&clock_time.to_le_bytes());
-        let _ = self.writer.write_all(&[channel.idx() as u8, 0, 0, 0]);
-        let _ = self.writer.write_all(&delta.to_le_bytes());
-        let _ = self.writer.write_all(&level.to_le_bytes());
-    }
-
-    fn flush(&mut self) {
-        if !self.closed {
-            let _ = self.writer.flush();
-        }
-    }
-}
-
-impl MixPcmDump {
-    fn from_env(sample_rate: u32) -> Option<Self> {
-        let path = env::var("NESIUM_APU_MIX_DUMP_PATH").ok()?;
-        if path.trim().is_empty() {
-            return None;
-        }
-
-        let seconds = env::var("NESIUM_APU_MIX_DUMP_SECONDS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(30);
-        let max_frames = (sample_rate as u64).saturating_mul(seconds);
-
-        let file = File::create(path).ok()?;
-        let mut writer = BufWriter::new(file);
-
-        // Header:
-        // magic       [u8;4] = b"AMIX"
-        // version     u16 LE = 1
-        // channels    u16 LE = 2
-        // sample_rate u32 LE
-        // max_frames  u64 LE
-        let _ = writer.write_all(b"AMIX");
-        let _ = writer.write_all(&1u16.to_le_bytes());
-        let _ = writer.write_all(&2u16.to_le_bytes());
-        let _ = writer.write_all(&sample_rate.to_le_bytes());
-        let _ = writer.write_all(&max_frames.to_le_bytes());
-
-        Some(Self {
-            writer,
-            max_frames,
-            frames_written: 0,
-            closed: false,
-        })
-    }
-
-    fn record_interleaved_f32(&mut self, samples: &[f32]) {
-        if self.closed || samples.len() < 2 {
-            return;
-        }
-
-        let total_frames = samples.len() / 2;
-        let remaining = self.max_frames.saturating_sub(self.frames_written);
-        if remaining == 0 {
-            let _ = self.writer.flush();
-            self.closed = true;
-            return;
-        }
-
-        let frames_to_write = total_frames.min(remaining as usize);
-        let mut bytes = Vec::with_capacity(frames_to_write * 4);
-        for i in 0..frames_to_write {
-            let l = f32_to_i16(samples[i * 2]);
-            let r = f32_to_i16(samples[i * 2 + 1]);
-            bytes.extend_from_slice(&l.to_le_bytes());
-            bytes.extend_from_slice(&r.to_le_bytes());
-        }
-        let _ = self.writer.write_all(&bytes);
-        self.frames_written += frames_to_write as u64;
-
-        if self.frames_written >= self.max_frames {
-            let _ = self.writer.flush();
-            self.closed = true;
-        }
-    }
-
-    fn record_interleaved_i16(&mut self, samples: &[i16]) {
-        if self.closed || samples.len() < 2 {
-            return;
-        }
-
-        let total_frames = samples.len() / 2;
-        let remaining = self.max_frames.saturating_sub(self.frames_written);
-        if remaining == 0 {
-            let _ = self.writer.flush();
-            self.closed = true;
-            return;
-        }
-
-        let frames_to_write = total_frames.min(remaining as usize);
-        let sample_count = frames_to_write * 2;
-        let mut bytes = Vec::with_capacity(sample_count * 2);
-        for &v in &samples[..sample_count] {
-            bytes.extend_from_slice(&v.to_le_bytes());
-        }
-        let _ = self.writer.write_all(&bytes);
-        self.frames_written += frames_to_write as u64;
-
-        if self.frames_written >= self.max_frames {
-            let _ = self.writer.flush();
-            self.closed = true;
-        }
-    }
-
-    fn flush(&mut self) {
-        if !self.closed {
-            let _ = self.writer.flush();
-        }
-    }
-}
-
-impl MixEventDump {
-    fn from_env(clock_rate: f64) -> Option<Self> {
-        let path = env::var("NESIUM_APU_MIX_EVENT_DUMP_PATH").ok()?;
-        if path.trim().is_empty() {
-            return None;
-        }
-
-        let seconds = env::var("NESIUM_APU_MIX_EVENT_DUMP_SECONDS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(30);
-        let max_clock = (clock_rate * seconds as f64).round() as i64;
-
-        let file = File::create(path).ok()?;
-        let mut writer = BufWriter::new(file);
-        let _ = writer.write_all(b"AMEV");
-        let _ = writer.write_all(&1u16.to_le_bytes());
-        let _ = writer.write_all(&2u16.to_le_bytes());
-        let _ = writer.write_all(&clock_rate.to_le_bytes());
-        let _ = writer.write_all(&max_clock.to_le_bytes());
-
-        Some(Self {
-            writer,
-            max_clock,
-            closed: false,
-        })
-    }
-
-    fn record(&mut self, clock: i64, left: i16, right: i16) {
-        if self.closed {
-            return;
-        }
-        if clock > self.max_clock {
-            let _ = self.writer.flush();
-            self.closed = true;
-            return;
-        }
-        let _ = self.writer.write_all(&clock.to_le_bytes());
-        let _ = self.writer.write_all(&left.to_le_bytes());
-        let _ = self.writer.write_all(&right.to_le_bytes());
-    }
-
-    fn flush(&mut self) {
-        if !self.closed {
-            let _ = self.writer.flush();
-        }
-    }
 }
 
 impl NesSoundMixer {
@@ -373,9 +129,6 @@ impl NesSoundMixer {
             stereo_delay_state: StereoDelayState::default(),
             stereo_panning_state: StereoPanningState::default(),
             stereo_comb_state: StereoCombState::default(),
-            raw_event_dump: RawEventDump::from_env(clock_rate),
-            mix_event_dump: MixEventDump::from_env(clock_rate),
-            mix_pcm_dump: MixPcmDump::from_env(sample_rate),
         }
     }
 
@@ -401,15 +154,6 @@ impl NesSoundMixer {
         self.stereo_delay_state = StereoDelayState::default();
         self.stereo_panning_state = StereoPanningState::default();
         self.stereo_comb_state = StereoCombState::default();
-        if let Some(dump) = self.raw_event_dump.as_mut() {
-            dump.flush();
-        }
-        if let Some(dump) = self.mix_event_dump.as_mut() {
-            dump.flush();
-        }
-        if let Some(dump) = self.mix_pcm_dump.as_mut() {
-            dump.flush();
-        }
     }
 
     pub fn save_state(&self) -> MixerState {
@@ -443,16 +187,6 @@ impl NesSoundMixer {
         let delta_right = right - self.mixed_right;
         if delta_left == 0.0 && delta_right == 0.0 {
             return;
-        }
-
-        if let Some(dump) = self.mix_event_dump.as_mut() {
-            // Convert from blip-domain integer level (`GetOutputVolume()*4`)
-            // back to int16-like level for readability in debug dumps.
-            dump.record(
-                clock_time,
-                (left / 4.0).round() as i16,
-                (right / 4.0).round() as i16,
-            );
         }
 
         let rel_clock = clock_time - self.last_frame_clock;
@@ -566,10 +300,6 @@ impl NesSoundMixer {
 
         let idx = channel.idx();
         self.channel_levels[idx] += delta;
-        let level = self.channel_levels[idx];
-        if let Some(dump) = self.raw_event_dump.as_mut() {
-            dump.record(clock_time, channel, delta, level);
-        }
         self.pending_mix_clock = Some(clock_time);
     }
 
@@ -625,14 +355,11 @@ impl NesSoundMixer {
         let got_left = self.blip_left.read_samples_i16(&mut left_i16[..]);
         let got_right = self.blip_right.read_samples_i16(&mut right_i16[..]);
         let got = got_left.min(got_right);
-        let mut stereo_i16 = Vec::with_capacity(got * 2);
         let mut stereo = Vec::with_capacity(got * 2);
 
         for i in 0..got {
             let l_i16 = left_i16[i];
             let r_i16 = right_i16[i];
-            stereo_i16.push(l_i16);
-            stereo_i16.push(r_i16);
 
             // Keep this stage as close as possible to Mesen2's
             // `NesSoundMixer::PlayAudioBuffer` path: no extra smoothing
@@ -644,25 +371,7 @@ impl NesSoundMixer {
         }
 
         self.apply_stereo_post_filters(&mut stereo);
-        if let Some(dump) = self.mix_pcm_dump.as_mut() {
-            // If there is no post-processing and neutral gain, dump the exact
-            // i16 stream produced by blip to avoid i16<->f32 round-trip drift.
-            if self.stereo_filter == StereoFilterType::None
-                && (self.master_gain - 1.0).abs() < f32::EPSILON
-            {
-                dump.record_interleaved_i16(&stereo_i16);
-            } else {
-                dump.record_interleaved_f32(&stereo);
-            }
-            dump.flush();
-        }
         out.extend_from_slice(&stereo);
-        if let Some(dump) = self.raw_event_dump.as_mut() {
-            dump.flush();
-        }
-        if let Some(dump) = self.mix_event_dump.as_mut() {
-            dump.flush();
-        }
     }
 
     fn mix_output_volume_stereo(&self) -> (f32, f32) {
@@ -780,13 +489,6 @@ fn high_pass(input: f32, last_in: &mut f32, state: &mut f32, coeff: f32) -> f32 
     *last_in = input;
     *state = out;
     out
-}
-
-fn f32_to_i16(sample: f32) -> i16 {
-    let clamped = sample.clamp(-1.0, 1.0 - (1.0 / 32_768.0));
-    // Match Mesen's int16 write path more closely: truncate toward zero.
-    let scaled = (clamped * 32_768.0) as i32;
-    scaled.clamp(i16::MIN as i32, i16::MAX as i32) as i16
 }
 
 #[cfg(test)]
