@@ -70,7 +70,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4
-  build_runner: ^2.10.5
+  build_runner: ^2.11.1
   freezed: ^3.2.3
   json_serializable: ^6.9.0
 
