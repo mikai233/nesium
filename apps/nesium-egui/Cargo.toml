@@ -1,6 +1,6 @@
 [package]
 name = "nesium-egui"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license.workspace = true
 default-run = "nesium_egui"
@@ -20,7 +20,7 @@ icon = [
     "../../target/generated/nesium.ico",
     "../../target/generated/nesium.png",
 ]
-version = "0.1.0"
+version = "0.2.0"
 copyright = "Copyright (c) 2025 mikai233"
 
 [dependencies]
