@@ -19,10 +19,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   flutter::DartProject project(L"data");
 
-  // TEMP WORKAROUND: Flutter Windows performance regression
-  // TODO: Remove once Flutter fixes https://github.com/flutter/flutter/issues/178916
-  project.set_ui_thread_policy(flutter::UIThreadPolicy::RunOnSeparateThread);
-
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
 
