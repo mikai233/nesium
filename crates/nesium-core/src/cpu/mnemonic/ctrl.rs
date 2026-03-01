@@ -1,5 +1,6 @@
 use crate::{
     bus::{CpuBus, STACK_ADDR},
+    cartridge::CpuBusAccessKind,
     context::Context,
     cpu::{Cpu, status::Status},
     memory::cpu::{IRQ_VECTOR_HI, IRQ_VECTOR_LO, NMI_VECTOR_HI, NMI_VECTOR_LO},
@@ -53,7 +54,7 @@ pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             cpu.p.insert(Status::INTERRUPT);
         }
         4 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             if cpu.effective_addr == NMI_VECTOR_LO {
                 cpu.effective_addr = NMI_VECTOR_HI;
             } else {
@@ -61,7 +62,7 @@ pub fn exec_brk(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             }
         }
         5 => {
-            let high_byte = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let high_byte = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.pc = ((high_byte as u16) << 8) | (cpu.tmp as u16);
             cpu.prev_nmi_latch = false;
         }
@@ -116,12 +117,17 @@ pub fn exec_jmp(_: &mut Cpu, _: &mut CpuBus, _: &mut Context, step: u8) {
 pub fn exec_jsr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = cpu.fetch_u8(bus, ctx);
+            cpu.tmp = cpu.fetch_operand_u8(bus, ctx);
         }
         1 => {
             let return_pc = cpu.pc;
             cpu.effective_addr = return_pc;
-            cpu.dummy_read_at(STACK_ADDR + cpu.s as u16, bus, ctx);
+            cpu.read(
+                STACK_ADDR + cpu.s as u16,
+                bus,
+                ctx,
+                CpuBusAccessKind::DummyRead,
+            );
         }
         2 => {
             let pc_hi = (cpu.effective_addr >> 8) as u8;
@@ -132,7 +138,7 @@ pub fn exec_jsr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             cpu.push_stack(bus, ctx, pc_lo);
         }
         4 => {
-            let hi_byte = bus.mem_read(cpu.pc, cpu, ctx) as u16;
+            let hi_byte = cpu.read(cpu.pc, bus, ctx, CpuBusAccessKind::ExecOperand) as u16;
             let lo_byte = cpu.tmp as u16;
             cpu.pc = (hi_byte << 8) | lo_byte;
         }
@@ -167,7 +173,12 @@ pub fn exec_rti(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             cpu.dummy_read(bus, ctx);
         }
         1 => {
-            cpu.dummy_read_at(STACK_ADDR + cpu.s as u16, bus, ctx);
+            cpu.read(
+                STACK_ADDR + cpu.s as u16,
+                bus,
+                ctx,
+                CpuBusAccessKind::DummyRead,
+            );
         }
         2 => {
             let p_bits = cpu.pop_stack(bus, ctx);
@@ -208,7 +219,12 @@ pub fn exec_rts(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             cpu.dummy_read(bus, ctx);
         }
         1 => {
-            cpu.dummy_read_at(STACK_ADDR + cpu.s as u16, bus, ctx);
+            cpu.read(
+                STACK_ADDR + cpu.s as u16,
+                bus,
+                ctx,
+                CpuBusAccessKind::DummyRead,
+            );
         }
         2 => {
             cpu.tmp = cpu.pop_stack(bus, ctx);
@@ -218,7 +234,7 @@ pub fn exec_rts(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             cpu.effective_addr = (hi_byte << 8) | (cpu.tmp as u16);
         }
         4 => {
-            cpu.dummy_read_at(cpu.effective_addr, bus, ctx);
+            cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::DummyRead);
             cpu.pc = cpu.effective_addr.wrapping_add(1);
         }
         _ => unreachable_step!("invalid RTS step {step}"),

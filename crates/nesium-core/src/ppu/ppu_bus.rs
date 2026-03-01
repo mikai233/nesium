@@ -80,6 +80,19 @@ impl<'a> PpuBus<'a> {
         }
     }
 
+    pub fn apply_vram_read_override(
+        &mut self,
+        addr: u16,
+        ctx: PpuVramAccessContext,
+        value: u8,
+    ) -> u8 {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.ppu_read_override(addr, ctx, value)
+        } else {
+            value
+        }
+    }
+
     pub fn mapper_nametable_read(&self, offset: u16) -> Option<u8> {
         self.cartridge
             .as_deref()

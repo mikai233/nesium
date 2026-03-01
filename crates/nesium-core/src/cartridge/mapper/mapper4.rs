@@ -30,8 +30,8 @@ use crate::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring, RomFormat},
         mapper::{
-            ChrStorage, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram_with_trainer,
-            select_chr_storage,
+            ChrStorage, MapperEvent, MapperHookMask, PpuVramAccessContext, PpuVramAccessKind,
+            allocate_prg_ram_with_trainer, select_chr_storage,
         },
     },
     memory::cpu as cpu_mem,
@@ -706,6 +706,16 @@ impl Mapper4 {
 }
 
 impl Mapper for Mapper4 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::PPU_BUS_ADDRESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::PpuBusAddress { addr, ctx } = event {
+            self.observe_ppu_vram_access(addr, ctx);
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         // Power-on defaults chosen to match common emulator behaviour:
         // - PRG mode = 1 (swap at $C000) so that the last bank appears at
@@ -764,10 +774,6 @@ impl Mapper for Mapper4 {
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
         self.write_chr(addr, data);
-    }
-
-    fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
-        self.observe_ppu_vram_access(addr, ctx);
     }
 
     fn irq_pending(&self) -> bool {

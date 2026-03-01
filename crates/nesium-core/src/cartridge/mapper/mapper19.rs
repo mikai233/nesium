@@ -37,7 +37,10 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
+        mapper::{
+            ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer,
+            select_chr_storage,
+        },
     },
     memory::cpu as cpu_mem,
     reset_kind::ResetKind,
@@ -538,6 +541,27 @@ impl ExpansionAudio for Mapper19 {
 }
 
 impl Mapper for Mapper19 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::CPU_BUS_ACCESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::CpuBusAccess { .. } = event {
+            // Nesdev: IRQ is a 15‑bit CPU cycle up‑counter. $5000/$5800 provide
+            // direct access to the counter; bit15 acts as an enable flag.
+            //
+            // When (counter & 0x8000) != 0 and the low 15 bits are not yet $7FFF,
+            // increment on each CPU cycle. When the low 15 bits reach $7FFF,
+            // latch an IRQ and stop counting until the value is changed.
+            if (self.irq_counter & 0x8000) != 0 && (self.irq_counter & 0x7FFF) != 0x7FFF {
+                self.irq_counter = self.irq_counter.wrapping_add(1);
+                if (self.irq_counter & 0x7FFF) == 0x7FFF {
+                    self.irq_pending = true;
+                }
+            }
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
@@ -605,21 +629,6 @@ impl Mapper for Mapper19 {
 
                 // Write-protect / audio RAM address port.
                 Namco163CpuRegister::AudioRamAddr => self.write_audio_register(addr, data),
-            }
-        }
-    }
-
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        // Nesdev: IRQ is a 15‑bit CPU cycle up‑counter. $5000/$5800 provide
-        // direct access to the counter; bit15 acts as an enable flag.
-        //
-        // When (counter & 0x8000) != 0 and the low 15 bits are not yet $7FFF,
-        // increment on each CPU cycle. When the low 15 bits reach $7FFF,
-        // latch an IRQ and stop counting until the value is changed.
-        if (self.irq_counter & 0x8000) != 0 && (self.irq_counter & 0x7FFF) != 0x7FFF {
-            self.irq_counter = self.irq_counter.wrapping_add(1);
-            if (self.irq_counter & 0x7FFF) == 0x7FFF {
-                self.irq_pending = true;
             }
         }
     }

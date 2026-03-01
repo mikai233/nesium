@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use crate::bus::CpuBus;
+use crate::cartridge::CpuBusAccessKind;
 use crate::context::Context;
 use crate::cpu::Cpu;
 
@@ -39,7 +40,7 @@ pub(crate) fn hi_byte_store_final(
     let value = value_reg & base_hi.wrapping_add(1);
     let final_addr = ((hi as u16) << 8) | (lo as u16);
 
-    bus.mem_write(final_addr, value, cpu, ctx);
+    cpu.write(final_addr, value, bus, ctx, CpuBusAccessKind::Write);
 }
 
 #[allow(clippy::upper_case_acronyms)]

@@ -1,5 +1,6 @@
 use crate::{
     bus::CpuBus,
+    cartridge::CpuBusAccessKind,
     context::Context,
     cpu::{Cpu, mnemonic::hi_byte_store_final},
 };
@@ -28,7 +29,7 @@ use crate::{
 pub fn exec_las(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu.effective_addr, cpu, ctx) & cpu.s;
+            let value = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read) & cpu.s;
             cpu.a = value;
             cpu.x = value;
             cpu.s = value;
@@ -67,7 +68,7 @@ pub fn exec_las(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_lax(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let value = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.a = value;
             cpu.x = value;
             cpu.p.set_zn(value);
@@ -106,7 +107,7 @@ pub fn exec_lax(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_lda(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let value = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.a = value;
             cpu.p.set_zn(value);
         }
@@ -139,7 +140,7 @@ pub fn exec_lda(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_ldx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let value = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.x = value;
             cpu.p.set_zn(value);
         }
@@ -172,7 +173,7 @@ pub fn exec_ldx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_ldy(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let value = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let value = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.y = value;
             cpu.p.set_zn(value);
         }
@@ -206,7 +207,7 @@ pub fn exec_sax(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             let value = cpu.a & cpu.x;
-            bus.mem_write(cpu.effective_addr, value, cpu, ctx);
+            cpu.write(cpu.effective_addr, value, bus, ctx, CpuBusAccessKind::Write);
         }
         _ => unreachable_step!("invalid SAX step {step}"),
     }
@@ -328,7 +329,7 @@ pub fn exec_shy(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_sta(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => bus.mem_write(cpu.effective_addr, cpu.a, cpu, ctx),
+        0 => cpu.write(cpu.effective_addr, cpu.a, bus, ctx, CpuBusAccessKind::Write),
         _ => unreachable_step!("invalid STA step {step}"),
     }
 }
@@ -352,7 +353,7 @@ pub fn exec_sta(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_stx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => bus.mem_write(cpu.effective_addr, cpu.x, cpu, ctx),
+        0 => cpu.write(cpu.effective_addr, cpu.x, bus, ctx, CpuBusAccessKind::Write),
         _ => unreachable_step!("invalid STX step {step}"),
     }
 }
@@ -375,7 +376,7 @@ pub fn exec_stx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 #[inline]
 pub fn exec_sty(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
-        0 => bus.mem_write(cpu.effective_addr, cpu.y, cpu, ctx),
+        0 => cpu.write(cpu.effective_addr, cpu.y, bus, ctx, CpuBusAccessKind::Write),
         _ => unreachable_step!("invalid STY step {step}"),
     }
 }

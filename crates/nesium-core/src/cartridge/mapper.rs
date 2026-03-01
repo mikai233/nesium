@@ -94,6 +94,77 @@ pub enum PpuVramAccessKind {
     Other,
 }
 
+/// Operation classification aligned with Mesen2 `MemoryOperationType`.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum MapperMemoryOperation {
+    Read,
+    Write,
+    ExecOpcode,
+    ExecOperand,
+    DmaRead,
+    DmaWrite,
+    DummyRead,
+    DummyWrite,
+    PpuRenderingRead,
+    Idle,
+}
+
+impl PpuVramAccessKind {
+    pub const fn operation(self) -> MapperMemoryOperation {
+        match self {
+            PpuVramAccessKind::RenderingFetch => MapperMemoryOperation::PpuRenderingRead,
+            PpuVramAccessKind::CpuRead => MapperMemoryOperation::Read,
+            PpuVramAccessKind::CpuWrite => MapperMemoryOperation::Write,
+            PpuVramAccessKind::Other => MapperMemoryOperation::Idle,
+        }
+    }
+}
+
+/// Fine-grained source of a PPU address-bus event.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum PpuVramAccessSource {
+    /// PPU rendering pipeline fetches (background/sprite).
+    RenderingFetch,
+    /// CPU write to `$2006` (VRAM address latch update).
+    CpuAddrWrite,
+    /// CPU read from `$2007`.
+    CpuDataRead,
+    /// CPU write to `$2007`.
+    CpuDataWrite,
+    /// Delayed `$2007` auto-increment bus update.
+    CpuDataIncrement,
+    /// Any other source.
+    Other,
+}
+
+/// Rendering pipeline target for PPU fetches.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum PpuRenderFetchTarget {
+    Background,
+    Sprite,
+    Other,
+}
+
+/// Rendering fetch phase for PPU memory reads.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum PpuRenderFetchType {
+    Nametable,
+    Attribute,
+    PatternLow,
+    PatternHigh,
+    Other,
+}
+
+/// Extra rendering metadata attached to rendering VRAM accesses.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct PpuRenderFetchInfo {
+    pub target: PpuRenderFetchTarget,
+    pub fetch: PpuRenderFetchType,
+    pub tile_x: Option<u8>,
+    pub tile_y: Option<u8>,
+    pub sprite_index: Option<u8>,
+}
+
 /// Rich timing/context information for a PPU VRAM access.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PpuVramAccessContext {
@@ -103,6 +174,78 @@ pub struct PpuVramAccessContext {
     pub cpu_cycle: u64,
     /// High-level classification of this VRAM access.
     pub kind: PpuVramAccessKind,
+    /// Fine-grained source of this access.
+    pub source: PpuVramAccessSource,
+    /// PPU master clock (4 master clocks per dot).
+    pub ppu_master_clock: u64,
+    /// Current scanline (`-1..=260` on NTSC).
+    pub ppu_scanline: i16,
+    /// Current dot (`0..=340`).
+    pub ppu_dot: u16,
+    /// Optional rendering-fetch metadata (background/sprite + fetch phase).
+    pub render_fetch: Option<PpuRenderFetchInfo>,
+}
+
+bitflags::bitflags! {
+    /// Declares which event hooks a mapper wants to receive.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct MapperHookMask: u8 {
+        const NONE = 0;
+        /// Receive explicit CPU bus access events (read/write/DMA).
+        const CPU_BUS_ACCESS = 1 << 0;
+        /// Receive PPU address-bus change events.
+        const PPU_BUS_ADDRESS = 1 << 1;
+        /// Receive final PPU VRAM read-value override callback.
+        const PPU_READ_OVERRIDE = 1 << 2;
+    }
+}
+
+/// CPU bus access type observed by the mapper hook system.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum CpuBusAccessKind {
+    Read,
+    Write,
+    DmaRead,
+    DmaWrite,
+    ExecOpcode,
+    ExecOperand,
+    DummyRead,
+    DummyWrite,
+    Idle,
+}
+
+impl CpuBusAccessKind {
+    pub const fn operation(self) -> MapperMemoryOperation {
+        match self {
+            CpuBusAccessKind::Read => MapperMemoryOperation::Read,
+            CpuBusAccessKind::Write => MapperMemoryOperation::Write,
+            CpuBusAccessKind::DmaRead => MapperMemoryOperation::DmaRead,
+            CpuBusAccessKind::DmaWrite => MapperMemoryOperation::DmaWrite,
+            CpuBusAccessKind::ExecOpcode => MapperMemoryOperation::ExecOpcode,
+            CpuBusAccessKind::ExecOperand => MapperMemoryOperation::ExecOperand,
+            CpuBusAccessKind::DummyRead => MapperMemoryOperation::DummyRead,
+            CpuBusAccessKind::DummyWrite => MapperMemoryOperation::DummyWrite,
+            CpuBusAccessKind::Idle => MapperMemoryOperation::Idle,
+        }
+    }
+}
+
+/// Unified mapper event stream used by the new bus notification path.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum MapperEvent {
+    /// CPU bus access event with cycle timing.
+    CpuBusAccess {
+        kind: CpuBusAccessKind,
+        addr: u16,
+        value: u8,
+        cpu_cycle: u64,
+        master_clock: u64,
+    },
+    /// PPU address-bus update event.
+    PpuBusAddress {
+        addr: u16,
+        ctx: PpuVramAccessContext,
+    },
 }
 
 /// Target backing store for a PPU nametable address.
@@ -130,9 +273,22 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     /// CPU write with cycle count for timing-sensitive mappers.
     fn cpu_write(&mut self, addr: u16, data: u8, cpu_cycle: u64);
 
-    /// Optional per-CPU-cycle hook for mappers that implement hardware timers or
-    /// IRQ counters. Default implementation does nothing.
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {}
+    /// Declares which unified mapper events this mapper consumes.
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::NONE
+    }
+
+    /// Unified mapper event callback.
+    fn on_mapper_event(&mut self, _event: MapperEvent) {}
+
+    /// Final value filter for PPU VRAM reads (`$0000-$3EFF`).
+    ///
+    /// This is intended for boards that need to override returned PPU read
+    /// data depending on rendering phase/state (e.g. MMC5/JY/Rainbow-style
+    /// behaviour). The default implementation keeps `value` unchanged.
+    fn ppu_read_override(&mut self, _addr: u16, _ctx: PpuVramAccessContext, value: u8) -> u8 {
+        value
+    }
 
     /// Returns this mapper as an expansion audio source, when supported.
     ///
@@ -178,11 +334,6 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     fn chr_write(&mut self, addr: u16, data: u8) {
         self.ppu_write(addr, data);
     }
-
-    /// Hook invoked on every PPU VRAM access, including pattern and nametable
-    /// fetches as well as CPU-driven `$2007` reads/writes. Default
-    /// implementation does nothing.
-    fn ppu_vram_access(&mut self, _addr: u16, _ctx: PpuVramAccessContext) {}
 
     /// Maps a PPU nametable address (`$2000-$2FFF`) to its backing storage.
     ///

@@ -21,7 +21,10 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
+        mapper::{
+            ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer,
+            select_chr_storage,
+        },
     },
     memory::cpu as cpu_mem,
     reset_kind::ResetKind,
@@ -341,6 +344,27 @@ impl Mapper26 {
 }
 
 impl Mapper for Mapper26 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::CPU_BUS_ACCESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::CpuBusAccess { .. } = event {
+            if !self.irq_enabled {
+                return;
+            }
+            if self.irq_cycle_mode {
+                self.clock_irq_counter();
+            } else {
+                self.irq_prescaler -= 3;
+                if self.irq_prescaler <= 0 {
+                    self.clock_irq_counter();
+                    self.irq_prescaler += 341;
+                }
+            }
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         self.prg_bank_8000_2x = 0;
         self.prg_bank_c000 = self.prg_bank_count_8k.saturating_sub(2);
@@ -373,21 +397,6 @@ impl Mapper for Mapper26 {
                 self.write_register(translated, data);
             }
             _ => {}
-        }
-    }
-
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        if !self.irq_enabled {
-            return;
-        }
-        if self.irq_cycle_mode {
-            self.clock_irq_counter();
-        } else {
-            self.irq_prescaler -= 3;
-            if self.irq_prescaler <= 0 {
-                self.clock_irq_counter();
-                self.irq_prescaler += 341;
-            }
         }
     }
 

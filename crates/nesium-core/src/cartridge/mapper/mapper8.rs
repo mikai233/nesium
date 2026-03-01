@@ -40,7 +40,7 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram_with_trainer},
+        mapper::{ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer},
     },
     memory::cpu as cpu_mem,
     reset_kind::ResetKind,
@@ -248,6 +248,22 @@ impl Mapper8 {
 }
 
 impl Mapper for Mapper8 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::CPU_BUS_ACCESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::CpuBusAccess { .. } = event {
+            if self.irq_enabled {
+                self.irq_counter = self.irq_counter.wrapping_add(1);
+                if self.irq_counter == 0 {
+                    self.irq_pending = true;
+                    self.irq_enabled = false;
+                }
+            }
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         // Power-on defaults:
         // - IRQ counter disabled and cleared.
@@ -286,16 +302,6 @@ impl Mapper for Mapper8 {
                 self.write_bank_select_8000_plus(addr, data)
             }
             _ => {}
-        }
-    }
-
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        if self.irq_enabled {
-            self.irq_counter = self.irq_counter.wrapping_add(1);
-            if self.irq_counter == 0 {
-                self.irq_pending = true;
-                self.irq_enabled = false;
-            }
         }
     }
 

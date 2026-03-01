@@ -5,8 +5,8 @@ use crate::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{
-            ChrStorage, NametableTarget, PpuVramAccessContext, PpuVramAccessKind,
-            allocate_prg_ram_with_trainer, select_chr_storage,
+            ChrStorage, MapperEvent, MapperHookMask, NametableTarget, PpuVramAccessContext,
+            PpuVramAccessKind, allocate_prg_ram_with_trainer, select_chr_storage,
         },
     },
     mem_block::ByteBlock,
@@ -199,8 +199,8 @@ pub struct Mapper5 {
 
     // CHR banking registers ($5120-$5127). We ignore the separate BG banks
     // ($5128-$512B) for now and treat these as the unified set.
-    // TODO: Implement BG-specific banks once PpuVramAccessContext exposes
-    // whether a given fetch is BG or sprite.
+    // TODO: Consume `ctx.render_fetch` (BG/Sprite + fetch phase) to split
+    // background/sprite CHR banking exactly like Mesen2.
     chr_banks: Mapper5ChrBanks,
     chr_upper_bits: u8, // $5130 (upper CHR bank bits)
 
@@ -228,6 +228,10 @@ pub struct Mapper5 {
     last_nt_addr: u16,
     nt_addr_repeat_count: u8,
     expect_scanline_on_next_fetch: bool,
+    // ExGrafix state for ExRAM mode 1 read override sequencing.
+    ex_attr_last_nametable_fetch: u16,
+    ex_attr_fetch_remaining: u8,
+    ex_attr_selected_chr_bank: u16,
 }
 
 type Mapper5ChrBanks = ByteBlock<8>;
@@ -280,6 +284,9 @@ impl Mapper5 {
             last_nt_addr: 0,
             nt_addr_repeat_count: 0,
             expect_scanline_on_next_fetch: false,
+            ex_attr_last_nametable_fetch: 0,
+            ex_attr_fetch_remaining: 0,
+            ex_attr_selected_chr_bank: 0,
         }
     }
 
@@ -504,12 +511,13 @@ impl Mapper5 {
             Some(Mmc5CpuRegister::ChrUpperBits) => self.chr_upper_bits = data & 0x03,
             Some(Mmc5CpuRegister::SplitControl) => {
                 // Vertical split control. We only latch the value here; the
-                // actual split behaviour is implemented in ppu_vram_access
+                // actual split behaviour is implemented in the PPU bus-address hook
                 // and currently requires more detailed PPU context.
                 self.split_control = data;
-                // TODO: Use split_control in ppu_vram_access/map_nametable to
-                // implement MMC5 vertical split once PpuVramAccessContext
-                // exposes tile X/Y and BG vs sprite fetch information.
+                // TODO: Use split_control in the PPU bus-address hook/map_nametable.
+                // `PpuVramAccessContext` now includes `render_fetch` metadata
+                // (target/fetch phase/tile coords); MMC5 split logic still needs
+                // to be wired to those fields.
             }
             Some(Mmc5CpuRegister::SplitScroll) => {
                 // Vertical split scroll value.
@@ -681,9 +689,90 @@ impl Mapper5 {
     fn decode_fill_offset(offset: u16) -> u16 {
         offset & 0x03FF
     }
+
+    fn read_chr_from_4k_bank(&self, bank_4k: u16, addr: u16) -> u8 {
+        let base = (bank_4k as usize) << 12;
+        let offset = (addr as usize) & 0x0FFF;
+        self.chr.read_indexed(base, offset)
+    }
 }
 
 impl Mapper for Mapper5 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::PPU_BUS_ADDRESS | MapperHookMask::PPU_READ_OVERRIDE
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::PpuBusAddress { addr, ctx } = event {
+            // Only PPU background/sprite rendering fetches are relevant for MMC5
+            // scanline IRQ and split/ExGrafix behaviour. CPU-driven $2007 accesses
+            // are ignored here.
+            if ctx.kind != PpuVramAccessKind::RenderingFetch {
+                return;
+            }
+
+            // Mark that we are inside a rendered frame for $5204 "in frame" bit.
+            // TODO: Clear in_frame precisely at vblank start when the PPU exposes
+            // that information; for now this stays set once rendering begins.
+            self.in_frame = true;
+
+            // Nesdev: MMC5 detects scanlines by watching three consecutive reads
+            // from the same $2xxx nametable address; the following read
+            // (regardless of address) is treated as the scanline boundary.
+            // We approximate that here using the VRAM address and access kind.
+            if !(0x2000..=0x2FFF).contains(&addr) {
+                // Leaving nametable space resets the repeat tracking.
+                self.nt_addr_repeat_count = 0;
+                return;
+            }
+
+            if self.last_nt_addr == addr {
+                self.nt_addr_repeat_count = self.nt_addr_repeat_count.saturating_add(1);
+            } else {
+                self.last_nt_addr = addr;
+                self.nt_addr_repeat_count = 1;
+            }
+
+            if self.nt_addr_repeat_count == 3 {
+                // The next rendering fetch is considered the scanline boundary.
+                self.expect_scanline_on_next_fetch = true;
+                self.nt_addr_repeat_count = 0;
+                return;
+            }
+
+            if self.expect_scanline_on_next_fetch {
+                self.expect_scanline_on_next_fetch = false;
+
+                // Approximate frame boundaries by looking for a large gap in
+                // PPU cycles between successive detected scanlines. A real
+                // implementation should use explicit PPU vblank/frame signals.
+                const SCANLINE_GAP_THRESHOLD: u64 = 2000;
+                if self.last_scanline_cycle == 0
+                    || ctx.ppu_cycle.saturating_sub(self.last_scanline_cycle)
+                        > SCANLINE_GAP_THRESHOLD
+                {
+                    // Start of a new frame.
+                    self.current_scanline = 0;
+                } else {
+                    self.current_scanline = self.current_scanline.wrapping_add(1);
+                }
+                self.last_scanline_cycle = ctx.ppu_cycle;
+
+                // Generate scanline IRQ when the current scanline matches $5203.
+                // Per docs, a compare value of $00 suppresses new IRQs.
+                let target = self.irq_scanline;
+                if self.irq_enabled && target != 0 && self.current_scanline == target {
+                    self.irq_pending.set(true);
+                }
+            }
+
+            // TODO: Implement MMC5 split-screen ($5200-$5202) fully. The
+            // current read-override path covers ExGrafix mode-1 palette/CHR
+            // substitution but does not yet model split region tile-space
+            // remapping.
+        }
+    }
+
     fn reset(&mut self, kind: ResetKind) {
         if !matches!(kind, ResetKind::PowerOn) {
             return;
@@ -723,6 +812,9 @@ impl Mapper for Mapper5 {
         self.last_nt_addr = 0;
         self.nt_addr_repeat_count = 0;
         self.expect_scanline_on_next_fetch = false;
+        self.ex_attr_last_nametable_fetch = 0;
+        self.ex_attr_fetch_remaining = 0;
+        self.ex_attr_selected_chr_bank = 0;
         self.exram.fill(0);
     }
 
@@ -779,10 +871,6 @@ impl Mapper for Mapper5 {
         self.write_prg(addr, data);
     }
 
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        // TODO: Implement MMC5 scanline IRQ timing based on CPU/PPU state when needed.
-    }
-
     fn ppu_read(&self, addr: u16) -> Option<u8> {
         // MMC5 CHR banking only applies to pattern table space.
         if addr < 0x2000 {
@@ -798,73 +886,43 @@ impl Mapper for Mapper5 {
         }
     }
 
-    fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
-        // Only PPU background/sprite rendering fetches are relevant for MMC5
-        // scanline IRQ and split/ExGrafix behaviour. CPU-driven $2007 accesses
-        // are ignored here.
+    fn ppu_read_override(&mut self, addr: u16, ctx: PpuVramAccessContext, value: u8) -> u8 {
         if ctx.kind != PpuVramAccessKind::RenderingFetch {
-            return;
+            return value;
         }
 
-        // Mark that we are inside a rendered frame for $5204 "in frame" bit.
-        // TODO: Clear in_frame precisely at vblank start when the PPU exposes
-        // that information; for now this stays set once rendering begins.
-        self.in_frame = true;
-
-        // Nesdev: MMC5 detects scanlines by watching three consecutive reads
-        // from the same $2xxx nametable address; the following read
-        // (regardless of address) is treated as the scanline boundary.
-        // We approximate that here using the VRAM address and access kind.
-        if !(0x2000..=0x2FFF).contains(&addr) {
-            // Leaving nametable space resets the repeat tracking.
-            self.nt_addr_repeat_count = 0;
-            return;
+        // ExRAM mode 1 (ExGrafix): nametable fetches are not modified, but
+        // the following attribute + tile low/high fetches are overridden
+        // using the matching ExRAM entry.
+        if (self.exram_mode & 0x03) != 0b01 || !self.in_frame {
+            self.ex_attr_fetch_remaining = 0;
+            return value;
         }
 
-        if self.last_nt_addr == addr {
-            self.nt_addr_repeat_count = self.nt_addr_repeat_count.saturating_add(1);
-        } else {
-            self.last_nt_addr = addr;
-            self.nt_addr_repeat_count = 1;
+        let is_nt_fetch = (0x2000..=0x2FFF).contains(&addr) && (addr & 0x03FF) < 0x03C0;
+        if is_nt_fetch {
+            self.ex_attr_last_nametable_fetch = addr & 0x03FF;
+            self.ex_attr_fetch_remaining = 3;
+            return value;
         }
 
-        if self.nt_addr_repeat_count == 3 {
-            // The next rendering fetch is considered the scanline boundary.
-            self.expect_scanline_on_next_fetch = true;
-            self.nt_addr_repeat_count = 0;
-            return;
+        if self.ex_attr_fetch_remaining == 0 {
+            return value;
         }
 
-        if self.expect_scanline_on_next_fetch {
-            self.expect_scanline_on_next_fetch = false;
-
-            // Approximate frame boundaries by looking for a large gap in
-            // PPU cycles between successive detected scanlines. A real
-            // implementation should use explicit PPU vblank/frame signals.
-            const SCANLINE_GAP_THRESHOLD: u64 = 2000;
-            if self.last_scanline_cycle == 0
-                || ctx.ppu_cycle.saturating_sub(self.last_scanline_cycle) > SCANLINE_GAP_THRESHOLD
-            {
-                // Start of a new frame.
-                self.current_scanline = 0;
-            } else {
-                self.current_scanline = self.current_scanline.wrapping_add(1);
+        self.ex_attr_fetch_remaining = self.ex_attr_fetch_remaining.saturating_sub(1);
+        match self.ex_attr_fetch_remaining {
+            2 => {
+                let ex_idx = self.exram_index_for_nametable(self.ex_attr_last_nametable_fetch);
+                let ex = self.exram[ex_idx];
+                // Low 6 bits select a 4 KiB CHR bank, top two come from $5130.
+                self.ex_attr_selected_chr_bank = ((self.chr_upper_bits as u16) << 6) | ex as u16;
+                let palette = (ex >> 6) & 0x03;
+                palette * 0x55
             }
-            self.last_scanline_cycle = ctx.ppu_cycle;
-
-            // Generate scanline IRQ when the current scanline matches $5203.
-            // Per docs, a compare value of $00 suppresses new IRQs.
-            let target = self.irq_scanline;
-            if self.irq_enabled && target != 0 && self.current_scanline == target {
-                self.irq_pending.set(true);
-            }
+            1 | 0 => self.read_chr_from_4k_bank(self.ex_attr_selected_chr_bank, addr),
+            _ => value,
         }
-
-        // TODO: Use addr/ctx and the vertical split registers ($5200-$5202)
-        // plus ExRAM contents to implement MMC5's split-screen mode and
-        // extended attribute (ExGrafix) behaviour. This requires additional
-        // PPU context (e.g. tile X/Y, BG vs sprite fetch) that is not yet
-        // exposed in PpuVramAccessContext.
     }
 
     fn map_nametable(&self, addr: u16) -> NametableTarget {

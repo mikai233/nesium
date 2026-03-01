@@ -70,7 +70,11 @@ impl<'a> From<&'a [u8]> for CartridgeImage {
 pub mod a12_watcher;
 pub mod header;
 pub mod mapper;
-pub use mapper::{Mapper, Provider, mapper_downcast_mut, mapper_downcast_ref};
+pub use mapper::{
+    CpuBusAccessKind, Mapper, MapperEvent, MapperHookMask, MapperMemoryOperation,
+    PpuRenderFetchInfo, PpuRenderFetchTarget, PpuRenderFetchType, PpuVramAccessContext,
+    PpuVramAccessSource, Provider, mapper_downcast_mut, mapper_downcast_ref,
+};
 
 #[derive(Debug)]
 pub struct Cartridge {
@@ -126,19 +130,58 @@ impl Cartridge {
     }
 
     /// Notify the mapper about a PPU VRAM access, including CPU bus timing.
-    pub fn ppu_vram_access(
-        &mut self,
-        addr: u16,
-        ctx: crate::cartridge::mapper::PpuVramAccessContext,
-    ) {
-        self.mapper.ppu_vram_access(addr, ctx);
+    pub fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
+        if self
+            .mapper
+            .hook_mask()
+            .contains(MapperHookMask::PPU_BUS_ADDRESS)
+        {
+            self.mapper
+                .on_mapper_event(MapperEvent::PpuBusAddress { addr, ctx });
+        }
     }
 
-    /// Advance mapper-internal CPU-based timers and expansion audio by one bus cycle.
-    pub fn cpu_clock(&mut self, cpu_cycle: u64) {
-        self.mapper.cpu_clock(cpu_cycle);
+    /// Allows mappers to post-process the final value returned for a PPU VRAM read.
+    pub fn ppu_read_override(&mut self, addr: u16, ctx: PpuVramAccessContext, value: u8) -> u8 {
+        if self
+            .mapper
+            .hook_mask()
+            .contains(MapperHookMask::PPU_READ_OVERRIDE)
+        {
+            self.mapper.ppu_read_override(addr, ctx, value)
+        } else {
+            value
+        }
+    }
+
+    /// Advance expansion-audio channels by one CPU bus cycle.
+    pub fn clock_expansion_audio(&mut self) {
         if let Some(expansion) = self.mapper.as_expansion_audio_mut() {
             expansion.clock_audio();
+        }
+    }
+
+    /// Notify mapper of a CPU bus access.
+    pub fn cpu_bus_access(
+        &mut self,
+        kind: CpuBusAccessKind,
+        addr: u16,
+        value: u8,
+        cpu_cycle: u64,
+        master_clock: u64,
+    ) {
+        if self
+            .mapper
+            .hook_mask()
+            .contains(MapperHookMask::CPU_BUS_ACCESS)
+        {
+            self.mapper.on_mapper_event(MapperEvent::CpuBusAccess {
+                kind,
+                addr,
+                value,
+                cpu_cycle,
+                master_clock,
+            });
         }
     }
 

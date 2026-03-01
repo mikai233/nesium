@@ -19,7 +19,10 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram_with_trainer},
+        mapper::{
+            MapperEvent, MapperHookMask, PpuVramAccessContext, PpuVramAccessKind,
+            allocate_prg_ram_with_trainer,
+        },
     },
     memory::cpu as cpu_mem,
     reset_kind::ResetKind,
@@ -338,6 +341,18 @@ impl Mapper119 {
 }
 
 impl Mapper for Mapper119 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::PPU_BUS_ADDRESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::PpuBusAddress { addr, ctx } = event
+            && ctx.kind == PpuVramAccessKind::RenderingFetch
+        {
+            self.observe_ppu_vram_access(addr, ctx);
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         self.bank_select = 0;
         self.bank_regs.fill(0);
@@ -413,20 +428,12 @@ impl Mapper for Mapper119 {
         }
     }
 
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {}
-
     fn ppu_read(&self, addr: u16) -> Option<u8> {
         Some(self.read_chr(addr))
     }
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
         self.write_chr(addr, data);
-    }
-
-    fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
-        if ctx.kind == PpuVramAccessKind::RenderingFetch {
-            self.observe_ppu_vram_access(addr, ctx);
-        }
     }
 
     fn irq_pending(&self) -> bool {

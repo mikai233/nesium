@@ -39,7 +39,7 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram_with_trainer},
+        mapper::{ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer},
     },
     memory::cpu as cpu_mem,
     reset_kind::ResetKind,
@@ -289,6 +289,24 @@ impl Mapper6 {
 }
 
 impl Mapper for Mapper6 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::CPU_BUS_ACCESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::CpuBusAccess { .. } = event {
+            // Front Fareast IRQ timer: increment once per CPU clock event.
+            // The new hook path delivers this event per CPU cycle.
+            if self.irq_enabled {
+                self.irq_counter = self.irq_counter.wrapping_add(1);
+                if self.irq_counter == 0 {
+                    self.irq_pending = true;
+                    self.irq_enabled = false;
+                }
+            }
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         // Front Fareast power-on defaults:
         // - IRQ counter disabled and cleared.
@@ -336,20 +354,6 @@ impl Mapper for Mapper6 {
             }
 
             _ => {}
-        }
-    }
-
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        // Approximate the Front Fareast IRQ timer: increment the counter
-        // once per CPU bus write. On real hardware, the counter increments
-        // every CPU cycle, but this approximation matches the intent for
-        // most games using mapper 6 dumps.
-        if self.irq_enabled {
-            self.irq_counter = self.irq_counter.wrapping_add(1);
-            if self.irq_counter == 0 {
-                self.irq_pending = true;
-                self.irq_enabled = false;
-            }
         }
     }
 

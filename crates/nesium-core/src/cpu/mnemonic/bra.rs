@@ -3,7 +3,7 @@ use crate::{bus::CpuBus, context::Context, cpu::Cpu};
 #[inline]
 pub fn branch_step0(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, taken: bool) {
     // T1: fetch offset and decide taken/not-taken
-    cpu.tmp = cpu.fetch_u8(bus, ctx);
+    cpu.tmp = cpu.fetch_operand_u8(bus, ctx);
     cpu.apply_branch_decision(taken); // not taken => step += 2
 }
 

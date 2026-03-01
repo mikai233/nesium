@@ -33,8 +33,8 @@ use crate::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{
-            ChrStorage, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram_with_trainer,
-            select_chr_storage,
+            ChrStorage, MapperEvent, MapperHookMask, PpuVramAccessKind,
+            allocate_prg_ram_with_trainer, select_chr_storage,
         },
     },
     memory::cpu as cpu_mem,
@@ -366,6 +366,21 @@ impl Mapper9 {
 }
 
 impl Mapper for Mapper9 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::PPU_BUS_ADDRESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::PpuBusAddress { addr, ctx } = event {
+            // Update MMC2 latches when the PPU performs a rendering fetch from
+            // the documented trigger addresses. This approximates the hardware
+            // behaviour where the latch flips just after fetching the tile.
+            if addr < 0x2000 && ctx.kind == PpuVramAccessKind::RenderingFetch {
+                self.update_latches_after_read(addr);
+            }
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         // Reset state roughly matches the typical behaviour described on
         // Nesdev and implemented by Mesen2:
@@ -417,15 +432,6 @@ impl Mapper for Mapper9 {
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
         self.write_chr(addr, data);
-    }
-
-    fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
-        // Update MMC2 latches when the PPU performs a rendering fetch from
-        // the documented trigger addresses. This approximates the hardware
-        // behaviour where the latch flips just after fetching the tile.
-        if addr < 0x2000 && ctx.kind == PpuVramAccessKind::RenderingFetch {
-            self.update_latches_after_read(addr);
-        }
     }
 
     fn prg_rom(&self) -> Option<&[u8]> {

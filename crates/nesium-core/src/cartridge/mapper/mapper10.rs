@@ -10,9 +10,9 @@
 //!
 //! The key difference from MMC2 is that both CHR windows use tile *ranges*
 //! to trigger the FD/FE latches (see Nesdev MMC4 docs). We approximate the
-//! "latch updates after fetch" behaviour by updating latch state in
-//! [`ppu_vram_access`] whenever the PPU performs a rendering fetch from the
-//! documented trigger addresses.
+//! "latch updates after fetch" behaviour by updating latch state on
+//! PPU bus-address events whenever rendering fetches hit documented trigger
+//! addresses.
 //!
 //! | Area | Address range     | Behaviour                                          | IRQ/Audio |
 //! |------|-------------------|----------------------------------------------------|-----------|
@@ -31,8 +31,8 @@ use crate::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{
-            ChrStorage, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram_with_trainer,
-            select_chr_storage,
+            ChrStorage, MapperEvent, MapperHookMask, PpuVramAccessContext, PpuVramAccessKind,
+            allocate_prg_ram_with_trainer, select_chr_storage,
         },
     },
     memory::cpu as cpu_mem,
@@ -355,6 +355,16 @@ impl Mapper10 {
 }
 
 impl Mapper for Mapper10 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::PPU_BUS_ADDRESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::PpuBusAddress { addr, ctx } = event {
+            self.update_latches_on_vram_access(addr, ctx);
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         // Power-on defaults:
         // - PRG bank at $8000 defaults to 0.
@@ -405,10 +415,6 @@ impl Mapper for Mapper10 {
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
         self.write_chr(addr, data);
-    }
-
-    fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
-        self.update_latches_on_vram_access(addr, ctx);
     }
 
     fn prg_rom(&self) -> Option<&[u8]> {

@@ -30,7 +30,10 @@ use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
+        mapper::{
+            ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer,
+            select_chr_storage,
+        },
     },
     memory::cpu as cpu_mem,
     reset_kind::ResetKind,
@@ -296,6 +299,23 @@ impl Mapper90 {
 }
 
 impl Mapper for Mapper90 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::CPU_BUS_ACCESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::CpuBusAccess { .. } = event {
+            if !self.irq_enabled {
+                return;
+            }
+            self.irq_prescaler -= 3;
+            if self.irq_prescaler <= 0 {
+                self.clock_irq_counter();
+                self.irq_prescaler += 341;
+            }
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         self.prg_regs[0] = 0;
         self.prg_regs[1] = 1;
@@ -323,17 +343,6 @@ impl Mapper for Mapper90 {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
             JY90_IO_WINDOW_START..=JY90_IO_WINDOW_END => self.write_register(addr, data),
             _ => {}
-        }
-    }
-
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        if !self.irq_enabled {
-            return;
-        }
-        self.irq_prescaler -= 3;
-        if self.irq_prescaler <= 0 {
-            self.clock_irq_counter();
-            self.irq_prescaler += 341;
         }
     }
 

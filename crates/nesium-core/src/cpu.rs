@@ -2,6 +2,7 @@ use std::fmt::{Debug, Display};
 
 use crate::apu::Apu;
 use crate::bus::{CpuBus, DmcDmaEvent, STACK_ADDR};
+use crate::cartridge::CpuBusAccessKind;
 use crate::context::Context;
 use crate::cpu::addressing::Addressing;
 use crate::cpu::instruction::Instruction;
@@ -278,7 +279,7 @@ impl Cpu {
                 if self.prev_irq_active || self.prev_nmi_latch {
                     self.perform_interrupt(bus, ctx);
                 } else {
-                    let opcode = self.fetch_u8(bus, ctx);
+                    let opcode = self.fetch_opcode(bus, ctx);
                     self.opcode_in_flight = Some(opcode);
                     let instr = &LOOKUP_TABLE[opcode as usize];
                     self.prepare_step(instr);
@@ -297,7 +298,7 @@ impl Cpu {
         bus.bump_master_clock(start_delta, self, ctx);
 
         if let Some(cart) = bus.cartridge.as_mut() {
-            cart.cpu_clock(*bus.cycles);
+            cart.clock_expansion_audio();
         }
         // Run one APU CPU-cycle tick; DMA requests are queued on the bus.
         Apu::step(bus, self, ctx);
@@ -325,34 +326,59 @@ impl Cpu {
 
     #[inline]
     pub(crate) fn dummy_read(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
-        bus.mem_read(self.pc, self, ctx)
+        self.read(self.pc, bus, ctx, CpuBusAccessKind::DummyRead)
     }
 
     #[inline]
-    pub(crate) fn dummy_read_at(&mut self, addr: u16, bus: &mut CpuBus, ctx: &mut Context) {
-        bus.mem_read(addr, self, ctx);
+    pub(crate) fn dummy_write(&mut self, addr: u16, data: u8, bus: &mut CpuBus, ctx: &mut Context) {
+        self.write(addr, data, bus, ctx, CpuBusAccessKind::DummyWrite);
     }
 
     #[inline]
-    pub(crate) fn dummy_write_at(
+    fn fetch_pc_u8(&mut self, bus: &mut CpuBus, ctx: &mut Context, kind: CpuBusAccessKind) -> u8 {
+        debug_assert!(matches!(
+            kind,
+            CpuBusAccessKind::ExecOpcode | CpuBusAccessKind::ExecOperand
+        ));
+        let v = self.read(self.pc, bus, ctx, kind);
+        self.inc_pc();
+        v
+    }
+
+    pub(crate) fn fetch_opcode(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
+        self.fetch_pc_u8(bus, ctx, CpuBusAccessKind::ExecOpcode)
+    }
+
+    pub(crate) fn fetch_operand_u8(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
+        self.fetch_pc_u8(bus, ctx, CpuBusAccessKind::ExecOperand)
+    }
+
+    #[inline]
+    pub(crate) fn read(
+        &mut self,
+        addr: u16,
+        bus: &mut CpuBus,
+        ctx: &mut Context,
+        kind: CpuBusAccessKind,
+    ) -> u8 {
+        bus.mem_read_with_kind(addr, self, ctx, kind)
+    }
+
+    #[inline]
+    pub(crate) fn write(
         &mut self,
         addr: u16,
         data: u8,
         bus: &mut CpuBus,
         ctx: &mut Context,
+        kind: CpuBusAccessKind,
     ) {
-        bus.mem_write(addr, data, self, ctx);
+        bus.mem_write_with_kind(addr, data, self, ctx, kind);
     }
 
-    pub(crate) fn fetch_u8(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
-        let v = bus.mem_read(self.pc, self, ctx);
-        self.inc_pc();
-        v
-    }
-
-    pub(crate) fn fetch_u16(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u16 {
-        let lo = self.fetch_u8(bus, ctx) as u16;
-        let hi = self.fetch_u8(bus, ctx) as u16;
+    pub(crate) fn fetch_operand_u16(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u16 {
+        let lo = self.fetch_operand_u8(bus, ctx) as u16;
+        let hi = self.fetch_operand_u8(bus, ctx) as u16;
         (hi << 8) | lo
     }
 
@@ -828,13 +854,13 @@ impl Cpu {
 
         match kind {
             IrqKind::Nmi => {
-                let lo = bus.mem_read(NMI_VECTOR_LO, self, ctx);
-                let hi = bus.mem_read(NMI_VECTOR_HI, self, ctx);
+                let lo = self.read(NMI_VECTOR_LO, bus, ctx, CpuBusAccessKind::Read);
+                let hi = self.read(NMI_VECTOR_HI, bus, ctx, CpuBusAccessKind::Read);
                 self.pc = ((hi as u16) << 8) | (lo as u16);
             }
             IrqKind::Irq => {
-                let lo = bus.mem_read(IRQ_VECTOR_LO, self, ctx);
-                let hi = bus.mem_read(IRQ_VECTOR_HI, self, ctx);
+                let lo = self.read(IRQ_VECTOR_LO, bus, ctx, CpuBusAccessKind::Read);
+                let hi = self.read(IRQ_VECTOR_HI, bus, ctx, CpuBusAccessKind::Read);
                 self.pc = ((hi as u16) << 8) | (lo as u16);
             }
         }
@@ -886,7 +912,7 @@ impl Cpu {
 
         // T2*: dummy/prefetch read at PC+2+offset (w/o carry).
         let pc_wo_carry = Self::branch_target_wo_carry(pc_next, offset);
-        self.dummy_read_at(pc_wo_carry, bus, ctx);
+        self.read(pc_wo_carry, bus, ctx, CpuBusAccessKind::DummyRead);
 
         // Commit final branch target using full 16-bit addition (with carry into high byte).
         let pc_final = pc_next.wrapping_add(offset as u16);
@@ -908,14 +934,14 @@ impl Cpu {
 
     #[inline]
     pub(crate) fn push_stack(&mut self, bus: &mut CpuBus, ctx: &mut Context, data: u8) {
-        bus.mem_write(self.stack_addr(), data, self, ctx);
+        self.write(self.stack_addr(), data, bus, ctx, CpuBusAccessKind::Write);
         self.s = self.s.wrapping_sub(1);
     }
 
     #[inline]
     pub(crate) fn pop_stack(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
         self.s = self.s.wrapping_add(1);
-        bus.mem_read(self.stack_addr(), self, ctx)
+        self.read(self.stack_addr(), bus, ctx, CpuBusAccessKind::Read)
     }
 
     #[inline]

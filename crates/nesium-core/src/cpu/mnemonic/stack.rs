@@ -32,6 +32,7 @@
 
 use crate::{
     bus::{CpuBus, STACK_ADDR},
+    cartridge::CpuBusAccessKind,
     context::Context,
     cpu::{Cpu, status::Status},
 };
@@ -119,7 +120,12 @@ pub fn exec_pla(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             cpu.dummy_read(bus, ctx);
         }
         1 => {
-            cpu.dummy_read_at(STACK_ADDR | cpu.s as u16, bus, ctx);
+            cpu.read(
+                STACK_ADDR | cpu.s as u16,
+                bus,
+                ctx,
+                CpuBusAccessKind::DummyRead,
+            );
         }
         2 => {
             let value = cpu.pop_stack(bus, ctx);
@@ -154,7 +160,12 @@ pub fn exec_plp(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             cpu.dummy_read(bus, ctx);
         }
         1 => {
-            cpu.dummy_read_at(STACK_ADDR | cpu.s as u16, bus, ctx);
+            cpu.read(
+                STACK_ADDR | cpu.s as u16,
+                bus,
+                ctx,
+                CpuBusAccessKind::DummyRead,
+            );
         }
         2 => {
             let value = cpu.pop_stack(bus, ctx);
