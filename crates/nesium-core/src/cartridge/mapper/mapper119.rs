@@ -36,6 +36,10 @@ const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 const CHR_BANK_SIZE_1K: usize = 1024;
 /// Fixed CHR-RAM size used by TQROM boards.
 const CHR_RAM_SIZE: usize = 8 * 1024;
+/// MMC3 A12 low-time qualifier in CPU cycles.
+const MMC3_A12_LOW_MIN_CPU_CYCLES: u64 = 3;
+/// One CPU cycle equals 12 master clocks (NTSC timing model in this core).
+const MASTER_CLOCKS_PER_CPU_CYCLE: u64 = 12;
 
 /// CPU `$8000-$9FFF`: bank select and bank data registers (MMC3-style slot 0).
 const TQROM_BANK_SELECT_START: u16 = 0x8000;
@@ -139,8 +143,10 @@ pub struct Mapper119 {
     irq_pending: bool,
 
     // PPU A12 edge detection ------------------------------------
-    last_a12_high: bool,
-    last_a12_rise_ppu_cycle: u64,
+    /// Start timestamp (master clocks) of the current A12-low phase.
+    ///
+    /// `None` means A12 is currently high or no low phase is armed.
+    a12_low_start_master_clock: Option<u64>,
 }
 
 type Mapper119BankRegs = ByteBlock<8>;
@@ -169,8 +175,7 @@ impl Mapper119 {
             irq_reload: false,
             irq_enabled: false,
             irq_pending: false,
-            last_a12_high: false,
-            last_a12_rise_ppu_cycle: 0,
+            a12_low_start_master_clock: None,
         }
     }
 
@@ -311,32 +316,49 @@ impl Mapper119 {
         (bank, offset)
     }
 
+    #[inline]
+    fn is_a12_rising_edge(&mut self, addr: u16, ppu_master_clock: u64) -> bool {
+        let a12_high = addr & 0x1000 != 0;
+
+        if a12_high {
+            let low_min_master = MMC3_A12_LOW_MIN_CPU_CYCLES * MASTER_CLOCKS_PER_CPU_CYCLE;
+            let is_rise = self
+                .a12_low_start_master_clock
+                .map(|low_start| ppu_master_clock.saturating_sub(low_start) >= low_min_master)
+                .unwrap_or(false);
+            self.a12_low_start_master_clock = None;
+            return is_rise;
+        }
+
+        if self.a12_low_start_master_clock.is_none() {
+            self.a12_low_start_master_clock = Some(ppu_master_clock);
+        }
+        false
+    }
+
+    fn clock_irq_counter(&mut self) {
+        if self.irq_reload {
+            self.irq_counter = self.irq_latch;
+            self.irq_reload = false;
+        } else if self.irq_counter == 0 {
+            self.irq_counter = self.irq_latch;
+        } else {
+            self.irq_counter = self.irq_counter.saturating_sub(1);
+        }
+
+        if self.irq_counter == 0 && self.irq_enabled {
+            self.irq_pending = true;
+        }
+    }
+
     fn observe_ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
         if addr >= 0x2000 {
             return;
         }
 
-        let a12_high = addr & 0x1000 != 0;
-        if a12_high && !self.last_a12_high {
-            // Debounce: ignore rises that occur too soon after the last one.
-            let delta = ctx.ppu_cycle.saturating_sub(self.last_a12_rise_ppu_cycle);
-            if delta >= 8 {
-                if self.irq_reload {
-                    self.irq_counter = self.irq_latch;
-                    self.irq_reload = false;
-                } else if self.irq_counter == 0 {
-                    self.irq_counter = self.irq_latch;
-                } else {
-                    self.irq_counter = self.irq_counter.saturating_sub(1);
-                }
-
-                if self.irq_counter == 0 && self.irq_enabled {
-                    self.irq_pending = true;
-                }
-            }
-            self.last_a12_rise_ppu_cycle = ctx.ppu_cycle;
+        if self.is_a12_rising_edge(addr, ctx.ppu_master_clock) {
+            self.clock_irq_counter();
         }
-        self.last_a12_high = a12_high;
     }
 }
 
@@ -346,10 +368,15 @@ impl Mapper for Mapper119 {
     }
 
     fn on_mapper_event(&mut self, event: MapperEvent) {
-        if let MapperEvent::PpuBusAddress { addr, ctx } = event
-            && ctx.kind == PpuVramAccessKind::RenderingFetch
-        {
-            self.observe_ppu_vram_access(addr, ctx);
+        if let MapperEvent::PpuBusAddress { addr, ctx } = event {
+            if matches!(
+                ctx.kind,
+                PpuVramAccessKind::RenderingFetch
+                    | PpuVramAccessKind::CpuRead
+                    | PpuVramAccessKind::CpuWrite
+            ) {
+                self.observe_ppu_vram_access(addr, ctx);
+            }
         }
     }
 
@@ -363,8 +390,7 @@ impl Mapper for Mapper119 {
         self.irq_reload = false;
         self.irq_enabled = false;
         self.irq_pending = false;
-        self.last_a12_high = false;
-        self.last_a12_rise_ppu_cycle = 0;
+        self.a12_low_start_master_clock = None;
         self.mirroring = self.base_mirroring;
     }
 

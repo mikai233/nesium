@@ -47,24 +47,13 @@ use serde::{Deserialize, Serialize};
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
 const CHR_BANK_SIZE_1K: usize = 1024;
-/// Temporary dot-domain debounce for rendering-driven MMC3 A12 rises.
+/// MMC3 A12 low-time qualifier in CPU cycles.
 ///
-/// Why this exists:
-/// - Mesen2 gates on master-clock time (`A12 low >= 3`) at every PPU bus
-///   address change.
-/// - NESium currently reports mapper VRAM activity at a coarser "access-event"
-///   granularity (`ppu_cycle` + access kind), not every bus-address edge.
-/// - With current callback timing, using a smaller gate regresses MMC3 tests
-///   and game parity (e.g. Nekketsu Kakutou Densetsu intro jitter).
-///
-/// TODO(mmc3-a12): remove this heuristic after PPU/mapper bus notifications are
-/// remodeled to be edge-accurate:
-/// 1) Add a single PPU bus-address change hook (all rendering and $2006/$2007
-///    paths go through it).
-/// 2) Expose master-clock-aligned timing to mappers.
-/// 3) Switch MMC3 A12 detection to Mesen2-style `low >= 3` master clocks and
-///    drop the dot-based fallback.
-const MMC3_RENDER_A12_LOW_DOTS_MIN: u64 = 7;
+/// Matches Mesen2's MMC3 edge detector: a low->high transition is only
+/// considered valid when A12 stayed low for at least 3 CPU cycles.
+const MMC3_A12_LOW_MIN_CPU_CYCLES: u64 = 3;
+/// One CPU cycle equals 12 master clocks (NTSC timing model in this core).
+const MASTER_CLOCKS_PER_CPU_CYCLE: u64 = 12;
 
 /// CPU `$8000-$9FFF`: first 8 KiB PRG-ROM window and MMC3 bank select/data registers.
 const MMC3_PRG_SLOT0_START: u16 = 0x8000;
@@ -216,17 +205,10 @@ pub struct Mapper4 {
     irq_revision: Mmc3IrqRevision,
 
     // PPU A12 edge detection -----------------------------------------------
-    /// Last observed value of PPU address line A12 during rendering fetches.
-    last_a12_high: bool,
-    /// PPU cycle of the last A12 rising edge we acted on.
+    /// Start timestamp (master clocks) of the current A12-low phase.
     ///
-    /// Used to debounce rendering-triggered A12 rises.
-    last_a12_rise_ppu_cycle: u64,
-    /// Last observed A12 level for CPU-driven $2006/$2007 accesses.
-    ///
-    /// Kept separate from rendering debounce state to avoid introducing
-    /// spurious/late scanline IRQ drift in games that interleave both paths.
-    last_a12_high_cpu: bool,
+    /// `None` means A12 is currently high or no low phase is armed.
+    a12_low_start_master_clock: Option<u64>,
 }
 
 type Mapper4BankRegs = ByteBlock<8>;
@@ -246,9 +228,7 @@ pub struct Mapper4State {
     pub irq_enabled: bool,
     pub irq_pending: bool,
     pub irq_revision: u8,
-    pub last_a12_high: bool,
-    pub last_a12_rise_ppu_cycle: u64,
-    pub last_a12_high_cpu: bool,
+    pub a12_low_start_master_clock: Option<u64>,
 }
 
 impl Mapper4 {
@@ -276,9 +256,7 @@ impl Mapper4 {
             irq_enabled: false,
             irq_pending: false,
             irq_revision,
-            last_a12_high: false,
-            last_a12_rise_ppu_cycle: 0,
-            last_a12_high_cpu: false,
+            a12_low_start_master_clock: None,
         }
     }
 
@@ -298,9 +276,7 @@ impl Mapper4 {
             irq_enabled: self.irq_enabled,
             irq_pending: self.irq_pending,
             irq_revision: self.irq_revision.as_u8(),
-            last_a12_high: self.last_a12_high,
-            last_a12_rise_ppu_cycle: self.last_a12_rise_ppu_cycle,
-            last_a12_high_cpu: self.last_a12_high_cpu,
+            a12_low_start_master_clock: self.a12_low_start_master_clock,
         }
     }
 
@@ -319,9 +295,7 @@ impl Mapper4 {
         self.irq_enabled = state.irq_enabled;
         self.irq_pending = state.irq_pending;
         self.irq_revision = Mmc3IrqRevision::from_u8(state.irq_revision);
-        self.last_a12_high = state.last_a12_high;
-        self.last_a12_rise_ppu_cycle = state.last_a12_rise_ppu_cycle;
-        self.last_a12_high_cpu = state.last_a12_high_cpu;
+        self.a12_low_start_master_clock = state.a12_low_start_master_clock;
     }
 
     /// Returns true when CHR A12 inversion is active (bank select bit7 set).
@@ -630,9 +604,9 @@ impl Mapper4 {
         self.irq_enabled = true;
     }
 
-    /// Called when a debounced PPU A12 rising edge is detected during
-    /// rendering. This clocks the internal IRQ counter in the usual MMC3
-    /// manner.
+    /// Called when a qualified PPU A12 rising edge is detected.
+    ///
+    /// This clocks the internal IRQ counter in the usual MMC3 manner.
     fn clock_irq_counter(&mut self) {
         let counter_before = self.irq_counter;
         let reload_before = self.irq_reload;
@@ -659,49 +633,40 @@ impl Mapper4 {
         }
     }
 
-    /// Observe a PPU VRAM access and detect A12 rising edges.
-    ///
-    /// Notes about alignment with Mesen2:
-    /// - Mesen2 clocks MMC3 on bus-address A12 rises from both rendering and
-    ///   CPU-driven $2006/$2007 activity.
-    /// - In NESium, VRAM access callbacks are delivered at a slightly
-    ///   different granularity, so we keep independent edge state for CPU and
-    ///   rendering paths to avoid cross-path interference while preserving
-    ///   equivalent IRQ clocking behavior.
-    fn observe_ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
+    #[inline]
+    fn is_a12_rising_edge(&mut self, addr: u16, ppu_master_clock: u64) -> bool {
         let a12_high = addr & 0x1000 != 0;
-        if matches!(
+
+        if a12_high {
+            let low_min_master = MMC3_A12_LOW_MIN_CPU_CYCLES * MASTER_CLOCKS_PER_CPU_CYCLE;
+            let is_rise = self
+                .a12_low_start_master_clock
+                .map(|low_start| ppu_master_clock.saturating_sub(low_start) >= low_min_master)
+                .unwrap_or(false);
+            self.a12_low_start_master_clock = None;
+            return is_rise;
+        }
+
+        if self.a12_low_start_master_clock.is_none() {
+            self.a12_low_start_master_clock = Some(ppu_master_clock);
+        }
+        false
+    }
+
+    /// Observe a PPU VRAM access and detect MMC3-qualified A12 rising edges.
+    fn observe_ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
+        if !matches!(
             ctx.kind,
-            PpuVramAccessKind::CpuRead | PpuVramAccessKind::CpuWrite
+            PpuVramAccessKind::RenderingFetch
+                | PpuVramAccessKind::CpuRead
+                | PpuVramAccessKind::CpuWrite
         ) {
-            if a12_high && !self.last_a12_high_cpu {
-                self.clock_irq_counter();
-            }
-            self.last_a12_high_cpu = a12_high;
             return;
         }
 
-        if !matches!(ctx.kind, PpuVramAccessKind::RenderingFetch) {
-            return;
+        if self.is_a12_rising_edge(addr, ctx.ppu_master_clock) {
+            self.clock_irq_counter();
         }
-
-        if !a12_high {
-            // Track low period start for rendering-triggered debounce.
-            if self.last_a12_high || self.last_a12_rise_ppu_cycle == 0 {
-                self.last_a12_rise_ppu_cycle = ctx.ppu_cycle;
-            }
-            self.last_a12_high = false;
-            return;
-        }
-
-        if !self.last_a12_high {
-            let low_period = ctx.ppu_cycle.saturating_sub(self.last_a12_rise_ppu_cycle);
-            if self.last_a12_rise_ppu_cycle != 0 && low_period >= MMC3_RENDER_A12_LOW_DOTS_MIN {
-                self.clock_irq_counter();
-            }
-        }
-
-        self.last_a12_high = true;
     }
 }
 
@@ -731,9 +696,7 @@ impl Mapper for Mapper4 {
         self.irq_reload = false;
         self.irq_enabled = false;
         self.irq_pending = false;
-        self.last_a12_high = false;
-        self.last_a12_rise_ppu_cycle = 0;
-        self.last_a12_high_cpu = false;
+        self.a12_low_start_master_clock = None;
         self.mirroring = self.base_mirroring;
     }
 
