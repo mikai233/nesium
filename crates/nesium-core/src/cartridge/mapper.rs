@@ -30,6 +30,7 @@ pub mod mapper4;
 pub mod mapper5;
 pub mod mapper6;
 pub mod mapper66;
+pub mod mapper69;
 pub mod mapper7;
 pub mod mapper71;
 pub mod mapper78;
@@ -60,6 +61,7 @@ pub use mapper25::Mapper25;
 pub use mapper26::Mapper26;
 pub use mapper34::Mapper34;
 pub use mapper66::Mapper66;
+pub use mapper69::Mapper69;
 pub use mapper71::Mapper71;
 pub use mapper78::Mapper78;
 pub use mapper85::Mapper85;
@@ -262,8 +264,7 @@ pub enum NametableTarget {
 /// Core mapper interface implemented by all cartridge boards.
 ///
 /// Boards that expose extra sound channels can additionally implement
-/// [`ExpansionAudio`] and opt into the optional `as_expansion_audio`/`mut`
-/// hooks below so the core can treat expansion audio generically.
+/// [`ExpansionAudio`] and return it via the optional `expansion_audio` hooks.
 pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     /// Returns the CPU-visible byte for `addr`, or `None` when the bus should
     /// float (open-bus behavior) because the addressed resource is disabled or
@@ -294,16 +295,15 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     ///
     /// The default implementation returns `None`, meaning the board does not
     /// provide any extra audio channels beyond the core APU.
-    fn as_expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
+    fn expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
         None
     }
 
-    /// Mutable variant of [`as_expansion_audio`](Self::as_expansion_audio).
+    /// Mutable variant of [`expansion_audio`](Self::expansion_audio).
     ///
-    /// Mappers that implement [`ExpansionAudio`] typically return
-    /// `Some(self)` here; boards without expansion audio keep the
-    /// default `None` implementation.
-    fn as_expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
+    /// Mappers that implement [`ExpansionAudio`] typically return `Some(self)`
+    /// here; boards without expansion audio keep the default `None`.
+    fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
         None
     }
 

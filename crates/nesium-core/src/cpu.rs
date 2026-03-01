@@ -297,9 +297,7 @@ impl Cpu {
         *bus.cycles = bus.cycles.wrapping_add(1);
         bus.bump_master_clock(start_delta, self, ctx);
 
-        if let Some(cart) = bus.cartridge.as_mut() {
-            cart.clock_expansion_audio();
-        }
+        bus.clock_mapper_expansion_audio();
         // Run one APU CPU-cycle tick; DMA requests are queued on the bus.
         Apu::step(bus, self, ctx);
     }
@@ -679,7 +677,8 @@ impl Cpu {
                     self.dma.dmc_active = false;
                     self.dma.dmc_abort_pending = false;
 
-                    bus.apu.finish_dma_fetch(val);
+                    let pending_dma = &mut *bus.pending_dma;
+                    bus.apu.finish_dma_fetch(val, pending_dma);
 
                     // This cycle was fully consumed by DMA; continue the while-loop.
                     continue;

@@ -33,7 +33,8 @@
 use std::borrow::Cow;
 
 use crate::{
-    apu::{ExpansionAudio, expansion::ExpansionSamples},
+    apu::{ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot},
+    audio::AudioChannel,
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
@@ -333,6 +334,7 @@ pub struct Mapper19 {
     /// Namco 163 expansion audio generator state, when this board revision
     /// includes the N163 audio block.
     audio: Option<Namco163AudioState>,
+    audio_level: f32,
 
     /// IRQ counter (bit15 is the enable flag; bits 0‑14 are the 15‑bit count),
     /// matching the representation used in Mesen2 and the Nesdev description.
@@ -371,6 +373,7 @@ impl Mapper19 {
             prg_bank_c000: 2,
             chr_banks: Namco163ChrBankRegs::new(),
             audio,
+            audio_level: 0.0,
             irq_counter: 0,
             irq_pending: false,
             mirroring: header.mirroring(),
@@ -525,17 +528,22 @@ impl Mapper19 {
 }
 
 impl ExpansionAudio for Mapper19 {
-    fn clock_audio(&mut self) {
+    fn clock_cpu(&mut self, ctx: ExpansionAudioClockContext, sink: &mut dyn ExpansionAudioSink) {
         if let Some(audio) = &mut self.audio {
             audio.clock();
+            let level = audio.sample();
+            let delta = level - self.audio_level;
+            if delta != 0.0 {
+                sink.push_delta(AudioChannel::Namco163, ctx.cpu_cycle, delta);
+                self.audio_level = level;
+            }
         }
     }
 
-    fn samples(&self) -> ExpansionSamples {
-        let namco163 = self.audio.as_ref().map_or(0.0, |a| a.sample());
-        ExpansionSamples {
-            namco163,
-            ..ExpansionSamples::default()
+    fn snapshot(&self) -> ExpansionAudioSnapshot {
+        ExpansionAudioSnapshot {
+            namco163: self.audio_level,
+            ..ExpansionAudioSnapshot::default()
         }
     }
 }
@@ -569,6 +577,10 @@ impl Mapper for Mapper19 {
         self.chr_banks.fill(0);
         self.irq_counter = 0;
         self.irq_pending = false;
+        if let Some(audio) = self.audio.as_mut() {
+            *audio = Namco163AudioState::new();
+        }
+        self.audio_level = 0.0;
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
@@ -694,10 +706,14 @@ impl Mapper for Mapper19 {
     }
 
     fn name(&self) -> Cow<'static, str> {
-        Cow::Borrowed("Namco 163 (no expansion audio)")
+        if self.audio.is_some() {
+            Cow::Borrowed("Namco 163")
+        } else {
+            Cow::Borrowed("Namco 163 (no expansion audio)")
+        }
     }
 
-    fn as_expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
+    fn expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
         if self.audio.is_some() {
             Some(self)
         } else {
@@ -705,7 +721,7 @@ impl Mapper for Mapper19 {
         }
     }
 
-    fn as_expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
+    fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
         if self.audio.is_some() {
             Some(self)
         } else {

@@ -1,6 +1,10 @@
 use std::{borrow::Cow, fs, path::Path};
 
 use crate::{
+    apu::{
+        ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot,
+        NullExpansionAudioSink,
+    },
     cartridge::header::{Header, Mirroring, NES_HEADER_LEN},
     error::Error,
     reset_kind::ResetKind,
@@ -9,7 +13,8 @@ use crate::{
 use self::mapper::{
     Mapper0, Mapper1, Mapper2, Mapper3, Mapper4, Mapper5, Mapper6, Mapper7, Mapper8, Mapper9,
     Mapper10, Mapper11, Mapper13, Mapper19, Mapper21, Mapper23, Mapper25, Mapper26, Mapper34,
-    Mapper66, Mapper71, Mapper78, Mapper85, Mapper90, Mapper119, Mapper228, NametableTarget,
+    Mapper66, Mapper69, Mapper71, Mapper78, Mapper85, Mapper90, Mapper119, Mapper228,
+    NametableTarget,
 };
 
 pub const TRAINER_SIZE: usize = 512;
@@ -154,11 +159,29 @@ impl Cartridge {
         }
     }
 
-    /// Advance expansion-audio channels by one CPU bus cycle.
-    pub fn clock_expansion_audio(&mut self) {
-        if let Some(expansion) = self.mapper.as_expansion_audio_mut() {
-            expansion.clock_audio();
+    /// Advance mapper-provided expansion audio by one CPU clock tick.
+    pub fn clock_expansion_audio(
+        &mut self,
+        ctx: ExpansionAudioClockContext,
+        sink: &mut dyn ExpansionAudioSink,
+    ) {
+        if let Some(expansion) = self.mapper.expansion_audio_mut() {
+            expansion.clock_cpu(ctx, sink);
         }
+    }
+
+    /// Advance expansion audio without emitting mixer deltas.
+    pub fn clock_expansion_audio_silent(&mut self, ctx: ExpansionAudioClockContext) {
+        let mut null_sink = NullExpansionAudioSink;
+        self.clock_expansion_audio(ctx, &mut null_sink);
+    }
+
+    /// Snapshot current mapper expansion-audio output levels.
+    pub fn expansion_audio_snapshot(&self) -> ExpansionAudioSnapshot {
+        self.mapper
+            .expansion_audio()
+            .map(|exp| exp.snapshot())
+            .unwrap_or_default()
     }
 
     /// Notify mapper of a CPU bus access.
@@ -279,6 +302,7 @@ fn build_cartridge_from_sections<'a>(
         26 => Box::new(Mapper26::new(header, prg_rom, chr_rom, trainer)),
         34 => Box::new(Mapper34::new(header, prg_rom, chr_rom, trainer)),
         66 => Box::new(Mapper66::new(header, prg_rom, chr_rom, trainer)),
+        69 => Box::new(Mapper69::new(header, prg_rom, chr_rom, trainer)),
         71 => Box::new(Mapper71::new(header, prg_rom, chr_rom, trainer)),
         78 => Box::new(Mapper78::new(header, prg_rom, chr_rom, trainer)),
         85 => Box::new(Mapper85::new(header, prg_rom, chr_rom, trainer)),

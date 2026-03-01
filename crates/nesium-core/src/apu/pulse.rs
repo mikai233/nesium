@@ -100,6 +100,7 @@ pub(super) struct Pulse {
     duty: u8,
     duty_pos: u8,
     timer: u16,
+    timer_reload: u16,
     timer_period: u16,
     pub(super) envelope: Envelope,
     pub(super) length: LengthCounter,
@@ -113,6 +114,7 @@ impl Pulse {
             duty: 0,
             duty_pos: 0,
             timer: 0,
+            timer_reload: 0,
             timer_period: 0,
             envelope: Envelope::default(),
             length: LengthCounter::default(),
@@ -136,10 +138,12 @@ impl Pulse {
 
     pub(super) fn write_timer_low(&mut self, value: u8) {
         self.timer_period = (self.timer_period & 0xFF00) | value as u16;
+        self.timer_reload = (self.timer_period << 1) | 1;
     }
 
     pub(super) fn write_timer_high(&mut self, value: u8) {
         self.timer_period = (self.timer_period & 0x00FF) | (((value & 0b0000_0111) as u16) << 8);
+        self.timer_reload = (self.timer_period << 1) | 1;
         self.duty_pos = 0;
         self.envelope.restart();
         self.length.load(value >> 3, self.enabled);
@@ -155,8 +159,10 @@ impl Pulse {
 
     pub(super) fn step_timer(&mut self) {
         if self.timer == 0 {
-            // Pulse sequencer clocks at CPU/(2*(period+1)).
-            self.timer = (self.timer_period << 1) | 1;
+            // Match Mesen2's ApuTimer behavior: before the first timer write,
+            // reload is 0 (ticks every CPU cycle). After low/high writes,
+            // reload is 2*period+1.
+            self.timer = self.timer_reload;
             self.duty_pos = (self.duty_pos + 1) & 0b111;
         } else {
             self.timer = self.timer.saturating_sub(1);

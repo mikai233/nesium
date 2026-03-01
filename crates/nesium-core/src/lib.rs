@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::{
     apu::Apu,
-    audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
+    audio::{CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
     bus::{OpenBus, PendingDma, cpu::CpuBus},
     cartridge::{Cartridge, Provider},
     config::region::Region,
@@ -76,12 +76,16 @@ pub struct Nes {
     audio_sample_rate: u32,
     /// Scratch buffer for a single frame of internal-rate audio from the per-console mixer.
     mixer_frame_buffer: Vec<f32>,
+    /// Absolute APU-cycle timestamp for the next Mesen-style audio mixer flush.
+    next_audio_chunk_clock: i64,
     pub region: Region,
     pub interceptor: EmuInterceptor,
 }
 
 /// Internal mixer output sample rate (matches Mesen2's fixed 96 kHz path).
 const INTERNAL_MIXER_SAMPLE_RATE: u32 = 96_000;
+/// Mesen2 flushes when APU cycle counter reaches `CycleLength - 1` (9999).
+const MIXER_CHUNK_CYCLES: i64 = 9_999;
 
 /// Builder for configuring and constructing a powered-on NES instance.
 ///
@@ -192,6 +196,7 @@ impl NesBuilder {
             sound_bus: SoundMixerBus::new(INTERNAL_MIXER_SAMPLE_RATE, self.sample_rate),
             audio_sample_rate: self.sample_rate,
             mixer_frame_buffer: Vec::new(),
+            next_audio_chunk_clock: MIXER_CHUNK_CYCLES,
             region: self.region,
             interceptor,
         };
@@ -351,23 +356,35 @@ impl Nes {
         // Wire up a temporary CPU bus and run the CPU reset sequence, passing
         // down the reset kind so the CPU can distinguish power-on vs soft
         // reset semantics (register init vs preserving A/X/Y and PS).
-        let mut bus = nes_cpu_bus!(
-            self,
-            mixer: matches!(kind, ResetKind::PowerOn),
-            serial: true
-        );
-        let mut ctx = Context::Some {
-            interceptor: &mut self.interceptor,
+        let frame_after_reset = {
+            let mut bus = nes_cpu_bus!(
+                self,
+                mixer: matches!(kind, ResetKind::PowerOn),
+                serial: true
+            );
+            let mut ctx = Context::Some {
+                interceptor: &mut self.interceptor,
+            };
+            self.cpu.reset(&mut bus, kind, &mut ctx);
+            bus.devices().ppu.frame_count()
         };
-        self.cpu.reset(&mut bus, kind, &mut ctx);
-        self.last_frame = bus.devices().ppu.frame_count();
+        // Match Mesen2 reset sequencing: CPU reset burns initial cycles (8 on
+        // power-on path) and APU calls EndFrame on that partial segment before
+        // normal 9,999-cycle cadence resumes.
+        let apu_clock = self.apu_cycles() as i64;
+        self.mixer
+            .end_frame(apu_clock, &mut self.mixer_frame_buffer);
+        self.mixer_frame_buffer.clear();
+        self.next_audio_chunk_clock = apu_clock + MIXER_CHUNK_CYCLES;
+
+        self.last_frame = frame_after_reset;
         self.dot_counter = 0;
     }
 
     pub fn step_cpu_cycle(&mut self, emit_audio: bool) -> ClockResult {
         let frame_before = self.ppu.frame_count();
         let apu_clocked = true;
-        let (cpu_cycles, expansion_samples, opcode_active) = {
+        let opcode_active = {
             let mut bus = nes_cpu_bus!(self, mixer: emit_audio, serial: true);
             let mut ctx = Context::Some {
                 interceptor: &mut self.interceptor,
@@ -375,34 +392,10 @@ impl Nes {
 
             // Advance one CPU cycle (and implicitly PPU/APU).
             self.cpu.step(&mut bus, &mut ctx);
-            let cycles = bus.cpu_cycles();
-            let expansion = bus
-                .cartridge()
-                .and_then(|cart| cart.mapper().as_expansion_audio())
-                .map(|exp| exp.samples());
-
-            let opcode_active = self.cpu_opcode_active();
-            (cycles, expansion, opcode_active)
+            self.cpu_opcode_active()
         };
 
         self.dot_counter = self.ppu.total_dots();
-
-        // Feed expansion audio into the mixer at the CPU clock edge.
-        if apu_clocked && let Some(samples) = expansion_samples {
-            let clock = cpu_cycles as i64;
-            self.mixer
-                .set_channel_level(AudioChannel::Fds, clock, samples.fds);
-            self.mixer
-                .set_channel_level(AudioChannel::Mmc5, clock, samples.mmc5);
-            self.mixer
-                .set_channel_level(AudioChannel::Namco163, clock, samples.namco163);
-            self.mixer
-                .set_channel_level(AudioChannel::Sunsoft5B, clock, samples.sunsoft5b);
-            self.mixer
-                .set_channel_level(AudioChannel::Vrc6, clock, samples.vrc6);
-            self.mixer
-                .set_channel_level(AudioChannel::Vrc7, clock, samples.vrc7);
-        }
 
         let frame_after = self.ppu.frame_count();
         self.last_frame = frame_after;
@@ -420,14 +413,38 @@ impl Nes {
         let target_frame = self.ppu.frame_count().wrapping_add(1);
         while self.ppu.frame_count() < target_frame {
             let _ = self.step_cpu_cycle(emit_audio);
-        }
-        let end_clock = self.apu_cycles() as i64;
-        self.mixer_frame_buffer.clear();
-        self.mixer
-            .end_frame(end_clock, &mut self.mixer_frame_buffer);
+            let apu_clock = self.apu_cycles() as i64;
+            while apu_clock >= self.next_audio_chunk_clock {
+                self.mixer_frame_buffer.clear();
+                self.mixer
+                    .end_frame(self.next_audio_chunk_clock, &mut self.mixer_frame_buffer);
 
-        self.sound_bus
-            .mix_frame(&[&self.mixer_frame_buffer], &mut samples);
+                if emit_audio {
+                    self.sound_bus
+                        .mix_frame(&[&self.mixer_frame_buffer], &mut samples);
+                }
+
+                self.next_audio_chunk_clock += MIXER_CHUNK_CYCLES;
+            }
+        }
+
+        // Mesen2 calls `NesApu::EndFrame()` at PPU frame boundaries even when the
+        // current APU chunk is shorter than 10,000 cycles. Flush this remainder
+        // and restart the 10,000-cycle cadence from the frame boundary.
+        let apu_clock = self.apu_cycles() as i64;
+        let last_flushed_clock = self.next_audio_chunk_clock - MIXER_CHUNK_CYCLES;
+        if apu_clock > last_flushed_clock {
+            self.mixer_frame_buffer.clear();
+            self.mixer
+                .end_frame(apu_clock, &mut self.mixer_frame_buffer);
+
+            if emit_audio {
+                self.sound_bus
+                    .mix_frame(&[&self.mixer_frame_buffer], &mut samples);
+            }
+
+            self.next_audio_chunk_clock = apu_clock + MIXER_CHUNK_CYCLES;
+        }
 
         self.last_frame = self.ppu.frame_count();
         self.dot_counter = self.ppu.total_dots();
@@ -440,8 +457,7 @@ impl Nes {
         let expansion = self
             .cartridge
             .as_ref()
-            .and_then(|cart| cart.mapper().as_expansion_audio())
-            .map(|exp| exp.samples())
+            .map(|cart| cart.expansion_audio_snapshot())
             .unwrap_or_default();
 
         // Collapse expansion into a single scalar matching the mixer weights.

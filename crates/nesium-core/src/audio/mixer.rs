@@ -198,7 +198,7 @@ impl NesSoundMixer {
             if delta_left != 0.0 {
                 self.blip_left.add_delta(rel_clock, delta_left);
             }
-            if delta_right != 0.0 {
+            if self.has_panning && delta_right != 0.0 {
                 self.blip_right.add_delta(rel_clock, delta_right);
             }
         }
@@ -340,34 +340,51 @@ impl NesSoundMixer {
         }
 
         self.blip_left.end_frame(duration);
-        self.blip_right.end_frame(duration);
+        if self.has_panning {
+            self.blip_right.end_frame(duration);
+        }
         self.last_frame_clock = frame_end_clock;
 
-        let avail_left = self.blip_left.samples_avail();
-        let avail_right = self.blip_right.samples_avail();
-        let avail = avail_left.min(avail_right);
+        let avail = self.blip_left.samples_avail();
         if avail == 0 {
             return;
         }
 
         let mut left_i16 = vec![0i16; avail];
-        let mut right_i16 = vec![0i16; avail];
         let got_left = self.blip_left.read_samples_i16(&mut left_i16[..]);
-        let got_right = self.blip_right.read_samples_i16(&mut right_i16[..]);
-        let got = got_left.min(got_right);
-        let mut stereo = Vec::with_capacity(got * 2);
+        debug_assert_eq!(
+            got_left, avail,
+            "left blip should return all available samples"
+        );
+        let mut stereo = Vec::with_capacity(got_left * 2);
 
-        for i in 0..got {
-            let l_i16 = left_i16[i];
-            let r_i16 = right_i16[i];
+        if self.has_panning {
+            let mut right_i16 = vec![0i16; got_left];
+            let got_right = self.blip_right.read_samples_i16(&mut right_i16[..]);
+            let got = got_left.min(got_right);
 
-            // Keep this stage as close as possible to Mesen2's
-            // `NesSoundMixer::PlayAudioBuffer` path: no extra smoothing
-            // or soft-clip in this layer.
-            let l = l_i16 as f32 / 32_768.0;
-            let r = r_i16 as f32 / 32_768.0;
-            stereo.push(l * self.master_gain);
-            stereo.push(r * self.master_gain);
+            for i in 0..got {
+                let l_i16 = left_i16[i];
+                let r_i16 = right_i16[i];
+
+                // Keep this stage as close as possible to Mesen2's
+                // `NesSoundMixer::PlayAudioBuffer` path: no extra smoothing
+                // or soft-clip in this layer.
+                let l = l_i16 as f32 / 32_768.0;
+                let r = r_i16 as f32 / 32_768.0;
+                stereo.push(l * self.master_gain);
+                stereo.push(r * self.master_gain);
+            }
+        } else {
+            for i in 0..got_left {
+                let l_i16 = left_i16[i];
+
+                // Match Mesen2's no-panning path: copy left to right.
+                let l = l_i16 as f32 / 32_768.0;
+                let s = l * self.master_gain;
+                stereo.push(s);
+                stereo.push(s);
+            }
         }
 
         self.apply_stereo_post_filters(&mut stereo);

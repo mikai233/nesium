@@ -1,5 +1,5 @@
 use crate::{
-    apu::Apu,
+    apu::{Apu, ExpansionAudioClockContext},
     audio::NesSoundMixer,
     bus::{BusDevices, BusDevicesMut, DmcDmaEvent, OpenBus, PendingDma},
     cartridge::{Cartridge, CpuBusAccessKind},
@@ -87,6 +87,23 @@ impl<'a> CpuBus<'a> {
         *self.master_clock = self.master_clock.wrapping_add(delta as u64);
         let ppu_target = self.master_clock.saturating_sub(self.ppu_offset as u64);
         Ppu::run_until(self, ppu_target, cpu, ctx);
+    }
+
+    /// Advance mapper expansion audio by one CPU clock tick.
+    #[inline]
+    pub(crate) fn clock_mapper_expansion_audio(&mut self) {
+        let ctx = ExpansionAudioClockContext {
+            cpu_cycle: *self.cycles,
+            master_clock: *self.master_clock,
+        };
+
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            if let Some(mixer) = self.mixer.as_deref_mut() {
+                cart.clock_expansion_audio(ctx, mixer);
+            } else {
+                cart.clock_expansion_audio_silent(ctx);
+            }
+        }
     }
 
     /// PPU-facing mapper read for pattern table space.

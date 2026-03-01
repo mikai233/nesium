@@ -54,6 +54,8 @@ const CHR_BANK_SIZE_1K: usize = 1024;
 const MMC3_A12_LOW_MIN_CPU_CYCLES: u64 = 3;
 /// One CPU cycle equals 12 master clocks (NTSC timing model in this core).
 const MASTER_CLOCKS_PER_CPU_CYCLE: u64 = 12;
+/// Mesen2-compatible MMC3 power-on register defaults (R0..R7).
+const MMC3_POWER_ON_BANK_REGS: [u8; 8] = [0, 2, 4, 5, 6, 7, 0, 1];
 
 /// CPU `$8000-$9FFF`: first 8 KiB PRG-ROM window and MMC3 bank select/data registers.
 const MMC3_PRG_SLOT0_START: u16 = 0x8000;
@@ -682,14 +684,14 @@ impl Mapper for Mapper4 {
     }
 
     fn reset(&mut self, _kind: ResetKind) {
-        // Power-on defaults chosen to match common emulator behaviour:
-        // - PRG mode = 1 (swap at $C000) so that the last bank appears at
-        //   $E000-$FFFF and the second last at $8000-$9FFF.
-        // - CHR A12 inversion disabled.
-        // - PRG-RAM enabled by default for iNES mapper-4 compatibility.
-        self.bank_select = 0x40;
-        self.bank_regs.fill(0);
-        self.prg_ram_enable = true;
+        // Match Mesen2's deterministic (non-randomized) MMC3 power-on state.
+        // This affects pre-init startup code paths that execute before the
+        // game programs $8000/$8001.
+        self.bank_select = 0x00;
+        self.bank_regs
+            .as_mut_slice()
+            .copy_from_slice(&MMC3_POWER_ON_BANK_REGS);
+        self.prg_ram_enable = false;
         self.prg_ram_write_protect = false;
         self.irq_latch = 0;
         self.irq_counter = 0;

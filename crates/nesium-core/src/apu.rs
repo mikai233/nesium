@@ -31,7 +31,10 @@ use crate::{
     reset_kind::ResetKind,
 };
 
-pub use expansion::ExpansionAudio;
+pub use expansion::{
+    ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot,
+    NullExpansionAudioSink,
+};
 pub use frame_counter::FrameCounterMode;
 
 use dmc::Dmc;
@@ -384,8 +387,9 @@ impl Apu {
     }
 
     /// Completes a pending DMC DMA fetch with the provided PRG byte.
-    pub fn finish_dma_fetch(&mut self, byte: u8) {
-        self.dmc.finish_dma_fetch(byte, &mut self.status);
+    pub fn finish_dma_fetch(&mut self, byte: u8, pending_dma: &mut crate::bus::PendingDma) {
+        self.dmc
+            .finish_dma_fetch(byte, &mut self.status, pending_dma);
     }
 
     /// Last DMC sample fetch address (used for DMA stall bus access).
