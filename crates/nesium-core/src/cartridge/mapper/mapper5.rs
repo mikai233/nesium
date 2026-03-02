@@ -818,22 +818,8 @@ impl Mapper for Mapper5 {
                     return;
                 }
 
-                self.in_frame = true;
-                self.ppu_idle_counter = 3;
-
-                if let Some(fetch) = ctx.render_fetch {
-                    self.sprite_fetch_window = fetch.target == PpuRenderFetchTarget::Sprite;
-                    if fetch.target == PpuRenderFetchTarget::Background
-                        && fetch.fetch == PpuRenderFetchType::Nametable
-                        && (0..=239).contains(&ctx.ppu_scanline)
-                        && self.irq_scanline != 0
-                        && ctx.ppu_scanline as u8 == self.irq_scanline
-                    {
-                        self.irq_pending.set(true);
-                    }
-                }
-
-                if Self::is_nametable_tile_fetch(addr) {
+                let is_nt_fetch = Self::is_nametable_tile_fetch(addr);
+                if is_nt_fetch {
                     self.split_tile_number = self.split_tile_number.wrapping_add(1);
                     if !self.in_frame && self.need_in_frame {
                         self.need_in_frame = false;
@@ -841,7 +827,12 @@ impl Mapper for Mapper5 {
                     }
                 }
 
+                if let Some(fetch) = ctx.render_fetch {
+                    self.sprite_fetch_window = fetch.target == PpuRenderFetchTarget::Sprite;
+                }
+
                 self.detect_scanline_start(addr);
+                self.ppu_idle_counter = 3;
                 self.last_ppu_read_addr = addr;
             }
         }

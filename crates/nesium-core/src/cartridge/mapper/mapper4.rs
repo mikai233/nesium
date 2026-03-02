@@ -30,7 +30,8 @@ use crate::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring, RomFormat},
         mapper::{
-            ChrStorage, MapperEvent, MapperHookMask, PpuVramAccessContext, PpuVramAccessKind,
+            ChrStorage, MapperEvent, MapperHookMask, PpuRenderFetchOrigin, PpuRenderFetchTarget,
+            PpuRenderFetchType, PpuVramAccessContext, PpuVramAccessKind,
             allocate_prg_ram_with_trainer, select_chr_storage,
         },
     },
@@ -663,6 +664,20 @@ impl Mapper4 {
                 | PpuVramAccessKind::CpuRead
                 | PpuVramAccessKind::CpuWrite
         ) {
+            return;
+        }
+
+        // End-of-scanline dummy NT fetches should not clock MMC3 IRQ in this core.
+        // Keep the filter semantic (fetch-origin based) instead of hard-coding dots.
+        if ctx.kind == PpuVramAccessKind::RenderingFetch
+            && matches!(
+                ctx.render_fetch,
+                Some(info)
+                    if info.target == PpuRenderFetchTarget::Background
+                        && info.fetch == PpuRenderFetchType::Nametable
+                        && info.origin == PpuRenderFetchOrigin::EndOfScanlineDummy
+            )
+        {
             return;
         }
 
