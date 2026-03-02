@@ -5,11 +5,11 @@ use crate::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{
-            ChrStorage, MapperEvent, MapperHookMask, NametableTarget, PpuVramAccessContext,
-            PpuVramAccessKind, allocate_prg_ram_with_trainer, select_chr_storage,
+            ChrStorage, CpuBusAccessKind, MapperEvent, MapperHookMask, NametableTarget,
+            PpuRenderFetchTarget, PpuRenderFetchType, PpuVramAccessContext, PpuVramAccessKind,
+            allocate_prg_ram_with_trainer, select_chr_storage,
         },
     },
-    mem_block::ByteBlock,
     reset_kind::ResetKind,
 };
 
@@ -69,9 +69,10 @@ const MMC5_REG_PRG_BANK_A000: u16 = 0x5115;
 const MMC5_REG_PRG_BANK_C000: u16 = 0x5116;
 const MMC5_REG_PRG_BANK_E000: u16 = 0x5117;
 
-/// MMC5 CHR banking registers `$5120-$5127` and upper CHR bank bits `$5130`.
+/// MMC5 CHR banking registers `$5120-$512B` and upper CHR bank bits `$5130`.
 const MMC5_REG_CHR_BANK_FIRST: u16 = 0x5120;
-const MMC5_REG_CHR_BANK_LAST: u16 = 0x5127;
+const MMC5_REG_CHR_BANK_LAST: u16 = 0x512B;
+const MMC5_REG_CHR_BANK_A_LAST: u16 = 0x5127;
 const MMC5_REG_CHR_UPPER_BITS: u16 = 0x5130;
 
 /// MMC5 split-screen / IRQ / multiplier registers in `$5200-$5206`.
@@ -197,12 +198,11 @@ pub struct Mapper5 {
     prg_bank_c000: u8,      // $5116
     prg_bank_e000: u8,      // $5117
 
-    // CHR banking registers ($5120-$5127). We ignore the separate BG banks
-    // ($5128-$512B) for now and treat these as the unified set.
-    // TODO: Consume `ctx.render_fetch` (BG/Sprite + fetch phase) to split
-    // background/sprite CHR banking exactly like Mesen2.
-    chr_banks: Mapper5ChrBanks,
+    // CHR banking registers ($5120-$512B).
+    chr_banks: [u16; 12],
     chr_upper_bits: u8, // $5130 (upper CHR bank bits)
+    last_chr_reg: u16,
+    ppu_ctrl: u8,
 
     // IRQ / scanline registers.
     irq_scanline: u8, // $5203
@@ -215,26 +215,28 @@ pub struct Mapper5 {
     split_control: u8,  // $5200
     split_scroll: u8,   // $5201
     split_chr_bank: u8, // $5202
+    split_tile: u16,
+    sprite_fetch_window: bool,
 
     // Unsigned 8x8->16 multiplier ($5205/$5206).
     mul_a: u8,
     mul_b: u8,
     mul_result: u16,
 
-    // Scanline IRQ / frame tracking state (approximate).
-    current_scanline: u8,
-    last_scanline_cycle: u64,
+    // Scanline IRQ / frame tracking state.
+    scanline_counter: u8,
     in_frame: bool,
-    last_nt_addr: u16,
-    nt_addr_repeat_count: u8,
-    expect_scanline_on_next_fetch: bool,
+    need_in_frame: bool,
+    ppu_idle_counter: u8,
+    last_cpu_cycle: u64,
+    last_ppu_read_addr: u16,
+    nt_read_counter: u8,
+    split_tile_number: u8,
     // ExGrafix state for ExRAM mode 1 read override sequencing.
     ex_attr_last_nametable_fetch: u16,
     ex_attr_fetch_remaining: u8,
     ex_attr_selected_chr_bank: u16,
 }
-
-type Mapper5ChrBanks = ByteBlock<8>;
 
 impl Mapper5 {
     pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
@@ -266,24 +268,30 @@ impl Mapper5 {
             prg_bank_a000: 0,
             prg_bank_c000: 0,
             prg_bank_e000: 0,
-            chr_banks: Mapper5ChrBanks::new(),
+            chr_banks: [0; 12],
             chr_upper_bits: 0,
+            last_chr_reg: 0,
+            ppu_ctrl: 0,
             irq_scanline: 0,
             irq_enabled: false,
             irq_pending: Cell::new(false),
             split_control: 0,
             split_scroll: 0,
             split_chr_bank: 0,
+            split_tile: 0,
+            sprite_fetch_window: false,
             mul_a: 0xFF,
             mul_b: 0xFF,
             // Power-on default $FE01 per MMC5A docs.
             mul_result: 0xFF * 0xFF,
-            current_scanline: 0,
-            last_scanline_cycle: 0,
+            scanline_counter: 0,
             in_frame: false,
-            last_nt_addr: 0,
-            nt_addr_repeat_count: 0,
-            expect_scanline_on_next_fetch: false,
+            need_in_frame: false,
+            ppu_idle_counter: 0,
+            last_cpu_cycle: 0,
+            last_ppu_read_addr: 0,
+            nt_read_counter: 0,
+            split_tile_number: 0,
             ex_attr_last_nametable_fetch: 0,
             ex_attr_fetch_remaining: 0,
             ex_attr_selected_chr_bank: 0,
@@ -506,7 +514,8 @@ impl Mapper5 {
             Some(Mmc5CpuRegister::PrgBankE000) => self.prg_bank_e000 = data,
             Some(Mmc5CpuRegister::ChrBank) => {
                 let idx = (addr - MMC5_REG_CHR_BANK_FIRST) as usize;
-                self.chr_banks[idx] = data;
+                self.chr_banks[idx] = ((self.chr_upper_bits as u16) << 8) | (data as u16);
+                self.last_chr_reg = addr;
             }
             Some(Mmc5CpuRegister::ChrUpperBits) => self.chr_upper_bits = data & 0x03,
             Some(Mmc5CpuRegister::SplitControl) => {
@@ -537,9 +546,6 @@ impl Mapper5 {
             Some(Mmc5CpuRegister::IrqStatus) => {
                 // Writing with bit7 set enables IRQ, clearing it disables.
                 self.irq_enabled = data & 0x80 != 0;
-                if !self.irq_enabled {
-                    self.irq_pending.set(false);
-                }
             }
             Some(Mmc5CpuRegister::MultiplierA) => {
                 // Unsigned 8-bit multiplicand.
@@ -554,16 +560,19 @@ impl Mapper5 {
             Some(Mmc5CpuRegister::ExRamCpu) => {
                 // Internal ExRAM writes. $5104 controls CPU accessibility:
                 // modes 0/1 are write-only, mode 2 is read/write, mode 3 is
-                // read-only. We only gate writes in mode 3 here; timing
-                // restrictions while the PPU is rendering are not modelled.
+                // read-only. In modes 0/1, writes outside rendering store 0.
                 let idx = (addr - MMC5_EXRAM_CPU_START) as usize;
                 if idx < EXRAM_SIZE {
-                    if (self.exram_mode & 0x03) != 0b11 {
-                        self.exram[idx] = data;
-                    } else {
-                        // TODO: In ExRAM mode 3, writes during rendering may
-                        // have more complex behaviour (open bus). We simply
-                        // ignore them for now.
+                    match self.exram_mode & 0x03 {
+                        0 | 1 => {
+                            self.exram[idx] = if self.in_frame { data } else { 0 };
+                        }
+                        2 => {
+                            self.exram[idx] = data;
+                        }
+                        _ => {
+                            // Mode 3 is read-only.
+                        }
                     }
                 }
             }
@@ -624,41 +633,36 @@ impl Mapper5 {
     }
 
     fn chr_bank_for_addr(&self, addr: u16) -> (usize, usize) {
-        // Decode which CHR bank register applies to this address based on
-        // CHR mode ($5101) and the Nesdev mapping table.
+        // Decode CHR register + bank size based on CHR mode and CHR A/B set.
         let mode = self.chr_mode & 0x03;
+        let chr_a = self.chr_a_selected();
         let (reg_index, bank_size) = match mode {
-            0 => {
-                // 8 KiB page: $5127
-                (7usize, 0x2000usize)
-            }
+            0 => (if chr_a { 7usize } else { 11usize }, 0x2000usize),
             1 => {
-                // 4 KiB pages: $5123 (0x0000-0x0FFF), $5127 (0x1000-0x1FFF)
                 if addr < 0x1000 {
-                    (3usize, 0x1000usize)
+                    (if chr_a { 3usize } else { 11usize }, 0x1000usize)
                 } else {
-                    (7usize, 0x1000usize)
+                    (if chr_a { 7usize } else { 11usize }, 0x1000usize)
                 }
             }
-            2 => {
-                // 2 KiB pages: $5121,$5123,$5125,$5127
-                match addr {
-                    0x0000..=0x07FF => (1usize, 0x0800usize),
-                    0x0800..=0x0FFF => (3usize, 0x0800usize),
-                    0x1000..=0x17FF => (5usize, 0x0800usize),
-                    _ => (7usize, 0x0800usize), // 0x1800-0x1FFF
-                }
-            }
+            2 => match addr {
+                0x0000..=0x07FF => (if chr_a { 1usize } else { 9usize }, 0x0800usize),
+                0x0800..=0x0FFF => (if chr_a { 3usize } else { 11usize }, 0x0800usize),
+                0x1000..=0x17FF => (if chr_a { 5usize } else { 9usize }, 0x0800usize),
+                _ => (if chr_a { 7usize } else { 11usize }, 0x0800usize),
+            },
             _ => {
-                // Mode 3: eight 1 KiB pages via $5120-$5127.
                 let index = ((addr as usize) >> 10) & 0x07;
-                (index, 0x0400usize)
+                let reg_index = if chr_a {
+                    index
+                } else {
+                    [8usize, 9, 10, 11, 8, 9, 10, 11][index]
+                };
+                (reg_index, 0x0400usize)
             }
         };
 
-        let bank_val = self.chr_banks[reg_index];
-        let upper = (self.chr_upper_bits & 0x03) as usize;
-        let bank_index = (upper << 8) | bank_val as usize;
+        let bank_index = self.chr_banks[reg_index] as usize;
         (bank_index, bank_size)
     }
 
@@ -695,81 +699,151 @@ impl Mapper5 {
         let offset = (addr as usize) & 0x0FFF;
         self.chr.read_indexed(base, offset)
     }
+
+    fn tick_cpu_idle_counter(&mut self, cpu_cycle: u64) {
+        if self.last_cpu_cycle == 0 {
+            self.last_cpu_cycle = cpu_cycle;
+            return;
+        }
+
+        let elapsed = cpu_cycle.saturating_sub(self.last_cpu_cycle);
+        self.last_cpu_cycle = cpu_cycle;
+        if elapsed == 0 || self.ppu_idle_counter == 0 {
+            return;
+        }
+
+        let dec = elapsed.min(self.ppu_idle_counter as u64) as u8;
+        self.ppu_idle_counter = self.ppu_idle_counter.saturating_sub(dec);
+        if self.ppu_idle_counter == 0 {
+            self.in_frame = false;
+        }
+    }
+
+    #[inline]
+    fn is_nametable_tile_fetch(addr: u16) -> bool {
+        (0x2000..=0x2FFF).contains(&addr) && (addr & 0x03FF) < 0x03C0
+    }
+
+    fn detect_scanline_start(&mut self, addr: u16) {
+        if self.nt_read_counter >= 2 {
+            // After 3 identical NT reads, the following attribute fetch marks a scanline step.
+            if !self.in_frame && !self.need_in_frame {
+                self.need_in_frame = true;
+                self.scanline_counter = 0;
+            } else {
+                self.scanline_counter = self.scanline_counter.wrapping_add(1);
+                if self.irq_scanline != 0 && self.scanline_counter == self.irq_scanline {
+                    self.irq_pending.set(true);
+                }
+            }
+        } else if (0x2000..=0x2FFF).contains(&addr) && self.last_ppu_read_addr == addr {
+            self.nt_read_counter = self.nt_read_counter.saturating_add(1);
+            if self.nt_read_counter >= 2 {
+                self.split_tile_number = 0;
+            }
+        }
+
+        if self.last_ppu_read_addr != addr {
+            self.nt_read_counter = 0;
+        }
+    }
+
+    fn chr_a_selected(&self) -> bool {
+        let large_sprites = (self.ppu_ctrl & 0x20) != 0;
+        if !large_sprites {
+            return true;
+        }
+
+        if self.sprite_fetch_window {
+            return true;
+        }
+
+        !self.in_frame && self.last_chr_reg <= MMC5_REG_CHR_BANK_A_LAST
+    }
 }
 
 impl Mapper for Mapper5 {
     fn hook_mask(&self) -> MapperHookMask {
-        MapperHookMask::PPU_BUS_ADDRESS | MapperHookMask::PPU_READ_OVERRIDE
+        MapperHookMask::CPU_BUS_ACCESS
+            | MapperHookMask::PPU_BUS_ADDRESS
+            | MapperHookMask::PPU_READ_OVERRIDE
     }
 
     fn on_mapper_event(&mut self, event: MapperEvent) {
-        if let MapperEvent::PpuBusAddress { addr, ctx } = event {
-            // Only PPU background/sprite rendering fetches are relevant for MMC5
-            // scanline IRQ and split/ExGrafix behaviour. CPU-driven $2007 accesses
-            // are ignored here.
-            if ctx.kind != PpuVramAccessKind::RenderingFetch {
-                return;
-            }
+        match event {
+            MapperEvent::CpuBusAccess {
+                kind,
+                addr,
+                value,
+                cpu_cycle,
+                ..
+            } => {
+                self.tick_cpu_idle_counter(cpu_cycle);
 
-            // Mark that we are inside a rendered frame for $5204 "in frame" bit.
-            // TODO: Clear in_frame precisely at vblank start when the PPU exposes
-            // that information; for now this stays set once rendering begins.
-            self.in_frame = true;
+                let is_write = matches!(
+                    kind,
+                    CpuBusAccessKind::Write
+                        | CpuBusAccessKind::DmaWrite
+                        | CpuBusAccessKind::DummyWrite
+                );
+                let is_read = matches!(
+                    kind,
+                    CpuBusAccessKind::Read
+                        | CpuBusAccessKind::DmaRead
+                        | CpuBusAccessKind::ExecOpcode
+                        | CpuBusAccessKind::ExecOperand
+                        | CpuBusAccessKind::DummyRead
+                );
 
-            // Nesdev: MMC5 detects scanlines by watching three consecutive reads
-            // from the same $2xxx nametable address; the following read
-            // (regardless of address) is treated as the scanline boundary.
-            // We approximate that here using the VRAM address and access kind.
-            if !(0x2000..=0x2FFF).contains(&addr) {
-                // Leaving nametable space resets the repeat tracking.
-                self.nt_addr_repeat_count = 0;
-                return;
-            }
-
-            if self.last_nt_addr == addr {
-                self.nt_addr_repeat_count = self.nt_addr_repeat_count.saturating_add(1);
-            } else {
-                self.last_nt_addr = addr;
-                self.nt_addr_repeat_count = 1;
-            }
-
-            if self.nt_addr_repeat_count == 3 {
-                // The next rendering fetch is considered the scanline boundary.
-                self.expect_scanline_on_next_fetch = true;
-                self.nt_addr_repeat_count = 0;
-                return;
-            }
-
-            if self.expect_scanline_on_next_fetch {
-                self.expect_scanline_on_next_fetch = false;
-
-                // Approximate frame boundaries by looking for a large gap in
-                // PPU cycles between successive detected scanlines. A real
-                // implementation should use explicit PPU vblank/frame signals.
-                const SCANLINE_GAP_THRESHOLD: u64 = 2000;
-                if self.last_scanline_cycle == 0
-                    || ctx.ppu_cycle.saturating_sub(self.last_scanline_cycle)
-                        > SCANLINE_GAP_THRESHOLD
-                {
-                    // Start of a new frame.
-                    self.current_scanline = 0;
-                } else {
-                    self.current_scanline = self.current_scanline.wrapping_add(1);
+                if is_write && (0x2000..=0x3FFF).contains(&addr) && (addr & 0x2007) == 0x2000 {
+                    self.ppu_ctrl = value;
+                    if (self.ppu_ctrl & 0x20) == 0 {
+                        self.last_chr_reg = 0;
+                    }
                 }
-                self.last_scanline_cycle = ctx.ppu_cycle;
 
-                // Generate scanline IRQ when the current scanline matches $5203.
-                // Per docs, a compare value of $00 suppresses new IRQs.
-                let target = self.irq_scanline;
-                if self.irq_enabled && target != 0 && self.current_scanline == target {
-                    self.irq_pending.set(true);
+                if is_read && (addr == 0xFFFA || addr == 0xFFFB) {
+                    self.in_frame = false;
+                    self.ppu_idle_counter = 0;
+                    self.last_cpu_cycle = 0;
+                    self.last_ppu_read_addr = 0;
+                    self.nt_read_counter = 0;
+                    self.scanline_counter = 0;
+                    self.sprite_fetch_window = false;
+                    self.irq_pending.set(false);
                 }
             }
+            MapperEvent::PpuBusAddress { addr, ctx } => {
+                if ctx.kind != PpuVramAccessKind::RenderingFetch {
+                    return;
+                }
 
-            // TODO: Implement MMC5 split-screen ($5200-$5202) fully. The
-            // current read-override path covers ExGrafix mode-1 palette/CHR
-            // substitution but does not yet model split region tile-space
-            // remapping.
+                self.in_frame = true;
+                self.ppu_idle_counter = 3;
+
+                if let Some(fetch) = ctx.render_fetch {
+                    self.sprite_fetch_window = fetch.target == PpuRenderFetchTarget::Sprite;
+                    if fetch.target == PpuRenderFetchTarget::Background
+                        && fetch.fetch == PpuRenderFetchType::Nametable
+                        && (0..=239).contains(&ctx.ppu_scanline)
+                        && self.irq_scanline != 0
+                        && ctx.ppu_scanline as u8 == self.irq_scanline
+                    {
+                        self.irq_pending.set(true);
+                    }
+                }
+
+                if Self::is_nametable_tile_fetch(addr) {
+                    self.split_tile_number = self.split_tile_number.wrapping_add(1);
+                    if !self.in_frame && self.need_in_frame {
+                        self.need_in_frame = false;
+                        self.in_frame = true;
+                    }
+                }
+
+                self.detect_scanline_start(addr);
+                self.last_ppu_read_addr = addr;
+            }
         }
     }
 
@@ -795,23 +869,27 @@ impl Mapper for Mapper5 {
         self.prg_bank_e000 = (self.prg_bank_count.saturating_sub(1)) as u8;
         self.chr_banks.fill(0);
         self.chr_upper_bits = 0;
+        self.last_chr_reg = 0;
+        self.ppu_ctrl = 0;
         self.irq_scanline = 0;
         self.irq_enabled = false;
         self.irq_pending.set(false);
         self.split_control = 0;
         self.split_scroll = 0;
         self.split_chr_bank = 0;
+        self.split_tile = 0;
+        self.sprite_fetch_window = false;
         self.mul_a = 0xFF;
         self.mul_b = 0xFF;
         self.mul_result = 0xFF * 0xFF; // $FE01
-        self.current_scanline = 0;
-        self.last_scanline_cycle = 0;
-        // TODO: in_frame should be cleared precisely during vertical blank.
-        // This requires an explicit vblank/frame signal from the PPU core.
+        self.scanline_counter = 0;
         self.in_frame = false;
-        self.last_nt_addr = 0;
-        self.nt_addr_repeat_count = 0;
-        self.expect_scanline_on_next_fetch = false;
+        self.need_in_frame = false;
+        self.ppu_idle_counter = 0;
+        self.last_cpu_cycle = 0;
+        self.last_ppu_read_addr = 0;
+        self.nt_read_counter = 0;
+        self.split_tile_number = 0;
         self.ex_attr_last_nametable_fetch = 0;
         self.ex_attr_fetch_remaining = 0;
         self.ex_attr_selected_chr_bank = 0;
@@ -853,9 +931,8 @@ impl Mapper for Mapper5 {
                 let mode = self.exram_mode & 0x03;
                 match mode {
                     0 | 1 => {
-                        // Modes 0/1: CPU writes are allowed but reads behave
-                        // like open bus. We approximate open bus as 0 here.
-                        Some(0)
+                        // Modes 0/1: CPU reads are open bus.
+                        None
                     }
                     _ => {
                         // Modes 2/3: CPU can read ExRAM.
@@ -891,10 +968,59 @@ impl Mapper for Mapper5 {
             return value;
         }
 
+        // Vertical split mode ($5200-$5202): override background fetches in the
+        // split region using ExRAM nametable/attribute data and $5202 CHR bank.
+        if (self.exram_mode & 0x03) <= 0b01 && self.in_frame && (self.split_control & 0x80) != 0 {
+            if let Some(fetch) = ctx.render_fetch {
+                if fetch.target == PpuRenderFetchTarget::Background {
+                    let tile_x = fetch.tile_x.unwrap_or(0);
+                    let delimiter = self.split_control & 0x1F;
+                    let right_side = (self.split_control & 0x40) != 0;
+                    let in_region = if right_side {
+                        tile_x >= delimiter
+                    } else {
+                        tile_x < delimiter
+                    };
+
+                    if in_region {
+                        let scanline =
+                            ((ctx.ppu_scanline.max(0) as u8).wrapping_add(self.split_scroll)) % 240;
+                        match fetch.fetch {
+                            PpuRenderFetchType::Nametable => {
+                                let column = tile_x & 0x1F;
+                                self.split_tile =
+                                    (((scanline & 0xF8) as u16) << 2) | (column as u16);
+                                let idx = self.exram_index_for_nametable(self.split_tile);
+                                return self.exram[idx];
+                            }
+                            PpuRenderFetchType::Attribute => {
+                                let shift =
+                                    ((self.split_tile >> 4) & 0x04) | (self.split_tile & 0x02);
+                                let attr_addr = 0x03C0
+                                    | ((self.split_tile & 0x0380) >> 4)
+                                    | ((self.split_tile & 0x001F) >> 2);
+                                let attr = self.exram[self.exram_index_for_nametable(attr_addr)];
+                                let palette = (attr >> shift) & 0x03;
+                                return palette * 0x55;
+                            }
+                            PpuRenderFetchType::PatternLow | PpuRenderFetchType::PatternHigh => {
+                                let row_addr = (((addr & !0x0007) | ((scanline as u16) & 0x0007))
+                                    & 0x0FFF) as u16;
+                                return self
+                                    .read_chr_from_4k_bank(self.split_chr_bank as u16, row_addr);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
         // ExRAM mode 1 (ExGrafix): nametable fetches are not modified, but
         // the following attribute + tile low/high fetches are overridden
         // using the matching ExRAM entry.
-        if (self.exram_mode & 0x03) != 0b01 || !self.in_frame {
+        let ex_attr_active_window = !self.sprite_fetch_window;
+        if (self.exram_mode & 0x03) != 0b01 || !self.in_frame || !ex_attr_active_window {
             self.ex_attr_fetch_remaining = 0;
             return value;
         }
@@ -916,7 +1042,8 @@ impl Mapper for Mapper5 {
                 let ex_idx = self.exram_index_for_nametable(self.ex_attr_last_nametable_fetch);
                 let ex = self.exram[ex_idx];
                 // Low 6 bits select a 4 KiB CHR bank, top two come from $5130.
-                self.ex_attr_selected_chr_bank = ((self.chr_upper_bits as u16) << 6) | ex as u16;
+                self.ex_attr_selected_chr_bank =
+                    ((self.chr_upper_bits as u16) << 6) | ((ex as u16) & 0x3F);
                 let palette = (ex >> 6) & 0x03;
                 palette * 0x55
             }
@@ -926,12 +1053,13 @@ impl Mapper for Mapper5 {
     }
 
     fn map_nametable(&self, addr: u16) -> NametableTarget {
-        // Derive nametable index (0-3) from PPU address.
-        if !(0x2000..0x3000).contains(&addr) {
+        // Mirror $3000-$3EFF to $2000-$2EFF before MMC5 nametable mapping.
+        if !(0x2000..=0x3EFF).contains(&addr) {
             return NametableTarget::Ciram(addr & 0x07FF);
         }
-        let nt = ((addr - 0x2000) / 0x0400) as u8; // 0..3
-        let offset = (addr - 0x2000) & 0x03FF;
+        let mirrored = if addr >= 0x3000 { addr - 0x1000 } else { addr };
+        let nt = ((mirrored - 0x2000) / 0x0400) as u8; // 0..3
+        let offset = (mirrored - 0x2000) & 0x03FF;
         let sel_bits = (self.nt_mapping >> (nt * 2)) & 0x03;
         match sel_bits {
             0 => {
@@ -993,7 +1121,7 @@ impl Mapper for Mapper5 {
     }
 
     fn irq_pending(&self) -> bool {
-        self.irq_pending.get()
+        self.irq_pending.get() && self.irq_enabled
     }
 
     fn prg_rom(&self) -> Option<&[u8]> {
