@@ -617,12 +617,34 @@ fn mmc3_test_2_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc5test_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    {
-        let rom = "mmc5test/mmc5test.nes";
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // This ROM does not converge to the standard blargg $6000 pass/fail protocol
+    // in either Mesen2 or NESium in unattended runs. Validate it by comparing
+    // distributed Mesen2 RGB24 frame hashes instead.
+    const ROM: &str = "mmc5test/mmc5test.nes";
+    const FRAMES: &[usize] = &[6, 30, 60, 120, 180, 240, 300];
+    const EXPECTED: &[&str] = &[
+        "GafGduOKC1HMF5E+9NdD0fy6WsM=",
+        "5FQDkEPQpySFdPFgWyPIEa8PXtc=",
+        "55jJ2me9zknsFRvxAHTP7K1VRGI=",
+        "GafGduOKC1HMF5E+9NdD0fy6WsM=",
+        "JFRFEGfhQvsgZDQHgopUmzNb7ac=",
+        "GafGduOKC1HMF5E+9NdD0fy6WsM=",
+        "55jJ2me9zknsFRvxAHTP7K1VRGI=",
+    ];
+
+    let hashes = run_rom_rgb24_sha1_for_frames(ROM, FRAMES)?;
+    for ((frame, actual_hash), expected_hash) in hashes.into_iter().zip(EXPECTED.iter()) {
+        if actual_hash != *expected_hash {
+            bail!(
+                "[{}] mesen_rgb24_sha1 mismatch at frame {}: expected {}, got {}",
+                ROM,
+                frame,
+                expected_hash,
+                actual_hash
+            );
+        }
     }
     Ok(())
 }

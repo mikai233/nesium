@@ -127,6 +127,12 @@ impl PpuVramAccessKind {
 pub enum PpuVramAccessSource {
     /// PPU rendering pipeline fetches (background/sprite).
     RenderingFetch,
+    /// PPU updates the external address bus at visible-scanline cycle 0.
+    PpuScanlineStart,
+    /// PPU updates the external address bus when entering vblank.
+    PpuEnterVblank,
+    /// PPU updates the external address bus when rendering is disabled mid-frame.
+    PpuRenderingDisabled,
     /// CPU write to `$2006` (VRAM address latch update).
     CpuAddrWrite,
     /// CPU read from `$2007`.
@@ -147,6 +153,20 @@ pub enum PpuRenderFetchTarget {
     Other,
 }
 
+/// Semantic origin of a rendering fetch on the PPU bus.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum PpuRenderFetchOrigin {
+    /// Standard background tile pipeline fetches (dots 1..=336).
+    BackgroundPipeline,
+    /// Sprite pattern fetches during dots 257..=320.
+    SpritePattern,
+    /// Sprite-window garbage NT/AT fetches (still mapper-visible on hardware).
+    SpriteGarbage,
+    /// End-of-scanline dummy NT fetches (dots 337/339).
+    EndOfScanlineDummy,
+    Other,
+}
+
 /// Rendering fetch phase for PPU memory reads.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum PpuRenderFetchType {
@@ -162,6 +182,7 @@ pub enum PpuRenderFetchType {
 pub struct PpuRenderFetchInfo {
     pub target: PpuRenderFetchTarget,
     pub fetch: PpuRenderFetchType,
+    pub origin: PpuRenderFetchOrigin,
     pub tile_x: Option<u8>,
     pub tile_y: Option<u8>,
     pub sprite_index: Option<u8>,
