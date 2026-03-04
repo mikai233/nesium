@@ -608,6 +608,16 @@ impl Cpu {
                 bus.dma_read(addr, self, ctx);
             }
 
+            // APU/DMC can queue an abort/request during the halt cycle itself.
+            // Drain it immediately so post-halt handling can match Mesen's
+            // `_abortDmcDma` early-return path.
+            while let Some(evt) = bus.take_dmc_dma_event() {
+                match evt {
+                    DmcDmaEvent::Abort => self.dma.stop_dmc(),
+                    DmcDmaEvent::Request { addr } => self.dma.request_dmc(addr),
+                }
+            }
+
             // If DMC was aborted during/just before the halt cycle, clear it now.
             // Mesen clears `_needDummyRead` and may return early if OAM isn't about to start.
             if self.dma.dmc_abort_pending {
@@ -677,8 +687,7 @@ impl Cpu {
                     self.dma.dmc_active = false;
                     self.dma.dmc_abort_pending = false;
 
-                    let pending_dma = &mut *bus.pending_dma;
-                    bus.apu.finish_dma_fetch(val, pending_dma);
+                    bus.apu.finish_dma_fetch(val);
 
                     // This cycle was fully consumed by DMA; continue the while-loop.
                     continue;

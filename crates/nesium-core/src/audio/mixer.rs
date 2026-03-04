@@ -319,10 +319,6 @@ impl NesSoundMixer {
     /// Mesen2's `NesSoundMixer::EndFrame` behaviour.
     pub fn end_frame(&mut self, frame_end_clock: i64, out: &mut Vec<f32>) {
         if let Some(pending_clock) = self.pending_mix_clock {
-            debug_assert!(
-                pending_clock <= frame_end_clock,
-                "NesSoundMixer::end_frame called before pending mix clock was committed"
-            );
             if pending_clock <= frame_end_clock {
                 self.flush_pending_mix_at(pending_clock);
                 self.pending_mix_clock = None;
@@ -739,5 +735,19 @@ mod tests {
         assert!(mixer.has_panning);
         assert_eq!(mixer.blip_left.samples_avail(), 0);
         assert_eq!(mixer.blip_right.samples_avail(), 0);
+    }
+
+    #[test]
+    fn pending_mix_clock_in_future_is_flushed_on_later_end_frame() {
+        let mut mixer = NesSoundMixer::new(CPU_CLOCK_NTSC, 48_000);
+
+        mixer.add_delta(AudioChannel::Pulse1, 1_000, 5.0);
+
+        let mut out = Vec::new();
+        mixer.end_frame(900, &mut out);
+        assert_eq!(mixer.pending_mix_clock, Some(1_000));
+
+        mixer.end_frame(1_100, &mut out);
+        assert_eq!(mixer.pending_mix_clock, None);
     }
 }

@@ -10,10 +10,10 @@ pub(super) const LENGTH_TABLE: [u8; 32] = [
 
 /// Duty cycle bit patterns for the two pulse channels.
 pub(super) const PULSE_DUTY_TABLE: [[u8; 8]; 4] = [
-    [0, 1, 0, 0, 0, 0, 0, 0], // 12.5%
-    [0, 1, 1, 0, 0, 0, 0, 0], // 25%
-    [0, 1, 1, 1, 1, 0, 0, 0], // 50%
-    [1, 0, 0, 1, 1, 1, 1, 1], // 75% (inverted)
+    [0, 0, 0, 0, 0, 0, 0, 1], // 12.5%
+    [0, 0, 0, 0, 0, 0, 1, 1], // 25%
+    [0, 0, 0, 0, 1, 1, 1, 1], // 50%
+    [1, 1, 1, 1, 1, 1, 0, 0], // 75% (inverted)
 ];
 
 /// 32-step triangle waveform.
