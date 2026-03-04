@@ -1,6 +1,8 @@
 use std::{borrow::Cow, cell::Cell};
 
 use crate::{
+    apu::{ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot},
+    audio::{AudioChannel, CPU_CLOCK_NTSC},
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
@@ -91,6 +93,19 @@ const MMC5_REG_MULTIPLIER_B: u16 = 0x5206;
 const MMC5_EXRAM_CPU_START: u16 = 0x5C00;
 const MMC5_EXRAM_CPU_END: u16 = 0x5FFF;
 
+/// MMC5 expansion audio registers.
+const MMC5_REG_AUDIO_SQ1_CTRL: u16 = 0x5000;
+const MMC5_REG_AUDIO_SQ1_SWEEP: u16 = 0x5001;
+const MMC5_REG_AUDIO_SQ1_TIMER_LO: u16 = 0x5002;
+const MMC5_REG_AUDIO_SQ1_TIMER_HI: u16 = 0x5003;
+const MMC5_REG_AUDIO_SQ2_CTRL: u16 = 0x5004;
+const MMC5_REG_AUDIO_SQ2_SWEEP: u16 = 0x5005;
+const MMC5_REG_AUDIO_SQ2_TIMER_LO: u16 = 0x5006;
+const MMC5_REG_AUDIO_SQ2_TIMER_HI: u16 = 0x5007;
+const MMC5_REG_AUDIO_PCM_CTRL: u16 = 0x5010;
+const MMC5_REG_AUDIO_PCM_DATA: u16 = 0x5011;
+const MMC5_REG_AUDIO_STATUS: u16 = 0x5015;
+
 /// CPU-visible MMC5 register set.
 ///
 /// MMC5 exposes a rich set of control registers across `$5100-$5206` as well
@@ -99,6 +114,11 @@ const MMC5_EXRAM_CPU_END: u16 = 0x5FFF;
 /// of raw addresses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Mmc5CpuRegister {
+    AudioSquare1,
+    AudioSquare2,
+    AudioPcmControl,
+    AudioPcmData,
+    AudioStatus,
     PrgMode,
     ChrMode,
     PrgRamProtect1,
@@ -131,6 +151,17 @@ impl Mmc5CpuRegister {
         use Mmc5CpuRegister::*;
 
         match addr {
+            MMC5_REG_AUDIO_SQ1_CTRL
+            | MMC5_REG_AUDIO_SQ1_SWEEP
+            | MMC5_REG_AUDIO_SQ1_TIMER_LO
+            | MMC5_REG_AUDIO_SQ1_TIMER_HI => Some(AudioSquare1),
+            MMC5_REG_AUDIO_SQ2_CTRL
+            | MMC5_REG_AUDIO_SQ2_SWEEP
+            | MMC5_REG_AUDIO_SQ2_TIMER_LO
+            | MMC5_REG_AUDIO_SQ2_TIMER_HI => Some(AudioSquare2),
+            MMC5_REG_AUDIO_PCM_CTRL => Some(AudioPcmControl),
+            MMC5_REG_AUDIO_PCM_DATA => Some(AudioPcmData),
+            MMC5_REG_AUDIO_STATUS => Some(AudioStatus),
             MMC5_REG_PRG_MODE => Some(PrgMode),
             MMC5_REG_CHR_MODE => Some(ChrMode),
             MMC5_REG_PRG_RAM_PROTECT1 => Some(PrgRamProtect1),
@@ -169,6 +200,315 @@ enum PrgWindowSize {
     Size16K,
     /// 32 KiB CPU window.
     Size32K,
+}
+
+const MMC5_LENGTH_TABLE: [u8; 32] = [
+    10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
+    192, 24, 72, 26, 16, 28, 32, 30,
+];
+
+const MMC5_PULSE_DUTY_TABLE: [[u8; 8]; 4] = [
+    [0, 0, 0, 0, 0, 0, 0, 1],
+    [0, 0, 0, 0, 0, 0, 1, 1],
+    [0, 0, 0, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 0, 0],
+];
+
+const MMC5_FRAME_COUNTER_PERIOD_CPU: i32 = (CPU_CLOCK_NTSC as i32) / 240;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Mmc5LengthCounter {
+    enabled: bool,
+    halt: bool,
+    new_halt: bool,
+    counter: u8,
+    reload_value: u8,
+    previous_value: u8,
+}
+
+impl Mmc5LengthCounter {
+    fn new() -> Self {
+        Self {
+            enabled: false,
+            halt: false,
+            new_halt: false,
+            counter: 0,
+            reload_value: 0,
+            previous_value: 0,
+        }
+    }
+
+    fn initialize(&mut self, halt_flag: bool) {
+        self.new_halt = halt_flag;
+    }
+
+    fn load(&mut self, index: u8) {
+        if self.enabled {
+            self.reload_value = MMC5_LENGTH_TABLE[index as usize];
+            self.previous_value = self.counter;
+        }
+    }
+
+    fn tick(&mut self) {
+        if self.counter > 0 && !self.halt {
+            self.counter -= 1;
+        }
+    }
+
+    fn reload_counter(&mut self) {
+        if self.reload_value != 0 {
+            if self.counter == self.previous_value {
+                self.counter = self.reload_value;
+            }
+            self.reload_value = 0;
+        }
+        self.halt = self.new_halt;
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.counter = 0;
+        }
+        self.enabled = enabled;
+    }
+
+    fn active(&self) -> bool {
+        self.counter > 0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Mmc5Envelope {
+    constant_volume: bool,
+    loop_flag: bool,
+    volume: u8,
+    start: bool,
+    divider: i16,
+    decay_level: u8,
+}
+
+impl Mmc5Envelope {
+    fn new() -> Self {
+        Self {
+            constant_volume: false,
+            loop_flag: false,
+            volume: 0,
+            start: false,
+            divider: 0,
+            decay_level: 0,
+        }
+    }
+
+    fn initialize(&mut self, value: u8) {
+        self.loop_flag = (value & 0x20) != 0;
+        self.constant_volume = (value & 0x10) != 0;
+        self.volume = value & 0x0F;
+    }
+
+    fn restart(&mut self) {
+        self.start = true;
+    }
+
+    fn tick(&mut self) {
+        if !self.start {
+            self.divider -= 1;
+            if self.divider < 0 {
+                self.divider = self.volume as i16;
+                if self.decay_level > 0 {
+                    self.decay_level -= 1;
+                } else if self.loop_flag {
+                    self.decay_level = 15;
+                }
+            }
+        } else {
+            self.start = false;
+            self.decay_level = 15;
+            self.divider = self.volume as i16;
+        }
+    }
+
+    fn output(&self, length_active: bool) -> u8 {
+        if !length_active {
+            0
+        } else if self.constant_volume {
+            self.volume
+        } else {
+            self.decay_level
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Mmc5PulseState {
+    envelope: Mmc5Envelope,
+    length_counter: Mmc5LengthCounter,
+    duty: u8,
+    duty_pos: u8,
+    period: u16,
+    timer: u16,
+    current_output: i16,
+}
+
+impl Mmc5PulseState {
+    fn new() -> Self {
+        Self {
+            envelope: Mmc5Envelope::new(),
+            length_counter: Mmc5LengthCounter::new(),
+            duty: 0,
+            duty_pos: 0,
+            period: 0,
+            timer: 0,
+            current_output: 0,
+        }
+    }
+
+    fn write_register(&mut self, addr: u16, value: u8) {
+        match addr & 0x03 {
+            0 => {
+                self.envelope.initialize(value);
+                self.length_counter.initialize((value & 0x20) != 0);
+                self.duty = (value >> 6) & 0x03;
+            }
+            1 => {
+                // MMC5 pulse channels do not implement sweep ($5001/$5005 ignored).
+            }
+            2 => {
+                self.period = (self.period & 0x0700) | value as u16;
+            }
+            3 => {
+                self.length_counter.load((value >> 3) & 0x1F);
+                self.period = (self.period & 0x00FF) | (((value & 0x07) as u16) << 8);
+                self.duty_pos = 0;
+                self.envelope.restart();
+            }
+            _ => {}
+        }
+    }
+
+    fn run_channel(&mut self) {
+        if self.timer == 0 {
+            self.duty_pos = self.duty_pos.wrapping_sub(1) & 0x07;
+            let duty_bit = MMC5_PULSE_DUTY_TABLE[self.duty as usize][self.duty_pos as usize] as i16;
+            self.current_output =
+                duty_bit * self.envelope.output(self.length_counter.active()) as i16;
+            self.timer = self.period;
+        } else {
+            self.timer -= 1;
+        }
+    }
+
+    fn tick_length_counter(&mut self) {
+        self.length_counter.tick();
+    }
+
+    fn tick_envelope(&mut self) {
+        self.envelope.tick();
+    }
+
+    fn reload_length_counter(&mut self) {
+        self.length_counter.reload_counter();
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.length_counter.set_enabled(enabled);
+    }
+
+    fn status(&self) -> bool {
+        self.length_counter.active()
+    }
+
+    fn output(&self) -> i16 {
+        self.current_output
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct Mmc5AudioState {
+    square1: Mmc5PulseState,
+    square2: Mmc5PulseState,
+    audio_counter: i32,
+    pcm_read_mode: bool,
+    pcm_irq_enabled: bool,
+    pcm_output: u8,
+}
+
+impl Mmc5AudioState {
+    fn new() -> Self {
+        Self {
+            square1: Mmc5PulseState::new(),
+            square2: Mmc5PulseState::new(),
+            audio_counter: 0,
+            pcm_read_mode: false,
+            pcm_irq_enabled: false,
+            pcm_output: 0,
+        }
+    }
+
+    fn write_register(&mut self, addr: u16, value: u8) {
+        match addr {
+            MMC5_REG_AUDIO_SQ1_CTRL
+            | MMC5_REG_AUDIO_SQ1_SWEEP
+            | MMC5_REG_AUDIO_SQ1_TIMER_LO
+            | MMC5_REG_AUDIO_SQ1_TIMER_HI => self.square1.write_register(addr, value),
+            MMC5_REG_AUDIO_SQ2_CTRL
+            | MMC5_REG_AUDIO_SQ2_SWEEP
+            | MMC5_REG_AUDIO_SQ2_TIMER_LO
+            | MMC5_REG_AUDIO_SQ2_TIMER_HI => self.square2.write_register(addr, value),
+            MMC5_REG_AUDIO_PCM_CTRL => {
+                self.pcm_read_mode = (value & 0x01) != 0;
+                self.pcm_irq_enabled = (value & 0x80) != 0;
+            }
+            MMC5_REG_AUDIO_PCM_DATA => {
+                if !self.pcm_read_mode && value != 0 {
+                    self.pcm_output = value;
+                }
+            }
+            MMC5_REG_AUDIO_STATUS => {
+                self.square1.set_enabled((value & 0x01) != 0);
+                self.square2.set_enabled((value & 0x02) != 0);
+            }
+            _ => {}
+        }
+    }
+
+    fn read_register(&self, addr: u16) -> u8 {
+        match addr {
+            // PCM IRQ/read mode side effects are not implemented yet.
+            MMC5_REG_AUDIO_PCM_CTRL => 0,
+            MMC5_REG_AUDIO_STATUS => {
+                let mut status = 0u8;
+                if self.square1.status() {
+                    status |= 0x01;
+                }
+                if self.square2.status() {
+                    status |= 0x02;
+                }
+                status
+            }
+            _ => 0,
+        }
+    }
+
+    fn clock_and_sample(&mut self) -> f32 {
+        self.audio_counter -= 1;
+        self.square1.run_channel();
+        self.square2.run_channel();
+
+        if self.audio_counter <= 0 {
+            self.audio_counter = MMC5_FRAME_COUNTER_PERIOD_CPU;
+            self.square1.tick_length_counter();
+            self.square1.tick_envelope();
+            self.square2.tick_length_counter();
+            self.square2.tick_envelope();
+        }
+
+        let summed = -(self.square1.output() + self.square2.output() + self.pcm_output as i16);
+
+        self.square1.reload_length_counter();
+        self.square2.reload_length_counter();
+
+        summed as f32
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -236,6 +576,9 @@ pub struct Mapper5 {
     ex_attr_last_nametable_fetch: u16,
     ex_attr_fetch_remaining: u8,
     ex_attr_selected_chr_bank: u16,
+
+    audio: Mmc5AudioState,
+    audio_level: f32,
 }
 
 impl Mapper5 {
@@ -295,6 +638,8 @@ impl Mapper5 {
             ex_attr_last_nametable_fetch: 0,
             ex_attr_fetch_remaining: 0,
             ex_attr_selected_chr_bank: 0,
+            audio: Mmc5AudioState::new(),
+            audio_level: 0.0,
         }
     }
 
@@ -499,6 +844,11 @@ impl Mapper5 {
     fn write_prg(&mut self, addr: u16, data: u8) {
         match Mmc5CpuRegister::from_addr(addr) {
             // MMC5 control/config registers live in $5100-$51FF and $5200+.
+            Some(Mmc5CpuRegister::AudioSquare1)
+            | Some(Mmc5CpuRegister::AudioSquare2)
+            | Some(Mmc5CpuRegister::AudioPcmControl)
+            | Some(Mmc5CpuRegister::AudioPcmData)
+            | Some(Mmc5CpuRegister::AudioStatus) => self.audio.write_register(addr, data),
             Some(Mmc5CpuRegister::PrgMode) => self.prg_mode = data & 0x03,
             Some(Mmc5CpuRegister::ChrMode) => self.chr_mode = data & 0x03,
             Some(Mmc5CpuRegister::PrgRamProtect1) => self.prg_ram_protect1 = data,
@@ -771,6 +1121,7 @@ impl Mapper for Mapper5 {
 
     fn on_mapper_event(&mut self, event: MapperEvent) {
         match event {
+            MapperEvent::CpuClock { .. } => {}
             MapperEvent::CpuBusAccess {
                 kind,
                 addr,
@@ -893,11 +1244,16 @@ impl Mapper for Mapper5 {
         self.ex_attr_last_nametable_fetch = 0;
         self.ex_attr_fetch_remaining = 0;
         self.ex_attr_selected_chr_bank = 0;
+        self.audio = Mmc5AudioState::new();
+        self.audio_level = 0.0;
         self.exram.fill(0);
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
         match Mmc5CpuRegister::from_addr(addr) {
+            Some(Mmc5CpuRegister::AudioPcmControl) | Some(Mmc5CpuRegister::AudioStatus) => {
+                Some(self.audio.read_register(addr))
+            }
             Some(Mmc5CpuRegister::IrqStatus) => {
                 // IRQ status ($5204). We expose the pending and "in frame" bits,
                 // clearing the pending flag on read to match hardware ack
@@ -1124,6 +1480,14 @@ impl Mapper for Mapper5 {
         self.irq_pending.get() && self.irq_enabled
     }
 
+    fn expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
+        Some(self)
+    }
+
+    fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
+        Some(self)
+    }
+
     fn prg_rom(&self) -> Option<&[u8]> {
         Some(self.prg_rom.as_ref())
     }
@@ -1184,5 +1548,23 @@ impl Mapper for Mapper5 {
 
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("MMC5")
+    }
+}
+
+impl ExpansionAudio for Mapper5 {
+    fn clock_cpu(&mut self, ctx: ExpansionAudioClockContext, sink: &mut dyn ExpansionAudioSink) {
+        let level = self.audio.clock_and_sample();
+        let delta = level - self.audio_level;
+        if delta != 0.0 {
+            sink.push_delta(AudioChannel::Mmc5, ctx.cpu_cycle, delta);
+            self.audio_level = level;
+        }
+    }
+
+    fn snapshot(&self) -> ExpansionAudioSnapshot {
+        ExpansionAudioSnapshot {
+            mmc5: self.audio_level,
+            ..ExpansionAudioSnapshot::default()
+        }
     }
 }

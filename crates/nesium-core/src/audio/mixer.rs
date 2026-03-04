@@ -1,4 +1,9 @@
-use std::f32::consts::PI;
+use std::{
+    f32::consts::PI,
+    fs::OpenOptions,
+    io::Write,
+    sync::{Mutex, OnceLock},
+};
 
 use nesium_blip::BlipBuf;
 
@@ -10,6 +15,65 @@ use crate::audio::{
 
 #[cfg(feature = "savestate-serde")]
 use serde::{Deserialize, Serialize};
+
+fn mix_trace_sink() -> &'static Option<Mutex<std::fs::File>> {
+    static TRACE: OnceLock<Option<Mutex<std::fs::File>>> = OnceLock::new();
+    TRACE.get_or_init(|| {
+        let path = std::env::var("NESIUM_MIX_TRACE_PATH").ok()?;
+        if path.trim().is_empty() {
+            return None;
+        }
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path)
+            .ok()?;
+        let _ = writeln!(
+            file,
+            "seq,stamp,delta_left,delta_right,p1,p2,tri,noi,dmc,fds,mmc5,n163,s5b,vrc6,vrc7"
+        );
+        Some(Mutex::new(file))
+    })
+}
+
+fn maybe_trace_mix_event(
+    stamp: i64,
+    delta_left: f32,
+    delta_right: f32,
+    levels: &ChannelLevels,
+    seq: &mut u64,
+) {
+    let Some(lock) = mix_trace_sink().as_ref() else {
+        return;
+    };
+    let mut ints = [0i32; 11];
+    for (idx, out) in ints.iter_mut().enumerate() {
+        *out = levels[idx].round() as i32;
+    }
+    if let Ok(mut file) = lock.lock() {
+        let _ = writeln!(
+            file,
+            "{},{},{:.0},{:.0},{},{},{},{},{},{},{},{},{},{},{}",
+            *seq,
+            stamp,
+            delta_left,
+            delta_right,
+            ints[0],
+            ints[1],
+            ints[2],
+            ints[3],
+            ints[4],
+            ints[5],
+            ints[6],
+            ints[7],
+            ints[8],
+            ints[9],
+            ints[10]
+        );
+        *seq += 1;
+    }
+}
 
 /// Serializable snapshot of the mixer state.
 #[cfg_attr(feature = "savestate-serde", derive(Serialize, Deserialize))]
@@ -74,6 +138,7 @@ pub struct NesSoundMixer {
     stereo_delay_state: StereoDelayState,
     stereo_panning_state: StereoPanningState,
     stereo_comb_state: StereoCombState,
+    mix_trace_seq: u64,
 }
 
 impl NesSoundMixer {
@@ -129,6 +194,7 @@ impl NesSoundMixer {
             stereo_delay_state: StereoDelayState::default(),
             stereo_panning_state: StereoPanningState::default(),
             stereo_comb_state: StereoCombState::default(),
+            mix_trace_seq: 0,
         }
     }
 
@@ -154,6 +220,7 @@ impl NesSoundMixer {
         self.stereo_delay_state = StereoDelayState::default();
         self.stereo_panning_state = StereoPanningState::default();
         self.stereo_comb_state = StereoCombState::default();
+        self.mix_trace_seq = 0;
     }
 
     pub fn save_state(&self) -> MixerState {
@@ -202,6 +269,14 @@ impl NesSoundMixer {
                 self.blip_right.add_delta(rel_clock, delta_right);
             }
         }
+
+        maybe_trace_mix_event(
+            rel_clock,
+            delta_left,
+            delta_right,
+            &self.channel_levels,
+            &mut self.mix_trace_seq,
+        );
 
         self.mixed_left = left;
         self.mixed_right = right;

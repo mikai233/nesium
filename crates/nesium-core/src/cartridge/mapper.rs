@@ -199,6 +199,8 @@ bitflags::bitflags! {
         const PPU_BUS_ADDRESS = 1 << 1;
         /// Receive final PPU VRAM read-value override callback.
         const PPU_READ_OVERRIDE = 1 << 2;
+        /// Receive one callback per CPU cycle (including DMA/idle cycles).
+        const CPU_CLOCK = 1 << 3;
     }
 }
 
@@ -235,6 +237,8 @@ impl CpuBusAccessKind {
 /// Unified mapper event stream used by the new bus notification path.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum MapperEvent {
+    /// CPU clock tick event (exactly once per CPU cycle).
+    CpuClock { cpu_cycle: u64, master_clock: u64 },
     /// CPU bus access event with cycle timing.
     CpuBusAccess {
         kind: CpuBusAccessKind,

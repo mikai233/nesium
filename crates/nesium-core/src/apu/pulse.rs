@@ -59,15 +59,16 @@ impl Sweep {
         timer_period < 8 || (!self.negate && self.target_period(timer_period) > 0x07FF)
     }
 
-    fn target_period(&self, timer_period: u16) -> u16 {
-        let delta = timer_period >> self.shift;
+    fn target_period(&self, timer_period: u16) -> u32 {
+        let base = timer_period as u32;
+        let delta = (timer_period >> self.shift) as u32;
         if self.negate {
             match self.channel {
-                PulseChannel::Pulse1 => timer_period.wrapping_sub(delta).wrapping_sub(1),
-                PulseChannel::Pulse2 => timer_period.wrapping_sub(delta),
+                PulseChannel::Pulse1 => base.wrapping_sub(delta).wrapping_sub(1),
+                PulseChannel::Pulse2 => base.wrapping_sub(delta),
             }
         } else {
-            timer_period.wrapping_add(delta)
+            base + delta
         }
     }
 
@@ -79,7 +80,7 @@ impl Sweep {
         self.divider = self.divider.wrapping_sub(1);
         if self.divider == 0 {
             if should_mutate {
-                *timer_period = self.target_period(*timer_period);
+                *timer_period = self.target_period(*timer_period) as u16;
             }
             self.divider = self.period;
         }
@@ -106,6 +107,7 @@ pub(super) struct Pulse {
     pub(super) length: LengthCounter,
     pub(super) sweep: Sweep,
     enabled: bool,
+    current_output: u8,
 }
 
 impl Pulse {
@@ -123,6 +125,7 @@ impl Pulse {
                 ..Sweep::default()
             },
             enabled: false,
+            current_output: 0,
         }
     }
 
@@ -130,15 +133,18 @@ impl Pulse {
         self.duty = (value >> 6) & 0b0000_0011;
         self.envelope.configure(value);
         self.length.set_halt_pending(self.envelope.halt_length());
+        self.refresh_output();
     }
 
     pub(super) fn write_sweep(&mut self, value: u8) {
         self.sweep.write(value);
+        self.refresh_output();
     }
 
     pub(super) fn write_timer_low(&mut self, value: u8) {
-        self.timer_period = (self.timer_period & 0xFF00) | value as u16;
+        self.timer_period = (self.timer_period & 0x0700) | value as u16;
         self.timer_reload = (self.timer_period << 1) | 1;
+        self.refresh_output();
     }
 
     pub(super) fn write_timer_high(&mut self, value: u8) {
@@ -148,6 +154,7 @@ impl Pulse {
         self.envelope.restart();
         self.length.load(value >> 3, self.enabled);
         // Do not reset the timer on high-byte writes (Mesen2 / hardware behavior).
+        self.refresh_output();
     }
 
     pub(super) fn set_enabled(&mut self, enabled: bool) {
@@ -165,6 +172,7 @@ impl Pulse {
             self.timer = self.timer_reload;
             // Mesen clocks the sequencer "backward" through the 8-step table.
             self.duty_pos = self.duty_pos.wrapping_sub(1) & 0b111;
+            self.refresh_output();
         } else {
             self.timer = self.timer.saturating_sub(1);
         }
@@ -191,6 +199,11 @@ impl Pulse {
     }
 
     pub(super) fn output(&self) -> u8 {
+        self.current_output
+    }
+
+    #[inline]
+    fn compute_output(&self) -> u8 {
         if !self.enabled || !self.length.active() || self.sweep.muted(self.timer_period) {
             return 0;
         }
@@ -200,6 +213,11 @@ impl Pulse {
         } else {
             self.envelope.output()
         }
+    }
+
+    #[inline]
+    fn refresh_output(&mut self) {
+        self.current_output = self.compute_output();
     }
 
     pub(super) fn length_active(&self) -> bool {

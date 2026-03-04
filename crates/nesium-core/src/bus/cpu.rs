@@ -10,6 +10,46 @@ use crate::{
     memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem},
     ppu::{Ppu, ppu_bus::PpuBus},
 };
+use std::{
+    fs::OpenOptions,
+    io::Write as _,
+    sync::{Mutex, OnceLock},
+};
+
+fn apu_trace_sink() -> &'static Option<Mutex<std::fs::File>> {
+    static TRACE: OnceLock<Option<Mutex<std::fs::File>>> = OnceLock::new();
+    TRACE.get_or_init(|| {
+        let path = std::env::var("NESIUM_APU_TRACE_PATH").ok()?;
+        if path.trim().is_empty() {
+            return None;
+        }
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path)
+            .ok()?;
+        let _ = writeln!(file, "cpu_cycle,master_clock,addr,value");
+        Some(Mutex::new(file))
+    })
+}
+
+#[inline]
+fn maybe_trace_apu_write(cpu_cycle: u64, master_clock: u64, addr: u16, value: u8) {
+    if !((0x4000..=0x4015).contains(&addr) || addr == 0x4017) {
+        return;
+    }
+    let Some(lock) = apu_trace_sink().as_ref() else {
+        return;
+    };
+    if let Ok(mut file) = lock.lock() {
+        let _ = writeln!(
+            file,
+            "{},{},{:#06X},{:#04X}",
+            cpu_cycle, master_clock, addr, value
+        );
+    }
+}
 
 /// CPU-visible bus that bridges the core to RAM, the PPU, the APU, and the
 /// cartridge mapper space. It borrows the hardware from the owning NES.
@@ -307,6 +347,7 @@ impl<'a> CpuBus<'a> {
                 self.ppu.cpu_write(addr, data, &mut pattern);
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
+                maybe_trace_apu_write(*self.cycles, *self.master_clock, addr, data);
                 self.apu.cpu_write(addr, data, *self.cycles);
                 if let Some(mixer) = self.mixer.as_deref_mut() {
                     self.apu.sync_levels_now(mixer);
@@ -316,12 +357,14 @@ impl<'a> CpuBus<'a> {
                 self.write_oam_dma(data);
             }
             cpu_mem::APU_STATUS => {
+                maybe_trace_apu_write(*self.cycles, *self.master_clock, addr, data);
                 self.apu.cpu_write(addr, data, *self.cycles);
                 if let Some(mixer) = self.mixer.as_deref_mut() {
                     self.apu.sync_levels_now(mixer);
                 }
             }
             apu_mem::FRAME_COUNTER => {
+                maybe_trace_apu_write(*self.cycles, *self.master_clock, addr, data);
                 self.apu.cpu_write(addr, data, *self.cycles);
                 if let Some(mixer) = self.mixer.as_deref_mut() {
                     self.apu.sync_levels_now(mixer);

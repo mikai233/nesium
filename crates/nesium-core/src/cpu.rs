@@ -297,6 +297,9 @@ impl Cpu {
         *bus.cycles = bus.cycles.wrapping_add(1);
         bus.bump_master_clock(start_delta, self, ctx);
 
+        if let Some(cart) = bus.cartridge.as_deref_mut() {
+            cart.cpu_clock(*bus.cycles, *bus.master_clock);
+        }
         bus.clock_mapper_expansion_audio();
         // Run one APU CPU-cycle tick; DMA requests are queued on the bus.
         Apu::step(bus, self, ctx);

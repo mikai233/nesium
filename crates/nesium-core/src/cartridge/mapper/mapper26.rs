@@ -1,9 +1,8 @@
-//! Mapper 26 – Konami VRC6b (with basic VRC6 behaviour, audio stubbed).
+//! Mapper 26 – Konami VRC6b.
 //!
 //! This implementation mirrors the PRG/CHR banking and IRQ behaviour of VRC6,
-//! following Mesen2's layout. VRC6's expansion audio registers are accepted
-//! but do not currently generate audio output; this can be extended via the
-//! [`ExpansionAudio`] trait in the future.
+//! following Mesen2's layout, including VRC6 expansion audio (two pulse
+//! channels + one saw channel) clocked on CPU cycles.
 //!
 //! | Area | Address range       | Behaviour                                          | IRQ/Audio                         |
 //! |------|---------------------|----------------------------------------------------|-----------------------------------|
@@ -11,13 +10,21 @@
 //! | CPU  | `$8000-$BFFF`       | 16 KiB switchable PRG-ROM window (2×8 KiB)         | None                              |
 //! | CPU  | `$C000-$DFFF`       | 8 KiB switchable PRG-ROM window                    | None                              |
 //! | CPU  | `$E000-$FFFF`       | 8 KiB fixed PRG-ROM window (last)                  | None                              |
-//! | CPU  | `$B003/$F000-$F002` | Banking/mirroring/IRQ control registers           | VRC6 IRQ (audio regs stubbed)     |
+//! | CPU  | `$9000-$B003`       | VRC6 expansion audio registers                      | VRC6 audio                        |
+//! | CPU  | `$F000-$F002`       | IRQ control registers                               | VRC6 IRQ                          |
 //! | PPU  | `$0000-$1FFF`       | Eight 1 KiB CHR banks with mode‑dependent mapping  | None                              |
 //! | PPU  | `$2000-$3EFF`       | Mirroring from VRC6 control (`banking_mode`)       | None                              |
 
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fs::OpenOptions,
+    io::Write,
+    sync::{Mutex, OnceLock},
+};
 
 use crate::{
+    apu::{ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot},
+    audio::AudioChannel,
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
@@ -51,7 +58,7 @@ const VRC6_IO_WINDOW_END: u16 = 0xFFFF;
 enum Vrc6CpuRegister {
     /// `$8000-$8003` – PRG bank for `$8000-$BFFF` (2×8 KiB window).
     PrgBank8000_2x,
-    /// `$9000-$B002` – expansion audio registers (currently ignored).
+    /// `$9000-$B002` – expansion audio registers.
     ExpansionAudio,
     /// `$B003` – banking/mirroring/CHR mode/PRG-RAM control.
     Control,
@@ -67,6 +74,221 @@ enum Vrc6CpuRegister {
     IrqControl,
     /// `$F002` – IRQ acknowledge / re-enable.
     IrqAck,
+}
+
+const VRC6_DUTY_TABLE: [[u8; 16]; 8] = [
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 1/16
+    [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 2/16
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 3/16
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 4/16
+    [1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 5/16
+    [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 6/16
+    [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 7/16
+    [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0], // 8/16
+];
+
+#[derive(Debug, Clone)]
+struct Vrc6PulseState {
+    volume: u8,
+    duty_cycle: u8,
+    ignore_duty: bool,
+    frequency: u16,
+    enabled: bool,
+    timer: i32,
+    step: u8,
+    frequency_shift: u8,
+}
+
+impl Vrc6PulseState {
+    fn new() -> Self {
+        Self {
+            volume: 0,
+            duty_cycle: 0,
+            ignore_duty: false,
+            frequency: 1,
+            enabled: false,
+            timer: 1,
+            step: 0,
+            frequency_shift: 0,
+        }
+    }
+
+    fn write_register(&mut self, addr: u16, value: u8) {
+        match addr & 0x03 {
+            0 => {
+                self.volume = value & 0x0F;
+                self.duty_cycle = (value >> 4) & 0x07;
+                self.ignore_duty = (value & 0x80) != 0;
+            }
+            1 => {
+                self.frequency = (self.frequency & 0x0F00) | value as u16;
+            }
+            2 => {
+                self.frequency = (self.frequency & 0x00FF) | (((value & 0x0F) as u16) << 8);
+                self.enabled = (value & 0x80) != 0;
+                if !self.enabled {
+                    self.step = 0;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn set_frequency_shift(&mut self, shift: u8) {
+        self.frequency_shift = shift;
+    }
+
+    fn clock(&mut self) {
+        if !self.enabled {
+            return;
+        }
+
+        self.timer -= 1;
+        if self.timer <= 0 {
+            self.step = (self.step + 1) & 0x0F;
+            self.timer = ((self.frequency >> self.frequency_shift) as i32) + 1;
+        }
+    }
+
+    fn volume(&self) -> u8 {
+        if !self.enabled {
+            0
+        } else if self.ignore_duty {
+            self.volume
+        } else if VRC6_DUTY_TABLE[self.duty_cycle as usize][self.step as usize] != 0 {
+            self.volume
+        } else {
+            0
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Vrc6SawState {
+    accumulator_rate: u8,
+    accumulator: u8,
+    frequency: u16,
+    enabled: bool,
+    timer: i32,
+    step: u8,
+    frequency_shift: u8,
+}
+
+impl Vrc6SawState {
+    fn new() -> Self {
+        Self {
+            accumulator_rate: 0,
+            accumulator: 0,
+            frequency: 1,
+            enabled: false,
+            timer: 1,
+            step: 0,
+            frequency_shift: 0,
+        }
+    }
+
+    fn write_register(&mut self, addr: u16, value: u8) {
+        match addr & 0x03 {
+            0 => self.accumulator_rate = value & 0x3F,
+            1 => self.frequency = (self.frequency & 0x0F00) | value as u16,
+            2 => {
+                self.frequency = (self.frequency & 0x00FF) | (((value & 0x0F) as u16) << 8);
+                self.enabled = (value & 0x80) != 0;
+                if !self.enabled {
+                    self.accumulator = 0;
+                    self.step = 0;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn set_frequency_shift(&mut self, shift: u8) {
+        self.frequency_shift = shift;
+    }
+
+    fn clock(&mut self) {
+        if !self.enabled {
+            return;
+        }
+
+        self.timer -= 1;
+        if self.timer <= 0 {
+            self.step = (self.step + 1) % 14;
+            self.timer = ((self.frequency >> self.frequency_shift) as i32) + 1;
+
+            if self.step == 0 {
+                self.accumulator = 0;
+            } else if (self.step & 0x01) == 0 {
+                self.accumulator = self.accumulator.wrapping_add(self.accumulator_rate);
+            }
+        }
+    }
+
+    fn volume(&self) -> u8 {
+        if self.enabled {
+            self.accumulator >> 3
+        } else {
+            0
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Vrc6AudioState {
+    pulse1: Vrc6PulseState,
+    pulse2: Vrc6PulseState,
+    saw: Vrc6SawState,
+    halt_audio: bool,
+}
+
+impl Vrc6AudioState {
+    fn new() -> Self {
+        Self {
+            pulse1: Vrc6PulseState::new(),
+            pulse2: Vrc6PulseState::new(),
+            saw: Vrc6SawState::new(),
+            halt_audio: false,
+        }
+    }
+
+    fn write_register(&mut self, addr: u16, value: u8) {
+        match addr & 0xF003 {
+            0x9000..=0x9002 => self.pulse1.write_register(addr, value),
+            0x9003 => {
+                self.halt_audio = (value & 0x01) != 0;
+                let shift = if (value & 0x04) != 0 {
+                    8
+                } else if (value & 0x02) != 0 {
+                    4
+                } else {
+                    0
+                };
+                self.pulse1.set_frequency_shift(shift);
+                self.pulse2.set_frequency_shift(shift);
+                self.saw.set_frequency_shift(shift);
+            }
+            0xA000..=0xA002 => self.pulse2.write_register(addr, value),
+            0xB000..=0xB002 => self.saw.write_register(addr, value),
+            _ => {}
+        }
+    }
+
+    fn clock(&mut self) {
+        if self.halt_audio {
+            return;
+        }
+        self.pulse1.clock();
+        self.pulse2.clock();
+        self.saw.clock();
+    }
+
+    fn sample(&self) -> f32 {
+        // Mesen2 VRC6 path: (pulse1 + pulse2 + saw) * 15
+        let level =
+            self.pulse1.volume() as i16 + self.pulse2.volume() as i16 + self.saw.volume() as i16;
+        (level * 15) as f32
+    }
 }
 
 impl Vrc6CpuRegister {
@@ -99,9 +321,11 @@ pub struct Mapper26 {
     prg_bank_count_8k: usize,
 
     /// Base 16 KiB window at `$8000-$BFFF` (expressed as an 8 KiB index).
-    prg_bank_8000_2x: usize,
+    /// `None` means this window is currently unmapped (open bus).
+    prg_bank_8000_2x: Option<usize>,
     /// 8 KiB bank at `$C000-$DFFF`.
-    prg_bank_c000: usize,
+    /// `None` means this window is currently unmapped (open bus).
+    prg_bank_c000: Option<usize>,
     /// Control bits written via `$B003` (banking/mirroring/CHR mode/PRG-RAM).
     banking_mode: u8,
 
@@ -119,6 +343,9 @@ pub struct Mapper26 {
     irq_enabled_after_ack: bool,
     irq_cycle_mode: bool,
     irq_pending: bool,
+
+    audio: Vrc6AudioState,
+    audio_level: f32,
 }
 
 type Mapper26ChrRegs = ByteBlock<8>;
@@ -135,8 +362,8 @@ impl Mapper26 {
             prg_ram,
             chr,
             prg_bank_count_8k,
-            prg_bank_8000_2x: 0,
-            prg_bank_c000: 0,
+            prg_bank_8000_2x: None,
+            prg_bank_c000: None,
             banking_mode: 0,
             chr_regs: Mapper26ChrRegs::new(),
             mirroring: header.mirroring(),
@@ -148,6 +375,8 @@ impl Mapper26 {
             irq_enabled_after_ack: false,
             irq_cycle_mode: false,
             irq_pending: false,
+            audio: Vrc6AudioState::new(),
+            audio_level: 0.0,
         }
     }
 
@@ -177,22 +406,22 @@ impl Mapper26 {
         self.prg_ram[idx] = data;
     }
 
-    fn read_prg_rom(&self, addr: u16) -> u8 {
+    fn read_prg_rom(&self, addr: u16) -> Option<u8> {
         if self.prg_rom.is_empty() {
-            return 0;
+            return Some(0);
         }
 
         let bank = match addr {
             0x8000..=0x9FFF => self.prg_bank_8000_2x,
-            0xA000..=0xBFFF => self.prg_bank_8000_2x.saturating_add(1),
+            0xA000..=0xBFFF => self.prg_bank_8000_2x.map(|bank| bank.saturating_add(1)),
             0xC000..=0xDFFF => self.prg_bank_c000,
-            0xE000..=0xFFFF => self.prg_bank_count_8k.saturating_sub(1),
-            _ => 0,
-        } % self.prg_bank_count_8k;
+            0xE000..=0xFFFF => Some(self.prg_bank_count_8k.saturating_sub(1)),
+            _ => None,
+        }? % self.prg_bank_count_8k;
 
         let offset = (addr & 0x1FFF) as usize;
         let base = bank.saturating_mul(PRG_BANK_SIZE_8K);
-        self.prg_rom.get(base + offset).copied().unwrap_or(0)
+        Some(self.prg_rom.get(base + offset).copied().unwrap_or(0))
     }
 
     fn chr_page_base(&self, bank: usize) -> usize {
@@ -249,15 +478,11 @@ impl Mapper26 {
     }
 
     fn update_prg_bank_8000(&mut self, value: u8) {
-        let mut page = ((value & 0x0F) as usize) << 1;
-        if page + 1 >= self.prg_bank_count_8k {
-            page = self.prg_bank_count_8k.saturating_sub(2);
-        }
-        self.prg_bank_8000_2x = page;
+        self.prg_bank_8000_2x = Some(((value & 0x0F) as usize) << 1);
     }
 
     fn update_prg_bank_c000(&mut self, value: u8) {
-        self.prg_bank_c000 = self.prg_bank_index(value & 0x1F);
+        self.prg_bank_c000 = Some(self.prg_bank_index(value & 0x1F));
     }
 
     #[inline]
@@ -278,9 +503,7 @@ impl Mapper26 {
                     self.update_prg_bank_8000(value);
                 }
                 ExpansionAudio => {
-                    // Expansion audio registers ($9000-$B002) are accepted but
-                    // ignored for now; integration with an ExpansionAudio
-                    // implementation can extend this in the future.
+                    self.audio.write_register(addr, value);
                 }
                 Control => {
                     self.banking_mode = value;
@@ -307,8 +530,8 @@ impl Mapper26 {
                     if self.irq_enabled {
                         self.irq_counter = self.irq_reload;
                         self.irq_prescaler = 341;
-                        self.irq_pending = false;
                     }
+                    self.irq_pending = false;
                 }
                 IrqAck => {
                     self.irq_enabled = self.irq_enabled_after_ack;
@@ -343,31 +566,72 @@ impl Mapper26 {
     }
 }
 
+fn mapper26_trace_sink() -> &'static Option<Mutex<std::fs::File>> {
+    static TRACE: OnceLock<Option<Mutex<std::fs::File>>> = OnceLock::new();
+    TRACE.get_or_init(|| {
+        let path = std::env::var("NESIUM_MAPPER26_TRACE_PATH").ok()?;
+        if path.trim().is_empty() {
+            return None;
+        }
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path)
+            .ok()?;
+        let _ = writeln!(
+            file,
+            "cpu_cycle,addr,translated_addr,value,prg8000_2x,prgC000,banking_mode"
+        );
+        Some(Mutex::new(file))
+    })
+}
+
+fn mapper26_trace_write(
+    cpu_cycle: u64,
+    addr: u16,
+    translated_addr: u16,
+    value: u8,
+    prg_bank_8000_2x: Option<usize>,
+    prg_bank_c000: Option<usize>,
+    banking_mode: u8,
+) {
+    let Some(lock) = mapper26_trace_sink().as_ref() else {
+        return;
+    };
+    let prg8000 = prg_bank_8000_2x.map(|v| v as i64).unwrap_or(-1);
+    let prgc000 = prg_bank_c000.map(|v| v as i64).unwrap_or(-1);
+    if let Ok(mut file) = lock.lock() {
+        let _ = writeln!(
+            file,
+            "{},{:#06X},{:#06X},{:#04X},{},{},{:#04X}",
+            cpu_cycle, addr, translated_addr, value, prg8000, prgc000, banking_mode
+        );
+    }
+}
+
 impl Mapper for Mapper26 {
     fn hook_mask(&self) -> MapperHookMask {
-        MapperHookMask::CPU_BUS_ACCESS
+        MapperHookMask::CPU_CLOCK
     }
 
     fn on_mapper_event(&mut self, event: MapperEvent) {
-        if let MapperEvent::CpuBusAccess { .. } = event {
+        if let MapperEvent::CpuClock { .. } = event {
             if !self.irq_enabled {
                 return;
             }
-            if self.irq_cycle_mode {
+            self.irq_prescaler -= 3;
+            if self.irq_cycle_mode || self.irq_prescaler <= 0 {
                 self.clock_irq_counter();
-            } else {
-                self.irq_prescaler -= 3;
-                if self.irq_prescaler <= 0 {
-                    self.clock_irq_counter();
-                    self.irq_prescaler += 341;
-                }
+                self.irq_prescaler += 341;
             }
         }
     }
 
     fn reset(&mut self, _kind: ResetKind) {
-        self.prg_bank_8000_2x = 0;
-        self.prg_bank_c000 = self.prg_bank_count_8k.saturating_sub(2);
+        self.prg_bank_8000_2x = None;
+        self.prg_bank_c000 = None;
         self.banking_mode = 0;
         self.chr_regs.fill(0);
         self.mirroring = self.base_mirroring;
@@ -379,22 +643,33 @@ impl Mapper for Mapper26 {
         self.irq_enabled_after_ack = false;
         self.irq_cycle_mode = false;
         self.irq_pending = false;
+        self.audio = Vrc6AudioState::new();
+        self.audio_level = 0.0;
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
-            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => Some(self.read_prg_rom(addr)),
+            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
             _ => None,
         }
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
+    fn cpu_write(&mut self, addr: u16, data: u8, cpu_cycle: u64) {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
             VRC6_IO_WINDOW_START..=VRC6_IO_WINDOW_END => {
                 let translated = self.translate_address(addr);
                 self.write_register(translated, data);
+                mapper26_trace_write(
+                    cpu_cycle,
+                    addr,
+                    translated,
+                    data,
+                    self.prg_bank_8000_2x,
+                    self.prg_bank_c000,
+                    self.banking_mode,
+                );
             }
             _ => {}
         }
@@ -462,5 +737,32 @@ impl Mapper for Mapper26 {
 
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("Konami VRC6b")
+    }
+
+    fn expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
+        Some(self)
+    }
+
+    fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
+        Some(self)
+    }
+}
+
+impl ExpansionAudio for Mapper26 {
+    fn clock_cpu(&mut self, ctx: ExpansionAudioClockContext, sink: &mut dyn ExpansionAudioSink) {
+        self.audio.clock();
+        let level = self.audio.sample();
+        let delta = level - self.audio_level;
+        if delta != 0.0 {
+            sink.push_delta(AudioChannel::Vrc6, ctx.cpu_cycle, delta);
+            self.audio_level = level;
+        }
+    }
+
+    fn snapshot(&self) -> ExpansionAudioSnapshot {
+        ExpansionAudioSnapshot {
+            vrc6: self.audio_level,
+            ..ExpansionAudioSnapshot::default()
+        }
     }
 }
