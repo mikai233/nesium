@@ -163,7 +163,8 @@ impl Pulse {
             // reload is 0 (ticks every CPU cycle). After low/high writes,
             // reload is 2*period+1.
             self.timer = self.timer_reload;
-            self.duty_pos = (self.duty_pos + 1) & 0b111;
+            // Mesen clocks the sequencer "backward" through the 8-step table.
+            self.duty_pos = self.duty_pos.wrapping_sub(1) & 0b111;
         } else {
             self.timer = self.timer.saturating_sub(1);
         }
@@ -182,7 +183,11 @@ impl Pulse {
     }
 
     pub(super) fn clock_sweep(&mut self) {
+        let before = self.timer_period;
         self.sweep.clock(&mut self.timer_period);
+        if self.timer_period != before {
+            self.timer_reload = (self.timer_period << 1) | 1;
+        }
     }
 
     pub(super) fn output(&self) -> u8 {

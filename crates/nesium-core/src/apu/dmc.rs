@@ -230,12 +230,7 @@ impl Dmc {
         self.last_fetch_addr
     }
 
-    pub(super) fn finish_dma_fetch(
-        &mut self,
-        byte: u8,
-        status: &mut StatusFlags,
-        pending_dma: &mut PendingDma,
-    ) {
+    pub(super) fn finish_dma_fetch(&mut self, byte: u8, status: &mut StatusFlags) {
         if self.pending_fetch.take().is_none() {
             return;
         }
@@ -257,17 +252,12 @@ impl Dmc {
             }
         }
 
-        // Mesen2 models two sample-length=1 edge cases around bit-counter
-        // resets. The first can duplicate the sample byte; the second triggers
-        // a transfer that is then aborted one cycle later.
+        // Mesen2 has two sample-length=1 edge cases around bit-counter resets.
+        // The "duplicate sample byte" glitch is optional and disabled by
+        // default in Mesen (`EnableDmcSampleDuplicationGlitch = false`), so
+        // we only model the always-on abort-path behavior here.
         if self.sample_length == 1 && !self.loop_flag {
-            if self.bits_remaining == 8 && self.timer == self.timer_period {
-                self.shift_register = self.read_buffer;
-                self.silence = false;
-                self.buffer_empty = true;
-                self.restart_sample();
-                self.start_dmc_transfer(pending_dma);
-            } else if self.bits_remaining == 1 && self.timer < 2 {
+            if self.bits_remaining == 1 && self.timer < 2 {
                 self.shift_register = self.read_buffer;
                 self.buffer_empty = false;
                 self.restart_sample();
