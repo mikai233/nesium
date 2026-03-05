@@ -296,6 +296,7 @@ impl Cpu {
         };
         *bus.cycles = bus.cycles.wrapping_add(1);
         bus.bump_master_clock(start_delta, self, ctx);
+        bus.notify_mapper_cpu_clock();
 
         bus.clock_mapper_expansion_audio();
         // Run one APU CPU-cycle tick; DMA requests are queued on the bus.
@@ -565,8 +566,9 @@ impl Cpu {
         // This is required to model Mesen's behavior where certain dummy reads to $4016/$4017
         // are skipped to avoid extra controller side effects, while still consuming time.
         #[inline(always)]
-        fn dma_idle(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context) {
+        fn dma_idle(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, addr: u16) {
             cpu.begin_cycle(true, bus, ctx);
+            bus.notify_mapper_cpu_bus_access(CpuBusAccessKind::Idle, addr, 0);
             cpu.end_cycle(true, bus, ctx);
         }
 
@@ -603,7 +605,7 @@ impl Cpu {
                 || skip_first_input_clock;
 
             if skip_halt_mem_access {
-                dma_idle(self, bus, ctx);
+                dma_idle(self, bus, ctx, addr);
             } else {
                 bus.dma_read(addr, self, ctx);
             }
@@ -718,7 +720,7 @@ impl Cpu {
 
                     // Alignment: waiting for the write phase, burn a dummy/idle DMA read.
                     if skip_dummy_reads {
-                        dma_idle(self, bus, ctx);
+                        dma_idle(self, bus, ctx, addr);
                     } else {
                         bus.dma_read(addr, self, ctx);
                     }
@@ -727,7 +729,7 @@ impl Cpu {
 
                 // DMC running but not ready and no OAM: dummy/idle cycle.
                 if skip_dummy_reads {
-                    dma_idle(self, bus, ctx);
+                    dma_idle(self, bus, ctx, addr);
                 } else {
                     bus.dma_read(addr, self, ctx);
                 }
@@ -748,7 +750,7 @@ impl Cpu {
 
                 // Alignment: burn a dummy/idle cycle.
                 if skip_dummy_reads {
-                    dma_idle(self, bus, ctx);
+                    dma_idle(self, bus, ctx, addr);
                 } else {
                     bus.dma_read(addr, self, ctx);
                 }
@@ -826,6 +828,7 @@ impl Cpu {
             v
         };
 
+        bus.notify_mapper_cpu_bus_access(CpuBusAccessKind::DmaRead, dma_addr, value);
         self.end_cycle(true, bus, ctx);
         value
     }

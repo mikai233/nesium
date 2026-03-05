@@ -199,6 +199,8 @@ bitflags::bitflags! {
         const PPU_BUS_ADDRESS = 1 << 1;
         /// Receive final PPU VRAM read-value override callback.
         const PPU_READ_OVERRIDE = 1 << 2;
+        /// Receive per-CPU-cycle clock events.
+        const CPU_CLOCK = 1 << 3;
     }
 }
 
@@ -248,6 +250,8 @@ pub enum MapperEvent {
         addr: u16,
         ctx: PpuVramAccessContext,
     },
+    /// CPU clock tick event (once per CPU cycle advanced by the core).
+    CpuClock { cpu_cycle: u64, master_clock: u64 },
 }
 
 /// Target backing store for a PPU nametable address.
