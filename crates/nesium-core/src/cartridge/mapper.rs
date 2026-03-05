@@ -265,6 +265,30 @@ pub enum NametableTarget {
     None,
 }
 
+/// Unified immutable mapper memory view for savestate/debug tooling.
+#[derive(Debug, Clone, Copy, Default)]
+#[non_exhaustive]
+pub struct MapperMemoryRef<'a> {
+    pub prg_rom: Option<&'a [u8]>,
+    pub prg_ram: Option<&'a [u8]>,
+    pub prg_work_ram: Option<&'a [u8]>,
+    pub mapper_ram: Option<&'a [u8]>,
+    pub chr_rom: Option<&'a [u8]>,
+    pub chr_ram: Option<&'a [u8]>,
+    pub chr_battery_ram: Option<&'a [u8]>,
+}
+
+/// Unified mutable mapper memory view for state restore tooling.
+#[derive(Debug, Default)]
+#[non_exhaustive]
+pub struct MapperMemoryMut<'a> {
+    pub prg_ram: Option<&'a mut [u8]>,
+    pub prg_work_ram: Option<&'a mut [u8]>,
+    pub mapper_ram: Option<&'a mut [u8]>,
+    pub chr_ram: Option<&'a mut [u8]>,
+    pub chr_battery_ram: Option<&'a mut [u8]>,
+}
+
 /// Core mapper interface implemented by all cartridge boards.
 ///
 /// Boards that expose extra sound channels can additionally implement
@@ -390,78 +414,14 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
         false
     }
 
-    /// Optional introspection hook for PRG ROM contents.
-    fn prg_rom(&self) -> Option<&[u8]> {
-        None
+    /// Immutable snapshot-style view of mapper-owned memory regions.
+    fn memory_ref(&self) -> MapperMemoryRef<'_> {
+        MapperMemoryRef::default()
     }
 
-    /// Optional introspection hook for unified PRG RAM contents.
-    ///
-    /// New code should prefer the more granular `prg_save_ram` / `prg_work_ram`
-    /// helpers below when it needs to distinguish battery-backed vs volatile
-    /// work RAM. This method remains for backwards compatibility.
-    fn prg_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Optional mutable access to PRG RAM contents.
-    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
-    }
-
-    /// PRG save RAM (battery-backed), if present.
-    fn prg_save_ram(&self) -> Option<&[u8]> {
-        self.prg_ram()
-    }
-
-    /// Mutable view of PRG save RAM (battery-backed), if present.
-    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.prg_ram_mut()
-    }
-
-    /// PRG work RAM (non battery-backed), if present.
-    fn prg_work_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Mutable view of PRG work RAM (non battery-backed), if present.
-    fn prg_work_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
-    }
-
-    /// Mapper-private RAM (e.g., MMC5 ExRAM), if present.
-    fn mapper_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Mutable view of mapper-private RAM, if present.
-    fn mapper_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
-    }
-
-    /// Optional introspection hook for CHR ROM contents.
-    fn chr_rom(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Optional introspection hook for CHR RAM contents.
-    fn chr_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Optional mutable access to CHR RAM contents.
-    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
-    }
-
-    /// Optional CHR battery-backed RAM region, if distinct from `chr_ram`.
-    fn chr_battery_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Mutable view of CHR battery-backed RAM, if present.
-    fn chr_battery_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
+    /// Mutable snapshot-style view of mapper-owned memory regions.
+    fn memory_mut(&mut self) -> MapperMemoryMut<'_> {
+        MapperMemoryMut::default()
     }
 
     /// Current nametable mirroring mode exposed by the mapper.

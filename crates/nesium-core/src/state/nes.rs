@@ -696,6 +696,7 @@ fn cartridge_to_state(cart: &Cartridge) -> Result<CartridgeState, NesSaveStateEr
     let mapper = cart.mapper();
     let mapper_id = mapper.mapper_id();
     let submapper = cart.header().submapper();
+    let memory = mapper.memory_ref();
 
     let mapper_state = match mapper_id {
         0 => MapperState::Mapper0,
@@ -725,11 +726,11 @@ fn cartridge_to_state(cart: &Cartridge) -> Result<CartridgeState, NesSaveStateEr
     Ok(CartridgeState {
         mapper_id,
         submapper,
-        prg_ram: mapper.prg_ram().map(|s| s.to_vec()),
-        prg_work_ram: mapper.prg_work_ram().map(|s| s.to_vec()),
-        chr_ram: mapper.chr_ram().map(|s| s.to_vec()),
-        chr_battery_ram: mapper.chr_battery_ram().map(|s| s.to_vec()),
-        mapper_ram: mapper.mapper_ram().map(|s| s.to_vec()),
+        prg_ram: memory.prg_ram.map(|s| s.to_vec()),
+        prg_work_ram: memory.prg_work_ram.map(|s| s.to_vec()),
+        chr_ram: memory.chr_ram.map(|s| s.to_vec()),
+        chr_battery_ram: memory.chr_battery_ram.map(|s| s.to_vec()),
+        mapper_ram: memory.mapper_ram.map(|s| s.to_vec()),
         mapper: mapper_state,
     })
 }
@@ -748,13 +749,17 @@ fn apply_cartridge_state(
     }
 
     let mapper = cart.mapper_mut();
-    if let (Some(dst), Some(src)) = (mapper.prg_ram_mut(), state.prg_ram.as_deref()) {
+    let mut memory = mapper.memory_mut();
+    if let (Some(dst), Some(src)) = (memory.prg_ram.as_deref_mut(), state.prg_ram.as_deref()) {
         if dst.len() != src.len() {
             return Err(NesSaveStateError::CorruptState("prg_ram size mismatch"));
         }
         dst.copy_from_slice(src);
     }
-    if let (Some(dst), Some(src)) = (mapper.prg_work_ram_mut(), state.prg_work_ram.as_deref()) {
+    if let (Some(dst), Some(src)) = (
+        memory.prg_work_ram.as_deref_mut(),
+        state.prg_work_ram.as_deref(),
+    ) {
         if dst.len() != src.len() {
             return Err(NesSaveStateError::CorruptState(
                 "prg_work_ram size mismatch",
@@ -762,14 +767,14 @@ fn apply_cartridge_state(
         }
         dst.copy_from_slice(src);
     }
-    if let (Some(dst), Some(src)) = (mapper.chr_ram_mut(), state.chr_ram.as_deref()) {
+    if let (Some(dst), Some(src)) = (memory.chr_ram.as_deref_mut(), state.chr_ram.as_deref()) {
         if dst.len() != src.len() {
             return Err(NesSaveStateError::CorruptState("chr_ram size mismatch"));
         }
         dst.copy_from_slice(src);
     }
     if let (Some(dst), Some(src)) = (
-        mapper.chr_battery_ram_mut(),
+        memory.chr_battery_ram.as_deref_mut(),
         state.chr_battery_ram.as_deref(),
     ) {
         if dst.len() != src.len() {
@@ -779,7 +784,10 @@ fn apply_cartridge_state(
         }
         dst.copy_from_slice(src);
     }
-    if let (Some(dst), Some(src)) = (mapper.mapper_ram_mut(), state.mapper_ram.as_deref()) {
+    if let (Some(dst), Some(src)) = (
+        memory.mapper_ram.as_deref_mut(),
+        state.mapper_ram.as_deref(),
+    ) {
         if dst.len() != src.len() {
             return Err(NesSaveStateError::CorruptState("mapper_ram size mismatch"));
         }

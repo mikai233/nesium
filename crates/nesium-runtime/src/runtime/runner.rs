@@ -1208,7 +1208,8 @@ impl Runner {
                     .get_cartridge()
                     .and_then(|c| {
                         let m = c.mapper();
-                        m.chr_rom().or_else(|| m.chr_ram())
+                        let memory = m.memory_ref();
+                        memory.chr_rom.or(memory.chr_ram)
                     })
                     .unwrap_or(&[]);
                 let size = src.len();
@@ -1226,7 +1227,8 @@ impl Runner {
                     .get_cartridge()
                     .and_then(|c| {
                         let m = c.mapper();
-                        m.chr_ram().or_else(|| m.chr_rom())
+                        let memory = m.memory_ref();
+                        memory.chr_ram.or(memory.chr_rom)
                     })
                     .unwrap_or(&[]);
                 let size = src.len();
@@ -1242,7 +1244,7 @@ impl Runner {
                 let src = self
                     .nes
                     .get_cartridge()
-                    .and_then(|c| c.mapper().prg_rom())
+                    .and_then(|c| c.mapper().memory_ref().prg_rom)
                     .unwrap_or(&[]);
                 let size = src.len();
                 if size == 0 {
