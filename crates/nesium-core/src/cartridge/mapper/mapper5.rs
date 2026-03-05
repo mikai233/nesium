@@ -844,6 +844,7 @@ impl Mapper for Mapper5 {
                 self.detect_scanline_start(addr);
                 self.last_ppu_read_addr = addr;
             }
+            MapperEvent::CpuClock { .. } => {}
         }
     }
 

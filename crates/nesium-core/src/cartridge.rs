@@ -208,6 +208,16 @@ impl Cartridge {
         }
     }
 
+    /// Notify mapper of a CPU clock tick.
+    pub fn cpu_clock(&mut self, cpu_cycle: u64, master_clock: u64) {
+        if self.mapper.hook_mask().contains(MapperHookMask::CPU_CLOCK) {
+            self.mapper.on_mapper_event(MapperEvent::CpuClock {
+                cpu_cycle,
+                master_clock,
+            });
+        }
+    }
+
     /// Resolve a PPU nametable address to its backing storage.
     pub fn map_nametable(&self, addr: u16) -> NametableTarget {
         self.mapper.map_nametable(addr)

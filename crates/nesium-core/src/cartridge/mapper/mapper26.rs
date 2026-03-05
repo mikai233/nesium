@@ -22,8 +22,8 @@ use crate::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{
-            ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer,
-            select_chr_storage,
+            ChrStorage, MapperEvent, MapperHookMask, NametableTarget,
+            allocate_prg_ram_with_trainer, select_chr_storage,
         },
     },
     memory::cpu as cpu_mem,
@@ -99,11 +99,16 @@ pub struct Mapper26 {
     prg_bank_count_8k: usize,
 
     /// Base 16 KiB window at `$8000-$BFFF` (expressed as an 8 KiB index).
-    prg_bank_8000_2x: usize,
+    /// `None` means this window is currently unmapped (open bus).
+    prg_bank_8000_2x: Option<usize>,
     /// 8 KiB bank at `$C000-$DFFF`.
-    prg_bank_c000: usize,
+    /// `None` means this window is currently unmapped (open bus).
+    prg_bank_c000: Option<usize>,
     /// Control bits written via `$B003` (banking/mirroring/CHR mode/PRG-RAM).
     banking_mode: u8,
+    /// Mirrors Mesen2 startup behavior: $6000-$7FFF starts RW until the first
+    /// banking update path (B003/Dxxx/Exxx) reapplies bit7 gating.
+    prg_ram_gate_initialized: bool,
 
     /// Eight 8-bit CHR registers.
     chr_regs: Mapper26ChrRegs,
@@ -135,9 +140,10 @@ impl Mapper26 {
             prg_ram,
             chr,
             prg_bank_count_8k,
-            prg_bank_8000_2x: 0,
-            prg_bank_c000: 0,
+            prg_bank_8000_2x: None,
+            prg_bank_c000: None,
             banking_mode: 0,
+            prg_ram_gate_initialized: false,
             chr_regs: Mapper26ChrRegs::new(),
             mirroring: header.mirroring(),
             base_mirroring: header.mirroring(),
@@ -158,7 +164,15 @@ impl Mapper26 {
 
     #[inline]
     fn prg_ram_enabled(&self) -> bool {
-        !self.prg_ram.is_empty() && (self.banking_mode & 0x80) != 0
+        if self.prg_ram.is_empty() {
+            return false;
+        }
+
+        if !self.prg_ram_gate_initialized {
+            true
+        } else {
+            (self.banking_mode & 0x80) != 0
+        }
     }
 
     fn read_prg_ram(&self, addr: u16) -> Option<u8> {
@@ -177,22 +191,28 @@ impl Mapper26 {
         self.prg_ram[idx] = data;
     }
 
-    fn read_prg_rom(&self, addr: u16) -> u8 {
+    fn read_prg_rom(&self, addr: u16) -> Option<u8> {
         if self.prg_rom.is_empty() {
-            return 0;
+            return Some(0);
         }
 
         let bank = match addr {
             0x8000..=0x9FFF => self.prg_bank_8000_2x,
-            0xA000..=0xBFFF => self.prg_bank_8000_2x.saturating_add(1),
+            0xA000..=0xBFFF => self.prg_bank_8000_2x.map(|bank| bank.saturating_add(1)),
             0xC000..=0xDFFF => self.prg_bank_c000,
-            0xE000..=0xFFFF => self.prg_bank_count_8k.saturating_sub(1),
-            _ => 0,
-        } % self.prg_bank_count_8k;
+            0xE000..=0xFFFF => Some(self.prg_bank_count_8k.saturating_sub(1)),
+            _ => None,
+        };
+
+        let Some(bank) = bank else {
+            // Match Mesen2 BaseMapper behavior: unmapped PRG slots read as 0.
+            return Some(0);
+        };
+        let bank = bank % self.prg_bank_count_8k;
 
         let offset = (addr & 0x1FFF) as usize;
         let base = bank.saturating_mul(PRG_BANK_SIZE_8K);
-        self.prg_rom.get(base + offset).copied().unwrap_or(0)
+        Some(self.prg_rom.get(base + offset).copied().unwrap_or(0))
     }
 
     fn chr_page_base(&self, bank: usize) -> usize {
@@ -209,7 +229,7 @@ impl Mapper26 {
         self.chr.write_indexed(bank, offset, data);
     }
 
-    /// Map PPU address to CHR bank base + offset according to banking mode.
+    /// Map PPU address to CHR bank base + offset according to VRC6 banking mode.
     fn resolve_chr_bank_and_offset(&self, addr: u16) -> (usize, usize) {
         let bank_idx = ((addr >> 10) & 0x07) as usize;
         let offset = (addr & 0x03FF) as usize;
@@ -224,40 +244,44 @@ impl Mapper26 {
             0
         };
 
-        let bank = match self.banking_mode & 0x03 {
-            0 => bank_idx,
+        let page = match self.banking_mode & 0x03 {
+            0 => self.chr_regs.get(bank_idx).copied().unwrap_or(0),
             1 => {
-                // Banks 0/1,2/3,4/5,6/7 share pairs.
-                let pair = bank_idx / 2;
-                (pair * 2) | (bank_idx & 1)
+                let reg = self.chr_regs.get(bank_idx / 2).copied().unwrap_or(0);
+                if (bank_idx & 0x01) == 0 {
+                    reg & mask
+                } else {
+                    (reg & mask) | or_mask
+                }
             }
             _ => {
-                // Mode 2/3: banks 0-3 direct; banks 4/5 mirror reg4; 6/7 mirror reg5.
+                // Mode 2/3: first 4 banks direct, last 4 use reg4/reg5 pairs.
                 if bank_idx < 4 {
-                    bank_idx
-                } else if bank_idx < 6 {
-                    4
+                    self.chr_regs.get(bank_idx).copied().unwrap_or(0)
                 } else {
-                    5
+                    let reg = if bank_idx < 6 {
+                        self.chr_regs.get(4).copied().unwrap_or(0)
+                    } else {
+                        self.chr_regs.get(5).copied().unwrap_or(0)
+                    };
+                    if (bank_idx & 0x01) == 0 {
+                        reg & mask
+                    } else {
+                        (reg & mask) | or_mask
+                    }
                 }
             }
         };
 
-        let reg_val = self.chr_regs.get(bank).copied().unwrap_or(0);
-        let page = (reg_val & mask) | or_mask;
         (page as usize * CHR_BANK_SIZE_1K, offset)
     }
 
     fn update_prg_bank_8000(&mut self, value: u8) {
-        let mut page = ((value & 0x0F) as usize) << 1;
-        if page + 1 >= self.prg_bank_count_8k {
-            page = self.prg_bank_count_8k.saturating_sub(2);
-        }
-        self.prg_bank_8000_2x = page;
+        self.prg_bank_8000_2x = Some(((value & 0x0F) as usize) << 1);
     }
 
     fn update_prg_bank_c000(&mut self, value: u8) {
-        self.prg_bank_c000 = self.prg_bank_index(value & 0x1F);
+        self.prg_bank_c000 = Some(self.prg_bank_index(value & 0x1F));
     }
 
     #[inline]
@@ -284,6 +308,7 @@ impl Mapper26 {
                 }
                 Control => {
                     self.banking_mode = value;
+                    self.prg_ram_gate_initialized = true;
                     self.update_mirroring();
                 }
                 PrgBankC000 => {
@@ -292,10 +317,12 @@ impl Mapper26 {
                 ChrBankLow => {
                     let idx = (addr & 0x0003) as usize;
                     self.chr_regs[idx] = value;
+                    self.prg_ram_gate_initialized = true;
                 }
                 ChrBankHigh => {
                     let idx = 4 + (addr & 0x0003) as usize;
                     self.chr_regs[idx] = value;
+                    self.prg_ram_gate_initialized = true;
                 }
                 IrqReload => {
                     self.irq_reload = value;
@@ -307,8 +334,8 @@ impl Mapper26 {
                     if self.irq_enabled {
                         self.irq_counter = self.irq_reload;
                         self.irq_prescaler = 341;
-                        self.irq_pending = false;
                     }
+                    self.irq_pending = false;
                 }
                 IrqAck => {
                     self.irq_enabled = self.irq_enabled_after_ack;
@@ -320,7 +347,8 @@ impl Mapper26 {
 
     fn update_mirroring(&mut self) {
         if (self.banking_mode & 0x10) != 0 {
-            // CHR ROM nametable modes not modelled; leave mirroring unchanged.
+            // CHR-ROM nametable mode is mapper-controlled.
+            self.mirroring = Mirroring::MapperControlled;
             return;
         }
 
@@ -329,8 +357,77 @@ impl Mapper26 {
             0x23 | 0x24 => Mirroring::Horizontal,
             0x28 | 0x2F => Mirroring::SingleScreenLower,
             0x2B | 0x2C => Mirroring::SingleScreenUpper,
-            _ => self.base_mirroring,
+            _ => Mirroring::MapperControlled,
         };
+    }
+
+    #[inline]
+    fn chr_nt_page_default(&self, nt: usize) -> u8 {
+        match self.banking_mode & 0x07 {
+            0 | 6 | 7 => {
+                if nt < 2 {
+                    self.chr_regs.get(6).copied().unwrap_or(0)
+                } else {
+                    self.chr_regs.get(7).copied().unwrap_or(0)
+                }
+            }
+            1 | 5 => match nt {
+                0 => self.chr_regs.get(4).copied().unwrap_or(0),
+                1 => self.chr_regs.get(5).copied().unwrap_or(0),
+                2 => self.chr_regs.get(6).copied().unwrap_or(0),
+                _ => self.chr_regs.get(7).copied().unwrap_or(0),
+            },
+            _ => {
+                if nt == 1 || nt == 3 {
+                    self.chr_regs.get(7).copied().unwrap_or(0)
+                } else {
+                    self.chr_regs.get(6).copied().unwrap_or(0)
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn chr_nt_page_special(&self, nt: usize) -> Option<u8> {
+        let reg6 = self.chr_regs.get(6).copied().unwrap_or(0);
+        let reg7 = self.chr_regs.get(7).copied().unwrap_or(0);
+        let reg6_even = reg6 & 0xFE;
+        let reg7_even = reg7 & 0xFE;
+
+        match self.banking_mode & 0x2F {
+            0x20 | 0x27 => Some(match nt {
+                0 => reg6_even,
+                1 => reg6_even | 1,
+                2 => reg7_even,
+                _ => reg7_even | 1,
+            }),
+            0x23 | 0x24 => Some(match nt {
+                0 => reg6_even,
+                1 => reg7_even,
+                2 => reg6_even | 1,
+                _ => reg7_even | 1,
+            }),
+            0x28 | 0x2F => Some(match nt {
+                0 | 1 => reg6_even,
+                _ => reg7_even,
+            }),
+            0x2B | 0x2C => Some(match nt {
+                0 | 2 => reg6_even | 1,
+                _ => reg7_even | 1,
+            }),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn ciram_nt_page_special(&self, nt: usize) -> Option<u8> {
+        match self.banking_mode & 0x2F {
+            0x20 | 0x27 => Some(if nt == 0 || nt == 2 { 0 } else { 1 }),
+            0x23 | 0x24 => Some(if nt <= 1 { 0 } else { 1 }),
+            0x28 | 0x2F => Some(0),
+            0x2B | 0x2C => Some(1),
+            _ => None,
+        }
     }
 
     fn clock_irq_counter(&mut self) {
@@ -345,14 +442,15 @@ impl Mapper26 {
 
 impl Mapper for Mapper26 {
     fn hook_mask(&self) -> MapperHookMask {
-        MapperHookMask::CPU_BUS_ACCESS
+        MapperHookMask::CPU_CLOCK
     }
 
     fn on_mapper_event(&mut self, event: MapperEvent) {
-        if let MapperEvent::CpuBusAccess { .. } = event {
-            if !self.irq_enabled {
-                return;
-            }
+        if !matches!(event, MapperEvent::CpuClock { .. }) {
+            return;
+        }
+
+        if self.irq_enabled {
             if self.irq_cycle_mode {
                 self.clock_irq_counter();
             } else {
@@ -366,9 +464,10 @@ impl Mapper for Mapper26 {
     }
 
     fn reset(&mut self, _kind: ResetKind) {
-        self.prg_bank_8000_2x = 0;
-        self.prg_bank_c000 = self.prg_bank_count_8k.saturating_sub(2);
+        self.prg_bank_8000_2x = None;
+        self.prg_bank_c000 = None;
         self.banking_mode = 0;
+        self.prg_ram_gate_initialized = false;
         self.chr_regs.fill(0);
         self.mirroring = self.base_mirroring;
 
@@ -384,7 +483,7 @@ impl Mapper for Mapper26 {
     fn cpu_read(&self, addr: u16) -> Option<u8> {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
-            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => Some(self.read_prg_rom(addr)),
+            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
             _ => None,
         }
     }
@@ -406,6 +505,39 @@ impl Mapper for Mapper26 {
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
         self.write_chr(addr, data);
+    }
+
+    fn map_nametable(&self, addr: u16) -> NametableTarget {
+        let base = addr & 0x0FFF;
+        let nt = ((base >> 10) & 0x03) as usize;
+        let within = base & 0x03FF;
+
+        if (self.banking_mode & 0x10) != 0 {
+            let page = self
+                .chr_nt_page_special(nt)
+                .unwrap_or_else(|| self.chr_nt_page_default(nt));
+            let offset = ((page as u16) << 10) | within;
+            return NametableTarget::MapperVram(offset);
+        }
+
+        let page = self
+            .ciram_nt_page_special(nt)
+            .unwrap_or_else(|| self.chr_nt_page_default(nt) & 0x01);
+
+        NametableTarget::Ciram(((page as u16) << 10) | within)
+    }
+
+    fn mapper_nametable_read(&self, offset: u16) -> u8 {
+        let page = ((offset >> 10) & 0x3F) as usize;
+        let within = (offset & 0x03FF) as usize;
+        self.chr.read_indexed(page * CHR_BANK_SIZE_1K, within)
+    }
+
+    fn mapper_nametable_write(&mut self, offset: u16, value: u8) {
+        let page = ((offset >> 10) & 0x3F) as usize;
+        let within = (offset & 0x03FF) as usize;
+        self.chr
+            .write_indexed(page * CHR_BANK_SIZE_1K, within, value);
     }
 
     fn irq_pending(&self) -> bool {

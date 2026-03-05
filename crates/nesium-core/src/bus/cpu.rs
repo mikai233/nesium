@@ -147,6 +147,25 @@ impl<'a> CpuBus<'a> {
         }
     }
 
+    #[inline]
+    pub(crate) fn notify_mapper_cpu_bus_access(
+        &mut self,
+        kind: CpuBusAccessKind,
+        addr: u16,
+        value: u8,
+    ) {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.cpu_bus_access(kind, addr, value, *self.cycles, *self.master_clock);
+        }
+    }
+
+    #[inline]
+    pub(crate) fn notify_mapper_cpu_clock(&mut self) {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.cpu_clock(*self.cycles, *self.master_clock);
+        }
+    }
+
     /// Returns `true` when the inserted cartridge asserts IRQ.
     fn cartridge_irq_pending(&self) -> bool {
         self.cartridge
@@ -356,9 +375,7 @@ impl<'a> CpuBus<'a> {
         cpu.handle_dma(addr, self, ctx);
         cpu.begin_cycle(true, self, ctx);
         let value = self.read(addr, cpu, ctx);
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.cpu_bus_access(kind, addr, value, *self.cycles, *self.master_clock);
-        }
+        self.notify_mapper_cpu_bus_access(kind, addr, value);
         cpu.end_cycle(true, self, ctx);
         value
     }
@@ -379,9 +396,7 @@ impl<'a> CpuBus<'a> {
     ) {
         cpu.begin_cycle(false, self, ctx);
         self.write(addr, data, cpu, ctx);
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.cpu_bus_access(kind, addr, data, *self.cycles, *self.master_clock);
-        }
+        self.notify_mapper_cpu_bus_access(kind, addr, data);
         cpu.end_cycle(false, self, ctx);
     }
 
@@ -389,15 +404,7 @@ impl<'a> CpuBus<'a> {
     pub fn dma_read(&mut self, addr: u16, cpu: &mut Cpu, ctx: &mut Context) -> u8 {
         cpu.begin_cycle(true, self, ctx);
         let v = self.read(addr, cpu, ctx);
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.cpu_bus_access(
-                CpuBusAccessKind::DmaRead,
-                addr,
-                v,
-                *self.cycles,
-                *self.master_clock,
-            );
-        }
+        self.notify_mapper_cpu_bus_access(CpuBusAccessKind::DmaRead, addr, v);
         cpu.end_cycle(true, self, ctx);
         v
     }
@@ -406,15 +413,7 @@ impl<'a> CpuBus<'a> {
     pub fn dma_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, ctx: &mut Context) {
         cpu.begin_cycle(true, self, ctx);
         self.write(addr, data, cpu, ctx);
-        if let Some(cart) = self.cartridge.as_deref_mut() {
-            cart.cpu_bus_access(
-                CpuBusAccessKind::DmaWrite,
-                addr,
-                data,
-                *self.cycles,
-                *self.master_clock,
-            );
-        }
+        self.notify_mapper_cpu_bus_access(CpuBusAccessKind::DmaWrite, addr, data);
         cpu.end_cycle(true, self, ctx);
     }
 
