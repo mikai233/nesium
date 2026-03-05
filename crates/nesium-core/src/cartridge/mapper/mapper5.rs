@@ -1075,18 +1075,19 @@ impl Mapper for Mapper5 {
             }
             2 => {
                 // Internal ExRAM.
-                NametableTarget::MapperVram(offset)
+                NametableTarget::MapperVram(offset as u32)
             }
             3 => {
                 // Fill mode: encode using high bit so mapper_nametable_* can
                 // distinguish it from ExRAM-backed nametables.
-                NametableTarget::MapperVram(0x1000 | offset)
+                NametableTarget::MapperVram((0x1000 | offset) as u32)
             }
             _ => NametableTarget::Ciram(offset),
         }
     }
 
-    fn mapper_nametable_read(&self, offset: u16) -> u8 {
+    fn mapper_nametable_read(&self, offset: u32) -> u8 {
+        let offset = offset as u16;
         if Self::is_fill_offset(offset) {
             let rel = Self::decode_fill_offset(offset);
             // Fill-mode tile vs attribute behaviour depends on the offset.
@@ -1113,7 +1114,8 @@ impl Mapper for Mapper5 {
         }
     }
 
-    fn mapper_nametable_write(&mut self, offset: u16, value: u8) {
+    fn mapper_nametable_write(&mut self, offset: u32, value: u8) {
+        let offset = offset as u16;
         if Self::is_fill_offset(offset) {
             // Writes to fill-mode nametables are ignored; only $5106/$5107 matter.
             let _ = (offset, value);

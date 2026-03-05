@@ -1,9 +1,7 @@
-//! Mapper 26 – Konami VRC6b (with basic VRC6 behaviour, audio stubbed).
+//! Mapper 26 – Konami VRC6b.
 //!
 //! This implementation mirrors the PRG/CHR banking and IRQ behaviour of VRC6,
-//! following Mesen2's layout. VRC6's expansion audio registers are accepted
-//! but do not currently generate audio output; this can be extended via the
-//! [`ExpansionAudio`] trait in the future.
+//! following Mesen2's layout, including VRC6 expansion audio.
 //!
 //! | Area | Address range       | Behaviour                                          | IRQ/Audio                         |
 //! |------|---------------------|----------------------------------------------------|-----------------------------------|
@@ -11,7 +9,7 @@
 //! | CPU  | `$8000-$BFFF`       | 16 KiB switchable PRG-ROM window (2×8 KiB)         | None                              |
 //! | CPU  | `$C000-$DFFF`       | 8 KiB switchable PRG-ROM window                    | None                              |
 //! | CPU  | `$E000-$FFFF`       | 8 KiB fixed PRG-ROM window (last)                  | None                              |
-//! | CPU  | `$B003/$F000-$F002` | Banking/mirroring/IRQ control registers           | VRC6 IRQ (audio regs stubbed)     |
+//! | CPU  | `$B003/$F000-$F002` | Banking/mirroring/IRQ control registers           | VRC6 IRQ                           |
 //! | PPU  | `$0000-$1FFF`       | Eight 1 KiB CHR banks with mode‑dependent mapping  | None                              |
 //! | PPU  | `$2000-$3EFF`       | Mirroring from VRC6 control (`banking_mode`)       | None                              |
 
@@ -20,6 +18,8 @@ use std::borrow::Cow;
 use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef};
 
 use crate::{
+    apu::{ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot},
+    audio::AudioChannel,
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
@@ -53,7 +53,7 @@ const VRC6_IO_WINDOW_END: u16 = 0xFFFF;
 enum Vrc6CpuRegister {
     /// `$8000-$8003` – PRG bank for `$8000-$BFFF` (2×8 KiB window).
     PrgBank8000_2x,
-    /// `$9000-$B002` – expansion audio registers (currently ignored).
+    /// `$9000-$B002` – VRC6 expansion audio registers.
     ExpansionAudio,
     /// `$B003` – banking/mirroring/CHR mode/PRG-RAM control.
     Control,
@@ -121,14 +121,230 @@ pub struct Mapper26 {
     // IRQ state (VRC6 uses the same style counter as VRC4).
     irq_reload: u8,
     irq_counter: u8,
-    irq_prescaler: i32,
+    irq_prescaler: i16,
     irq_enabled: bool,
     irq_enabled_after_ack: bool,
     irq_cycle_mode: bool,
     irq_pending: bool,
+    audio: Vrc6AudioState,
 }
 
 type Mapper26ChrRegs = ByteBlock<8>;
+
+#[derive(Debug, Clone)]
+struct Vrc6PulseState {
+    volume: u8,
+    duty_cycle: u8,
+    ignore_duty: bool,
+    frequency: u16,
+    enabled: bool,
+    timer: i32,
+    step: u8,
+    frequency_shift: u8,
+}
+
+impl Vrc6PulseState {
+    fn new() -> Self {
+        Self {
+            volume: 0,
+            duty_cycle: 0,
+            ignore_duty: false,
+            frequency: 1,
+            enabled: false,
+            timer: 1,
+            step: 0,
+            frequency_shift: 0,
+        }
+    }
+
+    fn write_reg(&mut self, addr: u16, value: u8) {
+        match addr & 0x03 {
+            0 => {
+                self.volume = value & 0x0F;
+                self.duty_cycle = (value >> 4) & 0x07;
+                self.ignore_duty = (value & 0x80) != 0;
+            }
+            1 => {
+                self.frequency = (self.frequency & 0x0F00) | value as u16;
+            }
+            2 => {
+                self.frequency = (self.frequency & 0x00FF) | (((value & 0x0F) as u16) << 8);
+                self.enabled = (value & 0x80) != 0;
+                if !self.enabled {
+                    self.step = 0;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn set_frequency_shift(&mut self, shift: u8) {
+        self.frequency_shift = shift;
+    }
+
+    fn clock(&mut self) {
+        if !self.enabled {
+            return;
+        }
+
+        self.timer -= 1;
+        if self.timer == 0 {
+            self.step = (self.step + 1) & 0x0F;
+            self.timer = ((self.frequency >> self.frequency_shift) + 1) as i32;
+        }
+    }
+
+    fn volume(&self) -> u8 {
+        if !self.enabled {
+            0
+        } else if self.ignore_duty || self.step <= self.duty_cycle {
+            self.volume
+        } else {
+            0
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Vrc6SawState {
+    accumulator_rate: u8,
+    accumulator: u8,
+    frequency: u16,
+    enabled: bool,
+    timer: i32,
+    step: u8,
+    frequency_shift: u8,
+}
+
+impl Vrc6SawState {
+    fn new() -> Self {
+        Self {
+            accumulator_rate: 0,
+            accumulator: 0,
+            frequency: 1,
+            enabled: false,
+            timer: 1,
+            step: 0,
+            frequency_shift: 0,
+        }
+    }
+
+    fn write_reg(&mut self, addr: u16, value: u8) {
+        match addr & 0x03 {
+            0 => {
+                self.accumulator_rate = value & 0x3F;
+            }
+            1 => {
+                self.frequency = (self.frequency & 0x0F00) | value as u16;
+            }
+            2 => {
+                self.frequency = (self.frequency & 0x00FF) | (((value & 0x0F) as u16) << 8);
+                self.enabled = (value & 0x80) != 0;
+                if !self.enabled {
+                    self.accumulator = 0;
+                    self.step = 0;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn set_frequency_shift(&mut self, shift: u8) {
+        self.frequency_shift = shift;
+    }
+
+    fn clock(&mut self) {
+        if !self.enabled {
+            return;
+        }
+
+        self.timer -= 1;
+        if self.timer == 0 {
+            self.step = (self.step + 1) % 14;
+            self.timer = ((self.frequency >> self.frequency_shift) + 1) as i32;
+
+            if self.step == 0 {
+                self.accumulator = 0;
+            } else if (self.step & 0x01) == 0 {
+                self.accumulator = self.accumulator.wrapping_add(self.accumulator_rate);
+            }
+        }
+    }
+
+    fn volume(&self) -> u8 {
+        if self.enabled {
+            self.accumulator >> 3
+        } else {
+            0
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Vrc6AudioState {
+    pulse1: Vrc6PulseState,
+    pulse2: Vrc6PulseState,
+    saw: Vrc6SawState,
+    halt_audio: bool,
+    last_output: i32,
+}
+
+impl Vrc6AudioState {
+    fn new() -> Self {
+        Self {
+            pulse1: Vrc6PulseState::new(),
+            pulse2: Vrc6PulseState::new(),
+            saw: Vrc6SawState::new(),
+            halt_audio: false,
+            last_output: 0,
+        }
+    }
+
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    fn write_register(&mut self, addr: u16, value: u8) {
+        match addr & 0xF003 {
+            0x9000 | 0x9001 | 0x9002 => self.pulse1.write_reg(addr, value),
+            0xA000 | 0xA001 | 0xA002 => self.pulse2.write_reg(addr, value),
+            0xB000 | 0xB001 | 0xB002 => self.saw.write_reg(addr, value),
+            0x9003 => {
+                self.halt_audio = (value & 0x01) != 0;
+                let shift = if (value & 0x04) != 0 {
+                    8
+                } else if (value & 0x02) != 0 {
+                    4
+                } else {
+                    0
+                };
+                self.pulse1.set_frequency_shift(shift);
+                self.pulse2.set_frequency_shift(shift);
+                self.saw.set_frequency_shift(shift);
+            }
+            _ => {}
+        }
+    }
+
+    fn clock_delta(&mut self) -> f32 {
+        if !self.halt_audio {
+            self.pulse1.clock();
+            self.pulse2.clock();
+            self.saw.clock();
+        }
+
+        let output_level =
+            self.pulse1.volume() as i32 + self.pulse2.volume() as i32 + self.saw.volume() as i32;
+        // Match Mesen2 VRC6 path: delta units are scaled by 15.
+        let delta = ((output_level - self.last_output) * 15) as f32;
+        self.last_output = output_level;
+        delta
+    }
+
+    fn current_level(&self) -> f32 {
+        self.last_output as f32
+    }
+}
 
 impl Mapper26 {
     pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
@@ -156,6 +372,7 @@ impl Mapper26 {
             irq_enabled_after_ack: false,
             irq_cycle_mode: false,
             irq_pending: false,
+            audio: Vrc6AudioState::new(),
         }
     }
 
@@ -169,7 +386,6 @@ impl Mapper26 {
         if self.prg_ram.is_empty() {
             return false;
         }
-
         if !self.prg_ram_gate_initialized {
             true
         } else {
@@ -304,9 +520,7 @@ impl Mapper26 {
                     self.update_prg_bank_8000(value);
                 }
                 ExpansionAudio => {
-                    // Expansion audio registers ($9000-$B002) are accepted but
-                    // ignored for now; integration with an ExpansionAudio
-                    // implementation can extend this in the future.
+                    self.audio.write_register(addr, value);
                 }
                 Control => {
                     self.banking_mode = value;
@@ -453,14 +667,10 @@ impl Mapper for Mapper26 {
         }
 
         if self.irq_enabled {
-            if self.irq_cycle_mode {
+            self.irq_prescaler = self.irq_prescaler.wrapping_sub(3);
+            if self.irq_cycle_mode || self.irq_prescaler <= 0 {
                 self.clock_irq_counter();
-            } else {
-                self.irq_prescaler -= 3;
-                if self.irq_prescaler <= 0 {
-                    self.clock_irq_counter();
-                    self.irq_prescaler += 341;
-                }
+                self.irq_prescaler = self.irq_prescaler.wrapping_add(341);
             }
         }
     }
@@ -480,6 +690,7 @@ impl Mapper for Mapper26 {
         self.irq_enabled_after_ack = false;
         self.irq_cycle_mode = false;
         self.irq_pending = false;
+        self.audio.reset();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
@@ -518,7 +729,7 @@ impl Mapper for Mapper26 {
             let page = self
                 .chr_nt_page_special(nt)
                 .unwrap_or_else(|| self.chr_nt_page_default(nt));
-            let offset = ((page as u16) << 10) | within;
+            let offset = ((page as u32) << 10) | u32::from(within);
             return NametableTarget::MapperVram(offset);
         }
 
@@ -529,15 +740,15 @@ impl Mapper for Mapper26 {
         NametableTarget::Ciram(((page as u16) << 10) | within)
     }
 
-    fn mapper_nametable_read(&self, offset: u16) -> u8 {
-        let page = ((offset >> 10) & 0x3F) as usize;
-        let within = (offset & 0x03FF) as usize;
+    fn mapper_nametable_read(&self, offset: u32) -> u8 {
+        let page = (offset >> 10) as usize;
+        let within = (offset as usize) & 0x03FF;
         self.chr.read_indexed(page * CHR_BANK_SIZE_1K, within)
     }
 
-    fn mapper_nametable_write(&mut self, offset: u16, value: u8) {
-        let page = ((offset >> 10) & 0x3F) as usize;
-        let within = (offset & 0x03FF) as usize;
+    fn mapper_nametable_write(&mut self, offset: u32, value: u8) {
+        let page = (offset >> 10) as usize;
+        let within = (offset as usize) & 0x03FF;
         self.chr
             .write_indexed(page * CHR_BANK_SIZE_1K, within, value);
     }
@@ -577,5 +788,29 @@ impl Mapper for Mapper26 {
 
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("Konami VRC6b")
+    }
+
+    fn expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
+        Some(self)
+    }
+
+    fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
+        Some(self)
+    }
+}
+
+impl ExpansionAudio for Mapper26 {
+    fn clock_cpu(&mut self, ctx: ExpansionAudioClockContext, sink: &mut dyn ExpansionAudioSink) {
+        let delta = self.audio.clock_delta();
+        if delta != 0.0 {
+            sink.push_delta(AudioChannel::Vrc6, ctx.cpu_cycle, delta);
+        }
+    }
+
+    fn snapshot(&self) -> ExpansionAudioSnapshot {
+        ExpansionAudioSnapshot {
+            vrc6: self.audio.current_level(),
+            ..ExpansionAudioSnapshot::default()
+        }
     }
 }
