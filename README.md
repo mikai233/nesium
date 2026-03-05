@@ -137,7 +137,6 @@ The long-term vision for Nesium focuses on precision, tooling, and extensibility
 
 - **MMC5 (mapper 5)**: ExRAM-as-nametable modes and extended attribute/fill features are still TODO; expansion audio unimplemented.
 - **Namco 163 (mapper 19)**: Only basic audio routing implemented; full 8-channel wavetable behaviour and per-channel timing/phase wrapping remain to be completed.
-- **VRC6b (mapper 26)**: Expansion audio stubbed; CHR-ROM nametable modes not finished.
 - **VRC7 (mapper 85)**: Audio core not wired; OPLL implementation pending.
 - **J.Y. Company 90**: Multicart NT/IRQ tricks are simplified; advanced nametable/IRQ behaviour needs work.
 - **TQROM (mapper 119)**: Edge cases around CHR ROM/RAM bit toggling still need verification.

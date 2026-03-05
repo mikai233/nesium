@@ -224,12 +224,12 @@ impl Cartridge {
     }
 
     /// Mapper-controlled nametable read when [`map_nametable`] selects mapper VRAM/ROM.
-    pub fn mapper_nametable_read(&self, offset: u16) -> u8 {
+    pub fn mapper_nametable_read(&self, offset: u32) -> u8 {
         self.mapper.mapper_nametable_read(offset)
     }
 
     /// Mapper-controlled nametable write when [`map_nametable`] selects mapper VRAM/ROM.
-    pub fn mapper_nametable_write(&mut self, offset: u16, value: u8) {
+    pub fn mapper_nametable_write(&mut self, offset: u32, value: u8) {
         self.mapper.mapper_nametable_write(offset, value);
     }
 

@@ -93,13 +93,13 @@ impl<'a> PpuBus<'a> {
         }
     }
 
-    pub fn mapper_nametable_read(&self, offset: u16) -> Option<u8> {
+    pub fn mapper_nametable_read(&self, offset: u32) -> Option<u8> {
         self.cartridge
             .as_deref()
             .map(|cart| cart.mapper_nametable_read(offset))
     }
 
-    pub fn mapper_nametable_write(&mut self, offset: u16, value: u8) -> bool {
+    pub fn mapper_nametable_write(&mut self, offset: u32, value: u8) -> bool {
         if let Some(cart) = self.cartridge.as_deref_mut() {
             cart.mapper_nametable_write(offset, value);
             true
