@@ -1,6 +1,9 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use eframe::egui;
@@ -12,7 +15,7 @@ use nesium_runtime::DebugState;
 use super::{
     AppViewport, NesiumApp, TextId, controller,
     controller::{ControllerDevice, InputAction, InputPreset},
-    dialogs::pick_palette_dialog,
+    dialogs::{pick_palette_dialog, save_input_record_dialog},
 };
 
 fn consume_close_requests(
@@ -678,6 +681,7 @@ impl NesiumApp {
                 .with_inner_size([420.0, 300.0]);
             let ui_state = Arc::clone(&self.ui_state);
             let runtime_handle = self.runtime_handle.clone();
+            let input_recorder = Arc::clone(&self.input_recorder);
             let close_flag = self.viewports.close_flag(AppViewport::Input);
             show_viewport_with_close(
                 ctx,
@@ -704,6 +708,113 @@ impl NesiumApp {
 
                     show_viewport_content(ctx, class, title, |ui| {
                         ui.heading(ui_state.i18n.text(TextId::InputHeading));
+
+                        let (
+                            recording_active,
+                            recording_output_path,
+                            recording_event_count,
+                            recording_last_saved_path,
+                            recording_last_error,
+                        ) = if let Ok(recorder) = input_recorder.lock() {
+                            (
+                                recorder.is_active(),
+                                recorder.output_path().map(PathBuf::from),
+                                recorder.event_count(),
+                                recorder.last_saved_path().map(PathBuf::from),
+                                recorder.last_error().map(str::to_string),
+                            )
+                        } else {
+                            (
+                                false,
+                                None,
+                                0usize,
+                                None,
+                                Some("recorder lock poisoned".to_string()),
+                            )
+                        };
+
+                        ui.group(|ui| {
+                            ui.label(ui_state.i18n.text(TextId::InputRecordingSection));
+                            ui.horizontal(|ui| {
+                                ui.label(ui_state.i18n.text(TextId::InputRecordingStatusLabel));
+                                let status = if recording_active {
+                                    ui_state.i18n.text(TextId::InputRecordingStatusRecording)
+                                } else {
+                                    ui_state.i18n.text(TextId::InputRecordingStatusIdle)
+                                };
+                                ui.monospace(status);
+                            });
+
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(ui_state.i18n.text(TextId::InputRecordingOutputLabel));
+                                if let Some(path) = recording_output_path.as_deref() {
+                                    ui.monospace(path.display().to_string());
+                                } else {
+                                    ui.monospace("-");
+                                }
+                            });
+
+                            ui.horizontal(|ui| {
+                                ui.label(ui_state.i18n.text(TextId::InputRecordingEventsLabel));
+                                ui.monospace(recording_event_count.to_string());
+                            });
+
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add_enabled(
+                                        !recording_active,
+                                        egui::Button::new(
+                                            ui_state.i18n.text(TextId::InputRecordingStart),
+                                        ),
+                                    )
+                                    .clicked()
+                                    && let Some(path) = save_input_record_dialog()
+                                {
+                                    let mut masks = [0u8; 4];
+                                    for (port, mask) in masks.iter_mut().enumerate() {
+                                        *mask = ui_state.controllers[port].pressed_mask();
+                                    }
+                                    let start_frame = runtime_handle.frame_seq().saturating_add(1);
+                                    if let Ok(mut recorder) = input_recorder.lock() {
+                                        recorder.start(path, start_frame, masks);
+                                    }
+                                }
+
+                                if ui
+                                    .add_enabled(
+                                        recording_active,
+                                        egui::Button::new(
+                                            ui_state.i18n.text(TextId::InputRecordingStopAndSave),
+                                        ),
+                                    )
+                                    .clicked()
+                                    && let Ok(mut recorder) = input_recorder.lock()
+                                {
+                                    recorder.stop_and_save();
+                                }
+                            });
+
+                            if let Some(path) = recording_last_saved_path.as_deref() {
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.label(
+                                        ui_state.i18n.text(TextId::InputRecordingLastSavedLabel),
+                                    );
+                                    ui.monospace(path.display().to_string());
+                                });
+                            }
+
+                            if let Some(err) = recording_last_error.as_deref() {
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.colored_label(
+                                        Color32::LIGHT_RED,
+                                        ui_state.i18n.text(TextId::InputRecordingLastErrorLabel),
+                                    );
+                                    ui.colored_label(Color32::LIGHT_RED, err);
+                                });
+                            }
+
+                            ui.small(ui_state.i18n.text(TextId::InputRecordingHelp));
+                        });
 
                         egui::ScrollArea::vertical()
                             .auto_shrink([false, false])

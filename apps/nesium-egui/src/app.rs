@@ -41,6 +41,133 @@ use self::{
 };
 
 #[derive(Debug, Clone)]
+struct InputRecordEvent {
+    frame: u64,
+    pad: usize,
+    state: u8,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct InputRecorder {
+    active: bool,
+    output_path: Option<PathBuf>,
+    events: Vec<InputRecordEvent>,
+    last_masks: [u8; 4],
+    last_frame: Option<u64>,
+    last_saved_path: Option<PathBuf>,
+    last_error: Option<String>,
+}
+
+impl InputRecorder {
+    fn start(&mut self, path: PathBuf, start_frame: u64, current_masks: [u8; 4]) {
+        self.active = true;
+        self.output_path = Some(path);
+        self.events.clear();
+        self.last_masks = current_masks;
+        self.last_frame = Some(start_frame);
+        self.last_error = None;
+
+        // Only serialize ports 1-2 for compatibility with existing replay tooling.
+        for (pad, state) in current_masks.iter().copied().enumerate().take(2) {
+            if state != 0 {
+                self.push_or_replace_event(start_frame, pad, state);
+            }
+        }
+    }
+
+    fn push_or_replace_event(&mut self, frame: u64, pad: usize, state: u8) {
+        if let Some(existing) = self
+            .events
+            .iter_mut()
+            .rfind(|event| event.frame == frame && event.pad == pad)
+        {
+            existing.state = state;
+            return;
+        }
+        self.events.push(InputRecordEvent { frame, pad, state });
+    }
+
+    fn record_frame(&mut self, frame: u64, pad_masks: [u8; 4]) {
+        if !self.active {
+            return;
+        }
+
+        if let Some(last) = self.last_frame
+            && frame < last
+        {
+            self.active = false;
+            self.last_error = Some(format!(
+                "input recording stopped: frame sequence moved backwards ({last} -> {frame})"
+            ));
+            return;
+        }
+
+        for (pad, state) in pad_masks.iter().copied().enumerate().take(2) {
+            if state != self.last_masks[pad] {
+                self.push_or_replace_event(frame, pad, state);
+                self.last_masks[pad] = state;
+            }
+        }
+        self.last_frame = Some(frame);
+    }
+
+    fn stop_and_save(&mut self) {
+        if !self.active {
+            self.last_error = Some("input recording is not active".to_string());
+            return;
+        }
+
+        let Some(path) = self.output_path.clone() else {
+            self.active = false;
+            self.last_error = Some("input recording has no output path".to_string());
+            return;
+        };
+
+        let mut output = String::new();
+        output.push_str("# nesium-egui input recording\n");
+        output.push_str("# format: frame:pad:state\n");
+        output.push_str("# bits: 1=A,2=B,4=Select,8=Start,16=Up,32=Down,64=Left,128=Right\n");
+        for event in &self.events {
+            output.push_str(&format!("{}:{}:{}\n", event.frame, event.pad, event.state));
+        }
+
+        match std::fs::write(&path, output) {
+            Ok(()) => {
+                self.last_saved_path = Some(path);
+                self.last_error = None;
+            }
+            Err(err) => {
+                self.last_error = Some(format!("failed to write input recording: {err}"));
+            }
+        }
+
+        self.active = false;
+        self.output_path = None;
+        self.last_frame = None;
+    }
+
+    fn is_active(&self) -> bool {
+        self.active
+    }
+
+    fn output_path(&self) -> Option<&Path> {
+        self.output_path.as_deref()
+    }
+
+    fn event_count(&self) -> usize {
+        self.events.len()
+    }
+
+    fn last_saved_path(&self) -> Option<&Path> {
+        self.last_saved_path.as_deref()
+    }
+
+    fn last_error(&self) -> Option<&str> {
+        self.last_error.as_deref()
+    }
+}
+
+#[derive(Debug, Clone)]
 struct EguiNotificationSender {
     tx: Sender<NotificationEvent>,
 }
@@ -202,6 +329,7 @@ pub struct NesiumApp {
     fps_last_update: Instant,
     gamepads: Option<GamepadManager>,
     debugger_was_open: bool,
+    input_recorder: Arc<Mutex<InputRecorder>>,
 }
 
 impl NesiumApp {
@@ -285,6 +413,7 @@ impl NesiumApp {
             fps_last_update: Instant::now(),
             gamepads,
             debugger_was_open: false,
+            input_recorder: Arc::new(Mutex::new(InputRecorder::default())),
         };
         if let Some(path) = config.rom_path
             && let Err(err) = app.load_rom(&path)
@@ -722,6 +851,10 @@ impl eframe::App for NesiumApp {
         }
 
         // Always publish input state via atomics (no control channel, low latency).
+        let input_frame = current_seq.saturating_add(1);
+        if let Ok(mut recorder) = self.input_recorder.lock() {
+            recorder.record_frame(input_frame, pad_masks);
+        }
         for port in 0..4 {
             self.runtime_handle.set_pad_mask(port, pad_masks[port]);
             self.runtime_handle.set_turbo_mask(port, turbo_masks[port]);

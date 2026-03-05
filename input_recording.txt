@@ -1,0 +1,11 @@
+# nesium-egui input recording
+# format: frame:pad:state
+# bits: 1=A,2=B,4=Select,8=Start,16=Up,32=Down,64=Left,128=Right
+827:0:8
+827:1:8
+834:0:0
+834:1:0
+869:0:8
+869:1:8
+874:0:0
+874:1:0

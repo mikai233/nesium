@@ -65,6 +65,19 @@ impl LanguagePack for En {
             // Input viewport
             InputHeading => "Input configuration",
             InputControllerPortsLabel => "Controller ports:",
+            InputRecordingSection => "Input recording",
+            InputRecordingStatusLabel => "Status:",
+            InputRecordingStatusIdle => "Idle",
+            InputRecordingStatusRecording => "Recording",
+            InputRecordingOutputLabel => "Output:",
+            InputRecordingEventsLabel => "Captured events:",
+            InputRecordingStart => "Start recording…",
+            InputRecordingStopAndSave => "Stop and save",
+            InputRecordingLastSavedLabel => "Last saved:",
+            InputRecordingLastErrorLabel => "Last error:",
+            InputRecordingHelp => {
+                "Writes frame-based events as `frame:pad:state`, compatible with replay probes."
+            }
             InputDeviceKeyboard => "Keyboard",
             InputDeviceDisabled => "Disabled",
             InputNoGamepads => "No gamepad connected",

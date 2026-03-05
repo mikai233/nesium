@@ -259,8 +259,8 @@ pub enum MapperEvent {
 pub enum NametableTarget {
     /// Use PPU CIRAM (internal 2 KiB VRAM). `u16` is CIRAM offset.
     Ciram(u16),
-    /// Use mapper-controlled VRAM/ROM. `u16` is mapper-local offset.
-    MapperVram(u16),
+    /// Use mapper-controlled VRAM/ROM. `u32` is mapper-local offset.
+    MapperVram(u32),
     /// No device drives the bus (open bus).
     None,
 }
@@ -401,13 +401,13 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
 
     /// Called when [`map_nametable`] returns [`NametableTarget::MapperVram`]
     /// for nametable reads.
-    fn mapper_nametable_read(&self, _offset: u16) -> u8 {
+    fn mapper_nametable_read(&self, _offset: u32) -> u8 {
         0
     }
 
     /// Called when [`map_nametable`] returns [`NametableTarget::MapperVram`]
     /// for nametable writes.
-    fn mapper_nametable_write(&mut self, _offset: u16, _value: u8) {}
+    fn mapper_nametable_write(&mut self, _offset: u32, _value: u8) {}
 
     /// Returns `true` when the mapper asserts the CPU IRQ line.
     fn irq_pending(&self) -> bool {

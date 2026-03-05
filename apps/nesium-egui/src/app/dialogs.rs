@@ -23,6 +23,13 @@ pub fn save_wav_dialog() -> Option<PathBuf> {
         .save_file()
 }
 
+pub fn save_input_record_dialog() -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .add_filter("Input recording", &["txt", "log", "csv"])
+        .set_file_name("input_recording.txt")
+        .save_file()
+}
+
 pub fn write_wav(path: &Path, sample_rate: u32, samples: &[f32]) -> std::io::Result<()> {
     let channels: u16 = 2;
     let bits_per_sample: u16 = 16;
