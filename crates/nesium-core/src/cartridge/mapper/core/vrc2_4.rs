@@ -2,10 +2,29 @@ use crate::{
     cartridge::mapper::core::vrc_irq::VrcIrq,
     cartridge::{PrgRom, header::Mirroring, mapper::ChrStorage},
     mem_block::ByteBlock,
+    memory::cpu as cpu_mem,
 };
 
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 const CHR_BANK_SIZE_1K: usize = 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct VrcAddressBits {
+    pub a0_shift: u8,
+    pub a1_shift: u8,
+}
+
+impl VrcAddressBits {
+    pub const fn new(a0_shift: u8, a1_shift: u8) -> Self {
+        Self { a0_shift, a1_shift }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Vrc2_4AddressConfig {
+    pub primary: VrcAddressBits,
+    pub heuristic_alt: Option<VrcAddressBits>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Vrc2_4Register {
@@ -42,6 +61,53 @@ impl Vrc2_4Register {
             _ => None,
         }
     }
+}
+
+pub fn translate_vrc2_4_address(
+    addr: u16,
+    config: Vrc2_4AddressConfig,
+    use_heuristics: bool,
+) -> u16 {
+    let (a0, a1) = if use_heuristics {
+        if let Some(alt) = config.heuristic_alt {
+            (
+                (read_addr_line(addr, config.primary.a0_shift)
+                    | read_addr_line(addr, alt.a0_shift))
+                    & 0x01,
+                (read_addr_line(addr, config.primary.a1_shift)
+                    | read_addr_line(addr, alt.a1_shift))
+                    & 0x01,
+            )
+        } else {
+            (
+                read_addr_line(addr, config.primary.a0_shift),
+                read_addr_line(addr, config.primary.a1_shift),
+            )
+        }
+    } else {
+        (
+            read_addr_line(addr, config.primary.a0_shift),
+            read_addr_line(addr, config.primary.a1_shift),
+        )
+    };
+
+    (addr & 0xFF00) | (a1 << 1) | a0
+}
+
+pub fn read_prg_ram_window(prg_ram: &[u8], addr: u16) -> Option<u8> {
+    if prg_ram.is_empty() {
+        return None;
+    }
+    let idx = (addr - cpu_mem::PRG_RAM_START) as usize % prg_ram.len();
+    Some(prg_ram[idx])
+}
+
+pub fn write_prg_ram_window(prg_ram: &mut [u8], addr: u16, data: u8) {
+    if prg_ram.is_empty() {
+        return;
+    }
+    let idx = (addr - cpu_mem::PRG_RAM_START) as usize % prg_ram.len();
+    prg_ram[idx] = data;
 }
 
 #[derive(Debug, Clone)]
@@ -237,4 +303,9 @@ pub fn write_vrc2_4_register(
             }
         }
     }
+}
+
+#[inline]
+fn read_addr_line(addr: u16, shift: u8) -> u16 {
+    (addr >> shift) & 0x01
 }

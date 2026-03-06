@@ -41,6 +41,7 @@ use crate::{
         header::{Header, Mirroring},
         mapper::{
             ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer,
+            core::namco19::{Namco19BoardState, NamcoVariant, namco19_variant_init},
             select_chr_storage,
         },
     },
@@ -155,14 +156,6 @@ enum Namco163PpuSource {
     Nametable(u16),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NamcoVariant {
-    Namco163,
-    Namco175,
-    Namco340,
-    Unknown,
-}
-
 #[derive(Debug, Clone)]
 pub struct Mapper19 {
     prg_rom: PrgRom,
@@ -188,17 +181,7 @@ pub struct Mapper19 {
     /// Namco 163 expansion audio generator state, when this board revision
     /// includes the N163 audio block.
     audio: Option<Namco163Audio>,
-    reset_variant: NamcoVariant,
-    variant: NamcoVariant,
-    not_namco340: bool,
-    auto_detect_variant: bool,
-    /// Namco 163 write-protect register (`$F800`): bit6 is global write enable,
-    /// bits0-3 gate 2 KiB segments within `$6000-$7FFF`.
-    write_protect: u8,
-    /// E800 bit6: disable low CHR (slots 0-3) nametable-as-CHR mapping when set.
-    low_chr_nt_mode: bool,
-    /// E800 bit7: disable high CHR (slots 4-7) nametable-as-CHR mapping when set.
-    high_chr_nt_mode: bool,
+    board: Namco19BoardState,
     /// Mapper-local 2 KiB nametable RAM used when CHR slots map to NTRAM.
     nametable_ram: Namco163NametableRam,
 
@@ -206,12 +189,6 @@ pub struct Mapper19 {
     /// matching the representation used in Mesen2 and the Nesdev description.
     irq_counter: u16,
     irq_pending: bool,
-
-    /// Current nametable mirroring mode. Namco 163 can repurpose nametable RAM
-    /// as CHR, but the basic nametable wiring still follows the header unless
-    /// a more complete implementation overrides it.
-    reset_mirroring: Mirroring,
-    mirroring: Mirroring,
 }
 
 impl Mapper19 {
@@ -223,22 +200,10 @@ impl Mapper19 {
         let mapper_id = header.mapper();
         let submapper = header.submapper();
 
-        // Mirror Mesen's mapper/submapper defaults:
-        // - Mapper 19 defaults to Namco163.
-        // - Mapper 210 uses submapper for 175/340/unknown split.
-        let (variant, auto_detect_variant) = match (mapper_id, submapper) {
-            (19, _) => (NamcoVariant::Namco163, false),
-            (210, 1) => (NamcoVariant::Namco175, false),
-            (210, 2) => (NamcoVariant::Namco340, false),
-            (210, 0) => (NamcoVariant::Unknown, true),
-            _ => (NamcoVariant::Namco163, true),
-        };
-
-        // Submapper 2 corresponds to boards without expansion sound.
-        let has_audio_block = submapper != 2;
-        let mut audio = has_audio_block.then(Namco163Audio::new);
+        let init = namco19_variant_init(mapper_id, submapper);
+        let mut audio = init.has_audio_block.then(Namco163Audio::new);
         if let Some(audio) = audio.as_mut() {
-            audio.set_active(variant == NamcoVariant::Namco163);
+            audio.set_active(init.variant == NamcoVariant::Namco163);
         }
 
         Self {
@@ -252,18 +217,10 @@ impl Mapper19 {
             chr_banks: Namco163ChrBankRegs::new(),
             chr_is_nametable: Namco163ChrIsNametable::new(),
             audio,
-            reset_variant: variant,
-            variant,
-            not_namco340: false,
-            auto_detect_variant,
-            write_protect: 0,
-            low_chr_nt_mode: false,
-            high_chr_nt_mode: false,
+            board: Namco19BoardState::new(init, header.mirroring()),
             nametable_ram: Namco163NametableRam::new(),
             irq_counter: 0,
             irq_pending: false,
-            reset_mirroring: header.mirroring(),
-            mirroring: header.mirroring(),
         }
     }
 
@@ -286,24 +243,20 @@ impl Mapper19 {
     fn set_variant(&mut self, variant: NamcoVariant) {
         // Match Mesen2: fixed-board variants (auto-detect disabled) ignore
         // runtime variant probing writes.
-        if !self.auto_detect_variant {
-            return;
-        }
-        if !self.not_namco340 || variant != NamcoVariant::Namco340 {
-            self.variant = variant;
+        if self.board.set_variant(variant) {
             self.sync_audio_active();
         }
     }
 
     fn sync_audio_active(&mut self) {
         if let Some(audio) = self.audio.as_mut() {
-            audio.set_active(self.variant == NamcoVariant::Namco163);
+            audio.set_active(self.board.variant() == NamcoVariant::Namco163);
         }
     }
 
     fn map_default_nametable(&self, addr: u16) -> NametableTarget {
         let base = addr & 0x0FFF;
-        let offset = match self.mirroring {
+        let offset = match self.board.mirroring() {
             Mirroring::Horizontal => {
                 let nt = (base >> 10) & 3;
                 let within = base & 0x03FF;
@@ -360,7 +313,10 @@ impl Mapper19 {
         if self.prg_ram.is_empty() {
             return None;
         }
-        if matches!(self.variant, NamcoVariant::Namco340 | NamcoVariant::Unknown) {
+        if matches!(
+            self.board.variant(),
+            NamcoVariant::Namco340 | NamcoVariant::Unknown
+        ) {
             return None;
         }
         let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
@@ -371,23 +327,23 @@ impl Mapper19 {
         if self.prg_ram.is_empty() {
             return;
         }
-        match self.variant {
+        match self.board.variant() {
             NamcoVariant::Namco163 => {
                 // Match Namco163 write protection behavior used by Mesen:
                 // - bit6 must be set to enable writes globally
                 // - bits0-3 are per-2KiB inhibit bits (0 = writable)
-                let global_write_enable = (self.write_protect & 0x40) != 0;
+                let global_write_enable = (self.board.write_protect() & 0x40) != 0;
                 if !global_write_enable {
                     return;
                 }
                 let segment = ((addr.saturating_sub(cpu_mem::PRG_RAM_START)) >> 11) as u8; // 0..3
                 let inhibit_mask = 1u8 << segment.min(3);
-                if (self.write_protect & inhibit_mask) != 0 {
+                if (self.board.write_protect() & inhibit_mask) != 0 {
                     return;
                 }
             }
             NamcoVariant::Namco175 => {
-                if (self.write_protect & 0x01) == 0 {
+                if (self.board.write_protect() & 0x01) == 0 {
                     return;
                 }
             }
@@ -412,9 +368,13 @@ impl Mapper19 {
 
     fn update_chr_slot_latch(&mut self, slot: usize, value: u8) {
         let use_nametable = if slot < 4 {
-            self.variant == NamcoVariant::Namco163 && !self.low_chr_nt_mode && value >= 0xE0
+            self.board.variant() == NamcoVariant::Namco163
+                && !self.board.low_chr_nt_mode()
+                && value >= 0xE0
         } else if slot < 8 {
-            self.variant == NamcoVariant::Namco163 && !self.high_chr_nt_mode && value >= 0xE0
+            self.board.variant() == NamcoVariant::Namco163
+                && !self.board.high_chr_nt_mode()
+                && value >= 0xE0
         } else {
             value >= 0xE0
         };
@@ -485,9 +445,9 @@ impl Mapper19 {
         // - P bits select PRG bank at $A000-$BFFF
         // - H/L bits gate nametable-as-CHR mapping for slots 4-7 / 0-3
         self.prg_bank_a000 = value & 0x3F;
-        if self.variant == NamcoVariant::Namco163 {
-            self.low_chr_nt_mode = (value & 0x40) != 0;
-            self.high_chr_nt_mode = (value & 0x80) != 0;
+        if self.board.variant() == NamcoVariant::Namco163 {
+            self.board
+                .set_chr_nt_modes((value & 0x40) != 0, (value & 0x80) != 0);
         }
     }
 
@@ -542,22 +502,17 @@ impl Mapper for Mapper19 {
     }
 
     fn reset(&mut self, _kind: ResetKind) {
-        self.variant = self.reset_variant;
-        self.not_namco340 = false;
+        self.board.reset();
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
         self.prg_bank_c000 = 2.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
-        self.mirroring = self.reset_mirroring;
         self.chr_banks.fill(0);
         self.chr_is_nametable.fill(false);
-        self.write_protect = 0;
-        self.low_chr_nt_mode = false;
-        self.high_chr_nt_mode = false;
         self.irq_counter = 0;
         self.irq_pending = false;
         if let Some(audio) = self.audio.as_mut() {
             *audio = Namco163Audio::new();
-            audio.set_active(self.variant == NamcoVariant::Namco163);
+            audio.set_active(self.board.variant() == NamcoVariant::Namco163);
         }
     }
 
@@ -593,9 +548,8 @@ impl Mapper for Mapper19 {
 
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
-            self.not_namco340 = true;
-            if self.variant == NamcoVariant::Namco340 {
-                self.set_variant(NamcoVariant::Unknown);
+            if self.board.on_prg_ram_access() {
+                self.sync_audio_active();
             }
             self.write_prg_ram(addr, data);
             return;
@@ -623,12 +577,12 @@ impl Mapper for Mapper19 {
                 Namco163CpuRegister::ChrBankBase => {
                     if addr >= 0xC800 {
                         self.set_variant(NamcoVariant::Namco163);
-                    } else if addr >= 0xC000 && self.variant != NamcoVariant::Namco163 {
+                    } else if addr >= 0xC000 && self.board.variant() != NamcoVariant::Namco163 {
                         self.set_variant(NamcoVariant::Namco175);
                     }
 
-                    if self.variant == NamcoVariant::Namco175 {
-                        self.write_protect = data;
+                    if self.board.variant() == NamcoVariant::Namco175 {
+                        self.board.set_write_protect(data);
                     } else {
                         self.write_chr_bank(addr, data);
                     }
@@ -637,19 +591,19 @@ impl Mapper for Mapper19 {
                 // PRG bank selects for the 3 switchable 8 KiB windows.
                 Namco163CpuRegister::PrgSelect8000 => {
                     if (data & 0x80) != 0
-                        || ((data & 0x40) != 0 && self.variant != NamcoVariant::Namco163)
+                        || ((data & 0x40) != 0 && self.board.variant() != NamcoVariant::Namco163)
                     {
                         self.set_variant(NamcoVariant::Namco340);
                     }
                     self.write_prg_select_8000(data);
-                    if self.variant == NamcoVariant::Namco340 {
-                        self.mirroring = match (data >> 6) & 0x03 {
+                    if self.board.variant() == NamcoVariant::Namco340 {
+                        self.board.set_mirroring(match (data >> 6) & 0x03 {
                             0 => Mirroring::SingleScreenLower,
                             1 => Mirroring::Vertical,
                             2 => Mirroring::Horizontal,
                             _ => Mirroring::SingleScreenUpper,
-                        };
-                    } else if self.variant == NamcoVariant::Namco163 {
+                        });
+                    } else if self.board.variant() == NamcoVariant::Namco163 {
                         self.write_audio_register(addr, data);
                     }
                 }
@@ -659,8 +613,8 @@ impl Mapper for Mapper19 {
                 // Write-protect / audio RAM address port.
                 Namco163CpuRegister::AudioRamAddr => {
                     self.set_variant(NamcoVariant::Namco163);
-                    if self.variant == NamcoVariant::Namco163 {
-                        self.write_protect = data;
+                    if self.board.variant() == NamcoVariant::Namco163 {
+                        self.board.set_write_protect(data);
                         self.write_audio_register(addr, data);
                     }
                 }
@@ -677,7 +631,7 @@ impl Mapper for Mapper19 {
     }
 
     fn map_nametable(&self, addr: u16) -> NametableTarget {
-        if self.variant != NamcoVariant::Namco163 {
+        if self.board.variant() != NamcoVariant::Namco163 {
             return self.map_default_nametable(addr);
         }
         let base = addr & 0x0FFF;
@@ -739,7 +693,7 @@ impl Mapper for Mapper19 {
     }
 
     fn mirroring(&self) -> Mirroring {
-        self.mirroring
+        self.board.mirroring()
     }
 
     fn mapper_id(&self) -> u16 {
@@ -747,7 +701,7 @@ impl Mapper for Mapper19 {
     }
 
     fn name(&self) -> Cow<'static, str> {
-        if self.audio.is_some() && self.variant == NamcoVariant::Namco163 {
+        if self.audio.is_some() && self.board.variant() == NamcoVariant::Namco163 {
             Cow::Borrowed("Namco 163")
         } else {
             Cow::Borrowed("Namco 163-compatible")

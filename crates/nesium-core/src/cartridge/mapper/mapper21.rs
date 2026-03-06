@@ -28,7 +28,11 @@ use crate::{
             ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer,
             core::{
                 vrc_irq::VrcIrq,
-                vrc2_4::{Vrc2_4Banking, Vrc2_4Register, write_vrc2_4_register},
+                vrc2_4::{
+                    Vrc2_4AddressConfig, Vrc2_4Banking, Vrc2_4Register, VrcAddressBits,
+                    read_prg_ram_window, translate_vrc2_4_address, write_prg_ram_window,
+                    write_vrc2_4_register,
+                },
             },
             select_chr_storage,
         },
@@ -92,28 +96,17 @@ impl Mapper21 {
     /// Translate the CPU address into the VRC4 register layout, emulating the
     /// A0/A1 pin permutations documented on Nesdev and mirrored in Mesen2.
     fn translate_address(&self, addr: u16) -> u16 {
-        let (mut a0, mut a1) = if self.use_heuristics {
-            // Heuristic mode ORs both possible wirings to maximise compatibility
-            // for submapper 0 ROMs.
-            let base_a0 = (addr >> 1) & 0x01;
-            let base_a1 = (addr >> 2) & 0x01;
-            match self.variant {
-                Vrc4Variant::Vrc4a | Vrc4Variant::Vrc4c => {
-                    let alt_a0 = (addr >> 6) & 0x01;
-                    let alt_a1 = (addr >> 7) & 0x01;
-                    (base_a0 | alt_a0, base_a1 | alt_a1)
-                }
-            }
-        } else {
-            match self.variant {
-                Vrc4Variant::Vrc4a => ((addr >> 1) & 0x01, (addr >> 2) & 0x01),
-                Vrc4Variant::Vrc4c => ((addr >> 6) & 0x01, (addr >> 7) & 0x01),
-            }
+        let config = match self.variant {
+            Vrc4Variant::Vrc4a => Vrc2_4AddressConfig {
+                primary: VrcAddressBits::new(1, 2),
+                heuristic_alt: Some(VrcAddressBits::new(6, 7)),
+            },
+            Vrc4Variant::Vrc4c => Vrc2_4AddressConfig {
+                primary: VrcAddressBits::new(6, 7),
+                heuristic_alt: Some(VrcAddressBits::new(1, 2)),
+            },
         };
-
-        a0 &= 0x01;
-        a1 &= 0x01;
-        (addr & 0xFF00) | (a1 << 1) | a0
+        translate_vrc2_4_address(addr, config, self.use_heuristics)
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
@@ -121,19 +114,11 @@ impl Mapper21 {
     }
 
     fn read_prg_ram(&self, addr: u16) -> Option<u8> {
-        if self.prg_ram.is_empty() {
-            return None;
-        }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        Some(self.prg_ram[idx])
+        read_prg_ram_window(&self.prg_ram, addr)
     }
 
     fn write_prg_ram(&mut self, addr: u16, data: u8) {
-        if self.prg_ram.is_empty() {
-            return;
-        }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        self.prg_ram[idx] = data;
+        write_prg_ram_window(&mut self.prg_ram, addr, data);
     }
 
     fn read_chr(&self, addr: u16) -> u8 {
