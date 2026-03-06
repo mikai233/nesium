@@ -2,6 +2,16 @@ use core::fmt::Debug;
 
 use crate::audio::{AudioChannel, NesSoundMixer};
 
+pub mod namco163;
+pub mod sunsoft5b;
+pub mod vrc6;
+pub mod vrc7;
+
+pub use namco163::Namco163Audio;
+pub use sunsoft5b::Sunsoft5bAudio;
+pub use vrc6::Vrc6Audio;
+pub use vrc7::Vrc7Audio;
+
 /// Immutable timing information for one expansion-audio CPU clock tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExpansionAudioClockContext {

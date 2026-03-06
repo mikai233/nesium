@@ -31,13 +31,11 @@
 //! | PPU  | `$0000-$1FFF`     | CHR ROM/RAM in 1 KiB banks                         | None           |
 
 use std::borrow::Cow;
-use std::cell::Cell;
 
 use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef, NametableTarget};
 
 use crate::{
-    apu::{ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot},
-    audio::AudioChannel,
+    apu::{ExpansionAudio, Namco163Audio},
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
@@ -71,14 +69,7 @@ const NAMCO163_PRG_SLOT2_END: u16 = 0xDFFF;
 const NAMCO163_PRG_FIXED_SLOT_START: u16 = 0xE000;
 const NAMCO163_PRG_FIXED_SLOT_END: u16 = 0xFFFF;
 
-/// Namco 163 audio register decode mask and ports.
-/// - `$4800-$4FFF`: internal wave RAM data port.
-/// - `$E000-$E7FF`: audio control (also overlaps PRG select).
-/// - `$F800-$FFFF`: audio RAM address/auto-increment port.
-const NAMCO163_AUDIO_ADDR_MASK: u16 = 0xF800;
 const NAMCO163_AUDIO_RAM_PORT_BASE: u16 = 0x4800;
-const NAMCO163_AUDIO_CTRL_PORT_BASE: u16 = 0xE000;
-const NAMCO163_AUDIO_ADDR_PORT_BASE: u16 = 0xF800;
 
 /// IRQ counter access windows:
 /// - `$5000-$57FF`: IRQ low byte.
@@ -154,21 +145,6 @@ impl Namco163CpuRegister {
     }
 }
 
-/// Namco 163 audio state (adapted from Mesen2's `Namco163Audio`).
-#[derive(Debug, Clone)]
-struct Namco163AudioState {
-    internal_ram: Namco163InternalRam,
-    channel_output: Namco163ChannelOutput,
-    ram_position: Cell<u8>,
-    auto_increment: Cell<bool>,
-    update_counter: u8,
-    current_channel: i8,
-    last_output: f32,
-    disabled: bool,
-}
-
-type Namco163InternalRam = ByteBlock<0x80>;
-type Namco163ChannelOutput = MemBlock<i16, 8>;
 type Namco163ChrBankRegs = ByteBlock<12>;
 type Namco163ChrIsNametable = MemBlock<bool, 12>;
 type Namco163NametableRam = ByteBlock<NAMETABLE_RAM_SIZE>;
@@ -185,157 +161,6 @@ enum NamcoVariant {
     Namco175,
     Namco340,
     Unknown,
-}
-
-impl Namco163AudioState {
-    fn new() -> Self {
-        Self {
-            internal_ram: Namco163InternalRam::new(),
-            channel_output: Namco163ChannelOutput::new(),
-            ram_position: Cell::new(0),
-            auto_increment: Cell::new(false),
-            update_counter: 0,
-            current_channel: 7,
-            last_output: 0.0,
-            disabled: false,
-        }
-    }
-
-    fn num_channels(&self) -> u8 {
-        // Nesdev: high nibble of $7F encodes (channels - 1).
-        (self.internal_ram[0x7F] >> 4) & 0x07
-    }
-
-    fn frequency(&self, channel: usize) -> u32 {
-        let base = 0x40 + channel as u8 * 0x08;
-        let lo = self.internal_ram[base as usize] as u32;
-        let mid = self.internal_ram[base as usize + 2] as u32;
-        let hi = (self.internal_ram[base as usize + 4] & 0x03) as u32;
-        (hi << 16) | (mid << 8) | lo
-    }
-
-    fn phase(&self, channel: usize) -> u32 {
-        let base = 0x40 + channel as u8 * 0x08;
-        let lo = self.internal_ram[base as usize + 1] as u32;
-        let mid = self.internal_ram[base as usize + 3] as u32;
-        let hi = self.internal_ram[base as usize + 5] as u32;
-        (hi << 16) | (mid << 8) | lo
-    }
-
-    fn set_phase(&mut self, channel: usize, phase: u32) {
-        let base = 0x40 + channel as u8 * 0x08;
-        self.internal_ram[base as usize + 5] = ((phase >> 16) & 0xFF) as u8;
-        self.internal_ram[base as usize + 3] = ((phase >> 8) & 0xFF) as u8;
-        self.internal_ram[base as usize + 1] = (phase & 0xFF) as u8;
-    }
-
-    fn wave_address(&self, channel: usize) -> u8 {
-        let base = 0x40 + channel as u8 * 0x08;
-        self.internal_ram[base as usize + 6]
-    }
-
-    fn wave_length(&self, channel: usize) -> u16 {
-        let base = 0x40 + channel as u8 * 0x08;
-        let raw = self.internal_ram[base as usize + 4] & 0xFC;
-        256u16.saturating_sub(raw as u16).max(1)
-    }
-
-    fn volume(&self, channel: usize) -> u8 {
-        let base = 0x40 + channel as u8 * 0x08;
-        self.internal_ram[base as usize + 7] & 0x0F
-    }
-
-    fn update_channel(&mut self, channel: usize, _cpu_cycle: u64, _apu_cycle: u64) {
-        let freq = self.frequency(channel);
-        let mut phase = self.phase(channel);
-        let length = self.wave_length(channel) as u32;
-        let offset = self.wave_address(channel);
-        let vol = self.volume(channel) as i16;
-
-        // Advance phase within the waveform length.
-        phase = phase.wrapping_add(freq) % (length << 16);
-
-        let sample_pos = ((phase >> 16) as u8).wrapping_add(offset);
-        let byte = self.internal_ram[(sample_pos >> 1) as usize];
-        let nibble = if sample_pos & 1 != 0 {
-            (byte >> 4) & 0x0F
-        } else {
-            byte & 0x0F
-        };
-        let sample = (nibble as i16) - 8;
-
-        self.channel_output[channel] = sample * vol;
-        self.update_output_level();
-        self.set_phase(channel, phase);
-    }
-
-    fn update_output_level(&mut self) {
-        let n = self.num_channels();
-        let active = n as i16 + 1;
-        let mut sum: i16 = 0;
-        for i in (7 - n as i8)..=7 {
-            let idx = i as usize;
-            sum += self.channel_output[idx];
-        }
-        // Match Mesen2's Namco163Audio::UpdateOutputLevel integer-domain output.
-        self.last_output = (sum / active) as f32;
-    }
-
-    fn clock(&mut self, cpu_cycle: u64, apu_cycle: u64) {
-        if self.disabled {
-            return;
-        }
-        self.update_counter = self.update_counter.wrapping_add(1);
-        if self.update_counter == 15 {
-            let ch = self.current_channel.clamp(0, 7) as usize;
-            self.update_channel(ch, cpu_cycle, apu_cycle);
-            self.update_counter = 0;
-
-            self.current_channel -= 1;
-            if self.current_channel < 7 - self.num_channels() as i8 {
-                self.current_channel = 7;
-            }
-        }
-    }
-
-    fn write_register(&mut self, addr: u16, value: u8) {
-        match addr & NAMCO163_AUDIO_ADDR_MASK {
-            NAMCO163_AUDIO_RAM_PORT_BASE => {
-                let pos = self.ram_position.get();
-                self.internal_ram[pos as usize] = value;
-                if self.auto_increment.get() {
-                    self.ram_position.set((pos + 1) & 0x7F);
-                }
-            }
-            NAMCO163_AUDIO_CTRL_PORT_BASE => {
-                // Bit 6 disables sound; other bits handled by PRG banking.
-                self.disabled = (value & 0x40) != 0;
-            }
-            NAMCO163_AUDIO_ADDR_PORT_BASE => {
-                self.ram_position.set(value & 0x7F);
-                self.auto_increment.set((value & 0x80) != 0);
-            }
-            _ => {}
-        }
-    }
-
-    fn read_register(&self, addr: u16) -> u8 {
-        match addr & NAMCO163_AUDIO_ADDR_MASK {
-            NAMCO163_AUDIO_RAM_PORT_BASE => {
-                let pos = self.ram_position.get();
-                let val = self.internal_ram[pos as usize];
-                if self.auto_increment.get() {
-                    self.ram_position.set((pos + 1) & 0x7F);
-                }
-                val
-            }
-            _ => 0,
-        }
-    }
-
-    fn sample(&self) -> f32 {
-        self.last_output
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -362,8 +187,7 @@ pub struct Mapper19 {
 
     /// Namco 163 expansion audio generator state, when this board revision
     /// includes the N163 audio block.
-    audio: Option<Namco163AudioState>,
-    audio_level: f32,
+    audio: Option<Namco163Audio>,
     reset_variant: NamcoVariant,
     variant: NamcoVariant,
     not_namco340: bool,
@@ -412,7 +236,10 @@ impl Mapper19 {
 
         // Submapper 2 corresponds to boards without expansion sound.
         let has_audio_block = submapper != 2;
-        let audio = has_audio_block.then(Namco163AudioState::new);
+        let mut audio = has_audio_block.then(Namco163Audio::new);
+        if let Some(audio) = audio.as_mut() {
+            audio.set_active(variant == NamcoVariant::Namco163);
+        }
 
         Self {
             prg_rom,
@@ -425,7 +252,6 @@ impl Mapper19 {
             chr_banks: Namco163ChrBankRegs::new(),
             chr_is_nametable: Namco163ChrIsNametable::new(),
             audio,
-            audio_level: 0.0,
             reset_variant: variant,
             variant,
             not_namco340: false,
@@ -465,6 +291,13 @@ impl Mapper19 {
         }
         if !self.not_namco340 || variant != NamcoVariant::Namco340 {
             self.variant = variant;
+            self.sync_audio_active();
+        }
+    }
+
+    fn sync_audio_active(&mut self) {
+        if let Some(audio) = self.audio.as_mut() {
+            audio.set_active(self.variant == NamcoVariant::Namco163);
         }
     }
 
@@ -686,32 +519,6 @@ impl Mapper19 {
     }
 }
 
-impl ExpansionAudio for Mapper19 {
-    fn clock_cpu(&mut self, ctx: ExpansionAudioClockContext, sink: &mut dyn ExpansionAudioSink) {
-        if self.variant == NamcoVariant::Namco163
-            && let Some(audio) = &mut self.audio
-        {
-            audio.clock(ctx.cpu_cycle, ctx.apu_cycle);
-            let level = audio.sample();
-            let delta = level - self.audio_level;
-            if delta != 0.0 {
-                sink.push_delta(AudioChannel::Namco163, ctx.apu_cycle, delta);
-                self.audio_level = level;
-            }
-        } else if self.audio_level != 0.0 {
-            sink.push_delta(AudioChannel::Namco163, ctx.apu_cycle, -self.audio_level);
-            self.audio_level = 0.0;
-        }
-    }
-
-    fn snapshot(&self) -> ExpansionAudioSnapshot {
-        ExpansionAudioSnapshot {
-            namco163: self.audio_level,
-            ..ExpansionAudioSnapshot::default()
-        }
-    }
-}
-
 impl Mapper for Mapper19 {
     fn hook_mask(&self) -> MapperHookMask {
         MapperHookMask::CPU_CLOCK
@@ -749,9 +556,9 @@ impl Mapper for Mapper19 {
         self.irq_counter = 0;
         self.irq_pending = false;
         if let Some(audio) = self.audio.as_mut() {
-            *audio = Namco163AudioState::new();
+            *audio = Namco163Audio::new();
+            audio.set_active(self.variant == NamcoVariant::Namco163);
         }
-        self.audio_level = 0.0;
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
@@ -948,18 +755,14 @@ impl Mapper for Mapper19 {
     }
 
     fn expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
-        if self.audio.is_some() {
-            Some(self)
-        } else {
-            None
-        }
+        self.audio
+            .as_ref()
+            .map(|audio| audio as &dyn ExpansionAudio)
     }
 
     fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
-        if self.audio.is_some() {
-            Some(self)
-        } else {
-            None
-        }
+        self.audio
+            .as_mut()
+            .map(|audio| audio as &mut dyn ExpansionAudio)
     }
 }

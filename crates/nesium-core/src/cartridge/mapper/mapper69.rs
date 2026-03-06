@@ -12,8 +12,7 @@ use std::borrow::Cow;
 use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef};
 
 use crate::{
-    apu::{ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot},
-    audio::AudioChannel,
+    apu::{ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, Sunsoft5bAudio},
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
@@ -30,107 +29,6 @@ const FME7_CMD_SELECT_START: u16 = 0x8000;
 const FME7_CMD_SELECT_END: u16 = 0x9FFF;
 const FME7_CMD_DATA_START: u16 = 0xA000;
 const FME7_CMD_DATA_END: u16 = 0xBFFF;
-
-/// Minimal Sunsoft 5B tone-generator model aligned with Mesen2's mapper path.
-#[derive(Debug, Clone)]
-struct Sunsoft5bAudioState {
-    volume_lut: [u8; 0x10],
-    current_register: u8,
-    registers: [u8; 0x10],
-    last_output: f32,
-    timer: [i16; 3],
-    tone_step: [u8; 3],
-    process_tick: bool,
-}
-
-impl Sunsoft5bAudioState {
-    fn new() -> Self {
-        let mut volume_lut = [0u8; 0x10];
-        volume_lut[0] = 0;
-
-        let mut output = 1.0f64;
-        for item in volume_lut.iter_mut().skip(1) {
-            // +3.0 dB per volume step (1.5 dB * 2).
-            output *= 1.188_502_227_437_018_4;
-            output *= 1.188_502_227_437_018_4;
-            *item = output as u8;
-        }
-
-        Self {
-            volume_lut,
-            current_register: 0,
-            registers: [0; 0x10],
-            last_output: 0.0,
-            timer: [0; 3],
-            tone_step: [0; 3],
-            process_tick: false,
-        }
-    }
-
-    #[inline]
-    fn period(&self, channel: usize) -> i16 {
-        let lo = self.registers[channel * 2] as u16;
-        let hi = self.registers[channel * 2 + 1] as u16;
-        (lo | (hi << 8)) as i16
-    }
-
-    #[inline]
-    fn volume(&self, channel: usize) -> u8 {
-        self.volume_lut[(self.registers[8 + channel] & 0x0F) as usize]
-    }
-
-    #[inline]
-    fn tone_enabled(&self, channel: usize) -> bool {
-        ((self.registers[7] >> channel) & 0x01) == 0
-    }
-
-    fn update_channel(&mut self, channel: usize) {
-        self.timer[channel] = self.timer[channel].saturating_sub(1);
-        if self.timer[channel] <= 0 {
-            self.timer[channel] = self.period(channel);
-            self.tone_step[channel] = (self.tone_step[channel] + 1) & 0x0F;
-        }
-    }
-
-    fn update_output_level(&mut self) {
-        let mut summed = 0u16;
-        for ch in 0..3 {
-            if self.tone_enabled(ch) && self.tone_step[ch] < 8 {
-                summed = summed.saturating_add(self.volume(ch) as u16);
-            }
-        }
-        self.last_output = summed as f32;
-    }
-
-    fn clock(&mut self) {
-        if self.process_tick {
-            for channel in 0..3 {
-                self.update_channel(channel);
-            }
-            self.update_output_level();
-        }
-        self.process_tick = !self.process_tick;
-    }
-
-    fn write_register(&mut self, addr: u16, value: u8) {
-        match addr & 0xE000 {
-            0xC000 => {
-                self.current_register = value;
-            }
-            0xE000 => {
-                if self.current_register <= 0x0F {
-                    self.registers[self.current_register as usize] = value;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    #[inline]
-    fn sample(&self) -> f32 {
-        self.last_output
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Mapper69 {
@@ -157,8 +55,7 @@ pub struct Mapper69 {
     irq_counter: u16,
     irq_pending: bool,
 
-    audio: Sunsoft5bAudioState,
-    audio_level: f32,
+    audio: Sunsoft5bAudio,
 }
 
 impl Mapper69 {
@@ -187,8 +84,7 @@ impl Mapper69 {
             irq_counter_enabled: false,
             irq_counter: 0,
             irq_pending: false,
-            audio: Sunsoft5bAudioState::new(),
-            audio_level: 0.0,
+            audio: Sunsoft5bAudio::new(),
         }
     }
 
@@ -346,32 +242,6 @@ impl Mapper69 {
     }
 }
 
-impl ExpansionAudio for Mapper69 {
-    fn clock_cpu(&mut self, ctx: ExpansionAudioClockContext, sink: &mut dyn ExpansionAudioSink) {
-        if self.irq_counter_enabled {
-            self.irq_counter = self.irq_counter.wrapping_sub(1);
-            if self.irq_counter == 0xFFFF && self.irq_enabled {
-                self.irq_pending = true;
-            }
-        }
-
-        self.audio.clock();
-        let level = self.audio.sample();
-        let delta = level - self.audio_level;
-        if delta != 0.0 {
-            sink.push_delta(AudioChannel::Sunsoft5B, ctx.apu_cycle, delta);
-            self.audio_level = level;
-        }
-    }
-
-    fn snapshot(&self) -> ExpansionAudioSnapshot {
-        ExpansionAudioSnapshot {
-            sunsoft5b: self.audio_level,
-            ..ExpansionAudioSnapshot::default()
-        }
-    }
-}
-
 impl Mapper for Mapper69 {
     fn reset(&mut self, _kind: ResetKind) {
         self.command = 0;
@@ -388,8 +258,7 @@ impl Mapper for Mapper69 {
         self.irq_counter_enabled = false;
         self.irq_counter = 0;
         self.irq_pending = false;
-        self.audio = Sunsoft5bAudioState::new();
-        self.audio_level = 0.0;
+        self.audio = Sunsoft5bAudio::new();
     }
 
     fn cpu_read(&self, addr: u16) -> Option<u8> {
@@ -435,6 +304,7 @@ impl Mapper for Mapper69 {
     fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
         Some(self)
     }
+
     fn memory_ref(&self) -> MapperMemoryRef<'_> {
         MapperMemoryRef {
             prg_rom: Some(self.prg_rom.as_ref()),
@@ -467,6 +337,18 @@ impl Mapper for Mapper69 {
 
     fn name(&self) -> Cow<'static, str> {
         Cow::Borrowed("Sunsoft FME-7 / 5B")
+    }
+}
+
+impl ExpansionAudio for Mapper69 {
+    fn clock_cpu(&mut self, ctx: ExpansionAudioClockContext, sink: &mut dyn ExpansionAudioSink) {
+        if self.irq_counter_enabled {
+            self.irq_counter = self.irq_counter.wrapping_sub(1);
+            if self.irq_counter == 0xFFFF && self.irq_enabled {
+                self.irq_pending = true;
+            }
+        }
+        self.audio.clock_cpu(ctx, sink);
     }
 }
 
