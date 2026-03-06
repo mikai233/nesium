@@ -12,7 +12,10 @@ use std::borrow::Cow;
 use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef};
 
 use crate::{
-    apu::{ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, Sunsoft5bAudio},
+    apu::{
+        ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot,
+        Sunsoft5bAudio,
+    },
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
@@ -349,6 +352,10 @@ impl ExpansionAudio for Mapper69 {
             }
         }
         self.audio.clock_cpu(ctx, sink);
+    }
+
+    fn snapshot(&self) -> ExpansionAudioSnapshot {
+        self.audio.snapshot()
     }
 }
 
