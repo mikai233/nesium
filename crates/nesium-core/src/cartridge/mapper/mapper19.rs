@@ -1,4 +1,4 @@
-//! Mapper 19 – Namco 163 (N163) implementation with basic expansion audio.
+//! Mapper 19 – Namco 163 (N163) implementation.
 //!
 //! This mapper powers a number of late Famicom titles (Digital Devil Story:
 //! Megami Tensei II, Erika to Satoru no Yume Bouken, etc.). The ASIC supports

@@ -136,7 +136,6 @@ Nesium 的长期愿景专注于精确度、工具链和可扩展性：
 ### Mapper 支持详情 / 已知问题
 
 - **MMC5 (mapper 5)**: ExRAM 作为 nametable 的模式和扩展属性/填充特性尚未实现；扩展音频未实现。
-- **Namco 163 (mapper 19)**: 仅实现了基本的音频路由；完整的 8 通道波表行为和每个通道的时序/相位包裹尚待完成。
 - **VRC7 (mapper 85)**: 音频核心尚未接入；OPLL 实现待定。
 - **J.Y. Company 90**: 多合一卡带的 NT/IRQ 机制已简化；高级 nametable/IRQ 行为需要完善。
 - **TQROM (mapper 119)**: 围绕 CHR ROM/RAM 位切换的边缘情况仍需验证。
