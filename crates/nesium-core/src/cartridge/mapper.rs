@@ -11,6 +11,7 @@ use dyn_clone::DynClone;
 use crate::{apu::ExpansionAudio, reset_kind::ResetKind};
 
 pub mod chr_storage;
+pub mod core;
 pub mod mapper0;
 pub mod mapper1;
 pub mod mapper10;

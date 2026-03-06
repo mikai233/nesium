@@ -33,7 +33,7 @@ use crate::{
 
 pub use expansion::{
     ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot,
-    NullExpansionAudioSink,
+    Namco163Audio, NullExpansionAudioSink, Sunsoft5bAudio, Vrc6Audio, Vrc7Audio,
 };
 pub use frame_counter::FrameCounterMode;
 
