@@ -545,9 +545,9 @@ impl Cpu {
             }
         }
 
-        // Start OAM DMA only at instruction boundary (before opcode fetch), mirroring Mesen.
-        if self.opcode_in_flight.is_none()
-            && !self.dma.oam_active
+        // Mesen latches $4014 immediately and processes DMA on the next CPU
+        // bus access, not only on the next opcode fetch/instruction boundary.
+        if !self.dma.oam_active
             && let Some(page) = bus.take_oam_dma()
         {
             self.dma.request_oam(page);

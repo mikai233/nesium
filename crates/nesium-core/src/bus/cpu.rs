@@ -94,6 +94,7 @@ impl<'a> CpuBus<'a> {
     pub(crate) fn clock_mapper_expansion_audio(&mut self) {
         let ctx = ExpansionAudioClockContext {
             cpu_cycle: *self.cycles,
+            apu_cycle: self.apu.cycle_count(),
             master_clock: *self.master_clock,
         };
 
@@ -411,10 +412,10 @@ impl<'a> CpuBus<'a> {
 
     #[inline]
     pub fn dma_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, ctx: &mut Context) {
-        cpu.begin_cycle(true, self, ctx);
+        cpu.begin_cycle(false, self, ctx);
         self.write(addr, data, cpu, ctx);
         self.notify_mapper_cpu_bus_access(CpuBusAccessKind::DmaWrite, addr, data);
-        cpu.end_cycle(true, self, ctx);
+        cpu.end_cycle(false, self, ctx);
     }
 
     #[inline]

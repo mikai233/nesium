@@ -7,10 +7,10 @@ pub enum AudioChannel {
     Dmc = 4,
     Fds = 5,
     Mmc5 = 6,
-    Namco163 = 7,
-    Sunsoft5B = 8,
-    Vrc6 = 9,
-    Vrc7 = 10,
+    Vrc6 = 7,
+    Vrc7 = 8,
+    Namco163 = 9,
+    Sunsoft5B = 10,
 }
 
 impl AudioChannel {
