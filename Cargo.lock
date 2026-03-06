@@ -957,16 +957,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "cidr-utils"
-version = "0.5.11"
+name = "cidr"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2315f7119b7146d6a883de6acd63ddf96071b5f79d9d98d2adaa84d749f6abf1"
+checksum = "579504560394e388085d0c080ea587dfa5c15f7e251b4d5247d1e1a61d1d6928"
 dependencies = [
- "debug-helper",
- "num-bigint",
- "num-traits",
- "once_cell",
- "regex",
  "serde",
 ]
 
@@ -1378,12 +1373,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
-name = "debug-helper"
-version = "0.3.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f578e8e2c440e7297e008bb5486a3a8a194775224bbc23729b0dbdfaeebf162e"
-
-[[package]]
 name = "delegate-attr"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1531,12 +1520,12 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "easy-upnp"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53c41d0d474b34eec76d4e4971bedfc3930ad2790e1782a7b9c5de98fb7504bb"
+checksum = "49959a385453a50c2280a5f93db1182c27a73442d874fcd6114cec55ca763e50"
 dependencies = [
- "cidr-utils",
- "if-addrs",
+ "cidr",
+ "if-addrs 0.15.0",
  "igd-next",
  "log",
  "serde",
@@ -2667,6 +2656,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "if-addrs"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0a05c691e1fae256cf7013d99dad472dc52d5543322761f83ec8d47eab40d2b"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "igd-next"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3535,7 +3534,7 @@ dependencies = [
  "flutter_rust_bridge",
  "gilrs",
  "glow",
- "if-addrs",
+ "if-addrs 0.14.0",
  "jni",
  "libc",
  "librashader",
