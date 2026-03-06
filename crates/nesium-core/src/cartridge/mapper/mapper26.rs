@@ -803,7 +803,7 @@ impl ExpansionAudio for Mapper26 {
     fn clock_cpu(&mut self, ctx: ExpansionAudioClockContext, sink: &mut dyn ExpansionAudioSink) {
         let delta = self.audio.clock_delta();
         if delta != 0.0 {
-            sink.push_delta(AudioChannel::Vrc6, ctx.cpu_cycle, delta);
+            sink.push_delta(AudioChannel::Vrc6, ctx.apu_cycle, delta);
         }
     }
 

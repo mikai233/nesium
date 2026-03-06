@@ -7,6 +7,12 @@ use crate::audio::{AudioChannel, NesSoundMixer};
 pub struct ExpansionAudioClockContext {
     /// CPU cycle counter in the same clock domain used by the mixer.
     pub cpu_cycle: u64,
+    /// Mesen-aligned APU mixer timestamp for this expansion-audio tick.
+    ///
+    /// Mesen clocks mapper expansion audio before the APU advances its own
+    /// cycle counter, so expansion deltas are tagged with the APU's
+    /// pre-step cycle index rather than the just-begun CPU bus cycle.
+    pub apu_cycle: u64,
     /// Master clock value (12 master clocks per CPU cycle on NTSC).
     pub master_clock: u64,
 }

@@ -602,27 +602,32 @@ impl Ppu {
                 // ----------------------
                 // Pre-render scanline (-1)
                 // ----------------------
-                // Dot 0 has no special side effects (prerender clears happen at dot 1).
+                // Mesen clears sprite flags on prerender cycle 0, before the
+                // vblank flag is dropped on cycle 1.
+                (-1, 0) => {
+                    ppu.registers
+                        .status
+                        .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
+                }
+
+                // Dot 0 on all other scanlines has no special side effects.
                 (_, 0) => {}
 
                 // Background pipeline ticks during prerender dots 1..=256 when rendering is enabled.
                 (-1, 1..=256) => {
                     if ppu.cycle == 1 {
-                        // Clear vblank/sprite flags at dot 1 of prerender.
+                        // Clear vblank at prerender dot 1. Sprite flags were
+                        // already cleared on cycle 0 to match Mesen/hardware.
                         ppu.registers.status.remove(Status::VERTICAL_BLANK);
-                        ppu.registers
-                            .status
-                            .remove(Status::SPRITE_OVERFLOW | Status::SPRITE_ZERO_HIT);
                         // Mesen2: sprite evaluation does not run on the pre-render line,
                         // so ensure scanline 0 starts with 0 active sprites.
                         ppu.sprite_eval.count = 0;
                         ppu.sprite_eval.sprite0_in_range_next = false;
                     }
                     if rendering_enabled {
-                        // Hardware cadence: background shifters tick on dots 2..=257.
-                        if ppu.cycle >= 2 {
-                            ppu.bg_pipeline.shift();
-                        }
+                        // Mesen2/hardware-equivalent cadence in this per-dot model:
+                        // shifters advance each dot in 1..=256.
+                        ppu.bg_pipeline.shift();
 
                         // Mesen2: OAMADDR bug on prerender, cycles 1..=8.
                         // If OAMADDR >= 8 when rendering starts, the 8 bytes starting at
@@ -646,8 +651,6 @@ impl Ppu {
                 // Dot 257: copy horizontal scroll bits from t -> v.
                 (-1, 257) => {
                     if ppu.prev_render_enabled {
-                        // Hardware cadence: dot 257 still shifts background shifters.
-                        ppu.bg_pipeline.shift();
                         ppu.copy_horizontal_scroll();
                     }
                     if rendering_enabled {
@@ -674,10 +677,9 @@ impl Ppu {
                 // Dots 321..=336: prefetch first two background tiles for scanline 0.
                 (-1, 321..=336) => {
                     if rendering_enabled {
-                        // Hardware cadence: background prefetch shift window is 322..=337.
-                        if ppu.cycle >= 322 {
-                            ppu.bg_pipeline.shift();
-                        }
+                        // Per-dot equivalent of Mesen's 8-bit shifts at 328/336:
+                        // shift every dot in 321..=336.
+                        ppu.bg_pipeline.shift();
 
                         if ppu.cycle == 321 {
                             // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
@@ -696,9 +698,6 @@ impl Ppu {
                 // the last dot of the scanline when we are on the pre-render
                 // scanline, cycle 339 of an odd frame with rendering enabled.
                 (-1, 337..=340) => {
-                    if ppu.cycle == 337 && rendering_enabled {
-                        ppu.bg_pipeline.shift();
-                    }
                     if ppu.cycle == 339 && ppu.frame % 2 == 1 && ppu.render_enabled {
                         // Force the next `advance_cycle()` call to wrap directly
                         // to scanline 0, cycle 0, effectively removing dot 340
@@ -715,10 +714,9 @@ impl Ppu {
                     ppu.render_pixel();
 
                     if rendering_enabled {
-                        // Hardware cadence: background shifters tick on dots 2..=257.
-                        if ppu.cycle >= 2 {
-                            ppu.bg_pipeline.shift();
-                        }
+                        // Mesen2/hardware-equivalent cadence in this per-dot model:
+                        // shifters advance each dot in 1..=256.
+                        ppu.bg_pipeline.shift();
 
                         // Fetch background data for this dot.
                         ppu.fetch_background_data(&mut ppu_bus);
@@ -734,8 +732,6 @@ impl Ppu {
                 // Dot 257: copy horizontal scroll bits for next scanline.
                 (0..=239, 257) => {
                     if ppu.prev_render_enabled {
-                        // Hardware cadence: dot 257 still shifts background shifters.
-                        ppu.bg_pipeline.shift();
                         ppu.copy_horizontal_scroll();
                     }
                     if rendering_enabled {
@@ -756,10 +752,9 @@ impl Ppu {
                 // Dots 321..=336: prefetch first two background tiles for next scanline.
                 (0..=239, 321..=336) => {
                     if rendering_enabled {
-                        // Hardware cadence: background prefetch shift window is 322..=337.
-                        if ppu.cycle >= 322 {
-                            ppu.bg_pipeline.shift();
-                        }
+                        // Per-dot equivalent of Mesen's 8-bit shifts at 328/336:
+                        // shift every dot in 321..=336.
+                        ppu.bg_pipeline.shift();
 
                         if ppu.cycle == 321 {
                             // Mesen2: dot 321 latches secondary OAM[0] onto the internal OAM bus.
@@ -771,11 +766,7 @@ impl Ppu {
                 }
 
                 // Dots 337..=340: dummy nametable fetches (no visible effect).
-                (0..=239, 337..=340) => {
-                    if ppu.cycle == 337 && rendering_enabled {
-                        ppu.bg_pipeline.shift();
-                    }
-                }
+                (0..=239, 337..=340) => {}
 
                 // ----------------------
                 // Post-render scanline (240)

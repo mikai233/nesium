@@ -359,7 +359,7 @@ impl ExpansionAudio for Mapper69 {
         let level = self.audio.sample();
         let delta = level - self.audio_level;
         if delta != 0.0 {
-            sink.push_delta(AudioChannel::Sunsoft5B, ctx.cpu_cycle, delta);
+            sink.push_delta(AudioChannel::Sunsoft5B, ctx.apu_cycle, delta);
             self.audio_level = level;
         }
     }
@@ -544,6 +544,7 @@ mod tests {
         mapper.clock_cpu(
             ExpansionAudioClockContext {
                 cpu_cycle: 0,
+                apu_cycle: 0,
                 master_clock: 0,
             },
             &mut sink,
