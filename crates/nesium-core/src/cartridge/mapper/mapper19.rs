@@ -386,6 +386,7 @@ pub struct Mapper19 {
     /// Current nametable mirroring mode. Namco 163 can repurpose nametable RAM
     /// as CHR, but the basic nametable wiring still follows the header unless
     /// a more complete implementation overrides it.
+    reset_mirroring: Mirroring,
     mirroring: Mirroring,
 }
 
@@ -435,6 +436,7 @@ impl Mapper19 {
             nametable_ram: Namco163NametableRam::new(),
             irq_counter: 0,
             irq_pending: false,
+            reset_mirroring: header.mirroring(),
             mirroring: header.mirroring(),
         }
     }
@@ -682,7 +684,6 @@ impl Mapper19 {
     fn read_irq_high(&self) -> u8 {
         (self.irq_counter >> 8) as u8
     }
-
 }
 
 impl ExpansionAudio for Mapper19 {
@@ -739,6 +740,7 @@ impl Mapper for Mapper19 {
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
         self.prg_bank_c000 = 2.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
+        self.mirroring = self.reset_mirroring;
         self.chr_banks.fill(0);
         self.chr_is_nametable.fill(false);
         self.write_protect = 0;
@@ -946,7 +948,7 @@ impl Mapper for Mapper19 {
     }
 
     fn expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
-        if self.audio.is_some() && self.variant == NamcoVariant::Namco163 {
+        if self.audio.is_some() {
             Some(self)
         } else {
             None
@@ -954,7 +956,7 @@ impl Mapper for Mapper19 {
     }
 
     fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
-        if self.audio.is_some() && self.variant == NamcoVariant::Namco163 {
+        if self.audio.is_some() {
             Some(self)
         } else {
             None
