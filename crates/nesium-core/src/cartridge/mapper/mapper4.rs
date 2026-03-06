@@ -89,7 +89,6 @@ pub struct Mapper4State {
     pub irq_reload: bool,
     pub irq_enabled: bool,
     pub irq_pending: bool,
-    pub irq_revision: u8,
     pub a12_low_start_master_clock: Option<u64>,
 }
 
@@ -135,7 +134,6 @@ impl Mapper4 {
             irq_reload: self.mmc3.irq_reload,
             irq_enabled: self.mmc3.irq_enabled,
             irq_pending: self.mmc3.irq_pending,
-            irq_revision: self.mmc3.irq_revision.as_u8(),
             a12_low_start_master_clock: self.mmc3.a12_low_start_master_clock,
         }
     }
@@ -155,7 +153,6 @@ impl Mapper4 {
         self.mmc3.irq_reload = state.irq_reload;
         self.mmc3.irq_enabled = state.irq_enabled;
         self.mmc3.irq_pending = state.irq_pending;
-        self.mmc3.irq_revision = Mmc3IrqRevision::from_u8(state.irq_revision);
         self.mmc3.a12_low_start_master_clock = state.a12_low_start_master_clock;
     }
 

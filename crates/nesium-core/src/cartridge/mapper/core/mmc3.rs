@@ -94,22 +94,6 @@ pub(crate) enum Mmc3IrqRevision {
     RevB,
 }
 
-impl Mmc3IrqRevision {
-    pub(crate) fn as_u8(self) -> u8 {
-        match self {
-            Self::RevA => 0,
-            Self::RevB => 1,
-        }
-    }
-
-    pub(crate) fn from_u8(v: u8) -> Self {
-        match v {
-            0 => Self::RevA,
-            _ => Self::RevB,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Mmc3CoreResetConfig {
     pub(crate) bank_select: u8,
