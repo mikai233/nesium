@@ -26,7 +26,11 @@ use crate::{
             ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer,
             core::{
                 vrc_irq::VrcIrq,
-                vrc2_4::{Vrc2_4Banking, Vrc2_4Register, write_vrc2_4_register},
+                vrc2_4::{
+                    Vrc2_4AddressConfig, Vrc2_4Banking, Vrc2_4Register, VrcAddressBits,
+                    read_prg_ram_window, translate_vrc2_4_address, write_prg_ram_window,
+                    write_vrc2_4_register,
+                },
             },
             select_chr_storage,
         },
@@ -86,35 +90,25 @@ impl Mapper23 {
     }
 
     fn translate_address(&self, addr: u16) -> u16 {
-        let (a0, a1) = if self.use_heuristics {
-            let b0 = addr & 0x01;
-            let b1 = (addr >> 1) & 0x01;
-            let b2 = (addr >> 2) & 0x01;
-            let b3 = (addr >> 3) & 0x01;
-            ((b0 | b2) & 0x01, (b1 | b3) & 0x01)
-        } else {
-            match self.variant {
-                Variant::Vrc2b => (addr & 0x01, (addr >> 1) & 0x01),
-                Variant::Vrc4e => ((addr >> 2) & 0x01, (addr >> 3) & 0x01),
-            }
+        let config = match self.variant {
+            Variant::Vrc2b => Vrc2_4AddressConfig {
+                primary: VrcAddressBits::new(0, 1),
+                heuristic_alt: Some(VrcAddressBits::new(2, 3)),
+            },
+            Variant::Vrc4e => Vrc2_4AddressConfig {
+                primary: VrcAddressBits::new(2, 3),
+                heuristic_alt: Some(VrcAddressBits::new(0, 1)),
+            },
         };
-        (addr & 0xFF00) | (a1 << 1) | a0
+        translate_vrc2_4_address(addr, config, self.use_heuristics)
     }
 
     fn read_prg_ram(&self, addr: u16) -> Option<u8> {
-        if self.prg_ram.is_empty() {
-            return None;
-        }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        Some(self.prg_ram[idx])
+        read_prg_ram_window(&self.prg_ram, addr)
     }
 
     fn write_prg_ram(&mut self, addr: u16, data: u8) {
-        if self.prg_ram.is_empty() {
-            return;
-        }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        self.prg_ram[idx] = data;
+        write_prg_ram_window(&mut self.prg_ram, addr, data);
     }
 
     fn mirroring_mask(&self) -> u8 {
