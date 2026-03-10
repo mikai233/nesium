@@ -79,7 +79,7 @@ final class NesiumTextureManager: NesiumFrameConsumer {
     }
 
     private func disposeNesTexture(result: @escaping FlutterResult) {
-        nesium_set_frame_ready_callback(nil, nil)
+        nesiumUnregisterFrameCallback(for: self)
 
         var tid: Int64 = -1
         frameCopyQueue.sync {
