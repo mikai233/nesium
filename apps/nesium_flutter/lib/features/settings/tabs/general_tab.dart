@@ -38,6 +38,12 @@ class GeneralTab extends ConsumerWidget {
                     AppLanguage.english => l10n.languageEnglish,
                     AppLanguage.chineseSimplified =>
                       l10n.languageChineseSimplified,
+                    AppLanguage.japanese => l10n.languageJapanese,
+                    AppLanguage.spanish => l10n.languageSpanish,
+                    AppLanguage.portuguese => l10n.languagePortuguese,
+                    AppLanguage.russian => l10n.languageRussian,
+                    AppLanguage.french => l10n.languageFrench,
+                    AppLanguage.german => l10n.languageGerman,
                   },
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.primary,
@@ -60,6 +66,30 @@ class GeneralTab extends ConsumerWidget {
                       DropdownMenuEntry(
                         value: AppLanguage.chineseSimplified,
                         label: l10n.languageChineseSimplified,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppLanguage.japanese,
+                        label: l10n.languageJapanese,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppLanguage.spanish,
+                        label: l10n.languageSpanish,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppLanguage.portuguese,
+                        label: l10n.languagePortuguese,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppLanguage.russian,
+                        label: l10n.languageRussian,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppLanguage.french,
+                        label: l10n.languageFrench,
+                      ),
+                      DropdownMenuEntry(
+                        value: AppLanguage.german,
+                        label: l10n.languageGerman,
                       ),
                     ],
                     onSelected: (value) {

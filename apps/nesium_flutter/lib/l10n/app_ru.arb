@@ -1,0 +1,845 @@
+{
+  "@@locale": "ru",
+  "@serverClientCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@serverStartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverStopFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverBindAddress": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverQuicFingerprint": {
+    "placeholders": {
+      "fingerprint": {
+        "type": "String"
+      }
+    }
+  },
+  "@connectedGamepadsPort": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "@inputDetected": {
+    "placeholders": {
+      "buttons": {
+        "type": "String"
+      }
+    }
+  },
+  "@bindKeyTitle": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@inputBindingConflictCleared": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@inputBindingConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@inputBindingCapturedConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@autoSaveIntervalValue": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@fastForwardSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@quickSaveSlotValue": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindSecondsValue": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindMinutesValue": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@framesValue": {
+    "placeholders": {
+      "frames": {
+        "type": "int"
+      }
+    }
+  },
+  "@keyCaptureCurrent": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "@keyCaptureCaptured": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayPlayerIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@netplayConnectFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayDisconnectFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayCreateRoomFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayJoinRoomFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplaySwitchRoleFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@stateSavedToSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@stateLoadedFromSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@slotCleared": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@shaderBrowserError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@aboutLaunchFailed": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "@videoBackendCurrent": {
+    "placeholders": {
+      "backend": {
+        "type": "String"
+      }
+    }
+  },
+  "@paletteModeCustomActive": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@commandSucceeded": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "@commandFailed": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "@snackPauseFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@tilemapError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@tileViewerError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@tileViewerPaletteBg": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@tileViewerPaletteSprite": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@paletteViewerTooltipPaletteRam": {
+    "placeholders": {
+      "addr": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "@paletteViewerTooltipSystemIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@spriteViewerError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@spriteViewerTooltipTitle": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsTitle": "Настройки",
+  "settingsTabGeneral": "Общие",
+  "settingsTabInput": "Управление",
+  "settingsTabVideo": "Видео",
+  "settingsTabEmulation": "Эмуляция",
+  "settingsTabServer": "Сервер",
+  "settingsFloatingPreviewToggle": "Плавающий предварительный просмотр",
+  "settingsFloatingPreviewTooltip": "Показать предварительный просмотр игры",
+  "serverTitle": "Сервер Netplay",
+  "serverPortLabel": "Порт",
+  "serverStartButton": "Запустить сервер",
+  "serverStopButton": "Остановить сервер",
+  "serverStatusRunning": "Запущено",
+  "serverStatusStopped": "Остановлено",
+  "serverClientCount": "Подключенные клиенты: {count}",
+  "serverStartFailed": "Не удалось запустить сервер: {error}.",
+  "serverStopFailed": "Не удалось остановить сервер: {error}.",
+  "serverBindAddress": "Адрес привязки: {address}",
+  "serverQuicFingerprint": "Отпечаток QUIC: {fingerprint}",
+  "generalTitle": "Общие",
+  "themeLabel": "Тема",
+  "themeSystem": "Система",
+  "themeLight": "Свет",
+  "themeDark": "Темный",
+  "languageLabel": "Язык",
+  "languageSystem": "Система",
+  "languageEnglish": "Английский",
+  "languageChineseSimplified": "Упрощенный китайский",
+  "inputTitle": "Управление",
+  "turboTitle": "Турбо",
+  "turboLinkPressRelease": "Link press/release",
+  "inputDeviceLabel": "Устройство ввода",
+  "inputDeviceKeyboard": "Клавиатура",
+  "inputDeviceGamepad": "Геймпад",
+  "connectedGamepadsTitle": "Подключенные геймпады",
+  "connectedGamepadsNone": "Геймпады не подключены",
+  "webGamepadActivationHint": "Веб-лимит: НАЖМИТЕ ЛЮБУЮ КНОПКУ на геймпаде, чтобы активировать его.",
+  "connectedGamepadsPort": "Игрок {port}",
+  "connectedGamepadsUnassigned": "Неназначенный",
+  "inputDeviceVirtualController": "Виртуальный контроллер",
+  "inputGamepadAssignmentLabel": "Назначение геймпада",
+  "inputGamepadNone": "Нет/не назначено",
+  "inputListening": "Слушаю...",
+  "inputDetected": "Обнаружено: {buttons}",
+  "inputGamepadMappingLabel": "Сопоставление кнопок",
+  "inputResetToDefault": "Сбросить настройки по умолчанию",
+  "inputButtonA": "А",
+  "inputButtonB": "Б",
+  "inputButtonTurboA": "Турбо А",
+  "inputButtonTurboB": "Турбо Б",
+  "inputButtonSelect": "Select",
+  "inputButtonStart": "Start",
+  "inputButtonUp": "Вверх",
+  "inputButtonDown": "Вниз",
+  "inputButtonLeft": "Влево",
+  "inputButtonRight": "Вправо",
+  "inputButtonRewind": "Перемотка назад",
+  "inputButtonFastForward": "Быстрая перемотка вперед",
+  "inputButtonSaveState": "Сохранить состояние",
+  "inputButtonLoadState": "Загрузить состояние",
+  "inputButtonPause": "Пауза",
+  "globalHotkeysTitle": "Горячие клавиши эмулятора",
+  "gamepadHotkeysTitle": "Горячие клавиши геймпада (Игрок 1)",
+  "inputPortLabel": "Настроить плеер",
+  "player1": "Игрок 1",
+  "player2": "Игрок 2",
+  "player3": "Игрок 3",
+  "player4": "Игрок 4",
+  "keyboardPresetLabel": "Предустановка клавиатуры",
+  "keyboardPresetNone": "Нет",
+  "keyboardPresetNesStandard": "стандарт РЭШ",
+  "keyboardPresetFightStick": "Arcade Stick",
+  "keyboardPresetArcadeLayout": "Arcade",
+  "keyboardPresetCustom": "Пользовательский",
+  "customKeyBindingsTitle": "Пользовательские привязки клавиш",
+  "bindKeyTitle": "Привязать {action}",
+  "unassignedKey": "Неназначенный",
+  "tipPressEscapeToClearBinding": "Совет: нажмите Escape, чтобы очистить привязку.",
+  "keyboardActionUp": "Вверх",
+  "keyboardActionDown": "Вниз",
+  "keyboardActionLeft": "Влево",
+  "keyboardActionRight": "Вправо",
+  "keyboardActionA": "А",
+  "keyboardActionB": "Б",
+  "keyboardActionSelect": "Select",
+  "keyboardActionStart": "Start",
+  "keyboardActionTurboA": "Турбо А",
+  "keyboardActionTurboB": "Турбо Б",
+  "keyboardActionRewind": "Перемотка назад",
+  "keyboardActionFastForward": "Быстрая перемотка вперед",
+  "keyboardActionSaveState": "Сохранить состояние",
+  "keyboardActionLoadState": "Загрузить состояние",
+  "keyboardActionPause": "Пауза",
+  "keyboardActionFullScreen": "Полноэкранный",
+  "inputBindingConflictCleared": "Привязка {player} {action} очищена.",
+  "inputBindingConflictHint": "({player} - {action})",
+  "inputBindingCapturedConflictHint": "Занят {player} - {action}",
+  "emulationTitle": "Эмуляция",
+  "integerFpsTitle": "Целочисленный режим FPS (60 Гц, NTSC)",
+  "integerFpsSubtitle": "Уменьшает дрожание при прокрутке на дисплеях с частотой 60 Гц. PAL будет добавлен позже.",
+  "showOverlayTitle": "Показать наложение статуса",
+  "showOverlaySubtitle": "Показывать индикаторы паузы/перемотки назад/вперед на экране.",
+  "pauseInBackgroundTitle": "Пауза в фоновом режиме",
+  "pauseInBackgroundSubtitle": "Автоматически приостанавливает работу эмулятора, когда приложение не активно.",
+  "autoSaveEnabledTitle": "Автосохранение",
+  "autoSaveEnabledSubtitle": "Периодически сохраняйте состояние игры в выделенном слоте.",
+  "autoSaveIntervalTitle": "Интервал автоматического сохранения",
+  "autoSaveIntervalValue": "{minutes} минут",
+  "fastForwardSpeedTitle": "Скорость быстрой перемотки вперед",
+  "fastForwardSpeedSubtitle": "Максимальная скорость при активной перемотке вперед.",
+  "fastForwardSpeedValue": "{percent}%",
+  "quickSaveSlotTitle": "Слот быстрого сохранения",
+  "quickSaveSlotSubtitle": "Слот, используемый ярлыками быстрого сохранения/загрузки.",
+  "quickSaveSlotValue": "Слот {index}",
+  "rewindEnabledTitle": "Перемотка назад",
+  "rewindEnabledSubtitle": "Включите функцию перемотки в реальном времени.",
+  "rewindSecondsTitle": "Продолжительность перемотки назад",
+  "rewindSecondsValue": "{seconds} секунд",
+  "rewindMinutesTitle": "Продолжительность перемотки назад",
+  "rewindMinutesValue": "{minutes} минут",
+  "rewindSpeedTitle": "Скорость перемотки назад",
+  "rewindSpeedSubtitle": "Скорость при перемотке активна.",
+  "rewindSpeedValue": "{percent}%",
+  "autoSlotLabel": "Автоматический слот",
+  "menuAutoSave": "Автосохранение...",
+  "stateAutoSaved": "Автосохранение создано",
+  "virtualControlsTitle": "Виртуальное управление",
+  "virtualControlsSwitchInputTip": "Переключите вход на «Виртуальный контроллер», чтобы использовать эти настройки.",
+  "virtualControlsButtonSize": "Размер кнопки",
+  "virtualControlsGap": "Зазор",
+  "virtualControlsOpacity": "Непрозрачность",
+  "virtualControlsHitboxScale": "Масштаб хитбокса",
+  "virtualControlsHapticFeedback": "Тактильная обратная связь",
+  "virtualControlsDpadDeadzone": "Мертвая зона крестовины",
+  "virtualControlsDpadDeadzoneHelp": "Центральная мертвая зона: прикосновение к центру не активирует какое-либо направление.",
+  "virtualControlsDpadBoundaryDeadzone": "Граница мертвой зоны крестовины",
+  "virtualControlsDpadBoundaryDeadzoneHelp": "Граничная мертвая зона: более высокие значения затрудняют срабатывание диагоналей, уменьшая случайное нажатие соседей.",
+  "virtualControlsReset": "Сбросить макет",
+  "virtualControlsDiscardChangesTitle": "Отменить изменения",
+  "virtualControlsDiscardChangesSubtitle": "Вернуться к последнему сохраненному макету",
+  "virtualControlsTurboFramesPerToggle": "Турбо-кадров на переключатель",
+  "virtualControlsTurboOnFrames": "Турбо пресс-рамы",
+  "virtualControlsTurboOffFrames": "Рамки турбо-релиза",
+  "framesValue": "{frames} кадры",
+  "tipAdjustButtonsInDrawer": "Совет: отрегулируйте положение/размер кнопки в панели управления игрой.",
+  "keyCapturePressKeyToBind": "Нажмите клавишу для привязки.",
+  "keyCaptureCurrent": "Текущий: {key}",
+  "keyCaptureCaptured": "Снято: {key}",
+  "keyCapturePressEscToClear": "Нажмите Escape, чтобы очистить.",
+  "keyBindingsTitle": "Привязки клавиш",
+  "cancel": "Отмена",
+  "appName": "Nesium",
+  "menuTooltip": "Меню",
+  "menuSectionFile": "Файл",
+  "menuSectionEmulation": "Эмуляция",
+  "menuSectionSettings": "Настройки",
+  "menuSectionWindows": "Окна",
+  "menuSectionHelp": "Помощь",
+  "menuOpenRom": "Открыть ПЗУ...",
+  "menuReset": "Перезагрузить",
+  "menuPowerReset": "Сброс питания",
+  "menuEject": "Выключить питание",
+  "menuSaveState": "Сохранить состояние...",
+  "menuLoadState": "Загрузить состояние...",
+  "menuPauseResume": "Пауза/возобновить",
+  "menuNetplay": "Сетевая игра",
+  "netplayTransportLabel": "Транспорт",
+  "netplayTransportAuto": "Авто (QUIC → TCP)",
+  "netplayTransportUnknown": "Неизвестный",
+  "netplayTransportTcp": "TCP",
+  "netplayTransportQuic": "QUIC",
+  "netplayUsingTcpFallback": "Ошибка QUIC при использовании TCP",
+  "netplayStatusDisconnected": "Отключено",
+  "netplayStatusConnecting": "Подключение...",
+  "netplayStatusConnected": "Подключено (ожидание места)",
+  "netplayStatusInRoom": "В комнате",
+  "netplayDisconnect": "Отключить",
+  "netplayServerAddress": "Адрес сервера",
+  "netplayServerNameLabel": "Имя сервера (SNI)",
+  "netplayServerNameHint": "локальный хост",
+  "netplayPlayerName": "Имя игрока",
+  "netplayQuicFingerprintLabel": "Отпечаток сертификата QUIC (необязательно)",
+  "netplayQuicFingerprintHint": "base64url (43 символа)",
+  "netplayQuicFingerprintHelper": "Введите это для использования привязанного QUIC. Оставьте пустым для использования системных сертификатов (QUIC) или отката на TCP.",
+  "netplayConnect": "Присоединиться к игре",
+  "netplayJoinViaP2P": "Присоединяйтесь через P2P",
+  "netplayJoinGame": "Присоединиться к игре",
+  "netplayCreateRoom": "Создать комнату",
+  "netplayJoinRoom": "Присоединиться к игре",
+  "netplayAddressOrRoomCode": "Код комнаты или адрес сервера",
+  "netplayHostingTitle": "Хостинг",
+  "netplayRoomCodeLabel": "Код вашего номера",
+  "netplayP2PEnabled": "P2P-режим",
+  "netplayDirectServerLabel": "Адрес сервера",
+  "netplayAdvancedSettings": "Расширенные настройки подключения",
+  "netplayP2PServerLabel": "P2P-сервер",
+  "netplayRoomCode": "Код номера",
+  "netplayRoleLabel": "Роль",
+  "netplayPlayerIndex": "Игрок {index}",
+  "netplaySpectator": "Зритель",
+  "netplayClientId": "Идентификатор клиента",
+  "netplayPlayerListHeader": "Игроки",
+  "netplayYouIndicator": "(Ты)",
+  "netplayOrSeparator": "ИЛИ",
+  "netplayConnectFailed": "Не удалось подключиться: {error}",
+  "netplayDisconnectFailed": "Отключиться не удалось: {error}",
+  "netplayCreateRoomFailed": "Не удалось создать комнату: {error}.",
+  "netplayJoinRoomFailed": "Не удалось присоединиться к комнате: {error}.",
+  "netplaySwitchRoleFailed": "Не удалось переключить роль: {error}.",
+  "netplayInvalidRoomCode": "Неверный код комнаты",
+  "netplayRomBroadcasted": "Netplay: ПЗУ транслируется в комнату",
+  "menuLoadTasMovie": "Загрузить фильм ТАС...",
+  "menuPreferences": "Предпочтения...",
+  "saveToExternalFile": "Сохранить в файл...",
+  "loadFromExternalFile": "Загрузить из файла...",
+  "slotLabel": "Слот",
+  "slotEmpty": "Пусто",
+  "slotHasData": "Сохранено",
+  "stateSavedToSlot": "Состояние сохранено в слоте {index}.",
+  "stateLoadedFromSlot": "Состояние загружено из слота {index}",
+  "slotCleared": "Слот {index} очищен",
+  "menuAbout": "О программе",
+  "menuDebugger": "Отладчик",
+  "menuTools": "Инструменты",
+  "menuOpenDebuggerWindow": "Открыть окно отладчика",
+  "menuOpenToolsWindow": "Открыть окно инструментов",
+  "menuInputMappingComingSoon": "Сопоставление входных данных (скоро)",
+  "menuLastError": "Последняя ошибка",
+  "lastErrorDetailsAction": "Подробности",
+  "lastErrorDialogTitle": "Последняя ошибка",
+  "lastErrorCopied": "Скопировано",
+  "copy": "Копировать",
+  "paste": "Вставить",
+  "windowDebuggerTitle": "Отладчик Nesium",
+  "windowToolsTitle": "Инструменты Nesium",
+  "virtualControlsEditTitle": "Редактировать виртуальные элементы управления",
+  "virtualControlsEditSubtitleEnabled": "Перетащите, чтобы переместить, зажмите или перетащите угол, чтобы изменить размер",
+  "virtualControlsEditSubtitleDisabled": "Включить интерактивную настройку",
+  "gridSnappingTitle": "Привязка к сетке",
+  "gridSpacingLabel": "Шаг сетки",
+  "debuggerPlaceholderBody": "Место, зарезервированное для мониторов CPU/PPU, средств просмотра памяти и инспекторов OAM. Одни и те же виджеты могут располагаться на боковой панели рабочего стола или на листе мобильного устройства.",
+  "toolsPlaceholderBody": "Запись/воспроизведение, сопоставление ввода и читы могут использовать эти виджеты для совместного использования между боковыми панелями рабочего стола и нижними листами мобильных устройств.",
+  "actionLoadRom": "Загрузить ПЗУ",
+  "actionResetNes": "Сбросить РЭШ",
+  "actionPowerResetNes": "Сброс питания NES",
+  "actionEjectNes": "Выключить питание",
+  "actionLoadPalette": "Загрузить палитру",
+  "videoResetToDefault": "Сбросить настройки по умолчанию",
+  "videoTitle": "Видео",
+  "videoFilterLabel": "Видео фильтр",
+  "videoFilterCategoryCpu": "Фильтры ЦП",
+  "videoFilterCategoryGpu": "Фильтры графического процессора (шейдеры)",
+  "videoFilterNone": "Нет (1x)",
+  "videoFilterPrescale2x": "Предварительное масштабирование 2x",
+  "videoFilterPrescale3x": "Предварительное масштабирование 3x",
+  "videoFilterPrescale4x": "Предварительное масштабирование 4x",
+  "videoFilterHq2x": "HQ2x",
+  "videoFilterHq3x": "HQ3x",
+  "videoFilterHq4x": "HQ4x",
+  "videoFilter2xSai": "2xSaI",
+  "videoFilterSuper2xSai": "Супер 2xSaI",
+  "videoFilterSuperEagle": "Супер Орел",
+  "videoFilterLcdGrid": "ЖК-сетка (2 шт.)",
+  "videoFilterScanlines": "Строки развертки (2x)",
+  "videoFilterXbrz2x": "хБРЗ 2x",
+  "videoFilterXbrz3x": "хБРЗ 3x",
+  "videoFilterXbrz4x": "хБРЗ 4x",
+  "videoFilterXbrz5x": "хБРЗ 5x",
+  "videoFilterXbrz6x": "хБРЗ 6x",
+  "videoLcdGridStrengthLabel": "Прочность ЖК-сетки",
+  "videoScanlinesIntensityLabel": "Интенсивность линии развертки",
+  "videoFilterNtscComposite": "NTSC (композитный)",
+  "videoFilterNtscSvideo": "NTSC (S-Видео)",
+  "videoFilterNtscRgb": "NTSC (РГБ)",
+  "videoFilterNtscMonochrome": "NTSC (монохромный)",
+  "videoFilterNtscBisqwit2x": "NTSC (Бисквит) 2x",
+  "videoFilterNtscBisqwit4x": "NTSC (Бисквит) 4x",
+  "videoFilterNtscBisqwit8x": "NTSC (Бисквит) 8x",
+  "videoNtscAdvancedTitle": "NTSC продвинутый",
+  "videoNtscMergeFieldsLabel": "Объединить поля (уменьшить мерцание)",
+  "videoNtscHueLabel": "Оттенок (Hue)",
+  "videoNtscSaturationLabel": "Насыщенность",
+  "videoNtscContrastLabel": "Контраст",
+  "videoNtscBrightnessLabel": "Яркость",
+  "videoNtscSharpnessLabel": "Резкость",
+  "videoNtscGammaLabel": "Гамма",
+  "videoNtscResolutionLabel": "Разрешение",
+  "videoNtscArtifactsLabel": "Артефакты",
+  "videoNtscFringingLabel": "окантовка",
+  "videoNtscBleedLabel": "Смешивание цветов (Bleed)",
+  "videoNtscBisqwitSettingsTitle": "Настройки NTSC (Бисквит)",
+  "videoNtscBisqwitYFilterLengthLabel": "Y-фильтр (горизонтальное размытие)",
+  "videoNtscBisqwitIFilterLengthLabel": "Я фильтрую",
+  "videoNtscBisqwitQFilterLengthLabel": "Q-фильтр",
+  "videoIntegerScalingTitle": "Целочисленное масштабирование",
+  "videoIntegerScalingSubtitle": "Идеальное масштабирование до пикселя (уменьшает мерцание при прокрутке).",
+  "videoFullScreenTitle": "Полноэкранный",
+  "videoFullScreenSubtitle": "Переключить полноэкранное состояние окна",
+  "videoScreenVerticalOffset": "Вертикальное смещение экрана",
+  "videoScreenVerticalOffsetPortraitOnly": "Действует только в портретном режиме.",
+  "videoAspectRatio": "Соотношение сторон",
+  "videoAspectRatioSquare": "1:1 (квадратные пиксели)",
+  "videoAspectRatioNtsc": "4:3 (НТСК)",
+  "videoAspectRatioStretch": "Растянуть",
+  "videoShaderLibrashaderTitle": "Шейдеры RetroArch",
+  "videoShaderLibrashaderSubtitle": "Требуется GLES3 + аппаратный бэкэнд (цепочка обмена AHB).",
+  "videoShaderLibrashaderSubtitleWindows": "Требуется серверная часть графического процессора D3D11.",
+  "videoShaderLibrashaderSubtitleApple": "Требуется металлический бэкэнд.",
+  "videoShaderLibrashaderSubtitleDisabled": "Переключите серверную часть Android на Аппаратное обеспечение, чтобы включить.",
+  "videoShaderLibrashaderSubtitleDisabledWindows": "Чтобы включить серверную часть Windows, переключите ее на графический процессор D3D11.",
+  "videoShaderPresetLabel": "Предустановка (.slangp)",
+  "videoShaderPresetNotSet": "Не установлено",
+  "shaderBrowserTitle": "Шейдеры",
+  "shaderBrowserNoShaders": "Шейдеры не найдены",
+  "shaderBrowserError": "Ошибка: {error}.",
+  "aboutTitle": "О Nesium",
+  "aboutLead": "Nesium: Интерфейс эмулятора NES/FC на языке Rust, построенный на ядре nesium-core.",
+  "aboutIntro": "Этот интерфейс Flutter повторно использует ядро ​​Rust для эмуляции. Веб-сборка запускается в браузере через Flutter Web + Web Worker + WASM.",
+  "aboutLinksHeading": "Ссылки",
+  "aboutGitHubLabel": "GitHub",
+  "aboutWebDemoLabel": "Веб-демо",
+  "aboutComponentsHeading": "Компоненты с открытым исходным кодом",
+  "aboutComponentsHint": "Нажмите, чтобы открыть, нажмите и удерживайте, чтобы скопировать.",
+  "aboutLicenseHeading": "Лицензия",
+  "aboutLicenseBody": "Nesium распространяется под лицензией GPL-3.0 или более поздней версии. См. LICENSE.md в корне репозитория.",
+  "aboutLaunchFailed": "Не удалось запустить: {url}",
+  "videoBackendLabel": "Серверная часть рендерера",
+  "videoBackendAndroidLabel": "Серверная часть рендеринга Android",
+  "videoBackendWindowsLabel": "Серверная часть рендеринга Windows",
+  "videoBackendHardware": "Аппаратное обеспечение (AHardwareBuffer)",
+  "videoBackendUpload": "Совместимость (загрузка процессора)",
+  "videoBackendRestartHint": "Вступает в силу после перезапуска приложения.",
+  "videoBackendCurrent": "Текущий бэкэнд: {backend}",
+  "windowsNativeOverlayTitle": "Собственное наложение Windows (экспериментальное)",
+  "windowsNativeOverlaySubtitle": "Обходит компоновщик Flutter для идеальной плавности. Отключает шейдеры и наложения пользовательского интерфейса игры.",
+  "highPerformanceModeLabel": "Режим высокой производительности",
+  "highPerformanceModeDescription": "Повысьте приоритет процесса и оптимизируйте планировщик для более плавного игрового процесса.",
+  "videoLowLatencyTitle": "Видео с низкой задержкой",
+  "videoLowLatencySubtitle": "Синхронизируйте эмуляцию и рендеринг, чтобы уменьшить дрожание. Вступает в силу после перезапуска приложения.",
+  "paletteModeLabel": "Палитра",
+  "paletteModeBuiltin": "Встроенный",
+  "paletteModeCustom": "Обычай…",
+  "paletteModeCustomActive": "Пользовательский ({name})",
+  "builtinPaletteLabel": "Встроенная палитра",
+  "customPaletteLoadTitle": "Загрузить файл палитры (.pal)…",
+  "customPaletteLoadSubtitle": "192 байта (RGB) или 256 байтов (RGBA)",
+  "commandSucceeded": "{label} удалось",
+  "commandFailed": "{label} не удалось",
+  "snackPaused": "Приостановлено",
+  "snackResumed": "Возобновлено",
+  "snackPauseFailed": "Не удалось приостановить: {error}.",
+  "dialogOk": "ХОРОШО",
+  "debuggerNoRomTitle": "ПЗУ не работает",
+  "debuggerNoRomSubtitle": "Загрузите ПЗУ, чтобы увидеть состояние отладки",
+  "debuggerCpuRegisters": "Регистры ЦП",
+  "debuggerPpuState": "ППУ Государство",
+  "debuggerCpuStatusTooltip": "Регистр состояния ЦП (P)\nN: Отрицательный — устанавливается, если установлен бит результата 7.\nV: Переполнение – устанавливается на знаковое переполнение.\nB: Break – устанавливается инструкцией BRK.\nD: Десятичный — режим BCD (игнорируется на NES)\nI: Прерывание отключено – блокирует IRQ\nZ: Ноль — устанавливается, если результат равен нулю.\nC: Carry – устанавливается на беззнаковое переполнение.\n\nПрописные буквы = заданы, строчные = очищены.",
+  "debuggerPpuCtrlTooltip": "Регистр управления ППУ (2000 долларов США)\nV: включение NMI\nP: ведущий/ведомый PPU (не используется)\nH: Высота спрайта (0=8x8, 1=8x16)\nB: Адрес таблицы фоновых шаблонов\nS: Адрес таблицы шаблонов спрайтов.\nI: приращение адреса VRAM (0=1, 1=32)\nNN: адрес базовой таблицы имен.\n\nПрописные буквы = заданы, строчные = очищены.",
+  "debuggerPpuMaskTooltip": "Реестр масок ППУ (2001 долл. США)\nBGR: биты выделения цвета.\ns: Показать спрайты\nб: Показать фон\nM: показывать спрайты в 8 крайних левых пикселях.\nm: показать фон в крайних левых 8 пикселях.\nг: оттенки серого\n\nПрописные буквы = заданы, строчные = очищены.",
+  "debuggerPpuStatusTooltip": "Регистр состояния PPU ($2002)\nВ: VBlank запущен.\nS: Спрайт 0 попаданий\nО: переполнение спрайта\n\nПрописные буквы = заданы, строчные = очищены.",
+  "debuggerScanlineTooltip": "Scanline Numbers:\n0-239: Видимый (рендеринг)\n240: Пост-рендеринг (в режиме ожидания)\n241-260: VBlank (вертикальное гашение)\n-1: Предварительный рендеринг (фиктивная строка сканирования)",
+  "tilemapSettings": "Настройки",
+  "tilemapOverlay": "Наложение",
+  "tilemapDisplayMode": "Режим отображения",
+  "tilemapDisplayModeDefault": "По умолчанию",
+  "tilemapDisplayModeGrayscale": "Оттенки серого",
+  "tilemapDisplayModeAttributeView": "Просмотр атрибутов",
+  "tilemapTileGrid": "Плиточная сетка (8×8)",
+  "tilemapAttrGrid": "Сетка атрибутов (16×16)",
+  "tilemapAttrGrid32": "Сетка атрибутов (32×32)",
+  "tilemapNtBounds": "Границы Северной Америки",
+  "tilemapScrollOverlay": "Наложение прокрутки",
+  "tilemapPanelDisplay": "Отображать",
+  "tilemapPanelTilemap": "Тайловая карта",
+  "tilemapPanelSelectedTile": "Выбранная плитка",
+  "tilemapHidePanel": "Скрыть панель",
+  "tilemapShowPanel": "Показать панель",
+  "tilemapInfoSize": "Размер",
+  "tilemapInfoSizePx": "Размер (пикселей)",
+  "tilemapInfoTilemapAddress": "Адрес тайловой карты",
+  "tilemapInfoTilesetAddress": "Адрес набора тайлов",
+  "tilemapInfoMirroring": "Зеркальное отображение",
+  "tilemapInfoTileFormat": "Формат плитки",
+  "tilemapInfoTileFormat2bpp": "2 бит на пиксель",
+  "tilemapMirroringHorizontal": "Горизонтальный",
+  "tilemapMirroringVertical": "Вертикальный",
+  "tilemapMirroringFourScreen": "Четырехэкранный",
+  "tilemapMirroringSingleScreenLower": "Одноэкранный (нижний)",
+  "tilemapMirroringSingleScreenUpper": "Одноэкранный (верхний)",
+  "tilemapMirroringMapperControlled": "Контролируется картографом",
+  "tilemapLabelColumnRow": "Столбец, Строка",
+  "tilemapLabelXY": "Х, Ю",
+  "tilemapLabelSize": "Размер",
+  "tilemapLabelTilemapAddress": "Адрес тайловой карты",
+  "tilemapLabelTileIndex": "Индекс плитки",
+  "tilemapLabelTileAddressPpu": "Адрес плитки (PPU)",
+  "tilemapLabelPaletteIndex": "Индекс палитры",
+  "tilemapLabelPaletteAddress": "Адрес палитры",
+  "tilemapLabelAttributeAddress": "Адрес атрибута",
+  "tilemapLabelAttributeData": "Данные атрибута",
+  "tilemapSelectedTileTilemap": "Тайловая карта",
+  "tilemapSelectedTileTileIdx": "Идентификатор плитки",
+  "tilemapSelectedTileTilePpu": "Плитка (ППУ)",
+  "tilemapSelectedTilePalette": "Палитра",
+  "tilemapSelectedTileAttr": "Атрибут",
+  "tilemapCapture": "Захватывать",
+  "tilemapCaptureFrameStart": "Начало кадра",
+  "tilemapCaptureVblankStart": "VПустой старт",
+  "tilemapCaptureManual": "Руководство",
+  "tilemapScanline": "Сканлайн",
+  "tilemapDot": "Точка",
+  "tilemapError": "Ошибка: {error}.",
+  "tilemapRetry": "Повторить попытку",
+  "tilemapResetZoom": "Сбросить масштаб",
+  "menuTilemapViewer": "Просмотрщик тайловых карт",
+  "menuTileViewer": "Средство просмотра плиток",
+  "tileViewerError": "Ошибка: {error}.",
+  "tileViewerRetry": "Повторить попытку",
+  "tileViewerSettings": "Настройки просмотра плиток",
+  "tileViewerOverlays": "Наложения",
+  "tileViewerShowGrid": "Показать сетку плиток",
+  "tileViewerPalette": "Палитра",
+  "tileViewerPaletteBg": "БГ {index}",
+  "tileViewerPaletteSprite": "Спрайт {index}",
+  "tileViewerGrayscale": "Использовать палитру оттенков серого",
+  "tileViewerSelectedTile": "Выбранная плитка",
+  "tileViewerPatternTable": "Таблица шаблонов",
+  "tileViewerTileIndex": "Индекс плитки",
+  "tileViewerChrAddress": "Адрес ЦРП",
+  "tileViewerClose": "Закрыть",
+  "tileViewerSource": "Источник",
+  "tileViewerSourcePpu": "Память ППУ",
+  "tileViewerSourceChrRom": "ХР ПЗУ",
+  "tileViewerSourceChrRam": "ЧР ОЗУ",
+  "tileViewerSourcePrgRom": "ПРГ ПЗУ",
+  "tileViewerAddress": "Адрес",
+  "tileViewerSize": "Размер",
+  "tileViewerColumns": "Колс",
+  "tileViewerRows": "Строки",
+  "tileViewerLayout": "Макет",
+  "tileViewerLayoutNormal": "Нормальный",
+  "tileViewerLayout8x16": "Спрайты 8×16",
+  "tileViewerLayout16x16": "Спрайты 16×16",
+  "tileViewerBackground": "Фон",
+  "tileViewerBgDefault": "По умолчанию",
+  "tileViewerBgTransparent": "Прозрачный",
+  "tileViewerBgPalette": "Палитра цветов",
+  "tileViewerBgBlack": "Черный",
+  "tileViewerBgWhite": "Белый",
+  "tileViewerBgMagenta": "Пурпурный",
+  "tileViewerPresets": "Пресеты",
+  "tileViewerPresetPpu": "ППУ",
+  "tileViewerPresetChr": "ЧР",
+  "tileViewerPresetRom": "ПЗУ",
+  "tileViewerPresetBg": "БГ",
+  "tileViewerPresetOam": "ОАМ",
+  "menuSpriteViewer": "Просмотр спрайтов",
+  "menuPaletteViewer": "Средство просмотра палитры",
+  "paletteViewerPaletteRamTitle": "Палитра ОЗУ (32)",
+  "paletteViewerSystemPaletteTitle": "Системная палитра (64)",
+  "paletteViewerSettingsTooltip": "Настройки средства просмотра палитры",
+  "paletteViewerTooltipPaletteRam": "{addr} = 0x{value}",
+  "paletteViewerTooltipSystemIndex": "Индекс {index}",
+  "spriteViewerError": "Ошибка просмотра спрайтов: {error}.",
+  "spriteViewerSettingsTooltip": "Настройки просмотра спрайтов",
+  "spriteViewerShowGrid": "Показать сетку",
+  "spriteViewerShowOutline": "Показать контур вокруг спрайтов",
+  "spriteViewerShowOffscreenRegions": "Показать закадровые регионы",
+  "spriteViewerDimOffscreenSpritesGrid": "Затемнение закадровых спрайтов (сетка)",
+  "spriteViewerShowListView": "Показать список",
+  "spriteViewerPanelSprites": "Спрайты",
+  "spriteViewerPanelDataSource": "Источник данных",
+  "spriteViewerPanelSprite": "Спрайт",
+  "spriteViewerPanelSelectedSprite": "Выбранный спрайт",
+  "spriteViewerLabelMode": "Режим",
+  "spriteViewerLabelPatternBase": "Основа узора",
+  "spriteViewerLabelThumbnailSize": "Размер миниатюры",
+  "spriteViewerBgGray": "Серый",
+  "spriteViewerDataSourceSpriteRam": "Спрайтовая оперативная память",
+  "spriteViewerDataSourceCpuMemory": "Память процессора",
+  "spriteViewerTooltipTitle": "Спрайт #{index}",
+  "spriteViewerLabelIndex": "Индекс",
+  "spriteViewerLabelPos": "Поз.",
+  "spriteViewerLabelSize": "Размер",
+  "spriteViewerLabelTile": "Плитка",
+  "spriteViewerLabelTileAddr": "Адрес плитки",
+  "spriteViewerLabelPalette": "Палитра",
+  "spriteViewerLabelPaletteAddr": "Адрес палитры",
+  "spriteViewerLabelFlip": "Подбросить",
+  "spriteViewerLabelPriority": "Приоритет",
+  "spriteViewerPriorityBehindBg": "За БГ",
+  "spriteViewerPriorityInFront": "Спереди",
+  "spriteViewerLabelVisible": "Видимый",
+  "spriteViewerValueYes": "Да",
+  "spriteViewerValueNoOffscreen": "Нет (за кадром)",
+  "spriteViewerVisibleStatusVisible": "Видимый",
+  "spriteViewerVisibleStatusOffscreen": "За кадром",
+  "longPressToClear": "Длительное нажатие, чтобы очистить",
+  "videoBackendD3D11": "Графический процессор D3D11 (нулевая копия)",
+  "videoBackendSoftware": "Программный процессор (резервный)",
+  "netplayBackToSetup": "Вернуться к настройке",
+  "netplayP2PMode": "P2P-режим",
+  "netplaySignalingServer": "Сигнальный сервер",
+  "netplayRelayServer": "Ретрансляционный сервер (резервный)",
+  "netplayP2PRoomCode": "P2P-код комнаты",
+  "netplayStartP2PSession": "Начать P2P-сессию",
+  "netplayJoinP2PSession": "Присоединиться к P2P-сессии",
+  "netplayInvalidP2PServerAddr": "Неверный адрес P2P-сервера.",
+  "netplayProceed": "Продолжить",
+  "videoShaderParametersTitle": "Параметры шейдера",
+  "videoShaderParametersSubtitle": "Настраивайте параметры шейдера в режиме реального времени",
+  "videoShaderParametersReset": "Сбросить параметры",
+  "searchHint": "Поиск...",
+  "searchTooltip": "Поиск",
+  "noResults": "Соответствующие параметры не найдены",
+  "errorFailedToCreateTexture": "Не удалось создать текстуру.",
+  "languageJapanese": "Японский",
+  "languageSpanish": "Испанский",
+  "languagePortuguese": "Португальский",
+  "languageRussian": "Русский",
+  "languageFrench": "Французский",
+  "languageGerman": "Немецкий"
+}

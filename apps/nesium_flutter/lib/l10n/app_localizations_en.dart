@@ -1680,4 +1680,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorFailedToCreateTexture => 'Failed to create texture';
+
+  @override
+  String get languageJapanese => 'Japanese';
+
+  @override
+  String get languageSpanish => 'Spanish';
+
+  @override
+  String get languagePortuguese => 'Portuguese';
+
+  @override
+  String get languageRussian => 'Russian';
+
+  @override
+  String get languageFrench => 'French';
+
+  @override
+  String get languageGerman => 'German';
 }

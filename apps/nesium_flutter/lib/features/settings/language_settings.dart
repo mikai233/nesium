@@ -6,24 +6,52 @@ import '../../logging/app_logger.dart';
 import '../../persistence/app_storage.dart';
 import '../../persistence/keys.dart';
 
-enum AppLanguage { system, english, chineseSimplified }
+enum AppLanguage {
+  system,
+  english,
+  chineseSimplified,
+  japanese,
+  spanish,
+  portuguese,
+  russian,
+  french,
+  german,
+}
 
 extension AppLanguageX on AppLanguage {
   Locale? get locale => switch (this) {
     AppLanguage.system => null,
     AppLanguage.english => const Locale('en'),
     AppLanguage.chineseSimplified => const Locale('zh'),
+    AppLanguage.japanese => const Locale('ja'),
+    AppLanguage.spanish => const Locale('es'),
+    AppLanguage.portuguese => const Locale('pt'),
+    AppLanguage.russian => const Locale('ru'),
+    AppLanguage.french => const Locale('fr'),
+    AppLanguage.german => const Locale('de'),
   };
 
   String? get languageCode => switch (this) {
     AppLanguage.system => null,
     AppLanguage.english => 'en',
     AppLanguage.chineseSimplified => 'zh',
+    AppLanguage.japanese => 'ja',
+    AppLanguage.spanish => 'es',
+    AppLanguage.portuguese => 'pt',
+    AppLanguage.russian => 'ru',
+    AppLanguage.french => 'fr',
+    AppLanguage.german => 'de',
   };
 
   static AppLanguage fromLanguageCode(String? code) => switch (code) {
     'en' => AppLanguage.english,
     'zh' => AppLanguage.chineseSimplified,
+    'ja' => AppLanguage.japanese,
+    'es' => AppLanguage.spanish,
+    'pt' => AppLanguage.portuguese,
+    'ru' => AppLanguage.russian,
+    'fr' => AppLanguage.french,
+    'de' => AppLanguage.german,
     _ => AppLanguage.system,
   };
 }
