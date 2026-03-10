@@ -1,0 +1,219 @@
+import { ScrollView, TabWidget, Button, Slider } from "std-widgets.slint";
+
+export component InputPortConfig inherits Rectangle {
+    in property <int> port-index;
+    in property <[string]> button-names: [
+        "Up", "Down", "Left", "Right", "A", "B", "Turbo A", "Turbo B", "Select", "Start"
+    ];
+    in property <[string]> current-mappings;
+
+    in property <int> capturing-port-index: -1;
+    in property <int> capturing-button-index: -1;
+
+    callback bind-requested(int, int); 
+    callback reset-requested(int);
+
+    VerticalLayout {
+        spacing: 12px;
+        padding-top: 12px;
+
+        HorizontalLayout {
+            Text {
+                text: "Player \{root.port-index + 1} Bindings";
+                color: #1f1c18;
+                font-size: 15px;
+                font-weight: 700;
+                vertical-alignment: center;
+            }
+            Rectangle { horizontal-stretch: 1; }
+            Button {
+                text: "Reset to Default";
+                clicked => { root.reset-requested(root.port-index); }
+            }
+        }
+
+        Rectangle {
+            border-color: #d3ccbf;
+            border-width: 1px;
+            border-radius: 4px;
+            background: #ffffff;
+
+            VerticalLayout {
+                for btn-name[idx] in root.button-names: Rectangle {
+                    height: 36px;
+                    background: mod(idx, 2) == 0 ? #f9f8f6 : #ffffff;
+                    
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        spacing: 16px;
+
+                        Text {
+                            width: 80px;
+                            text: btn-name;
+                            vertical-alignment: center;
+                            color: #1f1c18;
+                        }
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: (root.capturing-port-index == root.port-index && root.capturing-button-index == idx) ? 
+                                  "Press any key..." : root.current-mappings[idx];
+                            vertical-alignment: center;
+                            color: (root.capturing-port-index == root.port-index && root.capturing-button-index == idx) ? 
+                                   #2b52d0 : #5f584e;
+                            font-weight: (root.capturing-port-index == root.port-index && root.capturing-button-index == idx) ? 700 : 400;
+                        }
+
+                        Button {
+                            y: (parent.height - self.height) / 2;
+                            text: "Bind";
+                            enabled: root.capturing-port-index == -1;
+                            clicked => { root.bind-requested(root.port-index, idx); }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if root.capturing-port-index == root.port-index: Text {
+            text: "Press ESC to cancel map binding.";
+            color: #615a50;
+            font-size: 12px;
+            horizontal-alignment: center;
+        }
+
+        Rectangle { vertical-stretch: 1; background: transparent; }
+    }
+}
+
+export component InputWindow inherits Window {
+    in-out property <string> ui-font-family: "Noto Sans SC";
+    in-out property <string> mono-font-family: "Noto Sans SC";
+    title: "Input Configuration";
+    preferred-width: 500px;
+    preferred-height: 600px;
+    min-width: 460px;
+    min-height: 400px;
+    default-font-family: root.ui-font-family;
+    default-font-size: 13px;
+
+    in-out property <[string]> p0-mappings: ["Up", "Down", "Left", "Right", "Z", "X", "C", "V", "Space", "Enter"];
+    in-out property <[string]> p1-mappings: ["", "", "", "", "", "", "", "", "", ""];
+    in property <[string]> button-names: ["Up", "Down", "Left", "Right", "A", "B", "Turbo A", "Turbo B", "Select", "Start"];
+    
+    in-out property <int> capturing-port-index: -1;
+    in-out property <int> capturing-button-index: -1;
+
+    in-out property <int> turbo-on-frames: 3;
+    in-out property <int> turbo-off-frames: 3;
+
+    callback keyboard-bind-requested(int, int);
+    callback cancel-bind-requested();
+    callback keyboard-bind-completed(int, int, string);
+    callback input-reset-requested(int);
+    callback turbo-timing-changed(int, int);
+
+    public function focus-bind-catcher() {
+        catcher.focus();
+    }
+
+    catcher := FocusScope {
+        width: 100%;
+        height: 100%;
+        
+        key-pressed(event) => {
+            if (root.capturing-port-index != -1 && root.capturing-button-index != -1) {
+                if (event.text == "\u{001b}") {
+                    root.cancel-bind-requested();
+                } else {
+                    root.keyboard-bind-completed(root.capturing-port-index, root.capturing-button-index, event.text);
+                }
+                return accept;
+            }
+            return reject;
+        }
+
+        key-released(event) => {
+            if (root.capturing-port-index != -1 && root.capturing-button-index != -1) {
+                return accept;
+            }
+            return reject;
+        }
+
+        Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: #efeae0;
+
+            VerticalLayout {
+                width: parent.width;
+                height: parent.height;
+                padding: 16px;
+
+                TabWidget {
+                    vertical-stretch: 1;
+                    Tab {
+                        title: "Port 0 (Player 1)";
+                        InputPortConfig {
+                            port-index: 0;
+                            current-mappings: root.p0-mappings;
+                            capturing-port-index: root.capturing-port-index;
+                            capturing-button-index: root.capturing-button-index;
+                            bind-requested(p, b) => { root.keyboard-bind-requested(p, b); }
+                            reset-requested(p) => { root.input-reset-requested(p); }
+                        }
+                    }
+                    Tab {
+                        title: "Port 1 (Player 2)";
+                        InputPortConfig {
+                            port-index: 1;
+                            current-mappings: root.p1-mappings;
+                            capturing-port-index: root.capturing-port-index;
+                            capturing-button-index: root.capturing-button-index;
+                            bind-requested(p, b) => { root.keyboard-bind-requested(p, b); }
+                            reset-requested(p) => { root.input-reset-requested(p); }
+                        }
+                    }
+                }
+
+                Rectangle { height: 16px; background: transparent; }
+
+                Text {
+                    text: "Turbo Timing Configuration";
+                    color: #1f1c18;
+                    font-size: 15px;
+                    font-weight: 700;
+                }
+                
+                Rectangle { height: 8px; background: transparent; }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text { width: 140px; text: "On frames:"; vertical-alignment: center; color: #1f1c18; }
+                    Slider {
+                        horizontal-stretch: 1;
+                        minimum: 1;
+                        maximum: 10;
+                        value: root.turbo-on-frames;
+                        changed(val) => { root.turbo-on-frames = val; root.turbo-timing-changed(root.turbo-on-frames, root.turbo-off-frames); }
+                    }
+                    Text { width: 40px; text: "\{root.turbo-on-frames}"; vertical-alignment: center; }
+                }
+                
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text { width: 140px; text: "Off frames:"; vertical-alignment: center; color: #1f1c18; }
+                    Slider {
+                        horizontal-stretch: 1;
+                        minimum: 1;
+                        maximum: 10;
+                        value: root.turbo-off-frames;
+                        changed(val) => { root.turbo-off-frames = val; root.turbo-timing-changed(root.turbo-on-frames, root.turbo-off-frames); }
+                    }
+                    Text { width: 40px; text: "\{root.turbo-off-frames}"; vertical-alignment: center; }
+                }
+            }
+        }
+    }
+}

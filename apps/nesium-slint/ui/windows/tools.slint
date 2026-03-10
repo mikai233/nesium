@@ -1,0 +1,18 @@
+import { PlaceholderContent } from "../shared.slint";
+
+export component ToolsWindow inherits Window {
+    in-out property <string> ui-font-family: "Noto Sans SC";
+    in-out property <string> mono-font-family: "Noto Sans SC";
+    title: "Tools";
+    preferred-width: 600px;
+    preferred-height: 520px;
+    min-width: 500px;
+    min-height: 440px;
+    default-font-family: root.ui-font-family;
+    default-font-size: 13px;
+
+    PlaceholderContent {
+        heading: "Tools Under Construction";
+        body: "Features like memory/PPU viewing and tas tools will be hosted here.";
+    }
+}

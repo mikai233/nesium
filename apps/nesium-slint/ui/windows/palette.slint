@@ -1,0 +1,85 @@
+import { ComboBox, Button, ScrollView } from "std-widgets.slint";
+
+export component PaletteWindow inherits Window {
+    in-out property <string> ui-font-family: "Noto Sans SC";
+    in-out property <string> mono-font-family: "Noto Sans SC";
+    title: "Palette Options";
+    preferred-width: 440px;
+    preferred-height: 280px;
+    min-width: 380px;
+    min-height: 220px;
+    default-font-family: root.ui-font-family;
+    default-font-size: 13px;
+
+    in-out property <int> current-palette-index: 0;
+    in-out property <string> palette-error: "";
+
+    callback palette-changed(int);
+    callback load-external-palette();
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #efeae0;
+
+        ScrollView {
+            width: parent.width;
+            height: parent.height;
+            horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+
+            VerticalLayout {
+                width: parent.visible-width;
+                padding-left: 18px;
+                padding-right: 18px;
+                padding-top: 16px;
+                padding-bottom: 16px;
+                spacing: 12px;
+
+                Text {
+                    text: "Built-in Palettes";
+                    color: #1f1c18;
+                    font-size: 15px;
+                    font-weight: 700;
+                }
+
+                ComboBox {
+                    model: ["Nesdev NTSC", "Mesen 2C02", "FBX Composite Direct", "Sony CXA2025AS US", "PAL 2C07", "Raw Linear"];
+                    current-index: root.current-palette-index;
+                    selected => {
+                        root.current-palette-index = self.current-index;
+                        root.palette-changed(self.current-index);
+                    }
+                }
+
+                Rectangle {
+                    height: 12px;
+                    background: transparent;
+                }
+
+                Text {
+                    text: "Custom Palette";
+                    color: #1f1c18;
+                    font-size: 15px;
+                    font-weight: 700;
+                }
+
+                Button {
+                    text: "Load .pal File...";
+                    clicked => { root.load-external-palette(); }
+                }
+
+                if (root.palette-error != ""): Text {
+                    text: root.palette-error;
+                    color: #d13232;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: transparent;
+                }
+            }
+        }
+    }
+}

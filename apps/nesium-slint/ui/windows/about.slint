@@ -1,0 +1,65 @@
+import { ScrollView } from "std-widgets.slint";
+
+export component AboutWindow inherits Window {
+    in-out property <string> ui-font-family: "Noto Sans SC";
+    in-out property <string> mono-font-family: "Noto Sans SC";
+    title: "About Nesium";
+    preferred-width: 500px;
+    preferred-height: 320px;
+    min-width: 400px;
+    min-height: 240px;
+    default-font-family: root.ui-font-family;
+    default-font-size: 13px;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #efeae0;
+
+        ScrollView {
+            width: parent.width;
+            height: parent.height;
+            horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+
+            VerticalLayout {
+                width: parent.visible-width;
+                padding-left: 18px;
+                padding-right: 18px;
+                padding-top: 16px;
+                padding-bottom: 16px;
+                spacing: 10px;
+
+                Text {
+                    text: "About Nesium";
+                    color: #1f1c18;
+                    font-size: 18px;
+                    font-weight: 700;
+                }
+
+                Text {
+                    text: "Slint frontend with a dedicated wgpu game surface, frame-driven presentation, and separate auxiliary windows for debugger and tools.";
+                    color: #5f584e;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: #d3ccbf;
+                }
+
+                Text {
+                    text: "Current focus: multi-window shell, low-latency game presentation, and staged migration of debugger and tooling from the egui frontend.";
+                    color: #635c53;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: transparent;
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,220 @@
+import { ScrollView, Slider, CheckBox } from "std-widgets.slint";
+
+export component AudioWindow inherits Window {
+    in-out property <string> ui-font-family: "Noto Sans SC";
+    in-out property <string> mono-font-family: "Noto Sans SC";
+    title: "Audio";
+    preferred-width: 520px;
+    preferred-height: 600px;
+    min-width: 460px;
+    min-height: 400px;
+    default-font-family: root.ui-font-family;
+    default-font-size: 13px;
+
+    in-out property <int> master-volume-percent: 100;
+    in-out property <bool> mute-in-background: false;
+    in-out property <bool> reduce-in-background: true;
+    in-out property <bool> reduce-in-fast-forward: false;
+    in-out property <int> volume-reduction-percent: 75;
+
+    in-out property <bool> reverb-enabled: false;
+    in-out property <int> reverb-strength-percent: 0;
+    in-out property <int> reverb-delay-ms: 1;
+
+    in-out property <bool> crossfeed-enabled: false;
+    in-out property <int> crossfeed-ratio-percent: 0;
+
+    in-out property <bool> eq-enabled: false;
+    in-out property <int> eq-gain-db: 0;
+
+    callback audio-config-changed();
+    
+    // helper wrapper to trigger callback
+    public function trigger_change() {
+        root.audio-config-changed();
+    }
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #efeae0;
+
+        ScrollView {
+            width: parent.width;
+            height: parent.height;
+            horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+
+            VerticalLayout {
+                width: parent.visible-width;
+                padding-left: 18px;
+                padding-right: 18px;
+                padding-top: 16px;
+                padding-bottom: 16px;
+                spacing: 12px;
+
+                Text {
+                    text: "General Output";
+                    color: #1f1c18;
+                    font-size: 15px;
+                    font-weight: 700;
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    Text { width: 140px; text: "Master Volume:"; vertical-alignment: center; color: #1f1c18; }
+                    Slider {
+                        horizontal-stretch: 1;
+                        minimum: 0;
+                        maximum: 100;
+                        value: root.master-volume-percent;
+                        changed(val) => { root.master-volume-percent = val; root.trigger_change(); }
+                    }
+                    Text { width: 40px; text: "\{root.master-volume-percent}%"; vertical-alignment: center; }
+                }
+
+                CheckBox {
+                    text: "Mute in Background";
+                    checked: root.mute-in-background;
+                    toggled => { root.mute-in-background = self.checked; root.trigger_change(); }
+                }
+
+                CheckBox {
+                    text: "Reduce Volume in Background";
+                    checked: root.reduce-in-background;
+                    toggled => { root.reduce-in-background = self.checked; root.trigger_change(); }
+                }
+
+                CheckBox {
+                    text: "Reduce Volume in Fast Forward";
+                    checked: root.reduce-in-fast-forward;
+                    toggled => { root.reduce-in-fast-forward = self.checked; root.trigger_change(); }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    opacity: root.reduce-in-background || root.reduce-in-fast-forward ? 1.0 : 0.5;
+                    Text { width: 140px; text: "Inactive Volume:"; vertical-alignment: center; color: #1f1c18; }
+                    Slider {
+                        horizontal-stretch: 1;
+                        minimum: 0;
+                        maximum: 100;
+                        value: root.volume-reduction-percent;
+                        enabled: root.reduce-in-background || root.reduce-in-fast-forward;
+                        changed(val) => { root.volume-reduction-percent = val; root.trigger_change(); }
+                    }
+                    Text { width: 40px; text: "\{root.volume-reduction-percent}%"; vertical-alignment: center; }
+                }
+
+                Rectangle { height: 1px; background: #d3ccbf; }
+
+                Text {
+                    text: "Reverb";
+                    color: #1f1c18;
+                    font-size: 15px;
+                    font-weight: 700;
+                }
+
+                CheckBox {
+                    text: "Enable Reverb";
+                    checked: root.reverb-enabled;
+                    toggled => { root.reverb-enabled = self.checked; root.trigger_change(); }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    opacity: root.reverb-enabled ? 1.0 : 0.5;
+                    Text { width: 140px; text: "Amount:"; vertical-alignment: center; color: #1f1c18; }
+                    Slider {
+                        horizontal-stretch: 1;
+                        minimum: 0;
+                        maximum: 100;
+                        value: root.reverb-strength-percent;
+                        enabled: root.reverb-enabled;
+                        changed(val) => { root.reverb-strength-percent = val; root.trigger_change(); }
+                    }
+                    Text { width: 40px; text: "\{root.reverb-strength-percent}%"; vertical-alignment: center; }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    opacity: root.reverb-enabled ? 1.0 : 0.5;
+                    Text { width: 140px; text: "Delay:"; vertical-alignment: center; color: #1f1c18; }
+                    Slider {
+                        horizontal-stretch: 1;
+                        minimum: 1;
+                        maximum: 50;
+                        value: root.reverb-delay-ms;
+                        enabled: root.reverb-enabled;
+                        changed(val) => { root.reverb-delay-ms = val; root.trigger_change(); }
+                    }
+                    Text { width: 40px; text: "\{root.reverb-delay-ms}ms"; vertical-alignment: center; }
+                }
+
+                Rectangle { height: 1px; background: #d3ccbf; }
+
+                Text {
+                    text: "Crossfeed / Panning";
+                    color: #1f1c18;
+                    font-size: 15px;
+                    font-weight: 700;
+                }
+                
+                CheckBox {
+                    text: "Enable Crossfeed";
+                    checked: root.crossfeed-enabled;
+                    toggled => { root.crossfeed-enabled = self.checked; root.trigger_change(); }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    opacity: root.crossfeed-enabled ? 1.0 : 0.5;
+                    Text { width: 140px; text: "Ratio:"; vertical-alignment: center; color: #1f1c18; }
+                    Slider {
+                        horizontal-stretch: 1;
+                        minimum: 0;
+                        maximum: 100;
+                        value: root.crossfeed-ratio-percent;
+                        enabled: root.crossfeed-enabled;
+                        changed(val) => { root.crossfeed-ratio-percent = val; root.trigger_change(); }
+                    }
+                    Text { width: 40px; text: "\{root.crossfeed-ratio-percent}%"; vertical-alignment: center; }
+                }
+
+                Rectangle { height: 1px; background: #d3ccbf; }
+
+                Text {
+                    text: "Equalizer";
+                    color: #1f1c18;
+                    font-size: 15px;
+                    font-weight: 700;
+                }
+
+                CheckBox {
+                    text: "Enable EQ";
+                    checked: root.eq-enabled;
+                    toggled => { root.eq-enabled = self.checked; root.trigger_change(); }
+                }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    opacity: root.eq-enabled ? 1.0 : 0.5;
+                    Text { width: 140px; text: "Global Gain (dB):"; vertical-alignment: center; color: #1f1c18; }
+                    Slider {
+                        horizontal-stretch: 1;
+                        minimum: -12;
+                        maximum: 12;
+                        value: root.eq-gain-db;
+                        enabled: root.eq-enabled;
+                        changed(val) => { root.eq-gain-db = val; root.trigger_change(); }
+                    }
+                    Text { width: 40px; text: "\{root.eq-gain-db}dB"; vertical-alignment: center; }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: transparent;
+                }
+            }
+        }
+    }
+}

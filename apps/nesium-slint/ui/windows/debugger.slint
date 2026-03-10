@@ -1,0 +1,133 @@
+import { ScrollView } from "std-widgets.slint";
+import { PlaceholderContent, DebugRow } from "../shared.slint";
+
+export component DebuggerWindow inherits Window {
+    in-out property <string> ui-font-family: "Noto Sans SC";
+    in-out property <string> mono-font-family: "Noto Sans SC";
+    in-out property <bool> has-rom: false;
+    in-out property <string> rom-name: "No ROM";
+    in-out property <string> debug-summary: "Debugger disabled";
+    in-out property <string> debug-cpu-pc: "--";
+    in-out property <string> debug-cpu-a: "--";
+    in-out property <string> debug-cpu-x: "--";
+    in-out property <string> debug-cpu-y: "--";
+    in-out property <string> debug-cpu-sp: "--";
+    in-out property <string> debug-cpu-status: "--";
+    in-out property <string> debug-cpu-cycle: "--";
+    in-out property <string> debug-ppu-scanline: "--";
+    in-out property <string> debug-ppu-cycle: "--";
+    in-out property <string> debug-ppu-frame: "--";
+    in-out property <string> debug-ppu-ctrl: "--";
+    in-out property <string> debug-ppu-mask: "--";
+    in-out property <string> debug-ppu-status: "--";
+    in-out property <string> debug-ppu-vram: "--";
+
+    title: "Debugger";
+    preferred-width: 440px;
+    preferred-height: 720px;
+    min-width: 360px;
+    min-height: 420px;
+    background: #efeae0;
+    default-font-family: root.ui-font-family;
+    default-font-size: 13px;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: root.background;
+
+        ScrollView {
+            width: parent.width;
+            height: parent.height;
+            horizontal-scrollbar-policy: ScrollBarPolicy.always-off;
+
+            VerticalLayout {
+                width: parent.visible-width;
+                padding-left: 14px;
+                padding-right: 14px;
+                padding-top: 14px;
+                padding-bottom: 14px;
+                spacing: 12px;
+
+                Text {
+                    text: "Debugger";
+                    color: #1f1c18;
+                    font-size: 16px;
+                    font-weight: 700;
+                }
+
+                Text {
+                    text: root.rom-name;
+                    color: #635c53;
+                    font-size: 13px;
+                }
+
+                if !root.has-rom : Text {
+                    text: "Load a ROM to see live CPU and PPU state.";
+                    color: #746d65;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: root.debug-summary;
+                    color: #635c53;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: #d3ccbf;
+                }
+
+                Text {
+                    text: "CPU";
+                    color: #1f1c18;
+                    font-size: 13px;
+                    font-weight: 700;
+                }
+
+                DebugRow { label: "PC"; value: root.debug-cpu-pc; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "A"; value: root.debug-cpu-a; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "X"; value: root.debug-cpu-x; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "Y"; value: root.debug-cpu-y; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "SP"; value: root.debug-cpu-sp; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "Status"; value: root.debug-cpu-status; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "Cycle"; value: root.debug-cpu-cycle; mono-font-family: root.mono-font-family; }
+
+                Rectangle {
+                    height: 1px;
+                    background: #d3ccbf;
+                }
+
+                Text {
+                    text: "PPU";
+                    color: #1f1c18;
+                    font-size: 13px;
+                    font-weight: 700;
+                }
+
+                DebugRow { label: "Scanline"; value: root.debug-ppu-scanline; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "Cycle"; value: root.debug-ppu-cycle; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "Frame"; value: root.debug-ppu-frame; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "CTRL"; value: root.debug-ppu-ctrl; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "MASK"; value: root.debug-ppu-mask; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "STATUS"; value: root.debug-ppu-status; mono-font-family: root.mono-font-family; }
+                DebugRow { label: "VRAM"; value: root.debug-ppu-vram; mono-font-family: root.mono-font-family; }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: transparent;
+                }
+
+                Text {
+                    text: "Controls: Arrows, Z/X, Enter, Space, C/V turbo";
+                    color: #746d65;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,463 @@
+import "../../nesium_flutter/assets/fonts/NotoSansSC-Regular.ttf";
+import "../../nesium_flutter/assets/fonts/NotoSansSC-Medium.ttf";
+import "../../nesium_flutter/assets/fonts/NotoSansSC-Bold.ttf";
+import { ScrollView, ComboBox, Button, Slider, CheckBox, TabWidget } from "std-widgets.slint";
+
+import { MenuTrigger, MenuPopupItem, MenuPopupSeparator, MenuPopupPanel } from "shared.slint";
+
+export component MainWindow inherits Window {
+    in-out property <image> game-frame;
+    in-out property <string> ui-font-family: "Noto Sans SC";
+    in-out property <string> mono-font-family: "Noto Sans SC";
+    in-out property <string> status-text: "Runtime ready";
+    in-out property <string> fps-text: "FPS: --";
+    in-out property <string> rom-name: "No ROM";
+    in-out property <bool> paused: false;
+    in-out property <bool> has-rom: false;
+    in-out property <bool> integer-fps-mode: false;
+    in-out property <int> display-mode: 0;
+    in-out property <int> open-menu: -1;
+    in-out property <string> error-message;
+
+    callback load-rom-requested();
+    callback pause-toggled();
+    callback reset-requested();
+    callback power-reset-requested();
+    callback power-off-requested();
+    callback quit-requested();
+    callback display-mode-requested(mode: int);
+    callback integer-fps-mode-requested(enabled: bool);
+    callback aux-window-open-requested(kind: int);
+    callback aux-window-closed(kind: int);
+    callback game-key-changed(key: string, pressed: bool) -> bool;
+    callback game-input-reset-requested();
+    callback error-dismissed();
+    callback rom-dropped(path: string);
+
+    title: "Nesium Slint";
+    preferred-width: 1360px;
+    preferred-height: 860px;
+    background: #000000;
+    default-font-family: root.ui-font-family;
+    default-font-size: 13px;
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: root.background;
+
+        VerticalLayout {
+            spacing: 0px;
+
+            Rectangle {
+                height: 32px;
+                background: #f6f7fb;
+
+                HorizontalLayout {
+                    spacing: 0px;
+
+                    file_button := MenuTrigger {
+                        title: "File";
+                        open: root.open-menu == 0;
+                        activated => {
+                            root.open-menu = root.open-menu == 0 ? -1 : 0;
+                        }
+                    }
+
+                    emulation_button := MenuTrigger {
+                        width: 86px;
+                        title: "Emulation";
+                        open: root.open-menu == 1;
+                        activated => {
+                            root.open-menu = root.open-menu == 1 ? -1 : 1;
+                        }
+                    }
+
+                    view_button := MenuTrigger {
+                        title: "View";
+                        open: root.open-menu == 2;
+                        activated => {
+                            root.open-menu = root.open-menu == 2 ? -1 : 2;
+                        }
+                    }
+
+                    window_button := MenuTrigger {
+                        width: 78px;
+                        title: "Window";
+                        open: root.open-menu == 3;
+                        activated => {
+                            root.open-menu = root.open-menu == 3 ? -1 : 3;
+                        }
+                    }
+
+                    help_button := MenuTrigger {
+                        title: "Help";
+                        open: root.open-menu == 4;
+                        activated => {
+                            root.open-menu = root.open-menu == 4 ? -1 : 4;
+                        }
+                    }
+
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        background: transparent;
+                    }
+
+                    Text {
+                        text: root.fps-text;
+                        color: #5a6270;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                    }
+
+                    Rectangle {
+                        width: 12px;
+                        background: transparent;
+                    }
+                }
+
+                Rectangle {
+                    x: 0px;
+                    y: parent.height - 1px;
+                    width: parent.width;
+                    height: 1px;
+                    background: #d8dee8;
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                background: #0d0d0d;
+
+                game_focus := FocusScope {
+                    width: parent.width;
+                    height: parent.height;
+                    focus-on-click: true;
+
+                    capture_key_pressed(event) => {
+                        if !root.has-rom {
+                            return reject;
+                        }
+                        return root.game-key-changed(event.text, true) ? accept : reject;
+                    }
+                    capture_key_released(event) => {
+                        return root.game-key-changed(event.text, false) ? accept : reject;
+                    }
+
+                    focus_lost(_) => {
+                        root.game-input-reset-requested();
+                    }
+
+                    Rectangle {
+                        width: parent.width;
+                        height: parent.height;
+                        background: #000000;
+
+                        viewport := Rectangle {
+                            x: 12px;
+                            y: 12px;
+                            width: parent.width - 24px;
+                            height: parent.height - 24px;
+                            background: #000000;
+
+                            property <float> target-aspect: root.display-mode == 1 ? 4.0 / 3.0 : 256.0 / 240.0;
+                            property <length> fitted-width: root.display-mode == 2 ? self.width : (self.width / self.target-aspect <= self.height ? self.width : self.height * self.target-aspect);
+                            property <length> fitted-height: root.display-mode == 2 ? self.height : (self.width / self.target-aspect <= self.height ? self.width / self.target-aspect : self.height);
+
+                            Image {
+                                visible: root.has-rom;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                width: parent.fitted-width;
+                                height: parent.fitted-height;
+                                source: root.game-frame;
+                                image-fit: fill;
+                                image-rendering: pixelated;
+                            }
+
+                            Text {
+                                visible: !root.has-rom;
+                                width: parent.width;
+                                height: parent.height;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                text: "Load a ROM to start emulation";
+                                color: #8b8b8b;
+                                font-size: 20px;
+                            }
+                        }
+
+                        TouchArea {
+                            width: parent.width;
+                            height: parent.height;
+                            clicked => {
+                                game_focus.focus();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if root.open-menu >= 0 : TouchArea {
+            y: 32px;
+            width: parent.width;
+            height: parent.height - 32px;
+            clicked => {
+                root.open-menu = -1;
+            }
+        }
+
+        file_menu := MenuPopupPanel {
+            open: root.open-menu == 0;
+            panel-x: file_button.x;
+            panel-y: file_button.height + 2px;
+
+            MenuPopupItem {
+                title: "Load ROM...";
+                activated => {
+                    root.open-menu = -1;
+                    root.load-rom-requested();
+                }
+            }
+
+            MenuPopupItem {
+                title: "Eject Cartridge";
+                enabled: root.has-rom;
+                activated => {
+                    root.open-menu = -1;
+                    root.power-off-requested();
+                }
+            }
+
+            MenuPopupSeparator {}
+
+            MenuPopupItem {
+                title: "Quit";
+                activated => {
+                    root.open-menu = -1;
+                    root.quit-requested();
+                }
+            }
+        }
+
+        emulation_menu := MenuPopupPanel {
+            open: root.open-menu == 1;
+            panel-x: emulation_button.x;
+            panel-y: emulation_button.height + 2px;
+
+            MenuPopupItem {
+                title: "Pause / Resume";
+                enabled: root.has-rom;
+                activated => {
+                    root.open-menu = -1;
+                    root.pause-toggled();
+                }
+            }
+
+            MenuPopupItem {
+                title: "Soft Reset";
+                enabled: root.has-rom;
+                activated => {
+                    root.open-menu = -1;
+                    root.reset-requested();
+                }
+            }
+
+            MenuPopupItem {
+                title: "Power Reset";
+                enabled: root.has-rom;
+                activated => {
+                    root.open-menu = -1;
+                    root.power-reset-requested();
+                }
+            }
+
+            MenuPopupSeparator {}
+
+            MenuPopupItem {
+                title: root.integer-fps-mode ? "Disable Integer 60 FPS Pacing" : "Enable Integer 60 FPS Pacing";
+                enabled: root.has-rom;
+                activated => {
+                    root.open-menu = -1;
+                    root.integer-fps-mode-requested(true);
+                }
+            }
+        }
+
+        view_menu := MenuPopupPanel {
+            open: root.open-menu == 2;
+            panel-x: view_button.x;
+            panel-y: view_button.height + 2px;
+
+            MenuPopupItem {
+                title: root.display-mode == 0 ? "Square Pixels  •" : "Square Pixels";
+                activated => {
+                    root.open-menu = -1;
+                    root.display-mode-requested(0);
+                }
+            }
+
+            MenuPopupItem {
+                title: root.display-mode == 1 ? "NTSC 4:3  •" : "NTSC 4:3";
+                activated => {
+                    root.open-menu = -1;
+                    root.display-mode-requested(1);
+                }
+            }
+
+            MenuPopupItem {
+                title: root.display-mode == 2 ? "Stretch  •" : "Stretch";
+                activated => {
+                    root.open-menu = -1;
+                    root.display-mode-requested(2);
+                }
+            }
+        }
+
+        window_menu := MenuPopupPanel {
+            open: root.open-menu == 3;
+            panel-x: window_button.x;
+            panel-y: window_button.height + 2px;
+
+            MenuPopupItem {
+                title: "Debugger";
+                activated => {
+                    root.open-menu = -1;
+                    root.aux-window-open-requested(0);
+                }
+            }
+
+            MenuPopupItem {
+                title: "Tools";
+                activated => {
+                    root.open-menu = -1;
+                    root.aux-window-open-requested(1);
+                }
+            }
+
+            MenuPopupItem {
+                title: "Palette";
+                activated => {
+                    root.open-menu = -1;
+                    root.aux-window-open-requested(2);
+                }
+            }
+
+            MenuPopupItem {
+                title: "Input";
+                activated => {
+                    root.open-menu = -1;
+                    root.aux-window-open-requested(3);
+                }
+            }
+
+            MenuPopupItem {
+                title: "Audio";
+                activated => {
+                    root.open-menu = -1;
+                    root.aux-window-open-requested(4);
+                }
+            }
+        }
+
+        help_menu := MenuPopupPanel {
+            open: root.open-menu == 4;
+            panel-x: help_button.x;
+            panel-y: help_button.height + 2px;
+
+            MenuPopupItem {
+                title: "About Nesium";
+                activated => {
+                    root.open-menu = -1;
+                    root.aux-window-open-requested(5);
+                }
+            }
+        }
+
+        // Error dialog overlay
+        if root.error-message != "" : Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: #80000000;
+
+            TouchArea {
+                width: parent.width;
+                height: parent.height;
+            }
+
+            Rectangle {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 420px;
+                height: error-layout.min-height;
+                background: #ffffff;
+                border-radius: 12px;
+                drop-shadow-color: #40000000;
+                drop-shadow-offset-y: 8px;
+                drop-shadow-blur: 24px;
+                clip: true;
+
+                error-layout := VerticalLayout {
+                    padding: 24px;
+                    spacing: 16px;
+
+                    Text {
+                        text: "Error";
+                        color: #c0392b;
+                        font-size: 18px;
+                        font-weight: 700;
+                    }
+
+                    Text {
+                        text: root.error-message;
+                        color: #333333;
+                        font-size: 13px;
+                        wrap: word-wrap;
+                    }
+
+                    HorizontalLayout {
+                        alignment: end;
+
+                        Rectangle {
+                            width: 80px;
+                            height: 36px;
+                            border-radius: 6px;
+                            background: ok-touch.pressed ? #2563eb : (ok-touch.has-hover ? #3b82f6 : #2980b9);
+
+                            animate background { duration: 100ms; }
+
+                            Text {
+                                width: parent.width;
+                                height: parent.height;
+                                text: "OK";
+                                color: #ffffff;
+                                font-size: 14px;
+                                font-weight: 600;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+
+                            ok-touch := TouchArea {
+                                width: parent.width;
+                                height: parent.height;
+                                clicked => {
+                                    root.error-message = "";
+                                    root.error-dismissed();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export { DebuggerWindow } from "windows/debugger.slint";
+export { ToolsWindow } from "windows/tools.slint";
+export { PaletteWindow } from "windows/palette.slint";
+export { InputWindow } from "windows/input.slint";
+export { AudioWindow } from "windows/audio.slint";
+export { AboutWindow } from "windows/about.slint";

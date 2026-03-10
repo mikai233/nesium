@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "apps/nesium-egui",
+  "apps/nesium-slint",
   "crates/nesium-core",
   "crates/libretro-bridge",
   "crates/nesium-libretro",
@@ -82,7 +83,7 @@ ringbuf = "0.4.8"
 base64 = "0.22"
 quick-xml = "0.39.0"
 sha1 = "0.10.6"
-skia-safe = "0.91.1"
+skia-safe = "0.90.0"
 ico = "0.5.0"
 winres = "0.1.12"
 png = "0.18.0"
@@ -93,6 +94,8 @@ tokio = "1.49.0"
 thiserror = "2.0.17"
 strum = "0.27.2"
 bytes = "1.11.0"
+slint = "1.15.1"
+slint-build = "1.15.1"
 jni = "0.21.1"
 ndk-context = "0.1.1"
 libc = "0.2.180"

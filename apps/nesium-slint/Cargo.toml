@@ -1,0 +1,32 @@
+[package]
+name = "nesium_slint"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+default-run = "nesium_slint"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "nesium_slint"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+crossbeam-channel.workspace = true
+nesium-core.workspace = true
+nesium-runtime.workspace = true
+rfd.workspace = true
+gilrs.workspace = true
+slint = { version = "1.15.1", default-features = false, features = [
+    "std",
+    "compat-1-2",
+    "backend-winit",
+    "renderer-femtovg-wgpu",
+    "unstable-wgpu-28",
+    "unstable-winit-030",
+] }
+
+[build-dependencies]
+slint-build = "1.15.1"
