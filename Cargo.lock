@@ -3486,6 +3486,7 @@ dependencies = [
  "anyhow",
  "base64",
  "bitflags 2.10.0",
+ "cc",
  "ctor",
  "dyn-clone",
  "nesium-blip",
