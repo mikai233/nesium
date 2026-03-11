@@ -30,9 +30,10 @@ fn canonicalize_vrc7_reg(reg: u8) -> Option<u8> {
 #[cfg(nesium_has_vrc7_native)]
 mod native {
     use super::{
-        AudioChannel, CPU_CLOCK_NTSC, ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink,
-        ExpansionAudioSnapshot, VRC7_CHIP_TYPE, VRC7_OPLL_CLOCK_RATE, VRC7_OPLL_SAMPLE_RATE,
-        VRC7_PATCH_TYPE, VRC7_REGISTER_COUNT, canonicalize_vrc7_reg, is_vrc7_mirrored_alias,
+        AudioChannel, CPU_CLOCK_NTSC, ExpansionAudio, ExpansionAudioClockContext,
+        ExpansionAudioSink, ExpansionAudioSnapshot, VRC7_CHIP_TYPE, VRC7_OPLL_CLOCK_RATE,
+        VRC7_OPLL_SAMPLE_RATE, VRC7_PATCH_TYPE, VRC7_REGISTER_COUNT, canonicalize_vrc7_reg,
+        is_vrc7_mirrored_alias,
     };
     use core::ffi::c_void;
 
