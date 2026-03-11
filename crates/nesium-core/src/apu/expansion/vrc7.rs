@@ -9,13 +9,30 @@ const VRC7_OPLL_SAMPLE_RATE: u32 = 49_716;
 const VRC7_OPLL_CLOCK_RATE: u32 = VRC7_OPLL_SAMPLE_RATE * 72;
 const VRC7_PATCH_TYPE: u8 = 1;
 const VRC7_CHIP_TYPE: u8 = 1;
+const VRC7_REGISTER_COUNT: usize = 0x40;
+
+fn is_vrc7_mirrored_alias(reg: u8) -> bool {
+    matches!(reg, 0x19..=0x1F | 0x29..=0x2F | 0x39..=0x3F)
+}
+
+fn canonicalize_vrc7_reg(reg: u8) -> Option<u8> {
+    if reg >= VRC7_REGISTER_COUNT as u8 {
+        return None;
+    }
+
+    Some(if is_vrc7_mirrored_alias(reg) {
+        reg - 9
+    } else {
+        reg
+    })
+}
 
 #[cfg(nesium_has_vrc7_native)]
 mod native {
     use super::{
-        AudioChannel, CPU_CLOCK_NTSC, ExpansionAudio, ExpansionAudioClockContext,
-        ExpansionAudioSink, ExpansionAudioSnapshot, VRC7_CHIP_TYPE, VRC7_OPLL_CLOCK_RATE,
-        VRC7_OPLL_SAMPLE_RATE, VRC7_PATCH_TYPE,
+        AudioChannel, CPU_CLOCK_NTSC, ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink,
+        ExpansionAudioSnapshot, VRC7_CHIP_TYPE, VRC7_OPLL_CLOCK_RATE, VRC7_OPLL_SAMPLE_RATE,
+        VRC7_PATCH_TYPE, VRC7_REGISTER_COUNT, canonicalize_vrc7_reg, is_vrc7_mirrored_alias,
     };
     use core::ffi::c_void;
 
@@ -78,7 +95,7 @@ mod native {
     pub struct Vrc7Audio {
         opll: OpllHandle,
         register_select: u8,
-        registers: [u8; 0x40],
+        registers: [u8; VRC7_REGISTER_COUNT],
         previous_output: i16,
         clock_timer: f64,
         muted: bool,
@@ -93,7 +110,9 @@ mod native {
             cloned.clock_timer = self.clock_timer;
             cloned.muted = self.muted;
             for (reg, value) in self.registers.iter().copied().enumerate() {
-                cloned.opll.write_reg(reg as u8, value);
+                if !is_vrc7_mirrored_alias(reg as u8) {
+                    cloned.opll.write_reg(reg as u8, value);
+                }
             }
             cloned
         }
@@ -104,7 +123,7 @@ mod native {
             Self {
                 opll: OpllHandle::new(),
                 register_select: 0,
-                registers: [0; 0x40],
+                registers: [0; VRC7_REGISTER_COUNT],
                 previous_output: 0,
                 clock_timer: 0.0,
                 muted: false,
@@ -134,8 +153,8 @@ mod native {
             if self.muted {
                 return;
             }
-            if (self.register_select as usize) < self.registers.len() {
-                self.registers[self.register_select as usize] = value;
+            if let Some(reg) = canonicalize_vrc7_reg(self.register_select) {
+                self.registers[reg as usize] = value;
             }
             self.opll.write_reg(self.register_select, value);
         }
@@ -188,12 +207,13 @@ mod native {
 mod fallback {
     use super::{
         ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot,
+        VRC7_REGISTER_COUNT, canonicalize_vrc7_reg,
     };
 
     #[derive(Debug, Clone)]
     pub struct Vrc7Audio {
         register_select: u8,
-        registers: [u8; 0x40],
+        registers: [u8; VRC7_REGISTER_COUNT],
         muted: bool,
     }
 
@@ -201,7 +221,7 @@ mod fallback {
         pub fn new() -> Self {
             Self {
                 register_select: 0,
-                registers: [0; 0x40],
+                registers: [0; VRC7_REGISTER_COUNT],
                 muted: false,
             }
         }
@@ -219,14 +239,16 @@ mod fallback {
             if self.muted {
                 return;
             }
-            self.register_select = value & 0x3F;
+            self.register_select = value;
         }
 
         pub fn write_register_data(&mut self, value: u8) {
             if self.muted {
                 return;
             }
-            self.registers[self.register_select as usize] = value;
+            if let Some(reg) = canonicalize_vrc7_reg(self.register_select) {
+                self.registers[reg as usize] = value;
+            }
         }
     }
 
