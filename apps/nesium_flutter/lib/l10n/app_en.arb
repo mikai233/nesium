@@ -835,5 +835,11 @@
   "searchHint": "Search...",
   "searchTooltip": "Search",
   "noResults": "No matching parameters found",
-  "errorFailedToCreateTexture": "Failed to create texture"
+  "errorFailedToCreateTexture": "Failed to create texture",
+  "languageJapanese": "Japanese",
+  "languageSpanish": "Spanish",
+  "languagePortuguese": "Portuguese",
+  "languageRussian": "Russian",
+  "languageFrench": "French",
+  "languageGerman": "German"
 }
