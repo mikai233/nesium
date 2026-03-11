@@ -136,7 +136,7 @@ Nesium 的长期愿景专注于精确度、工具链和可扩展性：
 ### Mapper 支持详情 / 已知问题
 
 - **MMC5 (mapper 5)**: ExRAM 作为 nametable 的模式和扩展属性/填充特性尚未实现；扩展音频未实现。
-- **J.Y. Company 90**: 多合一卡带的 NT/IRQ 机制已简化；高级 nametable/IRQ 行为需要完善。
+- **J.Y. Company 90**: 已在抽样 mapper 90 商业 ROM 上验证音视频对齐；较少见的高级 nametable 边缘行为仍缺少专项覆盖。
 - **TQROM (mapper 119)**: 围绕 CHR ROM/RAM 位切换的边缘情况仍需验证。
 - **Action 52 / Cheetahmen II (mapper 228)**: Mapper RAM 窗口行为实现非常基础；需针对所有卡带进行验证。
 - **通用**: 针对某些离散板（如部分 UNROM/CNROM 变体）的总线冲突处理尚未完全建模。
