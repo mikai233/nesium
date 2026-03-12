@@ -1,4 +1,9 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    fs::OpenOptions,
+    io::Write,
+    sync::OnceLock,
+};
 
 use crate::apu::Apu;
 use crate::bus::{CpuBus, DmcDmaEvent, STACK_ADDR};
@@ -39,6 +44,120 @@ mod timing;
 
 pub(crate) use irq::IrqSource;
 pub(crate) use status::Status;
+
+#[derive(Debug, Clone)]
+struct CpuWriteTraceConfig {
+    path: String,
+    cycle_start: u64,
+    cycle_end: u64,
+    addr_start: u16,
+    addr_end: u16,
+}
+
+#[derive(Debug, Clone)]
+struct CpuExecTraceConfig {
+    path: String,
+    cycle_start: u64,
+    cycle_end: u64,
+}
+
+#[derive(Debug, Clone)]
+struct CpuInterruptTraceConfig {
+    path: String,
+    cycle_start: u64,
+    cycle_end: u64,
+}
+
+fn cpu_write_trace_config() -> Option<&'static CpuWriteTraceConfig> {
+    static TRACE_CFG: OnceLock<Option<CpuWriteTraceConfig>> = OnceLock::new();
+    TRACE_CFG
+        .get_or_init(|| {
+            let path = std::env::var("NESIUM_CPU_WRITE_TRACE_PATH")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())?;
+            let cycle_start = std::env::var("NESIUM_CPU_WRITE_TRACE_CYCLE_START")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
+            let cycle_end = std::env::var("NESIUM_CPU_WRITE_TRACE_CYCLE_END")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(u64::MAX);
+            let addr_start = std::env::var("NESIUM_CPU_WRITE_TRACE_ADDR_START")
+                .ok()
+                .and_then(|s| {
+                    u16::from_str_radix(s.trim_start_matches("0x").trim_start_matches("0X"), 16)
+                        .ok()
+                })
+                .unwrap_or(0);
+            let addr_end = std::env::var("NESIUM_CPU_WRITE_TRACE_ADDR_END")
+                .ok()
+                .and_then(|s| {
+                    u16::from_str_radix(s.trim_start_matches("0x").trim_start_matches("0X"), 16)
+                        .ok()
+                })
+                .unwrap_or(u16::MAX);
+            Some(CpuWriteTraceConfig {
+                path,
+                cycle_start,
+                cycle_end,
+                addr_start,
+                addr_end,
+            })
+        })
+        .as_ref()
+}
+
+fn cpu_exec_trace_config() -> Option<&'static CpuExecTraceConfig> {
+    static TRACE_CFG: OnceLock<Option<CpuExecTraceConfig>> = OnceLock::new();
+    TRACE_CFG
+        .get_or_init(|| {
+            let path = std::env::var("NESIUM_CPU_EXEC_TRACE_PATH")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())?;
+            let cycle_start = std::env::var("NESIUM_CPU_EXEC_TRACE_CYCLE_START")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
+            let cycle_end = std::env::var("NESIUM_CPU_EXEC_TRACE_CYCLE_END")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(u64::MAX);
+            Some(CpuExecTraceConfig {
+                path,
+                cycle_start,
+                cycle_end,
+            })
+        })
+        .as_ref()
+}
+
+fn cpu_interrupt_trace_config() -> Option<&'static CpuInterruptTraceConfig> {
+    static TRACE_CFG: OnceLock<Option<CpuInterruptTraceConfig>> = OnceLock::new();
+    TRACE_CFG
+        .get_or_init(|| {
+            let path = std::env::var("NESIUM_CPU_INTERRUPT_TRACE_PATH")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())?;
+            let cycle_start = std::env::var("NESIUM_CPU_INTERRUPT_TRACE_CYCLE_START")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
+            let cycle_end = std::env::var("NESIUM_CPU_INTERRUPT_TRACE_CYCLE_END")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(u64::MAX);
+            Some(CpuInterruptTraceConfig {
+                path,
+                cycle_start,
+                cycle_end,
+            })
+        })
+        .as_ref()
+}
 
 /// Lightweight CPU register snapshot used for tracing/debugging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -345,7 +464,10 @@ impl Cpu {
     }
 
     pub(crate) fn fetch_opcode(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
-        self.fetch_pc_u8(bus, ctx, CpuBusAccessKind::ExecOpcode)
+        let pc = self.pc;
+        let opcode = self.fetch_pc_u8(bus, ctx, CpuBusAccessKind::ExecOpcode);
+        self.maybe_trace_exec(pc, opcode, bus);
+        opcode
     }
 
     pub(crate) fn fetch_operand_u8(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
@@ -373,6 +495,100 @@ impl Cpu {
         kind: CpuBusAccessKind,
     ) {
         bus.mem_write_with_kind(addr, data, self, ctx, kind);
+        self.maybe_trace_write(addr, data, bus);
+    }
+
+    fn maybe_trace_write(&self, addr: u16, data: u8, bus: &CpuBus) {
+        let Some(cfg) = cpu_write_trace_config() else {
+            return;
+        };
+        let cpu_cycle = bus.cpu_cycles();
+        if cpu_cycle < cfg.cycle_start || cpu_cycle > cfg.cycle_end {
+            return;
+        }
+        if addr < cfg.addr_start || addr > cfg.addr_end {
+            return;
+        }
+        let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&cfg.path) else {
+            return;
+        };
+        let opcode = self.opcode_in_flight.unwrap_or(0xFF);
+        let _ = writeln!(
+            file,
+            "CPUWRITE|cpu_cycle={}|master_clock={}|pc={:04X}|opcode={:02X}|step={}|addr={:04X}|value={:02X}|a={:02X}|x={:02X}|y={:02X}|sp={:02X}|p={:02X}",
+            cpu_cycle,
+            bus.master_clock(),
+            self.pc,
+            opcode,
+            self.step,
+            addr,
+            data,
+            self.a,
+            self.x,
+            self.y,
+            self.s,
+            self.p.bits()
+        );
+    }
+
+    fn maybe_trace_exec(&self, pc: u16, opcode: u8, bus: &CpuBus) {
+        let Some(cfg) = cpu_exec_trace_config() else {
+            return;
+        };
+        let cpu_cycle = bus.cpu_cycles();
+        if cpu_cycle < cfg.cycle_start || cpu_cycle > cfg.cycle_end {
+            return;
+        }
+        let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&cfg.path) else {
+            return;
+        };
+        let _ = writeln!(
+            file,
+            "CPUEXEC|cpu_cycle={}|master_clock={}|pc={:04X}|opcode={:02X}|a={:02X}|x={:02X}|y={:02X}|sp={:02X}|p={:02X}",
+            cpu_cycle,
+            bus.master_clock(),
+            pc,
+            opcode,
+            self.a,
+            self.x,
+            self.y,
+            self.s,
+            self.p.bits()
+        );
+    }
+
+    fn maybe_trace_interrupt(&self, kind: IrqKind, bus: &CpuBus) {
+        let Some(cfg) = cpu_interrupt_trace_config() else {
+            return;
+        };
+        let cpu_cycle = bus.cpu_cycles();
+        if cpu_cycle < cfg.cycle_start || cpu_cycle > cfg.cycle_end {
+            return;
+        }
+        let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&cfg.path) else {
+            return;
+        };
+        let kind_name = match kind {
+            IrqKind::Nmi => "NMI",
+            IrqKind::Irq => "IRQ",
+        };
+        let _ = writeln!(
+            file,
+            "CPUINT|cpu_cycle={}|master_clock={}|kind={}|pc={:04X}|a={:02X}|x={:02X}|y={:02X}|sp={:02X}|p={:02X}|irq_active={}|prev_irq_active={}|nmi_latch={}|prev_nmi_latch={}",
+            cpu_cycle,
+            bus.master_clock(),
+            kind_name,
+            self.pc,
+            self.a,
+            self.x,
+            self.y,
+            self.s,
+            self.p.bits(),
+            self.irq_active,
+            self.prev_irq_active,
+            self.nmi_latch,
+            self.prev_nmi_latch
+        );
     }
 
     pub(crate) fn fetch_operand_u16(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u16 {
@@ -859,6 +1075,7 @@ impl Cpu {
         } else {
             IrqKind::Irq
         };
+        self.maybe_trace_interrupt(kind, bus);
         let status = self.p | Status::UNUSED;
         self.push_stack(bus, ctx, status.bits());
         self.p.insert(Status::INTERRUPT);

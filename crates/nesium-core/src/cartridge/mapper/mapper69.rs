@@ -264,7 +264,7 @@ impl Mapper for Mapper69 {
         self.audio = Sunsoft5bAudio::new();
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => return self.read_lower_window(addr),
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom_window(addr),
@@ -393,11 +393,11 @@ mod tests {
         let mut mapper = test_mapper(8);
         mapper.reset(ResetKind::PowerOn);
 
-        assert_eq!(mapper.cpu_read(0xE000), Some(7));
+        assert_eq!(mapper.cpu_read(0xE000, 0), Some(7));
 
         mapper.cpu_write(0x8000, 0x09, 0);
         mapper.cpu_write(0xA000, 0x03, 0);
-        assert_eq!(mapper.cpu_read(0x8000), Some(3));
+        assert_eq!(mapper.cpu_read(0x8000, 0), Some(3));
     }
 
     #[test]
@@ -407,14 +407,14 @@ mod tests {
 
         mapper.cpu_write(0x8000, 0x08, 0);
         mapper.cpu_write(0xA000, 0x03, 0);
-        assert_eq!(mapper.cpu_read(0x6000), Some(3));
+        assert_eq!(mapper.cpu_read(0x6000, 0), Some(3));
 
         mapper.cpu_write(0xA000, 0xC0, 0); // RAM mode + enabled, bank 0
         mapper.cpu_write(0x6000, 0x5A, 0);
-        assert_eq!(mapper.cpu_read(0x6000), Some(0x5A));
+        assert_eq!(mapper.cpu_read(0x6000, 0), Some(0x5A));
 
         mapper.cpu_write(0xA000, 0x40, 0); // RAM mode + disabled
-        assert_eq!(mapper.cpu_read(0x6000), None);
+        assert_eq!(mapper.cpu_read(0x6000, 0), None);
     }
 
     #[test]

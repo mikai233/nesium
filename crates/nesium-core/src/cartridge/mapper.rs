@@ -18,6 +18,7 @@ pub mod mapper10;
 pub mod mapper11;
 pub mod mapper119;
 pub mod mapper13;
+pub mod mapper16;
 pub mod mapper19;
 pub mod mapper2;
 pub mod mapper21;
@@ -55,6 +56,7 @@ pub use mapper9::Mapper9;
 pub use mapper10::Mapper10;
 pub use mapper11::Mapper11;
 pub use mapper13::Mapper13;
+pub use mapper16::Mapper16;
 pub use mapper19::Mapper19;
 pub use mapper21::Mapper21;
 pub use mapper23::Mapper23;
@@ -297,8 +299,9 @@ pub struct MapperMemoryMut<'a> {
 pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     /// Returns the CPU-visible byte for `addr`, or `None` when the bus should
     /// float (open-bus behavior) because the addressed resource is disabled or
-    /// absent.
-    fn cpu_read(&self, addr: u16) -> Option<u8>;
+    /// absent. `open_bus` carries the current external CPU bus value for
+    /// mappers that need to merge mapper-driven bits with open-bus state.
+    fn cpu_read(&self, addr: u16, open_bus: u8) -> Option<u8>;
 
     /// CPU write with cycle count for timing-sensitive mappers.
     fn cpu_write(&mut self, addr: u16, data: u8, cpu_cycle: u64);

@@ -211,6 +211,35 @@ impl Header {
         }
     }
 
+    /// Returns a copy of this header with mapper/submapper fields overridden.
+    ///
+    /// This is used for small internal database fixes where legacy iNES dumps
+    /// should be treated as a different logical board without rewriting the
+    /// rest of the parsed metadata.
+    pub fn with_mapper_submapper(self, mapper: u16, submapper: u8) -> Self {
+        let mapper_low = ((mapper & 0x0F) as u8) << 4;
+        let mapper_high = (mapper as u8) & 0xF0;
+        let mapper_msb = ((mapper >> 8) as u8) & 0x0F;
+
+        match self {
+            Header::INes(mut header) => {
+                header.base.flags6.remove(Flags6::MAPPER_LOW_MASK);
+                header.base.flags6 |= Flags6::from_bits_retain(mapper_low);
+                header.base.flags7.remove(Flags7::MAPPER_HIGH_MASK);
+                header.base.flags7 |= Flags7::from_bits_retain(mapper_high);
+                Header::INes(header)
+            }
+            Header::Nes20(mut header) => {
+                header.base.flags6.remove(Flags6::MAPPER_LOW_MASK);
+                header.base.flags6 |= Flags6::from_bits_retain(mapper_low);
+                header.base.flags7.remove(Flags7::MAPPER_HIGH_MASK);
+                header.base.flags7 |= Flags7::from_bits_retain(mapper_high);
+                header.ext.mapper_msb_submapper = ((submapper & 0x0F) << 4) | (mapper_msb & 0x0F);
+                Header::Nes20(header)
+            }
+        }
+    }
+
     /// How the PPU nametables are mirrored.
     pub fn mirroring(&self) -> Mirroring {
         self.base().mirroring()
@@ -574,5 +603,35 @@ mod tests {
         assert!(matches!(header.format(), RomFormat::Nes20));
         assert_eq!(header.prg_rom_size(), 512);
         assert_eq!(header.chr_rom_size(), 0);
+    }
+
+    #[test]
+    fn overrides_ines_mapper_without_clobbering_high_nibble() {
+        let header_bytes = [
+            b'N',
+            b'E',
+            b'S',
+            0x1A,
+            16,
+            0,
+            0b0000_0011,
+            0b0001_0000,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let header = Header::parse(&header_bytes).expect("header parses");
+        let overridden = header.with_mapper_submapper(157, 0);
+
+        assert_eq!(overridden.format(), RomFormat::INes);
+        assert_eq!(overridden.mapper(), 157);
+        assert_eq!(overridden.submapper(), 0);
+        assert!(overridden.battery_backed_ram());
+        assert_eq!(overridden.mirroring(), Mirroring::Vertical);
     }
 }

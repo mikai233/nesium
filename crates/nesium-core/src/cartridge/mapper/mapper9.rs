@@ -400,7 +400,7 @@ impl Mapper for Mapper9 {
         self.mirroring = self.base_mirroring;
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
             return self.read_prg_ram(addr);
         }
