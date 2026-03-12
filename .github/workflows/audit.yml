@@ -31,6 +31,7 @@ jobs:
     # Do not fail the workflow on PR to avoid blocking
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     permissions:
+      contents: read
       issues: write # required to create issues if vulnerabilities are found
       checks: write # required to create check runs
     steps:
@@ -59,6 +60,7 @@ jobs:
           - licenses
           - sources
     permissions:
+      contents: read
       issues: write # required to create issues if violations are found
       checks: write # required to create check runs
     steps:
