@@ -250,12 +250,47 @@ impl Header {
         }
     }
 
-    /// Returns a copy of this header with mapper/submapper fields overridden.
-    ///
-    /// This is used for small internal database fixes where legacy iNES dumps
-    /// should be treated as a different logical board without rewriting the
-    /// rest of the parsed metadata.
+    /// Returns a copy of this header with mapper/submapper fields encoded back
+    /// into the original header representation.
     pub fn with_mapper_submapper(self, mapper: u16, submapper: u8) -> Self {
+        let mapper_low = ((mapper & 0x0F) as u8) << 4;
+        let mapper_high = (mapper as u8) & 0xF0;
+        let mapper_msb = ((mapper >> 8) as u8) & 0x0F;
+
+        match self {
+            Header::INes {
+                mut header,
+                runtime_override: _,
+            } => {
+                header.base.flags6.remove(Flags6::MAPPER_LOW_MASK);
+                header.base.flags6 |= Flags6::from_bits_retain(mapper_low);
+                header.base.flags7.remove(Flags7::MAPPER_HIGH_MASK);
+                header.base.flags7 |= Flags7::from_bits_retain(mapper_high);
+                Header::INes {
+                    header,
+                    runtime_override: None,
+                }
+            }
+            Header::Nes20 {
+                mut header,
+                runtime_override: _,
+            } => {
+                header.base.flags6.remove(Flags6::MAPPER_LOW_MASK);
+                header.base.flags6 |= Flags6::from_bits_retain(mapper_low);
+                header.base.flags7.remove(Flags7::MAPPER_HIGH_MASK);
+                header.base.flags7 |= Flags7::from_bits_retain(mapper_high);
+                header.ext.mapper_msb_submapper = ((submapper & 0x0F) << 4) | (mapper_msb & 0x0F);
+                Header::Nes20 {
+                    header,
+                    runtime_override: None,
+                }
+            }
+        }
+    }
+
+    /// Returns a copy of this header with mapper/submapper overridden only for
+    /// runtime use. The underlying encoded header bytes are preserved.
+    pub fn with_runtime_mapper_submapper(self, mapper: u16, submapper: u8) -> Self {
         match self {
             Header::INes { header, .. } => Header::INes {
                 header,
@@ -684,7 +719,7 @@ mod tests {
             0,
         ];
         let header = Header::parse(&header_bytes).expect("header parses");
-        let overridden = header.with_mapper_submapper(562, 0);
+        let overridden = header.with_runtime_mapper_submapper(562, 0);
 
         assert_eq!(overridden.format(), RomFormat::INes);
         assert_eq!(overridden.mapper(), 562);
@@ -714,7 +749,7 @@ mod tests {
             0,
         ];
         let header = Header::parse(&header_bytes).expect("header parses");
-        let overridden = header.with_mapper_submapper(16, 5);
+        let overridden = header.with_runtime_mapper_submapper(16, 5);
 
         assert_eq!(overridden.format(), RomFormat::INes);
         assert_eq!(overridden.mapper(), 16);

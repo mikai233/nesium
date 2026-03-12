@@ -345,7 +345,7 @@ fn load_cartridge_from_bytes(
     let parsed_header = Header::parse(header_bytes)?;
     let (trainer, prg_rom, chr_rom) = slice_sections(bytes, &parsed_header)?;
     let header = lookup_override(&parsed_header, prg_rom.as_ref(), chr_rom.as_ref())
-        .map(|info| parsed_header.with_mapper_submapper(info.mapper, info.submapper))
+        .map(|info| parsed_header.with_runtime_mapper_submapper(info.mapper, info.submapper))
         .unwrap_or(parsed_header);
 
     build_cartridge_from_sections(header, trainer, prg_rom, chr_rom, provider)
@@ -361,7 +361,7 @@ fn load_cartridge_from_static_bytes(
     let parsed_header = Header::parse(header_bytes)?;
     let (trainer, prg_rom, chr_rom) = slice_sections_static(bytes, &parsed_header)?;
     let header = lookup_override(&parsed_header, prg_rom.as_ref(), chr_rom.as_ref())
-        .map(|info| parsed_header.with_mapper_submapper(info.mapper, info.submapper))
+        .map(|info| parsed_header.with_runtime_mapper_submapper(info.mapper, info.submapper))
         .unwrap_or(parsed_header);
 
     build_cartridge_from_sections(header, trainer, prg_rom, chr_rom, provider)
