@@ -25,6 +25,7 @@ jobs:
           git submodule update --init --recursive --remote apps/nesium_flutter/assets/shaders
           
       - name: Create Pull Request
+        id: create_pr
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -42,3 +43,9 @@ jobs:
           labels: |
             dependencies
             automated-pr
+
+      - name: Enable auto-merge
+        if: steps.create_pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash "${{ steps.create_pr.outputs.pull-request-number }}"
