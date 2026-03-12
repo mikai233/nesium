@@ -4,6 +4,7 @@ use std::{fs, path::Path, time::Instant};
 
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose};
+use nesium_core::controller::Button;
 use nesium_core::memory::cpu as cpu_mem;
 use nesium_core::ppu::buffer::{ColorFormat, FrameBuffer};
 use nesium_core::ppu::palette::PaletteKind;
@@ -605,6 +606,227 @@ fn compute_rgb24_sha1_from_rgba8888(frame_rgba: &[u8]) -> Result<String> {
         rgb.push(px[2]);
     }
     Ok(compute_tv_sha1(&rgb))
+}
+
+fn resolve_rom_path(rom_path: &str) -> Result<std::path::PathBuf> {
+    let direct = Path::new(rom_path);
+    if direct.exists() {
+        return Ok(direct.to_path_buf());
+    }
+
+    let vendor = Path::new(ROM_ROOT).join(rom_path);
+    if vendor.exists() {
+        return Ok(vendor);
+    }
+
+    bail!(
+        "ROM not found: '{}' (checked absolute/current path and {})",
+        rom_path,
+        vendor.display()
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct InputEvent {
+    frame: usize,
+    pad: usize,
+    state: u8,
+}
+
+fn parse_u8_auto(text: &str) -> Result<u8> {
+    if let Some(hex) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+        return u8::from_str_radix(hex, 16).with_context(|| format!("invalid hex byte '{text}'"));
+    }
+    text.parse::<u8>()
+        .with_context(|| format!("invalid byte '{text}'"))
+}
+
+fn parse_input_event_token(token: &str) -> Result<InputEvent> {
+    let mut parts = token.split(':');
+    let first = parts
+        .next()
+        .with_context(|| format!("invalid input token '{token}'"))?;
+    let second = parts
+        .next()
+        .with_context(|| format!("invalid input token '{token}'"))?;
+    let third = parts.next();
+
+    let (frame_text, pad_text, state_text) = if let Some(state) = third {
+        (first, second, state)
+    } else {
+        (first, "0", second)
+    };
+
+    if parts.next().is_some() {
+        bail!("invalid input token '{}': too many ':'", token);
+    }
+
+    let frame_signed = frame_text
+        .parse::<isize>()
+        .with_context(|| format!("invalid frame '{}' in token '{}'", frame_text, token))?;
+    let frame = if frame_signed < 0 {
+        0
+    } else {
+        frame_signed as usize
+    };
+    let pad = pad_text
+        .parse::<usize>()
+        .with_context(|| format!("invalid pad '{}' in token '{}'", pad_text, token))?;
+    let state = parse_u8_auto(state_text)?;
+
+    Ok(InputEvent { frame, pad, state })
+}
+
+fn load_audio_probe_input_events() -> Result<Vec<InputEvent>> {
+    let input_file = std::env::var("NESIUM_AUDIO_PROBE_INPUT_FILE")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    let input_csv = std::env::var("NESIUM_AUDIO_PROBE_INPUT_EVENTS")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    let input_frame_offset = std::env::var("NESIUM_AUDIO_PROBE_INPUT_FRAME_OFFSET")
+        .ok()
+        .map(|v| {
+            v.parse::<i64>()
+                .with_context(|| format!("invalid NESIUM_AUDIO_PROBE_INPUT_FRAME_OFFSET '{}'", v))
+        })
+        .transpose()?
+        .unwrap_or(0);
+
+    let mut tokens = Vec::new();
+    if let Some(path) = input_file.as_deref() {
+        let text = std::fs::read_to_string(path)
+            .with_context(|| format!("reading NESIUM_AUDIO_PROBE_INPUT_FILE '{}'", path))?;
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            tokens.push(trimmed.to_string());
+        }
+    } else if let Some(csv) = input_csv.as_deref() {
+        for token in csv.split(',') {
+            let trimmed = token.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            tokens.push(trimmed.to_string());
+        }
+    }
+
+    let mut events = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        events.push(parse_input_event_token(&token)?);
+    }
+
+    if input_frame_offset != 0 {
+        for evt in &mut events {
+            if input_frame_offset < 0 {
+                let amount = input_frame_offset.unsigned_abs() as usize;
+                evt.frame = evt.frame.saturating_sub(amount);
+            } else {
+                evt.frame = evt.frame.saturating_add(input_frame_offset as usize);
+            }
+        }
+    }
+
+    events.sort_unstable_by_key(|e| (e.frame, e.pad));
+    Ok(events)
+}
+
+fn set_pad_state(nes: &mut Nes, pad: usize, state: u8) {
+    const BUTTONS: [Button; 8] = [
+        Button::A,
+        Button::B,
+        Button::Select,
+        Button::Start,
+        Button::Up,
+        Button::Down,
+        Button::Left,
+        Button::Right,
+    ];
+
+    for (bit, button) in BUTTONS.into_iter().enumerate() {
+        let pressed = (state & (1u8 << bit)) != 0;
+        nes.set_button(pad, button, pressed);
+    }
+}
+
+fn apply_audio_input_events_for_frame(
+    nes: &mut Nes,
+    input_events: &[InputEvent],
+    input_idx: &mut usize,
+    frame: usize,
+) {
+    while *input_idx < input_events.len() && input_events[*input_idx].frame <= frame {
+        let evt = input_events[*input_idx];
+        if evt.pad < 2 {
+            set_pad_state(nes, evt.pad, evt.state);
+        }
+        *input_idx += 1;
+    }
+}
+
+fn pcm_f32_to_i16(sample: f32) -> i16 {
+    let s = if sample.is_finite() { sample } else { 0.0 };
+    let scaled = (s.clamp(-1.0, 1.0) * 32768.0).round() as i32;
+    scaled.clamp(i16::MIN as i32, i16::MAX as i32) as i16
+}
+
+pub fn run_rom_audio_pcm16_for_frame_range_with_rate(
+    rom_path: &str,
+    start_frame: usize,
+    end_frame: usize,
+    sample_rate: u32,
+) -> Result<Vec<i16>> {
+    if start_frame >= end_frame {
+        bail!(
+            "invalid audio range: start_frame {} must be < end_frame {}",
+            start_frame,
+            end_frame
+        );
+    }
+
+    let path = resolve_rom_path(rom_path)?;
+    let mut nes = Nes::builder().sample_rate(sample_rate).build();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+
+    let input_events = load_audio_probe_input_events()?;
+    let mut input_idx = 0usize;
+    let mut pcm = Vec::new();
+    for frame in 0..end_frame {
+        apply_audio_input_events_for_frame(&mut nes, &input_events, &mut input_idx, frame);
+        let samples = nes.run_frame(true);
+        if frame >= start_frame {
+            pcm.extend(samples.into_iter().map(pcm_f32_to_i16));
+        }
+    }
+
+    Ok(pcm)
+}
+
+pub fn run_rom_audio_pcm16_sha1_for_frame_range_with_rate(
+    rom_path: &str,
+    start_frame: usize,
+    end_frame: usize,
+    sample_rate: u32,
+) -> Result<(String, usize)> {
+    let pcm = run_rom_audio_pcm16_for_frame_range_with_rate(
+        rom_path,
+        start_frame,
+        end_frame,
+        sample_rate,
+    )?;
+
+    let mut bytes = Vec::with_capacity(pcm.len() * 2);
+    for sample in &pcm {
+        bytes.extend_from_slice(&sample.to_le_bytes());
+    }
+
+    Ok((compute_tv_sha1(&bytes), pcm.len()))
 }
 
 /// Runs a ROM and returns RGB24 SHA1 hashes for selected frames.
