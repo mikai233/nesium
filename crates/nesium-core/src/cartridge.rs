@@ -14,9 +14,9 @@ mod db;
 use self::db::lookup_override;
 use self::mapper::{
     Mapper0, Mapper1, Mapper2, Mapper3, Mapper4, Mapper5, Mapper6, Mapper7, Mapper8, Mapper9,
-    Mapper10, Mapper11, Mapper13, Mapper16, Mapper19, Mapper21, Mapper23, Mapper25, Mapper26,
-    Mapper34, Mapper66, Mapper69, Mapper71, Mapper78, Mapper85, Mapper90, Mapper119, Mapper228,
-    NametableTarget,
+    Mapper10, Mapper11, Mapper13, Mapper16, Mapper18, Mapper19, Mapper21, Mapper23, Mapper25,
+    Mapper26, Mapper34, Mapper66, Mapper69, Mapper71, Mapper78, Mapper85, Mapper90, Mapper119,
+    Mapper228, NametableTarget,
 };
 
 pub const TRAINER_SIZE: usize = 512;
@@ -309,6 +309,7 @@ fn build_cartridge_from_sections<'a>(
         13 => Box::new(Mapper13::new(header, prg_rom, chr_rom, trainer)),
         16 => Box::new(Mapper16::new(header, prg_rom, chr_rom, trainer)),
         157 => Box::new(Mapper16::new(header, prg_rom, chr_rom, trainer)),
+        18 => Box::new(Mapper18::new(header, prg_rom, chr_rom, trainer)),
         19 => Box::new(Mapper19::new(header, prg_rom, chr_rom, trainer)),
         21 => Box::new(Mapper21::new(header, prg_rom, chr_rom, trainer)),
         23 => Box::new(Mapper23::new(header, prg_rom, chr_rom, trainer)),
