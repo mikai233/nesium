@@ -479,7 +479,7 @@ impl Mapper for Mapper90 {
         self.apply_state();
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         match addr {
             0x5000..=0x5FFF => self.read_low_register(addr),
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => {

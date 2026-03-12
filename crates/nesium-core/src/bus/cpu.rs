@@ -138,7 +138,10 @@ impl<'a> CpuBus<'a> {
 
     #[inline]
     fn read_cartridge(&self, addr: u16) -> Option<u8> {
-        self.cartridge.as_ref().and_then(|cart| cart.cpu_read(addr))
+        let open_bus = self.open_bus.sample();
+        self.cartridge
+            .as_ref()
+            .and_then(|cart| cart.cpu_read(addr, open_bus))
     }
 
     #[inline]

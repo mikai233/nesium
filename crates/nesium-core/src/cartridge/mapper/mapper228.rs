@@ -168,7 +168,7 @@ impl Mapper for Mapper228 {
         self.sync_from_write(0x8000, 0);
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         match addr {
             AE_MRAM_WINDOW_START..=AE_MRAM_WINDOW_END => Some(self.mram[(addr & 0x0003) as usize]),
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),

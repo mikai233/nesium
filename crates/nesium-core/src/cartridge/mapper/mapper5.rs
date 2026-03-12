@@ -899,7 +899,7 @@ impl Mapper for Mapper5 {
         self.exram.fill(0);
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         match Mmc5CpuRegister::from_addr(addr) {
             Some(Mmc5CpuRegister::IrqStatus) => {
                 // IRQ status ($5204). We expose the pending and "in frame" bits,

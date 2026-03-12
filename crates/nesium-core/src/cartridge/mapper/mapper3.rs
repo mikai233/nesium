@@ -138,7 +138,7 @@ impl Mapper3 {
 }
 
 impl Mapper for Mapper3 {
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         let value = match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => {
                 if self.prg_ram.is_empty() {
@@ -278,8 +278,8 @@ mod tests {
     #[test]
     fn prg_rom_mirrors() {
         let cart = rom_cart(1, 2);
-        let a = cart.cpu_read(cpu_mem::PRG_ROM_START).unwrap();
-        let b = cart.cpu_read(cpu_mem::PRG_ROM_START + 0x4000).unwrap();
+        let a = cart.cpu_read(cpu_mem::PRG_ROM_START, 0).unwrap();
+        let b = cart.cpu_read(cpu_mem::PRG_ROM_START + 0x4000, 0).unwrap();
         assert_eq!(a, b);
     }
 
