@@ -8,8 +8,9 @@ license.workspace = true
 workspace = true
 
 [features]
-default = []
+default = ["cartridge-db"]
 boxed-memblock = []
+cartridge-db = ["dep:crc32fast", "dep:phf"]
 savestate-serde = ["dep:serde"]
 savestate-postcard = ["savestate-serde", "dep:postcard"]
 
@@ -18,6 +19,8 @@ bitflags.workspace = true
 dyn-clone.workspace = true
 tracing.workspace = true
 nesium-blip.workspace = true
+crc32fast = { workspace = true, optional = true }
+phf = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 postcard = { workspace = true, optional = true, features = ["use-std"] }
 
@@ -34,3 +37,4 @@ sha1.workspace = true
 
 [build-dependencies]
 cc.workspace = true
+phf_codegen.workspace = true

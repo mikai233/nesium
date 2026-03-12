@@ -20,7 +20,7 @@ use crate::cartridge::{ChrRom, Mapper, PrgRom, TrainerBytes, header::Header};
 /// struct CustomMapper;
 ///
 /// impl Mapper for CustomMapper {
-///     fn cpu_read(&self, _addr: u16) -> Option<u8> { Some(0) }
+///     fn cpu_read(&self, _addr: u16, _open_bus: u8) -> Option<u8> { Some(0) }
 ///     fn cpu_write(&mut self, _addr: u16, _data: u8, _cpu_cycle: u64) {}
 ///     fn ppu_read(&self, _addr: u16) -> Option<u8> { Some(0) }
 ///     fn ppu_write(&mut self, _addr: u16, _data: u8) {}

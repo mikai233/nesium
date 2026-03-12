@@ -402,7 +402,7 @@ impl Mapper for Mapper1 {
         }
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         let value = match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => return self.read_prg_ram(addr),
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
@@ -537,8 +537,8 @@ mod tests {
     fn default_prg_banking_mode_is_fixed_last_bank() {
         let cart = cart_with_prg_banks(4);
         // Control defaults to 0x0C: 16 KiB banking with fixed last bank at $C000.
-        assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START), Some(0));
-        assert_eq!(cart.cpu_read(0xC000), Some(3));
+        assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START, 0), Some(0));
+        assert_eq!(cart.cpu_read(0xC000, 0), Some(3));
     }
 
     #[test]
@@ -546,8 +546,8 @@ mod tests {
         let mut cart = cart_with_prg_banks(4);
         // Select bank 2 at $8000 in mode 3 (control already 0x0C).
         write_serial_reg(&mut cart, 0xE000, 0x02);
-        assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START), Some(2));
+        assert_eq!(cart.cpu_read(cpu_mem::PRG_ROM_START, 0), Some(2));
         // High bank should remain fixed to last bank.
-        assert_eq!(cart.cpu_read(0xC000), Some(3));
+        assert_eq!(cart.cpu_read(0xC000, 0), Some(3));
     }
 }

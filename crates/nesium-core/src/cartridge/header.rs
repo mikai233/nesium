@@ -66,8 +66,20 @@ pub const NES_HEADER_LEN: usize = 16;
 /// Parsed cartridge header, naturally distinguishing iNES 1.0 from NES 2.0.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Header {
-    INes(INes10Header),
-    Nes20(Nes2Header),
+    INes {
+        header: INes10Header,
+        runtime_override: Option<RuntimeMapperOverride>,
+    },
+    Nes20 {
+        header: Nes2Header,
+        runtime_override: Option<RuntimeMapperOverride>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RuntimeMapperOverride {
+    mapper: u16,
+    submapper: u8,
 }
 
 impl Header {
@@ -86,30 +98,36 @@ impl Header {
         let base = INesHeader::from_bytes(bytes);
         let format = RomFormat::from_flags7(base.flags7);
         match format {
-            RomFormat::INes => Ok(Self::INes(INes10Header {
-                base,
-                ext: INes10Extension {
-                    prg_ram_units: bytes[8],
-                    flags9: bytes[9],
-                    flags10: bytes[10],
-                    padding: bytes[11..16]
-                        .try_into()
-                        .expect("iNES padding length mismatch"),
+            RomFormat::INes => Ok(Self::INes {
+                header: INes10Header {
+                    base,
+                    ext: INes10Extension {
+                        prg_ram_units: bytes[8],
+                        flags9: bytes[9],
+                        flags10: bytes[10],
+                        padding: bytes[11..16]
+                            .try_into()
+                            .expect("iNES padding length mismatch"),
+                    },
                 },
-            })),
-            RomFormat::Nes20 => Ok(Self::Nes20(Nes2Header {
-                base,
-                ext: Nes2Extension {
-                    mapper_msb_submapper: bytes[8],
-                    prg_chr_msb: bytes[9],
-                    prg_ram_shifts: bytes[10],
-                    chr_ram_shifts: bytes[11],
-                    timing: bytes[12],
-                    console_type_data: bytes[13],
-                    misc_roms: bytes[14],
-                    default_expansion_device: bytes[15],
+                runtime_override: None,
+            }),
+            RomFormat::Nes20 => Ok(Self::Nes20 {
+                header: Nes2Header {
+                    base,
+                    ext: Nes2Extension {
+                        mapper_msb_submapper: bytes[8],
+                        prg_chr_msb: bytes[9],
+                        prg_ram_shifts: bytes[10],
+                        chr_ram_shifts: bytes[11],
+                        timing: bytes[12],
+                        console_type_data: bytes[13],
+                        misc_roms: bytes[14],
+                        default_expansion_device: bytes[15],
+                    },
                 },
-            })),
+                runtime_override: None,
+            }),
             RomFormat::Archaic => Err(Error::UnsupportedFormat(format)),
         }
     }
@@ -117,16 +135,16 @@ impl Header {
     /// Detected header flavour.
     pub fn format(&self) -> RomFormat {
         match self {
-            Header::INes(_) => RomFormat::INes,
-            Header::Nes20(_) => RomFormat::Nes20,
+            Header::INes { .. } => RomFormat::INes,
+            Header::Nes20 { .. } => RomFormat::Nes20,
         }
     }
 
     /// Shared iNES-defined fields (bytes 4..=7).
     pub fn base(&self) -> &INesHeader {
         match self {
-            Header::INes(header) => &header.base,
-            Header::Nes20(header) => &header.base,
+            Header::INes { header, .. } => &header.base,
+            Header::Nes20 { header, .. } => &header.base,
         }
     }
 
@@ -148,7 +166,7 @@ impl Header {
     /// NES 2.0: console-type dependent byte 13 information.
     pub fn nes2_console_type_data(&self) -> Option<Nes2ConsoleTypeData> {
         match self {
-            Header::Nes20(header) => Some(header.ext.console_type_data(self.console_type())),
+            Header::Nes20 { header, .. } => Some(header.ext.console_type_data(self.console_type())),
             _ => None,
         }
     }
@@ -156,7 +174,7 @@ impl Header {
     /// NES 2.0: number of miscellaneous ROM regions (0..=3).
     pub fn nes2_misc_rom_count(&self) -> Option<Nes2MiscRomCount> {
         match self {
-            Header::Nes20(header) => Some(header.ext.misc_rom_count()),
+            Header::Nes20 { header, .. } => Some(header.ext.misc_rom_count()),
             _ => None,
         }
     }
@@ -164,7 +182,7 @@ impl Header {
     /// NES 2.0: default expansion device id.
     pub fn nes2_default_expansion_device(&self) -> Option<Nes2ExpansionDevice> {
         match self {
-            Header::Nes20(header) => Some(header.ext.default_expansion_device()),
+            Header::Nes20 { header, .. } => Some(header.ext.default_expansion_device()),
             _ => None,
         }
     }
@@ -178,7 +196,7 @@ impl Header {
     /// NES 2.0 CPU/PPU timing mode (byte 12 bits 0..=1).
     pub fn nes2_cpu_ppu_timing(&self) -> Option<Nes2CpuPpuTiming> {
         match self {
-            Header::Nes20(header) => Some(Nes2CpuPpuTiming::from_bits(header.ext.timing)),
+            Header::Nes20 { header, .. } => Some(Nes2CpuPpuTiming::from_bits(header.ext.timing)),
             _ => None,
         }
     }
@@ -186,7 +204,7 @@ impl Header {
     /// iNES 1.0: exposes the raw extension bytes 8..=15 (for diagnostics).
     pub fn ines_extension(&self) -> Option<INes10Extension> {
         match self {
-            Header::INes(header) => Some(header.ext),
+            Header::INes { header, .. } => Some(header.ext),
             _ => None,
         }
     }
@@ -194,20 +212,94 @@ impl Header {
     /// Mapper ID (0 == NROM, 1 == MMC1, ...).
     pub fn mapper(&self) -> u16 {
         match self {
-            Header::INes(header) => combine_mapper(header.base.flags6, header.base.flags7, 0),
-            Header::Nes20(header) => combine_mapper(
-                header.base.flags6,
-                header.base.flags7,
-                header.ext.mapper_msb(),
-            ),
+            Header::INes {
+                header,
+                runtime_override,
+            } => runtime_override
+                .map(|override_info| override_info.mapper)
+                .unwrap_or_else(|| combine_mapper(header.base.flags6, header.base.flags7, 0)),
+            Header::Nes20 {
+                header,
+                runtime_override,
+            } => runtime_override
+                .map(|override_info| override_info.mapper)
+                .unwrap_or_else(|| {
+                    combine_mapper(
+                        header.base.flags6,
+                        header.base.flags7,
+                        header.ext.mapper_msb(),
+                    )
+                }),
         }
     }
 
     /// NES 2.0 submapper value. Always 0 for legacy iNES files.
     pub fn submapper(&self) -> u8 {
         match self {
-            Header::INes(_) => 0,
-            Header::Nes20(header) => header.ext.submapper(),
+            Header::INes {
+                runtime_override, ..
+            } => runtime_override
+                .map(|override_info| override_info.submapper)
+                .unwrap_or(0),
+            Header::Nes20 {
+                header,
+                runtime_override,
+            } => runtime_override
+                .map(|override_info| override_info.submapper)
+                .unwrap_or_else(|| header.ext.submapper()),
+        }
+    }
+
+    /// Returns a copy of this header with mapper/submapper fields encoded back
+    /// into the original header representation.
+    pub fn with_mapper_submapper(self, mapper: u16, submapper: u8) -> Self {
+        let mapper_low = ((mapper & 0x0F) as u8) << 4;
+        let mapper_high = (mapper as u8) & 0xF0;
+        let mapper_msb = ((mapper >> 8) as u8) & 0x0F;
+
+        match self {
+            Header::INes {
+                mut header,
+                runtime_override: _,
+            } => {
+                header.base.flags6.remove(Flags6::MAPPER_LOW_MASK);
+                header.base.flags6 |= Flags6::from_bits_retain(mapper_low);
+                header.base.flags7.remove(Flags7::MAPPER_HIGH_MASK);
+                header.base.flags7 |= Flags7::from_bits_retain(mapper_high);
+                Header::INes {
+                    header,
+                    runtime_override: None,
+                }
+            }
+            Header::Nes20 {
+                mut header,
+                runtime_override: _,
+            } => {
+                header.base.flags6.remove(Flags6::MAPPER_LOW_MASK);
+                header.base.flags6 |= Flags6::from_bits_retain(mapper_low);
+                header.base.flags7.remove(Flags7::MAPPER_HIGH_MASK);
+                header.base.flags7 |= Flags7::from_bits_retain(mapper_high);
+                header.ext.mapper_msb_submapper = ((submapper & 0x0F) << 4) | (mapper_msb & 0x0F);
+                Header::Nes20 {
+                    header,
+                    runtime_override: None,
+                }
+            }
+        }
+    }
+
+    /// Returns a copy of this header with mapper/submapper overridden only for
+    /// runtime use. The underlying encoded header bytes are preserved.
+    pub fn with_runtime_mapper_submapper(self, mapper: u16, submapper: u8) -> Self {
+        match self {
+            Header::INes { header, .. } => Header::INes {
+                header,
+                runtime_override: Some(RuntimeMapperOverride { mapper, submapper }),
+            },
+            Header::Nes20 { header, .. } => Header::Nes20 {
+                header,
+                runtime_override: Some(RuntimeMapperOverride { mapper, submapper }),
+            },
         }
     }
 
@@ -219,8 +311,8 @@ impl Header {
     /// Battery bit indicates the cartridge keeps RAM contents when powered off.
     pub fn battery_backed_ram(&self) -> bool {
         match self {
-            Header::INes(header) => header.base.flags6.contains(Flags6::BATTERY),
-            Header::Nes20(header) => {
+            Header::INes { header, .. } => header.base.flags6.contains(Flags6::BATTERY),
+            Header::Nes20 { header, .. } => {
                 self.prg_nvram_size() != 0
                     || self.chr_nvram_size() != 0
                     || header.base.flags6.contains(Flags6::BATTERY)
@@ -236,8 +328,8 @@ impl Header {
     /// Amount of PRG ROM in bytes.
     pub fn prg_rom_size(&self) -> usize {
         match self {
-            Header::INes(header) => (header.base.prg_rom_lsb as usize) * 16 * 1024,
-            Header::Nes20(header) => {
+            Header::INes { header, .. } => (header.base.prg_rom_lsb as usize) * 16 * 1024,
+            Header::Nes20 { header, .. } => {
                 decode_nes2_rom_size(header.base.prg_rom_lsb, header.ext.prg_rom_msb(), 16 * 1024)
             }
         }
@@ -246,8 +338,8 @@ impl Header {
     /// Amount of CHR ROM in bytes.
     pub fn chr_rom_size(&self) -> usize {
         match self {
-            Header::INes(header) => (header.base.chr_rom_lsb as usize) * 8 * 1024,
-            Header::Nes20(header) => {
+            Header::INes { header, .. } => (header.base.chr_rom_lsb as usize) * 8 * 1024,
+            Header::Nes20 { header, .. } => {
                 decode_nes2_rom_size(header.base.chr_rom_lsb, header.ext.chr_rom_msb(), 8 * 1024)
             }
         }
@@ -256,52 +348,52 @@ impl Header {
     /// Volatile PRG RAM size (CPU accessible). Defaults to 8 KiB for legacy dumps that store 0.
     pub fn prg_ram_size(&self) -> usize {
         match self {
-            Header::INes(header) => (header.ext.prg_ram_units.max(1) as usize) * 8 * 1024,
-            Header::Nes20(header) => decode_nes2_ram_size(header.ext.prg_ram_shift()),
+            Header::INes { header, .. } => (header.ext.prg_ram_units.max(1) as usize) * 8 * 1024,
+            Header::Nes20 { header, .. } => decode_nes2_ram_size(header.ext.prg_ram_shift()),
         }
     }
 
     /// Battery-backed PRG RAM size.
     pub fn prg_nvram_size(&self) -> usize {
         match self {
-            Header::INes(header) => {
+            Header::INes { header, .. } => {
                 if header.base.flags6.contains(Flags6::BATTERY) {
                     (header.ext.prg_ram_units.max(1) as usize) * 8 * 1024
                 } else {
                     0
                 }
             }
-            Header::Nes20(header) => decode_nes2_ram_size(header.ext.prg_nvram_shift()),
+            Header::Nes20 { header, .. } => decode_nes2_ram_size(header.ext.prg_nvram_shift()),
         }
     }
 
     /// Volatile CHR RAM size located on the PPU side.
     pub fn chr_ram_size(&self) -> usize {
         match self {
-            Header::INes(header) => {
+            Header::INes { header, .. } => {
                 if header.base.chr_rom_lsb == 0 {
                     8 * 1024
                 } else {
                     0
                 }
             }
-            Header::Nes20(header) => decode_nes2_ram_size(header.ext.chr_ram_shift()),
+            Header::Nes20 { header, .. } => decode_nes2_ram_size(header.ext.chr_ram_shift()),
         }
     }
 
     /// Battery-backed CHR RAM size.
     pub fn chr_nvram_size(&self) -> usize {
         match self {
-            Header::INes(_) => 0,
-            Header::Nes20(header) => decode_nes2_ram_size(header.ext.chr_nvram_shift()),
+            Header::INes { .. } => 0,
+            Header::Nes20 { header, .. } => decode_nes2_ram_size(header.ext.chr_nvram_shift()),
         }
     }
 
     /// Set when the game targets the Vs. UniSystem arcade hardware.
     pub fn vs_unisystem(&self) -> bool {
         match self {
-            Header::INes(header) => header.base.flags7.contains(Flags7::VS_UNISYSTEM),
-            Header::Nes20(header) => {
+            Header::INes { header, .. } => header.base.flags7.contains(Flags7::VS_UNISYSTEM),
+            Header::Nes20 { header, .. } => {
                 let console_type = header.base.flags7.bits() & 0b11;
                 console_type == 1 || header.base.flags7.contains(Flags7::VS_UNISYSTEM)
             }
@@ -311,8 +403,8 @@ impl Header {
     /// Set when the cartridge contains PlayChoice-10 data.
     pub fn playchoice_10(&self) -> bool {
         match self {
-            Header::INes(header) => header.base.flags7.contains(Flags7::PLAYCHOICE_10),
-            Header::Nes20(header) => {
+            Header::INes { header, .. } => header.base.flags7.contains(Flags7::PLAYCHOICE_10),
+            Header::Nes20 { header, .. } => {
                 let console_type = header.base.flags7.bits() & 0b11;
                 console_type == 2 || header.base.flags7.contains(Flags7::PLAYCHOICE_10)
             }
@@ -322,7 +414,7 @@ impl Header {
     /// Region / timing hints described in the header.
     pub fn tv_system(&self) -> TvSystem {
         match self {
-            Header::INes(header) => {
+            Header::INes { header, .. } => {
                 let tv_bits = header.ext.flags10 & 0b11;
                 match tv_bits {
                     0b00 => {
@@ -337,7 +429,7 @@ impl Header {
                     _ => TvSystem::Unknown,
                 }
             }
-            Header::Nes20(header) => match header.ext.timing & 0b11 {
+            Header::Nes20 { header, .. } => match header.ext.timing & 0b11 {
                 0b00 => TvSystem::Ntsc,
                 0b01 => TvSystem::Pal,
                 0b10 => TvSystem::Dual,
@@ -350,7 +442,7 @@ impl Header {
     /// iNES 1.0 flags 10: hint whether the board has bus conflicts.
     pub fn ines_bus_conflicts(&self) -> Option<bool> {
         match self {
-            Header::INes(header) => Some((header.ext.flags10 & 0x80) != 0),
+            Header::INes { header, .. } => Some((header.ext.flags10 & 0x80) != 0),
             _ => None,
         }
     }
@@ -360,7 +452,7 @@ impl Header {
     /// Note: this is not part of the official iNES specification and is rarely used.
     pub fn ines_prg_ram_present_hint(&self) -> Option<bool> {
         match self {
-            Header::INes(header) => Some((header.ext.flags10 & 0x10) == 0),
+            Header::INes { header, .. } => Some((header.ext.flags10 & 0x10) == 0),
             _ => None,
         }
     }
@@ -574,5 +666,95 @@ mod tests {
         assert!(matches!(header.format(), RomFormat::Nes20));
         assert_eq!(header.prg_rom_size(), 512);
         assert_eq!(header.chr_rom_size(), 0);
+    }
+
+    #[test]
+    fn overrides_ines_mapper_without_clobbering_high_nibble() {
+        let header_bytes = [
+            b'N',
+            b'E',
+            b'S',
+            0x1A,
+            16,
+            0,
+            0b0000_0011,
+            0b0001_0000,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let header = Header::parse(&header_bytes).expect("header parses");
+        let overridden = header.with_mapper_submapper(157, 0);
+
+        assert_eq!(overridden.format(), RomFormat::INes);
+        assert_eq!(overridden.mapper(), 157);
+        assert_eq!(overridden.submapper(), 0);
+        assert!(overridden.battery_backed_ram());
+        assert_eq!(overridden.mirroring(), Mirroring::Vertical);
+    }
+
+    #[test]
+    fn runtime_override_preserves_large_mapper_ids_for_ines() {
+        let header_bytes = [
+            b'N',
+            b'E',
+            b'S',
+            0x1A,
+            16,
+            0,
+            0b0000_0011,
+            0b0001_0000,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let header = Header::parse(&header_bytes).expect("header parses");
+        let overridden = header.with_runtime_mapper_submapper(562, 0);
+
+        assert_eq!(overridden.format(), RomFormat::INes);
+        assert_eq!(overridden.mapper(), 562);
+        assert_eq!(overridden.submapper(), 0);
+        assert!(overridden.battery_backed_ram());
+        assert_eq!(overridden.mirroring(), Mirroring::Vertical);
+    }
+
+    #[test]
+    fn runtime_override_preserves_submapper_for_ines() {
+        let header_bytes = [
+            b'N',
+            b'E',
+            b'S',
+            0x1A,
+            16,
+            0,
+            0b0000_0011,
+            0b0001_0000,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let header = Header::parse(&header_bytes).expect("header parses");
+        let overridden = header.with_runtime_mapper_submapper(16, 5);
+
+        assert_eq!(overridden.format(), RomFormat::INes);
+        assert_eq!(overridden.mapper(), 16);
+        assert_eq!(overridden.submapper(), 5);
+        assert!(overridden.battery_backed_ram());
+        assert_eq!(overridden.mirroring(), Mirroring::Vertical);
     }
 }
