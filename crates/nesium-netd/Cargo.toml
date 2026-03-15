@@ -32,6 +32,6 @@ tokio-rustls = { version = "0.26.4", default-features = false, features = [
 tokio-tungstenite = { version = "0.28.0", features = [
     "rustls-tls-native-roots",
 ] }
-futures-util = "0.3.31"
+futures-util = "0.3.32"
 tokio-util = { version = "0.7.18", features = ["codec"] }
 rustls-pemfile = "2.1.0"
