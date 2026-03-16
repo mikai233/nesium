@@ -71,7 +71,7 @@ jobs:
 
       # Cache Cargo registry and git repositories to speed up dependency resolution
       - name: Cache cargo registry/git
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
