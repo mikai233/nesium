@@ -64,7 +64,7 @@ librashader = { workspace = true, features = [
     "preprocess",
     "stable",
 ] }
-glow = "0.16.0"
+glow = "0.17.0"
 android_logger = "0.15"
 log = "0.4"
 

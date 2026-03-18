@@ -1563,7 +1563,7 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "egui_glow",
- "glow",
+ "glow 0.16.0",
  "glutin",
  "glutin-winit",
  "image",
@@ -1655,7 +1655,7 @@ checksum = "6420863ea1d90e750f75075231a260030ad8a9f30a7cef82cdc966492dc4c4eb"
 dependencies = [
  "bytemuck",
  "egui",
- "glow",
+ "glow 0.16.0",
  "log",
  "memoffset",
  "profiling",
@@ -2237,6 +2237,18 @@ name = "glow"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5e5ea60d70410161c8bf5da3fdfeaa1c72ed2c15f8bbb9d19fe3a4fad085f08"
+dependencies = [
+ "js-sys",
+ "slotmap",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "glow"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29038e1c483364cc6bb3cf78feee1816002e127c331a1eec55a4d202b9e1adb5"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -2968,7 +2980,7 @@ checksum = "e198e06fd532b961e4247dafbbb0aa392a1ddb64e678d188bcafb630e5e16eef"
 dependencies = [
  "ash",
  "bitflags 2.11.0",
- "glow",
+ "glow 0.16.0",
  "halfbrown",
  "num-traits",
  "objc2 0.6.3",
@@ -3141,7 +3153,7 @@ checksum = "b38b64f3481b5e823b43755504e1e8ad34a9dd08b9ed41aa4a9973935aafef36"
 dependencies = [
  "array-init",
  "bytemuck",
- "glow",
+ "glow 0.16.0",
  "librashader-cache",
  "librashader-common",
  "librashader-pack",
@@ -3610,7 +3622,7 @@ dependencies = [
  "easy-upnp",
  "flutter_rust_bridge",
  "gilrs",
- "glow",
+ "glow 0.17.0",
  "if-addrs 0.14.0",
  "jni 0.22.4",
  "libc",
@@ -6931,7 +6943,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "core-graphics-types 0.2.0",
- "glow",
+ "glow 0.16.0",
  "glutin_wgl_sys",
  "gpu-alloc",
  "gpu-allocator 0.27.0",
