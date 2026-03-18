@@ -9,8 +9,9 @@ pub use ahb::{AhbSwapchain, ahb_lock_plane, ahb_unlock_plane};
 pub use renderer::apply_rust_renderer_priority;
 
 use jni::{
-    JNIEnv,
-    objects::{GlobalRef, JByteBuffer, JClass, JObject},
+    EnvUnowned,
+    errors::ThrowRuntimeExAndDefault,
+    objects::{Global, JByteBuffer, JClass, JObject},
     sys::jint,
     sys::jlong,
     sys::jobject,
@@ -43,7 +44,7 @@ pub(crate) static FRAME_SIGNAL_FD: AtomicI32 = AtomicI32::new(-1);
 static CURRENT_OUTPUT_WIDTH: AtomicU32 = AtomicU32::new(0);
 static CURRENT_OUTPUT_HEIGHT: AtomicU32 = AtomicU32::new(0);
 
-static GLOBAL_CONTEXT: OnceLock<GlobalRef> = OnceLock::new();
+static GLOBAL_CONTEXT: OnceLock<Global<JObject<'static>>> = OnceLock::new();
 static NDK_CONTEXT_INIT: OnceLock<()> = OnceLock::new();
 static RUST_RENDERER: OnceLock<parking_lot::Mutex<Option<RustRendererHandle>>> = OnceLock::new();
 
@@ -109,39 +110,46 @@ pub extern "C" fn android_frame_ready_cb(
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_init_1android_1context(
-    env: JNIEnv,
+    mut env: EnvUnowned,
     _class: JClass,
     context: JObject,
 ) {
-    let java_vm = env
-        .get_java_vm()
-        .expect("Failed to retrieve JavaVM instance");
-    let vm_ptr = java_vm.get_java_vm_pointer() as *mut c_void;
+    env.with_env(|env| -> jni::errors::Result<()> {
+        let java_vm = env.get_java_vm()?;
+        let vm_ptr = java_vm.get_raw() as *mut c_void;
 
-    let global = GLOBAL_CONTEXT.get_or_init(|| {
-        env.new_global_ref(&context)
-            .expect("Failed to create global reference for Context")
-    });
-    let context_ptr = global.as_raw() as *mut c_void;
+        let global = if let Some(global) = GLOBAL_CONTEXT.get() {
+            global
+        } else {
+            let global = env.new_global_ref(&context)?;
+            let _ = GLOBAL_CONTEXT.set(global);
+            GLOBAL_CONTEXT
+                .get()
+                .expect("GLOBAL_CONTEXT should be initialized")
+        };
+        let context_ptr = global.as_raw() as *mut c_void;
 
-    NDK_CONTEXT_INIT.get_or_init(|| {
-        // SAFETY: VM and context pointers are stable and backed by GLOBAL_CONTEXT.
-        unsafe {
-            ndk_context::initialize_android_context(vm_ptr, context_ptr);
-        }
-        tracing::info!("Android Context initialized via ndk-context");
-    });
+        NDK_CONTEXT_INIT.get_or_init(|| {
+            // SAFETY: VM and context pointers are stable and backed by GLOBAL_CONTEXT.
+            unsafe {
+                ndk_context::initialize_android_context(vm_ptr, context_ptr);
+            }
+            tracing::info!("Android Context initialized via ndk-context");
+        });
 
-    let runtime = ensure_runtime();
-    runtime
-        .handle
-        .set_frame_ready_callback(Some(android_frame_ready_cb), std::ptr::null_mut())
-        .expect("Failed to set frame ready callback");
+        let runtime = ensure_runtime();
+        runtime
+            .handle
+            .set_frame_ready_callback(Some(android_frame_ready_cb), std::ptr::null_mut())
+            .expect("Failed to set frame ready callback");
+        Ok(())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>();
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetVideoBackend(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
     mode: jint,
 ) {
@@ -150,7 +158,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetVide
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeRegisterRendererTid(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
     tid: jint,
 ) {
@@ -160,7 +168,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeRegiste
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRustRenderer(
-    env: JNIEnv,
+    env: EnvUnowned,
     _class: JClass,
     surface: JObject,
 ) {
@@ -169,7 +177,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
         return;
     };
 
-    let env_ptr = env.get_native_interface();
+    let env_ptr = env.as_raw();
     // SAFETY: surface is a valid JObject representing an Android Surface.
     let window = unsafe { ANativeWindow_fromSurface(env_ptr, surface.as_raw()) };
     if window.is_null() {
@@ -209,7 +217,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStartRu
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStopRustRenderer(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
 ) {
     set_rust_renderer_active(false);
@@ -223,7 +231,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeStopRus
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetFrameSignalFd(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
     fd: jint,
 ) {
@@ -244,7 +252,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeSetFram
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameSeq(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
 ) -> jlong {
     runtime_handle().frame_seq() as jlong
@@ -252,7 +260,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameSe
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeBeginFrontCopy(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
 ) -> jint {
     ensure_runtime()
@@ -264,7 +272,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeBeginFr
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativePlaneBuffer(
-    mut env: JNIEnv,
+    mut env: EnvUnowned,
     _class: JClass,
     idx: jint,
 ) -> jobject {
@@ -277,19 +285,16 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativePlaneBu
     let slice = h.plane_slice(idx as usize);
     // SAFETY: The direct byte buffer references NES runtime memory, which remains valid
     // until the matching nativeEndFrontCopy call.
-    let res = unsafe { env.new_direct_byte_buffer(slice.as_ptr() as *mut u8, slice.len()) };
-    match res {
-        Ok(buf) => buf.into_raw(),
-        Err(e) => {
-            tracing::error!("Failed to create direct ByteBuffer: {e}");
-            std::ptr::null_mut()
-        }
-    }
+    env.with_env(|env| -> jni::errors::Result<jobject> {
+        let buf = unsafe { env.new_direct_byte_buffer(slice.as_ptr() as *mut u8, slice.len()) }?;
+        Ok(buf.into_raw())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeEndFrontCopy(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
 ) {
     if let Some(h) = ensure_runtime().frame_handle.as_deref() {
@@ -299,7 +304,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeEndFron
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameWidth(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
 ) -> jint {
     if let Some(h) = ensure_runtime().frame_handle.as_deref() {
@@ -316,7 +321,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameWi
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameHeight(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
 ) -> jint {
     if let Some(h) = ensure_runtime().frame_handle.as_deref() {
@@ -333,7 +338,7 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nativeFrameHe
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nesiumAuxCreate(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
     id: jint,
     width: jint,
@@ -344,28 +349,30 @@ pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nesiumAuxCrea
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nesiumAuxCopy(
-    env: JNIEnv,
+    mut env: EnvUnowned,
     _class: JClass,
     id: jint,
     dst: jobject,
     dst_pitch: jint,
     dst_height: jint,
 ) -> jint {
-    // SAFETY: dst must be a valid DirectByteBuffer.
-    let Ok(ptr) = env.get_direct_buffer_address(&unsafe { JByteBuffer::from_raw(dst) }) else {
-        return 0;
-    };
-    if ptr.is_null() {
-        return 0;
-    }
-    let len = (dst_pitch as usize) * (dst_height as usize);
-    let slice = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
-    crate::aux_texture::aux_copy(id as u32, slice, dst_pitch as usize) as jint
+    env.with_env(|env| -> jni::errors::Result<jint> {
+        // SAFETY: dst must be a valid DirectByteBuffer local reference for this JNI frame.
+        let buffer = unsafe { JByteBuffer::from_raw(env, dst) };
+        let ptr = env.get_direct_buffer_address(&buffer)?;
+        if ptr.is_null() {
+            return Ok(0);
+        }
+        let len = (dst_pitch as usize) * (dst_height as usize);
+        let slice = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+        Ok(crate::aux_texture::aux_copy(id as u32, slice, dst_pitch as usize) as jint)
+    })
+    .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_mikai233_nesium_NesiumNative_nesiumAuxDestroy(
-    _env: JNIEnv,
+    _env: EnvUnowned,
     _class: JClass,
     id: jint,
 ) {
