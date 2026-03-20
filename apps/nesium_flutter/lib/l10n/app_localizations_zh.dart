@@ -1653,4 +1653,25 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noResults => '未找到匹配的参数';
+
+  @override
+  String get errorFailedToCreateTexture => '创建纹理失败';
+
+  @override
+  String get languageJapanese => '日语';
+
+  @override
+  String get languageSpanish => '西班牙语';
+
+  @override
+  String get languagePortuguese => '葡萄牙语';
+
+  @override
+  String get languageRussian => '俄语';
+
+  @override
+  String get languageFrench => '法语';
+
+  @override
+  String get languageGerman => '德语';
 }

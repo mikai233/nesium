@@ -834,5 +834,12 @@
   "videoShaderParametersReset": "Reset Parameters",
   "searchHint": "Search...",
   "searchTooltip": "Search",
-  "noResults": "No matching parameters found"
+  "noResults": "No matching parameters found",
+  "errorFailedToCreateTexture": "Failed to create texture",
+  "languageJapanese": "Japanese",
+  "languageSpanish": "Spanish",
+  "languagePortuguese": "Portuguese",
+  "languageRussian": "Russian",
+  "languageFrench": "French",
+  "languageGerman": "German"
 }

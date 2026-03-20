@@ -11,12 +11,15 @@ use dyn_clone::DynClone;
 use crate::{apu::ExpansionAudio, reset_kind::ResetKind};
 
 pub mod chr_storage;
+pub mod core;
 pub mod mapper0;
 pub mod mapper1;
 pub mod mapper10;
 pub mod mapper11;
 pub mod mapper119;
 pub mod mapper13;
+pub mod mapper16;
+pub mod mapper18;
 pub mod mapper19;
 pub mod mapper2;
 pub mod mapper21;
@@ -30,6 +33,7 @@ pub mod mapper4;
 pub mod mapper5;
 pub mod mapper6;
 pub mod mapper66;
+pub mod mapper69;
 pub mod mapper7;
 pub mod mapper71;
 pub mod mapper78;
@@ -53,6 +57,8 @@ pub use mapper9::Mapper9;
 pub use mapper10::Mapper10;
 pub use mapper11::Mapper11;
 pub use mapper13::Mapper13;
+pub use mapper16::Mapper16;
+pub use mapper18::Mapper18;
 pub use mapper19::Mapper19;
 pub use mapper21::Mapper21;
 pub use mapper23::Mapper23;
@@ -60,6 +66,7 @@ pub use mapper25::Mapper25;
 pub use mapper26::Mapper26;
 pub use mapper34::Mapper34;
 pub use mapper66::Mapper66;
+pub use mapper69::Mapper69;
 pub use mapper71::Mapper71;
 pub use mapper78::Mapper78;
 pub use mapper85::Mapper85;
@@ -94,6 +101,77 @@ pub enum PpuVramAccessKind {
     Other,
 }
 
+/// Operation classification aligned with Mesen2 `MemoryOperationType`.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum MapperMemoryOperation {
+    Read,
+    Write,
+    ExecOpcode,
+    ExecOperand,
+    DmaRead,
+    DmaWrite,
+    DummyRead,
+    DummyWrite,
+    PpuRenderingRead,
+    Idle,
+}
+
+impl PpuVramAccessKind {
+    pub const fn operation(self) -> MapperMemoryOperation {
+        match self {
+            PpuVramAccessKind::RenderingFetch => MapperMemoryOperation::PpuRenderingRead,
+            PpuVramAccessKind::CpuRead => MapperMemoryOperation::Read,
+            PpuVramAccessKind::CpuWrite => MapperMemoryOperation::Write,
+            PpuVramAccessKind::Other => MapperMemoryOperation::Idle,
+        }
+    }
+}
+
+/// Fine-grained source of a PPU address-bus event.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum PpuVramAccessSource {
+    /// PPU rendering pipeline fetches (background/sprite).
+    RenderingFetch,
+    /// CPU write to `$2006` (VRAM address latch update).
+    CpuAddrWrite,
+    /// CPU read from `$2007`.
+    CpuDataRead,
+    /// CPU write to `$2007`.
+    CpuDataWrite,
+    /// Delayed `$2007` auto-increment bus update.
+    CpuDataIncrement,
+    /// Any other source.
+    Other,
+}
+
+/// Rendering pipeline target for PPU fetches.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum PpuRenderFetchTarget {
+    Background,
+    Sprite,
+    Other,
+}
+
+/// Rendering fetch phase for PPU memory reads.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum PpuRenderFetchType {
+    Nametable,
+    Attribute,
+    PatternLow,
+    PatternHigh,
+    Other,
+}
+
+/// Extra rendering metadata attached to rendering VRAM accesses.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct PpuRenderFetchInfo {
+    pub target: PpuRenderFetchTarget,
+    pub fetch: PpuRenderFetchType,
+    pub tile_x: Option<u8>,
+    pub tile_y: Option<u8>,
+    pub sprite_index: Option<u8>,
+}
+
 /// Rich timing/context information for a PPU VRAM access.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PpuVramAccessContext {
@@ -103,6 +181,82 @@ pub struct PpuVramAccessContext {
     pub cpu_cycle: u64,
     /// High-level classification of this VRAM access.
     pub kind: PpuVramAccessKind,
+    /// Fine-grained source of this access.
+    pub source: PpuVramAccessSource,
+    /// PPU master clock (4 master clocks per dot).
+    pub ppu_master_clock: u64,
+    /// Current scanline (`-1..=260` on NTSC).
+    pub ppu_scanline: i16,
+    /// Current dot (`0..=340`).
+    pub ppu_dot: u16,
+    /// Optional rendering-fetch metadata (background/sprite + fetch phase).
+    pub render_fetch: Option<PpuRenderFetchInfo>,
+}
+
+bitflags::bitflags! {
+    /// Declares which event hooks a mapper wants to receive.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct MapperHookMask: u8 {
+        const NONE = 0;
+        /// Receive explicit CPU bus access events (read/write/DMA).
+        const CPU_BUS_ACCESS = 1 << 0;
+        /// Receive PPU address-bus change events.
+        const PPU_BUS_ADDRESS = 1 << 1;
+        /// Receive final PPU VRAM read-value override callback.
+        const PPU_READ_OVERRIDE = 1 << 2;
+        /// Receive per-CPU-cycle clock events.
+        const CPU_CLOCK = 1 << 3;
+    }
+}
+
+/// CPU bus access type observed by the mapper hook system.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum CpuBusAccessKind {
+    Read,
+    Write,
+    DmaRead,
+    DmaWrite,
+    ExecOpcode,
+    ExecOperand,
+    DummyRead,
+    DummyWrite,
+    Idle,
+}
+
+impl CpuBusAccessKind {
+    pub const fn operation(self) -> MapperMemoryOperation {
+        match self {
+            CpuBusAccessKind::Read => MapperMemoryOperation::Read,
+            CpuBusAccessKind::Write => MapperMemoryOperation::Write,
+            CpuBusAccessKind::DmaRead => MapperMemoryOperation::DmaRead,
+            CpuBusAccessKind::DmaWrite => MapperMemoryOperation::DmaWrite,
+            CpuBusAccessKind::ExecOpcode => MapperMemoryOperation::ExecOpcode,
+            CpuBusAccessKind::ExecOperand => MapperMemoryOperation::ExecOperand,
+            CpuBusAccessKind::DummyRead => MapperMemoryOperation::DummyRead,
+            CpuBusAccessKind::DummyWrite => MapperMemoryOperation::DummyWrite,
+            CpuBusAccessKind::Idle => MapperMemoryOperation::Idle,
+        }
+    }
+}
+
+/// Unified mapper event stream used by the new bus notification path.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum MapperEvent {
+    /// CPU bus access event with cycle timing.
+    CpuBusAccess {
+        kind: CpuBusAccessKind,
+        addr: u16,
+        value: u8,
+        cpu_cycle: u64,
+        master_clock: u64,
+    },
+    /// PPU address-bus update event.
+    PpuBusAddress {
+        addr: u16,
+        ctx: PpuVramAccessContext,
+    },
+    /// CPU clock tick event (once per CPU cycle advanced by the core).
+    CpuClock { cpu_cycle: u64, master_clock: u64 },
 }
 
 /// Target backing store for a PPU nametable address.
@@ -110,44 +264,80 @@ pub struct PpuVramAccessContext {
 pub enum NametableTarget {
     /// Use PPU CIRAM (internal 2 KiB VRAM). `u16` is CIRAM offset.
     Ciram(u16),
-    /// Use mapper-controlled VRAM/ROM. `u16` is mapper-local offset.
-    MapperVram(u16),
+    /// Use mapper-controlled VRAM/ROM. `u32` is mapper-local offset.
+    MapperVram(u32),
     /// No device drives the bus (open bus).
     None,
+}
+
+/// Unified immutable mapper memory view for savestate/debug tooling.
+#[derive(Debug, Clone, Copy, Default)]
+#[non_exhaustive]
+pub struct MapperMemoryRef<'a> {
+    pub prg_rom: Option<&'a [u8]>,
+    pub prg_ram: Option<&'a [u8]>,
+    pub prg_work_ram: Option<&'a [u8]>,
+    pub mapper_ram: Option<&'a [u8]>,
+    pub chr_rom: Option<&'a [u8]>,
+    pub chr_ram: Option<&'a [u8]>,
+    pub chr_battery_ram: Option<&'a [u8]>,
+}
+
+/// Unified mutable mapper memory view for state restore tooling.
+#[derive(Debug, Default)]
+#[non_exhaustive]
+pub struct MapperMemoryMut<'a> {
+    pub prg_ram: Option<&'a mut [u8]>,
+    pub prg_work_ram: Option<&'a mut [u8]>,
+    pub mapper_ram: Option<&'a mut [u8]>,
+    pub chr_ram: Option<&'a mut [u8]>,
+    pub chr_battery_ram: Option<&'a mut [u8]>,
 }
 
 /// Core mapper interface implemented by all cartridge boards.
 ///
 /// Boards that expose extra sound channels can additionally implement
-/// [`ExpansionAudio`] and opt into the optional `as_expansion_audio`/`mut`
-/// hooks below so the core can treat expansion audio generically.
+/// [`ExpansionAudio`] and return it via the optional `expansion_audio` hooks.
 pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     /// Returns the CPU-visible byte for `addr`, or `None` when the bus should
     /// float (open-bus behavior) because the addressed resource is disabled or
-    /// absent.
-    fn cpu_read(&self, addr: u16) -> Option<u8>;
+    /// absent. `open_bus` carries the current external CPU bus value for
+    /// mappers that need to merge mapper-driven bits with open-bus state.
+    fn cpu_read(&self, addr: u16, open_bus: u8) -> Option<u8>;
 
     /// CPU write with cycle count for timing-sensitive mappers.
     fn cpu_write(&mut self, addr: u16, data: u8, cpu_cycle: u64);
 
-    /// Optional per-CPU-cycle hook for mappers that implement hardware timers or
-    /// IRQ counters. Default implementation does nothing.
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {}
+    /// Declares which unified mapper events this mapper consumes.
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::NONE
+    }
+
+    /// Unified mapper event callback.
+    fn on_mapper_event(&mut self, _event: MapperEvent) {}
+
+    /// Final value filter for PPU VRAM reads (`$0000-$3EFF`).
+    ///
+    /// This is intended for boards that need to override returned PPU read
+    /// data depending on rendering phase/state (e.g. MMC5/JY/Rainbow-style
+    /// behaviour). The default implementation keeps `value` unchanged.
+    fn ppu_read_override(&mut self, _addr: u16, _ctx: PpuVramAccessContext, value: u8) -> u8 {
+        value
+    }
 
     /// Returns this mapper as an expansion audio source, when supported.
     ///
     /// The default implementation returns `None`, meaning the board does not
     /// provide any extra audio channels beyond the core APU.
-    fn as_expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
+    fn expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
         None
     }
 
-    /// Mutable variant of [`as_expansion_audio`](Self::as_expansion_audio).
+    /// Mutable variant of [`expansion_audio`](Self::expansion_audio).
     ///
-    /// Mappers that implement [`ExpansionAudio`] typically return
-    /// `Some(self)` here; boards without expansion audio keep the
-    /// default `None` implementation.
-    fn as_expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
+    /// Mappers that implement [`ExpansionAudio`] typically return `Some(self)`
+    /// here; boards without expansion audio keep the default `None`.
+    fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
         None
     }
 
@@ -178,11 +368,6 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
     fn chr_write(&mut self, addr: u16, data: u8) {
         self.ppu_write(addr, data);
     }
-
-    /// Hook invoked on every PPU VRAM access, including pattern and nametable
-    /// fetches as well as CPU-driven `$2007` reads/writes. Default
-    /// implementation does nothing.
-    fn ppu_vram_access(&mut self, _addr: u16, _ctx: PpuVramAccessContext) {}
 
     /// Maps a PPU nametable address (`$2000-$2FFF`) to its backing storage.
     ///
@@ -222,91 +407,27 @@ pub trait Mapper: Debug + Send + DynClone + Any + 'static {
 
     /// Called when [`map_nametable`] returns [`NametableTarget::MapperVram`]
     /// for nametable reads.
-    fn mapper_nametable_read(&self, _offset: u16) -> u8 {
+    fn mapper_nametable_read(&self, _offset: u32) -> u8 {
         0
     }
 
     /// Called when [`map_nametable`] returns [`NametableTarget::MapperVram`]
     /// for nametable writes.
-    fn mapper_nametable_write(&mut self, _offset: u16, _value: u8) {}
+    fn mapper_nametable_write(&mut self, _offset: u32, _value: u8) {}
 
     /// Returns `true` when the mapper asserts the CPU IRQ line.
     fn irq_pending(&self) -> bool {
         false
     }
 
-    /// Optional introspection hook for PRG ROM contents.
-    fn prg_rom(&self) -> Option<&[u8]> {
-        None
+    /// Immutable snapshot-style view of mapper-owned memory regions.
+    fn memory_ref(&self) -> MapperMemoryRef<'_> {
+        MapperMemoryRef::default()
     }
 
-    /// Optional introspection hook for unified PRG RAM contents.
-    ///
-    /// New code should prefer the more granular `prg_save_ram` / `prg_work_ram`
-    /// helpers below when it needs to distinguish battery-backed vs volatile
-    /// work RAM. This method remains for backwards compatibility.
-    fn prg_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Optional mutable access to PRG RAM contents.
-    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
-    }
-
-    /// PRG save RAM (battery-backed), if present.
-    fn prg_save_ram(&self) -> Option<&[u8]> {
-        self.prg_ram()
-    }
-
-    /// Mutable view of PRG save RAM (battery-backed), if present.
-    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.prg_ram_mut()
-    }
-
-    /// PRG work RAM (non battery-backed), if present.
-    fn prg_work_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Mutable view of PRG work RAM (non battery-backed), if present.
-    fn prg_work_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
-    }
-
-    /// Mapper-private RAM (e.g., MMC5 ExRAM), if present.
-    fn mapper_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Mutable view of mapper-private RAM, if present.
-    fn mapper_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
-    }
-
-    /// Optional introspection hook for CHR ROM contents.
-    fn chr_rom(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Optional introspection hook for CHR RAM contents.
-    fn chr_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Optional mutable access to CHR RAM contents.
-    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
-    }
-
-    /// Optional CHR battery-backed RAM region, if distinct from `chr_ram`.
-    fn chr_battery_ram(&self) -> Option<&[u8]> {
-        None
-    }
-
-    /// Mutable view of CHR battery-backed RAM, if present.
-    fn chr_battery_ram_mut(&mut self) -> Option<&mut [u8]> {
-        None
+    /// Mutable snapshot-style view of mapper-owned memory regions.
+    fn memory_mut(&mut self) -> MapperMemoryMut<'_> {
+        MapperMemoryMut::default()
     }
 
     /// Current nametable mirroring mode exposed by the mapper.

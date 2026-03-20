@@ -50,16 +50,10 @@ impl Controller {
         } else {
             self.state &= !bit;
         }
-        if self.strobe {
-            self.latched = self.state;
-        }
     }
 
     pub fn set_state(&mut self, state: u8) {
         self.state = state;
-        if self.strobe {
-            self.latched = self.state;
-        }
     }
 
     pub fn state(&self) -> u8 {
@@ -68,9 +62,13 @@ impl Controller {
 
     /// Writes to `$4016` strobe bit (shared for both ports).
     pub fn write_strobe(&mut self, data: u8) {
-        let strobe = (data & 0x01) != 0;
-        self.strobe = strobe;
-        if strobe {
+        let prev = self.strobe;
+        self.strobe = (data & 0x01) != 0;
+
+        // Match hardware / Mesen behavior:
+        // - while strobe is high, reads continuously sample current buttons
+        // - on 1->0 transition, latch the current button state
+        if prev && !self.strobe {
             self.latched = self.state;
         }
     }
@@ -79,18 +77,66 @@ impl Controller {
     ///
     /// Bit 0 holds the current button; subsequent reads shift unless strobe is held high.
     pub fn read(&mut self) -> u8 {
-        let bit = self.latched & 0x01;
-        if !self.strobe {
-            // After 8 reads hardware keeps returning 1s; simulate by shifting in ones.
-            self.latched = (self.latched >> 1) | 0x80;
+        if self.strobe {
+            self.latched = self.state;
+            return self.latched & 0x01;
         }
-        bit | 0x40 // Upper bits float high on hardware; keep them set.
+
+        let bit = self.latched & 0x01;
+        // After 8 reads hardware keeps returning 1s; simulate by shifting in ones.
+        self.latched = (self.latched >> 1) | 0x80;
+        // Return only the serial data bit; bus-level open-bus bits are merged by CpuBus.
+        bit
     }
 }
 
 impl Default for Controller {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Controller;
+
+    #[test]
+    fn latches_on_strobe_falling_edge() {
+        let mut c = Controller::new();
+        c.set_state(0x01); // A
+
+        c.write_strobe(1);
+        c.set_state(0x02); // B (state changed while strobe high)
+        c.write_strobe(0); // falling edge latches latest state
+
+        assert_eq!(c.read(), 0); // A bit
+        assert_eq!(c.read(), 1); // B bit
+    }
+
+    #[test]
+    fn strobe_high_reads_live_a_button() {
+        let mut c = Controller::new();
+        c.write_strobe(1);
+
+        c.set_state(0x01);
+        assert_eq!(c.read(), 1);
+
+        c.set_state(0x00);
+        assert_eq!(c.read(), 0);
+    }
+
+    #[test]
+    fn shift_register_returns_ones_after_eight_reads() {
+        let mut c = Controller::new();
+        c.set_state(0x00);
+        c.write_strobe(1);
+        c.write_strobe(0);
+
+        for _ in 0..8 {
+            let _ = c.read();
+        }
+        assert_eq!(c.read(), 1);
+        assert_eq!(c.read(), 1);
     }
 }
 

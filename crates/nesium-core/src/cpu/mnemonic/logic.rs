@@ -1,5 +1,6 @@
 use crate::{
     bus::CpuBus,
+    cartridge::CpuBusAccessKind,
     context::Context,
     cpu::{
         Cpu,
@@ -38,7 +39,7 @@ use crate::{
 pub fn exec_and(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.a &= m;
             cpu.p.set_zn(cpu.a);
         }
@@ -69,7 +70,7 @@ pub fn exec_and(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_bit(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             let and = cpu.a & m;
             cpu.p.set_z(and == 0);
             cpu.p.set_n(m & BIT_7 != 0);
@@ -110,7 +111,7 @@ pub fn exec_bit(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_eor(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.a ^= m;
             cpu.p.set_zn(cpu.a);
         }
@@ -149,7 +150,7 @@ pub fn exec_eor(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_ora(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.a |= m;
             cpu.p.set_zn(cpu.a);
         }

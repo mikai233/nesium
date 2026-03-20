@@ -1,4 +1,4 @@
-//! Mapper 19 – Namco 163 (N163) implementation with basic expansion audio.
+//! Mapper 19 – Namco 163 (N163) implementation.
 //!
 //! This mapper powers a number of late Famicom titles (Digital Devil Story:
 //! Megami Tensei II, Erika to Satoru no Yume Bouken, etc.). The ASIC supports
@@ -17,8 +17,8 @@
 //!   - 15‑bit CPU‑cycle counter configured via `$5000`/`$5800`, as per Nesdev.
 //!   - When the counter reaches `$7FFF`, an IRQ is latched and counting stops.
 //!
-//! Nametable‑as‑CHR configurations and some of the more exotic pin behaviours
-//! are currently omitted; most commercial games should still behave correctly.
+//! Board-variant auto-detection and some rarer side effects are still
+//! simplified compared to Mesen2.
 //!
 //! | Area | Address range     | Behaviour                                          | IRQ/Audio      |
 //! |------|-------------------|----------------------------------------------------|----------------|
@@ -32,12 +32,18 @@
 
 use std::borrow::Cow;
 
+use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef, NametableTarget};
+
 use crate::{
-    apu::{ExpansionAudio, expansion::ExpansionSamples},
+    apu::{ExpansionAudio, Namco163Audio},
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
+        mapper::{
+            ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer,
+            core::namco19::{Namco19BoardState, NamcoVariant, namco19_variant_init},
+            select_chr_storage,
+        },
     },
     memory::cpu as cpu_mem,
     reset_kind::ResetKind,
@@ -49,6 +55,10 @@ use crate::mem_block::{ByteBlock, MemBlock};
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
 /// CHR banking granularity (1 KiB).
 const CHR_BANK_SIZE_1K: usize = 1024;
+/// Internal nametable RAM size (2 KiB).
+const NAMETABLE_RAM_SIZE: usize = 0x800;
+/// Mapper-local `NametableTarget::MapperVram` tag for nametable RAM offsets.
+const NAMCO163_MAPPER_VRAM_NT_TAG: u32 = 0x8000_0000;
 
 /// CPU `$8000-$9FFF/$A000-$BFFF/$C000-$DFFF/$E000-$FFFF`: four 8 KiB PRG windows.
 const NAMCO163_PRG_SLOT0_START: u16 = 0x8000;
@@ -60,14 +70,7 @@ const NAMCO163_PRG_SLOT2_END: u16 = 0xDFFF;
 const NAMCO163_PRG_FIXED_SLOT_START: u16 = 0xE000;
 const NAMCO163_PRG_FIXED_SLOT_END: u16 = 0xFFFF;
 
-/// Namco 163 audio register decode mask and ports.
-/// - `$4800-$4FFF`: internal wave RAM data port.
-/// - `$E000-$E7FF`: audio control (also overlaps PRG select).
-/// - `$F800-$FFFF`: audio RAM address/auto-increment port.
-const NAMCO163_AUDIO_ADDR_MASK: u16 = 0xF800;
 const NAMCO163_AUDIO_RAM_PORT_BASE: u16 = 0x4800;
-const NAMCO163_AUDIO_CTRL_PORT_BASE: u16 = 0xE000;
-const NAMCO163_AUDIO_ADDR_PORT_BASE: u16 = 0xF800;
 
 /// IRQ counter access windows:
 /// - `$5000-$57FF`: IRQ low byte.
@@ -84,7 +87,7 @@ const NAMCO163_IRQ_HIGH_END: u16 = 0x5FFF;
 /// - `$F000-$F7FF`: PRG bank for `$C000-$DFFF`.
 /// - `$F800-$FFFF`: write-protect / audio RAM address port.
 const NAMCO163_CHR_BANK_WRITE_START: u16 = 0x8000;
-const NAMCO163_CHR_BANK_WRITE_END: u16 = 0xBFFF;
+const NAMCO163_CHR_BANK_WRITE_END: u16 = 0xDFFF;
 const NAMCO163_PRG_SELECT_8000_START: u16 = 0xE000;
 const NAMCO163_PRG_SELECT_8000_END: u16 = 0xE7FF;
 const NAMCO163_PRG_SELECT_A000_START: u16 = 0xE800;
@@ -143,171 +146,14 @@ impl Namco163CpuRegister {
     }
 }
 
-/// Namco 163 audio state (adapted from Mesen2's `Namco163Audio`).
-#[derive(Debug, Clone)]
-struct Namco163AudioState {
-    internal_ram: Namco163InternalRam,
-    channel_output: Namco163ChannelOutput,
-    ram_position: u8,
-    auto_increment: bool,
-    update_counter: u8,
-    current_channel: i8,
-    last_output: f32,
-    disabled: bool,
-}
+type Namco163ChrBankRegs = ByteBlock<12>;
+type Namco163ChrIsNametable = MemBlock<bool, 12>;
+type Namco163NametableRam = ByteBlock<NAMETABLE_RAM_SIZE>;
 
-type Namco163InternalRam = ByteBlock<0x80>;
-type Namco163ChannelOutput = MemBlock<i16, 8>;
-type Namco163ChrBankRegs = ByteBlock<8>;
-
-impl Namco163AudioState {
-    fn new() -> Self {
-        Self {
-            internal_ram: Namco163InternalRam::new(),
-            channel_output: Namco163ChannelOutput::new(),
-            ram_position: 0,
-            auto_increment: false,
-            update_counter: 0,
-            current_channel: 7,
-            last_output: 0.0,
-            disabled: false,
-        }
-    }
-
-    fn num_channels(&self) -> u8 {
-        // Nesdev: high nibble of $7F encodes (channels - 1).
-        (self.internal_ram[0x7F] >> 4) & 0x07
-    }
-
-    fn frequency(&self, channel: usize) -> u32 {
-        let base = 0x40 + channel as u8 * 0x08;
-        let lo = self.internal_ram[base as usize] as u32;
-        let mid = self.internal_ram[base as usize + 2] as u32;
-        let hi = (self.internal_ram[base as usize + 4] & 0x03) as u32;
-        (hi << 16) | (mid << 8) | lo
-    }
-
-    fn phase(&self, channel: usize) -> u32 {
-        let base = 0x40 + channel as u8 * 0x08;
-        let lo = self.internal_ram[base as usize + 1] as u32;
-        let mid = self.internal_ram[base as usize + 3] as u32;
-        let hi = self.internal_ram[base as usize + 5] as u32;
-        (hi << 16) | (mid << 8) | lo
-    }
-
-    fn set_phase(&mut self, channel: usize, phase: u32) {
-        let base = 0x40 + channel as u8 * 0x08;
-        self.internal_ram[base as usize + 5] = ((phase >> 16) & 0xFF) as u8;
-        self.internal_ram[base as usize + 3] = ((phase >> 8) & 0xFF) as u8;
-        self.internal_ram[base as usize + 1] = (phase & 0xFF) as u8;
-    }
-
-    fn wave_address(&self, channel: usize) -> u8 {
-        let base = 0x40 + channel as u8 * 0x08;
-        self.internal_ram[base as usize + 6]
-    }
-
-    fn wave_length(&self, channel: usize) -> u16 {
-        let base = 0x40 + channel as u8 * 0x08;
-        let raw = self.internal_ram[base as usize + 4] & 0xFC;
-        256u16.saturating_sub(raw as u16).max(1)
-    }
-
-    fn volume(&self, channel: usize) -> u8 {
-        let base = 0x40 + channel as u8 * 0x08;
-        self.internal_ram[base as usize + 7] & 0x0F
-    }
-
-    fn update_channel(&mut self, channel: usize) {
-        let freq = self.frequency(channel);
-        let mut phase = self.phase(channel);
-        let length = self.wave_length(channel) as u32;
-        let offset = self.wave_address(channel);
-        let vol = self.volume(channel) as i16;
-
-        // Advance phase within the waveform length.
-        phase = phase.wrapping_add(freq) % (length << 16);
-
-        let sample_pos = ((phase >> 16) as u8).wrapping_add(offset);
-        let byte = self.internal_ram[(sample_pos >> 1) as usize];
-        let nibble = if sample_pos & 1 != 0 {
-            (byte >> 4) & 0x0F
-        } else {
-            byte & 0x0F
-        };
-        let sample = (nibble as i16) - 8;
-
-        self.channel_output[channel] = sample * vol;
-        self.set_phase(channel, phase);
-        self.update_output_level();
-    }
-
-    fn update_output_level(&mut self) {
-        let n = self.num_channels();
-        let active = n as i16 + 1;
-        let mut sum: i16 = 0;
-        for i in (7 - n as i8)..=7 {
-            let idx = i as usize;
-            sum = sum.saturating_add(self.channel_output[idx]);
-        }
-        let avg = sum as f32 / active as f32;
-        // Roughly normalise into a small range; further scaling happens in the mixer.
-        self.last_output = avg / 512.0;
-    }
-
-    fn clock(&mut self) {
-        if self.disabled {
-            return;
-        }
-        self.update_counter = self.update_counter.wrapping_add(1);
-        if self.update_counter == 15 {
-            let ch = self.current_channel.clamp(0, 7) as usize;
-            self.update_channel(ch);
-            self.update_counter = 0;
-
-            self.current_channel -= 1;
-            if self.current_channel < 7 - self.num_channels() as i8 {
-                self.current_channel = 7;
-            }
-        }
-    }
-
-    fn write_register(&mut self, addr: u16, value: u8) {
-        match addr & NAMCO163_AUDIO_ADDR_MASK {
-            NAMCO163_AUDIO_RAM_PORT_BASE => {
-                self.internal_ram[self.ram_position as usize] = value;
-                if self.auto_increment {
-                    self.ram_position = (self.ram_position + 1) & 0x7F;
-                }
-            }
-            NAMCO163_AUDIO_CTRL_PORT_BASE => {
-                // Bit 6 disables sound; other bits handled by PRG banking.
-                self.disabled = (value & 0x40) != 0;
-            }
-            NAMCO163_AUDIO_ADDR_PORT_BASE => {
-                self.ram_position = value & 0x7F;
-                self.auto_increment = (value & 0x80) != 0;
-            }
-            _ => {}
-        }
-    }
-
-    fn read_register(&mut self, addr: u16) -> u8 {
-        match addr & NAMCO163_AUDIO_ADDR_MASK {
-            NAMCO163_AUDIO_RAM_PORT_BASE => {
-                let val = self.internal_ram[self.ram_position as usize];
-                if self.auto_increment {
-                    self.ram_position = (self.ram_position + 1) & 0x7F;
-                }
-                val
-            }
-            _ => 0,
-        }
-    }
-
-    fn sample(&self) -> f32 {
-        self.last_output
-    }
+#[derive(Debug, Clone, Copy)]
+enum Namco163PpuSource {
+    Chr(u32),
+    Nametable(u16),
 }
 
 #[derive(Debug, Clone)]
@@ -326,20 +172,23 @@ pub struct Mapper19 {
 
     /// Eight 1 KiB CHR bank registers backing `$0000-$1FFF`.
     chr_banks: Namco163ChrBankRegs,
+    /// Latched CHR page source type (CHR vs NTRAM) per 1 KiB slot.
+    ///
+    /// Match Mesen2's `SelectChrPage` behavior: mapping source is decided on
+    /// register write, not dynamically recomputed from current mode bits.
+    chr_is_nametable: Namco163ChrIsNametable,
 
     /// Namco 163 expansion audio generator state, when this board revision
     /// includes the N163 audio block.
-    audio: Option<Namco163AudioState>,
+    audio: Option<Namco163Audio>,
+    board: Namco19BoardState,
+    /// Mapper-local 2 KiB nametable RAM used when CHR slots map to NTRAM.
+    nametable_ram: Namco163NametableRam,
 
     /// IRQ counter (bit15 is the enable flag; bits 0‑14 are the 15‑bit count),
     /// matching the representation used in Mesen2 and the Nesdev description.
     irq_counter: u16,
     irq_pending: bool,
-
-    /// Current nametable mirroring mode. Namco 163 can repurpose nametable RAM
-    /// as CHR, but the basic nametable wiring still follows the header unless
-    /// a more complete implementation overrides it.
-    mirroring: Mirroring,
 }
 
 impl Mapper19 {
@@ -348,15 +197,14 @@ impl Mapper19 {
 
         let chr = select_chr_storage(&header, chr_rom);
         let prg_bank_count_8k = (prg_rom.len() / PRG_BANK_SIZE_8K).max(1);
+        let mapper_id = header.mapper();
+        let submapper = header.submapper();
 
-        // Submapper 2 corresponds to boards without expansion sound; other
-        // submappers include the N163 audio generator. Treat unknown/legacy
-        // values as having audio to remain compatible with older dumps.
-        let audio = if header.submapper() == 2 {
-            None
-        } else {
-            Some(Namco163AudioState::new())
-        };
+        let init = namco19_variant_init(mapper_id, submapper);
+        let mut audio = init.has_audio_block.then(Namco163Audio::new);
+        if let Some(audio) = audio.as_mut() {
+            audio.set_active(init.variant == NamcoVariant::Namco163);
+        }
 
         Self {
             prg_rom,
@@ -367,10 +215,12 @@ impl Mapper19 {
             prg_bank_a000: 1,
             prg_bank_c000: 2,
             chr_banks: Namco163ChrBankRegs::new(),
+            chr_is_nametable: Namco163ChrIsNametable::new(),
             audio,
+            board: Namco19BoardState::new(init, header.mirroring()),
+            nametable_ram: Namco163NametableRam::new(),
             irq_counter: 0,
             irq_pending: false,
-            mirroring: header.mirroring(),
         }
     }
 
@@ -388,6 +238,47 @@ impl Mapper19 {
         } else {
             self.prg_bank_count_8k - 1
         }
+    }
+
+    fn set_variant(&mut self, variant: NamcoVariant) {
+        // Match Mesen2: fixed-board variants (auto-detect disabled) ignore
+        // runtime variant probing writes.
+        if self.board.set_variant(variant) {
+            self.sync_audio_active();
+        }
+    }
+
+    fn sync_audio_active(&mut self) {
+        if let Some(audio) = self.audio.as_mut() {
+            audio.set_active(self.board.variant() == NamcoVariant::Namco163);
+        }
+    }
+
+    fn map_default_nametable(&self, addr: u16) -> NametableTarget {
+        let base = addr & 0x0FFF;
+        let offset = match self.board.mirroring() {
+            Mirroring::Horizontal => {
+                let nt = (base >> 10) & 3;
+                let within = base & 0x03FF;
+                match nt {
+                    0 | 1 => within,
+                    _ => 0x0400 | within,
+                }
+            }
+            Mirroring::Vertical => {
+                let nt = (base >> 10) & 3;
+                let within = base & 0x03FF;
+                match nt {
+                    0 | 2 => within,
+                    _ => 0x0400 | within,
+                }
+            }
+            Mirroring::FourScreen => base & 0x0FFF,
+            Mirroring::SingleScreenLower => base & 0x03FF,
+            Mirroring::SingleScreenUpper => 0x0400 | (base & 0x03FF),
+            Mirroring::MapperControlled => base,
+        };
+        NametableTarget::Ciram(offset)
     }
 
     fn read_prg_rom(&self, addr: u16) -> u8 {
@@ -422,6 +313,12 @@ impl Mapper19 {
         if self.prg_ram.is_empty() {
             return None;
         }
+        if matches!(
+            self.board.variant(),
+            NamcoVariant::Namco340 | NamcoVariant::Unknown
+        ) {
+            return None;
+        }
         let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
         Some(self.prg_ram[idx])
     }
@@ -429,6 +326,28 @@ impl Mapper19 {
     fn write_prg_ram(&mut self, addr: u16, data: u8) {
         if self.prg_ram.is_empty() {
             return;
+        }
+        match self.board.variant() {
+            NamcoVariant::Namco163 => {
+                // Match Namco163 write protection behavior used by Mesen:
+                // - bit6 must be set to enable writes globally
+                // - bits0-3 are per-2KiB inhibit bits (0 = writable)
+                let global_write_enable = (self.board.write_protect() & 0x40) != 0;
+                if !global_write_enable {
+                    return;
+                }
+                let segment = ((addr.saturating_sub(cpu_mem::PRG_RAM_START)) >> 11) as u8; // 0..3
+                let inhibit_mask = 1u8 << segment.min(3);
+                if (self.board.write_protect() & inhibit_mask) != 0 {
+                    return;
+                }
+            }
+            NamcoVariant::Namco175 => {
+                if (self.board.write_protect() & 0x01) == 0 {
+                    return;
+                }
+            }
+            NamcoVariant::Namco340 | NamcoVariant::Unknown => return,
         }
         let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
         self.prg_ram[idx] = data;
@@ -441,43 +360,77 @@ impl Mapper19 {
     }
 
     fn read_audio_register(&self, addr: u16) -> u8 {
-        if let Some(mut audio) = self.audio.clone() {
-            // Reads can auto-increment the internal address; cloning here keeps
-            // the implementation simple at the cost of ignoring that side
-            // effect for now. Games rarely rely on read-side auto-increment.
+        if let Some(audio) = &self.audio {
             return audio.read_register(addr);
         }
         0
     }
 
-    fn chr_bank_for_addr(&self, addr: u16) -> (usize, usize) {
-        let a = addr & 0x1FFF;
-        let index = ((a >> 10) & 0x07) as usize; // 1 KiB slot 0-7
-        let offset = (a & 0x03FF) as usize;
-        let bank = self.chr_banks[index] as usize;
-        (bank * CHR_BANK_SIZE_1K, offset)
+    fn update_chr_slot_latch(&mut self, slot: usize, value: u8) {
+        let use_nametable = if slot < 4 {
+            self.board.variant() == NamcoVariant::Namco163
+                && !self.board.low_chr_nt_mode()
+                && value >= 0xE0
+        } else if slot < 8 {
+            self.board.variant() == NamcoVariant::Namco163
+                && !self.board.high_chr_nt_mode()
+                && value >= 0xE0
+        } else {
+            value >= 0xE0
+        };
+        self.chr_is_nametable[slot] = use_nametable;
+        self.chr_banks[slot] = if use_nametable { value & 0x01 } else { value };
+    }
+
+    fn chr_slot_source(&self, slot: usize, within: u16) -> Namco163PpuSource {
+        let bank = self.chr_banks[slot];
+        if self.chr_is_nametable[slot] {
+            let nt_offset = (((bank & 0x01) as u16) << 10) | (within & 0x03FF);
+            Namco163PpuSource::Nametable(nt_offset)
+        } else {
+            let chr_offset = (bank as u32) * (CHR_BANK_SIZE_1K as u32) + (within as u32);
+            Namco163PpuSource::Chr(chr_offset)
+        }
     }
 
     fn read_chr(&self, addr: u16) -> u8 {
-        let (base, offset) = self.chr_bank_for_addr(addr);
-        self.chr.read_indexed(base, offset)
+        let a = addr & 0x1FFF;
+        let slot = ((a >> 10) & 0x07) as usize;
+        let within = a & 0x03FF;
+        match self.chr_slot_source(slot, within) {
+            Namco163PpuSource::Chr(offset) => {
+                let base = (offset as usize / CHR_BANK_SIZE_1K) * CHR_BANK_SIZE_1K;
+                let inner = (offset as usize) & (CHR_BANK_SIZE_1K - 1);
+                self.chr.read_indexed(base, inner)
+            }
+            Namco163PpuSource::Nametable(offset) => self.nametable_ram[(offset & 0x07FF) as usize],
+        }
     }
 
     fn write_chr(&mut self, addr: u16, data: u8) {
-        let (base, offset) = self.chr_bank_for_addr(addr);
-        self.chr.write_indexed(base, offset, data);
+        let a = addr & 0x1FFF;
+        let slot = ((a >> 10) & 0x07) as usize;
+        let within = a & 0x03FF;
+        match self.chr_slot_source(slot, within) {
+            Namco163PpuSource::Chr(offset) => {
+                let base = (offset as usize / CHR_BANK_SIZE_1K) * CHR_BANK_SIZE_1K;
+                let inner = (offset as usize) & (CHR_BANK_SIZE_1K - 1);
+                self.chr.write_indexed(base, inner, data);
+            }
+            Namco163PpuSource::Nametable(offset) => {
+                self.nametable_ram[(offset & 0x07FF) as usize] = data;
+            }
+        }
     }
 
     fn write_chr_bank(&mut self, addr: u16, value: u8) {
-        // Nesdev: $8000-$BFFF grouped in 0x800 ranges select 1 KiB CHR banks
-        // for $0000-$1FFF. We ignore the nametable‑as‑CHR feature for now and
-        // treat all values as CHR ROM/RAM page indices.
+        // Namco 163 uses $8000-$DFFF in 0x800 steps for 1 KiB bank registers.
         if !(NAMCO163_CHR_BANK_WRITE_START..=NAMCO163_CHR_BANK_WRITE_END).contains(&addr) {
             return;
         }
-        let index = ((addr - NAMCO163_CHR_BANK_WRITE_START) >> 11) as usize; // 0..7
+        let index = ((addr - NAMCO163_CHR_BANK_WRITE_START) >> 11) as usize; // 0..11
         if index < self.chr_banks.len() {
-            self.chr_banks[index] = value;
+            self.update_chr_slot_latch(index, value);
         }
     }
 
@@ -488,9 +441,14 @@ impl Mapper19 {
     }
 
     fn write_prg_select_a000(&mut self, value: u8) {
-        // HLPP PPPP → P bits select PRG bank at $A000-$BFFF; we ignore H/L
-        // CHR-RAM/NTRAM flags for now.
+        // HLPP PPPP:
+        // - P bits select PRG bank at $A000-$BFFF
+        // - H/L bits gate nametable-as-CHR mapping for slots 4-7 / 0-3
         self.prg_bank_a000 = value & 0x3F;
+        if self.board.variant() == NamcoVariant::Namco163 {
+            self.board
+                .set_chr_nt_modes((value & 0x40) != 0, (value & 0x80) != 0);
+        }
     }
 
     fn write_prg_select_c000(&mut self, value: u8) {
@@ -521,33 +479,44 @@ impl Mapper19 {
     }
 }
 
-impl ExpansionAudio for Mapper19 {
-    fn clock_audio(&mut self) {
-        if let Some(audio) = &mut self.audio {
-            audio.clock();
-        }
-    }
-
-    fn samples(&self) -> ExpansionSamples {
-        let namco163 = self.audio.as_ref().map_or(0.0, |a| a.sample());
-        ExpansionSamples {
-            namco163,
-            ..ExpansionSamples::default()
-        }
-    }
-}
-
 impl Mapper for Mapper19 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::CPU_CLOCK
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::CpuClock { .. } = event {
+            // Nesdev: IRQ is a 15‑bit CPU cycle up‑counter. $5000/$5800 provide
+            // direct access to the counter; bit15 acts as an enable flag.
+            //
+            // When (counter & 0x8000) != 0 and the low 15 bits are not yet $7FFF,
+            // increment on each CPU cycle. When the low 15 bits reach $7FFF,
+            // latch an IRQ and stop counting until the value is changed.
+            if (self.irq_counter & 0x8000) != 0 && (self.irq_counter & 0x7FFF) != 0x7FFF {
+                self.irq_counter = self.irq_counter.wrapping_add(1);
+                if (self.irq_counter & 0x7FFF) == 0x7FFF {
+                    self.irq_pending = true;
+                }
+            }
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
+        self.board.reset();
         self.prg_bank_8000 = 0;
         self.prg_bank_a000 = 1.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
         self.prg_bank_c000 = 2.min(self.prg_bank_count_8k.saturating_sub(1) as u8);
         self.chr_banks.fill(0);
+        self.chr_is_nametable.fill(false);
         self.irq_counter = 0;
         self.irq_pending = false;
+        if let Some(audio) = self.audio.as_mut() {
+            *audio = Namco163Audio::new();
+            audio.set_active(self.board.variant() == NamcoVariant::Namco163);
+        }
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         // PRG-RAM has priority over mapper registers/ROM.
         if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
             return self.read_prg_ram(addr);
@@ -579,6 +548,9 @@ impl Mapper for Mapper19 {
 
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
+            if self.board.on_prg_ram_access() {
+                self.sync_audio_active();
+            }
             self.write_prg_ram(addr, data);
             return;
         }
@@ -586,40 +558,66 @@ impl Mapper for Mapper19 {
         if let Some(reg) = Namco163CpuRegister::from_addr(addr) {
             match reg {
                 // Chip RAM / audio data port.
-                Namco163CpuRegister::AudioRamData => self.write_audio_register(addr, data),
+                Namco163CpuRegister::AudioRamData => {
+                    self.set_variant(NamcoVariant::Namco163);
+                    self.write_audio_register(addr, data);
+                }
 
                 // IRQ counter low/high (both readable and writable).
-                Namco163CpuRegister::IrqCounterLow => self.write_irq_low(data),
-                Namco163CpuRegister::IrqCounterHigh => self.write_irq_high(data),
+                Namco163CpuRegister::IrqCounterLow => {
+                    self.set_variant(NamcoVariant::Namco163);
+                    self.write_irq_low(data);
+                }
+                Namco163CpuRegister::IrqCounterHigh => {
+                    self.set_variant(NamcoVariant::Namco163);
+                    self.write_irq_high(data);
+                }
 
                 // CHR bank selects for 1 KiB pattern table windows.
-                Namco163CpuRegister::ChrBankBase => self.write_chr_bank(addr, data),
+                Namco163CpuRegister::ChrBankBase => {
+                    if addr >= 0xC800 {
+                        self.set_variant(NamcoVariant::Namco163);
+                    } else if addr >= 0xC000 && self.board.variant() != NamcoVariant::Namco163 {
+                        self.set_variant(NamcoVariant::Namco175);
+                    }
+
+                    if self.board.variant() == NamcoVariant::Namco175 {
+                        self.board.set_write_protect(data);
+                    } else {
+                        self.write_chr_bank(addr, data);
+                    }
+                }
 
                 // PRG bank selects for the 3 switchable 8 KiB windows.
                 Namco163CpuRegister::PrgSelect8000 => {
+                    if (data & 0x80) != 0
+                        || ((data & 0x40) != 0 && self.board.variant() != NamcoVariant::Namco163)
+                    {
+                        self.set_variant(NamcoVariant::Namco340);
+                    }
                     self.write_prg_select_8000(data);
-                    self.write_audio_register(addr, data);
+                    if self.board.variant() == NamcoVariant::Namco340 {
+                        self.board.set_mirroring(match (data >> 6) & 0x03 {
+                            0 => Mirroring::SingleScreenLower,
+                            1 => Mirroring::Vertical,
+                            2 => Mirroring::Horizontal,
+                            _ => Mirroring::SingleScreenUpper,
+                        });
+                    } else if self.board.variant() == NamcoVariant::Namco163 {
+                        self.write_audio_register(addr, data);
+                    }
                 }
                 Namco163CpuRegister::PrgSelectA000 => self.write_prg_select_a000(data),
                 Namco163CpuRegister::PrgSelectC000 => self.write_prg_select_c000(data),
 
                 // Write-protect / audio RAM address port.
-                Namco163CpuRegister::AudioRamAddr => self.write_audio_register(addr, data),
-            }
-        }
-    }
-
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        // Nesdev: IRQ is a 15‑bit CPU cycle up‑counter. $5000/$5800 provide
-        // direct access to the counter; bit15 acts as an enable flag.
-        //
-        // When (counter & 0x8000) != 0 and the low 15 bits are not yet $7FFF,
-        // increment on each CPU cycle. When the low 15 bits reach $7FFF,
-        // latch an IRQ and stop counting until the value is changed.
-        if (self.irq_counter & 0x8000) != 0 && (self.irq_counter & 0x7FFF) != 0x7FFF {
-            self.irq_counter = self.irq_counter.wrapping_add(1);
-            if (self.irq_counter & 0x7FFF) == 0x7FFF {
-                self.irq_pending = true;
+                Namco163CpuRegister::AudioRamAddr => {
+                    self.set_variant(NamcoVariant::Namco163);
+                    if self.board.variant() == NamcoVariant::Namco163 {
+                        self.board.set_write_protect(data);
+                        self.write_audio_register(addr, data);
+                    }
+                }
             }
         }
     }
@@ -632,52 +630,70 @@ impl Mapper for Mapper19 {
         self.write_chr(addr, data);
     }
 
+    fn map_nametable(&self, addr: u16) -> NametableTarget {
+        if self.board.variant() != NamcoVariant::Namco163 {
+            return self.map_default_nametable(addr);
+        }
+        let base = addr & 0x0FFF;
+        let slot = ((base >> 10) & 0x03) as usize; // 0..3
+        let within = base & 0x03FF;
+        match self.chr_slot_source(8 + slot, within) {
+            Namco163PpuSource::Chr(offset) => NametableTarget::MapperVram(offset),
+            Namco163PpuSource::Nametable(offset) => {
+                NametableTarget::MapperVram(NAMCO163_MAPPER_VRAM_NT_TAG | (offset as u32))
+            }
+        }
+    }
+
+    fn mapper_nametable_read(&self, offset: u32) -> u8 {
+        if (offset & NAMCO163_MAPPER_VRAM_NT_TAG) != 0 {
+            let nt = (offset & 0x07FF) as usize;
+            self.nametable_ram[nt]
+        } else {
+            let base = (offset as usize / CHR_BANK_SIZE_1K) * CHR_BANK_SIZE_1K;
+            let within = (offset as usize) & (CHR_BANK_SIZE_1K - 1);
+            self.chr.read_indexed(base, within)
+        }
+    }
+
+    fn mapper_nametable_write(&mut self, offset: u32, value: u8) {
+        if (offset & NAMCO163_MAPPER_VRAM_NT_TAG) != 0 {
+            let nt = (offset & 0x07FF) as usize;
+            self.nametable_ram[nt] = value;
+        } else {
+            let base = (offset as usize / CHR_BANK_SIZE_1K) * CHR_BANK_SIZE_1K;
+            let within = (offset as usize) & (CHR_BANK_SIZE_1K - 1);
+            self.chr.write_indexed(base, within, value);
+        }
+    }
+
     fn irq_pending(&self) -> bool {
         self.irq_pending
     }
-
-    fn prg_rom(&self) -> Option<&[u8]> {
-        Some(self.prg_rom.as_ref())
-    }
-
-    fn prg_ram(&self) -> Option<&[u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_ref())
+    fn memory_ref(&self) -> MapperMemoryRef<'_> {
+        MapperMemoryRef {
+            prg_rom: Some(self.prg_rom.as_ref()),
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_ref()),
+            prg_work_ram: None,
+            mapper_ram: Some(self.nametable_ram.as_ref()),
+            chr_rom: self.chr.as_rom(),
+            chr_ram: self.chr.as_ram(),
+            chr_battery_ram: None,
         }
     }
 
-    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_mut())
+    fn memory_mut(&mut self) -> MapperMemoryMut<'_> {
+        MapperMemoryMut {
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_mut()),
+            prg_work_ram: None,
+            mapper_ram: Some(self.nametable_ram.as_mut()),
+            chr_ram: self.chr.as_ram_mut(),
+            chr_battery_ram: None,
         }
-    }
-
-    fn prg_save_ram(&self) -> Option<&[u8]> {
-        self.prg_ram()
-    }
-
-    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.prg_ram_mut()
-    }
-
-    fn chr_rom(&self) -> Option<&[u8]> {
-        self.chr.as_rom()
-    }
-
-    fn chr_ram(&self) -> Option<&[u8]> {
-        self.chr.as_ram()
-    }
-
-    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.chr.as_ram_mut()
     }
 
     fn mirroring(&self) -> Mirroring {
-        self.mirroring
+        self.board.mirroring()
     }
 
     fn mapper_id(&self) -> u16 {
@@ -685,22 +701,22 @@ impl Mapper for Mapper19 {
     }
 
     fn name(&self) -> Cow<'static, str> {
-        Cow::Borrowed("Namco 163 (no expansion audio)")
-    }
-
-    fn as_expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
-        if self.audio.is_some() {
-            Some(self)
+        if self.audio.is_some() && self.board.variant() == NamcoVariant::Namco163 {
+            Cow::Borrowed("Namco 163")
         } else {
-            None
+            Cow::Borrowed("Namco 163-compatible")
         }
     }
 
-    fn as_expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
-        if self.audio.is_some() {
-            Some(self)
-        } else {
-            None
-        }
+    fn expansion_audio(&self) -> Option<&dyn ExpansionAudio> {
+        self.audio
+            .as_ref()
+            .map(|audio| audio as &dyn ExpansionAudio)
+    }
+
+    fn expansion_audio_mut(&mut self) -> Option<&mut dyn ExpansionAudio> {
+        self.audio
+            .as_mut()
+            .map(|audio| audio as &mut dyn ExpansionAudio)
     }
 }

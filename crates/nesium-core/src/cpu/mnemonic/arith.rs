@@ -1,5 +1,6 @@
 use crate::{
     bus::CpuBus,
+    cartridge::CpuBusAccessKind,
     context::Context,
     cpu::{
         Cpu,
@@ -45,7 +46,7 @@ use crate::{
 pub fn exec_adc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             let carry_in = if cpu.p.c() { 1 } else { 0 };
             let sum = cpu.a as u16 + m as u16 + carry_in as u16;
             let result = sum as u8;
@@ -83,7 +84,7 @@ pub fn exec_adc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_anc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.a &= m;
             cpu.p.set_zn(cpu.a);
             cpu.p.set_c(cpu.a & BIT_7 != 0);
@@ -126,7 +127,7 @@ pub fn exec_anc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_arr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.a &= m;
 
             let carry_in = if cpu.p.c() { BIT_7 } else { 0 };
@@ -166,7 +167,7 @@ pub fn exec_arr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_asr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.a &= m;
             cpu.p.set_c(cpu.a & BIT_0 != 0);
             cpu.a >>= 1;
@@ -207,7 +208,7 @@ pub fn exec_asr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_cmp(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             let result = cpu.a.wrapping_sub(m);
             cpu.p.set_c(cpu.a >= m);
             cpu.p.set_zn(result);
@@ -245,7 +246,7 @@ pub fn exec_cmp(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_cpx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             let result = cpu.x.wrapping_sub(m);
             cpu.p.set_c(cpu.x >= m);
             cpu.p.set_zn(result);
@@ -281,7 +282,7 @@ pub fn exec_cpx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_cpy(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             let result = cpu.y.wrapping_sub(m);
             cpu.p.set_c(cpu.y >= m);
             cpu.p.set_zn(result);
@@ -321,17 +322,23 @@ pub fn exec_cpy(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_dcp(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, cpu.tmp, bus, ctx);
             cpu.tmp = cpu.tmp.wrapping_sub(1);
         }
         2 => {
             let m = cpu.tmp;
             cpu.p.set_c(cpu.a >= m);
             cpu.p.set_zn(cpu.a.wrapping_sub(m));
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.write(
+                cpu.effective_addr,
+                cpu.tmp,
+                bus,
+                ctx,
+                CpuBusAccessKind::Write,
+            );
         }
         _ => unreachable_step!("invalid DCP step {step}"),
     }
@@ -370,10 +377,10 @@ pub fn exec_dcp(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_isc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, cpu.tmp, bus, ctx);
             cpu.tmp = cpu.tmp.wrapping_add(1);
         }
         2 => {
@@ -389,7 +396,13 @@ pub fn exec_isc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             cpu.a = result;
             cpu.p.set_zn(result);
 
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.write(
+                cpu.effective_addr,
+                cpu.tmp,
+                bus,
+                ctx,
+                CpuBusAccessKind::Write,
+            );
         }
         _ => unreachable_step!("invalid ISC step {step}"),
     }
@@ -427,10 +440,10 @@ pub fn exec_isc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_rla(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, cpu.tmp, bus, ctx);
             let m_old = cpu.tmp;
             let carry_in = if cpu.p.c() { 1 } else { 0 };
             cpu.p.set_c(m_old & BIT_7 != 0);
@@ -440,7 +453,13 @@ pub fn exec_rla(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             let m_new = cpu.tmp;
             cpu.a &= m_new;
             cpu.p.set_zn(cpu.a);
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.write(
+                cpu.effective_addr,
+                cpu.tmp,
+                bus,
+                ctx,
+                CpuBusAccessKind::Write,
+            );
         }
         _ => unreachable_step!("invalid RLA step {step}"),
     }
@@ -480,11 +499,11 @@ pub fn exec_rla(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_rra(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
             let m_old = cpu.tmp;
-            bus.mem_write(cpu.effective_addr, m_old, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, m_old, bus, ctx);
             let carry_in = if cpu.p.c() { BIT_7 } else { 0 };
             cpu.p.set_c(m_old & BIT_0 != 0);
             cpu.tmp = (m_old >> 1) | carry_in;
@@ -502,7 +521,13 @@ pub fn exec_rra(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             cpu.a = result;
             cpu.p.set_zn(result);
 
-            bus.mem_write(cpu.effective_addr, m_prime, cpu, ctx);
+            cpu.write(
+                cpu.effective_addr,
+                m_prime,
+                bus,
+                ctx,
+                CpuBusAccessKind::Write,
+            );
         }
         _ => unreachable_step!("invalid RRA step {step}"),
     }
@@ -548,7 +573,7 @@ pub fn exec_rra(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_sbc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             let carry_in = if cpu.p.c() { 1 } else { 0 };
             let value = (!m) as u16;
             let sum = cpu.a as u16 + value + carry_in as u16;
@@ -591,7 +616,7 @@ pub fn exec_sbc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_sbx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             let value = (cpu.a & cpu.x).wrapping_sub(m);
             cpu.p.set_c((cpu.a & cpu.x) >= m);
             cpu.x = value;
@@ -632,11 +657,11 @@ pub fn exec_sbx(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_slo(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
             let m_old = cpu.tmp;
-            bus.mem_write(cpu.effective_addr, m_old, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, m_old, bus, ctx);
             cpu.p.set_c(m_old & BIT_7 != 0);
             cpu.tmp = m_old.wrapping_mul(2);
         }
@@ -645,7 +670,13 @@ pub fn exec_slo(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             let result = cpu.a | m_prime;
             cpu.a = result;
             cpu.p.set_zn(result);
-            bus.mem_write(cpu.effective_addr, m_prime, cpu, ctx);
+            cpu.write(
+                cpu.effective_addr,
+                m_prime,
+                bus,
+                ctx,
+                CpuBusAccessKind::Write,
+            );
         }
         _ => unreachable_step!("invalid SLO step {step}"),
     }
@@ -683,11 +714,11 @@ pub fn exec_slo(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_sre(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
             let m_old = cpu.tmp;
-            bus.mem_write(cpu.effective_addr, m_old, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, m_old, bus, ctx);
             cpu.p.set_c(m_old & BIT_0 != 0);
             cpu.tmp = m_old >> 1;
         }
@@ -696,7 +727,13 @@ pub fn exec_sre(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             let result = cpu.a ^ m_prime;
             cpu.a = result;
             cpu.p.set_zn(result);
-            bus.mem_write(cpu.effective_addr, m_prime, cpu, ctx);
+            cpu.write(
+                cpu.effective_addr,
+                m_prime,
+                bus,
+                ctx,
+                CpuBusAccessKind::Write,
+            );
         }
         _ => unreachable_step!("invalid SRE step {step}"),
     }
@@ -738,7 +775,7 @@ pub fn exec_sre(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_xaa(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            let m = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            let m = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.a = (cpu.a & cpu.x) & m;
             cpu.p.set_zn(cpu.a);
         }

@@ -1,112 +1,40 @@
-//! Mapper 90 – J.Y. Company multicart (simplified).
+//! Mapper 90 - J.Y. Company multicart.
 //!
-//! This is a pared-down implementation that covers the common banking model:
-//! - PRG: four 8 KiB registers at `$8000-$8003` map to the three switchable
-//!   slots at `$8000/$A000/$C000` and a fourth slot we treat as fixed (`$E000`).
-//! - CHR: eight 1 KiB banks split across `$9000-$9FFF` (low bits) and
-//!   `$A000-$AFFF` (high bits). Advanced nametable-as-CHR behaviour is not
-//!   modelled; nametable control writes are ignored.
-//! - Mirroring: `$D001` low two bits select V/H/one-screen A/B.
-//! - IRQ: simple CPU-cycle counter with reload (`$C005`), prescaler (`$C004`),
-//!   enable/ack (`$C000/$C002/$C003`), modelled after other VRC-style timers.
+//! This tracks Mesen's mapper-90 core behavior closely for the common
+//! multicart banking and IRQ paths:
+//! - PRG banking modes from `$D000`, including optional PRG ROM at `$6000`
+//! - CHR banking modes/block mode from `$D000/$D003`
+//! - Mirroring control from `$D001`
+//! - Multiply/register-RAM reads in `$5000-$5FFF`
+//! - IRQ modes from `$C000-$C007` (CPU clock / CPU write / PPU render / A12)
 //!
-//! Known limitations:
-//! - Advanced nametable mapping and block/chunk CHR modes are omitted.
-//! - IRQ details on real JY hardware differ; this uses a VRC-like approximation.
-//!
-//! | Area | Address range                             | Behaviour                                          | IRQ/Audio      |
-//! |------|-------------------------------------------|----------------------------------------------------|----------------|
-//! | CPU  | `$6000-$7FFF`                             | Optional PRG-RAM                                   | None           |
-//! | CPU  | `$8000-$9FFF`                             | PRG bank register 0 / 8 KiB PRG slot               | None           |
-//! | CPU  | `$A000-$BFFF`                             | PRG bank register 1 / 8 KiB PRG slot               | None           |
-//! | CPU  | `$C000-$DFFF`                             | PRG bank register 2 / 8 KiB PRG slot               | None           |
-//! | CPU  | `$E000-$FFFF`                             | PRG bank register 3 / 8 KiB PRG slot (often fixed) | None           |
-//! | CPU  | `$9000/$A000/$B000/$C000-$C007/$D001`     | CHR, IRQ, mirroring registers                      | JY IRQ timer   |
-//! | PPU  | `$0000-$1FFF`                             | Eight 1 KiB CHR banks (split low/high regs)        | None           |
+//! Advanced nametable-as-CHR behavior remains intentionally omitted for mapper
+//! 90 itself; Mesen also excludes mapper 90 from the JY advanced NT path.
 
 use std::borrow::Cow;
 
-use crate::{
-    cartridge::{
-        ChrRom, Mapper, PrgRom, TrainerBytes,
-        header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
+use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef};
+use crate::cartridge::{
+    ChrRom, Mapper, PrgRom, TrainerBytes,
+    header::{Header, Mirroring},
+    mapper::{
+        ChrStorage, CpuBusAccessKind, MapperEvent, MapperHookMask, PpuVramAccessKind,
+        allocate_prg_ram_with_trainer, select_chr_storage,
     },
-    memory::cpu as cpu_mem,
-    reset_kind::ResetKind,
 };
-
 use crate::mem_block::ByteBlock;
+use crate::memory::cpu as cpu_mem;
+use crate::reset_kind::ResetKind;
 
-/// PRG banking granularity (8 KiB).
 const PRG_BANK_SIZE_8K: usize = 8 * 1024;
-/// CHR banking granularity (1 KiB).
 const CHR_BANK_SIZE_1K: usize = 1024;
 
-/// CPU `$8000-$FFFF`: J.Y. Company mapper 90 register window. Writes in this
-/// range select PRG/CHR banks, mirroring, and IRQ configuration.
-const JY90_IO_WINDOW_START: u16 = 0x8000;
-const JY90_IO_WINDOW_END: u16 = 0xFFFF;
-
-/// CPU-visible JY-90 mapper register set.
-///
-/// JY-90 exposes four PRG bank registers, CHR low/high registers, nametable
-/// control and a small IRQ/feature control area. Grouping them into an enum
-/// makes the decoded layout clearer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Jy90CpuRegister {
-    /// `$8000-$8003` – four 8 KiB PRG bank registers.
-    PrgBank,
-    /// `$9000-$9007` – CHR low bytes for eight 1 KiB banks.
-    ChrLow,
-    /// `$A000-$A007` – CHR high bytes for eight 1 KiB banks.
-    ChrHigh,
-    /// `$B000-$B007` – nametable/mode control (ignored in this implementation).
-    NametableCtrl,
-    /// `$C000` – IRQ enable.
-    IrqEnable,
-    /// `$C001` – IRQ mode (ignored).
-    IrqMode,
-    /// `$C002` – IRQ disable.
-    IrqDisable,
-    /// `$C003` – IRQ enable (alternate).
-    IrqEnableAlt,
-    /// `$C004` – IRQ prescaler value.
-    IrqPrescaler,
-    /// `$C005` – IRQ reload value.
-    IrqReload,
-    /// `$C006-$C007` – unused IRQ-related registers.
-    IrqUnused,
-    /// `$D000` – mode bits (ignored).
-    ModeControl,
-    /// `$D001` – mirroring control.
-    Mirroring,
-    /// `$D002-$D003` – unused.
-    MiscUnused,
-}
-
-impl Jy90CpuRegister {
-    fn from_addr(addr: u16) -> Option<Self> {
-        use Jy90CpuRegister::*;
-
-        match addr {
-            0x8000..=0x8003 => Some(PrgBank),
-            0x9000..=0x9007 => Some(ChrLow),
-            0xA000..=0xA007 => Some(ChrHigh),
-            0xB000..=0xB007 => Some(NametableCtrl),
-            0xC000 => Some(IrqEnable),
-            0xC001 => Some(IrqMode),
-            0xC002 => Some(IrqDisable),
-            0xC003 => Some(IrqEnableAlt),
-            0xC004 => Some(IrqPrescaler),
-            0xC005 => Some(IrqReload),
-            0xC006 | 0xC007 => Some(IrqUnused),
-            0xD000 => Some(ModeControl),
-            0xD001 => Some(Mirroring),
-            0xD002 | 0xD003 => Some(MiscUnused),
-            _ => None,
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum JyIrqSource {
+    CpuClock = 0,
+    PpuA12Rise = 1,
+    PpuRead = 2,
+    CpuWrite = 3,
 }
 
 #[derive(Debug, Clone)]
@@ -117,202 +45,450 @@ pub struct Mapper90 {
 
     prg_bank_count_8k: usize,
 
-    prg_regs: Mapper90PrgRegs,
-    chr_low: Mapper90ChrLowRegs,
-    chr_high: Mapper90ChrHighRegs,
+    prg_regs: ByteBlock<4>,
+    chr_low_regs: ByteBlock<8>,
+    chr_high_regs: ByteBlock<8>,
+    chr_latch: [u8; 2],
 
+    prg_mode: u8,
+    enable_prg_at_6000: bool,
+
+    chr_mode: u8,
+    chr_block_mode: bool,
+    chr_block: u8,
+    mirror_chr: bool,
+
+    mirroring_reg: u8,
     mirroring: Mirroring,
+    advanced_nt_control: bool,
+    disable_nt_ram: bool,
+    nt_ram_select_bit: u8,
+    nt_low_regs: ByteBlock<4>,
+    nt_high_regs: ByteBlock<4>,
 
-    // IRQ (simplified VRC-style)
-    irq_reload: u8,
-    irq_counter: u8,
-    irq_prescaler: i32,
     irq_enabled: bool,
     irq_pending: bool,
-}
+    irq_source: JyIrqSource,
+    irq_count_direction: u8,
+    irq_funky_mode: bool,
+    irq_funky_mode_reg: u8,
+    irq_small_prescaler: bool,
+    irq_prescaler: u8,
+    irq_counter: u8,
+    irq_xor_reg: u8,
+    last_ppu_addr: u16,
 
-type Mapper90PrgRegs = ByteBlock<4>;
-type Mapper90ChrLowRegs = ByteBlock<8>;
-type Mapper90ChrHighRegs = ByteBlock<8>;
+    multiply_value1: u8,
+    multiply_value2: u8,
+    reg_ram_value: u8,
+}
 
 impl Mapper90 {
     pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
-
         let chr = select_chr_storage(&header, chr_rom);
         let prg_bank_count_8k = (prg_rom.len() / PRG_BANK_SIZE_8K).max(1);
 
-        Self {
+        let mut mapper = Self {
             prg_rom,
             prg_ram,
             chr,
             prg_bank_count_8k,
-            prg_regs: Mapper90PrgRegs::new(),
-            chr_low: Mapper90ChrLowRegs::new(),
-            chr_high: Mapper90ChrHighRegs::new(),
-            mirroring: header.mirroring(),
-            irq_reload: 0,
-            irq_counter: 0,
-            irq_prescaler: 0,
+            prg_regs: ByteBlock::new(),
+            chr_low_regs: ByteBlock::new(),
+            chr_high_regs: ByteBlock::new(),
+            chr_latch: [0, 4],
+            prg_mode: 0,
+            enable_prg_at_6000: false,
+            chr_mode: 0,
+            chr_block_mode: false,
+            chr_block: 0,
+            mirror_chr: false,
+            mirroring_reg: 0,
+            mirroring: Mirroring::Vertical,
+            advanced_nt_control: false,
+            disable_nt_ram: false,
+            nt_ram_select_bit: 0,
+            nt_low_regs: ByteBlock::new(),
+            nt_high_regs: ByteBlock::new(),
             irq_enabled: false,
             irq_pending: false,
-        }
+            irq_source: JyIrqSource::CpuClock,
+            irq_count_direction: 0,
+            irq_funky_mode: false,
+            irq_funky_mode_reg: 0,
+            irq_small_prescaler: false,
+            irq_prescaler: 0,
+            irq_counter: 0,
+            irq_xor_reg: 0,
+            last_ppu_addr: 0,
+            multiply_value1: 0,
+            multiply_value2: 0,
+            reg_ram_value: 0,
+        };
+        mapper.apply_state();
+        mapper
     }
 
-    #[inline]
-    fn prg_bank_index(&self, value: u8) -> usize {
+    fn apply_state(&mut self) {
+        self.mirroring = match self.mirroring_reg & 0x03 {
+            0 => Mirroring::Vertical,
+            1 => Mirroring::Horizontal,
+            2 => Mirroring::SingleScreenLower,
+            _ => Mirroring::SingleScreenUpper,
+        };
+    }
+
+    fn prg_bank_index(&self, page: usize) -> usize {
         if self.prg_bank_count_8k == 0 {
             0
         } else {
-            (value as usize) % self.prg_bank_count_8k
+            page % self.prg_bank_count_8k
         }
     }
 
-    fn read_prg_rom(&self, addr: u16) -> u8 {
+    fn inverted_prg_reg(&self, reg: u8) -> u8 {
+        if (self.prg_mode & 0x03) != 0x03 {
+            return reg & 0x7F;
+        }
+        ((reg & 0x01) << 6)
+            | ((reg & 0x02) << 4)
+            | ((reg & 0x04) << 2)
+            | ((reg & 0x10) >> 2)
+            | ((reg & 0x20) >> 4)
+            | ((reg & 0x40) >> 6)
+    }
+
+    fn mapped_prg_regs(&self) -> [usize; 4] {
+        let regs = [
+            self.inverted_prg_reg(self.prg_regs[0]) as usize,
+            self.inverted_prg_reg(self.prg_regs[1]) as usize,
+            self.inverted_prg_reg(self.prg_regs[2]) as usize,
+            self.inverted_prg_reg(self.prg_regs[3]) as usize,
+        ];
+
+        match self.prg_mode & 0x03 {
+            0 => {
+                let base = if (self.prg_mode & 0x04) != 0 {
+                    regs[3]
+                } else {
+                    0x3C
+                };
+                [base, base + 1, base + 2, base + 3]
+            }
+            1 => {
+                let lo = regs[1] << 1;
+                let hi = if (self.prg_mode & 0x04) != 0 {
+                    regs[3]
+                } else {
+                    0x3E
+                };
+                [lo, lo + 1, hi, hi + 1]
+            }
+            _ => {
+                let hi = if (self.prg_mode & 0x04) != 0 {
+                    regs[3]
+                } else {
+                    0x3F
+                };
+                [regs[0], regs[1], regs[2], hi]
+            }
+        }
+    }
+
+    fn read_prg_rom_slot(&self, page: usize, offset: usize) -> u8 {
         if self.prg_rom.is_empty() {
             return 0;
         }
-        let bank = match addr {
-            0x8000..=0x9FFF => self.prg_bank_index(self.prg_regs[0]),
-            0xA000..=0xBFFF => self.prg_bank_index(self.prg_regs[1]),
-            0xC000..=0xDFFF => self.prg_bank_index(self.prg_regs[2]),
-            0xE000..=0xFFFF => {
-                self.prg_bank_index(self.prg_regs[3].max(self.prg_bank_count_8k as u8 - 1))
-            }
-            _ => 0,
-        };
-        let offset = (addr & 0x1FFF) as usize;
-        let base = bank.saturating_mul(PRG_BANK_SIZE_8K);
+        let base = self.prg_bank_index(page) * PRG_BANK_SIZE_8K;
         self.prg_rom.get(base + offset).copied().unwrap_or(0)
     }
 
-    fn read_prg_ram(&self, addr: u16) -> Option<u8> {
-        if self.prg_ram.is_empty() {
-            return None;
+    fn read_prg_rom(&self, addr: u16) -> u8 {
+        let offset = (addr & 0x1FFF) as usize;
+        if (0x6000..=0x7FFF).contains(&addr) && self.enable_prg_at_6000 {
+            let regs = self.mapped_prg_regs();
+            let page = match self.prg_mode & 0x03 {
+                0 => regs[3],
+                1 => regs[3],
+                _ => self.inverted_prg_reg(self.prg_regs[3]) as usize,
+            };
+            return self.read_prg_rom_slot(page, offset);
         }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        Some(self.prg_ram[idx])
+
+        let slot = ((addr - 0x8000) >> 13) as usize;
+        let page = self.mapped_prg_regs()[slot];
+        self.read_prg_rom_slot(page, offset)
     }
 
-    fn write_prg_ram(&mut self, addr: u16, data: u8) {
-        if self.prg_ram.is_empty() {
-            return;
+    fn chr_reg(&self, mut index: usize) -> usize {
+        if self.chr_mode >= 2 && self.mirror_chr && matches!(index, 2 | 3) {
+            index -= 2;
         }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        self.prg_ram[idx] = data;
+
+        if self.chr_block_mode {
+            let (mask, shift) = match self.chr_mode {
+                0 => (0x1F, 5),
+                1 => (0x3F, 6),
+                2 => (0x7F, 7),
+                _ => (0xFF, 8),
+            };
+            ((self.chr_low_regs[index] & mask) as usize) | ((self.chr_block as usize) << shift)
+        } else {
+            self.chr_low_regs[index] as usize | ((self.chr_high_regs[index] as usize) << 8)
+        }
     }
 
-    fn chr_page_base(&self, bank: usize) -> usize {
-        let lo = self.chr_low.get(bank).copied().unwrap_or(0);
-        let hi = self.chr_high.get(bank).copied().unwrap_or(0);
-        let page = (lo as usize) | ((hi as usize) << 8);
-        page * CHR_BANK_SIZE_1K
+    fn chr_page(&self, bank: usize) -> usize {
+        let regs = [
+            self.chr_reg(0),
+            self.chr_reg(1),
+            self.chr_reg(2),
+            self.chr_reg(3),
+            self.chr_reg(4),
+            self.chr_reg(5),
+            self.chr_reg(6),
+            self.chr_reg(7),
+        ];
+
+        match self.chr_mode {
+            0 => (regs[0] << 3) + bank,
+            1 => {
+                let index = if bank < 4 {
+                    self.chr_latch[0] as usize
+                } else {
+                    self.chr_latch[1] as usize
+                };
+                (regs[index] << 2) + (bank & 0x03)
+            }
+            2 => {
+                let index = match bank / 2 {
+                    0 => 0,
+                    1 => 2,
+                    2 => 4,
+                    _ => 6,
+                };
+                (regs[index] << 1) + (bank & 0x01)
+            }
+            _ => regs[bank],
+        }
     }
 
     fn read_chr(&self, addr: u16) -> u8 {
         let bank = ((addr >> 10) & 0x07) as usize;
         let offset = (addr & 0x03FF) as usize;
-        let base = self.chr_page_base(bank);
-        self.chr.read_indexed(base, offset)
+        self.chr
+            .read_indexed(self.chr_page(bank) * CHR_BANK_SIZE_1K, offset)
     }
 
     fn write_chr(&mut self, addr: u16, data: u8) {
         let bank = ((addr >> 10) & 0x07) as usize;
         let offset = (addr & 0x03FF) as usize;
-        let base = self.chr_page_base(bank);
-        self.chr.write_indexed(base, offset, data);
+        self.chr
+            .write_indexed(self.chr_page(bank) * CHR_BANK_SIZE_1K, offset, data);
+    }
+
+    fn read_low_register(&self, addr: u16) -> Option<u8> {
+        match addr & 0xF803 {
+            0x5000 => Some(0),
+            0x5800 => Some(self.multiply_value1.wrapping_mul(self.multiply_value2)),
+            0x5801 => Some(
+                ((u16::from(self.multiply_value1) * u16::from(self.multiply_value2)) >> 8) as u8,
+            ),
+            0x5803 => Some(self.reg_ram_value),
+            _ => None,
+        }
+    }
+
+    fn write_low_register(&mut self, addr: u16, value: u8) -> bool {
+        match addr & 0xF803 {
+            0x5800 => self.multiply_value1 = value,
+            0x5801 => self.multiply_value2 = value,
+            0x5803 => self.reg_ram_value = value,
+            _ => return false,
+        }
+        true
     }
 
     fn write_register(&mut self, addr: u16, value: u8) {
-        if let Some(reg) = Jy90CpuRegister::from_addr(addr) {
-            use Jy90CpuRegister::*;
-
-            match reg {
-                PrgBank => {
-                    self.prg_regs[(addr & 0x0003) as usize] = value & 0x7F;
-                }
-                ChrLow => {
-                    self.chr_low[(addr & 0x0007) as usize] = value;
-                }
-                ChrHigh => {
-                    self.chr_high[(addr & 0x0007) as usize] = value & 0x1F;
-                }
-                NametableCtrl => {
-                    // Nametable control ignored in this simplified model.
-                    let _ = value;
-                }
-                IrqEnable => {
-                    self.irq_enabled = (value & 0x01) != 0;
-                    if !self.irq_enabled {
-                        self.irq_pending = false;
-                    }
-                }
-                IrqMode => {
-                    let _ = value; // IRQ mode bits ignored.
-                }
-                IrqDisable => {
-                    self.irq_enabled = false;
+        match addr & 0xF007 {
+            0x8000..=0x8007 => self.prg_regs[(addr & 0x0003) as usize] = value & 0x7F,
+            0x9000..=0x9007 => self.chr_low_regs[(addr & 0x0007) as usize] = value,
+            0xA000..=0xA007 => self.chr_high_regs[(addr & 0x0007) as usize] = value,
+            0xB000..=0xB003 => self.nt_low_regs[(addr & 0x0003) as usize] = value,
+            0xB004..=0xB007 => self.nt_high_regs[(addr & 0x0003) as usize] = value,
+            0xC000 => {
+                self.irq_enabled = (value & 0x01) != 0;
+                if !self.irq_enabled {
                     self.irq_pending = false;
                 }
-                IrqEnableAlt => {
-                    self.irq_enabled = true;
+            }
+            0xC001 => {
+                self.irq_count_direction = (value >> 6) & 0x03;
+                self.irq_funky_mode = (value & 0x08) != 0;
+                self.irq_small_prescaler = ((value >> 2) & 0x01) != 0;
+                self.irq_source = match value & 0x03 {
+                    0 => JyIrqSource::CpuClock,
+                    1 => JyIrqSource::PpuA12Rise,
+                    2 => JyIrqSource::PpuRead,
+                    _ => JyIrqSource::CpuWrite,
+                };
+            }
+            0xC002 => {
+                self.irq_enabled = false;
+                self.irq_pending = false;
+            }
+            0xC003 => self.irq_enabled = true,
+            0xC004 => self.irq_prescaler = value ^ self.irq_xor_reg,
+            0xC005 => {
+                self.irq_counter = value ^ self.irq_xor_reg;
+                self.irq_pending = false;
+            }
+            0xC006 => self.irq_xor_reg = value,
+            0xC007 => self.irq_funky_mode_reg = value,
+            0xD000 => {
+                self.prg_mode = value & 0x07;
+                self.chr_mode = (value >> 3) & 0x03;
+                self.advanced_nt_control = (value & 0x20) != 0;
+                self.disable_nt_ram = (value & 0x40) != 0;
+                self.enable_prg_at_6000 = (value & 0x80) != 0;
+            }
+            0xD001 => self.mirroring_reg = value & 0x03,
+            0xD002 => self.nt_ram_select_bit = value & 0x80,
+            0xD003 => {
+                self.mirror_chr = (value & 0x80) != 0;
+                self.chr_block_mode = (value & 0x20) == 0;
+                self.chr_block = ((value & 0x18) >> 2) | (value & 0x01);
+            }
+            _ => return,
+        }
+
+        self.apply_state();
+    }
+
+    fn tick_irq_counter(&mut self) {
+        let _ = self.irq_funky_mode;
+        let _ = self.irq_funky_mode_reg;
+        let _ = self.advanced_nt_control;
+        let _ = self.disable_nt_ram;
+        let _ = self.nt_ram_select_bit;
+
+        let mut clock_irq_counter = false;
+        let mask = if self.irq_small_prescaler { 0x07 } else { 0xFF };
+        let mut prescaler = self.irq_prescaler & mask;
+
+        if self.irq_count_direction == 0x01 {
+            prescaler = prescaler.wrapping_add(1);
+            if (prescaler & mask) == 0 {
+                clock_irq_counter = true;
+            }
+        } else if self.irq_count_direction == 0x02 {
+            prescaler = prescaler.wrapping_sub(1);
+            if prescaler == 0 {
+                clock_irq_counter = true;
+            }
+        }
+
+        self.irq_prescaler = (self.irq_prescaler & !mask) | (prescaler & mask);
+
+        if !clock_irq_counter {
+            return;
+        }
+
+        if self.irq_count_direction == 0x01 {
+            self.irq_counter = self.irq_counter.wrapping_add(1);
+            if self.irq_counter == 0 && self.irq_enabled {
+                self.irq_pending = true;
+            }
+        } else if self.irq_count_direction == 0x02 {
+            self.irq_counter = self.irq_counter.wrapping_sub(1);
+            if self.irq_counter == 0xFF && self.irq_enabled {
+                self.irq_pending = true;
+            }
+        }
+    }
+
+    fn on_ppu_bus_address(&mut self, addr: u16, kind: PpuVramAccessKind) {
+        if self.irq_source == JyIrqSource::PpuRead && kind == PpuVramAccessKind::RenderingFetch {
+            self.tick_irq_counter();
+        }
+
+        if self.irq_source == JyIrqSource::PpuA12Rise
+            && (addr & 0x1000) != 0
+            && (self.last_ppu_addr & 0x1000) == 0
+        {
+            self.tick_irq_counter();
+        }
+
+        self.last_ppu_addr = addr;
+    }
+}
+
+impl Mapper for Mapper90 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::CPU_BUS_ACCESS | MapperHookMask::PPU_BUS_ADDRESS | MapperHookMask::CPU_CLOCK
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        match event {
+            MapperEvent::CpuBusAccess { kind, .. } => {
+                if self.irq_source == JyIrqSource::CpuWrite && kind == CpuBusAccessKind::Write {
+                    self.tick_irq_counter();
                 }
-                IrqPrescaler => {
-                    self.irq_prescaler = (value as i32) & 0xFF;
-                }
-                IrqReload => {
-                    self.irq_reload = value;
-                }
-                IrqUnused => {
-                    let _ = value; // Unused in this simplified model.
-                }
-                ModeControl => {
-                    // Mode bits ignored; base implementation uses direct registers.
-                    let _ = value;
-                }
-                Mirroring => {
-                    self.mirroring = match value & 0x03 {
-                        0 => crate::cartridge::header::Mirroring::Vertical,
-                        1 => crate::cartridge::header::Mirroring::Horizontal,
-                        2 => crate::cartridge::header::Mirroring::SingleScreenLower,
-                        _ => crate::cartridge::header::Mirroring::SingleScreenUpper,
-                    };
-                }
-                MiscUnused => {
-                    let _ = value; // Ignored
+            }
+            MapperEvent::PpuBusAddress { addr, ctx } => self.on_ppu_bus_address(addr, ctx.kind),
+            MapperEvent::CpuClock { .. } => {
+                if self.irq_source == JyIrqSource::CpuClock {
+                    self.tick_irq_counter();
                 }
             }
         }
     }
 
-    fn clock_irq_counter(&mut self) {
-        if self.irq_counter == 0xFF {
-            self.irq_counter = self.irq_reload;
-            self.irq_pending = true;
-        } else {
-            self.irq_counter = self.irq_counter.wrapping_add(1);
-        }
-    }
-}
-
-impl Mapper for Mapper90 {
     fn reset(&mut self, _kind: ResetKind) {
-        self.prg_regs[0] = 0;
-        self.prg_regs[1] = 1;
-        self.prg_regs[2] = 2;
-        self.prg_regs[3] = 0x7F;
-        self.chr_low.fill(0);
-        self.chr_high.fill(0);
-        self.irq_reload = 0;
-        self.irq_counter = 0;
-        self.irq_prescaler = 0;
+        self.prg_regs.fill(0);
+        self.chr_low_regs.fill(0);
+        self.chr_high_regs.fill(0);
+        self.chr_latch = [0, 4];
+        self.prg_mode = 0;
+        self.enable_prg_at_6000 = false;
+        self.chr_mode = 0;
+        self.chr_block_mode = false;
+        self.chr_block = 0;
+        self.mirror_chr = false;
+        self.mirroring_reg = 0;
+        self.advanced_nt_control = false;
+        self.disable_nt_ram = false;
+        self.nt_ram_select_bit = 0;
+        self.nt_low_regs.fill(0);
+        self.nt_high_regs.fill(0);
         self.irq_enabled = false;
         self.irq_pending = false;
+        self.irq_source = JyIrqSource::CpuClock;
+        self.irq_count_direction = 0;
+        self.irq_funky_mode = false;
+        self.irq_funky_mode_reg = 0;
+        self.irq_small_prescaler = false;
+        self.irq_prescaler = 0;
+        self.irq_counter = 0;
+        self.irq_xor_reg = 0;
+        self.last_ppu_addr = 0;
+        self.multiply_value1 = 0;
+        self.multiply_value2 = 0;
+        self.reg_ram_value = 0;
+        self.apply_state();
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
+            0x5000..=0x5FFF => self.read_low_register(addr),
+            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => {
+                if self.enable_prg_at_6000 {
+                    Some(self.read_prg_rom(addr))
+                } else {
+                    None
+                }
+            }
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => Some(self.read_prg_rom(addr)),
             _ => None,
         }
@@ -320,20 +496,12 @@ impl Mapper for Mapper90 {
 
     fn cpu_write(&mut self, addr: u16, data: u8, _cpu_cycle: u64) {
         match addr {
-            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.write_prg_ram(addr, data),
-            JY90_IO_WINDOW_START..=JY90_IO_WINDOW_END => self.write_register(addr, data),
+            0x5000..=0x5FFF => {
+                let _ = self.write_low_register(addr, data);
+            }
+            cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => {}
+            0x8000..=0xFFFF => self.write_register(addr, data),
             _ => {}
-        }
-    }
-
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        if !self.irq_enabled {
-            return;
-        }
-        self.irq_prescaler -= 3;
-        if self.irq_prescaler <= 0 {
-            self.clock_irq_counter();
-            self.irq_prescaler += 341;
         }
     }
 
@@ -349,44 +517,26 @@ impl Mapper for Mapper90 {
         self.irq_pending
     }
 
-    fn prg_rom(&self) -> Option<&[u8]> {
-        Some(self.prg_rom.as_ref())
-    }
-
-    fn prg_ram(&self) -> Option<&[u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_ref())
+    fn memory_ref(&self) -> MapperMemoryRef<'_> {
+        MapperMemoryRef {
+            prg_rom: Some(self.prg_rom.as_ref()),
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_ref()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_rom: self.chr.as_rom(),
+            chr_ram: self.chr.as_ram(),
+            chr_battery_ram: None,
         }
     }
 
-    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_mut())
+    fn memory_mut(&mut self) -> MapperMemoryMut<'_> {
+        MapperMemoryMut {
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_mut()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_ram: self.chr.as_ram_mut(),
+            chr_battery_ram: None,
         }
-    }
-
-    fn prg_save_ram(&self) -> Option<&[u8]> {
-        self.prg_ram()
-    }
-
-    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.prg_ram_mut()
-    }
-
-    fn chr_rom(&self) -> Option<&[u8]> {
-        self.chr.as_rom()
-    }
-
-    fn chr_ram(&self) -> Option<&[u8]> {
-        self.chr.as_ram()
-    }
-
-    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.chr.as_ram_mut()
     }
 
     fn mirroring(&self) -> Mirroring {
@@ -398,6 +548,6 @@ impl Mapper for Mapper90 {
     }
 
     fn name(&self) -> Cow<'static, str> {
-        Cow::Borrowed("JY Company (simplified)")
+        Cow::Borrowed("JY Company")
     }
 }

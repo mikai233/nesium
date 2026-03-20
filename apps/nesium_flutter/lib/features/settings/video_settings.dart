@@ -342,7 +342,9 @@ class VideoSettingsController extends Notifier<VideoSettings>
 
       // Only the main window has the native texture plugin registered.
       // Secondary windows (like Settings) should not update the texture directly.
-      if (ref.read(currentWindowKindProvider) == WindowKind.main) {
+      // Also, only Windows implements the setVideoFilter channel method (for native overlays).
+      if (ref.read(currentWindowKindProvider) == WindowKind.main &&
+          defaultTargetPlatform == TargetPlatform.windows) {
         await ref.read(nesTextureServiceProvider).setVideoFilter(filterMode);
       }
     }

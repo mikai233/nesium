@@ -1,0 +1,845 @@
+{
+  "@@locale": "ja",
+  "@serverClientCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@serverStartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverStopFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverBindAddress": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverQuicFingerprint": {
+    "placeholders": {
+      "fingerprint": {
+        "type": "String"
+      }
+    }
+  },
+  "@connectedGamepadsPort": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "@inputDetected": {
+    "placeholders": {
+      "buttons": {
+        "type": "String"
+      }
+    }
+  },
+  "@bindKeyTitle": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@inputBindingConflictCleared": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@inputBindingConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@inputBindingCapturedConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@autoSaveIntervalValue": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@fastForwardSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@quickSaveSlotValue": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindSecondsValue": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindMinutesValue": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@framesValue": {
+    "placeholders": {
+      "frames": {
+        "type": "int"
+      }
+    }
+  },
+  "@keyCaptureCurrent": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "@keyCaptureCaptured": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayPlayerIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@netplayConnectFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayDisconnectFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayCreateRoomFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayJoinRoomFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplaySwitchRoleFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@stateSavedToSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@stateLoadedFromSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@slotCleared": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@shaderBrowserError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@aboutLaunchFailed": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "@videoBackendCurrent": {
+    "placeholders": {
+      "backend": {
+        "type": "String"
+      }
+    }
+  },
+  "@paletteModeCustomActive": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@commandSucceeded": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "@commandFailed": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "@snackPauseFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@tilemapError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@tileViewerError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@tileViewerPaletteBg": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@tileViewerPaletteSprite": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@paletteViewerTooltipPaletteRam": {
+    "placeholders": {
+      "addr": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "@paletteViewerTooltipSystemIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@spriteViewerError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@spriteViewerTooltipTitle": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsTitle": "設定",
+  "settingsTabGeneral": "全般",
+  "settingsTabInput": "入力",
+  "settingsTabVideo": "ビデオ",
+  "settingsTabEmulation": "エミュレーション",
+  "settingsTabServer": "サーバ",
+  "settingsFloatingPreviewToggle": "フローティングプレビュー",
+  "settingsFloatingPreviewTooltip": "ゲームのプレビューを表示する",
+  "serverTitle": "ネットプレイサーバー",
+  "serverPortLabel": "ポート",
+  "serverStartButton": "サーバーの起動",
+  "serverStopButton": "サーバーを停止する",
+  "serverStatusRunning": "ランニング",
+  "serverStatusStopped": "停止しました",
+  "serverClientCount": "接続されているクライアント: {count}",
+  "serverStartFailed": "サーバーの起動に失敗しました: {error}",
+  "serverStopFailed": "サーバーの停止に失敗しました: {error}",
+  "serverBindAddress": "バインドアドレス: {address}",
+  "serverQuicFingerprint": "QUIC フィンガープリント: {fingerprint}",
+  "generalTitle": "全般",
+  "themeLabel": "テーマ",
+  "themeSystem": "システム",
+  "themeLight": "ライト",
+  "themeDark": "ダーク",
+  "languageLabel": "言語",
+  "languageSystem": "システム",
+  "languageEnglish": "英語",
+  "languageChineseSimplified": "簡体字中国語",
+  "inputTitle": "入力",
+  "turboTitle": "ターボ",
+  "turboLinkPressRelease": "プレス/リリースをリンク",
+  "inputDeviceLabel": "入力デバイス",
+  "inputDeviceKeyboard": "キーボード",
+  "inputDeviceGamepad": "ゲームパッド",
+  "connectedGamepadsTitle": "接続されたゲームパッド",
+  "connectedGamepadsNone": "ゲームパッドが接続されていません",
+  "webGamepadActivationHint": "ウェブ制限: ゲームパッドのいずれかのボタンを押して有効にします。",
+  "connectedGamepadsPort": "プレイヤー {port}",
+  "connectedGamepadsUnassigned": "未割り当て",
+  "inputDeviceVirtualController": "仮想コントローラー",
+  "inputGamepadAssignmentLabel": "ゲームパッドの割り当て",
+  "inputGamepadNone": "なし/未割り当て",
+  "inputListening": "リスニング...",
+  "inputDetected": "検出されました: {buttons}",
+  "inputGamepadMappingLabel": "ボタンのマッピング",
+  "inputResetToDefault": "デフォルトにリセット",
+  "inputButtonA": "A",
+  "inputButtonB": "B",
+  "inputButtonTurboA": "ターボA",
+  "inputButtonTurboB": "ターボB",
+  "inputButtonSelect": "選択",
+  "inputButtonStart": "スタート",
+  "inputButtonUp": "上",
+  "inputButtonDown": "下",
+  "inputButtonLeft": "左",
+  "inputButtonRight": "右",
+  "inputButtonRewind": "巻き戻し",
+  "inputButtonFastForward": "早送り",
+  "inputButtonSaveState": "ステート保存",
+  "inputButtonLoadState": "ステートロード",
+  "inputButtonPause": "一時停止",
+  "globalHotkeysTitle": "エミュレータのホットキー",
+  "gamepadHotkeysTitle": "ゲームパッドのホットキー (プレイヤー 1)",
+  "inputPortLabel": "プレーヤーの設定",
+  "player1": "プレイヤー 1",
+  "player2": "プレイヤー2",
+  "player3": "プレイヤー3",
+  "player4": "プレイヤー 4",
+  "keyboardPresetLabel": "キーボードプリセット",
+  "keyboardPresetNone": "なし",
+  "keyboardPresetNesStandard": "ファミコン規格",
+  "keyboardPresetFightStick": "ファイトスティック",
+  "keyboardPresetArcadeLayout": "アーケードのレイアウト",
+  "keyboardPresetCustom": "カスタム",
+  "customKeyBindingsTitle": "カスタムキーバインディング",
+  "bindKeyTitle": "{action}をバインドする",
+  "unassignedKey": "未割り当て",
+  "tipPressEscapeToClearBinding": "ヒント: バインディングをクリアするには Esc キーを押します。",
+  "keyboardActionUp": "上",
+  "keyboardActionDown": "下",
+  "keyboardActionLeft": "左",
+  "keyboardActionRight": "右",
+  "keyboardActionA": "A",
+  "keyboardActionB": "B",
+  "keyboardActionSelect": "選択",
+  "keyboardActionStart": "スタート",
+  "keyboardActionTurboA": "ターボA",
+  "keyboardActionTurboB": "ターボB",
+  "keyboardActionRewind": "巻き戻し",
+  "keyboardActionFastForward": "早送り",
+  "keyboardActionSaveState": "ステート保存",
+  "keyboardActionLoadState": "ステートロード",
+  "keyboardActionPause": "一時停止",
+  "keyboardActionFullScreen": "全画面表示",
+  "inputBindingConflictCleared": "{player} {action} バインディングがクリアされました。",
+  "inputBindingConflictHint": "({player} - {action})",
+  "inputBindingCapturedConflictHint": "{player} - {action} が占有",
+  "emulationTitle": "エミュレーション",
+  "integerFpsTitle": "整数 FPS モード (60Hz、NTSC)",
+  "integerFpsSubtitle": "60Hz ディスプレイでのスクロールのジャダーを軽減します。 PALは今後追加される予定です。",
+  "showOverlayTitle": "ステータスオーバーレイを表示",
+  "showOverlaySubtitle": "画面上に一時停止/巻き戻し/早送りインジケーターを表示します。",
+  "pauseInBackgroundTitle": "バックグラウンドで一時停止する",
+  "pauseInBackgroundSubtitle": "アプリがアクティブでない場合、エミュレーターを自動的に一時停止します。",
+  "autoSaveEnabledTitle": "自動保存",
+  "autoSaveEnabledSubtitle": "ゲームの状態を定期的に専用スロットに保存します。",
+  "autoSaveIntervalTitle": "自動保存間隔",
+  "autoSaveIntervalValue": "{minutes} 分",
+  "fastForwardSpeedTitle": "早送り速度",
+  "fastForwardSpeedSubtitle": "早送り中の最大速度。",
+  "fastForwardSpeedValue": "{percent}%",
+  "quickSaveSlotTitle": "クイックセーブスロット",
+  "quickSaveSlotSubtitle": "クイック セーブ/ロード ショートカットで使用されるスロット。",
+  "quickSaveSlotValue": "スロット {index}",
+  "rewindEnabledTitle": "巻き戻し",
+  "rewindEnabledSubtitle": "リアルタイム巻き戻し機能を有効にします。",
+  "rewindSecondsTitle": "巻き戻し期間",
+  "rewindSecondsValue": "{seconds} 秒",
+  "rewindMinutesTitle": "巻き戻し期間",
+  "rewindMinutesValue": "{minutes} 分",
+  "rewindSpeedTitle": "巻き戻し速度",
+  "rewindSpeedSubtitle": "巻き戻し中の速度。",
+  "rewindSpeedValue": "{percent}%",
+  "autoSlotLabel": "オートスロット",
+  "menuAutoSave": "自動保存...",
+  "stateAutoSaved": "自動保存が作成されました",
+  "virtualControlsTitle": "仮想コントロール",
+  "virtualControlsSwitchInputTip": "これらの設定を使用するには、入力を「仮想コントローラー」に切り替えます。",
+  "virtualControlsButtonSize": "ボタンのサイズ",
+  "virtualControlsGap": "ギャップ",
+  "virtualControlsOpacity": "不透明度",
+  "virtualControlsHitboxScale": "ヒットボックススケール",
+  "virtualControlsHapticFeedback": "触覚フィードバック",
+  "virtualControlsDpadDeadzone": "十字キーのデッドゾーン",
+  "virtualControlsDpadDeadzoneHelp": "中央のデッドゾーン: 中央付近に触れても、どの方向にもトリガーされません。",
+  "virtualControlsDpadBoundaryDeadzone": "D-パッド境界デッドゾーン",
+  "virtualControlsDpadBoundaryDeadzoneHelp": "境界デッドゾーン: 値を大きくすると、対角線がトリガーされにくくなり、誤って隣接するボタンが押されることが少なくなります。",
+  "virtualControlsReset": "レイアウトをリセットする",
+  "virtualControlsDiscardChangesTitle": "変更を元に戻す",
+  "virtualControlsDiscardChangesSubtitle": "最後に保存したレイアウトに戻す",
+  "virtualControlsTurboFramesPerToggle": "トグルごとのターボ フレーム",
+  "virtualControlsTurboOnFrames": "ターボプレスフレーム",
+  "virtualControlsTurboOffFrames": "ターボリリースフレーム",
+  "framesValue": "{frames} フレーム",
+  "tipAdjustButtonsInDrawer": "ヒント: ゲーム内のドロワーからボタンの位置/サイズを調整します。",
+  "keyCapturePressKeyToBind": "キーを押してバインドします。",
+  "keyCaptureCurrent": "現在: {key}",
+  "keyCaptureCaptured": "キャプチャ: {key}",
+  "keyCapturePressEscToClear": "Esc キーを押してクリアします。",
+  "keyBindingsTitle": "キーバインディング",
+  "cancel": "キャンセル",
+  "appName": "Nesium",
+  "menuTooltip": "メニュー",
+  "menuSectionFile": "ファイル",
+  "menuSectionEmulation": "エミュレーション",
+  "menuSectionSettings": "設定",
+  "menuSectionWindows": "ウィンドウ",
+  "menuSectionHelp": "ヘルプ",
+  "menuOpenRom": "ROMを開く...",
+  "menuReset": "リセット",
+  "menuPowerReset": "パワーリセット",
+  "menuEject": "電源オフ",
+  "menuSaveState": "状態を保存...",
+  "menuLoadState": "状態をロード...",
+  "menuPauseResume": "一時停止/再開",
+  "menuNetplay": "ネットプレイ",
+  "netplayTransportLabel": "輸送",
+  "netplayTransportAuto": "自動 (QUIC → TCP)",
+  "netplayTransportUnknown": "不明",
+  "netplayTransportTcp": "TCP",
+  "netplayTransportQuic": "QUIC",
+  "netplayUsingTcpFallback": "QUIC が失敗しました。TCP を使用しています",
+  "netplayStatusDisconnected": "切断されました",
+  "netplayStatusConnecting": "接続中...",
+  "netplayStatusConnected": "接続済み (ルーム待機中)",
+  "netplayStatusInRoom": "入室中",
+  "netplayDisconnect": "切断する",
+  "netplayServerAddress": "サーバーアドレス",
+  "netplayServerNameLabel": "サーバー名 (SN​​I)",
+  "netplayServerNameHint": "ローカルホスト",
+  "netplayPlayerName": "プレイヤー名",
+  "netplayQuicFingerprintLabel": "QUIC 証明書フィンガープリント (オプション)",
+  "netplayQuicFingerprintHint": "Base64url (43 文字)",
+  "netplayQuicFingerprintHelper": "ピン留めされた QUIC を使用するにはこれを入力します。システムの信頼（QUIC）を使用するか TCP にフォールバックする場合は空のままにしてください。",
+  "netplayConnect": "ゲームに参加する",
+  "netplayJoinViaP2P": "P2P 経由で参加する",
+  "netplayJoinGame": "ゲームに参加する",
+  "netplayCreateRoom": "ルームの作成",
+  "netplayJoinRoom": "ゲームに参加する",
+  "netplayAddressOrRoomCode": "ルームコードまたはサーバーアドレス",
+  "netplayHostingTitle": "ホスティング",
+  "netplayRoomCodeLabel": "あなたのルームコード",
+  "netplayP2PEnabled": "P2Pモード",
+  "netplayDirectServerLabel": "サーバーアドレス",
+  "netplayAdvancedSettings": "詳細な接続設定",
+  "netplayP2PServerLabel": "P2Pサーバー",
+  "netplayRoomCode": "ルームコード",
+  "netplayRoleLabel": "役割",
+  "netplayPlayerIndex": "プレイヤー {index}",
+  "netplaySpectator": "観客",
+  "netplayClientId": "クライアントID",
+  "netplayPlayerListHeader": "プレイヤー",
+  "netplayYouIndicator": "（あなた）",
+  "netplayOrSeparator": "または",
+  "netplayConnectFailed": "接続に失敗しました: {error}",
+  "netplayDisconnectFailed": "切断に失敗しました: {error}",
+  "netplayCreateRoomFailed": "ルームの作成に失敗しました: {error}",
+  "netplayJoinRoomFailed": "ルームへの参加に失敗しました: {error}",
+  "netplaySwitchRoleFailed": "役割の切り替えに失敗しました: {error}",
+  "netplayInvalidRoomCode": "部屋コードが無効です",
+  "netplayRomBroadcasted": "ネットプレイ: ルームにブロードキャストされた ROM",
+  "menuLoadTasMovie": "TAS ムービーをロード...",
+  "menuPreferences": "設定...",
+  "saveToExternalFile": "ファイルに保存...",
+  "loadFromExternalFile": "ファイルからロード...",
+  "slotLabel": "スロット",
+  "slotEmpty": "空",
+  "slotHasData": "保存されました",
+  "stateSavedToSlot": "状態はスロット {index} に保存されました",
+  "stateLoadedFromSlot": "スロット {index} からロードされた状態",
+  "slotCleared": "スロット {index} がクリアされました",
+  "menuAbout": "Nesium について",
+  "menuDebugger": "デバッガ",
+  "menuTools": "ツール",
+  "menuOpenDebuggerWindow": "デバッガーウィンドウを開く",
+  "menuOpenToolsWindow": "ツールウィンドウを開く",
+  "menuInputMappingComingSoon": "入力マッピング (近日公開予定)",
+  "menuLastError": "最後のエラー",
+  "lastErrorDetailsAction": "詳細",
+  "lastErrorDialogTitle": "最後のエラー",
+  "lastErrorCopied": "コピーされました",
+  "copy": "コピー",
+  "paste": "ペースト",
+  "windowDebuggerTitle": "Nesium デバッガー",
+  "windowToolsTitle": "ネシウムツール",
+  "virtualControlsEditTitle": "仮想コントロールを編集する",
+  "virtualControlsEditSubtitleEnabled": "ドラッグして移動し、角をピンチまたはドラッグしてサイズを変更します",
+  "virtualControlsEditSubtitleDisabled": "インタラクティブな調整を有効にする",
+  "gridSnappingTitle": "グリッドスナップ",
+  "gridSpacingLabel": "グリッド間隔",
+  "debuggerPlaceholderBody": "CPU/PPU モニタ、メモリ ビューア、および OAM インスペクタ用に予約されたスペース。同じウィジェットをデスクトップのサイド パネルまたはモバイル シートに配置できます。",
+  "toolsPlaceholderBody": "記録/再生、入力マッピング、およびチートは、デスクトップのサイド ペインとモバイルのボトム シート間でこれらのウィジェットを共有できます。",
+  "actionLoadRom": "ROMをロードする",
+  "actionResetNes": "ファミコンをリセットする",
+  "actionPowerResetNes": "パワーリセット",
+  "actionEjectNes": "電源オフ",
+  "actionLoadPalette": "パレットをロードする",
+  "videoResetToDefault": "デフォルトにリセットする",
+  "videoTitle": "ビデオ",
+  "videoFilterLabel": "ビデオフィルター",
+  "videoFilterCategoryCpu": "CPU フィルター",
+  "videoFilterCategoryGpu": "GPU フィルター (シェーダー)",
+  "videoFilterNone": "なし (1x)",
+  "videoFilterPrescale2x": "プリスケール 2x",
+  "videoFilterPrescale3x": "プリスケール 3x",
+  "videoFilterPrescale4x": "プリスケール 4x",
+  "videoFilterHq2x": "HQ2x",
+  "videoFilterHq3x": "HQ3x",
+  "videoFilterHq4x": "HQ4x",
+  "videoFilter2xSai": "2xSaI",
+  "videoFilterSuper2xSai": "スーパー 2xSaI",
+  "videoFilterSuperEagle": "スーパーイーグル",
+  "videoFilterLcdGrid": "LCD グリッド (2x)",
+  "videoFilterScanlines": "スキャンライン (2x)",
+  "videoFilterXbrz2x": "xBRZ 2x",
+  "videoFilterXbrz3x": "xBRZ 3x",
+  "videoFilterXbrz4x": "xBRZ 4x",
+  "videoFilterXbrz5x": "xBRZ 5x",
+  "videoFilterXbrz6x": "xBRZ 6x",
+  "videoLcdGridStrengthLabel": "LCD グリッド強度",
+  "videoScanlinesIntensityLabel": "走査線の強度",
+  "videoFilterNtscComposite": "NTSC（コンポジット）",
+  "videoFilterNtscSvideo": "NTSC (Sビデオ)",
+  "videoFilterNtscRgb": "NTSC (RGB)",
+  "videoFilterNtscMonochrome": "NTSC（モノクロ）",
+  "videoFilterNtscBisqwit2x": "NTSC (ビスクウィット) 2x",
+  "videoFilterNtscBisqwit4x": "NTSC (ビスクウィット) 4x",
+  "videoFilterNtscBisqwit8x": "NTSC (ビスクウィット) 8x",
+  "videoNtscAdvancedTitle": "NTSCアドバンスト",
+  "videoNtscMergeFieldsLabel": "フィールドを結合 (ちらつきを軽減)",
+  "videoNtscHueLabel": "色相",
+  "videoNtscSaturationLabel": "飽和",
+  "videoNtscContrastLabel": "対比",
+  "videoNtscBrightnessLabel": "輝度",
+  "videoNtscSharpnessLabel": "シャープネス",
+  "videoNtscGammaLabel": "ガンマ",
+  "videoNtscResolutionLabel": "解決",
+  "videoNtscArtifactsLabel": "アーティファクト",
+  "videoNtscFringingLabel": "フリンジ",
+  "videoNtscBleedLabel": "にじみ",
+  "videoNtscBisqwitSettingsTitle": "NTSC設定（ビスクウィット）",
+  "videoNtscBisqwitYFilterLengthLabel": "Yフィルター（横ぼかし）",
+  "videoNtscBisqwitIFilterLengthLabel": "Iフィルター",
+  "videoNtscBisqwitQFilterLengthLabel": "Qフィルター",
+  "videoIntegerScalingTitle": "整数スケーリング",
+  "videoIntegerScalingSubtitle": "ピクセルパーフェクトなスケーリング（スクロール時のガタつきを軽減）。",
+  "videoFullScreenTitle": "全画面表示",
+  "videoFullScreenSubtitle": "ウィンドウの全画面状態を切り替えます",
+  "videoScreenVerticalOffset": "画面の垂直オフセット",
+  "videoScreenVerticalOffsetPortraitOnly": "ポートレート モードでのみ有効です。",
+  "videoAspectRatio": "アスペクト比",
+  "videoAspectRatioSquare": "1:1 (正方形ピクセル)",
+  "videoAspectRatioNtsc": "4:3 (NTSC)",
+  "videoAspectRatioStretch": "ストレッチ",
+  "videoShaderLibrashaderTitle": "RetroArch シェーダ",
+  "videoShaderLibrashaderSubtitle": "GLES3 + ハードウェア バックエンド (AHB スワップチェーン) が必要です。",
+  "videoShaderLibrashaderSubtitleWindows": "D3D11 GPU バックエンドが必要です。",
+  "videoShaderLibrashaderSubtitleApple": "Metal バックエンドが必要です。",
+  "videoShaderLibrashaderSubtitleDisabled": "Android バックエンドをハードウェアに切り替えて有効にします。",
+  "videoShaderLibrashaderSubtitleDisabledWindows": "Windows バックエンドを D3D11 GPU に切り替えて有効にします。",
+  "videoShaderPresetLabel": "Preset (.slangp)",
+  "videoShaderPresetNotSet": "未設定",
+  "shaderBrowserTitle": "シェーダ",
+  "shaderBrowserNoShaders": "シェーダが見つかりません",
+  "shaderBrowserError": "エラー: {error}",
+  "aboutTitle": "ネシウムについて",
+  "aboutLead": "Nesium: nesium-core 上に構築された Rust NES/FC エミュレータ フロントエンド。",
+  "aboutIntro": "この Flutter フロントエンドはエミュレーションに Rust コアを再利用します。 Web ビルドは、Flutter Web + Web Worker + WASM を介してブラウザーで実行されます。",
+  "aboutLinksHeading": "リンク",
+  "aboutGitHubLabel": "GitHub",
+  "aboutWebDemoLabel": "ウェブデモ",
+  "aboutComponentsHeading": "オープンソースコンポーネント",
+  "aboutComponentsHint": "タップして開き、長押ししてコピーします。",
+  "aboutLicenseHeading": "ライセンス",
+  "aboutLicenseBody": "Nesium は GPL-3.0 以降に基づいてライセンスされています。リポジトリのルートにある LICENSE.md を参照してください。",
+  "aboutLaunchFailed": "起動できませんでした: {url}",
+  "videoBackendLabel": "レンダラ バックエンド",
+  "videoBackendAndroidLabel": "Android レンダラー バックエンド",
+  "videoBackendWindowsLabel": "Windows レンダラー バックエンド",
+  "videoBackendHardware": "ハードウェア (AHardwareBuffer)",
+  "videoBackendUpload": "互換性 (CPU アップロード)",
+  "videoBackendRestartHint": "アプリの再起動後に有効になります。",
+  "videoBackendCurrent": "現在のバックエンド: {backend}",
+  "windowsNativeOverlayTitle": "Windows ネイティブ オーバーレイ (実験的)",
+  "windowsNativeOverlaySubtitle": "Flutter コンポジターをバイパスして、完璧な滑らかさを実現します。シェーダーを無効にし、ゲームの背後にある UI をオーバーレイします。",
+  "highPerformanceModeLabel": "ハイパフォーマンスモード",
+  "highPerformanceModeDescription": "プロセスの優先順位を高め、スケジューラーを最適化してゲームプレイをよりスムーズにします。",
+  "videoLowLatencyTitle": "低遅延ビデオ",
+  "videoLowLatencySubtitle": "エミュレーションとレンダラーを同期してジッターを軽減します。アプリの再起動後に有効になります。",
+  "paletteModeLabel": "パレット",
+  "paletteModeBuiltin": "内蔵",
+  "paletteModeCustom": "カスタム…",
+  "paletteModeCustomActive": "カスタム ({name})",
+  "builtinPaletteLabel": "内蔵パレット",
+  "customPaletteLoadTitle": "パレット ファイル (.pal) をロード…",
+  "customPaletteLoadSubtitle": "192バイト（RGB）または256バイト（RGBA）",
+  "commandSucceeded": "{label} が成功しました",
+  "commandFailed": "{label} が失敗しました",
+  "snackPaused": "一時停止中",
+  "snackResumed": "再開しました",
+  "snackPauseFailed": "一時停止に失敗しました: {error}",
+  "dialogOk": "わかりました",
+  "debuggerNoRomTitle": "ROMが実行されていません",
+  "debuggerNoRomSubtitle": "ROMをロードしてデバッグ状態を確認します",
+  "debuggerCpuRegisters": "CPUレジスタ",
+  "debuggerPpuState": "PPU の状態",
+  "debuggerCpuStatusTooltip": "CPUステータスレジスタ(P)\nN: 負 - 結果ビット 7 が設定されている場合に設定されます。\nV: オーバーフロー - 符号付きオーバーフローに設定\nB: ブレーク - BRK 命令で設定\nD: 10 進数 - BCD モード (NES では無視されます)\nI: 割り込みディスエーブル - IRQ をブロックします\nZ: ゼロ - 結果がゼロの場合に設定されます\nC: キャリー - 符号なしオーバーフローに設定\n\n大文字 = 設定、小文字 = クリア",
+  "debuggerPpuCtrlTooltip": "PPU 制御レジスタ ($2000)\nV: NMIイネーブル\nP：PPUマスター/スレーブ（未使用）\nH: スプライトの高さ (0=8x8、1=8x16)\nB：地紋テーブルアドレス\nS: スプライトパターンテーブルアドレス\nI：VRAMアドレスインクリメント（0=1、1=32）\nNN: ベースネームテーブルアドレス\n\n大文字 = 設定、小文字 = クリア",
+  "debuggerPpuMaskTooltip": "PPU マスク レジスタ ($2001)\nBGR: カラー強調ビット\ns: スプライトを表示\nb: 背景を表示\nM: スプライトを左端の 8 ピクセルで表示します\nm: 左端の 8 ピクセルに背景を表示します\ng: グレースケール\n\n大文字 = 設定、小文字 = クリア",
+  "debuggerPpuStatusTooltip": "PPU ステータス レジスタ ($2002)\nV: VBlank が開始されました\nS: スプライト 0 ヒット\nO：スプライトオーバーフロー\n\n大文字 = 設定、小文字 = クリア",
+  "debuggerScanlineTooltip": "スキャンライン番号:\n0-239: 表示 (レンダリング)\n240: ポストレンダリング (アイドル)\n241-260: VBlank (垂直ブランキング)\n-1: プリレンダリング (ダミースキャンライン)",
+  "tilemapSettings": "設定",
+  "tilemapOverlay": "かぶせる",
+  "tilemapDisplayMode": "表示モード",
+  "tilemapDisplayModeDefault": "デフォルト",
+  "tilemapDisplayModeGrayscale": "グレースケール",
+  "tilemapDisplayModeAttributeView": "属性ビュー",
+  "tilemapTileGrid": "タイルグリッド (8×8)",
+  "tilemapAttrGrid": "属性グリッド (16×16)",
+  "tilemapAttrGrid32": "属性グリッド (32×32)",
+  "tilemapNtBounds": "NT 境界",
+  "tilemapScrollOverlay": "スクロールオーバーレイ",
+  "tilemapPanelDisplay": "画面",
+  "tilemapPanelTilemap": "タイルマップ",
+  "tilemapPanelSelectedTile": "選択したタイル",
+  "tilemapHidePanel": "パネルを非表示にする",
+  "tilemapShowPanel": "パネルを表示",
+  "tilemapInfoSize": "サイズ",
+  "tilemapInfoSizePx": "サイズ (ピクセル)",
+  "tilemapInfoTilemapAddress": "タイルマップアドレス",
+  "tilemapInfoTilesetAddress": "タイルセットアドレス",
+  "tilemapInfoMirroring": "ミラーリング",
+  "tilemapInfoTileFormat": "タイル形式",
+  "tilemapInfoTileFormat2bpp": "2bpp",
+  "tilemapMirroringHorizontal": "水平",
+  "tilemapMirroringVertical": "垂直",
+  "tilemapMirroringFourScreen": "4画面",
+  "tilemapMirroringSingleScreenLower": "シングルスクリーン（下）",
+  "tilemapMirroringSingleScreenUpper": "単一画面（上）",
+  "tilemapMirroringMapperControlled": "マッパー制御",
+  "tilemapLabelColumnRow": "列、行",
+  "tilemapLabelXY": "X、Y",
+  "tilemapLabelSize": "サイズ",
+  "tilemapLabelTilemapAddress": "タイルマップアドレス",
+  "tilemapLabelTileIndex": "タイルインデックス",
+  "tilemapLabelTileAddressPpu": "タイルアドレス(PPU)",
+  "tilemapLabelPaletteIndex": "パレットインデックス",
+  "tilemapLabelPaletteAddress": "パレットアドレス",
+  "tilemapLabelAttributeAddress": "属性アドレス",
+  "tilemapLabelAttributeData": "属性データ",
+  "tilemapSelectedTileTilemap": "タイルマップ",
+  "tilemapSelectedTileTileIdx": "タイルIDX",
+  "tilemapSelectedTileTilePpu": "タイル(PPU)",
+  "tilemapSelectedTilePalette": "パレット",
+  "tilemapSelectedTileAttr": "属性",
+  "tilemapCapture": "捕獲",
+  "tilemapCaptureFrameStart": "フレーム開始",
+  "tilemapCaptureVblankStart": "Vブランクスタート",
+  "tilemapCaptureManual": "マニュアル",
+  "tilemapScanline": "スキャンライン",
+  "tilemapDot": "ドット",
+  "tilemapError": "エラー: {error}",
+  "tilemapRetry": "リトライ",
+  "tilemapResetZoom": "ズームをリセット",
+  "menuTilemapViewer": "タイルマップビューア",
+  "menuTileViewer": "タイルビューア",
+  "tileViewerError": "エラー: {error}",
+  "tileViewerRetry": "リトライ",
+  "tileViewerSettings": "タイルビューアの設定",
+  "tileViewerOverlays": "オーバーレイ",
+  "tileViewerShowGrid": "タイルグリッドを表示",
+  "tileViewerPalette": "パレット",
+  "tileViewerPaletteBg": "BG {index}",
+  "tileViewerPaletteSprite": "スプライト {index}",
+  "tileViewerGrayscale": "グレースケールパレットを使用する",
+  "tileViewerSelectedTile": "選択したタイル",
+  "tileViewerPatternTable": "パターンテーブル",
+  "tileViewerTileIndex": "タイルインデックス",
+  "tileViewerChrAddress": "CHRアドレス",
+  "tileViewerClose": "近い",
+  "tileViewerSource": "ソース",
+  "tileViewerSourcePpu": "PPUメモリ",
+  "tileViewerSourceChrRom": "CHRROM",
+  "tileViewerSourceChrRam": "CHR RAM",
+  "tileViewerSourcePrgRom": "PRGROM",
+  "tileViewerAddress": "住所",
+  "tileViewerSize": "サイズ",
+  "tileViewerColumns": "コル",
+  "tileViewerRows": "行",
+  "tileViewerLayout": "レイアウト",
+  "tileViewerLayoutNormal": "普通",
+  "tileViewerLayout8x16": "8×16 スプライト",
+  "tileViewerLayout16x16": "16×16 スプライト",
+  "tileViewerBackground": "背景",
+  "tileViewerBgDefault": "デフォルト",
+  "tileViewerBgTransparent": "透明",
+  "tileViewerBgPalette": "パレットの色",
+  "tileViewerBgBlack": "黒",
+  "tileViewerBgWhite": "白",
+  "tileViewerBgMagenta": "マゼンタ",
+  "tileViewerPresets": "プリセット",
+  "tileViewerPresetPpu": "PPU",
+  "tileViewerPresetChr": "CHR",
+  "tileViewerPresetRom": "ロム",
+  "tileViewerPresetBg": "BG",
+  "tileViewerPresetOam": "OAM",
+  "menuSpriteViewer": "スプライトビューア",
+  "menuPaletteViewer": "パレットビューア",
+  "paletteViewerPaletteRamTitle": "パレットRAM (32)",
+  "paletteViewerSystemPaletteTitle": "システムパレット (64)",
+  "paletteViewerSettingsTooltip": "パレットビューアの設定",
+  "paletteViewerTooltipPaletteRam": "{addr} = 0x{value}",
+  "paletteViewerTooltipSystemIndex": "インデックス {index}",
+  "spriteViewerError": "スプライト ビューア エラー: {error}",
+  "spriteViewerSettingsTooltip": "スプライトビューアの設定",
+  "spriteViewerShowGrid": "グリッドを表示",
+  "spriteViewerShowOutline": "スプライトの周囲に輪郭を表示",
+  "spriteViewerShowOffscreenRegions": "オフスクリーン領域を表示する",
+  "spriteViewerDimOffscreenSpritesGrid": "オフスクリーン スプライトを暗くする (グリッド)",
+  "spriteViewerShowListView": "リストビューを表示",
+  "spriteViewerPanelSprites": "スプライト",
+  "spriteViewerPanelDataSource": "データソース",
+  "spriteViewerPanelSprite": "スプライト",
+  "spriteViewerPanelSelectedSprite": "選択したスプライト",
+  "spriteViewerLabelMode": "モード",
+  "spriteViewerLabelPatternBase": "パターンベース",
+  "spriteViewerLabelThumbnailSize": "サムネイルのサイズ",
+  "spriteViewerBgGray": "グレー",
+  "spriteViewerDataSourceSpriteRam": "スプライトRAM",
+  "spriteViewerDataSourceCpuMemory": "CPUメモリ",
+  "spriteViewerTooltipTitle": "スプライト #{index}",
+  "spriteViewerLabelIndex": "索引",
+  "spriteViewerLabelPos": "位置",
+  "spriteViewerLabelSize": "サイズ",
+  "spriteViewerLabelTile": "タイル",
+  "spriteViewerLabelTileAddr": "タイルアドレス",
+  "spriteViewerLabelPalette": "パレット",
+  "spriteViewerLabelPaletteAddr": "パレットアドレス",
+  "spriteViewerLabelFlip": "フリップ",
+  "spriteViewerLabelPriority": "優先度",
+  "spriteViewerPriorityBehindBg": "BGの後ろ",
+  "spriteViewerPriorityInFront": "前に",
+  "spriteViewerLabelVisible": "見える",
+  "spriteViewerValueYes": "はい",
+  "spriteViewerValueNoOffscreen": "いいえ (画面外)",
+  "spriteViewerVisibleStatusVisible": "見える",
+  "spriteViewerVisibleStatusOffscreen": "オフスクリーン",
+  "longPressToClear": "長押しするとクリアされます",
+  "videoBackendD3D11": "D3D11 GPU (ゼロコピー)",
+  "videoBackendSoftware": "ソフトウェアCPU（フォールバック）",
+  "netplayBackToSetup": "セットアップに戻る",
+  "netplayP2PMode": "P2Pモード",
+  "netplaySignalingServer": "シグナリングサーバー",
+  "netplayRelayServer": "リレーサーバー (フォールバック)",
+  "netplayP2PRoomCode": "P2Pルームコード",
+  "netplayStartP2PSession": "P2Pセッションを開始する",
+  "netplayJoinP2PSession": "P2Pセッションに参加する",
+  "netplayInvalidP2PServerAddr": "P2Pサーバーアドレスが無効です",
+  "netplayProceed": "進む",
+  "videoShaderParametersTitle": "シェーダパラメータ",
+  "videoShaderParametersSubtitle": "シェーダーパラメータをリアルタイムで調整",
+  "videoShaderParametersReset": "パラメータのリセット",
+  "searchHint": "検索...",
+  "searchTooltip": "検索",
+  "noResults": "一致するパラメータが見つかりません",
+  "errorFailedToCreateTexture": "テクスチャの作成に失敗しました",
+  "languageJapanese": "日本語",
+  "languageSpanish": "スペイン語",
+  "languagePortuguese": "ポルトガル語",
+  "languageRussian": "ロシア語",
+  "languageFrench": "フランス語",
+  "languageGerman": "ドイツ語"
+}

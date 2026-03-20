@@ -1,4 +1,6 @@
-use nesium_core::ppu::buffer::{ColorFormat, NearestPostProcessor, VideoPostProcessor};
+use nesium_core::ppu::buffer::{
+    ColorFormat, NearestPostProcessor, SourceFrame, TargetFrameMut, VideoPostProcessor,
+};
 use nesium_core::ppu::palette::Color;
 
 use crate::video::ntsc_bisqwit::ntsc_bisqwit_apply_argb8888;
@@ -50,18 +52,21 @@ impl NtscBisqwitPostProcessor {
 }
 
 impl VideoPostProcessor for NtscBisqwitPostProcessor {
-    fn process(
-        &mut self,
-        src_indices: &[u8],
-        src_width: usize,
-        src_height: usize,
-        _palette: &[Color; 64],
-        dst: &mut [u8],
-        dst_pitch: usize,
-        dst_width: usize,
-        dst_height: usize,
-        dst_format: ColorFormat,
-    ) {
+    fn process(&mut self, src: SourceFrame<'_>, palette: &[Color; 64], dst: TargetFrameMut<'_>) {
+        let SourceFrame {
+            indices: src_indices,
+            emphasis: _src_emphasis,
+            width: src_width,
+            height: src_height,
+        } = src;
+        let TargetFrameMut {
+            buffer: dst,
+            pitch: dst_pitch,
+            width: dst_width,
+            height: dst_height,
+            format: dst_format,
+        } = dst;
+
         if src_width == 0 || src_height == 0 || dst_width == 0 || dst_height == 0 {
             return;
         }
@@ -69,15 +74,15 @@ impl VideoPostProcessor for NtscBisqwitPostProcessor {
         let scale = self.scale.clamp(2, 8);
         if !(scale == 2 || scale == 4 || scale == 8) {
             self.fallback.process(
-                src_indices,
-                src_width,
-                src_height,
-                _palette,
-                dst,
-                dst_pitch,
-                dst_width,
-                dst_height,
-                dst_format,
+                src,
+                palette,
+                TargetFrameMut {
+                    buffer: dst,
+                    pitch: dst_pitch,
+                    width: dst_width,
+                    height: dst_height,
+                    format: dst_format,
+                },
             );
             return;
         }
@@ -86,15 +91,15 @@ impl VideoPostProcessor for NtscBisqwitPostProcessor {
         let expected_h = src_height.saturating_mul(scale as usize);
         if dst_width != expected_w || dst_height != expected_h {
             self.fallback.process(
-                src_indices,
-                src_width,
-                src_height,
-                _palette,
-                dst,
-                dst_pitch,
-                dst_width,
-                dst_height,
-                dst_format,
+                src,
+                palette,
+                TargetFrameMut {
+                    buffer: dst,
+                    pitch: dst_pitch,
+                    width: dst_width,
+                    height: dst_height,
+                    format: dst_format,
+                },
             );
             return;
         }
@@ -102,15 +107,15 @@ impl VideoPostProcessor for NtscBisqwitPostProcessor {
         let bpp = dst_format.bytes_per_pixel();
         if bpp != 4 {
             self.fallback.process(
-                src_indices,
-                src_width,
-                src_height,
-                _palette,
-                dst,
-                dst_pitch,
-                dst_width,
-                dst_height,
-                dst_format,
+                src,
+                palette,
+                TargetFrameMut {
+                    buffer: dst,
+                    pitch: dst_pitch,
+                    width: dst_width,
+                    height: dst_height,
+                    format: dst_format,
+                },
             );
             return;
         }
@@ -214,15 +219,15 @@ impl VideoPostProcessor for NtscBisqwitPostProcessor {
             }
             _ => {
                 self.fallback.process(
-                    src_indices,
-                    src_width,
-                    src_height,
-                    _palette,
-                    dst,
-                    dst_pitch,
-                    dst_width,
-                    dst_height,
-                    dst_format,
+                    src,
+                    palette,
+                    TargetFrameMut {
+                        buffer: dst,
+                        pitch: dst_pitch,
+                        width: dst_width,
+                        height: dst_height,
+                        format: dst_format,
+                    },
                 );
             }
         }

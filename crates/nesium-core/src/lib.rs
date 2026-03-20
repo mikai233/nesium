@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::{
     apu::Apu,
-    audio::{AudioChannel, CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
+    audio::{CPU_CLOCK_NTSC, NesSoundMixer, SoundMixerBus, bus::AudioBusConfig},
     bus::{OpenBus, PendingDma, cpu::CpuBus},
     cartridge::{Cartridge, Provider},
     config::region::Region,
@@ -76,12 +76,16 @@ pub struct Nes {
     audio_sample_rate: u32,
     /// Scratch buffer for a single frame of internal-rate audio from the per-console mixer.
     mixer_frame_buffer: Vec<f32>,
+    /// Absolute APU-cycle timestamp for the next Mesen-style audio mixer flush.
+    next_audio_chunk_clock: i64,
     pub region: Region,
     pub interceptor: EmuInterceptor,
 }
 
 /// Internal mixer output sample rate (matches Mesen2's fixed 96 kHz path).
 const INTERNAL_MIXER_SAMPLE_RATE: u32 = 96_000;
+/// Mesen2 flushes when APU cycle counter reaches `CycleLength - 1` (9999).
+const MIXER_CHUNK_CYCLES: i64 = 9_999;
 
 /// Builder for configuring and constructing a powered-on NES instance.
 ///
@@ -192,6 +196,7 @@ impl NesBuilder {
             sound_bus: SoundMixerBus::new(INTERNAL_MIXER_SAMPLE_RATE, self.sample_rate),
             audio_sample_rate: self.sample_rate,
             mixer_frame_buffer: Vec::new(),
+            next_audio_chunk_clock: MIXER_CHUNK_CYCLES,
             region: self.region,
             interceptor,
         };
@@ -351,23 +356,35 @@ impl Nes {
         // Wire up a temporary CPU bus and run the CPU reset sequence, passing
         // down the reset kind so the CPU can distinguish power-on vs soft
         // reset semantics (register init vs preserving A/X/Y and PS).
-        let mut bus = nes_cpu_bus!(
-            self,
-            mixer: matches!(kind, ResetKind::PowerOn),
-            serial: true
-        );
-        let mut ctx = Context::Some {
-            interceptor: &mut self.interceptor,
+        let frame_after_reset = {
+            let mut bus = nes_cpu_bus!(
+                self,
+                mixer: matches!(kind, ResetKind::PowerOn),
+                serial: true
+            );
+            let mut ctx = Context::Some {
+                interceptor: &mut self.interceptor,
+            };
+            self.cpu.reset(&mut bus, kind, &mut ctx);
+            bus.devices().ppu.frame_count()
         };
-        self.cpu.reset(&mut bus, kind, &mut ctx);
-        self.last_frame = bus.devices().ppu.frame_count();
+        // Match Mesen2 reset sequencing: CPU reset burns initial cycles (8 on
+        // power-on path) and APU calls EndFrame on that partial segment before
+        // normal 9,999-cycle cadence resumes.
+        let apu_clock = self.apu_cycles() as i64;
+        self.mixer
+            .end_frame(apu_clock, &mut self.mixer_frame_buffer);
+        self.mixer_frame_buffer.clear();
+        self.next_audio_chunk_clock = apu_clock + MIXER_CHUNK_CYCLES;
+
+        self.last_frame = frame_after_reset;
         self.dot_counter = 0;
     }
 
     pub fn step_cpu_cycle(&mut self, emit_audio: bool) -> ClockResult {
         let frame_before = self.ppu.frame_count();
         let apu_clocked = true;
-        let (cpu_cycles, expansion_samples, opcode_active) = {
+        let opcode_active = {
             let mut bus = nes_cpu_bus!(self, mixer: emit_audio, serial: true);
             let mut ctx = Context::Some {
                 interceptor: &mut self.interceptor,
@@ -375,34 +392,10 @@ impl Nes {
 
             // Advance one CPU cycle (and implicitly PPU/APU).
             self.cpu.step(&mut bus, &mut ctx);
-            let cycles = bus.cpu_cycles();
-            let expansion = bus
-                .cartridge()
-                .and_then(|cart| cart.mapper().as_expansion_audio())
-                .map(|exp| exp.samples());
-
-            let opcode_active = self.cpu_opcode_active();
-            (cycles, expansion, opcode_active)
+            self.cpu_opcode_active()
         };
 
         self.dot_counter = self.ppu.total_dots();
-
-        // Feed expansion audio into the mixer at the CPU clock edge.
-        if apu_clocked && let Some(samples) = expansion_samples {
-            let clock = cpu_cycles as i64;
-            self.mixer
-                .set_channel_level(AudioChannel::Fds, clock, samples.fds);
-            self.mixer
-                .set_channel_level(AudioChannel::Mmc5, clock, samples.mmc5);
-            self.mixer
-                .set_channel_level(AudioChannel::Namco163, clock, samples.namco163);
-            self.mixer
-                .set_channel_level(AudioChannel::Sunsoft5B, clock, samples.sunsoft5b);
-            self.mixer
-                .set_channel_level(AudioChannel::Vrc6, clock, samples.vrc6);
-            self.mixer
-                .set_channel_level(AudioChannel::Vrc7, clock, samples.vrc7);
-        }
 
         let frame_after = self.ppu.frame_count();
         self.last_frame = frame_after;
@@ -420,92 +413,38 @@ impl Nes {
         let target_frame = self.ppu.frame_count().wrapping_add(1);
         while self.ppu.frame_count() < target_frame {
             let _ = self.step_cpu_cycle(emit_audio);
+            let apu_clock = self.apu_cycles() as i64;
+            while apu_clock >= self.next_audio_chunk_clock {
+                self.mixer_frame_buffer.clear();
+                self.mixer
+                    .end_frame(self.next_audio_chunk_clock, &mut self.mixer_frame_buffer);
+
+                if emit_audio {
+                    self.sound_bus
+                        .mix_frame(&[&self.mixer_frame_buffer], &mut samples);
+                }
+
+                self.next_audio_chunk_clock += MIXER_CHUNK_CYCLES;
+            }
         }
-        let end_clock = self.apu_cycles() as i64;
-        self.mixer_frame_buffer.clear();
-        self.mixer
-            .end_frame(end_clock, &mut self.mixer_frame_buffer);
 
-        // Optional debug path: dump the internal 96 kHz mixer output to a raw
-        // float file for waveform comparison against Mesen2. This writes a
-        // small header once, followed by interleaved f32 stereo samples:
-        //
-        //   magic: [u8;4] = b\"APU0\"
-        //   sample_rate: u32 (little-endian) = 96_000
-        //   channels: u16 (little-endian) = 2
-        //   reserved: u16 (little-endian) = 0
-        //   then repeated { left: f32 LE, right: f32 LE } samples.
-        //
-        // The dump is limited to roughly 60 seconds to avoid unbounded files.
-        // const DEBUG_MAX_SECONDS: u64 = 60;
-        // let max_debug_frames = INTERNAL_MIXER_SAMPLE_RATE as u64 * DEBUG_MAX_SECONDS;
-        // if self.debug_apu_frames_written < max_debug_frames {
-        //     if self.debug_apu_dump.is_none() {
-        //         if let Ok(mut file) = File::create("apu_debug.raw") {
-        //             let _ = file.write_all(b"APU0");
-        //             let _ = file.write_all(&INTERNAL_MIXER_SAMPLE_RATE.to_le_bytes());
-        //             let channels: u16 = 2;
-        //             let _ = file.write_all(&channels.to_le_bytes());
-        //             let reserved: u16 = 0;
-        //             let _ = file.write_all(&reserved.to_le_bytes());
-        //             self.debug_apu_dump = Some(file);
-        //         }
-        //     }
-        //     if let Some(file) = self.debug_apu_dump.as_mut() {
-        //         let mut buf = Vec::with_capacity(self.mixer_frame_buffer.len() * 4);
-        //         for &s in &self.mixer_frame_buffer {
-        //             buf.extend_from_slice(&s.to_le_bytes());
-        //         }
-        //         let _ = file.write_all(&buf);
-        //         self.debug_apu_frames_written += (self.mixer_frame_buffer.len() / 2) as u64;
-        //     }
-        // }
+        // Mesen2 calls `NesApu::EndFrame()` at PPU frame boundaries even when the
+        // current APU chunk is shorter than 10,000 cycles. Flush this remainder
+        // and restart the 10,000-cycle cadence from the frame boundary.
+        let apu_clock = self.apu_cycles() as i64;
+        let last_flushed_clock = self.next_audio_chunk_clock - MIXER_CHUNK_CYCLES;
+        if apu_clock > last_flushed_clock {
+            self.mixer_frame_buffer.clear();
+            self.mixer
+                .end_frame(apu_clock, &mut self.mixer_frame_buffer);
 
-        self.sound_bus
-            .mix_frame(&[&self.mixer_frame_buffer], &mut samples);
+            if emit_audio {
+                self.sound_bus
+                    .mix_frame(&[&self.mixer_frame_buffer], &mut samples);
+            }
 
-        // Optional debug path: dump the post-bus PCM at the host sample rate
-        // (after resampling/EQ/reverb/crossfeed/master volume) to a raw float
-        // file. The format matches `apu_debug.raw`, only the sample rate
-        // differs:
-        //
-        //   magic: [u8;4] = b\"APU0\"
-        //   sample_rate: u32 (little-endian) = self.audio_sample_rate()
-        //   channels: u16 (little-endian) = 2
-        //   reserved: u16 (little-endian) = 0
-        //   then repeated { left: f32 LE, right: f32 LE } samples.
-        //
-        // Also limited to ~60s to keep file size reasonable.
-        // const DEBUG_BUS_MAX_SECONDS: u64 = 60;
-        // let max_bus_frames = self.audio_sample_rate as u64 * DEBUG_BUS_MAX_SECONDS;
-        // let new_samples = &out[out_start..];
-        // let new_frames = (new_samples.len() / 2) as u64;
-        // if self.debug_bus_frames_written < max_bus_frames && new_frames > 0 {
-        //     if self.debug_bus_dump.is_none() {
-        //         if let Ok(mut file) = File::create("bus_debug.raw") {
-        //             let _ = file.write_all(b"APU0");
-        //             let _ = file.write_all(&self.audio_sample_rate.to_le_bytes());
-        //             let channels: u16 = 2;
-        //             let _ = file.write_all(&channels.to_le_bytes());
-        //             let reserved: u16 = 0;
-        //             let _ = file.write_all(&reserved.to_le_bytes());
-        //             self.debug_bus_dump = Some(file);
-        //         }
-        //     }
-        //     if let Some(file) = self.debug_bus_dump.as_mut() {
-        //         // Clamp to remaining budget.
-        //         let frames_to_write =
-        //             (max_bus_frames - self.debug_bus_frames_written).min(new_frames) as usize;
-        //         let samples_to_write = frames_to_write * 2;
-        //         let slice = &new_samples[..samples_to_write];
-        //         let mut buf = Vec::with_capacity(slice.len() * 4);
-        //         for &s in slice {
-        //             buf.extend_from_slice(&s.to_le_bytes());
-        //         }
-        //         let _ = file.write_all(&buf);
-        //         self.debug_bus_frames_written += frames_to_write as u64;
-        //     }
-        // }
+            self.next_audio_chunk_clock = apu_clock + MIXER_CHUNK_CYCLES;
+        }
 
         self.last_frame = self.ppu.frame_count();
         self.dot_counter = self.ppu.total_dots();
@@ -518,8 +457,7 @@ impl Nes {
         let expansion = self
             .cartridge
             .as_ref()
-            .and_then(|cart| cart.mapper().as_expansion_audio())
-            .map(|exp| exp.samples())
+            .map(|cart| cart.expansion_audio_snapshot())
             .unwrap_or_default();
 
         // Collapse expansion into a single scalar matching the mixer weights.
@@ -580,13 +518,20 @@ impl Nes {
         self.apu.cycle_count()
     }
 
-    /// Palette indices for the latest frame (PPU native format).
-    pub fn render_buffer(&self) -> &[u8] {
-        self.ppu.render_buffer()
+    /// Packed pixels for the latest frame when direct access is available.
+    ///
+    /// Returns `None` when using a swapchain-backed framebuffer.
+    pub fn try_render_buffer(&self) -> Option<&[u8]> {
+        self.ppu.try_render_buffer()
     }
 
     pub fn render_index_buffer(&self) -> &[u8] {
         self.ppu.render_index_buffer()
+    }
+
+    /// Emphasis bits (`0..=7`) for the latest frame, one byte per pixel.
+    pub fn render_emphasis_buffer(&self) -> &[u8] {
+        self.ppu.render_emphasis_buffer()
     }
 
     /// Copies the current front buffer pixels into the provided destination slice.
@@ -597,6 +542,11 @@ impl Nes {
     /// Copies the current front index buffer into the provided destination slice.
     pub fn copy_render_index_buffer(&self, dst: &mut [u8]) {
         self.ppu.copy_render_index_buffer(dst);
+    }
+
+    /// Copies the current front emphasis buffer into the provided destination slice.
+    pub fn copy_render_emphasis_buffer(&self, dst: &mut [u8]) {
+        self.ppu.copy_render_emphasis_buffer(dst);
     }
 
     pub fn set_frame_ready_callback(
@@ -618,6 +568,36 @@ impl Nes {
     /// Selects one of the built-in palettes.
     pub fn set_palette(&mut self, palette: Palette) {
         self.ppu.set_palette(palette);
+    }
+
+    /// Updates video output resolution for the active framebuffer pipeline.
+    pub fn set_video_output_config(&mut self, width: usize, height: usize) {
+        self.ppu.set_video_output_config(width, height);
+    }
+
+    /// Replaces the video post-processor for the active framebuffer pipeline.
+    pub fn set_video_post_processor(
+        &mut self,
+        processor: Box<dyn crate::ppu::buffer::VideoPostProcessor>,
+    ) {
+        self.ppu.set_video_post_processor(processor);
+    }
+
+    /// Rebuilds packed output from the currently presented canonical frame.
+    pub fn rebuild_video_output(&mut self) {
+        self.ppu.rebuild_video_output();
+    }
+
+    /// Presents a canonical index frame immediately.
+    ///
+    /// Returns `false` when `indices.len() != 256 * 240`.
+    pub fn present_index_frame(&mut self, indices: &[u8]) -> bool {
+        self.ppu.present_index_frame(indices)
+    }
+
+    /// Clears framebuffers and presents black immediately.
+    pub fn clear_framebuffer_and_present(&mut self) {
+        self.ppu.clear_framebuffer_and_present();
     }
 
     /// Active palette reference.

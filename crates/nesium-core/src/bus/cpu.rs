@@ -1,14 +1,14 @@
 use crate::{
-    apu::Apu,
+    apu::{Apu, ExpansionAudioClockContext},
     audio::NesSoundMixer,
     bus::{BusDevices, BusDevicesMut, DmcDmaEvent, OpenBus, PendingDma},
-    cartridge::Cartridge,
+    cartridge::{Cartridge, CpuBusAccessKind},
     context::Context,
     controller::{ControllerPorts, SerialLogger},
     cpu::Cpu,
     mem_block::cpu as cpu_ram,
     memory::{apu as apu_mem, cpu as cpu_mem, ppu as ppu_mem},
-    ppu::{Ppu, pattern_bus::PpuBus},
+    ppu::{Ppu, ppu_bus::PpuBus},
 };
 
 /// CPU-visible bus that bridges the core to RAM, the PPU, the APU, and the
@@ -89,6 +89,24 @@ impl<'a> CpuBus<'a> {
         Ppu::run_until(self, ppu_target, cpu, ctx);
     }
 
+    /// Advance mapper expansion audio by one CPU clock tick.
+    #[inline]
+    pub(crate) fn clock_mapper_expansion_audio(&mut self) {
+        let ctx = ExpansionAudioClockContext {
+            cpu_cycle: *self.cycles,
+            apu_cycle: self.apu.cycle_count(),
+            master_clock: *self.master_clock,
+        };
+
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            if let Some(mixer) = self.mixer.as_deref_mut() {
+                cart.clock_expansion_audio(ctx, mixer);
+            } else {
+                cart.clock_expansion_audio_silent(ctx);
+            }
+        }
+    }
+
     /// PPU-facing mapper read for pattern table space.
     #[inline]
     pub fn ppu_pattern_read(&mut self, addr: u16) -> u8 {
@@ -120,13 +138,35 @@ impl<'a> CpuBus<'a> {
 
     #[inline]
     fn read_cartridge(&self, addr: u16) -> Option<u8> {
-        self.cartridge.as_ref().and_then(|cart| cart.cpu_read(addr))
+        let open_bus = self.open_bus.sample();
+        self.cartridge
+            .as_ref()
+            .and_then(|cart| cart.cpu_read(addr, open_bus))
     }
 
     #[inline]
     fn write_cartridge(&mut self, addr: u16, value: u8) {
         if let Some(cart) = self.cartridge.as_deref_mut() {
             cart.cpu_write(addr, value, *self.cycles);
+        }
+    }
+
+    #[inline]
+    pub(crate) fn notify_mapper_cpu_bus_access(
+        &mut self,
+        kind: CpuBusAccessKind,
+        addr: u16,
+        value: u8,
+    ) {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.cpu_bus_access(kind, addr, value, *self.cycles, *self.master_clock);
+        }
+    }
+
+    #[inline]
+    pub(crate) fn notify_mapper_cpu_clock(&mut self) {
+        if let Some(cart) = self.cartridge.as_deref_mut() {
+            cart.cpu_clock(*self.cycles, *self.master_clock);
         }
     }
 
@@ -147,6 +187,20 @@ impl<'a> CpuBus<'a> {
     #[inline]
     fn write_oam_dma(&mut self, page: u8) {
         self.pending_dma.oam_page = Some(page);
+    }
+
+    #[inline]
+    fn controller_open_bus_mask(_port: usize) -> u8 {
+        // Match Mesen's default NES-001 open-bus mask for standard pads.
+        0xE0
+    }
+
+    #[inline]
+    fn read_controller_port(&mut self, port: usize) -> u8 {
+        let mask = Self::controller_open_bus_mask(port);
+        let open_bus = self.open_bus.sample() & mask;
+        let data = self.controllers[port].read() & !mask;
+        open_bus | data
     }
 
     pub fn devices(&self) -> BusDevices<'_> {
@@ -200,8 +254,8 @@ impl<'a> CpuBus<'a> {
                 let status = self.apu.cpu_read(addr);
                 status | (internal & 0x20)
             }
-            cpu_mem::CONTROLLER_PORT_1 => self.controllers[0].read(),
-            cpu_mem::CONTROLLER_PORT_2 => self.controllers[1].read(),
+            cpu_mem::CONTROLLER_PORT_1 => self.read_controller_port(0),
+            cpu_mem::CONTROLLER_PORT_2 => self.read_controller_port(1),
             cpu_mem::TEST_MODE_BASE..=cpu_mem::TEST_MODE_END => OpenBus::peek(addr),
             cpu_mem::CARTRIDGE_SPACE_BASE..=cpu_mem::CPU_ADDR_END => {
                 match self.read_cartridge(addr) {
@@ -242,8 +296,8 @@ impl<'a> CpuBus<'a> {
                 self.open_bus.set_internal_only(value);
                 value
             }
-            cpu_mem::CONTROLLER_PORT_1 => self.controllers[0].read(),
-            cpu_mem::CONTROLLER_PORT_2 => self.controllers[1].read(),
+            cpu_mem::CONTROLLER_PORT_1 => self.read_controller_port(0),
+            cpu_mem::CONTROLLER_PORT_2 => self.read_controller_port(1),
             cpu_mem::TEST_MODE_BASE..=cpu_mem::TEST_MODE_END => {
                 driven = false;
                 self.open_bus.sample()
@@ -273,14 +327,29 @@ impl<'a> CpuBus<'a> {
             }
             cpu_mem::PPU_REGISTER_BASE..=cpu_mem::PPU_REGISTER_END => {
                 let mut pattern = PpuBus::new(self.cartridge.as_deref_mut(), *self.cycles);
-                self.ppu.cpu_write(addr, data, &mut pattern)
+                self.ppu.cpu_write(addr, data, &mut pattern);
             }
             cpu_mem::APU_REGISTER_BASE..=cpu_mem::APU_REGISTER_END => {
-                self.apu.cpu_write(addr, data, *self.cycles)
+                self.apu.cpu_write(addr, data, *self.cycles);
+                if let Some(mixer) = self.mixer.as_deref_mut() {
+                    self.apu.sync_levels_now(mixer);
+                }
             }
-            ppu_mem::OAM_DMA => self.write_oam_dma(data),
-            cpu_mem::APU_STATUS => self.apu.cpu_write(addr, data, *self.cycles),
-            apu_mem::FRAME_COUNTER => self.apu.cpu_write(addr, data, *self.cycles),
+            ppu_mem::OAM_DMA => {
+                self.write_oam_dma(data);
+            }
+            cpu_mem::APU_STATUS => {
+                self.apu.cpu_write(addr, data, *self.cycles);
+                if let Some(mixer) = self.mixer.as_deref_mut() {
+                    self.apu.sync_levels_now(mixer);
+                }
+            }
+            apu_mem::FRAME_COUNTER => {
+                self.apu.cpu_write(addr, data, *self.cycles);
+                if let Some(mixer) = self.mixer.as_deref_mut() {
+                    self.apu.sync_levels_now(mixer);
+                }
+            }
             cpu_mem::CONTROLLER_PORT_1 => {
                 self.log_serial_bit(data);
                 for ctrl in self.controllers.iter_mut() {
@@ -296,17 +365,42 @@ impl<'a> CpuBus<'a> {
 
     #[inline]
     pub fn mem_read(&mut self, addr: u16, cpu: &mut Cpu, ctx: &mut Context) -> u8 {
+        self.mem_read_with_kind(addr, cpu, ctx, CpuBusAccessKind::Read)
+    }
+
+    #[inline]
+    pub fn mem_read_with_kind(
+        &mut self,
+        addr: u16,
+        cpu: &mut Cpu,
+        ctx: &mut Context,
+        kind: CpuBusAccessKind,
+    ) -> u8 {
         cpu.handle_dma(addr, self, ctx);
         cpu.begin_cycle(true, self, ctx);
         let value = self.read(addr, cpu, ctx);
+        self.notify_mapper_cpu_bus_access(kind, addr, value);
         cpu.end_cycle(true, self, ctx);
         value
     }
 
     #[inline]
     pub fn mem_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, ctx: &mut Context) {
+        self.mem_write_with_kind(addr, data, cpu, ctx, CpuBusAccessKind::Write);
+    }
+
+    #[inline]
+    pub fn mem_write_with_kind(
+        &mut self,
+        addr: u16,
+        data: u8,
+        cpu: &mut Cpu,
+        ctx: &mut Context,
+        kind: CpuBusAccessKind,
+    ) {
         cpu.begin_cycle(false, self, ctx);
         self.write(addr, data, cpu, ctx);
+        self.notify_mapper_cpu_bus_access(kind, addr, data);
         cpu.end_cycle(false, self, ctx);
     }
 
@@ -314,15 +408,17 @@ impl<'a> CpuBus<'a> {
     pub fn dma_read(&mut self, addr: u16, cpu: &mut Cpu, ctx: &mut Context) -> u8 {
         cpu.begin_cycle(true, self, ctx);
         let v = self.read(addr, cpu, ctx);
+        self.notify_mapper_cpu_bus_access(CpuBusAccessKind::DmaRead, addr, v);
         cpu.end_cycle(true, self, ctx);
         v
     }
 
     #[inline]
     pub fn dma_write(&mut self, addr: u16, data: u8, cpu: &mut Cpu, ctx: &mut Context) {
-        cpu.begin_cycle(true, self, ctx);
+        cpu.begin_cycle(false, self, ctx);
         self.write(addr, data, cpu, ctx);
-        cpu.end_cycle(true, self, ctx);
+        self.notify_mapper_cpu_bus_access(CpuBusAccessKind::DmaWrite, addr, data);
+        cpu.end_cycle(false, self, ctx);
     }
 
     #[inline]

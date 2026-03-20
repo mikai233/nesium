@@ -29,6 +29,8 @@
 
 use std::borrow::Cow;
 
+use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef};
+
 use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
@@ -166,7 +168,7 @@ impl Mapper for Mapper228 {
         self.sync_from_write(0x8000, 0);
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         match addr {
             AE_MRAM_WINDOW_START..=AE_MRAM_WINDOW_END => Some(self.mram[(addr & 0x0003) as usize]),
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
@@ -202,45 +204,26 @@ impl Mapper for Mapper228 {
         let base = self.chr_bank_8k.saturating_mul(CHR_BANK_SIZE_8K);
         self.chr.write_indexed(base, offset, data);
     }
-
-    fn prg_rom(&self) -> Option<&[u8]> {
-        Some(self.prg_rom.as_ref())
-    }
-
-    fn prg_ram(&self) -> Option<&[u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_ref())
+    fn memory_ref(&self) -> MapperMemoryRef<'_> {
+        MapperMemoryRef {
+            prg_rom: Some(self.prg_rom.as_ref()),
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_ref()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_rom: self.chr.as_rom(),
+            chr_ram: self.chr.as_ram(),
+            chr_battery_ram: None,
         }
     }
 
-    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_mut())
+    fn memory_mut(&mut self) -> MapperMemoryMut<'_> {
+        MapperMemoryMut {
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_mut()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_ram: self.chr.as_ram_mut(),
+            chr_battery_ram: None,
         }
-    }
-
-    fn prg_save_ram(&self) -> Option<&[u8]> {
-        self.prg_ram()
-    }
-
-    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.prg_ram_mut()
-    }
-
-    fn chr_rom(&self) -> Option<&[u8]> {
-        self.chr.as_rom()
-    }
-
-    fn chr_ram(&self) -> Option<&[u8]> {
-        self.chr.as_ram()
-    }
-
-    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.chr.as_ram_mut()
     }
 
     fn mirroring(&self) -> Mirroring {

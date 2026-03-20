@@ -1,0 +1,845 @@
+{
+  "@@locale": "pt",
+  "@serverClientCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@serverStartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverStopFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverBindAddress": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "@serverQuicFingerprint": {
+    "placeholders": {
+      "fingerprint": {
+        "type": "String"
+      }
+    }
+  },
+  "@connectedGamepadsPort": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "@inputDetected": {
+    "placeholders": {
+      "buttons": {
+        "type": "String"
+      }
+    }
+  },
+  "@bindKeyTitle": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@inputBindingConflictCleared": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@inputBindingConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@inputBindingCapturedConflictHint": {
+    "placeholders": {
+      "player": {
+        "type": "String"
+      },
+      "action": {
+        "type": "String"
+      }
+    }
+  },
+  "@autoSaveIntervalValue": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@fastForwardSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@quickSaveSlotValue": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindSecondsValue": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindMinutesValue": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@rewindSpeedValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "@framesValue": {
+    "placeholders": {
+      "frames": {
+        "type": "int"
+      }
+    }
+  },
+  "@keyCaptureCurrent": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "@keyCaptureCaptured": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayPlayerIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@netplayConnectFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayDisconnectFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayCreateRoomFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplayJoinRoomFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@netplaySwitchRoleFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@stateSavedToSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@stateLoadedFromSlot": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@slotCleared": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@shaderBrowserError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@aboutLaunchFailed": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "@videoBackendCurrent": {
+    "placeholders": {
+      "backend": {
+        "type": "String"
+      }
+    }
+  },
+  "@paletteModeCustomActive": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@commandSucceeded": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "@commandFailed": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "@snackPauseFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@tilemapError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@tileViewerError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@tileViewerPaletteBg": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@tileViewerPaletteSprite": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@paletteViewerTooltipPaletteRam": {
+    "placeholders": {
+      "addr": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "@paletteViewerTooltipSystemIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "@spriteViewerError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@spriteViewerTooltipTitle": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsTitle": "Configurações",
+  "settingsTabGeneral": "Geral",
+  "settingsTabInput": "Entrada",
+  "settingsTabVideo": "Vídeo",
+  "settingsTabEmulation": "Emulação",
+  "settingsTabServer": "Servidor",
+  "settingsFloatingPreviewToggle": "Pré-visualização flutuante",
+  "settingsFloatingPreviewTooltip": "Mostrar prévia do jogo",
+  "serverTitle": "Servidor NetPlay",
+  "serverPortLabel": "Porta",
+  "serverStartButton": "Iniciar servidor",
+  "serverStopButton": "Parar servidor",
+  "serverStatusRunning": "Em execução",
+  "serverStatusStopped": "Parado",
+  "serverClientCount": "Clientes conectados: {count}",
+  "serverStartFailed": "Falha na inicialização do servidor: {error}",
+  "serverStopFailed": "Falha na parada do servidor: {error}",
+  "serverBindAddress": "Endereço de ligação: {address}",
+  "serverQuicFingerprint": "Impressão digital QUIC: {fingerprint}",
+  "generalTitle": "Geral",
+  "themeLabel": "Tema",
+  "themeSystem": "Sistema",
+  "themeLight": "Luz",
+  "themeDark": "Escuro",
+  "languageLabel": "Linguagem",
+  "languageSystem": "Sistema",
+  "languageEnglish": "Inglês",
+  "languageChineseSimplified": "Chinês simplificado",
+  "inputTitle": "Entrada",
+  "turboTitle": "Turbo",
+  "turboLinkPressRelease": "Imprensa/divulgação do link",
+  "inputDeviceLabel": "Dispositivo de entrada",
+  "inputDeviceKeyboard": "Teclado",
+  "inputDeviceGamepad": "Controle de jogo",
+  "connectedGamepadsTitle": "Controles conectados",
+  "connectedGamepadsNone": "Nenhum gamepad conectado",
+  "webGamepadActivationHint": "Limite da web: PRESSIONE QUALQUER BOTÃO no seu gamepad para ativá-lo.",
+  "connectedGamepadsPort": "Jogador {port}",
+  "connectedGamepadsUnassigned": "Não atribuído",
+  "inputDeviceVirtualController": "Controlador virtual",
+  "inputGamepadAssignmentLabel": "Atribuição de gamepad",
+  "inputGamepadNone": "Nenhum/Não atribuído",
+  "inputListening": "Ouvindo...",
+  "inputDetected": "Detectado: {buttons}",
+  "inputGamepadMappingLabel": "Mapeamento de botões",
+  "inputResetToDefault": "Redefinir para o padrão",
+  "inputButtonA": "UM",
+  "inputButtonB": "B",
+  "inputButtonTurboA": "Turbo A",
+  "inputButtonTurboB": "Turbo B",
+  "inputButtonSelect": "Selecione",
+  "inputButtonStart": "Começar",
+  "inputButtonUp": "Acima",
+  "inputButtonDown": "Abaixo",
+  "inputButtonLeft": "Esquerda",
+  "inputButtonRight": "Direita",
+  "inputButtonRewind": "Retroceder",
+  "inputButtonFastForward": "Avanço rápido",
+  "inputButtonSaveState": "Salvar estado",
+  "inputButtonLoadState": "Carregar estado",
+  "inputButtonPause": "Pausa",
+  "globalHotkeysTitle": "Teclas de atalho do emulador",
+  "gamepadHotkeysTitle": "Teclas de atalho do gamepad (Jogador 1)",
+  "inputPortLabel": "Configurar reprodutor",
+  "player1": "Jogador 1",
+  "player2": "Jogador 2",
+  "player3": "Jogador 3",
+  "player4": "Jogador 4",
+  "keyboardPresetLabel": "Predefinição de teclado",
+  "keyboardPresetNone": "Nenhum",
+  "keyboardPresetNesStandard": "Padrão NES",
+  "keyboardPresetFightStick": "Arcade Stick",
+  "keyboardPresetArcadeLayout": "Distribuição Arcade",
+  "keyboardPresetCustom": "Personalizado",
+  "customKeyBindingsTitle": "Atalhos de teclas personalizados",
+  "bindKeyTitle": "Vincular {action}",
+  "unassignedKey": "Não atribuído",
+  "tipPressEscapeToClearBinding": "Dica: pressione Escape para limpar uma ligação.",
+  "keyboardActionUp": "Acima",
+  "keyboardActionDown": "Abaixo",
+  "keyboardActionLeft": "Esquerda",
+  "keyboardActionRight": "Direita",
+  "keyboardActionA": "UM",
+  "keyboardActionB": "B",
+  "keyboardActionSelect": "Selecione",
+  "keyboardActionStart": "Começar",
+  "keyboardActionTurboA": "Turbo A",
+  "keyboardActionTurboB": "Turbo B",
+  "keyboardActionRewind": "Retroceder",
+  "keyboardActionFastForward": "Avanço rápido",
+  "keyboardActionSaveState": "Salvar estado",
+  "keyboardActionLoadState": "Carregar estado",
+  "keyboardActionPause": "Pausa",
+  "keyboardActionFullScreen": "Tela cheia",
+  "inputBindingConflictCleared": "Ligação {player} {action} desmarcada.",
+  "inputBindingConflictHint": "({player} - {action})",
+  "inputBindingCapturedConflictHint": "Ocupado por {player} - {action}",
+  "emulationTitle": "Emulação",
+  "integerFpsTitle": "Modo FPS inteiro (60 Hz, NTSC)",
+  "integerFpsSubtitle": "Reduz a trepidação da rolagem em monitores de 60 Hz. PAL será adicionado posteriormente.",
+  "showOverlayTitle": "Mostrar sobreposição de status",
+  "showOverlaySubtitle": "Mostrar indicadores de pausa/retrocesso/avanço rápido na tela.",
+  "pauseInBackgroundTitle": "Pausa em segundo plano",
+  "pauseInBackgroundSubtitle": "Pausa automaticamente o emulador quando o aplicativo não está ativo.",
+  "autoSaveEnabledTitle": "Salvamento automático",
+  "autoSaveEnabledSubtitle": "Salve periodicamente o estado do jogo em um slot dedicado.",
+  "autoSaveIntervalTitle": "Intervalo de salvamento automático",
+  "autoSaveIntervalValue": "{minutes} minutos",
+  "fastForwardSpeedTitle": "Velocidade de avanço rápido",
+  "fastForwardSpeedSubtitle": "Velocidade máxima enquanto o avanço rápido está ativo.",
+  "fastForwardSpeedValue": "{percent}%",
+  "quickSaveSlotTitle": "Slot de salvamento rápido",
+  "quickSaveSlotSubtitle": "Slot usado por atalhos rápidos para salvar/carregar.",
+  "quickSaveSlotValue": "Slot {index}",
+  "rewindEnabledTitle": "Retroceder",
+  "rewindEnabledSubtitle": "Ative a funcionalidade de retrocesso em tempo real.",
+  "rewindSecondsTitle": "Duração do retrocesso",
+  "rewindSecondsValue": "{seconds} segundos",
+  "rewindMinutesTitle": "Duração do retrocesso",
+  "rewindMinutesValue": "{minutes} minutos",
+  "rewindSpeedTitle": "Velocidade de retrocesso",
+  "rewindSpeedSubtitle": "A velocidade durante o retrocesso está ativa.",
+  "rewindSpeedValue": "{percent}%",
+  "autoSlotLabel": "Slot automático",
+  "menuAutoSave": "Salvar automaticamente...",
+  "stateAutoSaved": "Salvamento automático criado",
+  "virtualControlsTitle": "Controles Virtuais",
+  "virtualControlsSwitchInputTip": "Mude a entrada para \"Controlador virtual\" para usar essas configurações.",
+  "virtualControlsButtonSize": "Tamanho do botão",
+  "virtualControlsGap": "Brecha",
+  "virtualControlsOpacity": "Opacidade",
+  "virtualControlsHitboxScale": "Escala de hitbox",
+  "virtualControlsHapticFeedback": "Feedback tátil",
+  "virtualControlsDpadDeadzone": "Zona morta do D-pad",
+  "virtualControlsDpadDeadzoneHelp": "Zona morta central: tocar próximo ao centro não acionará nenhuma direção.",
+  "virtualControlsDpadBoundaryDeadzone": "Zona morta de limite do D-pad",
+  "virtualControlsDpadBoundaryDeadzoneHelp": "Zona morta de limite: valores mais altos tornam as diagonais mais difíceis de acionar, reduzindo pressionamentos acidentais de vizinhos.",
+  "virtualControlsReset": "Redefinir layout",
+  "virtualControlsDiscardChangesTitle": "Desfazer alterações",
+  "virtualControlsDiscardChangesSubtitle": "Reverter para o último layout salvo",
+  "virtualControlsTurboFramesPerToggle": "Quadros turbo por alternância",
+  "virtualControlsTurboOnFrames": "Quadros de prensa turbo",
+  "virtualControlsTurboOffFrames": "Quadros de liberação turbo",
+  "framesValue": "Quadros {frames}",
+  "tipAdjustButtonsInDrawer": "Dica: ajuste a posição/tamanho do botão na gaveta do jogo.",
+  "keyCapturePressKeyToBind": "Pressione uma tecla para vincular.",
+  "keyCaptureCurrent": "Atual: {key}",
+  "keyCaptureCaptured": "Capturado: {key}",
+  "keyCapturePressEscToClear": "Pressione Escape para limpar.",
+  "keyBindingsTitle": "Atalhos de teclas",
+  "cancel": "Cancelar",
+  "appName": "Nesium",
+  "menuTooltip": "Menu",
+  "menuSectionFile": "Arquivo",
+  "menuSectionEmulation": "Emulação",
+  "menuSectionSettings": "Configurações",
+  "menuSectionWindows": "Windows",
+  "menuSectionHelp": "Ajuda",
+  "menuOpenRom": "Abrir ROM...",
+  "menuReset": "Reiniciar",
+  "menuPowerReset": "Reinicialização de energia",
+  "menuEject": "Desligar",
+  "menuSaveState": "Salvar estado...",
+  "menuLoadState": "Carregar estado...",
+  "menuPauseResume": "Pausar/Retomar",
+  "menuNetplay": "Netplay",
+  "netplayTransportLabel": "Transporte",
+  "netplayTransportAuto": "Automático (QUIC → TCP)",
+  "netplayTransportUnknown": "Desconhecido",
+  "netplayTransportTcp": "TCP",
+  "netplayTransportQuic": "QUIC",
+  "netplayUsingTcpFallback": "QUIC falhou, usando TCP",
+  "netplayStatusDisconnected": "Desconectado",
+  "netplayStatusConnecting": "Conectando...",
+  "netplayStatusConnected": "Conectado (Aguardando Sala)",
+  "netplayStatusInRoom": "Na sala",
+  "netplayDisconnect": "Desconectar",
+  "netplayServerAddress": "Endereço do servidor",
+  "netplayServerNameLabel": "Nome do servidor (SNI)",
+  "netplayServerNameHint": "localhost",
+  "netplayPlayerName": "Nome do jogador",
+  "netplayQuicFingerprintLabel": "Impressão digital do certificado QUIC (opcional)",
+  "netplayQuicFingerprintHint": "base64url (43 caracteres)",
+  "netplayQuicFingerprintHelper": "Insira isto para usar o QUIC fixado. Deixe em branco para usar a confiança do sistema (QUIC) ou fallback para TCP.",
+  "netplayConnect": "Junte-se ao jogo",
+  "netplayJoinViaP2P": "Junte-se via P2P",
+  "netplayJoinGame": "Junte-se ao jogo",
+  "netplayCreateRoom": "Criar sala",
+  "netplayJoinRoom": "Junte-se ao jogo",
+  "netplayAddressOrRoomCode": "Código da sala ou endereço do servidor",
+  "netplayHostingTitle": "Hospedagem",
+  "netplayRoomCodeLabel": "O código do seu quarto",
+  "netplayP2PEnabled": "Modo P2P",
+  "netplayDirectServerLabel": "Endereço do servidor",
+  "netplayAdvancedSettings": "Configurações avançadas de conexão",
+  "netplayP2PServerLabel": "Servidor P2P",
+  "netplayRoomCode": "Código do quarto",
+  "netplayRoleLabel": "Papel",
+  "netplayPlayerIndex": "Jogador {index}",
+  "netplaySpectator": "Espectador",
+  "netplayClientId": "ID do cliente",
+  "netplayPlayerListHeader": "Jogadores",
+  "netplayYouIndicator": "(Você)",
+  "netplayOrSeparator": "OU",
+  "netplayConnectFailed": "Falha na conexão: {error}",
+  "netplayDisconnectFailed": "Falha na desconexão: {error}",
+  "netplayCreateRoomFailed": "Falha ao criar sala: {error}",
+  "netplayJoinRoomFailed": "Falha ao ingressar na sala: {error}",
+  "netplaySwitchRoleFailed": "Falha na troca de função: {error}",
+  "netplayInvalidRoomCode": "Código de quarto inválido",
+  "netplayRomBroadcasted": "Netplay: ROM transmitida para a sala",
+  "menuLoadTasMovie": "Carregar filme TAS...",
+  "menuPreferences": "Preferências...",
+  "saveToExternalFile": "Salvar em arquivo...",
+  "loadFromExternalFile": "Carregar do arquivo...",
+  "slotLabel": "Slot",
+  "slotEmpty": "Vazio",
+  "slotHasData": "Salvo",
+  "stateSavedToSlot": "Estado salvo no slot {index}",
+  "stateLoadedFromSlot": "Estado carregado do slot {index}",
+  "slotCleared": "Slot {index} liberado",
+  "menuAbout": "Sobre",
+  "menuDebugger": "Depurador",
+  "menuTools": "Ferramentas",
+  "menuOpenDebuggerWindow": "Abrir janela do depurador",
+  "menuOpenToolsWindow": "Abrir janela de ferramentas",
+  "menuInputMappingComingSoon": "Mapeamento de entrada (em breve)",
+  "menuLastError": "Último erro",
+  "lastErrorDetailsAction": "Detalhes",
+  "lastErrorDialogTitle": "Último erro",
+  "lastErrorCopied": "Copiado",
+  "copy": "Cópia",
+  "paste": "Colar",
+  "windowDebuggerTitle": "Depurador Nesium",
+  "windowToolsTitle": "Ferramentas Nesium",
+  "virtualControlsEditTitle": "Editar controles virtuais",
+  "virtualControlsEditSubtitleEnabled": "Arraste para mover, aperte ou arraste o canto para redimensionar",
+  "virtualControlsEditSubtitleDisabled": "Ativar ajuste interativo",
+  "gridSnappingTitle": "Ajuste de grade",
+  "gridSpacingLabel": "Espaçamento da grade",
+  "debuggerPlaceholderBody": "Espaço reservado para monitores CPU/PPU, visualizadores de memória e inspetores OAM. Os mesmos widgets podem ficar em um painel lateral da área de trabalho ou em uma planilha móvel.",
+  "toolsPlaceholderBody": "Gravação/reprodução, mapeamento de entrada e cheats podem compartilhar esses widgets entre os painéis laterais da área de trabalho e as folhas inferiores móveis.",
+  "actionLoadRom": "Carregar ROM",
+  "actionResetNes": "Redefinir NES",
+  "actionPowerResetNes": "Reinicialização de energia NES",
+  "actionEjectNes": "Desligar",
+  "actionLoadPalette": "Carregar paleta",
+  "videoResetToDefault": "Redefinir para o padrão",
+  "videoTitle": "Vídeo",
+  "videoFilterLabel": "Filtro de vídeo",
+  "videoFilterCategoryCpu": "Filtros de CPU",
+  "videoFilterCategoryGpu": "Filtros GPU (Shaders)",
+  "videoFilterNone": "Nenhum (1x)",
+  "videoFilterPrescale2x": "Pré-escalar 2x",
+  "videoFilterPrescale3x": "Pré-escalar 3x",
+  "videoFilterPrescale4x": "Pré-escalar 4x",
+  "videoFilterHq2x": "QG2x",
+  "videoFilterHq3x": "QG3x",
+  "videoFilterHq4x": "QG4x",
+  "videoFilter2xSai": "2xSaI",
+  "videoFilterSuper2xSai": "Super 2xSaI",
+  "videoFilterSuperEagle": "Super Águia",
+  "videoFilterLcdGrid": "Grade LCD (2x)",
+  "videoFilterScanlines": "Linhas de varredura (2x)",
+  "videoFilterXbrz2x": "xBRZ 2x",
+  "videoFilterXbrz3x": "xBRZ 3x",
+  "videoFilterXbrz4x": "xBRZ 4x",
+  "videoFilterXbrz5x": "xBRZ 5x",
+  "videoFilterXbrz6x": "xBRZ 6x",
+  "videoLcdGridStrengthLabel": "Força da grade LCD",
+  "videoScanlinesIntensityLabel": "Intensidade da linha de varredura",
+  "videoFilterNtscComposite": "NTSC (composto)",
+  "videoFilterNtscSvideo": "NTSC (S-Vídeo)",
+  "videoFilterNtscRgb": "NTSC (RGB)",
+  "videoFilterNtscMonochrome": "NTSC (Monocromático)",
+  "videoFilterNtscBisqwit2x": "NTSC (Bisqwit) 2x",
+  "videoFilterNtscBisqwit4x": "NTSC (Bisqwit) 4x",
+  "videoFilterNtscBisqwit8x": "NTSC (Bisqwit) 8x",
+  "videoNtscAdvancedTitle": "NTSC Avançado",
+  "videoNtscMergeFieldsLabel": "Mesclar campos (reduzir cintilação)",
+  "videoNtscHueLabel": "Matiz",
+  "videoNtscSaturationLabel": "Saturação",
+  "videoNtscContrastLabel": "Contraste",
+  "videoNtscBrightnessLabel": "Brilho",
+  "videoNtscSharpnessLabel": "Nitidez",
+  "videoNtscGammaLabel": "Gama",
+  "videoNtscResolutionLabel": "Resolução",
+  "videoNtscArtifactsLabel": "Artefatos",
+  "videoNtscFringingLabel": "Franjas",
+  "videoNtscBleedLabel": "Sangramento",
+  "videoNtscBisqwitSettingsTitle": "Configurações NTSC (Bisqwit)",
+  "videoNtscBisqwitYFilterLengthLabel": "Filtro Y (desfoque horizontal)",
+  "videoNtscBisqwitIFilterLengthLabel": "Eu filtro",
+  "videoNtscBisqwitQFilterLengthLabel": "Filtro Q",
+  "videoIntegerScalingTitle": "Escala inteira",
+  "videoIntegerScalingSubtitle": "Dimensionamento perfeito de pixels (reduz o brilho na rolagem).",
+  "videoFullScreenTitle": "Tela cheia",
+  "videoFullScreenSubtitle": "Alternar o estado de tela cheia da janela",
+  "videoScreenVerticalOffset": "Deslocamento vertical da tela",
+  "videoScreenVerticalOffsetPortraitOnly": "Só entra em vigor no modo retrato.",
+  "videoAspectRatio": "Proporção de aspecto",
+  "videoAspectRatioSquare": "1:1 (pixels quadrados)",
+  "videoAspectRatioNtsc": "4:3 (NTSC)",
+  "videoAspectRatioStretch": "Esticar",
+  "videoShaderLibrashaderTitle": "Sombreadores RetroArch",
+  "videoShaderLibrashaderSubtitle": "Requer GLES3 + back-end de hardware (swapchain AHB).",
+  "videoShaderLibrashaderSubtitleWindows": "Requer back-end de GPU D3D11.",
+  "videoShaderLibrashaderSubtitleApple": "Requer back-end de Metal.",
+  "videoShaderLibrashaderSubtitleDisabled": "Mude o back-end do Android para Hardware para ativar.",
+  "videoShaderLibrashaderSubtitleDisabledWindows": "Mude o back-end do Windows para GPU D3D11 para ativar.",
+  "videoShaderPresetLabel": "Predefinição (.slangp)",
+  "videoShaderPresetNotSet": "Não definido",
+  "shaderBrowserTitle": "Sombreadores",
+  "shaderBrowserNoShaders": "Nenhum sombreador encontrado",
+  "shaderBrowserError": "Erro: {error}",
+  "aboutTitle": "Sobre Nesium",
+  "aboutLead": "Nesium: Frontend do emulador Rust NES/FC construído em nesium-core.",
+  "aboutIntro": "Este frontend Flutter reutiliza o núcleo Rust para emulação. A construção da web é executada no navegador via Flutter Web + Web Worker + WASM.",
+  "aboutLinksHeading": "Ligações",
+  "aboutGitHubLabel": "GitHub",
+  "aboutWebDemoLabel": "Demonstração na Web",
+  "aboutComponentsHeading": "Componentes de código aberto",
+  "aboutComponentsHint": "Toque para abrir, pressione e segure para copiar.",
+  "aboutLicenseHeading": "Licença",
+  "aboutLicenseBody": "Nesium é licenciado sob GPL-3.0 ou posterior. Consulte LICENSE.md na raiz do repositório.",
+  "aboutLaunchFailed": "Não foi possível iniciar: {url}",
+  "videoBackendLabel": "Back-end do renderizador",
+  "videoBackendAndroidLabel": "Back-end do renderizador Android",
+  "videoBackendWindowsLabel": "Back-end do renderizador do Windows",
+  "videoBackendHardware": "Hardware (AHardwareBuffer)",
+  "videoBackendUpload": "Compatibilidade (upload de CPU)",
+  "videoBackendRestartHint": "Entra em vigor após a reinicialização do aplicativo.",
+  "videoBackendCurrent": "Back-end atual: {backend}",
+  "windowsNativeOverlayTitle": "Sobreposição nativa do Windows (experimental)",
+  "windowsNativeOverlaySubtitle": "Ignora o compositor Flutter para uma suavidade perfeita. Desativa shaders e sobreposições de UI por trás do jogo.",
+  "highPerformanceModeLabel": "Modo de alto desempenho",
+  "highPerformanceModeDescription": "Eleve a prioridade do processo e otimize o agendador para uma jogabilidade mais tranquila.",
+  "videoLowLatencyTitle": "Vídeo de baixa latência",
+  "videoLowLatencySubtitle": "Sincronize a emulação e o renderizador para reduzir o jitter. Entra em vigor após a reinicialização do aplicativo.",
+  "paletteModeLabel": "Paleta",
+  "paletteModeBuiltin": "Integrado",
+  "paletteModeCustom": "Personalizado…",
+  "paletteModeCustomActive": "Personalizado ({name})",
+  "builtinPaletteLabel": "Paleta integrada",
+  "customPaletteLoadTitle": "Carregar arquivo de paleta (.pal)…",
+  "customPaletteLoadSubtitle": "192 bytes (RGB) ou 256 bytes (RGBA)",
+  "commandSucceeded": "{label} teve sucesso",
+  "commandFailed": "{label} falhou",
+  "snackPaused": "Pausado",
+  "snackResumed": "Retomada",
+  "snackPauseFailed": "Falha na pausa: {error}",
+  "dialogOk": "OK",
+  "debuggerNoRomTitle": "Nenhuma ROM em execução",
+  "debuggerNoRomSubtitle": "Carregue uma ROM para ver o estado de depuração",
+  "debuggerCpuRegisters": "Registros de CPU",
+  "debuggerPpuState": "Estado da UPU",
+  "debuggerCpuStatusTooltip": "Registro de status da CPU (P)\nN: Negativo - definido se o bit de resultado 7 estiver definido\nV: Overflow - definido como overflow assinado\nB: Break - definido pela instrução BRK\nD: Decimal - modo BCD (ignorado no NES)\nI: Interrupção Desativada - bloqueia IRQ\nZ: Zero - definido se o resultado for zero\nC: Carry - definido para overflow não assinado\n\nMaiúsculas = definir, minúsculas = limpar",
+  "debuggerPpuCtrlTooltip": "Registro de controle PPU (US$ 2.000)\nV: NMI habilitado\nP: PPU mestre/escravo (não utilizado)\nH: Altura do Sprite (0=8x8, 1=8x16)\nB: Endereço da tabela de padrão de fundo\nS: endereço da tabela de padrões Sprite\nI: incremento de endereço VRAM (0=1, 1=32)\nNN: Endereço base da tabela de nomes\n\nMaiúsculas = definir, minúsculas = limpar",
+  "debuggerPpuMaskTooltip": "Registro de máscara PPU ($ 2.001)\nBGR: bits de ênfase de cor\ns: Mostrar sprites\nb: Mostrar plano de fundo\nM: Mostrar sprites nos 8 pixels mais à esquerda\nm: Mostra o fundo nos 8 pixels mais à esquerda\ng: Escala de cinza\n\nMaiúsculas = definir, minúsculas = limpar",
+  "debuggerPpuStatusTooltip": "Registro de status PPU ($ 2002)\nV: VBlank começou\nS: Sprite 0 acerto\nO: Estouro de Sprite\n\nMaiúsculas = definir, minúsculas = limpar",
+  "debuggerScanlineTooltip": "Números da linha de varredura:\n0-239: Visível (Renderização)\n240: Pós-renderização (inativo)\n241-260: VBlank (Supressão Vertical)\n-1: Pré-renderização (linha de varredura fictícia)",
+  "tilemapSettings": "Configurações",
+  "tilemapOverlay": "Sobreposição",
+  "tilemapDisplayMode": "Modo de exibição",
+  "tilemapDisplayModeDefault": "Padrão",
+  "tilemapDisplayModeGrayscale": "Tons de cinza",
+  "tilemapDisplayModeAttributeView": "Visualização de atributos",
+  "tilemapTileGrid": "Grade de azulejos (8×8)",
+  "tilemapAttrGrid": "Grade de atributos (16×16)",
+  "tilemapAttrGrid32": "Grade de atributos (32×32)",
+  "tilemapNtBounds": "Limites do NT",
+  "tilemapScrollOverlay": "Sobreposição de rolagem",
+  "tilemapPanelDisplay": "Mostrar",
+  "tilemapPanelTilemap": "Mapa de blocos",
+  "tilemapPanelSelectedTile": "Bloco selecionado",
+  "tilemapHidePanel": "Ocultar painel",
+  "tilemapShowPanel": "Mostrar painel",
+  "tilemapInfoSize": "Tamanho",
+  "tilemapInfoSizePx": "Tamanho (px)",
+  "tilemapInfoTilemapAddress": "Endereço do mapa de blocos",
+  "tilemapInfoTilesetAddress": "Endereço do conjunto de blocos",
+  "tilemapInfoMirroring": "Espelhamento",
+  "tilemapInfoTileFormat": "Formato de bloco",
+  "tilemapInfoTileFormat2bpp": "2 pb",
+  "tilemapMirroringHorizontal": "Horizontal",
+  "tilemapMirroringVertical": "Vertical",
+  "tilemapMirroringFourScreen": "Quatro telas",
+  "tilemapMirroringSingleScreenLower": "Tela única (inferior)",
+  "tilemapMirroringSingleScreenUpper": "Tela única (superior)",
+  "tilemapMirroringMapperControlled": "Controlado por mapeador",
+  "tilemapLabelColumnRow": "Coluna, Linha",
+  "tilemapLabelXY": "X, Y",
+  "tilemapLabelSize": "Tamanho",
+  "tilemapLabelTilemapAddress": "Endereço do mapa de blocos",
+  "tilemapLabelTileIndex": "Índice de blocos",
+  "tilemapLabelTileAddressPpu": "Endereço do bloco (PPU)",
+  "tilemapLabelPaletteIndex": "Índice de paleta",
+  "tilemapLabelPaletteAddress": "Endereço da paleta",
+  "tilemapLabelAttributeAddress": "Endereço de atributo",
+  "tilemapLabelAttributeData": "Dados de atributos",
+  "tilemapSelectedTileTilemap": "Mapa de blocos",
+  "tilemapSelectedTileTileIdx": "Bloco idx",
+  "tilemapSelectedTileTilePpu": "Bloco (PPU)",
+  "tilemapSelectedTilePalette": "Paleta",
+  "tilemapSelectedTileAttr": "Atributo",
+  "tilemapCapture": "Capturar",
+  "tilemapCaptureFrameStart": "Início do quadro",
+  "tilemapCaptureVblankStart": "Início em branco",
+  "tilemapCaptureManual": "Manual",
+  "tilemapScanline": "Linha de varredura",
+  "tilemapDot": "Ponto",
+  "tilemapError": "Erro: {error}",
+  "tilemapRetry": "Tentar novamente",
+  "tilemapResetZoom": "Redefinir zoom",
+  "menuTilemapViewer": "Visualizador de mapa de blocos",
+  "menuTileViewer": "Visualizador de blocos",
+  "tileViewerError": "Erro: {error}",
+  "tileViewerRetry": "Tentar novamente",
+  "tileViewerSettings": "Configurações do visualizador de blocos",
+  "tileViewerOverlays": "Sobreposições",
+  "tileViewerShowGrid": "Mostrar grade de blocos",
+  "tileViewerPalette": "Paleta",
+  "tileViewerPaletteBg": "BG {index}",
+  "tileViewerPaletteSprite": "Sprite {index}",
+  "tileViewerGrayscale": "Usar paleta de tons de cinza",
+  "tileViewerSelectedTile": "Bloco selecionado",
+  "tileViewerPatternTable": "Tabela de padrões",
+  "tileViewerTileIndex": "Índice de blocos",
+  "tileViewerChrAddress": "Endereço CHR",
+  "tileViewerClose": "Fechar",
+  "tileViewerSource": "Fonte",
+  "tileViewerSourcePpu": "Memória PPU",
+  "tileViewerSourceChrRom": "ROM CHR",
+  "tileViewerSourceChrRam": "RAM CHR",
+  "tileViewerSourcePrgRom": "ROM PRG",
+  "tileViewerAddress": "Endereço",
+  "tileViewerSize": "Tamanho",
+  "tileViewerColumns": "Colunas",
+  "tileViewerRows": "Linhas",
+  "tileViewerLayout": "Disposição",
+  "tileViewerLayoutNormal": "Normal",
+  "tileViewerLayout8x16": "Sprites 8x16",
+  "tileViewerLayout16x16": "Sprites 16×16",
+  "tileViewerBackground": "Fundo",
+  "tileViewerBgDefault": "Padrão",
+  "tileViewerBgTransparent": "Transparente",
+  "tileViewerBgPalette": "Cor da paleta",
+  "tileViewerBgBlack": "Preto",
+  "tileViewerBgWhite": "Branco",
+  "tileViewerBgMagenta": "Magenta",
+  "tileViewerPresets": "Predefinições",
+  "tileViewerPresetPpu": "UPU",
+  "tileViewerPresetChr": "CDH",
+  "tileViewerPresetRom": "ROM",
+  "tileViewerPresetBg": "GB",
+  "tileViewerPresetOam": "OAM",
+  "menuSpriteViewer": "Visualizador de Sprites",
+  "menuPaletteViewer": "Visualizador de paleta",
+  "paletteViewerPaletteRamTitle": "Paleta RAM (32)",
+  "paletteViewerSystemPaletteTitle": "Paleta do Sistema (64)",
+  "paletteViewerSettingsTooltip": "Configurações do visualizador de paleta",
+  "paletteViewerTooltipPaletteRam": "{addr} = 0x{value}",
+  "paletteViewerTooltipSystemIndex": "Índice {index}",
+  "spriteViewerError": "Erro do visualizador de Sprite: {error}",
+  "spriteViewerSettingsTooltip": "Configurações do visualizador de Sprite",
+  "spriteViewerShowGrid": "Mostrar grade",
+  "spriteViewerShowOutline": "Mostrar contorno em torno dos sprites",
+  "spriteViewerShowOffscreenRegions": "Mostrar regiões fora da tela",
+  "spriteViewerDimOffscreenSpritesGrid": "Escurecer sprites fora da tela (grade)",
+  "spriteViewerShowListView": "Mostrar visualização de lista",
+  "spriteViewerPanelSprites": "Sprites",
+  "spriteViewerPanelDataSource": "Fonte de dados",
+  "spriteViewerPanelSprite": "Sprite",
+  "spriteViewerPanelSelectedSprite": "ator selecionado",
+  "spriteViewerLabelMode": "Modo",
+  "spriteViewerLabelPatternBase": "Base padrão",
+  "spriteViewerLabelThumbnailSize": "Tamanho da miniatura",
+  "spriteViewerBgGray": "Cinza",
+  "spriteViewerDataSourceSpriteRam": "Sprite RAM",
+  "spriteViewerDataSourceCpuMemory": "Memória CPU",
+  "spriteViewerTooltipTitle": "Sprite#{index}",
+  "spriteViewerLabelIndex": "Índice",
+  "spriteViewerLabelPos": "Posição",
+  "spriteViewerLabelSize": "Tamanho",
+  "spriteViewerLabelTile": "Telha",
+  "spriteViewerLabelTileAddr": "Endereço do bloco",
+  "spriteViewerLabelPalette": "Paleta",
+  "spriteViewerLabelPaletteAddr": "Endereço da paleta",
+  "spriteViewerLabelFlip": "Virar",
+  "spriteViewerLabelPriority": "Prioridade",
+  "spriteViewerPriorityBehindBg": "Atrás de BG",
+  "spriteViewerPriorityInFront": "Na frente",
+  "spriteViewerLabelVisible": "Visível",
+  "spriteViewerValueYes": "Sim",
+  "spriteViewerValueNoOffscreen": "Não (fora da tela)",
+  "spriteViewerVisibleStatusVisible": "Visível",
+  "spriteViewerVisibleStatusOffscreen": "Fora da tela",
+  "longPressToClear": "Pressione longamente para limpar",
+  "videoBackendD3D11": "GPU D3D11 (cópia zero)",
+  "videoBackendSoftware": "CPU de software (substituição)",
+  "netplayBackToSetup": "Voltar à configuração",
+  "netplayP2PMode": "Modo P2P",
+  "netplaySignalingServer": "Servidor de sinalização",
+  "netplayRelayServer": "Servidor de retransmissão (substituto)",
+  "netplayP2PRoomCode": "Código da sala P2P",
+  "netplayStartP2PSession": "Iniciar sessão P2P",
+  "netplayJoinP2PSession": "Junte-se à sessão P2P",
+  "netplayInvalidP2PServerAddr": "Endereço de servidor P2P inválido",
+  "netplayProceed": "Prosseguir",
+  "videoShaderParametersTitle": "Parâmetros de sombreador",
+  "videoShaderParametersSubtitle": "Ajuste os parâmetros do shader em tempo real",
+  "videoShaderParametersReset": "Redefinir parâmetros",
+  "searchHint": "Procurar...",
+  "searchTooltip": "Procurar",
+  "noResults": "Nenhum parâmetro correspondente encontrado",
+  "errorFailedToCreateTexture": "Falha ao criar textura",
+  "languageJapanese": "Japonês",
+  "languageSpanish": "Espanhol",
+  "languagePortuguese": "Português",
+  "languageRussian": "Russo",
+  "languageFrench": "Francês",
+  "languageGerman": "Alemão"
+}

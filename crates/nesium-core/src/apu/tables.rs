@@ -10,10 +10,10 @@ pub(super) const LENGTH_TABLE: [u8; 32] = [
 
 /// Duty cycle bit patterns for the two pulse channels.
 pub(super) const PULSE_DUTY_TABLE: [[u8; 8]; 4] = [
-    [0, 1, 0, 0, 0, 0, 0, 0], // 12.5%
-    [0, 1, 1, 0, 0, 0, 0, 0], // 25%
-    [0, 1, 1, 1, 1, 0, 0, 0], // 50%
-    [1, 0, 0, 1, 1, 1, 1, 1], // 75% (inverted)
+    [0, 0, 0, 0, 0, 0, 0, 1], // 12.5%
+    [0, 0, 0, 0, 0, 0, 1, 1], // 25%
+    [0, 0, 0, 0, 1, 1, 1, 1], // 50%
+    [1, 1, 1, 1, 1, 1, 0, 0], // 75% (inverted)
 ];
 
 /// 32-step triangle waveform.
@@ -29,7 +29,7 @@ pub(super) const NOISE_PERIOD_TABLE: [u16; 16] = [
 
 /// DMC bit rates in CPU cycles (NTSC).
 pub(super) const DMC_RATE_TABLE: [u16; 16] = [
-    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 85, 72, 54,
+    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
 ];
 
 pub(super) const DMC_SAMPLE_BASE: u16 = 0xC000;

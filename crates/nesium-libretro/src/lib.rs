@@ -1,8 +1,8 @@
-//! Demo libretro core built with `libretro-bridge`.
+//! Nesium libretro core implementation.
 //!
-//! This crate exposes a tiny illustrative core that renders a moving color
-//! gradient and emits a simple sine wave so that the `libretro-bridge`
-//! integration can be validated inside RetroArch.
+//! This crate implements a libretro core for the Nesium NES emulator,
+//! using `nesium-core` as the emulation engine and `libretro-bridge`
+//! for the Libretro API integration.
 
 use libretro_bridge::{
     Frame, GameGeometry, GameInfo, LibretroCore, LoadGameError, RuntimeHandles, SystemAvInfo,
@@ -124,14 +124,11 @@ impl LibretroCore for NesiumCore {
         self.update_input(runtime);
 
         let audio_frames = self.render_audio();
-        if let Some(video) = runtime.video() {
+        if let Some(video) = runtime.video()
+            && let Some(frame) = self.nes.try_render_buffer()
+        {
             let pitch = WIDTH as usize * COLOR_FORMAT.bytes_per_pixel();
-            video.submit(Frame::from_pixels(
-                self.nes.render_buffer(),
-                WIDTH,
-                HEIGHT,
-                pitch,
-            ));
+            video.submit(Frame::from_pixels(frame, WIDTH, HEIGHT, pitch));
         }
 
         if !audio_frames.is_empty() {

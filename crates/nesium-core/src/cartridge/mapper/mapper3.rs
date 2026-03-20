@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef};
+
 use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
@@ -136,7 +138,7 @@ impl Mapper3 {
 }
 
 impl Mapper for Mapper3 {
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         let value = match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => {
                 if self.prg_ram.is_empty() {
@@ -165,56 +167,25 @@ impl Mapper for Mapper3 {
     fn ppu_write(&mut self, addr: u16, data: u8) {
         self.write_chr(addr, data);
     }
-
-    fn prg_rom(&self) -> Option<&[u8]> {
-        Some(self.prg_rom.as_ref())
-    }
-
-    fn prg_ram(&self) -> Option<&[u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_ref())
+    fn memory_ref(&self) -> MapperMemoryRef<'_> {
+        MapperMemoryRef {
+            prg_rom: Some(self.prg_rom.as_ref()),
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_ref()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_rom: (!self.chr_rom.is_empty()).then_some(self.chr_rom.as_ref()),
+            chr_ram: (!self.chr_ram.is_empty()).then_some(self.chr_ram.as_ref()),
+            chr_battery_ram: None,
         }
     }
 
-    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_mut())
-        }
-    }
-
-    fn prg_save_ram(&self) -> Option<&[u8]> {
-        self.prg_ram()
-    }
-
-    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.prg_ram_mut()
-    }
-
-    fn chr_rom(&self) -> Option<&[u8]> {
-        if self.chr_rom.is_empty() {
-            None
-        } else {
-            Some(self.chr_rom.as_ref())
-        }
-    }
-
-    fn chr_ram(&self) -> Option<&[u8]> {
-        if self.chr_ram.is_empty() {
-            None
-        } else {
-            Some(self.chr_ram.as_ref())
-        }
-    }
-
-    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
-        if self.chr_ram.is_empty() {
-            None
-        } else {
-            Some(self.chr_ram.as_mut())
+    fn memory_mut(&mut self) -> MapperMemoryMut<'_> {
+        MapperMemoryMut {
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_mut()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_ram: (!self.chr_ram.is_empty()).then_some(self.chr_ram.as_mut()),
+            chr_battery_ram: None,
         }
     }
 
@@ -307,8 +278,8 @@ mod tests {
     #[test]
     fn prg_rom_mirrors() {
         let cart = rom_cart(1, 2);
-        let a = cart.cpu_read(cpu_mem::PRG_ROM_START).unwrap();
-        let b = cart.cpu_read(cpu_mem::PRG_ROM_START + 0x4000).unwrap();
+        let a = cart.cpu_read(cpu_mem::PRG_ROM_START, 0).unwrap();
+        let b = cart.cpu_read(cpu_mem::PRG_ROM_START + 0x4000, 0).unwrap();
         assert_eq!(a, b);
     }
 

@@ -9,6 +9,7 @@ pub enum PaletteKind {
     FbxCompositeDirect,
     SonyCxa2025AsUs,
     Pal2c07,
+    Mesen2C02,
     RawLinear,
 }
 
@@ -19,6 +20,7 @@ impl From<PaletteKind> for CorePaletteKind {
             PaletteKind::FbxCompositeDirect => CorePaletteKind::FbxCompositeDirect,
             PaletteKind::SonyCxa2025AsUs => CorePaletteKind::SonyCxa2025AsUs,
             PaletteKind::Pal2c07 => CorePaletteKind::Pal2c07,
+            PaletteKind::Mesen2C02 => CorePaletteKind::Mesen2C02,
             PaletteKind::RawLinear => CorePaletteKind::RawLinear,
         }
     }
@@ -31,6 +33,7 @@ impl From<CorePaletteKind> for PaletteKind {
             CorePaletteKind::FbxCompositeDirect => PaletteKind::FbxCompositeDirect,
             CorePaletteKind::SonyCxa2025AsUs => PaletteKind::SonyCxa2025AsUs,
             CorePaletteKind::Pal2c07 => PaletteKind::Pal2c07,
+            CorePaletteKind::Mesen2C02 => PaletteKind::Mesen2C02,
             CorePaletteKind::RawLinear => PaletteKind::RawLinear,
         }
     }

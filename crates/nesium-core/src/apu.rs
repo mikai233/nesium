@@ -31,7 +31,10 @@ use crate::{
     reset_kind::ResetKind,
 };
 
-pub use expansion::ExpansionAudio;
+pub use expansion::{
+    ExpansionAudio, ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot,
+    Namco163Audio, NullExpansionAudioSink, Sunsoft5bAudio, Vrc6Audio, Vrc7Audio,
+};
 pub use frame_counter::FrameCounterMode;
 
 use dmc::Dmc;
@@ -190,7 +193,7 @@ impl Apu {
                 apu_mem::Register::DmcDirectLoad => self.dmc.write_direct_load(value),
                 apu_mem::Register::DmcSampleAddress => self.dmc.write_sample_address(value),
                 apu_mem::Register::DmcSampleLength => self.dmc.write_sample_length(value),
-                apu_mem::Register::Status => self.write_status(value),
+                apu_mem::Register::Status => self.write_status(value, cpu_cycle),
                 apu_mem::Register::FrameCounter => {
                     // Track the last written value so warm resets can restore
                     // the current frame counter mode, matching hardware
@@ -198,7 +201,9 @@ impl Apu {
                     // reset rather than forced back to `$00`.
                     self.last_frame_counter_value = value;
                     let reset = self.frame_counter.configure(value, cpu_cycle);
-                    self.status.frame_interrupt = false;
+                    if value & 0x40 != 0 {
+                        self.status.frame_interrupt = false;
+                    }
                     self.apply_frame_reset(reset);
                 }
             }
@@ -221,14 +226,15 @@ impl Apu {
         }
     }
 
-    fn write_status(&mut self, value: u8) {
+    fn write_status(&mut self, value: u8, cpu_cycle: u64) {
         self.pulse[0].set_enabled(value & 0b0000_0001 != 0);
         self.pulse[1].set_enabled(value & 0b0000_0010 != 0);
         self.triangle.set_enabled(value & 0b0000_0100 != 0);
         self.noise.set_enabled(value & 0b0000_1000 != 0);
-        self.dmc
-            .set_enabled(value & 0b0001_0000 != 0, &mut self.status);
+
+        // Hardware clears DMC IRQ on $4015 writes (not on $4015 reads).
         self.status.dmc_interrupt = false;
+        self.dmc.set_enabled(value & 0b0001_0000 != 0, cpu_cycle);
     }
 
     fn read_status(&mut self) -> u8 {
@@ -242,10 +248,8 @@ impl Apu {
         value |= u8::from(self.status.frame_interrupt) << 6;
         value |= u8::from(self.status.dmc_interrupt) << 7;
 
-        // Reading $4015 clears both interrupt sources.
+        // Reading $4015 clears only the frame interrupt source.
         self.status.frame_interrupt = false;
-        self.status.dmc_interrupt = false;
-
         value
     }
 
@@ -271,6 +275,15 @@ impl Apu {
         self.noise.clock_length();
     }
 
+    #[inline]
+    fn commit_length_halt_flags(&mut self) {
+        for pulse in &mut self.pulse {
+            pulse.apply_length_halt();
+        }
+        self.triangle.apply_length_halt();
+        self.noise.apply_length_halt();
+    }
+
     /// Bus-attached per-CPU-cycle tick, mirroring the `Ppu::step` entrypoint shape.
     ///
     /// DMC DMA requests are queued on the bus directly so callers no longer
@@ -287,16 +300,22 @@ impl Apu {
         if tick.half {
             apu.step_half_frame();
         }
+        if tick.frame_irq_clear {
+            apu.status.frame_interrupt = false;
+        }
         if tick.frame_irq {
             apu.status.frame_interrupt = true;
         }
+        // Apply control-register halt changes after frame-counter clocks so
+        // half-frame length decrements observe the previous halt state.
+        apu.commit_length_halt_flags();
 
         for pulse in &mut apu.pulse {
             pulse.step_timer();
         }
         apu.triangle.step_timer();
         apu.noise.step_timer();
-        apu.dmc.step(&mut apu.status, bus.pending_dma);
+        apu.dmc.step(bus.pending_dma);
 
         if let Some(mixer) = bus.mixer.as_deref_mut() {
             apu.push_audio_levels(mixer);
@@ -357,9 +376,19 @@ impl Apu {
         }
     }
 
+    /// Pushes instantaneous channel level changes at the current CPU cycle.
+    ///
+    /// This is used after CPU writes to APU registers: in the bus timing model,
+    /// APU stepping happens at cycle begin and register writes occur later in
+    /// the same cycle. Any write-induced output jump must therefore be emitted
+    /// immediately at this cycle, not deferred to the next `Apu::step`.
+    pub(crate) fn sync_levels_now(&mut self, mixer: &mut NesSoundMixer) {
+        self.push_audio_levels(mixer);
+    }
+
     /// Completes a pending DMC DMA fetch with the provided PRG byte.
     pub fn finish_dma_fetch(&mut self, byte: u8) {
-        self.dmc.finish_dma_fetch(byte);
+        self.dmc.finish_dma_fetch(byte, &mut self.status);
     }
 
     /// Last DMC sample fetch address (used for DMA stall bus access).
@@ -451,6 +480,7 @@ mod tests {
         let mut apu = Apu::new();
         apu.cpu_write(apu_mem::STATUS, 0b0000_0001, 0);
         apu.cpu_write(0x4003, 0b1111_1000, 0); // load a long length value
+        apu.commit_length_halt_flags();
 
         // Length counter latched because pulse1 is enabled.
         assert!(apu.pulse[0].length_active());
@@ -515,7 +545,7 @@ mod tests {
     }
 
     #[test]
-    fn dmc_status_bit_and_irq_clear() {
+    fn dmc_status_bit_and_irq_clear_on_write() {
         let mut apu = Apu::new();
         apu.cpu_write(0x4013, 0x01, 0); // sample length = 17 bytes
         apu.cpu_write(apu_mem::STATUS, 0b0001_0000, 0); // enable DMC
@@ -524,11 +554,16 @@ mod tests {
         let status = apu.cpu_read(apu_mem::STATUS);
         assert_eq!(status & 0b0001_0000, 0b0001_0000);
 
-        // Force an IRQ and ensure reads clear it.
+        // Force an IRQ and ensure reads preserve it.
         apu.status.dmc_interrupt = true;
         let first = apu.cpu_read(apu_mem::STATUS);
         assert_eq!(first & 0b1000_0000, 0b1000_0000);
         let second = apu.cpu_read(apu_mem::STATUS);
-        assert_eq!(second & 0b1000_0000, 0);
+        assert_eq!(second & 0b1000_0000, 0b1000_0000);
+
+        // Writing $4015 clears DMC IRQ.
+        apu.cpu_write(apu_mem::STATUS, 0b0001_0000, 0);
+        let third = apu.cpu_read(apu_mem::STATUS);
+        assert_eq!(third & 0b1000_0000, 0);
     }
 }

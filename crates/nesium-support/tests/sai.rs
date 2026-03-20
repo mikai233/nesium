@@ -1,4 +1,4 @@
-use nesium_core::ppu::buffer::{ColorFormat, VideoPostProcessor};
+use nesium_core::ppu::buffer::{ColorFormat, SourceFrame, TargetFrameMut, VideoPostProcessor};
 use nesium_core::ppu::palette::Color;
 use nesium_support::video::filters::{SaiPostProcessor, SaiVariant};
 
@@ -13,6 +13,7 @@ fn sai_filters_solid_color_is_solid() {
     let src_w = 8usize;
     let src_h = 6usize;
     let src = vec![0u8; src_w * src_h];
+    let src_emphasis = vec![0u8; src_w * src_h];
     let palette = solid_palette(Color {
         r: 0x12,
         g: 0x34,
@@ -29,15 +30,9 @@ fn sai_filters_solid_color_is_solid() {
         let dst_h = src_h * 2;
         let mut dst = vec![0u8; dst_w * dst_h * 4];
         processor.process(
-            &src,
-            src_w,
-            src_h,
+            SourceFrame::new(&src, &src_emphasis, src_w, src_h),
             &palette,
-            &mut dst,
-            dst_w * 4,
-            dst_w,
-            dst_h,
-            ColorFormat::Rgba8888,
+            TargetFrameMut::new(&mut dst, dst_w * 4, dst_w, dst_h, ColorFormat::Rgba8888),
         );
 
         for px in dst.chunks_exact(4) {

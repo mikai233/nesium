@@ -36,11 +36,13 @@
 
 use std::borrow::Cow;
 
+use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef};
+
 use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram_with_trainer},
+        mapper::{ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer},
     },
     memory::cpu as cpu_mem,
     reset_kind::ResetKind,
@@ -248,6 +250,22 @@ impl Mapper8 {
 }
 
 impl Mapper for Mapper8 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::CPU_BUS_ACCESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::CpuBusAccess { .. } = event {
+            if self.irq_enabled {
+                self.irq_counter = self.irq_counter.wrapping_add(1);
+                if self.irq_counter == 0 {
+                    self.irq_pending = true;
+                    self.irq_enabled = false;
+                }
+            }
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         // Power-on defaults:
         // - IRQ counter disabled and cleared.
@@ -262,7 +280,7 @@ impl Mapper for Mapper8 {
         self.prg_bank_high_2x = self.prg_bank_count_8k.saturating_sub(2);
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         let value = match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => return self.read_prg_ram(addr),
             cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => self.read_prg_rom(addr),
@@ -289,16 +307,6 @@ impl Mapper for Mapper8 {
         }
     }
 
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        if self.irq_enabled {
-            self.irq_counter = self.irq_counter.wrapping_add(1);
-            if self.irq_counter == 0 {
-                self.irq_pending = true;
-                self.irq_enabled = false;
-            }
-        }
-    }
-
     fn ppu_read(&self, addr: u16) -> Option<u8> {
         Some(self.read_chr(addr))
     }
@@ -310,45 +318,26 @@ impl Mapper for Mapper8 {
     fn irq_pending(&self) -> bool {
         self.irq_pending
     }
-
-    fn prg_rom(&self) -> Option<&[u8]> {
-        Some(self.prg_rom.as_ref())
-    }
-
-    fn prg_ram(&self) -> Option<&[u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_ref())
+    fn memory_ref(&self) -> MapperMemoryRef<'_> {
+        MapperMemoryRef {
+            prg_rom: Some(self.prg_rom.as_ref()),
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_ref()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_rom: self.chr.as_rom(),
+            chr_ram: self.chr.as_ram(),
+            chr_battery_ram: None,
         }
     }
 
-    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_mut())
+    fn memory_mut(&mut self) -> MapperMemoryMut<'_> {
+        MapperMemoryMut {
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_mut()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_ram: self.chr.as_ram_mut(),
+            chr_battery_ram: None,
         }
-    }
-
-    fn prg_save_ram(&self) -> Option<&[u8]> {
-        self.prg_ram()
-    }
-
-    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.prg_ram_mut()
-    }
-
-    fn chr_rom(&self) -> Option<&[u8]> {
-        self.chr.as_rom()
-    }
-
-    fn chr_ram(&self) -> Option<&[u8]> {
-        self.chr.as_ram()
-    }
-
-    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.chr.as_ram_mut()
     }
 
     fn mirroring(&self) -> Mirroring {

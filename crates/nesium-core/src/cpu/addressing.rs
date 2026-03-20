@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     bus::CpuBus,
+    cartridge::CpuBusAccessKind,
     context::Context,
     cpu::{
         Cpu,
@@ -234,10 +235,10 @@ impl Display for Addressing {
 fn exec_absolute(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
+            cpu.effective_addr = cpu.fetch_operand_u8(bus, ctx) as u16;
         }
         1 => {
-            let hi = cpu.fetch_u8(bus, ctx);
+            let hi = cpu.fetch_operand_u8(bus, ctx);
             cpu.effective_addr |= (hi as u16) << 8;
         }
         _ => unreachable_step!("invalid Absolute step {step}"),
@@ -247,10 +248,10 @@ fn exec_absolute(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
+            cpu.effective_addr = cpu.fetch_operand_u8(bus, ctx) as u16;
         }
         1 => {
-            let hi = cpu.fetch_u8(bus, ctx);
+            let hi = cpu.fetch_operand_u8(bus, ctx);
             let base = ((hi as u16) << 8) | cpu.effective_addr;
             cpu.tmp = hi;
             // if cpu.opcode_in_flight == Some(0x9C) {
@@ -269,7 +270,7 @@ fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8)
                 // Force dummy read cycle
                 cpu.effective_addr
             };
-            cpu.dummy_read_at(dummy_addr, bus, ctx);
+            cpu.read(dummy_addr, bus, ctx, CpuBusAccessKind::DummyRead);
         }
         _ => unreachable_step!("invalid AbsoluteX step {step}"),
     }
@@ -278,10 +279,10 @@ fn exec_absolute_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8)
 fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
+            cpu.effective_addr = cpu.fetch_operand_u8(bus, ctx) as u16;
         }
         1 => {
-            let hi = cpu.fetch_u8(bus, ctx);
+            let hi = cpu.fetch_operand_u8(bus, ctx);
             let base = ((hi as u16) << 8) | cpu.effective_addr;
             cpu.tmp = hi;
             // if cpu.opcode_in_flight == Some(0x9F)
@@ -303,7 +304,7 @@ fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8)
                 // Force dummy read cycle
                 cpu.effective_addr
             };
-            cpu.dummy_read_at(dummy_addr, bus, ctx);
+            cpu.read(dummy_addr, bus, ctx, CpuBusAccessKind::DummyRead);
         }
         _ => unreachable_step!("invalid AbsoluteY step {step}"),
     }
@@ -312,14 +313,14 @@ fn exec_absolute_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8)
 fn exec_indirect(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
+            cpu.effective_addr = cpu.fetch_operand_u8(bus, ctx) as u16;
         }
         1 => {
-            let hi = cpu.fetch_u8(bus, ctx);
+            let hi = cpu.fetch_operand_u8(bus, ctx);
             cpu.effective_addr |= (hi as u16) << 8;
         }
         2 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         3 => {
             let hi_addr = if (cpu.effective_addr & 0xFF) == 0xFF {
@@ -327,7 +328,7 @@ fn exec_indirect(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
             } else {
                 cpu.effective_addr + 1
             };
-            let hi = bus.mem_read(hi_addr, cpu, ctx);
+            let hi = cpu.read(hi_addr, bus, ctx, CpuBusAccessKind::Read);
             cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
         }
         _ => unreachable_step!("invalid Indirect step {step}"),
@@ -337,7 +338,7 @@ fn exec_indirect(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 fn exec_zero_page(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
+            cpu.effective_addr = cpu.fetch_operand_u8(bus, ctx) as u16;
         }
         _ => unreachable_step!("invalid ZeroPage step {step}"),
     }
@@ -348,7 +349,7 @@ fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8
         // T1: Fetch zero-page base address (BAL) from the instruction stream.
         // Operand is an 8-bit address; high byte is implicitly $00.
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
+            cpu.effective_addr = cpu.fetch_operand_u8(bus, ctx) as u16;
         }
 
         // T2: Dummy read at $00:BAL (discarded).
@@ -359,7 +360,7 @@ fn exec_zero_page_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8
         // that will be used by the instruction execution micro-ops on the next cycle.
         1 => {
             let base = cpu.effective_addr & 0x00FF;
-            cpu.dummy_read_at(base, bus, ctx);
+            cpu.read(base, bus, ctx, CpuBusAccessKind::DummyRead);
 
             let addr = (cpu.effective_addr + cpu.x as u16) & 0x00FF; // wrap within zero page
             cpu.effective_addr = addr;
@@ -373,14 +374,14 @@ fn exec_zero_page_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8
     match step {
         // T1: Fetch zero-page base address (BAL) from the instruction stream.
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
+            cpu.effective_addr = cpu.fetch_operand_u8(bus, ctx) as u16;
         }
 
         // T2: Dummy read at $00:BAL (discarded), then compute (BAL + Y).
         // Same timing behavior as ZeroPage,X, but using the Y index register.
         1 => {
             let base = cpu.effective_addr & 0x00FF;
-            cpu.dummy_read_at(base, bus, ctx);
+            cpu.read(base, bus, ctx, CpuBusAccessKind::DummyRead);
 
             let addr = (cpu.effective_addr + cpu.y as u16) & 0x00FF; // wrap within zero page
             cpu.effective_addr = addr;
@@ -394,13 +395,13 @@ fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8)
     match step {
         // T1: fetch zero-page base address (BAL)
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16; // BAL in low byte
+            cpu.effective_addr = cpu.fetch_operand_u8(bus, ctx) as u16; // BAL in low byte
         }
 
         // T2: dummy read at $00:BAL (discarded), then compute (BAL + X)
         1 => {
             let base = cpu.effective_addr & 0x00FF;
-            cpu.dummy_read_at(base, bus, ctx);
+            cpu.read(base, bus, ctx, CpuBusAccessKind::DummyRead);
 
             // reuse effective_addr to hold the indexed zero-page pointer location
             cpu.effective_addr = (base + cpu.x as u16) & 0x00FF;
@@ -409,13 +410,13 @@ fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8)
         // T3: fetch low byte of effective address from $00:(BAL+X)
         2 => {
             let ptr = cpu.effective_addr & 0x00FF;
-            cpu.tmp = bus.mem_read(ptr, cpu, ctx); // ADL
+            cpu.tmp = cpu.read(ptr, bus, ctx, CpuBusAccessKind::Read); // ADL
         }
 
         // T4: fetch high byte from $00:(BAL+X+1), then form 16-bit effective address
         3 => {
             let ptr = cpu.effective_addr & 0x00FF;
-            let hi = bus.mem_read((ptr + 1) & 0x00FF, cpu, ctx); // ADH (wrap in zero page)
+            let hi = cpu.read((ptr + 1) & 0x00FF, bus, ctx, CpuBusAccessKind::Read); // ADH (wrap in zero page)
             cpu.effective_addr = ((hi as u16) << 8) | (cpu.tmp as u16);
         }
 
@@ -426,14 +427,14 @@ fn exec_indirect_x(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8)
 fn exec_indirect_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.effective_addr = cpu.fetch_u8(bus, ctx) as u16;
+            cpu.effective_addr = cpu.fetch_operand_u8(bus, ctx) as u16;
         }
         1 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         2 => {
             let hi_addr = (cpu.effective_addr + 1) & 0x00FF;
-            let hi = bus.mem_read(hi_addr, cpu, ctx);
+            let hi = cpu.read(hi_addr, bus, ctx, CpuBusAccessKind::Read);
             let base = ((hi as u16) << 8) | (cpu.tmp as u16);
             cpu.tmp = hi;
             // if cpu.opcode_in_flight == Some(0x93) {
@@ -452,7 +453,7 @@ fn exec_indirect_y(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8)
                 // Force dummy read cycle
                 cpu.effective_addr
             };
-            cpu.dummy_read_at(dummy_addr, bus, ctx);
+            cpu.read(dummy_addr, bus, ctx, CpuBusAccessKind::DummyRead);
         }
         _ => unreachable_step!("invalid IndirectY step {step}"),
     }

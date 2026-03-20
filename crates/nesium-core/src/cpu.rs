@@ -1,10 +1,8 @@
 use std::fmt::{Debug, Display};
-use std::fs::OpenOptions;
-use std::io::{BufWriter, Write};
-use std::sync::{Mutex, OnceLock};
 
 use crate::apu::Apu;
 use crate::bus::{CpuBus, DmcDmaEvent, STACK_ADDR};
+use crate::cartridge::CpuBusAccessKind;
 use crate::context::Context;
 use crate::cpu::addressing::Addressing;
 use crate::cpu::instruction::Instruction;
@@ -70,33 +68,6 @@ pub fn opcode_meta(opcode: u8) -> OpcodeMeta {
 }
 
 const OAM_DMA_TRANSFER_BYTES: u16 = ppu_mem::OAM_RAM_SIZE as u16;
-
-static CPU_OPCODE_LOG: OnceLock<Option<Mutex<BufWriter<std::fs::File>>>> = OnceLock::new();
-
-#[inline]
-fn cpu_opcode_log_write(cycle: u64, pc: u16, opcode: u8, addr_val: u8) {
-    let log = CPU_OPCODE_LOG.get_or_init(|| {
-        OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open("/Users/mikai/RustroverProjects/nesium/nesium_cpu_opcode.log")
-            .ok()
-            .map(|f| Mutex::new(BufWriter::with_capacity(256 * 1024, f)))
-    });
-
-    if let Some(writer) = log
-        && let Ok(mut w) = writer.lock()
-    {
-        // Keep the same format as the C++ logger: "cycle=<u64> opcode=<02X>"
-        writeln!(
-            w,
-            "cycle={} pc={:04X} opcode={:02X} 0200={:02X}",
-            cycle, pc, opcode, addr_val
-        )
-        .unwrap();
-    }
-}
 
 /// Unified DMA controller state to match Mesen's implementation.
 /// Handles the interleaving of OAM and DMC DMA, including the specific "Halt" and "Dummy Read" cycle stealing behavior.
@@ -308,16 +279,9 @@ impl Cpu {
                 if self.prev_irq_active || self.prev_nmi_latch {
                     self.perform_interrupt(bus, ctx);
                 } else {
-                    // let start_pc = self.pc;
-                    // let start_cycles = bus.cycles();
-                    // let addr_val = bus.ram[0x0200];
-                    let opcode = self.fetch_u8(bus, ctx);
-                    // if start_cycles < 20_000_000 {
-                    //     cpu_opcode_log_write(start_cycles, start_pc, opcode, addr_val);
-                    // }
+                    let opcode = self.fetch_opcode(bus, ctx);
                     self.opcode_in_flight = Some(opcode);
                     let instr = &LOOKUP_TABLE[opcode as usize];
-                    // self.log_trace_line(bus, ctx, start_pc, start_cycles, instr);
                     self.prepare_step(instr);
                 }
             }
@@ -332,10 +296,9 @@ impl Cpu {
         };
         *bus.cycles = bus.cycles.wrapping_add(1);
         bus.bump_master_clock(start_delta, self, ctx);
+        bus.notify_mapper_cpu_clock();
 
-        if let Some(cart) = bus.cartridge.as_mut() {
-            cart.cpu_clock(*bus.cycles);
-        }
+        bus.clock_mapper_expansion_audio();
         // Run one APU CPU-cycle tick; DMA requests are queued on the bus.
         Apu::step(bus, self, ctx);
     }
@@ -362,34 +325,59 @@ impl Cpu {
 
     #[inline]
     pub(crate) fn dummy_read(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
-        bus.mem_read(self.pc, self, ctx)
+        self.read(self.pc, bus, ctx, CpuBusAccessKind::DummyRead)
     }
 
     #[inline]
-    pub(crate) fn dummy_read_at(&mut self, addr: u16, bus: &mut CpuBus, ctx: &mut Context) {
-        bus.mem_read(addr, self, ctx);
+    pub(crate) fn dummy_write(&mut self, addr: u16, data: u8, bus: &mut CpuBus, ctx: &mut Context) {
+        self.write(addr, data, bus, ctx, CpuBusAccessKind::DummyWrite);
     }
 
     #[inline]
-    pub(crate) fn dummy_write_at(
+    fn fetch_pc_u8(&mut self, bus: &mut CpuBus, ctx: &mut Context, kind: CpuBusAccessKind) -> u8 {
+        debug_assert!(matches!(
+            kind,
+            CpuBusAccessKind::ExecOpcode | CpuBusAccessKind::ExecOperand
+        ));
+        let v = self.read(self.pc, bus, ctx, kind);
+        self.inc_pc();
+        v
+    }
+
+    pub(crate) fn fetch_opcode(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
+        self.fetch_pc_u8(bus, ctx, CpuBusAccessKind::ExecOpcode)
+    }
+
+    pub(crate) fn fetch_operand_u8(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
+        self.fetch_pc_u8(bus, ctx, CpuBusAccessKind::ExecOperand)
+    }
+
+    #[inline]
+    pub(crate) fn read(
+        &mut self,
+        addr: u16,
+        bus: &mut CpuBus,
+        ctx: &mut Context,
+        kind: CpuBusAccessKind,
+    ) -> u8 {
+        bus.mem_read_with_kind(addr, self, ctx, kind)
+    }
+
+    #[inline]
+    pub(crate) fn write(
         &mut self,
         addr: u16,
         data: u8,
         bus: &mut CpuBus,
         ctx: &mut Context,
+        kind: CpuBusAccessKind,
     ) {
-        bus.mem_write(addr, data, self, ctx);
+        bus.mem_write_with_kind(addr, data, self, ctx, kind);
     }
 
-    pub(crate) fn fetch_u8(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
-        let v = bus.mem_read(self.pc, self, ctx);
-        self.inc_pc();
-        v
-    }
-
-    pub(crate) fn fetch_u16(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u16 {
-        let lo = self.fetch_u8(bus, ctx) as u16;
-        let hi = self.fetch_u8(bus, ctx) as u16;
+    pub(crate) fn fetch_operand_u16(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u16 {
+        let lo = self.fetch_operand_u8(bus, ctx) as u16;
+        let hi = self.fetch_operand_u8(bus, ctx) as u16;
         (hi << 8) | lo
     }
 
@@ -557,9 +545,9 @@ impl Cpu {
             }
         }
 
-        // Start OAM DMA only at instruction boundary (before opcode fetch), mirroring Mesen.
-        if self.opcode_in_flight.is_none()
-            && !self.dma.oam_active
+        // Mesen latches $4014 immediately and processes DMA on the next CPU
+        // bus access, not only on the next opcode fetch/instruction boundary.
+        if !self.dma.oam_active
             && let Some(page) = bus.take_oam_dma()
         {
             self.dma.request_oam(page);
@@ -578,8 +566,9 @@ impl Cpu {
         // This is required to model Mesen's behavior where certain dummy reads to $4016/$4017
         // are skipped to avoid extra controller side effects, while still consuming time.
         #[inline(always)]
-        fn dma_idle(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context) {
+        fn dma_idle(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, addr: u16) {
             cpu.begin_cycle(true, bus, ctx);
+            bus.notify_mapper_cpu_bus_access(CpuBusAccessKind::Idle, addr, 0);
             cpu.end_cycle(true, bus, ctx);
         }
 
@@ -616,9 +605,19 @@ impl Cpu {
                 || skip_first_input_clock;
 
             if skip_halt_mem_access {
-                dma_idle(self, bus, ctx);
+                dma_idle(self, bus, ctx, addr);
             } else {
                 bus.dma_read(addr, self, ctx);
+            }
+
+            // APU/DMC can queue an abort/request during the halt cycle itself.
+            // Drain it immediately so post-halt handling can match Mesen's
+            // `_abortDmcDma` early-return path.
+            while let Some(evt) = bus.take_dmc_dma_event() {
+                match evt {
+                    DmcDmaEvent::Abort => self.dma.stop_dmc(),
+                    DmcDmaEvent::Request { addr } => self.dma.request_dmc(addr),
+                }
             }
 
             // If DMC was aborted during/just before the halt cycle, clear it now.
@@ -647,10 +646,9 @@ impl Cpu {
                 }
             }
 
-            // Mesen decides GET/PUT based on the cycle count before starting the cycle.
-            // Our `begin_cycle` increments cycles, so use the *next* cycle to classify.
-            let next_cycle = bus.cycles().wrapping_add(1);
-            let get_cycle = (next_cycle & 1) == 0;
+            // Match Mesen: classify GET/PUT from the current CPU cycle counter
+            // *before* the next DMA cycle starts.
+            let get_cycle = (bus.cycles() & 1) == 0;
 
             // Snapshot DMC readiness BEFORE we clear `dummy_read_needed` this cycle.
             let dmc_ready_pre = self.dma.dmc_active
@@ -722,7 +720,7 @@ impl Cpu {
 
                     // Alignment: waiting for the write phase, burn a dummy/idle DMA read.
                     if skip_dummy_reads {
-                        dma_idle(self, bus, ctx);
+                        dma_idle(self, bus, ctx, addr);
                     } else {
                         bus.dma_read(addr, self, ctx);
                     }
@@ -731,7 +729,7 @@ impl Cpu {
 
                 // DMC running but not ready and no OAM: dummy/idle cycle.
                 if skip_dummy_reads {
-                    dma_idle(self, bus, ctx);
+                    dma_idle(self, bus, ctx, addr);
                 } else {
                     bus.dma_read(addr, self, ctx);
                 }
@@ -752,7 +750,7 @@ impl Cpu {
 
                 // Alignment: burn a dummy/idle cycle.
                 if skip_dummy_reads {
-                    dma_idle(self, bus, ctx);
+                    dma_idle(self, bus, ctx, addr);
                 } else {
                     bus.dma_read(addr, self, ctx);
                 }
@@ -774,62 +772,76 @@ impl Cpu {
     ) -> u8 {
         // This models Mesen's "CPU internal register conflict" glitch during DMA.
         //
-        // TODO parity with Mesen:
-        // - When `!enable_internal_reg_reads`, reads to $4000-$401F should return open bus (no external responder).
-        // - For internal-reg reads (4015/4016/4017), the *internal* read may be performed regardless of `dma_addr`.
-        // - 4015: internal read can clear frame IRQ flag without program knowledge.
-        // - 4016/4017: bit deletions + open bus masks + external bus merge are not yet implemented.
-        // - PAL vs NTSC behavior differences.
+        // Mesen runs this logic within a single DMA cycle; "internal" and
+        // "external" reads can both occur without stealing extra cycles.
+        self.begin_cycle(true, bus, ctx);
 
-        if !enable_internal_reg_reads {
-            // TODO: $4000-$401F should read open bus on the external bus.
-            let v = bus.dma_read(dma_addr, self, ctx);
+        let value = if !enable_internal_reg_reads {
+            let v = if (0x4000..=0x401F).contains(&dma_addr) {
+                // Nothing responds on $4000-$401F on the external bus.
+                bus.open_bus.sample()
+            } else {
+                bus.read(dma_addr, self, ctx)
+            };
             *prev_read_address = dma_addr;
-            return v;
-        }
+            v
+        } else {
+            // Internal-reg glitch path: CPU reads from internal APU/Input regs
+            // regardless of the DMA address.
+            let internal_addr = 0x4000 | (dma_addr & 0x1F);
+            let is_same_address = internal_addr == dma_addr;
 
-        // Internal-reg glitch path: CPU reads from internal APU/Input regs regardless of DMA address.
-        let internal_addr = 0x4000 | (dma_addr & 0x1F);
-        let is_same_address = internal_addr == dma_addr;
-
-        let val = match internal_addr {
-            0x4015 => {
-                // TODO: side effect: reading 4015 clears the frame counter IRQ flag.
-                let v = bus.dma_read(internal_addr, self, ctx);
-                if !is_same_address {
-                    // Also trigger external bus read (DMA's intended address).
-                    bus.dma_read(dma_addr, self, ctx);
+            let v = match internal_addr {
+                0x4015 => {
+                    // Side effect matches Mesen: reading $4015 can clear frame IRQ.
+                    let read_value = bus.read(internal_addr, self, ctx);
+                    if !is_same_address {
+                        // Trigger external read on the bus as well.
+                        let _ = bus.read(dma_addr, self, ctx);
+                    }
+                    read_value
                 }
-                v
-            }
-            0x4016 | 0x4017 => {
-                // TODO: PAL behavior unknown; on NES, consecutive reads may be hidden/skipped.
-                let consecutive_same = is_nes_behavior && *prev_read_address == internal_addr;
-                let mut v = if consecutive_same {
-                    // TODO: should return open bus (and avoid bit deletion).
-                    // Using an internal read here is not accurate but keeps timing consistent.
-                    bus.dma_read(internal_addr, self, ctx)
-                } else {
-                    bus.dma_read(internal_addr, self, ctx)
-                };
+                0x4016 | 0x4017 => {
+                    // On NES/AV Famicom, repeated reads of the same input register
+                    // can be hidden from controllers during this glitch path.
+                    let consecutive_same = is_nes_behavior && *prev_read_address == internal_addr;
+                    let mut read_value = if consecutive_same {
+                        bus.open_bus.sample()
+                    } else {
+                        bus.read(internal_addr, self, ctx)
+                    };
 
-                if !is_same_address {
-                    // DMA unit is reading from a different external address too.
-                    // TODO: implement open bus mask + merge/bus-conflict behavior.
-                    let external_value = bus.dma_read(dma_addr, self, ctx);
-                    // Placeholder: prefer external value for now.
-                    v = external_value;
+                    if !is_same_address {
+                        let external_value = bus.read(dma_addr, self, ctx);
+                        let open_bus_mask = Self::controller_open_bus_mask(internal_addr - 0x4016);
+                        read_value = (external_value & open_bus_mask)
+                            | ((read_value & !open_bus_mask) & (external_value & !open_bus_mask));
+                    }
+
+                    read_value
                 }
+                _ => bus.read(dma_addr, self, ctx),
+            };
 
-                v
-            }
-            _ => bus.dma_read(dma_addr, self, ctx),
+            // Mesen updates prevReadAddress with internalAddr on this path.
+            *prev_read_address = internal_addr;
+            v
         };
 
-        // Mesen updates prevReadAddress with the internal address (0x4000|(addr&0x1F)).
-        *prev_read_address = internal_addr;
+        bus.notify_mapper_cpu_bus_access(CpuBusAccessKind::DmaRead, dma_addr, value);
+        self.end_cycle(true, bus, ctx);
+        value
+    }
 
-        val
+    #[inline]
+    fn controller_open_bus_mask(port: u16) -> u8 {
+        // Match Mesen's default NES-001 behavior for now.
+        // TODO: plumb console model and use console-specific masks.
+        match port {
+            0 => 0xE0,
+            1 => 0xE0,
+            _ => 0xE0,
+        }
     }
 
     fn perform_interrupt(&mut self, bus: &mut CpuBus, ctx: &mut Context) {
@@ -853,16 +865,20 @@ impl Cpu {
 
         match kind {
             IrqKind::Nmi => {
-                let lo = bus.mem_read(NMI_VECTOR_LO, self, ctx);
-                let hi = bus.mem_read(NMI_VECTOR_HI, self, ctx);
+                let lo = self.read(NMI_VECTOR_LO, bus, ctx, CpuBusAccessKind::Read);
+                let hi = self.read(NMI_VECTOR_HI, bus, ctx, CpuBusAccessKind::Read);
                 self.pc = ((hi as u16) << 8) | (lo as u16);
             }
             IrqKind::Irq => {
-                let lo = bus.mem_read(IRQ_VECTOR_LO, self, ctx);
-                let hi = bus.mem_read(IRQ_VECTOR_HI, self, ctx);
+                let lo = self.read(IRQ_VECTOR_LO, bus, ctx, CpuBusAccessKind::Read);
+                let hi = self.read(IRQ_VECTOR_HI, bus, ctx, CpuBusAccessKind::Read);
                 self.pc = ((hi as u16) << 8) | (lo as u16);
             }
         }
+
+        // Match hardware/Mesen behavior: the first opcode in an IRQ/NMI handler
+        // must run before a newly-latched NMI can immediately retrigger.
+        self.prev_nmi_latch = false;
 
         debug_assert!(self.opcode_in_flight.is_none());
         debug_assert_eq!(self.step, 0);
@@ -907,7 +923,7 @@ impl Cpu {
 
         // T2*: dummy/prefetch read at PC+2+offset (w/o carry).
         let pc_wo_carry = Self::branch_target_wo_carry(pc_next, offset);
-        self.dummy_read_at(pc_wo_carry, bus, ctx);
+        self.read(pc_wo_carry, bus, ctx, CpuBusAccessKind::DummyRead);
 
         // Commit final branch target using full 16-bit addition (with carry into high byte).
         let pc_final = pc_next.wrapping_add(offset as u16);
@@ -929,14 +945,14 @@ impl Cpu {
 
     #[inline]
     pub(crate) fn push_stack(&mut self, bus: &mut CpuBus, ctx: &mut Context, data: u8) {
-        bus.mem_write(self.stack_addr(), data, self, ctx);
+        self.write(self.stack_addr(), data, bus, ctx, CpuBusAccessKind::Write);
         self.s = self.s.wrapping_sub(1);
     }
 
     #[inline]
     pub(crate) fn pop_stack(&mut self, bus: &mut CpuBus, ctx: &mut Context) -> u8 {
         self.s = self.s.wrapping_add(1);
-        bus.mem_read(self.stack_addr(), self, ctx)
+        self.read(self.stack_addr(), bus, ctx, CpuBusAccessKind::Read)
     }
 
     #[inline]
@@ -975,106 +991,6 @@ impl Cpu {
 
     pub(crate) fn stack_addr(&self) -> u16 {
         STACK_ADDR | self.s as u16
-    }
-
-    #[inline]
-    fn log_trace_line(
-        &mut self,
-        bus: &mut CpuBus,
-        ctx: &mut Context,
-        start_pc: u16,
-        start_cycles: u64,
-        instr: &Instruction,
-    ) {
-        if !tracing::enabled!(tracing::Level::DEBUG) {
-            return;
-        }
-
-        let operand_len = instr.addressing.operand_len();
-        let mut operands = [0u8; 2];
-        for i in 0..operand_len {
-            let addr = start_pc.wrapping_add(1 + i as u16);
-            operands[i] = bus.peek(addr, self, ctx);
-        }
-        let operand_text =
-            Self::format_operand(instr.addressing, &operands[..operand_len], start_pc);
-
-        let mut inst_text = format!("{:?}", instr.mnemonic);
-        if !operand_text.is_empty() {
-            inst_text.push(' ');
-            inst_text.push_str(&operand_text);
-        }
-
-        let log_line = format!(
-            "{:04X}   {:<24} A:{:02X} X:{:02X} Y:{:02X} S:{:02X} P:{} Cycle:{}",
-            start_pc,
-            inst_text,
-            self.a,
-            self.x,
-            self.y,
-            self.s,
-            Self::format_status(self.p),
-            start_cycles
-        );
-        tracing::debug!("{log_line}");
-    }
-
-    #[inline]
-    fn format_status(status: Status) -> String {
-        fn letter(set: bool, ch: char) -> char {
-            if set { ch } else { ch.to_ascii_lowercase() }
-        }
-
-        let mut out = String::with_capacity(8);
-        out.push(letter(status.n(), 'N'));
-        out.push(letter(status.v(), 'V'));
-        out.push('-');
-        out.push('-');
-        out.push(letter(status.d(), 'D'));
-        out.push(letter(status.i(), 'I'));
-        out.push(letter(status.z(), 'Z'));
-        out.push(letter(status.c(), 'C'));
-        out
-    }
-
-    #[inline]
-    fn format_operand(addressing: Addressing, operands: &[u8], start_pc: u16) -> String {
-        match addressing {
-            Addressing::Implied => String::new(),
-            Addressing::Accumulator => "A".to_string(),
-            Addressing::Immediate => format!("#${:02X}", operands[0]),
-            Addressing::Absolute => format!(
-                "${:04X}",
-                u16::from(operands[0]) | (u16::from(*operands.get(1).unwrap_or(&0)) << 8)
-            ),
-            Addressing::AbsoluteX => format!(
-                "${:04X},X",
-                u16::from(operands[0]) | (u16::from(*operands.get(1).unwrap_or(&0)) << 8)
-            ),
-            Addressing::AbsoluteY => format!(
-                "${:04X},Y",
-                u16::from(operands[0]) | (u16::from(*operands.get(1).unwrap_or(&0)) << 8)
-            ),
-            Addressing::Indirect => format!(
-                "(${:04X})",
-                u16::from(operands[0]) | (u16::from(*operands.get(1).unwrap_or(&0)) << 8)
-            ),
-            Addressing::ZeroPage => format!("${:02X}", operands[0]),
-            Addressing::ZeroPageX => format!("${:02X},X", operands[0]),
-            Addressing::ZeroPageY => format!("${:02X},Y", operands[0]),
-            Addressing::IndirectX => format!("(${:02X},X)", operands[0]),
-            Addressing::IndirectY => format!("(${:02X}),Y", operands[0]),
-            Addressing::Relative => {
-                let offset = operands[0] as i8 as i16;
-                let base = start_pc.wrapping_add(2);
-                let target = if offset < 0 {
-                    base.wrapping_sub((-offset) as u16)
-                } else {
-                    base.wrapping_add(offset as u16)
-                };
-                format!("${:04X}", target)
-            }
-        }
     }
 }
 

@@ -290,13 +290,12 @@ impl WasmNes {
             .ok_or_else(|| JsValue::from_str("Unsupported video filter on web"))?;
         let (output_width, output_height) = filter.output_size();
 
-        let palette = *self.nes.ppu.palette().as_colors();
-        let fb = self.nes.ppu.framebuffer_mut();
-        fb.set_output_config(output_width, output_height);
-        fb.set_post_processor(
+        self.nes
+            .set_video_output_config(output_width, output_height);
+        self.nes.set_video_post_processor(
             filter.post_processor(self.lcd_grid_strength, self.scanline_intensity),
         );
-        fb.rebuild_packed(&palette);
+        self.nes.rebuild_video_output();
 
         self.output_width = output_width;
         self.output_height = output_height;
@@ -313,26 +312,22 @@ impl WasmNes {
     pub fn set_lcd_grid_options(&mut self, strength: f64) {
         self.lcd_grid_strength = strength;
         if self.current_filter == WasmVideoFilter::LcdGrid {
-            let palette = *self.nes.ppu.palette().as_colors();
-            let fb = self.nes.ppu.framebuffer_mut();
-            fb.set_post_processor(
+            self.nes.set_video_post_processor(
                 self.current_filter
                     .post_processor(self.lcd_grid_strength, self.scanline_intensity),
             );
-            fb.rebuild_packed(&palette);
+            self.nes.rebuild_video_output();
         }
     }
 
     pub fn set_scanline_options(&mut self, intensity: f64) {
         self.scanline_intensity = intensity;
         if self.current_filter == WasmVideoFilter::Scanlines {
-            let palette = *self.nes.ppu.palette().as_colors();
-            let fb = self.nes.ppu.framebuffer_mut();
-            fb.set_post_processor(
+            self.nes.set_video_post_processor(
                 self.current_filter
                     .post_processor(self.lcd_grid_strength, self.scanline_intensity),
             );
-            fb.rebuild_packed(&palette);
+            self.nes.rebuild_video_output();
         }
     }
 
@@ -456,11 +451,7 @@ impl WasmNes {
             // Refresh the framebuffer with the saved palette indices.
             // This keeps rewind output consistent with the active video filter.
             if indices.len() == INDEX_FRAME_LEN {
-                let palette = *self.nes.ppu.palette().as_colors();
-                let fb = self.nes.ppu.framebuffer_mut();
-                let back_indices = fb.write();
-                back_indices.copy_from_slice(&indices);
-                fb.present(&palette);
+                self.nes.present_index_frame(&indices);
                 self.copy_rgba_from_core()?;
             }
         }
@@ -635,7 +626,9 @@ impl WasmNes {
     /// The core is configured to render RGBA8888 for WASM so the exported frame
     /// can be consumed directly by the frontend.
     fn copy_rgba_from_core(&mut self) -> Result<(), JsValue> {
-        let src = self.nes.render_buffer();
+        let src = self.nes.try_render_buffer().ok_or_else(|| {
+            JsValue::from_str("packed render buffer unavailable (swapchain backend)")
+        })?;
 
         if self.rgba.len() != src.len() {
             self.rgba.resize(src.len(), 0);

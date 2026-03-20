@@ -15,7 +15,7 @@ use std::{
 };
 
 mod post_process;
-pub use post_process::{NearestPostProcessor, VideoPostProcessor};
+pub use post_process::{NearestPostProcessor, SourceFrame, TargetFrameMut, VideoPostProcessor};
 
 pub const SCREEN_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
@@ -91,14 +91,18 @@ impl ColorFormat {
 /// A double-buffered framebuffer for the NES PPU.
 ///
 /// Always maintains two internal index planes. Packed pixels are derived on demand.
-#[derive(Debug)]
-pub struct FrameBuffer {
+#[derive(Debug, Clone)]
+struct CanonicalFrameStore {
     /// Index of the **back/write** index plane (0 or 1).
     active_index: usize,
     /// Canonical index planes (1 byte per pixel).
     index_planes: [Box<[u8]>; 2],
-    /// Destination for packed pixel output.
-    storage: FrameBufferStorage,
+    /// Per-pixel emphasis bits (0..7) captured at render time.
+    emphasis_planes: [Box<[u8]>; 2],
+}
+
+#[derive(Debug)]
+struct PostProcessPipeline {
     /// Format used for packed pixel derivation.
     color_format: ColorFormat,
     /// Output packed buffer width in pixels.
@@ -107,7 +111,21 @@ pub struct FrameBuffer {
     output_height: usize,
     /// Packed output post-processor (scaler/filter chain).
     post_processor: Box<dyn VideoPostProcessor>,
+}
+
+#[derive(Debug)]
+struct PresentBackend {
+    /// Destination for packed pixel output.
+    storage: FrameBufferStorage,
     frame_ready_hook: Option<FrameReadyHook>,
+}
+
+/// A double-buffered framebuffer for the NES PPU.
+#[derive(Debug)]
+pub struct FrameBuffer {
+    canonical: CanonicalFrameStore,
+    pipeline: PostProcessPipeline,
+    backend: PresentBackend,
 }
 
 /// Backing storage for the derived packed pixel planes.
@@ -157,13 +175,28 @@ impl Clone for FrameBufferStorage {
 impl Clone for FrameBuffer {
     fn clone(&self) -> Self {
         Self {
-            active_index: self.active_index,
-            index_planes: [self.index_planes[0].clone(), self.index_planes[1].clone()],
-            storage: self.storage.clone(),
+            canonical: self.canonical.clone(),
+            pipeline: self.pipeline.clone(),
+            backend: self.backend.clone(),
+        }
+    }
+}
+
+impl Clone for PostProcessPipeline {
+    fn clone(&self) -> Self {
+        Self {
             color_format: self.color_format,
             output_width: self.output_width,
             output_height: self.output_height,
             post_processor: dyn_clone::clone_box(&*self.post_processor),
+        }
+    }
+}
+
+impl Clone for PresentBackend {
+    fn clone(&self) -> Self {
+        Self {
+            storage: self.storage.clone(),
             frame_ready_hook: self.frame_ready_hook,
         }
     }
@@ -481,17 +514,27 @@ impl FrameBuffer {
         ));
 
         Self {
-            active_index,
-            index_planes: [
-                vec![0u8; SCREEN_SIZE].into_boxed_slice(),
-                vec![0u8; SCREEN_SIZE].into_boxed_slice(),
-            ],
-            storage: FrameBufferStorage::Owned { planes, handle },
-            color_format,
-            output_width,
-            output_height,
-            post_processor: Box::new(NearestPostProcessor::default()),
-            frame_ready_hook: None,
+            canonical: CanonicalFrameStore {
+                active_index,
+                index_planes: [
+                    vec![0u8; SCREEN_SIZE].into_boxed_slice(),
+                    vec![0u8; SCREEN_SIZE].into_boxed_slice(),
+                ],
+                emphasis_planes: [
+                    vec![0u8; SCREEN_SIZE].into_boxed_slice(),
+                    vec![0u8; SCREEN_SIZE].into_boxed_slice(),
+                ],
+            },
+            pipeline: PostProcessPipeline {
+                color_format,
+                output_width,
+                output_height,
+                post_processor: Box::new(NearestPostProcessor::default()),
+            },
+            backend: PresentBackend {
+                storage: FrameBufferStorage::Owned { planes, handle },
+                frame_ready_hook: None,
+            },
         }
     }
 
@@ -503,112 +546,120 @@ impl FrameBuffer {
         user_data: *mut c_void,
     ) -> Self {
         Self {
-            active_index: 1,
-            index_planes: [
-                vec![0u8; SCREEN_SIZE].into_boxed_slice(),
-                vec![0u8; SCREEN_SIZE].into_boxed_slice(),
-            ],
-            storage: FrameBufferStorage::Swapchain(SwapchainFrameBuffer::new(
-                lock, unlock, user_data,
-            )),
-            color_format,
-            output_width: SCREEN_WIDTH,
-            output_height: SCREEN_HEIGHT,
-            post_processor: Box::new(NearestPostProcessor::default()),
-            frame_ready_hook: None,
+            canonical: CanonicalFrameStore {
+                active_index: 1,
+                index_planes: [
+                    vec![0u8; SCREEN_SIZE].into_boxed_slice(),
+                    vec![0u8; SCREEN_SIZE].into_boxed_slice(),
+                ],
+                emphasis_planes: [
+                    vec![0u8; SCREEN_SIZE].into_boxed_slice(),
+                    vec![0u8; SCREEN_SIZE].into_boxed_slice(),
+                ],
+            },
+            pipeline: PostProcessPipeline {
+                color_format,
+                output_width: SCREEN_WIDTH,
+                output_height: SCREEN_HEIGHT,
+                post_processor: Box::new(NearestPostProcessor::default()),
+            },
+            backend: PresentBackend {
+                storage: FrameBufferStorage::Swapchain(SwapchainFrameBuffer::new(
+                    lock, unlock, user_data,
+                )),
+                frame_ready_hook: None,
+            },
         }
     }
 
     /// Primary entry point for presenting a completed frame.
     ///
     /// This converts the active index plane into packed pixels and performs the swap.
-    pub fn present(&mut self, palette: &[Color; 64]) {
-        let finished_back = self.active_index;
-        let format = self.color_format;
-        let indices = &self.index_planes[finished_back];
-        let out_w = self.output_width;
-        let out_h = self.output_height;
+    pub(crate) fn present(&mut self, palette: &[Color; 64]) {
+        let finished_back = self.canonical.active_index;
+        let format = self.pipeline.color_format;
+        let indices = &self.canonical.index_planes[finished_back];
+        let emphasis = &self.canonical.emphasis_planes[finished_back];
+        let out_w = self.pipeline.output_width;
+        let out_h = self.pipeline.output_height;
         let row_bytes = out_w * format.bytes_per_pixel();
 
-        let dst_pitch = match &mut self.storage {
+        let dst_pitch = match &mut self.backend.storage {
             FrameBufferStorage::Owned { .. } => row_bytes,
             FrameBufferStorage::Swapchain(s) => s.lock(finished_back).1,
         };
 
         if dst_pitch < row_bytes {
-            if let FrameBufferStorage::Swapchain(s) = &mut self.storage {
+            if let FrameBufferStorage::Swapchain(s) = &mut self.backend.storage {
                 s.unlock(finished_back);
             }
             return;
         }
+        let source = SourceFrame::new(indices, emphasis, SCREEN_WIDTH, SCREEN_HEIGHT);
 
         // Convert indices to packed pixels for the entire frame.
-        match &mut self.storage {
+        match &mut self.backend.storage {
             FrameBufferStorage::Owned { planes, .. } => {
-                self.post_processor.process(
-                    indices,
-                    SCREEN_WIDTH,
-                    SCREEN_HEIGHT,
+                self.pipeline.post_processor.process(
+                    source,
                     palette,
-                    &mut planes[finished_back],
-                    dst_pitch,
-                    out_w,
-                    out_h,
-                    format,
+                    TargetFrameMut::new(
+                        &mut planes[finished_back],
+                        dst_pitch,
+                        out_w,
+                        out_h,
+                        format,
+                    ),
                 );
             }
             FrameBufferStorage::Swapchain(s) => {
                 let (ptr, pitch) = s.lock(finished_back);
                 let dst = unsafe { slice::from_raw_parts_mut(ptr, pitch * out_h) };
-                self.post_processor.process(
-                    indices,
-                    SCREEN_WIDTH,
-                    SCREEN_HEIGHT,
+                self.pipeline.post_processor.process(
+                    source,
                     palette,
-                    dst,
-                    pitch,
-                    out_w,
-                    out_h,
-                    format,
+                    TargetFrameMut::new(dst, pitch, out_w, out_h, format),
                 );
             }
         }
 
         // Handle presentation and index plane flipping.
-        match &mut self.storage {
+        match &mut self.backend.storage {
             FrameBufferStorage::Owned { handle, .. } => {
                 handle.present(finished_back);
-                if let Some(hook) = self.frame_ready_hook {
+                if let Some(hook) = self.backend.frame_ready_hook {
                     hook.call(finished_back, out_w, out_h, dst_pitch);
                 }
-                self.active_index = 1 - self.active_index;
-                handle.wait_until_not_reading(self.active_index);
+                self.canonical.active_index = 1 - self.canonical.active_index;
+                handle.wait_until_not_reading(self.canonical.active_index);
             }
             FrameBufferStorage::Swapchain(s) => {
                 s.unlock(finished_back);
-                if let Some(hook) = self.frame_ready_hook {
+                if let Some(hook) = self.backend.frame_ready_hook {
                     hook.call(finished_back, out_w, out_h, dst_pitch);
                 }
-                self.active_index = 1 - self.active_index;
+                self.canonical.active_index = 1 - self.canonical.active_index;
             }
         }
 
         // Clear the new back index plane for the next frame.
-        self.index_planes[self.active_index].fill(0);
+        self.canonical.index_planes[self.canonical.active_index].fill(0);
+        self.canonical.emphasis_planes[self.canonical.active_index].fill(0);
     }
 
     /// Rebuilds the current front packed buffer from the current front index plane.
     ///
     /// Useful after a rewind restore to ensure the display matches the restored state.
-    pub fn rebuild_packed(&mut self, palette: &[Color; 64]) {
-        let front_idx = 1 - self.active_index;
-        let indices = &self.index_planes[front_idx];
-        let format = self.color_format;
-        let out_w = self.output_width;
-        let out_h = self.output_height;
+    pub(crate) fn rebuild_packed(&mut self, palette: &[Color; 64]) {
+        let front_idx = 1 - self.canonical.active_index;
+        let indices = &self.canonical.index_planes[front_idx];
+        let emphasis = &self.canonical.emphasis_planes[front_idx];
+        let format = self.pipeline.color_format;
+        let out_w = self.pipeline.output_width;
+        let out_h = self.pipeline.output_height;
         let row_bytes = out_w * format.bytes_per_pixel();
 
-        let dst_pitch = match &mut self.storage {
+        let dst_pitch = match &mut self.backend.storage {
             FrameBufferStorage::Owned { planes: _, handle } => {
                 // Avoid writing into a plane while the frontend is copying it.
                 handle.wait_until_not_reading(front_idx);
@@ -618,39 +669,28 @@ impl FrameBuffer {
         };
 
         if dst_pitch < row_bytes {
-            if let FrameBufferStorage::Swapchain(s) = &mut self.storage {
+            if let FrameBufferStorage::Swapchain(s) = &mut self.backend.storage {
                 s.unlock(front_idx);
             }
             return;
         }
+        let source = SourceFrame::new(indices, emphasis, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-        match &mut self.storage {
+        match &mut self.backend.storage {
             FrameBufferStorage::Owned { planes, .. } => {
-                self.post_processor.process(
-                    indices,
-                    SCREEN_WIDTH,
-                    SCREEN_HEIGHT,
+                self.pipeline.post_processor.process(
+                    source,
                     palette,
-                    &mut planes[front_idx],
-                    dst_pitch,
-                    out_w,
-                    out_h,
-                    format,
+                    TargetFrameMut::new(&mut planes[front_idx], dst_pitch, out_w, out_h, format),
                 );
             }
             FrameBufferStorage::Swapchain(s) => {
                 let (ptr, pitch) = s.lock(front_idx);
                 let dst = unsafe { slice::from_raw_parts_mut(ptr, pitch * out_h) };
-                self.post_processor.process(
-                    indices,
-                    SCREEN_WIDTH,
-                    SCREEN_HEIGHT,
+                self.pipeline.post_processor.process(
+                    source,
                     palette,
-                    dst,
-                    pitch,
-                    out_w,
-                    out_h,
-                    format,
+                    TargetFrameMut::new(dst, pitch, out_w, out_h, format),
                 );
                 s.unlock(front_idx);
             }
@@ -661,30 +701,70 @@ impl FrameBuffer {
 
     /// Writes a single pixel at `(x, y)` using a palette index.
     #[inline]
-    pub fn write_index(&mut self, x: usize, y: usize, index: u8) {
-        self.index_planes[self.active_index][y * SCREEN_WIDTH + x] = index;
+    pub(crate) fn write_index(&mut self, x: usize, y: usize, index: u8) {
+        self.write_index_with_emphasis(x, y, index, 0);
     }
 
-    /// Returns the current front packed pixel plane.
+    /// Writes a single pixel at `(x, y)` using palette index and emphasis bits.
+    #[inline]
+    pub(crate) fn write_index_with_emphasis(
+        &mut self,
+        x: usize,
+        y: usize,
+        index: u8,
+        emphasis: u8,
+    ) {
+        let pos = y * SCREEN_WIDTH + x;
+        self.canonical.index_planes[self.canonical.active_index][pos] = index;
+        self.canonical.emphasis_planes[self.canonical.active_index][pos] = emphasis & 0x07;
+    }
+
+    /// Applies grayscale/emphasis bit masks over an inclusive linear pixel range
+    /// on the current back buffer.
+    #[inline]
+    pub(crate) fn apply_color_mask_range(
+        &mut self,
+        start: usize,
+        end: usize,
+        grayscale: bool,
+        emphasis: u8,
+    ) {
+        if start > end || end >= SCREEN_SIZE {
+            return;
+        }
+        let mask = if grayscale { 0x30 } else { 0x3F };
+        let emphasis = emphasis & 0x07;
+        let indices = &mut self.canonical.index_planes[self.canonical.active_index];
+        let em = &mut self.canonical.emphasis_planes[self.canonical.active_index];
+        for pos in start..=end {
+            indices[pos] &= mask;
+            em[pos] = emphasis;
+        }
+    }
+
+    /// Returns the current front packed pixel plane when directly accessible.
     ///
-    /// For `Owned` storage, this slice is tightly packed and has length
+    /// For `Owned` storage, this returns a tightly packed slice with length
     /// `output_width * output_height * bytes_per_pixel`.
     ///
-    /// For `Swapchain` storage, direct access is not supported because writable/readable
-    /// pointers are only valid while the plane is locked.
-    pub fn render(&self) -> &[u8] {
-        let front_idx = 1 - self.active_index;
-        match &self.storage {
-            FrameBufferStorage::Owned { planes, .. } => &planes[front_idx],
-            FrameBufferStorage::Swapchain(_) => {
-                panic!("Direct plane access not supported for Swapchain. Use copy_render_buffer.")
-            }
+    /// For `Swapchain` storage, returns `None` because plane memory is only valid
+    /// while locked by the swapchain callbacks.
+    pub fn try_render_packed(&self) -> Option<&[u8]> {
+        let front_idx = 1 - self.canonical.active_index;
+        match &self.backend.storage {
+            FrameBufferStorage::Owned { planes, .. } => Some(&planes[front_idx]),
+            FrameBufferStorage::Swapchain(_) => None,
         }
     }
 
     /// Returns a read-only view of the **front** index plane.
-    pub fn render_index(&self) -> &[u8] {
-        &self.index_planes[1 - self.active_index]
+    pub(crate) fn render_index(&self) -> &[u8] {
+        &self.canonical.index_planes[1 - self.canonical.active_index]
+    }
+
+    /// Returns a read-only view of the **front** emphasis plane (`0..=7` per pixel).
+    pub(crate) fn render_emphasis(&self) -> &[u8] {
+        &self.canonical.emphasis_planes[1 - self.canonical.active_index]
     }
 
     /// Copies the current front index plane into `dst`.
@@ -693,12 +773,23 @@ impl FrameBuffer {
     ///
     /// This is intended for features such as rewind: the index plane is the canonical
     /// representation of the frame and is significantly smaller than packed pixels.
-    pub fn copy_render_index_buffer(&self, dst: &mut [u8]) {
+    pub(crate) fn copy_render_index_buffer(&self, dst: &mut [u8]) {
         assert!(
             dst.len() == SCREEN_SIZE,
             "dst must be SCREEN_WIDTH * SCREEN_HEIGHT bytes"
         );
         dst.copy_from_slice(self.render_index());
+    }
+
+    /// Copies the current front emphasis plane into `dst`.
+    ///
+    /// The destination buffer must be exactly `SCREEN_WIDTH * SCREEN_HEIGHT` bytes.
+    pub(crate) fn copy_render_emphasis_buffer(&self, dst: &mut [u8]) {
+        assert!(
+            dst.len() == SCREEN_SIZE,
+            "dst must be SCREEN_WIDTH * SCREEN_HEIGHT bytes"
+        );
+        dst.copy_from_slice(self.render_emphasis());
     }
 
     /// Copies the current front packed pixel buffer into `dst`.
@@ -709,24 +800,25 @@ impl FrameBuffer {
     /// For backends that expose a padded stride (pitch), this method copies each
     /// scanline while skipping the padding bytes.
     pub fn copy_render_buffer(&mut self, dst: &mut [u8]) {
-        let front_idx = 1 - self.active_index;
-        let bpp = self.color_format.bytes_per_pixel();
-        let row_len = self.output_width * bpp;
-        let expected = row_len * self.output_height;
+        let front_idx = 1 - self.canonical.active_index;
+        let bpp = self.pipeline.color_format.bytes_per_pixel();
+        let row_len = self.pipeline.output_width * bpp;
+        let expected = row_len * self.pipeline.output_height;
         assert!(
             dst.len() == expected,
             "dst must be output_width * output_height * bytes_per_pixel bytes"
         );
 
-        match &mut self.storage {
+        match &mut self.backend.storage {
             FrameBufferStorage::Owned { planes, .. } => {
                 dst.copy_from_slice(&planes[front_idx]);
             }
             FrameBufferStorage::Swapchain(s) => {
                 let (ptr, pitch) = s.lock(front_idx);
                 debug_assert!(pitch >= row_len);
-                let src = unsafe { slice::from_raw_parts(ptr, pitch * self.output_height) };
-                for y in 0..self.output_height {
+                let src =
+                    unsafe { slice::from_raw_parts(ptr, pitch * self.pipeline.output_height) };
+                for y in 0..self.pipeline.output_height {
                     let src_off = y * pitch;
                     let dst_off = y * row_len;
                     dst[dst_off..dst_off + row_len]
@@ -739,25 +831,25 @@ impl FrameBuffer {
 
     /// Returns a read-only view of the given index plane.
     #[inline]
-    pub fn index_plane(&self, index: usize) -> &[u8] {
+    pub(crate) fn index_plane(&self, index: usize) -> &[u8] {
         debug_assert!(index < 2);
-        &self.index_planes[index]
+        &self.canonical.index_planes[index]
     }
 
     /// Returns the number of bytes per scanline (pitch) for the packed output.
     #[inline]
     pub fn pitch(&self) -> usize {
-        match &self.storage {
+        match &self.backend.storage {
             FrameBufferStorage::Owned { .. } => {
-                self.output_width * self.color_format.bytes_per_pixel()
+                self.pipeline.output_width * self.pipeline.color_format.bytes_per_pixel()
             }
             FrameBufferStorage::Swapchain(s) => {
                 // If not locked, we return the baseline pitch.
-                let front_idx = 1 - self.active_index;
+                let front_idx = 1 - self.canonical.active_index;
                 if s.locked[front_idx] {
                     s.pitch_bytes[front_idx]
                 } else {
-                    self.output_width * self.color_format.bytes_per_pixel()
+                    self.pipeline.output_width * self.pipeline.color_format.bytes_per_pixel()
                 }
             }
         }
@@ -768,34 +860,37 @@ impl FrameBuffer {
         cb: Option<FrameReadyCallback>,
         user_data: *mut c_void,
     ) {
-        self.frame_ready_hook = cb.map(|cb| FrameReadyHook { cb, user_data });
+        self.backend.frame_ready_hook = cb.map(|cb| FrameReadyHook { cb, user_data });
     }
 
     /// Returns the external frame handle if this framebuffer exposes one.
     #[inline]
     pub fn external_frame_handle(&self) -> Option<&Arc<ExternalFrameHandle>> {
-        match &self.storage {
+        match &self.backend.storage {
             FrameBufferStorage::Owned { handle, .. } => Some(handle),
             FrameBufferStorage::Swapchain(_) => None,
         }
     }
 
     #[inline]
-    pub fn active_plane_index(&self) -> usize {
-        self.active_index
+    pub(crate) fn active_plane_index(&self) -> usize {
+        self.canonical.active_index
     }
 
     /// Returns a mutable view of the **back** index plane for PPU writes.
-    pub fn write(&mut self) -> &mut [u8] {
-        &mut self.index_planes[self.active_index]
+    pub(crate) fn write(&mut self) -> &mut [u8] {
+        &mut self.canonical.index_planes[self.canonical.active_index]
     }
 
     /// Clears both index planes and any accessible packed planes.
     pub fn clear(&mut self) {
-        for plane in &mut self.index_planes {
+        for plane in &mut self.canonical.index_planes {
             plane.fill(0);
         }
-        match &mut self.storage {
+        for plane in &mut self.canonical.emphasis_planes {
+            plane.fill(0);
+        }
+        match &mut self.backend.storage {
             FrameBufferStorage::Owned { planes, handle } => {
                 for (i, plane) in planes.iter_mut().enumerate() {
                     handle.wait_until_not_reading(i);
@@ -805,7 +900,9 @@ impl FrameBuffer {
             FrameBufferStorage::Swapchain(s) => {
                 for i in 0..2 {
                     let (ptr, pitch) = s.lock(i);
-                    unsafe { slice::from_raw_parts_mut(ptr, pitch * self.output_height).fill(0) };
+                    unsafe {
+                        slice::from_raw_parts_mut(ptr, pitch * self.pipeline.output_height).fill(0)
+                    };
                     s.unlock(i);
                 }
             }
@@ -817,18 +914,18 @@ impl FrameBuffer {
     /// Unlike `present()`, this method does NOT re-render using the palette.
     /// The packed buffers are filled with 0 bytes directly (black/transparent),
     /// and the frame-ready callback is invoked so the frontend updates its texture.
-    pub fn clear_and_present(&mut self) {
+    pub(crate) fn clear_and_present(&mut self) {
         self.clear();
 
         // Swap to the other plane so the cleared plane becomes front.
-        let cleared_plane = self.active_index;
-        self.active_index = 1 - self.active_index;
+        let cleared_plane = self.canonical.active_index;
+        self.canonical.active_index = 1 - self.canonical.active_index;
 
-        let pitch = match &mut self.storage {
+        let pitch = match &mut self.backend.storage {
             FrameBufferStorage::Owned { handle, .. } => {
                 handle.present(cleared_plane);
-                handle.wait_until_not_reading(self.active_index);
-                self.output_width * self.color_format.bytes_per_pixel()
+                handle.wait_until_not_reading(self.canonical.active_index);
+                self.pipeline.output_width * self.pipeline.color_format.bytes_per_pixel()
             }
             FrameBufferStorage::Swapchain(s) => {
                 // For swapchain, we need to lock/unlock to signal the frontend.
@@ -838,8 +935,13 @@ impl FrameBuffer {
             }
         };
 
-        if let Some(hook) = self.frame_ready_hook {
-            hook.call(cleared_plane, self.output_width, self.output_height, pitch);
+        if let Some(hook) = self.backend.frame_ready_hook {
+            hook.call(
+                cleared_plane,
+                self.pipeline.output_width,
+                self.pipeline.output_height,
+                pitch,
+            );
         }
     }
 
@@ -851,15 +953,15 @@ impl FrameBuffer {
     /// fetch a new handle.
     pub fn set_output_config(&mut self, width: usize, height: usize) {
         assert!(width > 0 && height > 0, "output size must be non-zero");
-        self.output_width = width;
-        self.output_height = height;
+        self.pipeline.output_width = width;
+        self.pipeline.output_height = height;
 
-        let bpp = self.color_format.bytes_per_pixel();
+        let bpp = self.pipeline.color_format.bytes_per_pixel();
         let pitch_bytes = width * bpp;
         let len = pitch_bytes * height;
-        let front_index = 1 - self.active_index;
+        let front_index = 1 - self.canonical.active_index;
 
-        match &mut self.storage {
+        match &mut self.backend.storage {
             FrameBufferStorage::Owned { planes, handle } => {
                 if planes[0].len() != len || planes[1].len() != len {
                     let mut new_planes = [
@@ -887,12 +989,12 @@ impl FrameBuffer {
     /// This is intended for Rust-side integrations that want to inject a filter/upscaler
     /// implementation at runtime.
     pub fn set_post_processor(&mut self, processor: Box<dyn VideoPostProcessor>) {
-        self.post_processor = processor;
+        self.pipeline.post_processor = processor;
     }
 
     #[inline]
     pub fn color_format(&self) -> ColorFormat {
-        self.color_format
+        self.pipeline.color_format
     }
 
     /// Change the color format at runtime.
@@ -900,14 +1002,14 @@ impl FrameBuffer {
     /// # Panics
     /// Panics if the new format has a different `bytes_per_pixel` than the current format.
     pub fn set_color_format(&mut self, format: ColorFormat) {
-        let current_bpp = self.color_format.bytes_per_pixel();
+        let current_bpp = self.pipeline.color_format.bytes_per_pixel();
         let new_bpp = format.bytes_per_pixel();
         assert_eq!(
             current_bpp, new_bpp,
             "Cannot change color format: bytes_per_pixel mismatch ({} != {})",
             current_bpp, new_bpp
         );
-        self.color_format = format;
+        self.pipeline.color_format = format;
     }
 }
 
@@ -960,11 +1062,49 @@ unsafe fn pack_pixel(color: Color, dst: *mut u8, format: ColorFormat) {
     }
 }
 
+pub(super) fn apply_emphasis(color: Color, color_index: u8, emphasis: u8) -> Color {
+    let emphasis = emphasis & 0x07;
+    if emphasis == 0 || (color_index & 0x0F) > 0x0D {
+        return color;
+    }
+
+    // Match Mesen2 default filter behavior: emphasis de-intensifies the
+    // non-selected channels by 0.84 and leaves selected channels unchanged.
+    let mut r = color.r as f64;
+    let mut g = color.g as f64;
+    let mut b = color.b as f64;
+    if (emphasis & 0x01) != 0 {
+        g *= 0.84;
+        b *= 0.84;
+    }
+    if (emphasis & 0x02) != 0 {
+        r *= 0.84;
+        b *= 0.84;
+    }
+    if (emphasis & 0x04) != 0 {
+        r *= 0.84;
+        g *= 0.84;
+    }
+
+    Color::new(
+        r.clamp(0.0, 255.0) as u8,
+        g.clamp(0.0, 255.0) as u8,
+        b.clamp(0.0, 255.0) as u8,
+    )
+}
+
 /// Helper to pack a single line of indices into a destination buffer.
-pub unsafe fn pack_line(indices: &[u8], dst: *mut u8, format: ColorFormat, palette: &[Color; 64]) {
+pub unsafe fn pack_line(
+    indices: &[u8],
+    emphasis: &[u8],
+    dst: *mut u8,
+    format: ColorFormat,
+    palette: &[Color; 64],
+) {
+    debug_assert_eq!(indices.len(), emphasis.len());
     let bpp = format.bytes_per_pixel();
     for (x, &idx) in indices.iter().enumerate() {
-        let color = palette[(idx & 0x3F) as usize];
+        let color = apply_emphasis(palette[(idx & 0x3F) as usize], idx, emphasis[x]);
         unsafe {
             let p = dst.add(x * bpp);
             match format {

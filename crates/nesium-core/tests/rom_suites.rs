@@ -1,9 +1,10 @@
 mod common;
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use common::{
-    RESULT_ZP_ADDR, require_color_diversity, run_rom_frames, run_rom_status, run_rom_tv_sha1,
-    run_rom_zeropage_result,
+    RESULT_ZP_ADDR, require_color_diversity, run_rom_fg_mask_sha1_for_frames, run_rom_frames,
+    run_rom_ram_sha1, run_rom_rgb24_sha1_for_frames, run_rom_serial_text, run_rom_status,
+    run_rom_tv_sha1, run_rom_zeropage_result,
 };
 use ctor::ctor;
 use tracing::Level;
@@ -83,7 +84,6 @@ fn apu_reset_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn apu_test_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
@@ -103,9 +103,10 @@ fn apu_test_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn blargg_apu_2005_07_30_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
+    // This suite reports pass/fail through zero-page $00F0.
+    const RESULT_ZP: u16 = 0x00F0;
     for rom in [
         "blargg_apu_2005.07.30/01.len_ctr.nes",
         "blargg_apu_2005.07.30/02.len_table.nes",
@@ -119,7 +120,7 @@ fn blargg_apu_2005_07_30_suite() -> Result<()> {
         "blargg_apu_2005.07.30/10.len_halt_timing.nes",
         "blargg_apu_2005.07.30/11.len_reload_timing.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_zeropage_result(rom, DEFAULT_FRAMES, RESULT_ZP, 0x01)?;
     }
     Ok(())
 }
@@ -207,7 +208,6 @@ fn cpu_dummy_writes_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn cpu_exec_space_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
@@ -220,7 +220,6 @@ fn cpu_exec_space_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn cpu_interrupts_v2_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [
@@ -231,7 +230,8 @@ fn cpu_interrupts_v2_suite() -> Result<()> {
         "cpu_interrupts_v2/rom_singles/4-irq_and_dma.nes",
         "cpu_interrupts_v2/rom_singles/5-branch_delays_irq.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_status(rom, DEFAULT_FRAMES)
+            .with_context(|| format!("[cpu_interrupts_v2_suite] rom={rom}"))?;
     }
     Ok(())
 }
@@ -256,45 +256,77 @@ fn cpu_timing_test6_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn dmc_dma_during_read4_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in [
-        "dmc_dma_during_read4/dma_2007_read.nes",
-        "dmc_dma_during_read4/dma_2007_write.nes",
-        "dmc_dma_during_read4/dma_4016_read.nes",
-        "dmc_dma_during_read4/double_2007_read.nes",
-        "dmc_dma_during_read4/read_write_2007.nes",
-    ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // Compare decoded serial output against captured baselines.
+    // These ROMs do not use the standard $6000 status-byte protocol.
+    let cases: &[(&str, &str)] = &[
+        (
+            "dmc_dma_during_read4/dma_2007_read.nes",
+            "11 22\n11 22\n33 44\n11 22\n11 22\n159A7A8F",
+        ),
+        (
+            "dmc_dma_during_read4/dma_2007_write.nes",
+            "11 11 AA 33 44 55 66 77\n11 11 AA 33 44 55 66 77\n11 11 AA 33 44 55 66 77\n11 11 AA 33 44 55 66 77\n11 11 AA 33 44 55 66 77\n\ndma_2007_write\nPassed",
+        ),
+        (
+            "dmc_dma_during_read4/dma_4016_read.nes",
+            "8 8 7 8 8\ndma_4016_read\nPassed",
+        ),
+        (
+            "dmc_dma_during_read4/double_2007_read.nes",
+            "22 33 44 55 66\n22 33 44 55 66\nF018C287",
+        ),
+        (
+            "dmc_dma_during_read4/read_write_2007.nes",
+            "33 11 22 33 09 55 66 77\n33 11 22 33 09 55 66 77\n\nread_write_2007\nPassed",
+        ),
+    ];
+    for (rom, expected_serial) in cases {
+        let serial = run_rom_serial_text(rom, DEFAULT_FRAMES)?;
+        assert_eq!(
+            serial, *expected_serial,
+            "[{}] serial output mismatch\nexpected:\n{}\nactual:\n{}",
+            rom, expected_serial, serial
+        );
     }
     Ok(())
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn dmc_tests_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
-    for rom in [
-        "dmc_tests/buffer_retained.nes",
-        "dmc_tests/latency.nes",
-        "dmc_tests/status.nes",
-        "dmc_tests/status_irq.nes",
-    ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // These ROMs do not provide a directly-consumable $6000 or serial pass/fail signal.
+    // Validate against Mesen2-captured 2KB CPU RAM snapshots at frame 1800.
+    const RAM_BASE: u16 = 0x0000;
+    const RAM_LEN: usize = 0x0800;
+    let cases: &[(&str, &str)] = &[
+        (
+            "dmc_tests/buffer_retained.nes",
+            "amCvSsAi2iiOJ1ZfjtPRwIEUFRY=",
+        ),
+        ("dmc_tests/latency.nes", "XHjhiTk6RWzf2G6ZdCH6+wBIgvM="),
+        ("dmc_tests/status.nes", "amCvSsAi2iiOJ1ZfjtPRwIEUFRY="),
+        ("dmc_tests/status_irq.nes", "9H7NkKJEDyBR7bOPq67NUS65j7M="),
+    ];
+
+    for (rom, expected_hash) in cases {
+        let actual_hash = run_rom_ram_sha1(rom, DEFAULT_FRAMES, RAM_BASE, RAM_LEN)?;
+        assert_eq!(
+            actual_hash, *expected_hash,
+            "[{}] RAM sha1 mismatch at frame {} (base={:#06X}, len={:#06X})",
+            rom, DEFAULT_FRAMES, RAM_BASE, RAM_LEN
+        );
     }
     Ok(())
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
+#[ignore = "visual demo ROM; requires manual verification per dpcmletterbox/README.txt"]
 fn dpcmletterbox_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
-    {
-        let rom = "dpcmletterbox/dpcmletterbox.nes";
-        run_rom_status(rom, DEFAULT_FRAMES)?;
-    }
-    Ok(())
+    // Demo ROM: does not expose a machine-readable pass/fail signal via $6000 or serial.
+    // Keep as manual visual verification.
+    run_rom_frames("dpcmletterbox/dpcmletterbox.nes", 600, |_| Ok(()))
 }
 
 #[test]
@@ -308,14 +340,76 @@ fn exram_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn full_palette_suite() -> Result<()> {
-    for rom in [
-        "full_palette/flowing_palette.nes",
-        "full_palette/full_palette.nes",
-        "full_palette/full_palette_smooth.nes",
-    ] {
-        run_rom_frames(rom, 120, |nes| require_color_diversity(nes, 32))?;
+    // Mesen2 RGB24 baseline sampled across distributed even/odd frames.
+    // Baseline is captured by `tools/mesen_dump_frame_rgb.lua`
+    // on `startFrame`, aligned to NESium's `ppu.frame_count()` numbering.
+    const FRAMES: &[usize] = &[60, 61, 180, 181, 360, 361, 600, 601];
+    const CASES: &[(&str, &[&str])] = &[
+        (
+            "full_palette/flowing_palette.nes",
+            &[
+                "/i6v7PI3soT8yYF8h+RvMgyIw1k=",
+                "kJP0YwzaH7oFiNarBWF25miMLRc=",
+                "/i6v7PI3soT8yYF8h+RvMgyIw1k=",
+                "kJP0YwzaH7oFiNarBWF25miMLRc=",
+                "/i6v7PI3soT8yYF8h+RvMgyIw1k=",
+                "8cMPjWTXhJ/WdyNpOs9ybx5InPg=",
+                "q37IUsmiH6+gLy21vWB4U7rPiO4=",
+                "naOBqMA19wdam3IIzLrh1QWYJJ8=",
+            ],
+        ),
+        (
+            "full_palette/full_palette.nes",
+            &[
+                "Gtzuy2H/pfvMokI6MSPX74D1tUE=",
+                "rON8jJ7X39bME4v0vo6PRjGf6OY=",
+                "Gtzuy2H/pfvMokI6MSPX74D1tUE=",
+                "rON8jJ7X39bME4v0vo6PRjGf6OY=",
+                "Gtzuy2H/pfvMokI6MSPX74D1tUE=",
+                "rON8jJ7X39bME4v0vo6PRjGf6OY=",
+                "Gtzuy2H/pfvMokI6MSPX74D1tUE=",
+                "rON8jJ7X39bME4v0vo6PRjGf6OY=",
+            ],
+        ),
+        (
+            "full_palette/full_palette_smooth.nes",
+            &[
+                "4+lzHQo7RMVu6Eo7BM7EMoHBVsA=",
+                "o+2A/7f6WLIc5SLE7y8ARl3SuSY=",
+                "4+lzHQo7RMVu6Eo7BM7EMoHBVsA=",
+                "o+2A/7f6WLIc5SLE7y8ARl3SuSY=",
+                "4+lzHQo7RMVu6Eo7BM7EMoHBVsA=",
+                "o+2A/7f6WLIc5SLE7y8ARl3SuSY=",
+                "4+lzHQo7RMVu6Eo7BM7EMoHBVsA=",
+                "o+2A/7f6WLIc5SLE7y8ARl3SuSY=",
+            ],
+        ),
+    ];
+
+    for (rom, expected_hashes) in CASES {
+        if expected_hashes.len() != FRAMES.len() {
+            bail!(
+                "[{}] expected hash list len {} does not match frames len {}",
+                rom,
+                expected_hashes.len(),
+                FRAMES.len()
+            );
+        }
+
+        let hashes = run_rom_rgb24_sha1_for_frames(rom, FRAMES)?;
+        for ((frame, actual_hash), expected_hash) in hashes.into_iter().zip(expected_hashes.iter())
+        {
+            if actual_hash != *expected_hash {
+                bail!(
+                    "[{}] mesen_rgb24_sha1 mismatch at frame {}: expected {}, got {}",
+                    rom,
+                    frame,
+                    expected_hash,
+                    actual_hash
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -412,53 +506,113 @@ fn m22chrbankingtest_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc3_irq_tests_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // TASVideos accuracy-required ROMs.
+    //
+    // Per upstream readme, 5/6 validate mutually-exclusive MMC3A vs MMC3B IRQ behavior,
+    // so a single emulator implementation is expected to pass at most one of them.
     for rom in [
         "mmc3_irq_tests/1.Clocking.nes",
         "mmc3_irq_tests/2.Details.nes",
         "mmc3_irq_tests/3.A12_clocking.nes",
         "mmc3_irq_tests/4.Scanline_timing.nes",
-        "mmc3_irq_tests/5.MMC3_rev_A.nes",
-        "mmc3_irq_tests/6.MMC3_rev_B.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_zeropage_result(rom, DEFAULT_FRAMES, RESULT_ZP_ADDR, 0x01)
+            .with_context(|| format!("[mmc3_irq_tests_suite] rom={rom}"))?;
     }
+
+    let rev_a = run_rom_zeropage_result(
+        "mmc3_irq_tests/5.MMC3_rev_A.nes",
+        DEFAULT_FRAMES,
+        RESULT_ZP_ADDR,
+        0x01,
+    )
+    .with_context(|| "[mmc3_irq_tests_suite] rom=mmc3_irq_tests/5.MMC3_rev_A.nes");
+    let rev_b = run_rom_zeropage_result(
+        "mmc3_irq_tests/6.MMC3_rev_B.nes",
+        DEFAULT_FRAMES,
+        RESULT_ZP_ADDR,
+        0x01,
+    )
+    .with_context(|| "[mmc3_irq_tests_suite] rom=mmc3_irq_tests/6.MMC3_rev_B.nes");
+
+    let rev_a_ok = rev_a.is_ok();
+    let rev_b_ok = rev_b.is_ok();
+    if !rev_a_ok && !rev_b_ok {
+        let err_a = rev_a.expect_err("rev_a should be Err");
+        let err_b = rev_b.expect_err("rev_b should be Err");
+        bail!(
+            "[mmc3_irq_tests_suite] neither revision variant passed.\nrev_a error: {err_a:#}\nrev_b error: {err_b:#}"
+        );
+    }
+
     Ok(())
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc3_test_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // TASVideos accuracy-required ROMs.
+    //
+    // 5/6 validate mutually-exclusive MMC3 revision behavior ("MMC3" vs "MMC6-style" IRQ quirks),
+    // so a single implementation should pass at least one variant.
     for rom in [
         "mmc3_test/1-clocking.nes",
         "mmc3_test/2-details.nes",
         "mmc3_test/3-A12_clocking.nes",
         "mmc3_test/4-scanline_timing.nes",
-        "mmc3_test/5-MMC3.nes",
-        "mmc3_test/6-MMC6.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_status(rom, DEFAULT_FRAMES)
+            .with_context(|| format!("[mmc3_test_suite] rom={rom}"))?;
     }
+
+    let mmc3 = run_rom_status("mmc3_test/5-MMC3.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_suite] rom=mmc3_test/5-MMC3.nes");
+    let mmc6_style = run_rom_status("mmc3_test/6-MMC6.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_suite] rom=mmc3_test/6-MMC6.nes");
+
+    let mmc3_ok = mmc3.is_ok();
+    let mmc6_ok = mmc6_style.is_ok();
+    if !mmc3_ok && !mmc6_ok {
+        let err_mmc3 = mmc3.expect_err("mmc3 should be Err");
+        let err_mmc6 = mmc6_style.expect_err("mmc6_style should be Err");
+        bail!(
+            "[mmc3_test_suite] neither variant passed.\nmmc3 error: {err_mmc3:#}\nmmc6-style error: {err_mmc6:#}"
+        );
+    }
+
     Ok(())
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn mmc3_test_2_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+    // TASVideos accuracy-required ROMs.
+    //
+    // 5/6 validate mutually-exclusive MMC3 revision behavior ("MMC3" vs "MMC3_alt").
     for rom in [
         "mmc3_test_2/rom_singles/1-clocking.nes",
         "mmc3_test_2/rom_singles/2-details.nes",
         "mmc3_test_2/rom_singles/3-A12_clocking.nes",
         "mmc3_test_2/rom_singles/4-scanline_timing.nes",
-        "mmc3_test_2/rom_singles/5-MMC3.nes",
-        "mmc3_test_2/rom_singles/6-MMC3_alt.nes",
     ] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_status(rom, DEFAULT_FRAMES)
+            .with_context(|| format!("[mmc3_test_2_suite] rom={rom}"))?;
     }
+
+    let mmc3 = run_rom_status("mmc3_test_2/rom_singles/5-MMC3.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_2_suite] rom=mmc3_test_2/rom_singles/5-MMC3.nes");
+    let mmc3_alt = run_rom_status("mmc3_test_2/rom_singles/6-MMC3_alt.nes", DEFAULT_FRAMES)
+        .with_context(|| "[mmc3_test_2_suite] rom=mmc3_test_2/rom_singles/6-MMC3_alt.nes");
+
+    let mmc3_ok = mmc3.is_ok();
+    let mmc3_alt_ok = mmc3_alt.is_ok();
+    if !mmc3_ok && !mmc3_alt_ok {
+        let err_mmc3 = mmc3.expect_err("mmc3 should be Err");
+        let err_mmc3_alt = mmc3_alt.expect_err("mmc3_alt should be Err");
+        bail!(
+            "[mmc3_test_2_suite] neither variant passed.\nmmc3 error: {err_mmc3:#}\nmmc3_alt error: {err_mmc3_alt:#}"
+        );
+    }
+
     Ok(())
 }
 
@@ -515,13 +669,76 @@ fn nes_instr_test_suite() -> Result<()> {
     Ok(())
 }
 
+/// NMI synchronization demo ROMs.
+/// See `vendor/nes-test-roms/nmi_sync/readme.txt`. These are visual demos that
+/// show whether timed writes stay stable; they do not expose a machine-readable
+/// pass/fail signal via $6000 or serial output.
 #[test]
-#[ignore = "this test fails and needs investigation"]
-fn nmi_sync_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
+#[ignore = "visual demo ROM; requires manual verification per nmi_sync/readme.txt"]
+fn nmi_sync_manual() -> Result<()> {
     for rom in ["nmi_sync/demo_ntsc.nes", "nmi_sync/demo_pal.nes"] {
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+        run_rom_frames(rom, 600, |_| Ok(()))?;
     }
+    Ok(())
+}
+
+/// NTSC-only automated baseline check for the nmi_sync demo.
+///
+/// This compares foreground geometry masks against Mesen2-captured hashes over
+/// multiple distributed frame windows to reduce false positives from single-frame
+/// sampling noise. PAL is intentionally excluded for now.
+#[test]
+fn nmi_sync_ntsc_mesen_baseline() -> Result<()> {
+    const ROM: &str = "nmi_sync/demo_ntsc.nes";
+    const EXPECTED_A: &str = "HsecswITwKxfvAbg7INnX+37zEg=";
+    const EXPECTED_B: &str = "V3aUHSsmGbJIIpCpK159sa78Q8I=";
+    const WINDOWS: &[(usize, usize)] = &[
+        (240, 241),
+        (360, 361),
+        (480, 481),
+        (600, 601),
+        (720, 721),
+        (840, 841),
+        (960, 961),
+        (1080, 1081),
+        (1200, 1201),
+    ];
+
+    let mut targets = Vec::with_capacity(WINDOWS.len() * 2);
+    for (a, b) in WINDOWS {
+        targets.push(*a);
+        targets.push(*b);
+    }
+    let captured = run_rom_fg_mask_sha1_for_frames(ROM, &targets)?;
+
+    let mut by_frame = std::collections::BTreeMap::new();
+    for (frame, hash) in captured {
+        by_frame.insert(frame, hash);
+    }
+
+    for (a, b) in WINDOWS {
+        let hash_a = by_frame
+            .get(a)
+            .with_context(|| format!("missing captured hash for frame {a}"))?;
+        let hash_b = by_frame
+            .get(b)
+            .with_context(|| format!("missing captured hash for frame {b}"))?;
+
+        let is_expected_pair = (hash_a == EXPECTED_A && hash_b == EXPECTED_B)
+            || (hash_a == EXPECTED_B && hash_b == EXPECTED_A);
+        if !is_expected_pair {
+            bail!(
+                "[nmi_sync_ntsc_mesen_baseline] frame pair ({}, {}) mismatch: got ({}, {}), expected pair {{{}, {}}}",
+                a,
+                b,
+                hash_a,
+                hash_b,
+                EXPECTED_A,
+                EXPECTED_B
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -688,23 +905,87 @@ fn read_joy3_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn scanline_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
-    {
-        let rom = "scanline/scanline.nes";
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // TASVideos accuracy-required ROMs.
+    // This ROM is primarily a visual/timing output check, so use Mesen2 RGB24
+    // frame hashes instead of the blargg $6000 status protocol.
+    //
+    // Baseline capture:
+    //   tools/mesen_dump_frame_rgb.lua on `startFrame`, NTSC ROM:
+    //   scanline/scanline.nes
+    const FRAMES: &[usize] = &[120, 121, 240, 241, 480, 481, 960, 961];
+    const EXPECTED_HASHES: &[&str] = &[
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+    ];
+
+    if EXPECTED_HASHES.len() != FRAMES.len() {
+        bail!(
+            "[scanline/scanline.nes] expected hash list len {} does not match frames len {}",
+            EXPECTED_HASHES.len(),
+            FRAMES.len()
+        );
+    }
+
+    let hashes = run_rom_rgb24_sha1_for_frames("scanline/scanline.nes", FRAMES)?;
+    for ((frame, actual_hash), expected_hash) in hashes.into_iter().zip(EXPECTED_HASHES.iter()) {
+        if actual_hash != *expected_hash {
+            bail!(
+                "[scanline/scanline.nes] mesen_rgb24_sha1 mismatch at frame {}: expected {}, got {}",
+                frame,
+                expected_hash,
+                actual_hash
+            );
+        }
     }
     Ok(())
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn scanline_a1_suite() -> Result<()> {
-    // TASVideos accuracy-required ROMs
-    {
-        let rom = "scanline-a1/scanline.nes";
-        run_rom_status(rom, DEFAULT_FRAMES)?;
+    // TASVideos accuracy-required ROMs.
+    // This ROM is also a visual/timing output check, so use Mesen2 RGB24
+    // frame hashes instead of the blargg $6000 status protocol.
+    //
+    // Baseline capture:
+    //   tools/mesen_dump_frame_rgb.lua on `startFrame`, NTSC ROM:
+    //   scanline-a1/scanline.nes
+    const FRAMES: &[usize] = &[120, 121, 240, 241, 480, 481, 960, 961];
+    const EXPECTED_HASHES: &[&str] = &[
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+        "o2bRGkaJ0WEu+kt/dqYw6+aqXLg=",
+        "rWSUyTlCPZZaFklvNg3kLa/qZkk=",
+    ];
+
+    if EXPECTED_HASHES.len() != FRAMES.len() {
+        bail!(
+            "[scanline-a1/scanline.nes] expected hash list len {} does not match frames len {}",
+            EXPECTED_HASHES.len(),
+            FRAMES.len()
+        );
+    }
+
+    let hashes = run_rom_rgb24_sha1_for_frames("scanline-a1/scanline.nes", FRAMES)?;
+    for ((frame, actual_hash), expected_hash) in hashes.into_iter().zip(EXPECTED_HASHES.iter()) {
+        if actual_hash != *expected_hash {
+            bail!(
+                "[scanline-a1/scanline.nes] mesen_rgb24_sha1 mismatch at frame {}: expected {}, got {}",
+                frame,
+                expected_hash,
+                actual_hash
+            );
+        }
     }
     Ok(())
 }
@@ -721,7 +1002,6 @@ fn scrolltest_suite() -> Result<()> {
 }
 
 #[test]
-#[ignore = "this test fails and needs investigation"]
 fn sprdma_and_dmc_dma_suite() -> Result<()> {
     // TASVideos accuracy-required ROMs
     for rom in [

@@ -91,7 +91,7 @@ jobs:
             libretro_folder: android-x86_64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -520,7 +520,7 @@ jobs:
 
       - name: Upload artifact
         if: ${{ !matrix.libretro_only }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nesium-egui-${{ matrix.name }}
           path: |
@@ -559,7 +559,7 @@ jobs:
           cp "$CORE_SO" "dist/libretro-staging/${{ matrix.libretro_folder }}/nesium_libretro.so"
 
       - name: Upload libretro staging artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: libretro-staging-${{ matrix.name }}
           path: dist/libretro-staging/
@@ -575,7 +575,7 @@ jobs:
     outputs:
       libretro_tag: ${{ steps.compute-tag.outputs.LIBRETRO_TAG }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: false
 
@@ -594,7 +594,7 @@ jobs:
           fi
 
       - name: Download all libretro staging artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: libretro-staging-*
           path: staging
@@ -628,7 +628,7 @@ jobs:
           ls -la dist/
 
       - name: Upload consolidated libretro artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nesium-libretro
           path: dist/nesium-libretro-*

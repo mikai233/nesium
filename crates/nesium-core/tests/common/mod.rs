@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 
-use std::{fs, path::Path, time::Instant};
+use std::{path::Path, time::Instant};
 
 use anyhow::{Context, Result, bail};
 use base64::{Engine as _, engine::general_purpose};
 use nesium_core::memory::cpu as cpu_mem;
 use nesium_core::ppu::buffer::{ColorFormat, FrameBuffer};
+use nesium_core::ppu::palette::PaletteKind;
 use nesium_core::{Nes, reset_kind::ResetKind};
-use quick_xml::{Reader, events::Event};
 use sha1::{Digest, Sha1};
 
 pub const ROM_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/vendor/nes-test-roms");
@@ -17,15 +17,22 @@ pub const STATUS_MAX_BYTES: usize = 256;
 /// Many test ROMs that don't use the Blargg $6000 protocol store their result in ZP.
 pub const RESULT_ZP_ADDR: u16 = 0x00F8;
 const TV_HASH_DEFAULT_FRAMES: usize = 1800;
-const TEST_ROMS_XML: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/vendor/nes-test-roms/test_roms.xml"
-);
 const TV_HASH_MAX_FRAMES: usize = 5000;
-const TV_HASH_OVERRIDES: &[(&str, &str)] = &[(
-    "cpu_timing_test6/cpu_timing_test.nes",
-    "KsHe7gRNo+A4ULDQe7qPmEx3t98=",
-)];
+
+#[derive(Debug, Clone)]
+pub struct TvTestCase {
+    pub filename: &'static str,
+    pub hash: &'static str,
+    pub runframes: usize,
+    pub testnotes: Option<&'static str>,
+}
+
+const TV_TEST_CASES: &[TvTestCase] = &[TvTestCase {
+    filename: "cpu_timing_test6/cpu_timing_test.nes",
+    hash: "KsHe7gRNo+A4ULDQe7qPmEx3t98=",
+    runframes: 660,
+    testnotes: Some("No inputs -- official only"),
+}];
 
 /// Status byte protocol used by blargg-style test ROMs (see individual READMEs):
 /// - $80: test is running
@@ -38,143 +45,66 @@ const STATUS_MAGIC: [u8; 3] = [0xDE, 0xB0, 0x61];
 /// README recommends waiting at least 100ms; ~6 frames at 60Hz is sufficient.
 const RESET_DELAY_FRAMES: usize = 6;
 
-#[derive(Debug, Clone)]
-struct TvTestEntry {
-    filename: String,
-    runframes: Option<usize>,
-    tv_sha1: Option<String>,
-    recorded_input: Option<String>,
-    testnotes: Option<String>,
-}
-
-fn load_tv_test_entries() -> Result<Vec<TvTestEntry>> {
-    let xml =
-        fs::read_to_string(TEST_ROMS_XML).with_context(|| format!("reading {}", TEST_ROMS_XML))?;
-
-    let mut reader = Reader::from_str(&xml);
-    reader.config_mut().trim_text(true);
-
-    let mut buf = Vec::new();
-    let mut entries = Vec::new();
-    let mut current: Option<TvTestEntry> = None;
-    let mut current_field: Option<&str> = None;
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) if e.name().as_ref() == b"test" => {
-                let mut entry = TvTestEntry {
-                    filename: String::new(),
-                    runframes: None,
-                    tv_sha1: None,
-                    recorded_input: None,
-                    testnotes: None,
-                };
-                let decoder = reader.decoder();
-                for attr in e.attributes() {
-                    let attr = attr?;
-                    let value = attr.decode_and_unescape_value(decoder)?;
-                    match attr.key.as_ref() {
-                        b"filename" => entry.filename = value.into_owned(),
-                        b"runframes" => entry.runframes = value.parse().ok(),
-                        b"testnotes" => entry.testnotes = Some(value.into_owned()),
-                        _ => {}
-                    }
-                }
-                current = Some(entry);
-            }
-            Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"tvsha1" => current_field = Some("tvsha1"),
-                b"recordedinput" => current_field = Some("recordedinput"),
-                _ => {}
-            },
-            Ok(Event::End(e)) => match e.name().as_ref() {
-                b"tvsha1" | b"recordedinput" => current_field = None,
-                b"test" => {
-                    if let Some(entry) = current.take() {
-                        entries.push(entry);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Text(t)) => {
-                if let (Some(field), Some(entry)) = (current_field, current.as_mut()) {
-                    let text = t.decode()?.into_owned();
-                    match field {
-                        "tvsha1" => entry.tv_sha1 = Some(text),
-                        "recordedinput" => entry.recorded_input = Some(text),
-                        _ => {}
-                    }
-                }
-            }
-            Ok(Event::CData(t)) => {
-                if let (Some(field), Some(entry)) = (current_field, current.as_mut()) {
-                    let text = String::from_utf8_lossy(t.as_ref()).into_owned();
-                    match field {
-                        "tvsha1" => entry.tv_sha1 = Some(text),
-                        "recordedinput" => entry.recorded_input = Some(text),
-                        _ => {}
-                    }
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(err) => bail!("error parsing {}: {}", TEST_ROMS_XML, err),
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    Ok(entries)
-}
-
-fn select_tv_entry<'a>(
-    entries: &'a [TvTestEntry],
-    rom_rel_path: &str,
-    preferred_testnotes: Option<&str>,
-) -> Option<&'a TvTestEntry> {
-    let candidates: Vec<&TvTestEntry> = entries
-        .iter()
-        .filter(|entry| entry.filename == rom_rel_path)
-        .collect();
-
-    if candidates.is_empty() {
-        return None;
-    }
-
-    if let Some(note) = preferred_testnotes {
-        if let Some(entry) = candidates
-            .iter()
-            .find(|entry| entry.testnotes.as_deref() == Some(note))
-        {
-            return Some(*entry);
-        }
-    }
-
-    candidates
-        .iter()
-        .find(|entry| {
-            entry
-                .recorded_input
-                .as_deref()
-                .map_or(true, |s| s.is_empty())
-        })
-        .copied()
-        .or_else(|| candidates.first().copied())
-}
-
 fn compute_tv_sha1(bytes: &[u8]) -> String {
     let mut hasher = Sha1::new();
     hasher.update(bytes);
     general_purpose::STANDARD.encode(hasher.finalize())
 }
 
+fn compute_foreground_mask_sha1(index_buffer: &[u8]) -> String {
+    if index_buffer.is_empty() {
+        return compute_tv_sha1(&[]);
+    }
+
+    let mut counts = [0usize; 256];
+    for &px in index_buffer {
+        counts[px as usize] += 1;
+    }
+
+    let mut bg_index = 0usize;
+    let mut bg_count = 0usize;
+    for (idx, &count) in counts.iter().enumerate() {
+        if count > bg_count {
+            bg_count = count;
+            bg_index = idx;
+        }
+    }
+
+    let mut mask = Vec::with_capacity(index_buffer.len().div_ceil(8));
+    let mut packed = 0u8;
+    let mut bit = 0u8;
+    for &px in index_buffer {
+        if px as usize != bg_index {
+            packed |= 1u8 << bit;
+        }
+        bit += 1;
+        if bit == 8 {
+            mask.push(packed);
+            packed = 0;
+            bit = 0;
+        }
+    }
+    if bit != 0 {
+        mask.push(packed);
+    }
+
+    compute_tv_sha1(&mask)
+}
+
 /// Runs a ROM and validates its video output by comparing a SHA-1 hash of the framebuffer against
-/// the expected `tvsha1` entry recorded in `test_roms.xml`. This is useful for ROMs that don't
+/// the expected `tvsha1` entry recorded in `TV_TEST_CASES`. This is useful for ROMs that don't
 /// expose a $6000 status protocol (e.g., `cpu_timing_test6`).
 pub fn run_rom_tv_sha1(rom_rel_path: &str, preferred_testnotes: Option<&str>) -> Result<String> {
-    let entries = load_tv_test_entries()?;
-    let entry = select_tv_entry(&entries, rom_rel_path, preferred_testnotes)
+    let entry = TV_TEST_CASES
+        .iter()
+        .find(|entry| {
+            entry.filename == rom_rel_path
+                && (preferred_testnotes.is_none()
+                    || entry.testnotes.as_deref() == preferred_testnotes)
+        })
         .with_context(|| format!("no tvsha1 entry found for {}", rom_rel_path))?;
-    let frames = entry.runframes.unwrap_or(TV_HASH_DEFAULT_FRAMES);
+
+    let frames = entry.runframes;
     let frames_to_run = frames.max(TV_HASH_MAX_FRAMES);
 
     let path = Path::new(ROM_ROOT).join(rom_rel_path);
@@ -189,11 +119,7 @@ pub fn run_rom_tv_sha1(rom_rel_path: &str, preferred_testnotes: Option<&str>) ->
     nes.load_cartridge_from_file(&path)
         .with_context(|| format!("loading {}", path.display()))?;
 
-    let expected_hash = TV_HASH_OVERRIDES
-        .iter()
-        .find(|(name, _)| *name == rom_rel_path)
-        .map(|(_, hash)| hash.to_string())
-        .unwrap_or_else(|| entry.tv_sha1.as_deref().unwrap_or_default().to_string());
+    let expected_hash = entry.hash.to_string();
 
     for _ in 0..frames {
         nes.run_frame(false);
@@ -456,6 +382,184 @@ where
     verify(&mut nes)
 }
 
+/// Runs a ROM for `frames` and returns normalized serial text emitted via `$4016`.
+pub fn run_rom_serial_text(rom_rel_path: &str, frames: usize) -> Result<String> {
+    let path = Path::new(ROM_ROOT).join(rom_rel_path);
+    if !path.exists() {
+        bail!("ROM not found: {}", path.display());
+    }
+
+    let mut nes = Nes::default();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+
+    let mut serial_log = String::new();
+    for _ in 0..frames {
+        serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
+        nes.run_frame(false);
+    }
+    serial_log.push_str(&serial_bytes_to_string(&nes.take_serial_output()));
+
+    Ok(normalize_serial_text(&serial_log))
+}
+
+/// Runs a ROM for `frames`, snapshots a CPU memory range, and returns the SHA-1
+/// hash (Base64) of that snapshot.
+pub fn run_rom_ram_sha1(
+    rom_rel_path: &str,
+    frames: usize,
+    base_addr: u16,
+    len: usize,
+) -> Result<String> {
+    let mut hash = String::new();
+    run_rom_frames(rom_rel_path, frames, |nes| {
+        let mut buf = vec![0u8; len];
+        nes.peek_cpu_slice(base_addr, &mut buf);
+        hash = compute_tv_sha1(&buf);
+        Ok(())
+    })?;
+    Ok(hash)
+}
+
+/// Runs a ROM and returns foreground-mask SHA1 hashes for requested frames.
+///
+/// The foreground mask treats the most frequent palette index of each frame as
+/// background and all other indices as foreground.
+pub fn run_rom_fg_mask_sha1_for_frames(
+    rom_rel_path: &str,
+    frames: &[usize],
+) -> Result<Vec<(usize, String)>> {
+    if frames.is_empty() {
+        bail!("frame list must not be empty");
+    }
+
+    let mut targets = frames.to_vec();
+    targets.sort_unstable();
+    targets.dedup();
+
+    let path = Path::new(ROM_ROOT).join(rom_rel_path);
+    if !path.exists() {
+        bail!("ROM not found: {}", path.display());
+    }
+
+    let mut nes = Nes::default();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+
+    let mut results = Vec::with_capacity(targets.len());
+    let mut target_idx = 0usize;
+    let max_frame = *targets.last().expect("targets not empty");
+
+    for frame in 0..=max_frame {
+        nes.run_frame(false);
+        while target_idx < targets.len() && frame == targets[target_idx] {
+            results.push((
+                frame,
+                compute_foreground_mask_sha1(nes.render_index_buffer()),
+            ));
+            target_idx += 1;
+        }
+        if target_idx >= targets.len() {
+            break;
+        }
+    }
+
+    if results.len() != targets.len() {
+        bail!(
+            "failed to capture all requested frames: captured {} of {}",
+            results.len(),
+            targets.len()
+        );
+    }
+
+    Ok(results)
+}
+
+fn compute_rgb24_sha1_from_rgba8888(frame_rgba: &[u8]) -> Result<String> {
+    if !frame_rgba.len().is_multiple_of(4) {
+        bail!(
+            "rgba buffer length must be multiple of 4, got {}",
+            frame_rgba.len()
+        );
+    }
+
+    let mut rgb = Vec::with_capacity(frame_rgba.len() / 4 * 3);
+    for px in frame_rgba.chunks_exact(4) {
+        rgb.push(px[0]);
+        rgb.push(px[1]);
+        rgb.push(px[2]);
+    }
+    Ok(compute_tv_sha1(&rgb))
+}
+
+/// Runs a ROM and returns RGB24 SHA1 hashes for selected frames.
+///
+/// Hash input is the visible framebuffer converted from RGBA8888 to RGB24
+/// (`R,G,B` per pixel). This matches the format dumped from Mesen2's
+/// `emu.getScreenBuffer()` helper scripts.
+pub fn run_rom_rgb24_sha1_for_frames(
+    rom_rel_path: &str,
+    frames: &[usize],
+) -> Result<Vec<(usize, String)>> {
+    if frames.is_empty() {
+        bail!("frame list must not be empty");
+    }
+
+    let mut targets = frames.to_vec();
+    targets.sort_unstable();
+    targets.dedup();
+    if targets.len() < 2 {
+        bail!(
+            "frame hash capture requires at least 2 distinct frames, got {}",
+            targets.len()
+        );
+    }
+
+    let path = Path::new(ROM_ROOT).join(rom_rel_path);
+    if !path.exists() {
+        bail!("ROM not found: {}", path.display());
+    }
+
+    let mut nes = Nes::builder()
+        .framebuffer(FrameBuffer::new(ColorFormat::Rgba8888))
+        .build();
+    nes.load_cartridge_from_file(&path)
+        .with_context(|| format!("loading {}", path.display()))?;
+    // Mesen2 RGB baselines are captured with Mesen's default 2C02 palette.
+    nes.set_palette(PaletteKind::Mesen2C02.palette());
+
+    let mut results = Vec::with_capacity(targets.len());
+    let mut target_idx = 0usize;
+    let max_frame = *targets.last().expect("targets not empty");
+
+    let mut frame = nes.ppu.frame_count() as usize;
+    while frame <= max_frame {
+        while target_idx < targets.len() && frame == targets[target_idx] {
+            let packed = nes
+                .try_render_buffer()
+                .context("packed render buffer unavailable (swapchain backend)")?;
+            let hash = compute_rgb24_sha1_from_rgba8888(packed)?;
+            results.push((frame, hash));
+            target_idx += 1;
+        }
+        if target_idx >= targets.len() || frame >= max_frame {
+            break;
+        }
+        nes.run_frame(false);
+        frame = nes.ppu.frame_count() as usize;
+    }
+
+    if results.len() != targets.len() {
+        bail!(
+            "failed to capture all requested frames: captured {} of {}",
+            results.len(),
+            targets.len()
+        );
+    }
+
+    Ok(results)
+}
+
 /// Runs a ROM until a zero-page result byte becomes non-zero or times out.
 /// Returns the final result byte. `pass_value` marks success; any other non-zero
 /// value is treated as failure.
@@ -545,7 +649,9 @@ pub fn run_rom_zeropage_result(
 /// Simple heuristic to ensure the framebuffer isn't blank: require at least `min_unique` distinct color indices.
 pub fn require_color_diversity(nes: &Nes, min_unique: usize) -> Result<()> {
     let mut seen = [false; 256];
-    let fb = nes.render_buffer();
+    let fb = nes
+        .try_render_buffer()
+        .context("packed render buffer unavailable (swapchain backend)")?;
     for &b in fb {
         seen[b as usize] = true;
     }
@@ -636,6 +742,17 @@ fn serial_bytes_to_string(bytes: &[u8]) -> String {
         }
     }
     out
+}
+
+fn normalize_serial_text(text: &str) -> String {
+    let mut lines: Vec<String> = text
+        .lines()
+        .map(|line| line.trim_end().to_string())
+        .collect();
+    while matches!(lines.last(), Some(last) if last.is_empty()) {
+        lines.pop();
+    }
+    lines.join("\n")
 }
 
 fn parse_serial_progress(log: &str) -> Option<Progress> {

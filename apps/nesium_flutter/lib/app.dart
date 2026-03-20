@@ -61,6 +61,15 @@ class NesiumApp extends ConsumerWidget {
       locale: language.locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      localeResolutionCallback: (deviceLocale, supportedLocales) {
+        for (final supportedLocale in supportedLocales) {
+          if (deviceLocale != null &&
+              supportedLocale.languageCode == deviceLocale.languageCode) {
+            return supportedLocale;
+          }
+        }
+        return const Locale('en');
+      },
       navigatorObservers: [appRouteObserver],
       builder: (context, child) {
         if (child == null) return const SizedBox.shrink();

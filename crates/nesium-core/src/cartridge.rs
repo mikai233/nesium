@@ -1,15 +1,22 @@
 use std::{borrow::Cow, fs, path::Path};
 
 use crate::{
+    apu::{
+        ExpansionAudioClockContext, ExpansionAudioSink, ExpansionAudioSnapshot,
+        NullExpansionAudioSink,
+    },
     cartridge::header::{Header, Mirroring, NES_HEADER_LEN},
     error::Error,
     reset_kind::ResetKind,
 };
 
+mod db;
+use self::db::lookup_override;
 use self::mapper::{
     Mapper0, Mapper1, Mapper2, Mapper3, Mapper4, Mapper5, Mapper6, Mapper7, Mapper8, Mapper9,
-    Mapper10, Mapper11, Mapper13, Mapper19, Mapper21, Mapper23, Mapper25, Mapper26, Mapper34,
-    Mapper66, Mapper71, Mapper78, Mapper85, Mapper90, Mapper119, Mapper228, NametableTarget,
+    Mapper10, Mapper11, Mapper13, Mapper16, Mapper18, Mapper19, Mapper21, Mapper23, Mapper25,
+    Mapper26, Mapper34, Mapper66, Mapper69, Mapper71, Mapper78, Mapper85, Mapper90, Mapper119,
+    Mapper228, NametableTarget,
 };
 
 pub const TRAINER_SIZE: usize = 512;
@@ -70,7 +77,11 @@ impl<'a> From<&'a [u8]> for CartridgeImage {
 pub mod a12_watcher;
 pub mod header;
 pub mod mapper;
-pub use mapper::{Mapper, Provider, mapper_downcast_mut, mapper_downcast_ref};
+pub use mapper::{
+    CpuBusAccessKind, Mapper, MapperEvent, MapperHookMask, MapperMemoryOperation,
+    PpuRenderFetchInfo, PpuRenderFetchTarget, PpuRenderFetchType, PpuVramAccessContext,
+    PpuVramAccessSource, Provider, mapper_downcast_mut, mapper_downcast_ref,
+};
 
 #[derive(Debug)]
 pub struct Cartridge {
@@ -99,8 +110,8 @@ impl Cartridge {
         self.mapper.mirroring()
     }
 
-    pub fn cpu_read(&self, addr: u16) -> Option<u8> {
-        self.mapper.cpu_read(addr)
+    pub fn cpu_read(&self, addr: u16, open_bus: u8) -> Option<u8> {
+        self.mapper.cpu_read(addr, open_bus)
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8, cpu_cycle: u64) {
@@ -126,19 +137,86 @@ impl Cartridge {
     }
 
     /// Notify the mapper about a PPU VRAM access, including CPU bus timing.
-    pub fn ppu_vram_access(
-        &mut self,
-        addr: u16,
-        ctx: crate::cartridge::mapper::PpuVramAccessContext,
-    ) {
-        self.mapper.ppu_vram_access(addr, ctx);
+    pub fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
+        if self
+            .mapper
+            .hook_mask()
+            .contains(MapperHookMask::PPU_BUS_ADDRESS)
+        {
+            self.mapper
+                .on_mapper_event(MapperEvent::PpuBusAddress { addr, ctx });
+        }
     }
 
-    /// Advance mapper-internal CPU-based timers and expansion audio by one bus cycle.
-    pub fn cpu_clock(&mut self, cpu_cycle: u64) {
-        self.mapper.cpu_clock(cpu_cycle);
-        if let Some(expansion) = self.mapper.as_expansion_audio_mut() {
-            expansion.clock_audio();
+    /// Allows mappers to post-process the final value returned for a PPU VRAM read.
+    pub fn ppu_read_override(&mut self, addr: u16, ctx: PpuVramAccessContext, value: u8) -> u8 {
+        if self
+            .mapper
+            .hook_mask()
+            .contains(MapperHookMask::PPU_READ_OVERRIDE)
+        {
+            self.mapper.ppu_read_override(addr, ctx, value)
+        } else {
+            value
+        }
+    }
+
+    /// Advance mapper-provided expansion audio by one CPU clock tick.
+    pub fn clock_expansion_audio(
+        &mut self,
+        ctx: ExpansionAudioClockContext,
+        sink: &mut dyn ExpansionAudioSink,
+    ) {
+        if let Some(expansion) = self.mapper.expansion_audio_mut() {
+            expansion.clock_cpu(ctx, sink);
+        }
+    }
+
+    /// Advance expansion audio without emitting mixer deltas.
+    pub fn clock_expansion_audio_silent(&mut self, ctx: ExpansionAudioClockContext) {
+        let mut null_sink = NullExpansionAudioSink;
+        self.clock_expansion_audio(ctx, &mut null_sink);
+    }
+
+    /// Snapshot current mapper expansion-audio output levels.
+    pub fn expansion_audio_snapshot(&self) -> ExpansionAudioSnapshot {
+        self.mapper
+            .expansion_audio()
+            .map(|exp| exp.snapshot())
+            .unwrap_or_default()
+    }
+
+    /// Notify mapper of a CPU bus access.
+    pub fn cpu_bus_access(
+        &mut self,
+        kind: CpuBusAccessKind,
+        addr: u16,
+        value: u8,
+        cpu_cycle: u64,
+        master_clock: u64,
+    ) {
+        if self
+            .mapper
+            .hook_mask()
+            .contains(MapperHookMask::CPU_BUS_ACCESS)
+        {
+            self.mapper.on_mapper_event(MapperEvent::CpuBusAccess {
+                kind,
+                addr,
+                value,
+                cpu_cycle,
+                master_clock,
+            });
+        }
+    }
+
+    /// Notify mapper of a CPU clock tick.
+    pub fn cpu_clock(&mut self, cpu_cycle: u64, master_clock: u64) {
+        if self.mapper.hook_mask().contains(MapperHookMask::CPU_CLOCK) {
+            self.mapper.on_mapper_event(MapperEvent::CpuClock {
+                cpu_cycle,
+                master_clock,
+            });
         }
     }
 
@@ -148,12 +226,12 @@ impl Cartridge {
     }
 
     /// Mapper-controlled nametable read when [`map_nametable`] selects mapper VRAM/ROM.
-    pub fn mapper_nametable_read(&self, offset: u16) -> u8 {
+    pub fn mapper_nametable_read(&self, offset: u32) -> u8 {
         self.mapper.mapper_nametable_read(offset)
     }
 
     /// Mapper-controlled nametable write when [`map_nametable`] selects mapper VRAM/ROM.
-    pub fn mapper_nametable_write(&mut self, offset: u16, value: u8) {
+    pub fn mapper_nametable_write(&mut self, offset: u32, value: u8) {
         self.mapper.mapper_nametable_write(offset, value);
     }
 
@@ -229,6 +307,9 @@ fn build_cartridge_from_sections<'a>(
         10 => Box::new(Mapper10::new(header, prg_rom, chr_rom, trainer)),
         11 => Box::new(Mapper11::new(header, prg_rom, chr_rom, trainer)),
         13 => Box::new(Mapper13::new(header, prg_rom, chr_rom, trainer)),
+        16 => Box::new(Mapper16::new(header, prg_rom, chr_rom, trainer)),
+        157 => Box::new(Mapper16::new(header, prg_rom, chr_rom, trainer)),
+        18 => Box::new(Mapper18::new(header, prg_rom, chr_rom, trainer)),
         19 => Box::new(Mapper19::new(header, prg_rom, chr_rom, trainer)),
         21 => Box::new(Mapper21::new(header, prg_rom, chr_rom, trainer)),
         23 => Box::new(Mapper23::new(header, prg_rom, chr_rom, trainer)),
@@ -236,6 +317,7 @@ fn build_cartridge_from_sections<'a>(
         26 => Box::new(Mapper26::new(header, prg_rom, chr_rom, trainer)),
         34 => Box::new(Mapper34::new(header, prg_rom, chr_rom, trainer)),
         66 => Box::new(Mapper66::new(header, prg_rom, chr_rom, trainer)),
+        69 => Box::new(Mapper69::new(header, prg_rom, chr_rom, trainer)),
         71 => Box::new(Mapper71::new(header, prg_rom, chr_rom, trainer)),
         78 => Box::new(Mapper78::new(header, prg_rom, chr_rom, trainer)),
         85 => Box::new(Mapper85::new(header, prg_rom, chr_rom, trainer)),
@@ -261,8 +343,11 @@ fn load_cartridge_from_bytes(
     let header_bytes = bytes.get(..NES_HEADER_LEN).ok_or(Error::TooShort {
         actual: bytes.len(),
     })?;
-    let header = Header::parse(header_bytes)?;
-    let (trainer, prg_rom, chr_rom) = slice_sections(bytes, &header)?;
+    let parsed_header = Header::parse(header_bytes)?;
+    let (trainer, prg_rom, chr_rom) = slice_sections(bytes, &parsed_header)?;
+    let header = lookup_override(&parsed_header, prg_rom.as_ref(), chr_rom.as_ref())
+        .map(|info| parsed_header.with_runtime_mapper_submapper(info.mapper, info.submapper))
+        .unwrap_or(parsed_header);
 
     build_cartridge_from_sections(header, trainer, prg_rom, chr_rom, provider)
 }
@@ -274,8 +359,11 @@ fn load_cartridge_from_static_bytes(
     let header_bytes = bytes.get(..NES_HEADER_LEN).ok_or(Error::TooShort {
         actual: bytes.len(),
     })?;
-    let header = Header::parse(header_bytes)?;
-    let (trainer, prg_rom, chr_rom) = slice_sections_static(bytes, &header)?;
+    let parsed_header = Header::parse(header_bytes)?;
+    let (trainer, prg_rom, chr_rom) = slice_sections_static(bytes, &parsed_header)?;
+    let header = lookup_override(&parsed_header, prg_rom.as_ref(), chr_rom.as_ref())
+        .map(|info| parsed_header.with_runtime_mapper_submapper(info.mapper, info.submapper))
+        .unwrap_or(parsed_header);
 
     build_cartridge_from_sections(header, trainer, prg_rom, chr_rom, provider)
 }
@@ -407,7 +495,7 @@ mod tests {
 
         assert_eq!(cartridge.header().prg_rom_size(), 16 * 1024);
         assert_eq!(cartridge.header().chr_rom_size(), 8 * 1024);
-        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), Some(0xAA));
+        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START, 0), Some(0xAA));
         assert_eq!(cartridge.ppu_read(0x0000), Some(0x55));
     }
 
@@ -421,7 +509,7 @@ mod tests {
 
         assert!(cartridge.header().trainer_present());
         assert_eq!(cartridge.header().prg_rom_size(), 16 * 1024);
-        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START), Some(0xAA));
+        assert_eq!(cartridge.cpu_read(cpu_mem::PRG_ROM_START, 0), Some(0xAA));
     }
 
     #[test]
@@ -456,7 +544,7 @@ mod tests {
     struct DummyMapper;
 
     impl Mapper for DummyMapper {
-        fn cpu_read(&self, _addr: u16) -> Option<u8> {
+        fn cpu_read(&self, _addr: u16, _open_bus: u8) -> Option<u8> {
             Some(0xFF)
         }
 

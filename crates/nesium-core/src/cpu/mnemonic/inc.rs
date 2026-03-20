@@ -1,5 +1,6 @@
 use crate::{
     bus::CpuBus,
+    cartridge::CpuBusAccessKind,
     context::Context,
     cpu::{Cpu, status::Status},
 };
@@ -30,15 +31,21 @@ pub fn exec_dec(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, cpu.tmp, bus, ctx);
             cpu.tmp = cpu.tmp.wrapping_sub(1);
             cpu.p.set_zn(cpu.tmp);
         }
         2 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.write(
+                cpu.effective_addr,
+                cpu.tmp,
+                bus,
+                ctx,
+                CpuBusAccessKind::Write,
+            );
         }
         _ => unreachable_step!("invalid DEC step {step}"),
     }
@@ -129,15 +136,21 @@ pub fn exec_inc(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
             cpu.p.remove(Status::NEGATIVE | Status::ZERO);
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, cpu.tmp, bus, ctx);
             cpu.tmp = cpu.tmp.wrapping_add(1);
             cpu.p.set_zn(cpu.tmp);
         }
         2 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.write(
+                cpu.effective_addr,
+                cpu.tmp,
+                bus,
+                ctx,
+                CpuBusAccessKind::Write,
+            );
         }
         _ => unreachable_step!("invalid INC step {step}"),
     }

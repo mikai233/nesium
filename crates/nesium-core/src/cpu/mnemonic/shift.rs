@@ -1,5 +1,6 @@
 use crate::{
     bus::CpuBus,
+    cartridge::CpuBusAccessKind,
     context::Context,
     cpu::{
         Cpu,
@@ -34,14 +35,14 @@ use crate::{
 pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, cpu.tmp, bus, ctx);
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x0A) {
-                let _ = bus.mem_read(cpu.pc, cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 cpu.p.set_c(cpu.a & BIT_7 != 0);
                 cpu.a <<= 1;
                 cpu.p.set_zn(cpu.a);
@@ -50,7 +51,13 @@ pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
                 cpu.tmp <<= 1;
                 cpu.p.set_c(old_bit7 != 0);
                 cpu.p.set_zn(cpu.tmp);
-                bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+                cpu.write(
+                    cpu.effective_addr,
+                    cpu.tmp,
+                    bus,
+                    ctx,
+                    CpuBusAccessKind::Write,
+                );
             }
         }
         _ => unreachable_step!("invalid ASL step {step}"),
@@ -86,10 +93,10 @@ pub fn exec_asl(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, cpu.tmp, bus, ctx);
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x4A) {
@@ -104,7 +111,13 @@ pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
                 cpu.p.set_c(old_bit0 != 0);
                 cpu.p.remove(Status::NEGATIVE);
                 cpu.p.set_z(cpu.tmp == 0);
-                bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+                cpu.write(
+                    cpu.effective_addr,
+                    cpu.tmp,
+                    bus,
+                    ctx,
+                    CpuBusAccessKind::Write,
+                );
             }
         }
         _ => unreachable_step!("invalid LSR step {step}"),
@@ -138,14 +151,14 @@ pub fn exec_lsr(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, cpu.tmp, bus, ctx);
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x2A) {
-                bus.mem_read(cpu.pc, cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 let old_bit7 = cpu.a & BIT_7;
                 let new_a = (cpu.a << 1) | if cpu.p.c() { 1 } else { 0 };
                 cpu.a = new_a;
@@ -157,7 +170,13 @@ pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
                 cpu.tmp = new_a;
                 cpu.p.set_c(old_bit7 != 0);
                 cpu.p.set_zn(cpu.tmp);
-                bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+                cpu.write(
+                    cpu.effective_addr,
+                    cpu.tmp,
+                    bus,
+                    ctx,
+                    CpuBusAccessKind::Write,
+                );
             }
         }
         _ => unreachable_step!("invalid ROL step {step}"),
@@ -192,14 +211,14 @@ pub fn exec_rol(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
 pub fn exec_ror(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
     match step {
         0 => {
-            cpu.tmp = bus.mem_read(cpu.effective_addr, cpu, ctx);
+            cpu.tmp = cpu.read(cpu.effective_addr, bus, ctx, CpuBusAccessKind::Read);
         }
         1 => {
-            bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+            cpu.dummy_write(cpu.effective_addr, cpu.tmp, bus, ctx);
         }
         2 => {
             if cpu.opcode_in_flight == Some(0x6A) {
-                bus.mem_read(cpu.pc, cpu, ctx);
+                cpu.dummy_read(bus, ctx);
                 let old_bit0 = cpu.a & BIT_0;
                 let new_a = (cpu.a >> 1) | if cpu.p.c() { BIT_7 } else { 0 };
                 cpu.a = new_a;
@@ -211,7 +230,13 @@ pub fn exec_ror(cpu: &mut Cpu, bus: &mut CpuBus, ctx: &mut Context, step: u8) {
                 cpu.tmp = new_a;
                 cpu.p.set_c(old_bit0 != 0);
                 cpu.p.set_zn(cpu.tmp);
-                bus.mem_write(cpu.effective_addr, cpu.tmp, cpu, ctx);
+                cpu.write(
+                    cpu.effective_addr,
+                    cpu.tmp,
+                    bus,
+                    ctx,
+                    CpuBusAccessKind::Write,
+                );
             }
         }
         _ => unreachable_step!("invalid ROR step {step}"),

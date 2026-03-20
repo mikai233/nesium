@@ -31,12 +31,13 @@ jobs:
     # Do not fail the workflow on PR to avoid blocking
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     permissions:
+      contents: read
       issues: write # required to create issues if vulnerabilities are found
       checks: write # required to create check runs
     steps:
       # Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -59,17 +60,18 @@ jobs:
           - licenses
           - sources
     permissions:
+      contents: read
       issues: write # required to create issues if violations are found
       checks: write # required to create check runs
     steps:
       # Checkout repository
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       # Cache Cargo registry and git repositories to speed up dependency resolution
       - name: Cache cargo registry/git
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry

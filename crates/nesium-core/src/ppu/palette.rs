@@ -324,6 +324,8 @@ pub enum PaletteKind {
     /// Canonical Nesdev/Ntsc palette. Matches the default data defined below.
     #[default]
     NesdevNtsc,
+    /// Mesen2 default NES 2C02 palette table.
+    Mesen2C02,
     /// FirebrandX's "Composite Direct" capture (CRT composite signal).
     FbxCompositeDirect,
     /// Sony CXA2025AS US RGB PPU measurements (PVM/RGB mod look).
@@ -338,6 +340,7 @@ impl PaletteKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             PaletteKind::NesdevNtsc => "nesdev-ntsc",
+            PaletteKind::Mesen2C02 => "mesen-2c02",
             PaletteKind::FbxCompositeDirect => "fbx-composite-direct",
             PaletteKind::SonyCxa2025AsUs => "sony-cxa2025as-us",
             PaletteKind::Pal2c07 => "pal-2c07",
@@ -348,6 +351,7 @@ impl PaletteKind {
     pub const fn description(self) -> &'static str {
         match self {
             PaletteKind::NesdevNtsc => "Canonical palette reproduced from the Nesdev wiki",
+            PaletteKind::Mesen2C02 => "Mesen2 default RP2C02 palette",
             PaletteKind::FbxCompositeDirect => {
                 "FirebrandX composite capture (looks like a calibrated CRT)"
             }
@@ -360,6 +364,7 @@ impl PaletteKind {
     pub const fn all() -> &'static [PaletteKind] {
         &[
             PaletteKind::NesdevNtsc,
+            PaletteKind::Mesen2C02,
             PaletteKind::FbxCompositeDirect,
             PaletteKind::SonyCxa2025AsUs,
             PaletteKind::Pal2c07,
@@ -370,6 +375,7 @@ impl PaletteKind {
     pub const fn palette(self) -> Palette {
         match self {
             PaletteKind::NesdevNtsc => Palette::Static(&NESDEV_TABLE),
+            PaletteKind::Mesen2C02 => Palette::Static(&MESEN_2C02_DATA),
             PaletteKind::FbxCompositeDirect => Palette::Static(&FBX_COMPOSITE_DIRECT_DATA),
             PaletteKind::SonyCxa2025AsUs => Palette::Static(&SONY_CXA2025AS_US_DATA),
             PaletteKind::Pal2c07 => Palette::Static(&PAL_2C07_DATA),
@@ -377,6 +383,30 @@ impl PaletteKind {
         }
     }
 }
+
+#[rustfmt::skip]
+const MESEN_2C02_DATA: [Color; 64] = [
+    // L0 ($00-$0F)
+    rgb!(0x66, 0x66, 0x66), rgb!(0x00, 0x2A, 0x88), rgb!(0x14, 0x12, 0xA7), rgb!(0x3B, 0x00, 0xA4),
+    rgb!(0x5C, 0x00, 0x7E), rgb!(0x6E, 0x00, 0x40), rgb!(0x6C, 0x06, 0x00), rgb!(0x56, 0x1D, 0x00),
+    rgb!(0x33, 0x35, 0x00), rgb!(0x0B, 0x48, 0x00), rgb!(0x00, 0x52, 0x00), rgb!(0x00, 0x4F, 0x08),
+    rgb!(0x00, 0x40, 0x4D), rgb!(0x00, 0x00, 0x00), rgb!(0x00, 0x00, 0x00), rgb!(0x00, 0x00, 0x00),
+    // L1 ($10-$1F)
+    rgb!(0xAD, 0xAD, 0xAD), rgb!(0x15, 0x5F, 0xD9), rgb!(0x42, 0x40, 0xFF), rgb!(0x75, 0x27, 0xFE),
+    rgb!(0xA0, 0x1A, 0xCC), rgb!(0xB7, 0x1E, 0x7B), rgb!(0xB5, 0x31, 0x20), rgb!(0x99, 0x4E, 0x00),
+    rgb!(0x6B, 0x6D, 0x00), rgb!(0x38, 0x87, 0x00), rgb!(0x0C, 0x93, 0x00), rgb!(0x00, 0x8F, 0x32),
+    rgb!(0x00, 0x7C, 0x8D), rgb!(0x00, 0x00, 0x00), rgb!(0x00, 0x00, 0x00), rgb!(0x00, 0x00, 0x00),
+    // L2 ($20-$2F)
+    rgb!(0xFF, 0xFE, 0xFF), rgb!(0x64, 0xB0, 0xFF), rgb!(0x92, 0x90, 0xFF), rgb!(0xC6, 0x76, 0xFF),
+    rgb!(0xF3, 0x6A, 0xFF), rgb!(0xFE, 0x6E, 0xCC), rgb!(0xFE, 0x81, 0x70), rgb!(0xEA, 0x9E, 0x22),
+    rgb!(0xBC, 0xBE, 0x00), rgb!(0x88, 0xD8, 0x00), rgb!(0x5C, 0xE4, 0x30), rgb!(0x45, 0xE0, 0x82),
+    rgb!(0x48, 0xCD, 0xDE), rgb!(0x4F, 0x4F, 0x4F), rgb!(0x00, 0x00, 0x00), rgb!(0x00, 0x00, 0x00),
+    // L3 ($30-$3F)
+    rgb!(0xFF, 0xFE, 0xFF), rgb!(0xC0, 0xDF, 0xFF), rgb!(0xD3, 0xD2, 0xFF), rgb!(0xE8, 0xC8, 0xFF),
+    rgb!(0xFB, 0xC2, 0xFF), rgb!(0xFE, 0xC4, 0xEA), rgb!(0xFE, 0xCC, 0xC5), rgb!(0xF7, 0xD8, 0xA5),
+    rgb!(0xE4, 0xE5, 0x94), rgb!(0xCF, 0xEF, 0x96), rgb!(0xBD, 0xF4, 0xAB), rgb!(0xB3, 0xF3, 0xCC),
+    rgb!(0xB5, 0xEB, 0xF2), rgb!(0xB8, 0xB8, 0xB8), rgb!(0x00, 0x00, 0x00), rgb!(0x00, 0x00, 0x00),
+];
 
 /// Default NTSC system palette organized as `Lx` / hue table entries.
 #[rustfmt::skip]
@@ -590,6 +620,14 @@ mod tests {
         assert_eq!(
             digest(&FBX_COMPOSITE_DIRECT_DATA),
             88560908037763379911532392017758831100
+        );
+    }
+
+    #[test]
+    fn mesen_2c02_palette_hash_matches_reference() {
+        assert_eq!(
+            digest(&MESEN_2C02_DATA),
+            103230626129420882480081790984154954439
         );
     }
 

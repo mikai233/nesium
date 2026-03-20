@@ -16,79 +16,37 @@
 
 use std::borrow::Cow;
 
+use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef};
+
 use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
-        mapper::{ChrStorage, allocate_prg_ram_with_trainer, select_chr_storage},
+        mapper::{
+            ChrStorage, MapperEvent, MapperHookMask, allocate_prg_ram_with_trainer,
+            core::{
+                vrc_irq::VrcIrq,
+                vrc2_4::{
+                    Vrc2_4AddressConfig, Vrc2_4Banking, Vrc2_4Register, VrcAddressBits,
+                    read_prg_ram_window, translate_vrc2_4_address, write_prg_ram_window,
+                    write_vrc2_4_register,
+                },
+            },
+            select_chr_storage,
+        },
     },
     memory::cpu as cpu_mem,
     reset_kind::ResetKind,
 };
-
-use crate::mem_block::ByteBlock;
-
-/// PRG-ROM banking granularity (8 KiB).
-const PRG_BANK_SIZE_8K: usize = 8 * 1024;
-/// CHR banking granularity (1 KiB).
-const CHR_BANK_SIZE_1K: usize = 1024;
 
 /// CPU `$8000-$FFFF`: VRC2b/VRC4e register I/O window. Writes in this range,
 /// after address line translation, target PRG/CHR/mirroring/IRQ registers.
 const VRC23_IO_WINDOW_START: u16 = 0x8000;
 const VRC23_IO_WINDOW_END: u16 = 0xFFFF;
 
-/// CPU-visible VRC2b/VRC4e register set after address translation.
-///
-/// The translated address layout mirrors VRC4 closely; VRC2b simply lacks the
-/// IRQ-related registers and PRG mode bit. Grouping these into an enum keeps
-/// the mapper logic close to the documented register map.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Vrc23CpuRegister {
-    /// `$8000-$8006` – PRG bank for `$8000-$9FFF`.
-    PrgBank8000,
-    /// `$9000-$9001` – nametable mirroring control.
-    Mirroring,
-    /// `$9002-$9003` – PRG mode / IRQ mode bits (VRC4e) or mirroring (VRC2b).
-    ModeOrMirroring,
-    /// `$A000-$A006` – PRG bank for `$A000-$BFFF`.
-    PrgBankA000,
-    /// `$B000-$E006` – CHR bank low/high nibbles.
-    ChrBank,
-    /// `$F000` – IRQ reload low nibble (VRC4e only).
-    IrqReloadLow,
-    /// `$F001` – IRQ reload high nibble (VRC4e only).
-    IrqReloadHigh,
-    /// `$F002` – IRQ control (enable/mode) (VRC4e only).
-    IrqControl,
-    /// `$F003` – IRQ acknowledge / re-enable (VRC4e only).
-    IrqAck,
-}
-
-impl Vrc23CpuRegister {
-    fn from_addr(addr: u16) -> Option<Self> {
-        use Vrc23CpuRegister::*;
-
-        match addr {
-            0x8000..=0x8006 => Some(PrgBank8000),
-            0x9000..=0x9001 => Some(Mirroring),
-            0x9002..=0x9003 => Some(ModeOrMirroring),
-            0xA000..=0xA006 => Some(PrgBankA000),
-            0xB000..=0xE006 => Some(ChrBank),
-            0xF000 => Some(IrqReloadLow),
-            0xF001 => Some(IrqReloadHigh),
-            0xF002 => Some(IrqControl),
-            0xF003 => Some(IrqAck),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Variant {
-    /// VRC2b: no PRG mode bit or IRQ support (mapper 23 submapper 0/3).
     Vrc2b,
-    /// VRC4e: PRG mode + IRQ (mapper 23 submapper 2).
     Vrc4e,
 }
 
@@ -97,284 +55,115 @@ pub struct Mapper23 {
     prg_rom: PrgRom,
     prg_ram: Box<[u8]>,
     chr: ChrStorage,
-
-    /// Number of 8 KiB PRG-ROM banks.
-    prg_bank_count_8k: usize,
-
-    prg_bank_8000: u8,
-    prg_bank_a000: u8,
-    /// PRG mode swap flag (only meaningful for VRC4e).
-    prg_mode_swap: bool,
-
-    chr_low_regs: Mapper23ChrLowRegs,
-    chr_high_regs: Mapper23ChrHighRegs,
-
-    mirroring: Mirroring,
-    base_mirroring: Mirroring,
-
-    // IRQ state (VRC4e only).
-    irq_reload: u8,
-    irq_counter: u8,
-    irq_prescaler: i32,
-    irq_enabled: bool,
-    irq_enabled_after_ack: bool,
-    irq_cycle_mode: bool,
-    irq_pending: bool,
-
+    banking: Vrc2_4Banking,
+    irq: Option<VrcIrq>,
     variant: Variant,
-    /// When true (submapper 0), OR both VRC2b/VRC4e address layouts.
     use_heuristics: bool,
 }
-
-type Mapper23ChrLowRegs = ByteBlock<8>;
-type Mapper23ChrHighRegs = ByteBlock<8>;
 
 impl Mapper23 {
     pub fn new(header: Header, prg_rom: PrgRom, chr_rom: ChrRom, trainer: TrainerBytes) -> Self {
         let prg_ram = allocate_prg_ram_with_trainer(&header, trainer);
-
         let chr = select_chr_storage(&header, chr_rom);
-        let prg_bank_count_8k = (prg_rom.len() / PRG_BANK_SIZE_8K).max(1);
+        let banking = Vrc2_4Banking::new(&prg_rom, header.mirroring());
 
         let variant = match header.submapper() {
             2 => Variant::Vrc4e,
             _ => Variant::Vrc2b,
         };
         let use_heuristics = header.submapper() == 0;
+        let irq = matches!(variant, Variant::Vrc4e).then(VrcIrq::new);
 
         Self {
             prg_rom,
             prg_ram,
             chr,
-            prg_bank_count_8k,
-            prg_bank_8000: 0,
-            prg_bank_a000: 0,
-            prg_mode_swap: false,
-            chr_low_regs: Mapper23ChrLowRegs::new(),
-            chr_high_regs: Mapper23ChrHighRegs::new(),
-            mirroring: header.mirroring(),
-            base_mirroring: header.mirroring(),
-            irq_reload: 0,
-            irq_counter: 0,
-            irq_prescaler: 0,
-            irq_enabled: false,
-            irq_enabled_after_ack: false,
-            irq_cycle_mode: false,
-            irq_pending: false,
+            banking,
+            irq,
             variant,
             use_heuristics,
         }
     }
 
     fn has_irq(&self) -> bool {
-        matches!(self.variant, Variant::Vrc4e)
+        self.irq.is_some()
     }
 
     fn translate_address(&self, addr: u16) -> u16 {
-        // VRC2b: A0=addr bit0, A1=addr bit1
-        // VRC4e: A0=addr bit2, A1=addr bit3
-        let (a0, a1) = if self.use_heuristics {
-            let b0 = addr & 0x01;
-            let b1 = (addr >> 1) & 0x01;
-            let b2 = (addr >> 2) & 0x01;
-            let b3 = (addr >> 3) & 0x01;
-            ((b0 | b2) & 0x01, (b1 | b3) & 0x01)
-        } else {
-            match self.variant {
-                Variant::Vrc2b => (addr & 0x01, (addr >> 1) & 0x01),
-                Variant::Vrc4e => ((addr >> 2) & 0x01, (addr >> 3) & 0x01),
-            }
+        let config = match self.variant {
+            Variant::Vrc2b => Vrc2_4AddressConfig {
+                primary: VrcAddressBits::new(0, 1),
+                heuristic_alt: Some(VrcAddressBits::new(2, 3)),
+            },
+            Variant::Vrc4e => Vrc2_4AddressConfig {
+                primary: VrcAddressBits::new(2, 3),
+                heuristic_alt: Some(VrcAddressBits::new(0, 1)),
+            },
         };
-        (addr & 0xFF00) | (a1 << 1) | a0
-    }
-
-    #[inline]
-    fn prg_bank_index(&self, reg_value: u8) -> usize {
-        if self.prg_bank_count_8k == 0 {
-            0
-        } else {
-            (reg_value as usize) % self.prg_bank_count_8k
-        }
-    }
-
-    fn prg_bank_for_addr(&self, addr: u16) -> usize {
-        let last = self.prg_bank_count_8k.saturating_sub(1);
-        let second_last = self.prg_bank_count_8k.saturating_sub(2);
-
-        if self.prg_mode_swap {
-            match addr {
-                0x8000..=0x9FFF => second_last,
-                0xA000..=0xBFFF => self.prg_bank_index(self.prg_bank_a000),
-                0xC000..=0xDFFF => self.prg_bank_index(self.prg_bank_8000),
-                _ => last,
-            }
-        } else {
-            match addr {
-                0x8000..=0x9FFF => self.prg_bank_index(self.prg_bank_8000),
-                0xA000..=0xBFFF => self.prg_bank_index(self.prg_bank_a000),
-                0xC000..=0xDFFF => second_last,
-                _ => last,
-            }
-        }
-    }
-
-    fn read_prg_rom(&self, addr: u16) -> u8 {
-        if self.prg_rom.is_empty() {
-            return 0;
-        }
-        let bank = self.prg_bank_for_addr(addr);
-        let offset = (addr & 0x1FFF) as usize;
-        let base = bank.saturating_mul(PRG_BANK_SIZE_8K);
-        self.prg_rom.get(base + offset).copied().unwrap_or(0)
+        translate_vrc2_4_address(addr, config, self.use_heuristics)
     }
 
     fn read_prg_ram(&self, addr: u16) -> Option<u8> {
-        if self.prg_ram.is_empty() {
-            return None;
-        }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        Some(self.prg_ram[idx])
+        read_prg_ram_window(&self.prg_ram, addr)
     }
 
     fn write_prg_ram(&mut self, addr: u16, data: u8) {
-        if self.prg_ram.is_empty() {
-            return;
-        }
-        let idx = (addr - cpu_mem::PRG_RAM_START) as usize % self.prg_ram.len();
-        self.prg_ram[idx] = data;
+        write_prg_ram_window(&mut self.prg_ram, addr, data);
     }
 
-    fn chr_page_base(&self, bank: usize) -> usize {
-        let lo = self.chr_low_regs.get(bank).copied().unwrap_or(0) & 0x0F;
-        let hi = self.chr_high_regs.get(bank).copied().unwrap_or(0) & 0x1F;
-        let page = ((hi as usize) << 4) | lo as usize;
-        page * CHR_BANK_SIZE_1K
-    }
-
-    fn read_chr(&self, addr: u16) -> u8 {
-        let bank = ((addr >> 10) & 0x07) as usize;
-        let offset = (addr & 0x03FF) as usize;
-        let base = self.chr_page_base(bank);
-        self.chr.read_indexed(base, offset)
-    }
-
-    fn write_chr(&mut self, addr: u16, data: u8) {
-        let bank = ((addr >> 10) & 0x07) as usize;
-        let offset = (addr & 0x03FF) as usize;
-        let base = self.chr_page_base(bank);
-        self.chr.write_indexed(base, offset, data);
-    }
-
-    fn set_mirroring_from_value(&mut self, value: u8) {
-        let mask = if matches!(self.variant, Variant::Vrc2b) && !self.use_heuristics {
+    fn mirroring_mask(&self) -> u8 {
+        if matches!(self.variant, Variant::Vrc2b) && !self.use_heuristics {
             0x01
         } else {
             0x03
-        };
-        self.mirroring = match value & mask {
-            0 => Mirroring::Vertical,
-            1 => Mirroring::Horizontal,
-            2 => Mirroring::SingleScreenLower,
-            _ => Mirroring::SingleScreenUpper,
-        };
-    }
-
-    fn write_register(&mut self, addr: u16, value: u8) {
-        if let Some(reg) = Vrc23CpuRegister::from_addr(addr) {
-            use Vrc23CpuRegister::*;
-
-            match reg {
-                PrgBank8000 => {
-                    self.prg_bank_8000 = value & 0x1F;
-                }
-                Mirroring => {
-                    self.set_mirroring_from_value(value);
-                }
-                ModeOrMirroring => {
-                    if self.has_irq() {
-                        self.prg_mode_swap = (value & 0x02) != 0;
-                    } else {
-                        self.set_mirroring_from_value(value);
-                    }
-                }
-                PrgBankA000 => {
-                    self.prg_bank_a000 = value & 0x1F;
-                }
-                ChrBank => {
-                    let reg_number = ((((addr >> 12) & 0x07) - 3) << 1) + ((addr >> 1) & 0x01);
-                    let idx = reg_number as usize;
-                    if idx < 8 {
-                        if addr & 0x01 == 0 {
-                            self.chr_low_regs[idx] = value & 0x0F;
-                        } else {
-                            self.chr_high_regs[idx] = value & 0x1F;
-                        }
-                    }
-                }
-                IrqReloadLow => {
-                    if self.has_irq() {
-                        self.irq_reload = (self.irq_reload & 0xF0) | (value & 0x0F);
-                    }
-                }
-                IrqReloadHigh => {
-                    if self.has_irq() {
-                        self.irq_reload = (self.irq_reload & 0x0F) | ((value & 0x0F) << 4);
-                    }
-                }
-                IrqControl => {
-                    if self.has_irq() {
-                        self.irq_enabled_after_ack = (value & 0x01) != 0;
-                        self.irq_enabled = (value & 0x02) != 0;
-                        self.irq_cycle_mode = (value & 0x04) != 0;
-                        if self.irq_enabled {
-                            self.irq_counter = self.irq_reload;
-                            self.irq_prescaler = 341;
-                            self.irq_pending = false;
-                        }
-                    }
-                }
-                IrqAck => {
-                    if self.has_irq() {
-                        self.irq_enabled = self.irq_enabled_after_ack;
-                        self.irq_pending = false;
-                    }
-                }
-            }
         }
     }
 
-    fn clock_irq_counter(&mut self) {
-        if self.irq_counter == 0xFF {
-            self.irq_counter = self.irq_reload;
-            self.irq_pending = true;
-        } else {
-            self.irq_counter = self.irq_counter.wrapping_add(1);
+    fn write_register(&mut self, addr: u16, value: u8) {
+        if let Some(reg) = Vrc2_4Register::from_addr(addr, true) {
+            let mode_controls_prg_swap = self.has_irq();
+            let mirroring_mask = self.mirroring_mask();
+            write_vrc2_4_register(
+                &mut self.banking,
+                self.irq.as_mut(),
+                reg,
+                addr,
+                value,
+                mirroring_mask,
+                mode_controls_prg_swap,
+            );
         }
     }
 }
 
 impl Mapper for Mapper23 {
-    fn reset(&mut self, _kind: ResetKind) {
-        self.prg_bank_8000 = 0;
-        self.prg_bank_a000 = 1;
-        self.prg_mode_swap = false;
-        self.chr_low_regs.fill(0);
-        self.chr_high_regs.fill(0);
-        self.mirroring = self.base_mirroring;
-
-        self.irq_reload = 0;
-        self.irq_counter = 0;
-        self.irq_prescaler = 0;
-        self.irq_enabled = false;
-        self.irq_enabled_after_ack = false;
-        self.irq_cycle_mode = false;
-        self.irq_pending = false;
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::CPU_BUS_ACCESS
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::CpuBusAccess { .. } = event {
+            if let Some(irq) = &mut self.irq {
+                irq.clock();
+            }
+        }
+    }
+
+    fn reset(&mut self, _kind: ResetKind) {
+        self.banking.reset();
+        if let Some(irq) = &mut self.irq {
+            irq.reset();
+        }
+    }
+
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         match addr {
             cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END => self.read_prg_ram(addr),
-            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => Some(self.read_prg_rom(addr)),
+            cpu_mem::PRG_ROM_START..=cpu_mem::CPU_ADDR_END => Some(self.banking.read_prg_rom(
+                &self.prg_rom,
+                addr,
+                self.has_irq(),
+            )),
             _ => None,
         }
     }
@@ -390,75 +179,42 @@ impl Mapper for Mapper23 {
         }
     }
 
-    fn cpu_clock(&mut self, _cpu_cycle: u64) {
-        if !self.has_irq() || !self.irq_enabled {
-            return;
-        }
-        if self.irq_cycle_mode {
-            self.clock_irq_counter();
-        } else {
-            self.irq_prescaler -= 3;
-            if self.irq_prescaler <= 0 {
-                self.clock_irq_counter();
-                self.irq_prescaler += 341;
-            }
-        }
-    }
-
     fn ppu_read(&self, addr: u16) -> Option<u8> {
-        Some(self.read_chr(addr))
+        Some(self.banking.read_chr(&self.chr, addr))
     }
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
-        self.write_chr(addr, data);
+        self.banking.write_chr(&mut self.chr, addr, data);
     }
 
     fn irq_pending(&self) -> bool {
-        self.has_irq() && self.irq_pending
+        self.irq.as_ref().is_some_and(VrcIrq::pending)
     }
 
-    fn prg_rom(&self) -> Option<&[u8]> {
-        Some(self.prg_rom.as_ref())
-    }
-
-    fn prg_ram(&self) -> Option<&[u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_ref())
+    fn memory_ref(&self) -> MapperMemoryRef<'_> {
+        MapperMemoryRef {
+            prg_rom: Some(self.prg_rom.as_ref()),
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_ref()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_rom: self.chr.as_rom(),
+            chr_ram: self.chr.as_ram(),
+            chr_battery_ram: None,
         }
     }
 
-    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_mut())
+    fn memory_mut(&mut self) -> MapperMemoryMut<'_> {
+        MapperMemoryMut {
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_mut()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_ram: self.chr.as_ram_mut(),
+            chr_battery_ram: None,
         }
-    }
-
-    fn prg_save_ram(&self) -> Option<&[u8]> {
-        self.prg_ram()
-    }
-
-    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.prg_ram_mut()
-    }
-
-    fn chr_rom(&self) -> Option<&[u8]> {
-        self.chr.as_rom()
-    }
-
-    fn chr_ram(&self) -> Option<&[u8]> {
-        self.chr.as_ram()
-    }
-
-    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.chr.as_ram_mut()
     }
 
     fn mirroring(&self) -> Mirroring {
-        self.mirroring
+        self.banking.mirroring()
     }
 
     fn mapper_id(&self) -> u16 {

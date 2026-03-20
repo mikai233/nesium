@@ -4,7 +4,7 @@
 //! This mirrors Mesen2's `Core/Shared/Audio/SoundMixer` at a high level but
 //! starts with a minimal feature set: fixed input rate (typically 96 kHz),
 //! configurable output rate, simple master volume/background attenuation, a
-//! linear resampler, and basic EQ/reverb/crossfeed support.
+//! Hermite resampler, and basic EQ/reverb/crossfeed support.
 
 /// Minimal audio bus configuration inspired by Mesen2's `AudioConfig`.
 ///
@@ -197,6 +197,112 @@ impl CrossFeedFilter {
 }
 
 #[derive(Debug, Clone)]
+struct HermiteResamplerStereo {
+    prev_left: [f64; 4],
+    prev_right: [f64; 4],
+    volume: i32,
+    rate_ratio: f64,
+    fraction: f64,
+    left: i16,
+    right: i16,
+}
+
+impl Default for HermiteResamplerStereo {
+    fn default() -> Self {
+        Self {
+            prev_left: [0.0; 4],
+            prev_right: [0.0; 4],
+            volume: 256,
+            rate_ratio: 1.0,
+            fraction: 0.0,
+            left: 0,
+            right: 0,
+        }
+    }
+}
+
+impl HermiteResamplerStereo {
+    fn reset(&mut self) {
+        self.prev_left = [0.0; 4];
+        self.prev_right = [0.0; 4];
+        self.fraction = 0.0;
+        self.left = 0;
+        self.right = 0;
+    }
+
+    fn set_volume(&mut self, volume: f64) {
+        self.volume = (volume * 256.0).round() as i32;
+    }
+
+    fn set_sample_rates(&mut self, src_rate: f64, dst_rate: f64) {
+        if src_rate > 0.0 && dst_rate > 0.0 {
+            self.rate_ratio = src_rate / dst_rate;
+        } else {
+            self.rate_ratio = 1.0;
+        }
+    }
+
+    fn resample(&mut self, input: &[i16], out: &mut Vec<i16>) {
+        if input.is_empty() {
+            return;
+        }
+
+        if (self.rate_ratio - 1.0).abs() <= f64::EPSILON {
+            out.reserve(input.len());
+            for frame in input.chunks_exact(2) {
+                let left = frame[0];
+                let right = frame[1];
+                self.left = left;
+                self.right = right;
+                self.write_sample(out, left, right);
+            }
+            return;
+        }
+
+        out.reserve(input.len());
+        for frame in input.chunks_exact(2) {
+            while self.fraction <= 1.0 {
+                self.left = self.hermite_interpolate(&self.prev_left, self.fraction);
+                self.right = self.hermite_interpolate(&self.prev_right, self.fraction);
+                self.write_sample(out, self.left, self.right);
+                self.fraction += self.rate_ratio;
+            }
+
+            Self::push_sample(&mut self.prev_left, frame[0]);
+            Self::push_sample(&mut self.prev_right, frame[1]);
+            self.fraction -= 1.0;
+        }
+    }
+
+    fn write_sample(&self, out: &mut Vec<i16>, left: i16, right: i16) {
+        let l = (((left as i32) * self.volume) >> 8).clamp(i16::MIN as i32, i16::MAX as i32);
+        let r = (((right as i32) * self.volume) >> 8).clamp(i16::MIN as i32, i16::MAX as i32);
+        out.push(l as i16);
+        out.push(r as i16);
+    }
+
+    fn hermite_interpolate(&self, values: &[f64; 4], mu: f64) -> i16 {
+        let mu2 = mu * mu;
+        let mu3 = mu2 * mu;
+        let m0 = (values[1] - values[0]) / 2.0 + (values[2] - values[1]) / 2.0;
+        let m1 = (values[2] - values[1]) / 2.0 + (values[3] - values[2]) / 2.0;
+        let a0 = 2.0 * mu3 - 3.0 * mu2 + 1.0;
+        let a1 = mu3 - 2.0 * mu2 + mu;
+        let a2 = mu3 - mu2;
+        let a3 = -2.0 * mu3 + 3.0 * mu2;
+        let output = a0 * values[1] + a1 * m0 + a2 * m1 + a3 * values[2];
+        output.clamp(i16::MIN as f64, i16::MAX as f64) as i16
+    }
+
+    fn push_sample(prev_values: &mut [f64; 4], sample: i16) {
+        prev_values[0] = prev_values[1];
+        prev_values[1] = prev_values[2];
+        prev_values[2] = prev_values[3];
+        prev_values[3] = sample as f64;
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SoundMixerBus {
     /// Base input sample rate used by the per-console mixer (e.g. 96 kHz).
     base_input_rate: u32,
@@ -218,6 +324,12 @@ pub struct SoundMixerBus {
     crossfeed: CrossFeedFilter,
     /// Scratch buffer used when summing multiple sources before resampling.
     mix_scratch: Vec<f32>,
+    /// PCM16 scratch mirror of `mix_scratch`.
+    mix_scratch_i16: Vec<i16>,
+    /// Resampler output scratch (PCM16 stereo interleaved).
+    resample_scratch_i16: Vec<i16>,
+    /// Mesen-style Hermite resampler state.
+    resampler: HermiteResamplerStereo,
 }
 
 impl SoundMixerBus {
@@ -233,13 +345,26 @@ impl SoundMixerBus {
             reverb: ReverbFilter::default(),
             crossfeed: CrossFeedFilter,
             mix_scratch: Vec::new(),
+            mix_scratch_i16: Vec::new(),
+            resample_scratch_i16: Vec::new(),
+            resampler: {
+                let mut r = HermiteResamplerStereo::default();
+                r.set_volume(1.0);
+                r.set_sample_rates(input_rate as f64, output_rate as f64);
+                r
+            },
         }
     }
 
     /// Clears any internal state. The current rate configuration is preserved.
     pub fn reset(&mut self) {
         self.mix_scratch.clear();
+        self.mix_scratch_i16.clear();
+        self.resample_scratch_i16.clear();
         self.reverb.reset();
+        self.resampler.reset();
+        self.resampler
+            .set_sample_rates(self.input_rate as f64, self.output_rate as f64);
     }
 
     /// Adjusts the effective input sample rate used by the bus resampler.
@@ -249,16 +374,22 @@ impl SoundMixerBus {
     /// outputs for a given input chunk.
     pub fn set_resample_input_rate(&mut self, input_rate: u32) {
         self.input_rate = input_rate.max(1);
+        self.resampler
+            .set_sample_rates(self.input_rate as f64, self.output_rate as f64);
     }
 
     /// Restores the resampler input rate back to the original mixer input rate.
     pub fn reset_resample_input_rate(&mut self) {
         self.input_rate = self.base_input_rate;
+        self.resampler
+            .set_sample_rates(self.input_rate as f64, self.output_rate as f64);
     }
 
     /// Updates the output sample rate while keeping the input rate fixed.
     pub fn set_output_rate(&mut self, output_rate: u32) {
         self.output_rate = output_rate.max(1);
+        self.resampler
+            .set_sample_rates(self.input_rate as f64, self.output_rate as f64);
     }
 
     /// Updates the bus configuration (master volume and attenuation flags).
@@ -282,9 +413,8 @@ impl SoundMixerBus {
     /// - All sources are expected to share the same input rate (`input_rate`)
     ///   and length in frames; extra samples in longer sources are ignored.
     /// - Samples are summed in linear amplitude space before resampling.
-    /// - The resampler is a simple per-chunk linear interpolator, which is
-    ///   sufficient for the NES bandwidth and matches the "simple quality"
-    ///   requirement for the initial SoundMixer implementation.
+    /// - Resampling follows Mesen2's Hermite algorithm and preserves state
+    ///   across chunks.
     pub fn mix_frame(&mut self, sources: &[&[f32]], out: &mut Vec<f32>) {
         if sources.is_empty() {
             return;
@@ -307,8 +437,21 @@ impl SoundMixerBus {
             }
         }
 
+        self.mix_scratch_i16.clear();
+        self.mix_scratch_i16.reserve(self.mix_scratch.len());
+        for &sample in &self.mix_scratch {
+            self.mix_scratch_i16.push(f32_to_i16_sample(sample));
+        }
+
+        self.resample_scratch_i16.clear();
+        self.resampler
+            .resample(&self.mix_scratch_i16, &mut self.resample_scratch_i16);
+
         let out_start = out.len();
-        resample_linear_stereo(&self.mix_scratch, self.input_rate, self.output_rate, out);
+        out.reserve(self.resample_scratch_i16.len());
+        for &sample in &self.resample_scratch_i16 {
+            out.push(i16_to_f32_sample(sample));
+        }
 
         let slice = &mut out[out_start..];
 
@@ -363,99 +506,16 @@ fn effective_gain(config: AudioBusConfig) -> f32 {
     gain
 }
 
-fn resample_linear_stereo(input: &[f32], input_rate: u32, output_rate: u32, out: &mut Vec<f32>) {
-    let frames_in = input.len() / 2;
-    if frames_in == 0 {
-        return;
-    }
+#[inline]
+fn f32_to_i16_sample(sample: f32) -> i16 {
+    let s = if sample.is_finite() { sample } else { 0.0 };
+    let scaled = (s * 32768.0).round() as i32;
+    scaled.clamp(i16::MIN as i32, i16::MAX as i32) as i16
+}
 
-    if input_rate == 0 || output_rate == 0 {
-        return;
-    }
-
-    // Fast path: identical rates, just append.
-    if input_rate == output_rate {
-        out.extend_from_slice(input);
-        return;
-    }
-
-    let frames_in_f = frames_in as f64;
-    let ratio = output_rate as f64 / input_rate as f64;
-    let mut frames_out = (frames_in_f * ratio).round() as usize;
-
-    if frames_out == 0 {
-        frames_out = 1;
-    }
-
-    // Reserve enough space for the new samples (stereo interleaved).
-    out.reserve(frames_out * 2);
-
-    if frames_in == 1 {
-        // Degenerate case: only one sample, just replicate it.
-        let l = input[0];
-        let r = input[1];
-        for _ in 0..frames_out {
-            out.push(l);
-            out.push(r);
-        }
-        return;
-    }
-
-    // Map output frame indices onto the [0, frames_in - 1] range and perform
-    // Hermite (Catmull-Rom style) interpolation between neighbouring input
-    // samples. This keeps the first and last samples aligned between the two
-    // domains and closely matches the quality of Mesen2's HermiteResampler.
-    let last_in = (frames_in - 1) as f64;
-    let last_out = (frames_out - 1).max(1) as f64;
-
-    for i in 0..frames_out {
-        let pos = if frames_out == 1 {
-            0.0
-        } else {
-            (i as f64) * last_in / last_out
-        };
-        let idx = pos.floor() as usize;
-        let frac = pos - idx as f64;
-
-        // Neighbouring sample indices for Catmull-Rom interpolation.
-        let i1 = idx.clamp(0, frames_in - 1);
-        let i2 = (idx + 1).clamp(0, frames_in - 1);
-        let i0 = i1.saturating_sub(1);
-        let i3 = (i2 + 1).clamp(0, frames_in - 1);
-
-        let base0 = i0 * 2;
-        let base1 = i1 * 2;
-        let base2 = i2 * 2;
-        let base3 = i3 * 2;
-
-        let l0 = input[base0];
-        let l1 = input[base1];
-        let l2 = input[base2];
-        let l3 = input[base3];
-
-        let r0 = input[base0 + 1];
-        let r1 = input[base1 + 1];
-        let r2 = input[base2 + 1];
-        let r3 = input[base3 + 1];
-
-        let t = frac as f32;
-        let t2 = t * t;
-        let t3 = t2 * t;
-
-        // Catmull-Rom spline interpolation (uniform parameterization).
-        let hermite = |y0: f32, y1: f32, y2: f32, y3: f32| -> f32 {
-            let a = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
-            let b = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
-            let c = -0.5 * y0 + 0.5 * y2;
-            let d = y1;
-            a * t3 + b * t2 + c * t + d
-        };
-
-        let l = hermite(l0, l1, l2, l3);
-        let r = hermite(r0, r1, r2, r3);
-        out.push(l);
-        out.push(r);
-    }
+#[inline]
+fn i16_to_f32_sample(sample: i16) -> f32 {
+    sample as f32 / 32768.0
 }
 
 #[cfg(test)]
@@ -468,7 +528,10 @@ mod tests {
         let src = vec![0.1f32, -0.1, 0.2, -0.2, 0.3, -0.3, 0.4, -0.4];
         let mut out = Vec::new();
         bus.mix_frame(&[&src], &mut out);
-        assert_eq!(src, out);
+        assert_eq!(src.len(), out.len());
+        for (expected, actual) in src.iter().zip(out.iter()) {
+            assert!((expected - actual).abs() <= (1.0 / 32768.0));
+        }
     }
 
     #[test]
@@ -487,7 +550,9 @@ mod tests {
         bus.mix_frame(&[&src], &mut out);
 
         let frames_out = out.len() / 2;
-        assert_eq!(frames_out, 800, "expected half as many frames at 48 kHz");
+        // Mesen's Hermite resampler emits one extra startup sample when
+        // downsampling a cold stream in a single chunk.
+        assert_eq!(frames_out, 801, "expected Hermite startup sample at 48 kHz");
 
         // Check endpoints preserve polarity and approximate amplitude.
         let l_first = out[0];
@@ -531,8 +596,8 @@ mod tests {
         bus.mix_frame(&[&src], &mut out);
 
         assert_eq!(out.len(), src.len());
-        assert!((out[0] - 0.4).abs() < 1e-6);
-        assert!((out[1] + 0.4).abs() < 1e-6);
+        assert!((out[0] - 0.4).abs() < 5e-4);
+        assert!((out[1] + 0.4).abs() < 5e-4);
     }
 
     #[test]
@@ -560,7 +625,7 @@ mod tests {
         bus.mix_frame(&[&src], &mut out);
         assert_eq!(out.len(), 2);
         // 1.0 * (1.0 - 0.75) = 0.25
-        assert!((out[0] - 0.25).abs() < 1e-6);
+        assert!((out[0] - 0.25).abs() < 5e-4);
 
         // Fast-forward + background reduction compounded.
         out.clear();
@@ -570,7 +635,7 @@ mod tests {
         bus.mix_frame(&[&src], &mut out);
         assert_eq!(out.len(), 2);
         // 1.0 * 0.25 (background) * 0.25 (fast-forward) = 0.0625
-        assert!((out[0] - 0.0625).abs() < 1e-6);
+        assert!((out[0] - 0.0625).abs() < 5e-4);
     }
 
     #[test]
@@ -611,8 +676,8 @@ mod tests {
 
         assert_eq!(out.len(), 2);
         // Left remains mostly left, right receives some bleed.
-        assert!((out[0] - 1.0).abs() < 1e-6);
-        assert!((out[1] - 0.5).abs() < 1e-6);
+        assert!((out[0] - 1.0).abs() < 5e-4);
+        assert!((out[1] - 0.5).abs() < 5e-4);
     }
 
     #[test]

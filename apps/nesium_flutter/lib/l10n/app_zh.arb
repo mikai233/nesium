@@ -263,13 +263,8 @@
   "netplayRoomCodeLabel": "你的房间码",
   "netplayConnect": "加入游戏",
   "netplayJoinViaP2P": "通过 P2P 加入",
-  "netplayJoinGame": "加入游戏",
   "netplayCreateRoom": "创建房间",
   "netplayJoinRoom": "加入游戏",
-  "netplayAddressOrRoomCode": "房间码或服务器地址",
-  "netplayHostingTitle": "正在托管",
-  "netplayRoomCodeLabel": "你的房间码",
-  "netplayAdvancedSettings": "高级连接设置",
   "netplayRoomCode": "房间码",
   "netplayRoleLabel": "角色",
   "netplayPlayerIndex": "玩家 {index}",
@@ -692,5 +687,12 @@
   "videoShaderParametersReset": "重置参数",
   "searchHint": "搜索...",
   "searchTooltip": "搜索",
-  "noResults": "未找到匹配的参数"
+  "noResults": "未找到匹配的参数",
+  "errorFailedToCreateTexture": "创建纹理失败",
+  "languageJapanese": "日语",
+  "languageSpanish": "西班牙语",
+  "languagePortuguese": "葡萄牙语",
+  "languageRussian": "俄语",
+  "languageFrench": "法语",
+  "languageGerman": "德语"
 }

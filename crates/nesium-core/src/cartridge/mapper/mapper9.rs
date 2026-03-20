@@ -28,13 +28,15 @@
 
 use std::borrow::Cow;
 
+use crate::cartridge::mapper::{MapperMemoryMut, MapperMemoryRef};
+
 use crate::{
     cartridge::{
         ChrRom, Mapper, PrgRom, TrainerBytes,
         header::{Header, Mirroring},
         mapper::{
-            ChrStorage, PpuVramAccessContext, PpuVramAccessKind, allocate_prg_ram_with_trainer,
-            select_chr_storage,
+            ChrStorage, MapperEvent, MapperHookMask, PpuVramAccessKind,
+            allocate_prg_ram_with_trainer, select_chr_storage,
         },
     },
     memory::cpu as cpu_mem,
@@ -366,6 +368,21 @@ impl Mapper9 {
 }
 
 impl Mapper for Mapper9 {
+    fn hook_mask(&self) -> MapperHookMask {
+        MapperHookMask::PPU_BUS_ADDRESS
+    }
+
+    fn on_mapper_event(&mut self, event: MapperEvent) {
+        if let MapperEvent::PpuBusAddress { addr, ctx } = event {
+            // Update MMC2 latches when the PPU performs a rendering fetch from
+            // the documented trigger addresses. This approximates the hardware
+            // behaviour where the latch flips just after fetching the tile.
+            if addr < 0x2000 && ctx.kind == PpuVramAccessKind::RenderingFetch {
+                self.update_latches_after_read(addr);
+            }
+        }
+    }
+
     fn reset(&mut self, _kind: ResetKind) {
         // Reset state roughly matches the typical behaviour described on
         // Nesdev and implemented by Mesen2:
@@ -383,7 +400,7 @@ impl Mapper for Mapper9 {
         self.mirroring = self.base_mirroring;
     }
 
-    fn cpu_read(&self, addr: u16) -> Option<u8> {
+    fn cpu_read(&self, addr: u16, _open_bus: u8) -> Option<u8> {
         if (cpu_mem::PRG_RAM_START..=cpu_mem::PRG_RAM_END).contains(&addr) {
             return self.read_prg_ram(addr);
         }
@@ -418,54 +435,26 @@ impl Mapper for Mapper9 {
     fn ppu_write(&mut self, addr: u16, data: u8) {
         self.write_chr(addr, data);
     }
-
-    fn ppu_vram_access(&mut self, addr: u16, ctx: PpuVramAccessContext) {
-        // Update MMC2 latches when the PPU performs a rendering fetch from
-        // the documented trigger addresses. This approximates the hardware
-        // behaviour where the latch flips just after fetching the tile.
-        if addr < 0x2000 && ctx.kind == PpuVramAccessKind::RenderingFetch {
-            self.update_latches_after_read(addr);
+    fn memory_ref(&self) -> MapperMemoryRef<'_> {
+        MapperMemoryRef {
+            prg_rom: Some(self.prg_rom.as_ref()),
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_ref()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_rom: self.chr.as_rom(),
+            chr_ram: self.chr.as_ram(),
+            chr_battery_ram: None,
         }
     }
 
-    fn prg_rom(&self) -> Option<&[u8]> {
-        Some(self.prg_rom.as_ref())
-    }
-
-    fn prg_ram(&self) -> Option<&[u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_ref())
+    fn memory_mut(&mut self) -> MapperMemoryMut<'_> {
+        MapperMemoryMut {
+            prg_ram: (!self.prg_ram.is_empty()).then_some(self.prg_ram.as_mut()),
+            prg_work_ram: None,
+            mapper_ram: None,
+            chr_ram: self.chr.as_ram_mut(),
+            chr_battery_ram: None,
         }
-    }
-
-    fn prg_ram_mut(&mut self) -> Option<&mut [u8]> {
-        if self.prg_ram.is_empty() {
-            None
-        } else {
-            Some(self.prg_ram.as_mut())
-        }
-    }
-
-    fn prg_save_ram(&self) -> Option<&[u8]> {
-        self.prg_ram()
-    }
-
-    fn prg_save_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.prg_ram_mut()
-    }
-
-    fn chr_rom(&self) -> Option<&[u8]> {
-        self.chr.as_rom()
-    }
-
-    fn chr_ram(&self) -> Option<&[u8]> {
-        self.chr.as_ram()
-    }
-
-    fn chr_ram_mut(&mut self) -> Option<&mut [u8]> {
-        self.chr.as_ram_mut()
     }
 
     fn mirroring(&self) -> Mirroring {
