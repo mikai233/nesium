@@ -203,7 +203,7 @@ jobs:
 
       - name: Setup Android SDK (Android)
         if: runner.os == 'Linux' && matrix.name == 'android'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install cargo-ndk (Android)
         if: runner.os == 'Linux' && matrix.name == 'android'
