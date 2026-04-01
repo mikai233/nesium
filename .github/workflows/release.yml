@@ -234,7 +234,7 @@ jobs:
           sha256sum apps/nesium_flutter/build/web/favicon.png apps/nesium_flutter/build/web/manifest.json | cat
 
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
