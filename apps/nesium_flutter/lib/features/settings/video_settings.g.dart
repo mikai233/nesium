@@ -83,6 +83,7 @@ const _$PaletteKindEnumMap = {
   PaletteKind.fbxCompositeDirect: 'fbxCompositeDirect',
   PaletteKind.sonyCxa2025AsUs: 'sonyCxa2025AsUs',
   PaletteKind.pal2C07: 'pal2C07',
+  PaletteKind.mesen2C02: 'mesen2C02',
   PaletteKind.rawLinear: 'rawLinear',
 };
 
