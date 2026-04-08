@@ -514,7 +514,7 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   Future<void> _promptAndLoadRom() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['nes'],
       withData: true,
@@ -784,7 +784,7 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   Future<void> _loadTasMovie() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['fm2'],
       withData: true,

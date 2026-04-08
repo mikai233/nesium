@@ -618,7 +618,7 @@ class _WebShellState extends ConsumerState<WebShell> {
 
   Future<void> _pickAndLoadRom() async {
     setState(() => _error = null);
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       withData: true,
       allowMultiple: false,
       type: FileType.custom,
@@ -819,7 +819,7 @@ class _WebShellState extends ConsumerState<WebShell> {
   }
 
   Future<void> _loadTasMovie() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['fm2'],
       withData: true,
