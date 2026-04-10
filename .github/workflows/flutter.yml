@@ -84,7 +84,7 @@ jobs:
         run: flutter build web --release --wasm
 
   build-native:
-    name: Native
+    name: Native matrix
     needs: checks
     uses: ./.github/workflows/build-flutter.yml
     with:
@@ -92,3 +92,11 @@ jobs:
       is_check: true
       release_tag: "check-${{ github.run_id }}"
     secrets: inherit
+
+  native:
+    name: Native
+    runs-on: ubuntu-latest
+    needs: build-native
+    steps:
+      - name: Confirm native matrix passed
+        run: echo "Native matrix completed successfully."
