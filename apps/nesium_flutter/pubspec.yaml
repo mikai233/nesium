@@ -46,7 +46,7 @@ dependencies:
   path_provider: ^2.1.2
   archive: ^4.0.7
   skeletonizer: ^2.1.2
-  animations: ^2.1.1
+  animations: ^2.2.0
   freezed_annotation: ^3.1.0
   json_annotation: ^4.9.0
   url_launcher: ^6.3.2
