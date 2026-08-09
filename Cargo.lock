@@ -1555,9 +1555,9 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "easy-upnp"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49959a385453a50c2280a5f93db1182c27a73442d874fcd6114cec55ca763e50"
+checksum = "d33e56db6c1dca2f9bf6be52e68b06a7a18de0c78eb18985b26fb143f74d85d8"
 dependencies = [
  "cidr",
  "if-addrs",
@@ -2687,13 +2687,13 @@ dependencies = [
 
 [[package]]
 name = "igd-next"
-version = "0.16.2"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "516893339c97f6011282d5825ac94fc1c7aad5cad26bdc2d0cee068c0bf97f97"
+checksum = "bac9a3c8278f43b4cd8463380f4a25653ac843e5b177e1d3eaf849cc9ba10d4d"
 dependencies = [
  "attohttpc",
  "log",
- "rand 0.9.2",
+ "rand 0.10.0",
  "url",
  "xmltree",
 ]
