@@ -32,7 +32,7 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  intl: ^0.20.2
+  intl: ^0.20.3
   flutter_riverpod: ^3.3.1
   desktop_multi_window: ^0.3.0
   window_manager: 0.5.1
