@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'nes_gamepad.dart' as nes_gamepad;
 
 /// Provider for the button mapping for a specific NES port.

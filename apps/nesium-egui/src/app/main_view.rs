@@ -1,5 +1,5 @@
 use eframe::egui;
-use egui::{Color32, Context as EguiContext, Vec2};
+use egui::{Color32, Vec2};
 use nesium_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 use super::{AspectRatio, NesiumApp};
@@ -7,10 +7,11 @@ use super::{AspectRatio, NesiumApp};
 const CURSOR_HIDE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
 impl NesiumApp {
-    pub(super) fn draw_main_view(&mut self, ctx: &EguiContext) {
+    pub(super) fn draw_main_view(&mut self, root_ui: &mut egui::Ui) {
+        let ctx = &root_ui.ctx().clone();
         egui::CentralPanel::default()
-            .frame(egui::Frame::central_panel(ctx.style().as_ref()).inner_margin(0))
-            .show(ctx, |ui| {
+            .frame(egui::Frame::central_panel(root_ui.style()).inner_margin(0))
+            .show(root_ui, |ui| {
                 let canvas_size = ui.available_size();
                 let (rect, response) = ui.allocate_exact_size(canvas_size, egui::Sense::hover());
                 ui.painter().rect_filled(rect, 0.0, Color32::BLACK);

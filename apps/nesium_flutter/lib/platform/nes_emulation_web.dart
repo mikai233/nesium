@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'web_cmd_sender.dart';
 
 Future<void> setIntegerFpsMode({required bool enabled}) async {

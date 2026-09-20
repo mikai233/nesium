@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'server_settings.dart';
@@ -9,6 +9,7 @@ part of 'server_settings.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 
@@ -28,16 +29,21 @@ $ServerSettingsCopyWith<ServerSettings> get copyWith => _$ServerSettingsCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ServerSettings&&(identical(other.port, port) || other.port == port)&&(identical(other.playerName, playerName) || other.playerName == playerName)&&(identical(other.p2pServerAddr, p2pServerAddr) || other.p2pServerAddr == p2pServerAddr)&&(identical(other.p2pEnabled, p2pEnabled) || other.p2pEnabled == p2pEnabled)&&(identical(other.p2pHostRoomCode, p2pHostRoomCode) || other.p2pHostRoomCode == p2pHostRoomCode)&&(identical(other.transport, transport) || other.transport == transport)&&(identical(other.sni, sni) || other.sni == sni)&&(identical(other.fingerprint, fingerprint) || other.fingerprint == fingerprint)&&(identical(other.directAddr, directAddr) || other.directAddr == directAddr));
+  final _this = this as ServerSettings;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ServerSettings&&(identical(other.port, _this.port) || other.port == _this.port)&&(identical(other.playerName, _this.playerName) || other.playerName == _this.playerName)&&(identical(other.p2pServerAddr, _this.p2pServerAddr) || other.p2pServerAddr == _this.p2pServerAddr)&&(identical(other.p2pEnabled, _this.p2pEnabled) || other.p2pEnabled == _this.p2pEnabled)&&(identical(other.p2pHostRoomCode, _this.p2pHostRoomCode) || other.p2pHostRoomCode == _this.p2pHostRoomCode)&&(identical(other.transport, _this.transport) || other.transport == _this.transport)&&(identical(other.sni, _this.sni) || other.sni == _this.sni)&&(identical(other.fingerprint, _this.fingerprint) || other.fingerprint == _this.fingerprint)&&(identical(other.directAddr, _this.directAddr) || other.directAddr == _this.directAddr));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,port,playerName,p2pServerAddr,p2pEnabled,p2pHostRoomCode,transport,sni,fingerprint,directAddr);
+int get hashCode {
+  final _this = this as ServerSettings;
+  return Object.hash(runtimeType,_this.port,_this.playerName,_this.p2pServerAddr,_this.p2pEnabled,_this.p2pHostRoomCode,_this.transport,_this.sni,_this.fingerprint,_this.directAddr);
+}
 
 @override
 String toString() {
-  return 'ServerSettings(port: $port, playerName: $playerName, p2pServerAddr: $p2pServerAddr, p2pEnabled: $p2pEnabled, p2pHostRoomCode: $p2pHostRoomCode, transport: $transport, sni: $sni, fingerprint: $fingerprint, directAddr: $directAddr)';
+  final _this = this as ServerSettings;
+  return 'ServerSettings(port: ${_this.port}, playerName: ${_this.playerName}, p2pServerAddr: ${_this.p2pServerAddr}, p2pEnabled: ${_this.p2pEnabled}, p2pHostRoomCode: ${_this.p2pHostRoomCode}, transport: ${_this.transport}, sni: ${_this.sni}, fingerprint: ${_this.fingerprint}, directAddr: ${_this.directAddr})';
 }
 
 
@@ -66,7 +72,7 @@ class _$ServerSettingsCopyWithImpl<$Res>
 /// Create a copy of ServerSettings
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? port = null,Object? playerName = null,Object? p2pServerAddr = null,Object? p2pEnabled = null,Object? p2pHostRoomCode = freezed,Object? transport = null,Object? sni = null,Object? fingerprint = null,Object? directAddr = null,}) {
-  return _then(_self.copyWith(
+  return _then(ServerSettings(
 port: null == port ? _self.port : port // ignore: cast_nullable_to_non_nullable
 as int,playerName: null == playerName ? _self.playerName : playerName // ignore: cast_nullable_to_non_nullable
 as String,p2pServerAddr: null == p2pServerAddr ? _self.p2pServerAddr : p2pServerAddr // ignore: cast_nullable_to_non_nullable
@@ -237,16 +243,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ServerSettings&&(identical(other.port, port) || other.port == port)&&(identical(other.playerName, playerName) || other.playerName == playerName)&&(identical(other.p2pServerAddr, p2pServerAddr) || other.p2pServerAddr == p2pServerAddr)&&(identical(other.p2pEnabled, p2pEnabled) || other.p2pEnabled == p2pEnabled)&&(identical(other.p2pHostRoomCode, p2pHostRoomCode) || other.p2pHostRoomCode == p2pHostRoomCode)&&(identical(other.transport, transport) || other.transport == transport)&&(identical(other.sni, sni) || other.sni == sni)&&(identical(other.fingerprint, fingerprint) || other.fingerprint == fingerprint)&&(identical(other.directAddr, directAddr) || other.directAddr == directAddr));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ServerSettings&&(identical(other.port, port) || other.port == port)&&(identical(other.playerName, playerName) || other.playerName == playerName)&&(identical(other.p2pServerAddr, p2pServerAddr) || other.p2pServerAddr == p2pServerAddr)&&(identical(other.p2pEnabled, p2pEnabled) || other.p2pEnabled == p2pEnabled)&&(identical(other.p2pHostRoomCode, p2pHostRoomCode) || other.p2pHostRoomCode == p2pHostRoomCode)&&(identical(other.transport, transport) || other.transport == transport)&&(identical(other.sni, sni) || other.sni == sni)&&(identical(other.fingerprint, fingerprint) || other.fingerprint == fingerprint)&&(identical(other.directAddr, directAddr) || other.directAddr == directAddr));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,port,playerName,p2pServerAddr,p2pEnabled,p2pHostRoomCode,transport,sni,fingerprint,directAddr);
+int get hashCode {
+    return Object.hash(runtimeType,port,playerName,p2pServerAddr,p2pEnabled,p2pHostRoomCode,transport,sni,fingerprint,directAddr);
+}
 
 @override
 String toString() {
-  return 'ServerSettings(port: $port, playerName: $playerName, p2pServerAddr: $p2pServerAddr, p2pEnabled: $p2pEnabled, p2pHostRoomCode: $p2pHostRoomCode, transport: $transport, sni: $sni, fingerprint: $fingerprint, directAddr: $directAddr)';
+    return 'ServerSettings(port: $port, playerName: $playerName, p2pServerAddr: $p2pServerAddr, p2pEnabled: $p2pEnabled, p2pHostRoomCode: $p2pHostRoomCode, transport: $transport, sni: $sni, fingerprint: $fingerprint, directAddr: $directAddr)';
 }
 
 

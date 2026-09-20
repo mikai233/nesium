@@ -64,7 +64,7 @@ impl NesAudioPlayer {
         let err_fn = |err| eprintln!("Audio stream error: {err}");
 
         let stream = device.build_output_stream(
-            &config,
+            config,
             move |data: &mut [f32], _| {
                 if clear_flag_for_cb.swap(false, Ordering::SeqCst) {
                     while consumer.try_pop().is_some() {}

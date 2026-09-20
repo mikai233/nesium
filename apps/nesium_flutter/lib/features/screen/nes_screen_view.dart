@@ -198,9 +198,8 @@ class _NesScreenViewState extends ConsumerState<NesScreenView> with RouteAware {
         const SizedBox(height: 8),
         Text(
           AppLocalizations.of(context)!.errorFailedToCreateTexture,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(color: Colors.red),
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(color: Colors.red),
         ),
         const SizedBox(height: 4),
         Text(widget.error!, textAlign: TextAlign.center),

@@ -35,6 +35,8 @@ The NES core canonical index buffer is fixed at `256x240`. The runtime derives a
 
 ## Getting started
 
+Use Flutter 3.47 or newer (Dart 3.13 or newer), together with the stable Rust toolchain.
+
 ```bash
 cd apps/nesium_flutter
 flutter pub get
@@ -45,6 +47,12 @@ flutter run
 
 This project uses **flutter_rust_bridge** to generate Dart ↔ Rust bindings.
 
+Install the generator version matching both `pubspec.yaml` and the workspace's Rust dependency:
+
+```bash
+cargo install flutter_rust_bridge_codegen --version 2.13.0 --locked
+```
+
 - Do **not** edit generated files by hand:
   - Dart: `apps/nesium_flutter/lib/bridge/` (e.g. `frb_generated*.dart`, `api/events.dart`)
   - Rust: `crates/nesium-flutter/src/frb_generated.rs`
@@ -54,7 +62,10 @@ This project uses **flutter_rust_bridge** to generate Dart ↔ Rust bindings.
 ```bash
 cd apps/nesium_flutter
 flutter_rust_bridge_codegen generate --config-file flutter_rust_bridge.yaml
+dart run build_runner build
 ```
+
+Run the full `build_runner` build after FRB generation to restore settings models outside FRB's generation filters.
 
 For iterative development:
 

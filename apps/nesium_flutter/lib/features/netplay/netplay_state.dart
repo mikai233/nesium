@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../bridge/api/netplay.dart';
 
 final netplayStatusProvider = StreamProvider<NetplayStatus>((ref) {

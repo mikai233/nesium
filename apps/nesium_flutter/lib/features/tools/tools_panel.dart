@@ -26,9 +26,8 @@ class ToolsPanel extends ConsumerWidget {
           padding: const EdgeInsets.all(32),
           child: Text(
             l10n.toolsPlaceholderBody,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.outline,
-            ),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: Theme.of(context).colorScheme.outline),
             textAlign: TextAlign.center,
           ),
         ),

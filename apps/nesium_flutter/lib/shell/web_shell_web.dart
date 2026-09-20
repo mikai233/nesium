@@ -618,24 +618,17 @@ class _WebShellState extends ConsumerState<WebShell> {
 
   Future<void> _pickAndLoadRom() async {
     setState(() => _error = null);
-    final result = await FilePicker.pickFiles(
-      withData: true,
-      allowMultiple: false,
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: const ['nes'],
     );
-    if (!mounted || result == null || result.files.isEmpty) return;
-
-    final file = result.files.single;
-    final bytes = file.bytes;
-    if (bytes == null) {
-      _reportError('Failed to read ROM bytes');
-      return;
-    }
+    if (!mounted || file == null) return;
 
     final name = p.basenameWithoutExtension(file.name);
 
     try {
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
       await _ensureInitialized();
       ref.read(nesControllerProvider.notifier).updateRomInfo(name: name);
       final u8 = bytes.toJS;
@@ -819,22 +812,15 @@ class _WebShellState extends ConsumerState<WebShell> {
   }
 
   Future<void> _loadTasMovie() async {
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['fm2'],
-      withData: true,
-      withReadStream: false,
     );
-    final file = result?.files.single;
     if (file == null) return;
-
-    final bytes = file.bytes;
-    if (bytes == null) return;
-
-    final data = String.fromCharCodes(bytes);
 
     if (!mounted) return;
     await _runRustCommand('Load TAS Movie', () async {
+      final data = String.fromCharCodes(await file.readAsBytes());
       await nes_emulation.loadTasMovie(data: data);
     });
   }
@@ -1004,9 +990,8 @@ class _WebShellState extends ConsumerState<WebShell> {
       },
       openAbout: () async {
         if (!mounted) return;
-        await Navigator.of(
-          context,
-        ).push(MaterialPageRoute<void>(builder: (_) => const AboutPage()));
+        await Navigator.of(context)
+            .push(MaterialPageRoute<void>(builder: (_) => const AboutPage()));
       },
       openDebugger: () async {},
       openTools: () async {},
@@ -1144,9 +1129,9 @@ class _WebShellState extends ConsumerState<WebShell> {
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 IconButton(
-                                                  onPressed: () => Scaffold.of(
-                                                    context,
-                                                  ).openDrawer(),
+                                                  onPressed: () =>
+                                                      Scaffold.of(context)
+                                                          .openDrawer(),
                                                   icon: const Icon(Icons.menu),
                                                   color: Colors.white,
                                                   tooltip: l10n.menuTooltip,
@@ -1279,9 +1264,8 @@ class _WebShellState extends ConsumerState<WebShell> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _runRustCommand(
@@ -1429,7 +1413,7 @@ class _WebShellState extends ConsumerState<WebShell> {
                     opacity: animation,
                     child: SizeTransition(
                       sizeFactor: animation,
-                      axisAlignment: -1.0,
+                      alignment: Alignment.topCenter,
                       child: child,
                     ),
                   );

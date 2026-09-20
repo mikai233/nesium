@@ -1,6 +1,8 @@
 typedef WebCmdSender = void Function(String cmd, Map<String, Object?>? extra);
-typedef WebRequestSender =
-    Future<T> Function<T>(String cmd, [Map<String, Object?>? extra]);
+typedef WebRequestSender = Future<T> Function<T>(
+  String cmd, [
+  Map<String, Object?>? extra,
+]);
 
 WebCmdSender? _sender;
 WebRequestSender? _requestSender;

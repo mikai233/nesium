@@ -301,9 +301,8 @@ class _GamepadMappingInfoCardState
                           l10n.inputResetToDefault,
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.7),
+                                color: Theme.of(context).colorScheme.primary
+                                    .withValues(alpha: 0.7),
                                 decoration: TextDecoration.underline,
                               ),
                         ),
@@ -315,9 +314,8 @@ class _GamepadMappingInfoCardState
                         l10n.longPressToClear,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: Theme.of(context).colorScheme.onSurface
+                              .withValues(alpha: 0.5),
                         ),
                       ),
                     ),
@@ -385,7 +383,7 @@ class _GamepadMappingInfoCardState
                           opacity: animation,
                           child: SizeTransition(
                             sizeFactor: animation,
-                            axisAlignment: -1.0,
+                            alignment: Alignment.topCenter,
                             child: child,
                           ),
                         );
@@ -513,9 +511,9 @@ class _GamepadMappingInfoCardState
                                           ? Icons.keyboard_command_key
                                           : Icons.gamepad,
                                       size: 16,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary,
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
@@ -526,9 +524,9 @@ class _GamepadMappingInfoCardState
                                           .textTheme
                                           .labelLarge
                                           ?.copyWith(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
                                           ),
                                     ),
                                   ],

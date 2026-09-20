@@ -407,9 +407,8 @@ class _AnchoredSelectMenu<T> extends StatelessWidget {
                 alignment: scaleAlignment,
                 scale: Tween<double>(begin: 0.98, end: 1).animate(eased),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints.tightFor(
-                    width: geo.menuWidth,
-                  ).copyWith(maxHeight: geo.maxHeight),
+                  constraints: BoxConstraints.tightFor(width: geo.menuWidth)
+                      .copyWith(maxHeight: geo.maxHeight),
                   child: Material(
                     color: background,
                     elevation: elevation,
@@ -431,9 +430,9 @@ class _AnchoredSelectMenu<T> extends StatelessWidget {
                         return InkWell(
                           borderRadius: BorderRadius.circular(10),
                           onTap: enabled
-                              ? () => Navigator.of(
-                                  context,
-                                ).pop(_DropdownMenuResult(entry.value))
+                              ? () =>
+                                    Navigator.of(context)
+                                        .pop(_DropdownMenuResult(entry.value))
                               : null,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -458,14 +457,13 @@ class _AnchoredSelectMenu<T> extends StatelessWidget {
                                 Expanded(
                                   child: DefaultTextStyle(
                                     style:
-                                        Theme.of(
-                                          context,
-                                        ).textTheme.bodyMedium?.copyWith(
-                                          color: enabled
-                                              ? colorScheme.onSurface
-                                              : colorScheme.onSurface
-                                                    .withValues(alpha: 0.5),
-                                        ) ??
+                                        Theme.of(context).textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color: enabled
+                                                  ? colorScheme.onSurface
+                                                  : colorScheme.onSurface
+                                                        .withValues(alpha: 0.5),
+                                            ) ??
                                         const TextStyle(),
                                     child:
                                         entry.labelWidget ??

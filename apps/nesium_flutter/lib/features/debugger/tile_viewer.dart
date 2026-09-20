@@ -928,9 +928,9 @@ class _TileViewerState extends ConsumerState<TileViewer> {
                               else
                                 DecoratedBox(
                                   decoration: BoxDecoration(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHighest,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),

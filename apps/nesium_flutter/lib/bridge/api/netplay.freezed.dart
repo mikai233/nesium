@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'netplay.dart';
@@ -9,6 +9,7 @@ part of 'netplay.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -20,7 +21,7 @@ mixin _$NetplayGameEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent);
 }
 
 
@@ -29,7 +30,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'NetplayGameEvent()';
+    return 'NetplayGameEvent()';
 }
 
 
@@ -226,16 +227,18 @@ $NetplayGameEvent_LoadRomCopyWith<NetplayGameEvent_LoadRom> get copyWith => _$Ne
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_LoadRom&&const DeepCollectionEquality().equals(other.data, data));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_LoadRom&&const DeepCollectionEquality().equals(other.data, data));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(data));
+int get hashCode {
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(data));
+}
 
 @override
 String toString() {
-  return 'NetplayGameEvent.loadRom(data: $data)';
+    return 'NetplayGameEvent.loadRom(data: $data)';
 }
 
 
@@ -287,7 +290,7 @@ class NetplayGameEvent_StartGame extends NetplayGameEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_StartGame);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_StartGame);
 }
 
 
@@ -296,7 +299,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'NetplayGameEvent.startGame()';
+    return 'NetplayGameEvent.startGame()';
 }
 
 
@@ -324,16 +327,18 @@ $NetplayGameEvent_PauseSyncCopyWith<NetplayGameEvent_PauseSync> get copyWith => 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_PauseSync&&(identical(other.paused, paused) || other.paused == paused));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_PauseSync&&(identical(other.paused, paused) || other.paused == paused));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,paused);
+int get hashCode {
+    return Object.hash(runtimeType,paused);
+}
 
 @override
 String toString() {
-  return 'NetplayGameEvent.pauseSync(paused: $paused)';
+    return 'NetplayGameEvent.pauseSync(paused: $paused)';
 }
 
 
@@ -390,16 +395,18 @@ $NetplayGameEvent_ResetSyncCopyWith<NetplayGameEvent_ResetSync> get copyWith => 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_ResetSync&&(identical(other.kind, kind) || other.kind == kind));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_ResetSync&&(identical(other.kind, kind) || other.kind == kind));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,kind);
+int get hashCode {
+    return Object.hash(runtimeType,kind);
+}
 
 @override
 String toString() {
-  return 'NetplayGameEvent.resetSync(kind: $kind)';
+    return 'NetplayGameEvent.resetSync(kind: $kind)';
 }
 
 
@@ -457,16 +464,18 @@ $NetplayGameEvent_SyncStateCopyWith<NetplayGameEvent_SyncState> get copyWith => 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_SyncState&&(identical(other.frame, frame) || other.frame == frame)&&const DeepCollectionEquality().equals(other.data, data));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_SyncState&&(identical(other.frame, frame) || other.frame == frame)&&const DeepCollectionEquality().equals(other.data, data));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,frame,const DeepCollectionEquality().hash(data));
+int get hashCode {
+    return Object.hash(runtimeType,frame,const DeepCollectionEquality().hash(data));
+}
 
 @override
 String toString() {
-  return 'NetplayGameEvent.syncState(frame: $frame, data: $data)';
+    return 'NetplayGameEvent.syncState(frame: $frame, data: $data)';
 }
 
 
@@ -524,16 +533,18 @@ $NetplayGameEvent_PlayerLeftCopyWith<NetplayGameEvent_PlayerLeft> get copyWith =
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_PlayerLeft&&(identical(other.playerIndex, playerIndex) || other.playerIndex == playerIndex));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_PlayerLeft&&(identical(other.playerIndex, playerIndex) || other.playerIndex == playerIndex));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,playerIndex);
+int get hashCode {
+    return Object.hash(runtimeType,playerIndex);
+}
 
 @override
 String toString() {
-  return 'NetplayGameEvent.playerLeft(playerIndex: $playerIndex)';
+    return 'NetplayGameEvent.playerLeft(playerIndex: $playerIndex)';
 }
 
 
@@ -590,16 +601,18 @@ $NetplayGameEvent_ErrorCopyWith<NetplayGameEvent_Error> get copyWith => _$Netpla
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_Error&&(identical(other.errorCode, errorCode) || other.errorCode == errorCode));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_Error&&(identical(other.errorCode, errorCode) || other.errorCode == errorCode));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,errorCode);
+int get hashCode {
+    return Object.hash(runtimeType,errorCode);
+}
 
 @override
 String toString() {
-  return 'NetplayGameEvent.error(errorCode: $errorCode)';
+    return 'NetplayGameEvent.error(errorCode: $errorCode)';
 }
 
 
@@ -658,16 +671,18 @@ $NetplayGameEvent_FallbackToRelayCopyWith<NetplayGameEvent_FallbackToRelay> get 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_FallbackToRelay&&(identical(other.relayAddr, relayAddr) || other.relayAddr == relayAddr)&&(identical(other.relayRoomCode, relayRoomCode) || other.relayRoomCode == relayRoomCode)&&(identical(other.reason, reason) || other.reason == reason));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NetplayGameEvent_FallbackToRelay&&(identical(other.relayAddr, relayAddr) || other.relayAddr == relayAddr)&&(identical(other.relayRoomCode, relayRoomCode) || other.relayRoomCode == relayRoomCode)&&(identical(other.reason, reason) || other.reason == reason));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,relayAddr,relayRoomCode,reason);
+int get hashCode {
+    return Object.hash(runtimeType,relayAddr,relayRoomCode,reason);
+}
 
 @override
 String toString() {
-  return 'NetplayGameEvent.fallbackToRelay(relayAddr: $relayAddr, relayRoomCode: $relayRoomCode, reason: $reason)';
+    return 'NetplayGameEvent.fallbackToRelay(relayAddr: $relayAddr, relayRoomCode: $relayRoomCode, reason: $reason)';
 }
 
 

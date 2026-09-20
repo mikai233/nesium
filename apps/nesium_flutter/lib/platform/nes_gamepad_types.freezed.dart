@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'nes_gamepad_types.dart';
@@ -9,14 +9,14 @@ part of 'nes_gamepad_types.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 
 /// @nodoc
 mixin _$GamepadMapping {
 
- GamepadButton? get a; GamepadButton? get b; GamepadButton? get select; GamepadButton? get start; GamepadButton? get up; GamepadButton? get down; GamepadButton? get left; GamepadButton? get right; GamepadButton? get turboA; GamepadButton? get turboB;// Extended actions
- GamepadButton? get rewind; GamepadButton? get fastForward; GamepadButton? get saveState; GamepadButton? get loadState; GamepadButton? get pause; GamepadButton? get fullScreen;
+ GamepadButton? get a; GamepadButton? get b; GamepadButton? get select; GamepadButton? get start; GamepadButton? get up; GamepadButton? get down; GamepadButton? get left; GamepadButton? get right; GamepadButton? get turboA; GamepadButton? get turboB; GamepadButton? get rewind; GamepadButton? get fastForward; GamepadButton? get saveState; GamepadButton? get loadState; GamepadButton? get pause; GamepadButton? get fullScreen;
 /// Create a copy of GamepadMapping
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -29,16 +29,21 @@ $GamepadMappingCopyWith<GamepadMapping> get copyWith => _$GamepadMappingCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is GamepadMapping&&(identical(other.a, a) || other.a == a)&&(identical(other.b, b) || other.b == b)&&(identical(other.select, select) || other.select == select)&&(identical(other.start, start) || other.start == start)&&(identical(other.up, up) || other.up == up)&&(identical(other.down, down) || other.down == down)&&(identical(other.left, left) || other.left == left)&&(identical(other.right, right) || other.right == right)&&(identical(other.turboA, turboA) || other.turboA == turboA)&&(identical(other.turboB, turboB) || other.turboB == turboB)&&(identical(other.rewind, rewind) || other.rewind == rewind)&&(identical(other.fastForward, fastForward) || other.fastForward == fastForward)&&(identical(other.saveState, saveState) || other.saveState == saveState)&&(identical(other.loadState, loadState) || other.loadState == loadState)&&(identical(other.pause, pause) || other.pause == pause)&&(identical(other.fullScreen, fullScreen) || other.fullScreen == fullScreen));
+  final _this = this as GamepadMapping;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is GamepadMapping&&(identical(other.a, _this.a) || other.a == _this.a)&&(identical(other.b, _this.b) || other.b == _this.b)&&(identical(other.select, _this.select) || other.select == _this.select)&&(identical(other.start, _this.start) || other.start == _this.start)&&(identical(other.up, _this.up) || other.up == _this.up)&&(identical(other.down, _this.down) || other.down == _this.down)&&(identical(other.left, _this.left) || other.left == _this.left)&&(identical(other.right, _this.right) || other.right == _this.right)&&(identical(other.turboA, _this.turboA) || other.turboA == _this.turboA)&&(identical(other.turboB, _this.turboB) || other.turboB == _this.turboB)&&(identical(other.rewind, _this.rewind) || other.rewind == _this.rewind)&&(identical(other.fastForward, _this.fastForward) || other.fastForward == _this.fastForward)&&(identical(other.saveState, _this.saveState) || other.saveState == _this.saveState)&&(identical(other.loadState, _this.loadState) || other.loadState == _this.loadState)&&(identical(other.pause, _this.pause) || other.pause == _this.pause)&&(identical(other.fullScreen, _this.fullScreen) || other.fullScreen == _this.fullScreen));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,a,b,select,start,up,down,left,right,turboA,turboB,rewind,fastForward,saveState,loadState,pause,fullScreen);
+int get hashCode {
+  final _this = this as GamepadMapping;
+  return Object.hash(runtimeType,_this.a,_this.b,_this.select,_this.start,_this.up,_this.down,_this.left,_this.right,_this.turboA,_this.turboB,_this.rewind,_this.fastForward,_this.saveState,_this.loadState,_this.pause,_this.fullScreen);
+}
 
 @override
 String toString() {
-  return 'GamepadMapping(a: $a, b: $b, select: $select, start: $start, up: $up, down: $down, left: $left, right: $right, turboA: $turboA, turboB: $turboB, rewind: $rewind, fastForward: $fastForward, saveState: $saveState, loadState: $loadState, pause: $pause, fullScreen: $fullScreen)';
+  final _this = this as GamepadMapping;
+  return 'GamepadMapping(a: ${_this.a}, b: ${_this.b}, select: ${_this.select}, start: ${_this.start}, up: ${_this.up}, down: ${_this.down}, left: ${_this.left}, right: ${_this.right}, turboA: ${_this.turboA}, turboB: ${_this.turboB}, rewind: ${_this.rewind}, fastForward: ${_this.fastForward}, saveState: ${_this.saveState}, loadState: ${_this.loadState}, pause: ${_this.pause}, fullScreen: ${_this.fullScreen})';
 }
 
 
@@ -67,7 +72,7 @@ class _$GamepadMappingCopyWithImpl<$Res>
 /// Create a copy of GamepadMapping
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? a = freezed,Object? b = freezed,Object? select = freezed,Object? start = freezed,Object? up = freezed,Object? down = freezed,Object? left = freezed,Object? right = freezed,Object? turboA = freezed,Object? turboB = freezed,Object? rewind = freezed,Object? fastForward = freezed,Object? saveState = freezed,Object? loadState = freezed,Object? pause = freezed,Object? fullScreen = freezed,}) {
-  return _then(_self.copyWith(
+  return _then(GamepadMapping(
 a: freezed == a ? _self.a : a // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,b: freezed == b ? _self.b : b // ignore: cast_nullable_to_non_nullable
 as GamepadButton?,select: freezed == select ? _self.select : select // ignore: cast_nullable_to_non_nullable
@@ -232,7 +237,6 @@ class _GamepadMapping implements GamepadMapping {
 @override final  GamepadButton? right;
 @override final  GamepadButton? turboA;
 @override final  GamepadButton? turboB;
-// Extended actions
 @override final  GamepadButton? rewind;
 @override final  GamepadButton? fastForward;
 @override final  GamepadButton? saveState;
@@ -253,16 +257,18 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _GamepadMapping&&(identical(other.a, a) || other.a == a)&&(identical(other.b, b) || other.b == b)&&(identical(other.select, select) || other.select == select)&&(identical(other.start, start) || other.start == start)&&(identical(other.up, up) || other.up == up)&&(identical(other.down, down) || other.down == down)&&(identical(other.left, left) || other.left == left)&&(identical(other.right, right) || other.right == right)&&(identical(other.turboA, turboA) || other.turboA == turboA)&&(identical(other.turboB, turboB) || other.turboB == turboB)&&(identical(other.rewind, rewind) || other.rewind == rewind)&&(identical(other.fastForward, fastForward) || other.fastForward == fastForward)&&(identical(other.saveState, saveState) || other.saveState == saveState)&&(identical(other.loadState, loadState) || other.loadState == loadState)&&(identical(other.pause, pause) || other.pause == pause)&&(identical(other.fullScreen, fullScreen) || other.fullScreen == fullScreen));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _GamepadMapping&&(identical(other.a, a) || other.a == a)&&(identical(other.b, b) || other.b == b)&&(identical(other.select, select) || other.select == select)&&(identical(other.start, start) || other.start == start)&&(identical(other.up, up) || other.up == up)&&(identical(other.down, down) || other.down == down)&&(identical(other.left, left) || other.left == left)&&(identical(other.right, right) || other.right == right)&&(identical(other.turboA, turboA) || other.turboA == turboA)&&(identical(other.turboB, turboB) || other.turboB == turboB)&&(identical(other.rewind, rewind) || other.rewind == rewind)&&(identical(other.fastForward, fastForward) || other.fastForward == fastForward)&&(identical(other.saveState, saveState) || other.saveState == saveState)&&(identical(other.loadState, loadState) || other.loadState == loadState)&&(identical(other.pause, pause) || other.pause == pause)&&(identical(other.fullScreen, fullScreen) || other.fullScreen == fullScreen));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,a,b,select,start,up,down,left,right,turboA,turboB,rewind,fastForward,saveState,loadState,pause,fullScreen);
+int get hashCode {
+    return Object.hash(runtimeType,a,b,select,start,up,down,left,right,turboA,turboB,rewind,fastForward,saveState,loadState,pause,fullScreen);
+}
 
 @override
 String toString() {
-  return 'GamepadMapping(a: $a, b: $b, select: $select, start: $start, up: $up, down: $down, left: $left, right: $right, turboA: $turboA, turboB: $turboB, rewind: $rewind, fastForward: $fastForward, saveState: $saveState, loadState: $loadState, pause: $pause, fullScreen: $fullScreen)';
+    return 'GamepadMapping(a: $a, b: $b, select: $select, start: $start, up: $up, down: $down, left: $left, right: $right, turboA: $turboA, turboB: $turboB, rewind: $rewind, fastForward: $fastForward, saveState: $saveState, loadState: $loadState, pause: $pause, fullScreen: $fullScreen)';
 }
 
 

@@ -383,12 +383,10 @@ class _VirtualControlsOverlayState
         );
 
         // Dark, translucent "chrome" that still reads on black sidebars.
-        final chromeBase = const Color(
-          0xFF2A303A,
-        ).withValues(alpha: (settings.opacity * 0.70).clamp(0.0, 1.0));
-        final chromeSurface = const Color(
-          0xFF3A4352,
-        ).withValues(alpha: (settings.opacity * 0.72).clamp(0.0, 1.0));
+        final chromeBase = const Color(0xFF2A303A)
+            .withValues(alpha: (settings.opacity * 0.70).clamp(0.0, 1.0));
+        final chromeSurface = const Color(0xFF3A4352)
+            .withValues(alpha: (settings.opacity * 0.72).clamp(0.0, 1.0));
 
         return Stack(
           fit: StackFit.expand,
@@ -2174,9 +2172,8 @@ class _DpadPainter extends CustomPainter {
       cross,
       Paint()
         ..style = PaintingStyle.fill
-        ..color = const Color(
-          0xFF0B0D10,
-        ).withValues(alpha: (discBase.a * 1.0).clamp(0.0, 1)),
+        ..color = const Color(0xFF0B0D10)
+            .withValues(alpha: (discBase.a * 1.0).clamp(0.0, 1)),
     );
   }
 
@@ -2328,9 +2325,8 @@ class _MainButton extends StatelessWidget {
       hitboxScale: settings.hitboxScale,
       hapticsEnabled: settings.hapticsEnabled,
       visualBuilder: (pressed) => _roundVisual(
-        base: const Color(
-          0xFF272B33,
-        ).withValues(alpha: (settings.opacity * 0.80).clamp(0.0, 1.0)),
+        base: const Color(0xFF272B33)
+            .withValues(alpha: (settings.opacity * 0.80).clamp(0.0, 1.0)),
         pressed: pressed,
         child: Text(label, style: labelStyle),
       ),
@@ -2368,13 +2364,11 @@ class _TurboButton extends StatelessWidget {
       hitboxScale: settings.hitboxScale,
       hapticsEnabled: settings.hapticsEnabled,
       visualBuilder: (pressed) => _roundVisual(
-        base: const Color(
-          0xFF1D2128,
-        ).withValues(alpha: (settings.opacity * 0.78).clamp(0.0, 1.0)),
+        base: const Color(0xFF1D2128)
+            .withValues(alpha: (settings.opacity * 0.78).clamp(0.0, 1.0)),
         pressed: pressed,
-        ringColor: const Color(
-          0xFFFFC107,
-        ).withValues(alpha: (settings.opacity * 0.75).clamp(0.0, 1.0)),
+        ringColor: const Color(0xFFFFC107)
+            .withValues(alpha: (settings.opacity * 0.75).clamp(0.0, 1.0)),
         child: Text(label, style: labelStyle),
       ),
       onToggle: (enabled) => onTurboChanged(button, enabled),

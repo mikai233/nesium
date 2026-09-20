@@ -31,7 +31,7 @@ postcard.workspace = true
 if-addrs = "0.15.0"
 stun-rs = "0.1.11"
 ureq.workspace = true
-easy-upnp = "0.3.1"
+easy-upnp = "0.3.2"
 arc-swap.workspace = true
 
 # Enable C++ filters for all non-wasm targets
@@ -64,9 +64,10 @@ librashader = { workspace = true, features = [
     "preprocess",
     "stable",
 ] }
-glow = "0.16.0"
+# Keep the public GL handle/context types compatible with librashader-runtime-gl.
+glow = "0.17.0"
 android_logger = "0.15"
-log = "0.4"
+log = "0.4.34"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 librashader = { workspace = true, features = [

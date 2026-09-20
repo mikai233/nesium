@@ -73,19 +73,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     BuildContext context,
     VideoSettingsController controller,
   ) async {
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['pal'],
-      withData: true,
-      withReadStream: false,
     );
-    final file = result?.files.single;
     if (file == null) return;
 
-    final bytes = file.bytes;
-    if (bytes == null) return;
-
     try {
+      final bytes = await file.readAsBytes();
       await controller.setCustomPalette(bytes, name: file.name);
     } catch (e) {
       if (!context.mounted) return;

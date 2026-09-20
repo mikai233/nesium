@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+
 import '../logging/app_logger.dart';
 import '../windows/app_data_sync.dart';
 import '../windows/window_types.dart';

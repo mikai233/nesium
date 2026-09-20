@@ -1,8 +1,10 @@
 import 'dart:io';
+
 import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+
 import '../../logging/app_logger.dart';
 import 'shader_node.dart';
 
@@ -69,9 +71,8 @@ class ShaderAssetService {
               ..createSync(recursive: true)
               ..writeAsBytesSync(data);
           } else {
-            Directory(
-              p.join(target.path, filename),
-            ).createSync(recursive: true);
+            Directory(p.join(target.path, filename))
+                .createSync(recursive: true);
           }
         }
 

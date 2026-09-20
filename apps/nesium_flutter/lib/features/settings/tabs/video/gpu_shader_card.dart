@@ -83,9 +83,8 @@ class GpuShaderCard extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
           child: Text(
             l10n.videoFilterCategoryGpu,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            style: Theme.of(context).textTheme.titleSmall
+                ?.copyWith(color: Theme.of(context).colorScheme.primary),
           ),
         ),
         if (isWindows &&

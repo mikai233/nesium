@@ -87,7 +87,7 @@ class EmulationTab extends ConsumerWidget {
                         opacity: animation,
                         child: SizeTransition(
                           sizeFactor: animation,
-                          axisAlignment: -1,
+                          alignment: Alignment.topCenter,
                           child: child,
                         ),
                       );
@@ -163,9 +163,8 @@ class EmulationTab extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(
                   l10n.fastForwardSpeedSubtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -197,7 +196,7 @@ class EmulationTab extends ConsumerWidget {
                         opacity: animation,
                         child: SizeTransition(
                           sizeFactor: animation,
-                          axisAlignment: -1,
+                          alignment: Alignment.topCenter,
                           child: child,
                         ),
                       );

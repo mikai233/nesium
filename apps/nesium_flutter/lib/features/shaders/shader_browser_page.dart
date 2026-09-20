@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../l10n/app_localizations.dart';
 import 'shader_browser_controller.dart';
 import '../settings/android_shader_settings.dart';
 import '../settings/apple_shader_settings.dart';
 import '../settings/windows_shader_settings.dart';
+
 import 'package:flutter/foundation.dart';
 
 class ShaderBrowserPage extends ConsumerStatefulWidget {

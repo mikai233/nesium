@@ -94,9 +94,8 @@ class _AboutPageState extends State<AboutPage>
       Text(
         l10n.aboutComponentsHint,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Theme.of(
-            context,
-          ).colorScheme.onSurface.withValues(alpha: 0.75),
+          color: Theme.of(context).colorScheme.onSurface
+              .withValues(alpha: 0.75),
         ),
       ),
       const SizedBox(height: 8),
@@ -170,9 +169,8 @@ class _LinkTile extends StatelessWidget {
   Future<void> _copy(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: value));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(copiedLabel)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(copiedLabel)));
   }
 
   @override

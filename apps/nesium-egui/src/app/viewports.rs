@@ -39,11 +39,12 @@ fn show_viewport_with_close(
     id: ViewportId,
     builder: ViewportBuilder,
     close_flag: Arc<AtomicBool>,
-    mut draw: impl FnMut(&EguiContext, ViewportClass) -> bool,
+    mut draw: impl FnMut(&EguiContext, ViewportClass, &mut egui::Ui) -> bool,
 ) {
-    ctx.show_viewport_immediate(id, builder, |ctx, class| {
+    ctx.show_viewport_immediate(id, builder, |ui, class| {
+        let ctx = &ui.ctx().clone();
         let mut close_requested = ctx.input(|i| i.viewport().close_requested());
-        close_requested |= draw(ctx, class);
+        close_requested |= draw(ctx, class, ui);
         if close_requested {
             close_flag.store(true, Ordering::Relaxed);
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -57,11 +58,12 @@ fn show_viewport_with_close(
     id: ViewportId,
     builder: ViewportBuilder,
     close_flag: Arc<AtomicBool>,
-    draw: impl Fn(&EguiContext, ViewportClass) -> bool + Send + Sync + 'static,
+    draw: impl Fn(&EguiContext, ViewportClass, &mut egui::Ui) -> bool + Send + Sync + 'static,
 ) {
-    ctx.show_viewport_deferred(id, builder, move |ctx, class| {
+    ctx.show_viewport_deferred(id, builder, move |ui, class| {
+        let ctx = &ui.ctx().clone();
         let mut close_requested = ctx.input(|i| i.viewport().close_requested());
-        close_requested |= draw(ctx, class);
+        close_requested |= draw(ctx, class, ui);
         if close_requested {
             close_flag.store(true, Ordering::Relaxed);
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -70,21 +72,19 @@ fn show_viewport_with_close(
 }
 
 fn show_viewport_content(
-    ctx: &EguiContext,
+    ui: &mut egui::Ui,
     class: ViewportClass,
-    title: &str,
+    _title: &str,
     add_contents: impl FnOnce(&mut egui::Ui),
 ) -> bool {
     match class {
-        ViewportClass::Embedded => {
-            let mut open = true;
-            egui::Window::new(title)
-                .open(&mut open)
-                .show(ctx, add_contents);
-            !open
+        ViewportClass::EmbeddedWindow => {
+            // egui already wraps embedded viewports in a window.
+            add_contents(ui);
+            false
         }
         _ => {
-            egui::CentralPanel::default().show(ctx, add_contents);
+            egui::CentralPanel::default().show(ui, add_contents);
             false
         }
     }
@@ -122,7 +122,7 @@ impl NesiumApp {
                 AppViewport::Debugger.id(),
                 builder,
                 close_flag,
-                move |ctx, class| {
+                move |ctx, class, root_ui| {
                     if has_rom {
                         ctx.request_repaint();
                     }
@@ -156,7 +156,7 @@ impl NesiumApp {
                         )
                     };
 
-                    show_viewport_content(ctx, class, title, |ui| {
+                    show_viewport_content(root_ui, class, title, |ui| {
                         if !has_rom {
                             ui.centered_and_justified(|ui| {
                                 ui.vertical_centered(|ui| {
@@ -356,7 +356,7 @@ impl NesiumApp {
                 AppViewport::Tools.id(),
                 builder,
                 close_flag,
-                move |ctx, class| {
+                move |_ctx, class, root_ui| {
                     // Snapshot state
                     let (
                         mut pixel_perfect,
@@ -393,7 +393,7 @@ impl NesiumApp {
 
                     let mut changed = false;
                     let mut fps_changed = false;
-                    let close_requested = show_viewport_content(ctx, class, title, |ui| {
+                    let close_requested = show_viewport_content(root_ui, class, title, |ui| {
                         ui.heading(heading);
                         if ui.checkbox(&mut pixel_perfect, pixel_label).changed() {
                             changed = true;
@@ -433,7 +433,7 @@ impl NesiumApp {
                 AppViewport::About.id(),
                 builder,
                 close_flag,
-                move |ctx, class| {
+                move |_ctx, class, root_ui| {
                     // Snapshot state
                     let (title, lang, lead, intro, comp_heading, comp_hint) = {
                         let state = ui_state.lock().unwrap();
@@ -447,7 +447,7 @@ impl NesiumApp {
                         )
                     };
 
-                    show_viewport_content(ctx, class, title, |ui| {
+                    show_viewport_content(root_ui, class, title, |ui| {
                         egui::ScrollArea::vertical()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
@@ -541,12 +541,12 @@ impl NesiumApp {
                 AppViewport::Palette.id(),
                 builder,
                 close_flag,
-                move |ctx, class| {
+                move |_ctx, class, root_ui| {
                     let mut ui_state = ui_state.lock().unwrap();
                     let title = ui_state.i18n.text(TextId::MenuWindowPalette);
                     let heading = ui_state.i18n.text(TextId::PaletteHeading);
 
-                    show_viewport_content(ctx, class, title, |ui| {
+                    show_viewport_content(root_ui, class, title, |ui| {
                         ui.heading(heading);
                         ui.add_space(6.0);
 
@@ -684,7 +684,7 @@ impl NesiumApp {
                 AppViewport::Input.id(),
                 builder,
                 close_flag,
-                move |ctx, class| {
+                move |ctx, class, root_ui| {
                     let mut ui_state = ui_state.lock().unwrap();
                     let title = ui_state.i18n.text(TextId::MenuWindowInput);
 
@@ -702,7 +702,7 @@ impl NesiumApp {
                         );
                     }
 
-                    show_viewport_content(ctx, class, title, |ui| {
+                    show_viewport_content(root_ui, class, title, |ui| {
                         ui.heading(ui_state.i18n.text(TextId::InputHeading));
 
                         egui::ScrollArea::vertical()
@@ -1284,7 +1284,7 @@ impl NesiumApp {
                 AppViewport::Audio.id(),
                 builder,
                 close_flag,
-                move |ctx, class| {
+                move |_ctx, class, root_ui| {
                     let (
                         title,
                         heading,
@@ -1331,7 +1331,7 @@ impl NesiumApp {
                     };
 
                     let mut changed = false;
-                    let close_requested = show_viewport_content(ctx, class, title, |ui| {
+                    let close_requested = show_viewport_content(root_ui, class, title, |ui| {
                         ui.heading(heading);
                         ui.separator();
 

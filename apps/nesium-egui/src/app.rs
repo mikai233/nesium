@@ -508,7 +508,8 @@ impl NesiumApp {
 
         let message = message.clone();
         let close_flag = Arc::clone(&self.error_dialog_close_requested);
-        ctx.show_viewport_deferred(error_viewport_id, builder, move |ctx, class| {
+        ctx.show_viewport_deferred(error_viewport_id, builder, move |root_ui, class| {
+            let ctx = &root_ui.ctx().clone();
             // Keep the dialog visuals consistent with the main window.
             ctx.set_visuals(Visuals::light());
 
@@ -516,41 +517,36 @@ impl NesiumApp {
                 ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
 
             match class {
-                egui::ViewportClass::Embedded => {
-                    egui::Window::new(title)
-                        .collapsible(false)
-                        .resizable(false)
-                        .show(ctx, |ui| {
-                            ui.label(message.as_str());
-                            ui.add_space(10.0);
-                            ui.horizontal(|ui| {
-                                if ui.button(copy_label).clicked() {
-                                    ui.output_mut(|o| {
-                                        o.commands.push(eframe::egui::OutputCommand::CopyText(
-                                            message.clone(),
-                                        ));
-                                    });
-                                }
-                                ui.with_layout(
-                                    eframe::egui::Layout::right_to_left(
-                                        eframe::egui::Align::Center,
-                                    ),
-                                    |ui| {
-                                        if ui.button(ok_label).clicked() {
-                                            close_requested = true;
-                                        }
-                                    },
-                                );
-                            });
+                egui::ViewportClass::EmbeddedWindow => {
+                    root_ui.scope(|ui| {
+                        ui.label(message.as_str());
+                        ui.add_space(10.0);
+                        ui.horizontal(|ui| {
+                            if ui.button(copy_label).clicked() {
+                                ui.output_mut(|o| {
+                                    o.commands.push(eframe::egui::OutputCommand::CopyText(
+                                        message.clone(),
+                                    ));
+                                });
+                            }
+                            ui.with_layout(
+                                eframe::egui::Layout::right_to_left(eframe::egui::Align::Center),
+                                |ui| {
+                                    if ui.button(ok_label).clicked() {
+                                        close_requested = true;
+                                    }
+                                },
+                            );
                         });
+                    });
                 }
                 _ => {
                     let content_margin_lr = 18;
                     let content_margin_top = 12;
                     let buttons_margin_bottom = 10;
-                    let panel_fill = ctx.style().visuals.panel_fill;
+                    let panel_fill = root_ui.visuals().panel_fill;
 
-                    egui::TopBottomPanel::bottom("error_dialog_buttons")
+                    egui::Panel::bottom("error_dialog_buttons")
                         .frame(
                             egui::Frame::NONE
                                 .fill(panel_fill)
@@ -561,7 +557,7 @@ impl NesiumApp {
                                     bottom: buttons_margin_bottom,
                                 }),
                         )
-                        .show(ctx, |ui| {
+                        .show(root_ui, |ui| {
                             ui.horizontal(|ui| {
                                 if ui.button(copy_label).clicked() {
                                     ui.output_mut(|o| {
@@ -594,7 +590,7 @@ impl NesiumApp {
                                     bottom: 0,
                                 }),
                         )
-                        .show(ctx, |ui| {
+                        .show(root_ui, |ui| {
                             egui::ScrollArea::vertical()
                                 .auto_shrink([false, false])
                                 .show(ui, |ui| {
@@ -613,7 +609,8 @@ impl NesiumApp {
 }
 
 impl eframe::App for NesiumApp {
-    fn update(&mut self, ctx: &EguiContext, _: &mut eframe::Frame) {
+    fn ui(&mut self, root_ui: &mut egui::Ui, _: &mut eframe::Frame) {
+        let ctx = &root_ui.ctx().clone();
         // Avoid an unbounded repaint loop: throttle to ~60Hz while the emulator runs.
         // This reduces CPU contention and improves frame pacing on some platforms.
         if self.has_rom() && !self.paused {
@@ -688,7 +685,7 @@ impl eframe::App for NesiumApp {
         }
 
         // 3. Process Input
-        let keyboard_busy = ctx.wants_keyboard_input();
+        let keyboard_busy = ctx.egui_wants_keyboard_input();
         let mut pad_masks = [0u8; 4];
         let mut turbo_masks = [0u8; 4];
         if let Ok(mut ui_state) = self.ui_state.try_lock() {
@@ -729,8 +726,8 @@ impl eframe::App for NesiumApp {
 
         // 4. Handle Drag & Drop
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
-        if let Some(path) = dropped.iter().filter_map(|f| f.path.clone()).next_back()
-            && let Err(err) = self.load_rom(&path)
+        if let Some(file) = dropped.last()
+            && let Err(err) = self.load_rom(file.path())
         {
             self.error_dialog = Some(match self.language() {
                 Language::English => format!("Load failed:\n{err}"),
@@ -752,11 +749,11 @@ impl eframe::App for NesiumApp {
         }
 
         // 6. Draw UI
-        if let Some(cmd) = self.draw_menu(ctx) {
+        if let Some(cmd) = self.draw_menu(root_ui) {
             self.handle_app_command(ctx, cmd);
         }
 
-        self.draw_main_view(ctx);
+        self.draw_main_view(root_ui);
 
         let has_rom = self.has_rom();
         let debug_state = self.last_debug_state.clone();

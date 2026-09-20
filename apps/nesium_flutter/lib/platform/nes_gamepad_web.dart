@@ -3,6 +3,7 @@
 // On Web, gamepad support can be implemented using the browser's Gamepad API.
 
 import 'dart:js_interop';
+
 import 'package:web/web.dart' as web;
 
 import 'nes_gamepad_types.dart';

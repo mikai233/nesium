@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'emulation_settings.dart';
@@ -9,6 +9,7 @@ part of 'emulation_settings.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 
@@ -27,23 +28,29 @@ $EmulationSettingsCopyWith<EmulationSettings> get copyWith => _$EmulationSetting
 
 @override
 void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  final _this = this as EmulationSettings;
   properties
     ..add(DiagnosticsProperty('type', 'EmulationSettings'))
-    ..add(DiagnosticsProperty('integerFpsMode', integerFpsMode))..add(DiagnosticsProperty('pauseInBackground', pauseInBackground))..add(DiagnosticsProperty('autoSaveEnabled', autoSaveEnabled))..add(DiagnosticsProperty('autoSaveIntervalInMinutes', autoSaveIntervalInMinutes))..add(DiagnosticsProperty('quickSaveSlot', quickSaveSlot))..add(DiagnosticsProperty('fastForwardSpeedPercent', fastForwardSpeedPercent))..add(DiagnosticsProperty('rewindEnabled', rewindEnabled))..add(DiagnosticsProperty('rewindSeconds', rewindSeconds))..add(DiagnosticsProperty('rewindSpeedPercent', rewindSpeedPercent))..add(DiagnosticsProperty('showEmulationStatusOverlay', showEmulationStatusOverlay));
+    ..add(DiagnosticsProperty('integerFpsMode', _this.integerFpsMode))..add(DiagnosticsProperty('pauseInBackground', _this.pauseInBackground))..add(DiagnosticsProperty('autoSaveEnabled', _this.autoSaveEnabled))..add(DiagnosticsProperty('autoSaveIntervalInMinutes', _this.autoSaveIntervalInMinutes))..add(DiagnosticsProperty('quickSaveSlot', _this.quickSaveSlot))..add(DiagnosticsProperty('fastForwardSpeedPercent', _this.fastForwardSpeedPercent))..add(DiagnosticsProperty('rewindEnabled', _this.rewindEnabled))..add(DiagnosticsProperty('rewindSeconds', _this.rewindSeconds))..add(DiagnosticsProperty('rewindSpeedPercent', _this.rewindSpeedPercent))..add(DiagnosticsProperty('showEmulationStatusOverlay', _this.showEmulationStatusOverlay));
 }
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is EmulationSettings&&(identical(other.integerFpsMode, integerFpsMode) || other.integerFpsMode == integerFpsMode)&&(identical(other.pauseInBackground, pauseInBackground) || other.pauseInBackground == pauseInBackground)&&(identical(other.autoSaveEnabled, autoSaveEnabled) || other.autoSaveEnabled == autoSaveEnabled)&&(identical(other.autoSaveIntervalInMinutes, autoSaveIntervalInMinutes) || other.autoSaveIntervalInMinutes == autoSaveIntervalInMinutes)&&(identical(other.quickSaveSlot, quickSaveSlot) || other.quickSaveSlot == quickSaveSlot)&&(identical(other.fastForwardSpeedPercent, fastForwardSpeedPercent) || other.fastForwardSpeedPercent == fastForwardSpeedPercent)&&(identical(other.rewindEnabled, rewindEnabled) || other.rewindEnabled == rewindEnabled)&&(identical(other.rewindSeconds, rewindSeconds) || other.rewindSeconds == rewindSeconds)&&(identical(other.rewindSpeedPercent, rewindSpeedPercent) || other.rewindSpeedPercent == rewindSpeedPercent)&&(identical(other.showEmulationStatusOverlay, showEmulationStatusOverlay) || other.showEmulationStatusOverlay == showEmulationStatusOverlay));
+  final _this = this as EmulationSettings;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is EmulationSettings&&(identical(other.integerFpsMode, _this.integerFpsMode) || other.integerFpsMode == _this.integerFpsMode)&&(identical(other.pauseInBackground, _this.pauseInBackground) || other.pauseInBackground == _this.pauseInBackground)&&(identical(other.autoSaveEnabled, _this.autoSaveEnabled) || other.autoSaveEnabled == _this.autoSaveEnabled)&&(identical(other.autoSaveIntervalInMinutes, _this.autoSaveIntervalInMinutes) || other.autoSaveIntervalInMinutes == _this.autoSaveIntervalInMinutes)&&(identical(other.quickSaveSlot, _this.quickSaveSlot) || other.quickSaveSlot == _this.quickSaveSlot)&&(identical(other.fastForwardSpeedPercent, _this.fastForwardSpeedPercent) || other.fastForwardSpeedPercent == _this.fastForwardSpeedPercent)&&(identical(other.rewindEnabled, _this.rewindEnabled) || other.rewindEnabled == _this.rewindEnabled)&&(identical(other.rewindSeconds, _this.rewindSeconds) || other.rewindSeconds == _this.rewindSeconds)&&(identical(other.rewindSpeedPercent, _this.rewindSpeedPercent) || other.rewindSpeedPercent == _this.rewindSpeedPercent)&&(identical(other.showEmulationStatusOverlay, _this.showEmulationStatusOverlay) || other.showEmulationStatusOverlay == _this.showEmulationStatusOverlay));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,integerFpsMode,pauseInBackground,autoSaveEnabled,autoSaveIntervalInMinutes,quickSaveSlot,fastForwardSpeedPercent,rewindEnabled,rewindSeconds,rewindSpeedPercent,showEmulationStatusOverlay);
+int get hashCode {
+  final _this = this as EmulationSettings;
+  return Object.hash(runtimeType,_this.integerFpsMode,_this.pauseInBackground,_this.autoSaveEnabled,_this.autoSaveIntervalInMinutes,_this.quickSaveSlot,_this.fastForwardSpeedPercent,_this.rewindEnabled,_this.rewindSeconds,_this.rewindSpeedPercent,_this.showEmulationStatusOverlay);
+}
 
 @override
 String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
-  return 'EmulationSettings(integerFpsMode: $integerFpsMode, pauseInBackground: $pauseInBackground, autoSaveEnabled: $autoSaveEnabled, autoSaveIntervalInMinutes: $autoSaveIntervalInMinutes, quickSaveSlot: $quickSaveSlot, fastForwardSpeedPercent: $fastForwardSpeedPercent, rewindEnabled: $rewindEnabled, rewindSeconds: $rewindSeconds, rewindSpeedPercent: $rewindSpeedPercent, showEmulationStatusOverlay: $showEmulationStatusOverlay)';
+  final _this = this as EmulationSettings;
+  return 'EmulationSettings(integerFpsMode: ${_this.integerFpsMode}, pauseInBackground: ${_this.pauseInBackground}, autoSaveEnabled: ${_this.autoSaveEnabled}, autoSaveIntervalInMinutes: ${_this.autoSaveIntervalInMinutes}, quickSaveSlot: ${_this.quickSaveSlot}, fastForwardSpeedPercent: ${_this.fastForwardSpeedPercent}, rewindEnabled: ${_this.rewindEnabled}, rewindSeconds: ${_this.rewindSeconds}, rewindSpeedPercent: ${_this.rewindSpeedPercent}, showEmulationStatusOverlay: ${_this.showEmulationStatusOverlay})';
 }
 
 
@@ -72,7 +79,7 @@ class _$EmulationSettingsCopyWithImpl<$Res>
 /// Create a copy of EmulationSettings
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? integerFpsMode = null,Object? pauseInBackground = null,Object? autoSaveEnabled = null,Object? autoSaveIntervalInMinutes = null,Object? quickSaveSlot = null,Object? fastForwardSpeedPercent = null,Object? rewindEnabled = null,Object? rewindSeconds = null,Object? rewindSpeedPercent = null,Object? showEmulationStatusOverlay = null,}) {
-  return _then(_self.copyWith(
+  return _then(EmulationSettings(
 integerFpsMode: null == integerFpsMode ? _self.integerFpsMode : integerFpsMode // ignore: cast_nullable_to_non_nullable
 as bool,pauseInBackground: null == pauseInBackground ? _self.pauseInBackground : pauseInBackground // ignore: cast_nullable_to_non_nullable
 as bool,autoSaveEnabled: null == autoSaveEnabled ? _self.autoSaveEnabled : autoSaveEnabled // ignore: cast_nullable_to_non_nullable
@@ -244,23 +251,25 @@ Map<String, dynamic> toJson() {
 }
 @override
 void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-  properties
+    properties
     ..add(DiagnosticsProperty('type', 'EmulationSettings'))
     ..add(DiagnosticsProperty('integerFpsMode', integerFpsMode))..add(DiagnosticsProperty('pauseInBackground', pauseInBackground))..add(DiagnosticsProperty('autoSaveEnabled', autoSaveEnabled))..add(DiagnosticsProperty('autoSaveIntervalInMinutes', autoSaveIntervalInMinutes))..add(DiagnosticsProperty('quickSaveSlot', quickSaveSlot))..add(DiagnosticsProperty('fastForwardSpeedPercent', fastForwardSpeedPercent))..add(DiagnosticsProperty('rewindEnabled', rewindEnabled))..add(DiagnosticsProperty('rewindSeconds', rewindSeconds))..add(DiagnosticsProperty('rewindSpeedPercent', rewindSpeedPercent))..add(DiagnosticsProperty('showEmulationStatusOverlay', showEmulationStatusOverlay));
 }
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _EmulationSettings&&(identical(other.integerFpsMode, integerFpsMode) || other.integerFpsMode == integerFpsMode)&&(identical(other.pauseInBackground, pauseInBackground) || other.pauseInBackground == pauseInBackground)&&(identical(other.autoSaveEnabled, autoSaveEnabled) || other.autoSaveEnabled == autoSaveEnabled)&&(identical(other.autoSaveIntervalInMinutes, autoSaveIntervalInMinutes) || other.autoSaveIntervalInMinutes == autoSaveIntervalInMinutes)&&(identical(other.quickSaveSlot, quickSaveSlot) || other.quickSaveSlot == quickSaveSlot)&&(identical(other.fastForwardSpeedPercent, fastForwardSpeedPercent) || other.fastForwardSpeedPercent == fastForwardSpeedPercent)&&(identical(other.rewindEnabled, rewindEnabled) || other.rewindEnabled == rewindEnabled)&&(identical(other.rewindSeconds, rewindSeconds) || other.rewindSeconds == rewindSeconds)&&(identical(other.rewindSpeedPercent, rewindSpeedPercent) || other.rewindSpeedPercent == rewindSpeedPercent)&&(identical(other.showEmulationStatusOverlay, showEmulationStatusOverlay) || other.showEmulationStatusOverlay == showEmulationStatusOverlay));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _EmulationSettings&&(identical(other.integerFpsMode, integerFpsMode) || other.integerFpsMode == integerFpsMode)&&(identical(other.pauseInBackground, pauseInBackground) || other.pauseInBackground == pauseInBackground)&&(identical(other.autoSaveEnabled, autoSaveEnabled) || other.autoSaveEnabled == autoSaveEnabled)&&(identical(other.autoSaveIntervalInMinutes, autoSaveIntervalInMinutes) || other.autoSaveIntervalInMinutes == autoSaveIntervalInMinutes)&&(identical(other.quickSaveSlot, quickSaveSlot) || other.quickSaveSlot == quickSaveSlot)&&(identical(other.fastForwardSpeedPercent, fastForwardSpeedPercent) || other.fastForwardSpeedPercent == fastForwardSpeedPercent)&&(identical(other.rewindEnabled, rewindEnabled) || other.rewindEnabled == rewindEnabled)&&(identical(other.rewindSeconds, rewindSeconds) || other.rewindSeconds == rewindSeconds)&&(identical(other.rewindSpeedPercent, rewindSpeedPercent) || other.rewindSpeedPercent == rewindSpeedPercent)&&(identical(other.showEmulationStatusOverlay, showEmulationStatusOverlay) || other.showEmulationStatusOverlay == showEmulationStatusOverlay));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,integerFpsMode,pauseInBackground,autoSaveEnabled,autoSaveIntervalInMinutes,quickSaveSlot,fastForwardSpeedPercent,rewindEnabled,rewindSeconds,rewindSpeedPercent,showEmulationStatusOverlay);
+int get hashCode {
+    return Object.hash(runtimeType,integerFpsMode,pauseInBackground,autoSaveEnabled,autoSaveIntervalInMinutes,quickSaveSlot,fastForwardSpeedPercent,rewindEnabled,rewindSeconds,rewindSpeedPercent,showEmulationStatusOverlay);
+}
 
 @override
 String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
-  return 'EmulationSettings(integerFpsMode: $integerFpsMode, pauseInBackground: $pauseInBackground, autoSaveEnabled: $autoSaveEnabled, autoSaveIntervalInMinutes: $autoSaveIntervalInMinutes, quickSaveSlot: $quickSaveSlot, fastForwardSpeedPercent: $fastForwardSpeedPercent, rewindEnabled: $rewindEnabled, rewindSeconds: $rewindSeconds, rewindSpeedPercent: $rewindSpeedPercent, showEmulationStatusOverlay: $showEmulationStatusOverlay)';
+    return 'EmulationSettings(integerFpsMode: $integerFpsMode, pauseInBackground: $pauseInBackground, autoSaveEnabled: $autoSaveEnabled, autoSaveIntervalInMinutes: $autoSaveIntervalInMinutes, quickSaveSlot: $quickSaveSlot, fastForwardSpeedPercent: $fastForwardSpeedPercent, rewindEnabled: $rewindEnabled, rewindSeconds: $rewindSeconds, rewindSpeedPercent: $rewindSpeedPercent, showEmulationStatusOverlay: $showEmulationStatusOverlay)';
 }
 
 

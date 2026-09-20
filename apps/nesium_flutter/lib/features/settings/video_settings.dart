@@ -240,15 +240,16 @@ class VideoSettingsController extends Notifier<VideoSettings>
       }
     });
 
+    final isMainWindow = ref.read(currentWindowKindProvider) == WindowKind.main;
     ref.onDispose(() {
-      if (ref.read(currentWindowKindProvider) == WindowKind.main) {
+      if (isMainWindow) {
         windowManager.removeListener(this);
       }
       subscription.cancel();
       _debounceTimer?.cancel();
     });
 
-    if (ref.read(currentWindowKindProvider) == WindowKind.main) {
+    if (isMainWindow) {
       windowManager.addListener(this);
     }
 

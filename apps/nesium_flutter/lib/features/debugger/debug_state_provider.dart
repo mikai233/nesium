@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../bridge/api/events.dart';
 
 /// Stream provider for debug state updates.

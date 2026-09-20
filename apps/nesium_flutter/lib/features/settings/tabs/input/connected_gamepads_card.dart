@@ -33,9 +33,8 @@ class ConnectedGamepadsCard extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Text(
                   l10n.connectedGamepadsTitle,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -75,9 +74,8 @@ class ConnectedGamepadsCard extends ConsumerWidget {
                                 .withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.2),
+                              color: Theme.of(context).colorScheme.primary
+                                  .withValues(alpha: 0.2),
                             ),
                           ),
                           child: Row(
@@ -93,9 +91,9 @@ class ConnectedGamepadsCard extends ConsumerWidget {
                                   l10n.webGamepadActivationHint,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),

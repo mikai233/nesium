@@ -230,9 +230,8 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
 
     final code = int.tryParse(_p2pRoomCodeController.text.trim());
     if (code == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.netplayInvalidRoomCode)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.netplayInvalidRoomCode)));
       return;
     }
     final playerNameRaw = _playerNameController.text.trim();
@@ -318,9 +317,8 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
     final l10n = AppLocalizations.of(context)!;
     final code = int.tryParse(_roomCodeController.text);
     if (code == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.netplayInvalidRoomCode)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.netplayInvalidRoomCode)));
       return;
     }
     try {
@@ -760,9 +758,8 @@ class _NetplayScreenState extends ConsumerState<NetplayScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 l10n.netplayOrSeparator,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+                style: Theme.of(context).textTheme.labelLarge
+                    ?.copyWith(color: Theme.of(context).colorScheme.outline),
               ),
             ),
             const Expanded(child: Divider()),

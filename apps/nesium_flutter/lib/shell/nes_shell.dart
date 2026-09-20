@@ -403,9 +403,8 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   void _showSnack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Translate netplay error code to user-friendly message.
@@ -514,38 +513,29 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   Future<void> _promptAndLoadRom() async {
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['nes'],
-      withData: true,
-      withReadStream: false,
     );
-    final file = result?.files.single;
-    final path = file?.path;
-    var bytes = file?.bytes;
-
-    if (path == null && bytes == null) {
-      return;
-    }
-
-    // Determine name from path if available, or just fallback
-    final name = path != null ? p.basenameWithoutExtension(path) : 'rom';
+    if (file == null) return;
+    final path = file.path;
+    final name = p.basenameWithoutExtension(file.name);
 
     if (!mounted) return;
     final l10n = AppLocalizations.of(context)!;
     await _runRustCommand(l10n.actionLoadRom, () async {
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
       final isNetplay = await nes_netplay.netplayIsConnected();
+      if (path != null) {
+        await nes_api.loadRom(path: path);
+      } else {
+        await nes_api.loadRomFromBytes(bytes: bytes);
+      }
+      if (!mounted) return;
+      ref.read(nesControllerProvider.notifier).updateRomBytes(bytes);
 
-      if (isNetplay && bytes != null) {
-        await nes_api.loadRom(
-          path: path ?? '',
-        ); // Use path if available for normal load
-
-        // Cache ROM bytes for late joiner sync
-        ref
-            .read(nesControllerProvider.notifier)
-            .updateRomBytes(Uint8List.fromList(bytes));
-
+      if (isNetplay) {
         // Pause immediately to wait for sync
         _pausedByLifecycle = true;
         await nes_pause.setPaused(paused: true);
@@ -572,36 +562,6 @@ class _NesShellState extends ConsumerState<NesShell>
           rethrow;
         }
         // Host waits for StartGame too.
-      } else if (isNetplay && bytes == null && path != null) {
-        // Fallback: read bytes from path if FilePicker didn't give them (shouldn't happen with withData: true)
-        // Use dart:io if necessary, but withData: true is standard.
-      } else {
-        await nes_api.loadRom(
-          path: path ?? '',
-        ); // Use path if available for normal load
-
-        // Cache ROM bytes for potential netplay late joiner sync
-        // If bytes not available from picker, try to read from file
-        if (bytes != null) {
-          ref
-              .read(nesControllerProvider.notifier)
-              .updateRomBytes(Uint8List.fromList(bytes));
-        } else if (path != null) {
-          // Read file bytes for caching (non-web platforms)
-          try {
-            final file = File(path);
-            final fileBytes = await file.readAsBytes();
-            ref.read(nesControllerProvider.notifier).updateRomBytes(fileBytes);
-          } catch (e, st) {
-            logWarning(
-              e,
-              stackTrace: st,
-              message: 'Failed to read ROM bytes for caching: $path',
-              logger: 'nes_shell',
-            );
-            // Ignore read errors - just won't have cached bytes
-          }
-        }
       }
 
       await ref.read(nesControllerProvider.notifier).refreshRomHash();
@@ -784,22 +744,15 @@ class _NesShellState extends ConsumerState<NesShell>
   }
 
   Future<void> _loadTasMovie() async {
-    final result = await FilePicker.pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['fm2'],
-      withData: true,
-      withReadStream: false,
     );
-    final file = result?.files.single;
     if (file == null) return;
-
-    final bytes = file.bytes;
-    if (bytes == null) return;
-
-    final data = String.fromCharCodes(bytes);
 
     if (!mounted) return;
     await _runRustCommand('Load TAS Movie', () async {
+      final data = String.fromCharCodes(await file.readAsBytes());
       await nes_emulation.loadTasMovie(data: data);
     });
   }
@@ -977,17 +930,15 @@ class _NesShellState extends ConsumerState<NesShell>
       );
     } else {
       if (!mounted) return;
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
+      await Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
     }
   }
 
   Future<void> _openAbout() async {
     if (!mounted) return;
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const AboutPage()));
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const AboutPage()));
   }
 
   NesActions _buildActions() {

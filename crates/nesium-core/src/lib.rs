@@ -855,7 +855,7 @@ mod tests {
     use tracing::Level;
     use tracing_subscriber::FmtSubscriber;
 
-    #[ctor]
+    #[ctor(unsafe)]
     fn init_tracing() {
         let subscriber = FmtSubscriber::builder()
             .with_file(true)

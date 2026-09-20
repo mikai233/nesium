@@ -201,15 +201,14 @@ class _ServerTabState extends ConsumerState<ServerTab> {
                                             ),
                                           );
                                           if (context.mounted) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  l10n.lastErrorCopied,
-                                                ),
-                                              ),
-                                            );
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      l10n.lastErrorCopied,
+                                                    ),
+                                                  ),
+                                                );
                                           }
                                         },
                                         icon: const Icon(
@@ -246,15 +245,14 @@ class _ServerTabState extends ConsumerState<ServerTab> {
                                             ),
                                           );
                                           if (context.mounted) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  l10n.lastErrorCopied,
-                                                ),
-                                              ),
-                                            );
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      l10n.lastErrorCopied,
+                                                    ),
+                                                  ),
+                                                );
                                           }
                                         },
                                         icon: const Icon(

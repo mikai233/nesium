@@ -16,7 +16,7 @@ const INSTR_TEST_V3_FRAMES: usize = 2500;
 // instr_test v5 needs a bit longer than the default to complete all 16 subtests.
 const INSTR_TEST_V5_FRAMES: usize = 2500;
 
-#[ctor]
+#[ctor(unsafe)]
 fn init_tracing() {
     let subscriber = FmtSubscriber::builder()
         .with_file(true)

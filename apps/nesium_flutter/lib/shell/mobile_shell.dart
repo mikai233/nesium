@@ -161,9 +161,8 @@ class _MobileDrawer extends StatelessWidget {
 
     Future<void> openPage(Widget page) async {
       closeDrawer();
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => page));
+      await Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => page));
     }
 
     return Consumer(
@@ -217,7 +216,7 @@ class _MobileDrawer extends StatelessWidget {
                             opacity: animation,
                             child: SizeTransition(
                               sizeFactor: animation,
-                              axisAlignment: -1.0,
+                              alignment: Alignment.topCenter,
                               child: child,
                             ),
                           );

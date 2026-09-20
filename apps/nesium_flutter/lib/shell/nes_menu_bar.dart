@@ -266,7 +266,7 @@ class _AnimatedMenuEntryState extends State<_AnimatedMenuEntry>
       opacity: _opacity,
       child: SizeTransition(
         sizeFactor: _sizeFactor,
-        axisAlignment: -1.0,
+        alignment: Alignment.topCenter,
         child: widget.child,
       ),
     );

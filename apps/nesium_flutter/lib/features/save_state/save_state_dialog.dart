@@ -185,9 +185,8 @@ class SaveStateDialog extends ConsumerWidget {
     final repository = ref.read(saveStateRepositoryProvider.notifier);
     await repository.deleteState(slotIndex);
     if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.slotCleared(slotIndex))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.slotCleared(slotIndex))));
     }
   }
 

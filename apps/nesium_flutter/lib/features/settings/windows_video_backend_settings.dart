@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../domain/nes_texture_service.dart';
 import '../../persistence/keys.dart';
 import '../../persistence/app_storage.dart';

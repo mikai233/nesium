@@ -19,7 +19,8 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 version: 0.2.0+1
 
 environment:
-  sdk: ^3.10.1
+  sdk: ^3.13.0
+  flutter: '>=3.47.0'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -35,9 +36,9 @@ dependencies:
   intl: ^0.20.2
   flutter_riverpod: ^3.3.1
   desktop_multi_window: ^0.3.0
-  window_manager: 0.5.1
-  flutter_rust_bridge: 2.12.0
-  file_picker: ^11.0.2
+  window_manager: 0.5.2
+  flutter_rust_bridge: 2.13.0
+  file_picker: ^13.1.0
   web: ^1.1.1
   hive: ^2.2.3
   hive_flutter: ^1.1.0
@@ -45,8 +46,8 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.2
   archive: ^4.0.7
-  skeletonizer: ^2.1.2
-  animations: ^2.2.0
+  skeletonizer: ^3.0.0
+  animations: ^3.0.0
   freezed_annotation: ^3.1.0
   json_annotation: ^4.12.0
   url_launcher: ^6.3.2
@@ -55,7 +56,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   file_selector: ^1.1.0
-  wakelock_plus: ^1.5.2
+  wakelock_plus: ^1.8.0
 
 dev_dependencies:
   flutter_test:
@@ -70,8 +71,8 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4
-  build_runner: ^2.14.1
-  freezed: ^3.2.3
+  build_runner: ^2.16.1
+  freezed: ^4.0.2
   json_serializable: ^6.9.0
 
 # For information on the generic Dart part of this file, see the

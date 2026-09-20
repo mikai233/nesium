@@ -11,6 +11,7 @@ import '../../settings_utils.dart';
 import '../../../../features/controls/input_settings.dart';
 import '../../../../platform/platform_capabilities.dart';
 import '../../input_settings_types.dart';
+
 // Note: keyboardPressedKeysProvider should be imported from somewhere.
 // It seems it was used in settings_page.dart but not defined there.
 // It is likely in input_settings.dart or similar. Checking dependencies.
@@ -111,7 +112,7 @@ class _KeyboardMappingInfoCardState
           opacity: animation,
           child: SizeTransition(
             sizeFactor: animation,
-            axisAlignment: -1.0,
+            alignment: Alignment.topCenter,
             child: child,
           ),
         );
@@ -144,9 +145,9 @@ class _KeyboardMappingInfoCardState
                                 l10n.inputGamepadMappingLabel,
                                 style: Theme.of(context).textTheme.labelLarge
                                     ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary,
                                     ),
                               ),
                               const SizedBox(width: 12),
@@ -197,9 +198,9 @@ class _KeyboardMappingInfoCardState
                                 Text(
                                   l10n.inputListening,
                                   style: TextStyle(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.secondary,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .secondary,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12,
                                   ),
@@ -218,9 +219,9 @@ class _KeyboardMappingInfoCardState
                                     child: Text(
                                       l10n.cancel,
                                       style: TextStyle(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.error,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12,
                                         decoration: TextDecoration.underline,
@@ -239,9 +240,9 @@ class _KeyboardMappingInfoCardState
                               ),
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.tertiary,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .tertiary,
                                     fontWeight: FontWeight.bold,
                                   ),
                             ),

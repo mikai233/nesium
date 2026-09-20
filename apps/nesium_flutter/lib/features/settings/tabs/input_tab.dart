@@ -124,7 +124,7 @@ class InputTab extends ConsumerWidget {
                 opacity: animation,
                 child: SizeTransition(
                   sizeFactor: animation,
-                  axisAlignment: -1.0,
+                  alignment: Alignment.topCenter,
                   child: child,
                 ),
               );
@@ -241,9 +241,8 @@ class InputTab extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                 child: Text(
                   l10n.turboTitle,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
               CheckboxListTile(
@@ -277,7 +276,7 @@ class InputTab extends ConsumerWidget {
                               opacity: animation,
                               child: SizeTransition(
                                 sizeFactor: animation,
-                                axisAlignment: -1.0,
+                                alignment: Alignment.topCenter,
                                 child: child,
                               ),
                             );
@@ -347,7 +346,7 @@ class InputTab extends ConsumerWidget {
                   opacity: animation,
                   child: SizeTransition(
                     sizeFactor: animation,
-                    axisAlignment: -1.0,
+                    alignment: Alignment.topCenter,
                     child: child,
                   ),
                 );
@@ -440,7 +439,7 @@ class InputTab extends ConsumerWidget {
                   opacity: animation,
                   child: SizeTransition(
                     sizeFactor: animation,
-                    axisAlignment: -1.0,
+                    alignment: Alignment.topCenter,
                     child: child,
                   ),
                 );
@@ -589,9 +588,9 @@ class InputTab extends ConsumerWidget {
                                     const SizedBox(height: 8),
                                     Text(
                                       l10n.tipAdjustButtonsInDrawer,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall,
                                     ),
                                   ],
                                 ),

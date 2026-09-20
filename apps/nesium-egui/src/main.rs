@@ -206,7 +206,7 @@ fn main() -> Result<()> {
 
 fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
     eframe::egui_wgpu::WgpuConfiguration {
-        desired_maximum_frame_latency: Some(1),
+        surface: eframe::egui_wgpu::SurfaceConfig::LOW_LATENCY,
         ..Default::default()
     }
 }

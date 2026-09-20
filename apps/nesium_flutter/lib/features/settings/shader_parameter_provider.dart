@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../bridge/api/video.dart' as video;
 import '../../domain/nes_texture_service.dart';
 import '../../persistence/app_storage.dart';

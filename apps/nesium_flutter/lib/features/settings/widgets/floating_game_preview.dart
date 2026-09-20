@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../screen/floating_game_preview_state.dart';
 import '../../screen/nes_screen_view.dart';
 import '../../../domain/nes_controller.dart';

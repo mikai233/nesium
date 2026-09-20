@@ -16,13 +16,14 @@ pub(super) struct AppCommand {
 }
 
 impl NesiumApp {
-    pub(super) fn draw_menu(&mut self, ctx: &EguiContext) -> Option<AppCommand> {
+    pub(super) fn draw_menu(&mut self, root_ui: &mut egui::Ui) -> Option<AppCommand> {
+        let ctx = &root_ui.ctx().clone();
         let mut cmd = AppCommand::default();
         let fullscreen = ctx.input(|i| i.viewport().fullscreen).unwrap_or(false);
         if fullscreen {
             let any_popup_open = egui::Popup::is_any_open(ctx);
-            let base_height = ctx.style().spacing.interact_size.y
-                + 2.0 * ctx.style().spacing.item_spacing.y
+            let base_height = root_ui.style().spacing.interact_size.y
+                + 2.0 * root_ui.style().spacing.item_spacing.y
                 + 2.0;
             let reveal_height = base_height + 24.0;
             let hover_at_top = ctx
@@ -50,7 +51,7 @@ impl NesiumApp {
                         });
                 });
         } else {
-            egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::Panel::top("menu_bar").show(root_ui, |ui| {
                 MenuBar::new().ui(ui, |ui| self.menu_contents(ui, &mut cmd));
             });
         }

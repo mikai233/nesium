@@ -80,9 +80,8 @@ class CpuFilterCard extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
           child: Text(
             l10n.videoFilterCategoryCpu,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+            style: Theme.of(context).textTheme.titleSmall
+                ?.copyWith(color: Theme.of(context).colorScheme.primary),
           ),
         ),
         Padding(
