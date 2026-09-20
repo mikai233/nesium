@@ -79,8 +79,8 @@ jobs:
           if [ "${MODE}" = "test" ]; then
             # Test builds: use externally-generated tag for file names
             echo "ASSET_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
-            echo "FLUTTER_BUILD_NAME=0.0.0" >> "$GITHUB_ENV"
-            echo "FLUTTER_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+            echo "NESIUM_BUILD_NAME=0.0.0" >> "$GITHUB_ENV"
+            echo "NESIUM_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
             echo "DEB_VERSION=0.0.0~dev.${GITHUB_RUN_NUMBER}+${SHORT_SHA}" >> "$GITHUB_ENV"
             echo "DEB_VERSION=0.0.0~dev.${GITHUB_RUN_NUMBER}+${SHORT_SHA}" >> "$GITHUB_ENV"
           else
@@ -102,8 +102,8 @@ jobs:
                   sys.exit(f'ERROR: pubspec build number must be digits, got: {build}')
               
               print(f'ASSET_TAG={v}')
-              print(f'FLUTTER_BUILD_NAME={name}')
-              print(f'FLUTTER_BUILD_NUMBER={build}')
+              print(f'NESIUM_BUILD_NAME={name}')
+              print(f'NESIUM_BUILD_NUMBER={build}')
               print(f'DEB_VERSION={v}')
           except Exception as e:
               sys.exit(f'ERROR: Script failed: {e}')
@@ -345,7 +345,7 @@ jobs:
             BUILD_TYPE="--debug"
           fi
 
-          flutter build linux ${BUILD_TYPE} --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+          flutter build linux ${BUILD_TYPE} --build-name "${NESIUM_BUILD_NAME}" --build-number "${NESIUM_BUILD_NUMBER}"
 
           if [ "${IS_CHECK}" = "true" ]; then
             echo "IS_CHECK is true, skipping packaging."
@@ -468,7 +468,7 @@ jobs:
             BUILD_TYPE="--debug"
           fi
 
-          flutter build apk ${BUILD_TYPE} --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+          flutter build apk ${BUILD_TYPE} --build-name "${NESIUM_BUILD_NAME}" --build-number "${NESIUM_BUILD_NUMBER}"
 
           if [ "${IS_CHECK}" = "true" ]; then
               echo "IS_CHECK is true, skipping further builds and packaging."
@@ -478,7 +478,7 @@ jobs:
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nesium-universal.apk
 
           # 2. Build ARM64 APK (Optimized for modern devices)
-          flutter build apk --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}" --target-platform android-arm64
+          flutter build apk --release --build-name "${NESIUM_BUILD_NAME}" --build-number "${NESIUM_BUILD_NUMBER}" --target-platform android-arm64
           mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nesium-arm64.apk
 
           popd >/dev/null
@@ -535,7 +535,7 @@ jobs:
               $BuildType = "--debug"
           }
 
-          flutter build windows $BuildType --build-name "$env:FLUTTER_BUILD_NAME" --build-number "$env:FLUTTER_BUILD_NUMBER"
+          flutter build windows $BuildType --build-name "$env:NESIUM_BUILD_NAME" --build-number "$env:NESIUM_BUILD_NUMBER"
           
           if ($env:IS_CHECK -eq "true") {
               Write-Host "IS_CHECK is true, skipping packaging."
@@ -626,7 +626,7 @@ jobs:
           
           if [ "${{ matrix.name }}" = "ios" ]; then
             echo "Building for iOS..."
-            flutter build ios --no-codesign --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+            flutter build ios --no-codesign --build-name "${NESIUM_BUILD_NAME}" --build-number "${NESIUM_BUILD_NUMBER}"
             if [ "${IS_CHECK}" = "true" ]; then
               echo "IS_CHECK is true, skipping further steps."
               exit 0
@@ -638,7 +638,7 @@ jobs:
 
           # Proceed with macOS build
           flutter config --enable-macos-desktop
-          flutter build macos --release --build-name "${FLUTTER_BUILD_NAME}" --build-number "${FLUTTER_BUILD_NUMBER}"
+          flutter build macos --release --build-name "${NESIUM_BUILD_NAME}" --build-number "${NESIUM_BUILD_NUMBER}"
 
           if [ "${IS_CHECK}" = "true" ]; then
             echo "IS_CHECK is true, skipping manual dylib injection and packaging."

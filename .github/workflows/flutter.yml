@@ -5,11 +5,13 @@ on:
     paths:
       - "apps/nesium_flutter/**"
       - ".github/workflows/flutter.yml"
+      - ".github/workflows/build-flutter.yml"
   push:
     branches: ["**"]
     paths:
       - "apps/nesium_flutter/**"
       - ".github/workflows/flutter.yml"
+      - ".github/workflows/build-flutter.yml"
 
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"

@@ -60,7 +60,7 @@ jobs:
             libfontconfig1-dev
 
       - name: Run tests
-        run: cargo test ${{ env.WORKSPACE_FLAGS }} --all-targets --verbose
+        run: cargo test ${{ env.WORKSPACE_FLAGS }} --all-targets --locked --verbose
 
       - name: Format
         run: cargo fmt --all -- --check
