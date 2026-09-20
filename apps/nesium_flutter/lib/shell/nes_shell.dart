@@ -45,7 +45,7 @@ import 'mobile_shell.dart';
 import '../features/debugger/debugger_panel.dart';
 import '../features/debugger/tilemap_viewer.dart';
 import '../features/debugger/tile_viewer.dart';
-import '../features/debugger/sprite_viewer.dart';
+import '../features/debugger/sprite_viewer/sprite_viewer.dart';
 import '../features/debugger/palette_viewer.dart';
 import '../features/tools/tools_panel.dart';
 

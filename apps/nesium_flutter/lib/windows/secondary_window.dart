@@ -13,7 +13,7 @@ import '../features/debugger/debugger_panel.dart';
 import '../features/debugger/palette_viewer.dart';
 import '../features/debugger/tile_viewer.dart';
 import '../features/debugger/tilemap_viewer.dart';
-import '../features/debugger/sprite_viewer.dart';
+import '../features/debugger/sprite_viewer/sprite_viewer.dart';
 import '../features/tools/tools_panel.dart';
 import '../platform/platform_capabilities.dart';
 import 'window_types.dart';
