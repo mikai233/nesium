@@ -325,6 +325,19 @@ Future<void> _parseDependencies(File file) async {
       line = line.trim();
       if (line.isEmpty) continue;
 
+      // Skip comments in .slangp files
+      if (ext == '.slangp' && line.startsWith('#')) {
+        // Handle #reference / #include / #import (Slang or Slangp)
+        final referenceMatch = RegExp(
+          r'^#(reference|include|import)\s+"?([^"]+)"?',
+        ).firstMatch(line);
+        if (referenceMatch != null) {
+          final refPath = referenceMatch.group(2)!;
+          await _resolveAndCopy(fileDir, refPath, file.path);
+        }
+        continue;
+      }
+
       // Handle Key=Value pairs (Presets)
       if (ext == '.slangp' && line.contains('=')) {
         final parts = line.split('=');
@@ -353,13 +366,13 @@ Future<void> _parseDependencies(File file) async {
         }
       }
 
-      // Handle #reference / #include / #import (Slang or Slangp)
-      if (line.startsWith('#')) {
-        final referenceMatch = RegExp(
-          r'^#(reference|include|import)\s+"?([^"]+)"?',
+      // Handle #include / #import in .slang / .h / .inc files
+      if (ext != '.slangp' && line.startsWith('#')) {
+        final match = RegExp(
+          r'^#(include|import)\s+["<]([^">]+)[">]',
         ).firstMatch(line);
-        if (referenceMatch != null) {
-          final refPath = referenceMatch.group(2)!;
+        if (match != null) {
+          final refPath = match.group(2)!;
           await _resolveAndCopy(fileDir, refPath, file.path);
         }
       }
@@ -375,23 +388,53 @@ Future<void> _resolveAndCopy(
   String relativePath,
   String sourceFile,
 ) async {
-  // Resolve path (manual normalization)
+  // Normalize path
   var targetPath = path.normalize(path.join(baseDir, relativePath));
   targetPath = File(targetPath).absolute.path;
 
-  // Fuzzy Resolution (matches existing heuristic)
+  // Handle "rooted" paths (e.g. shaders/...) assuming common parent structure
+  if (!File(targetPath).existsSync() && relativePath.startsWith('shaders/')) {
+    final potentialRootPath = path.normalize(
+      path.join(_sourceRoot, '..', relativePath),
+    );
+    if (File(potentialRootPath).existsSync()) {
+      targetPath = File(potentialRootPath).absolute.path;
+    }
+  }
+
+  // Fuzzy Resolution (matches existing heuristic, but more aggressive)
   if (!File(targetPath).existsSync()) {
     var candidate = relativePath;
-    for (var i = 0; i < 3; i++) {
+    // Try going up to 4 levels to find shifted directories
+    for (var i = 0; i < 4; i++) {
       candidate = path.join('..', candidate);
       var fuzzyPath = path.normalize(path.join(baseDir, candidate));
       fuzzyPath = File(fuzzyPath).absolute.path;
 
-      if (!fuzzyPath.startsWith(_sourceRoot)) break;
+      if (!fuzzyPath.toLowerCase().startsWith(_sourceRoot.toLowerCase()) &&
+          !fuzzyPath.toLowerCase().startsWith(
+            path.dirname(_sourceRoot).toLowerCase(),
+          )) {
+        break;
+      }
 
       if (File(fuzzyPath).existsSync()) {
         targetPath = fuzzyPath;
         break;
+      }
+    }
+  }
+
+  // Final check: if it's still missing, try looking for the filename inside the source root
+  if (!File(targetPath).existsSync()) {
+    final fileName = path.basename(relativePath);
+    // This is expensive, so only do it for actual potential paths
+    if (relativePath.contains('/') || relativePath.contains('\\')) {
+      final results = _findFileGlobally(_sourceRoot, fileName);
+      if (results.isNotEmpty) {
+        // If multiple matches, we might pick the wrong one, but usually it's better than nothing
+        // Or we could try to find the best match by comparing the end of the path
+        targetPath = results.first;
       }
     }
   }
@@ -412,6 +455,23 @@ Future<void> _resolveAndCopy(
       logWarning('⚠️ Missing dependency: $relativePath (in $sourceFile)');
     }
   }
+}
+
+List<String> _findFileGlobally(String root, String fileName) {
+  final List<String> matches = [];
+  final dir = Directory(root);
+  if (!dir.existsSync()) return matches;
+
+  try {
+    for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+      if (entity is File && path.basename(entity.path) == fileName) {
+        matches.add(entity.absolute.path);
+      }
+    }
+  } catch (e) {
+    // Ignore errors during listing
+  }
+  return matches;
 }
 
 // Logger shims to match project style
