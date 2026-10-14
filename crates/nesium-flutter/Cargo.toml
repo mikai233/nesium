@@ -65,7 +65,7 @@ librashader = { workspace = true, features = [
     "stable",
 ] }
 # Keep the public GL handle/context types compatible with librashader-runtime-gl.
-glow = "0.17.0"
+glow = "0.18.0"
 android_logger = "0.15"
 log = "0.4.34"
 
