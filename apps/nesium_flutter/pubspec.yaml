@@ -38,7 +38,7 @@ dependencies:
   desktop_multi_window: ^0.3.0
   window_manager: 0.5.2
   flutter_rust_bridge: 2.13.0
-  file_picker: ^13.1.0
+  file_picker: ^13.2.0
   web: ^1.1.1
   hive: ^2.2.3
   hive_flutter: ^1.1.0
